@@ -14894,6 +14894,28 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_balance_job_description']))
 
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12554', all_def_keywords['__all_unit']))
+
+def_table_schema(
+  owner = 'wangbai.wx',
+  table_name      = '__all_virtual_source',
+  table_id        = '12571',
+  table_type      = 'VIRTUAL_TABLE',
+  rowkey_columns  = [
+   ('owner', 'varchar:128'),
+   ('name', 'varchar:128'),
+   ('type', 'varchar:12'),
+  ],
+  normal_columns  = [
+   ('line', 'number:38:0'),
+   ('text', 'varchar:4000'),
+   ('origin_con_id', 'number:38:0'),
+   ('object_id', 'number:38:0'),
+   ('database_id', 'number:38:0'),
+  ],
+  gm_columns      = [],
+  in_tenant_space = True,
+)
+
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15376,7 +15398,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15492'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15502', all_def_keywords['__all_virtual_tenant_flashback_log_scn'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15510', all_def_keywords['__all_virtual_balance_job_description'])))
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15524', all_def_keywords['__all_unit'])))
-#
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -57745,6 +57768,63 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
+def_table_schema(
+    owner           = 'wangbai.wx',
+    table_name      = 'DBA_OB_SOURCE',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '25316',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner           = 'wangbai.wx',
+    table_name      = 'ALL_OB_SOURCE',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '25317',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE
+    WHERE origin_con_id != 1 AND
+      (owner = USER OR
+       USER_CAN_ACCESS_OBJ(CASE type
+         WHEN 'PACKAGE' THEN 3
+         WHEN 'PACKAGE BODY' THEN 3
+         WHEN 'PROCEDURE' THEN 12
+         WHEN 'FUNCTION' THEN 9
+         WHEN 'TRIGGER' THEN 7
+         WHEN 'TYPE' THEN 4
+         WHEN 'TYPE BODY' THEN 4
+         END, object_id, database_id) = 1)
+    UNION ALL
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE origin_con_id = 1;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner           = 'wangbai.wx',
+    table_name      = 'USER_OB_SOURCE',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id        = '25318',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE owner = USER AND origin_con_id != 1;
+""".replace("\n", " ")
+)
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

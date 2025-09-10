@@ -235,6 +235,7 @@
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 #include "observer/virtual_table/ob_all_virtual_deadlock_detector_stat.h"
+#include "observer/virtual_table/ob_all_virtual_dba_source.h"
 
 namespace oceanbase
 {
@@ -2575,6 +2576,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualMdsEventHistory construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObAllVirtualMdsEventHistory *>(mds_node_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SOURCE_TID: {
+            ObAllVirtualDbaSource *table = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDbaSource, table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualDbaSource table construct fail", K(ret));
+            } else {
+              table->set_tenant_id(real_tenant_id);
+              vt_iter = static_cast<ObAllVirtualDbaSource *>(table);
             }
             break;
           }

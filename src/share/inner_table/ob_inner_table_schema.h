@@ -1100,6 +1100,7 @@ public:
   static int all_virtual_tenant_flashback_log_scn_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_balance_job_description_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_unit_mysql_sys_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_source_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1392,6 +1393,7 @@ public:
   static int all_virtual_tenant_flashback_log_scn_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_balance_job_description_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_unit_sys_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_source_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -2148,6 +2150,9 @@ public:
   static int dba_ob_object_balance_weight_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_scheduler_jobs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_tenant_flashback_log_scn_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_source_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ob_source_schema(share::schema::ObTableSchema &table_schema);
+  static int user_ob_source_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -3955,6 +3960,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tenant_flashback_log_scn_schema,
   ObInnerTableSchema::all_virtual_balance_job_description_schema,
   ObInnerTableSchema::all_virtual_unit_mysql_sys_agent_schema,
+  ObInnerTableSchema::all_virtual_source_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -4247,6 +4253,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tenant_flashback_log_scn_ora_schema,
   ObInnerTableSchema::all_virtual_balance_job_description_ora_schema,
   ObInnerTableSchema::all_virtual_unit_sys_agent_schema,
+  ObInnerTableSchema::all_virtual_source_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -5109,6 +5116,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_object_balance_weight_ora_schema,
   ObInnerTableSchema::user_scheduler_jobs_ora_schema,
   ObInnerTableSchema::dba_ob_tenant_flashback_log_scn_ora_schema,
+  ObInnerTableSchema::dba_ob_source_schema,
+  ObInnerTableSchema::all_ob_source_schema,
+  ObInnerTableSchema::user_ob_source_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -5963,6 +5973,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_TID,
   OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TID,
   OB_ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT_TID,
+  OB_ALL_VIRTUAL_SOURCE_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -6264,6 +6275,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_ORA_TID,
   OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_ORA_TID,
   OB_ALL_VIRTUAL_UNIT_SYS_AGENT_TID,
+  OB_ALL_VIRTUAL_SOURCE_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -6897,6 +6909,9 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_OBJECT_BALANCE_WEIGHT_ORA_TID,
   OB_USER_SCHEDULER_JOBS_ORA_TID,
   OB_DBA_OB_TENANT_FLASHBACK_LOG_SCN_ORA_TID,
+  OB_DBA_OB_SOURCE_TID,
+  OB_ALL_OB_SOURCE_TID,
+  OB_USER_OB_SOURCE_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -8018,7 +8033,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_TID,
   OB_ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_TID,
   OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_TID,
-  OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TID,  };
+  OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TID,
+  OB_ALL_VIRTUAL_SOURCE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -8184,6 +8200,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_ORA_TID
 ,  OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_ORA_TID
 ,  OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_ORA_TID
+,  OB_ALL_VIRTUAL_SOURCE_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -8708,6 +8725,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_TNAME,
   OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_TNAME,
   OB_ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT_TNAME,
+  OB_ALL_VIRTUAL_SOURCE_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -9009,6 +9027,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_ORA_TNAME,
   OB_ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION_ORA_TNAME,
   OB_ALL_VIRTUAL_UNIT_SYS_AGENT_TNAME,
+  OB_ALL_VIRTUAL_SOURCE_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -9642,6 +9661,9 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_OBJECT_BALANCE_WEIGHT_ORA_TNAME,
   OB_USER_SCHEDULER_JOBS_ORA_TNAME,
   OB_DBA_OB_TENANT_FLASHBACK_LOG_SCN_ORA_TNAME,
+  OB_DBA_OB_SOURCE_TNAME,
+  OB_ALL_OB_SOURCE_TNAME,
+  OB_USER_OB_SOURCE_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,
@@ -13573,11 +13595,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 297;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 852;
-const int64_t OB_SYS_VIEW_COUNT = 973;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2127;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 854;
+const int64_t OB_SYS_VIEW_COUNT = 976;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2132;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2130;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2135;
 
 } // end namespace share
 } // end namespace oceanbase

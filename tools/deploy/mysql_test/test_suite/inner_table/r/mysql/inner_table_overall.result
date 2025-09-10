@@ -760,6 +760,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12522	__all_virtual_tenant_flashback_log_scn	2	201001	1
 12540	__all_virtual_balance_job_description	2	201001	1
 12554	__all_virtual_unit_mysql_sys_agent	2	201001	1
+12571	__all_virtual_source	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
