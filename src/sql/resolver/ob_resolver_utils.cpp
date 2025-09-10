@@ -6907,7 +6907,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        uint64_t tenant_id,
                                        const bool enable_decimal_int_type,
                                        const bool enable_mysql_compatible_dates,
-                                       const bool convert_real_type_to_decimal /*false*/)
+                                       const bool convert_real_type_to_decimal /*false*/,
+                                       const bool is_external_table /*false*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ob_is_valid_obj_type(static_cast<ObObjType>(type_node.type_)))) {
@@ -7137,7 +7138,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_scale(scale);
         // the datetime and timestamp type share the same type class, so we need to distinguish the
         // datetime and check need convert mysql_datetime type here.
-        if (ObDateTimeType == data_type.get_obj_type() && enable_mysql_compatible_dates) {
+        if (ObDateTimeType == data_type.get_obj_type() && enable_mysql_compatible_dates && !is_external_table) {
           data_type.set_obj_type(ObMySQLDateTimeType);
         }
       }
@@ -7146,7 +7147,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       // nothing to do.
       data_type.set_precision(default_accuracy.get_precision());
       data_type.set_scale(default_accuracy.get_scale());
-      if (enable_mysql_compatible_dates) {
+      if (enable_mysql_compatible_dates && !is_external_table) {
         data_type.set_obj_type(ObMySQLDateType);
       }
       break;

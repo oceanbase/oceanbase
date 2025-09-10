@@ -4216,7 +4216,7 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
             }
             break;
           case orc::TypeKind::SHORT:
-            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_tinyint(lib::is_oracle_mode(), column_schema))) {
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_smallint(lib::is_oracle_mode(), column_schema))) {
               LOG_WARN("failed to setup tinyint");
             }
             break;

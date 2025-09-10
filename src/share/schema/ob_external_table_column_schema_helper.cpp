@@ -263,6 +263,7 @@ int ObExternalTableColumnSchemaHelper::setup_date(const bool &is_oracle_mode,
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDateTimeType);
     column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObDateTimeType]);
+    column_schema.set_data_scale(0);
   } else {
     column_schema.set_data_type(ObDateType);
     column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObDateType]);
