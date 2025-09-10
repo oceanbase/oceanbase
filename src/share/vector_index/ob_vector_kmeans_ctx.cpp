@@ -897,12 +897,12 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
     int32_t *data_cnt_in_cluster = nullptr; // the number of vectors contained in each center (cluster)
     // init tmp variables
     float *tmp = nullptr;
-    if (OB_ISNULL(tmp = static_cast<float *>(ivf_build_mem_ctx_.Allocate(sizeof(float) * kmeans_ctx_->lists_ *
-                                                                         (kmeans_ctx_->lists_ - 1) / 2)))) {
+    int64_t center_dis_size = max(1, kmeans_ctx_->lists_ * (kmeans_ctx_->lists_ - 1) / 2);
+    if (OB_ISNULL(tmp = static_cast<float *>(ivf_build_mem_ctx_.Allocate(sizeof(float) * center_dis_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else {
-      MEMSET(tmp, 0, sizeof(float) * kmeans_ctx_->lists_ * (kmeans_ctx_->lists_ - 1) / 2);
+      MEMSET(tmp, 0, sizeof(float) * center_dis_size);
       centers_distance = tmp;
     }
     if (OB_FAIL(ret)) {
