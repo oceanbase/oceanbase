@@ -863,6 +863,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
   HazardList retire_list;
   ObDLink* head = list_handle.get_head();
   int64_t tenant_id = list_handle.list_->tenant_id_;
+  int64_t timeout_us = INT_MAX == size_to_wash ? FLUSH_MB_TIMEOUT_US : SYNC_WASH_MB_TIMEOUT_US;
   if (OB_LIKELY(GCONF._enable_kvcache_hazard_pointer)) {
     // retire memblock and reclaim until
     // 1. wash out enough memory, or
@@ -915,16 +916,16 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
 
           if (!force_flush && check_idx > 0 && 0 == check_idx % check_interval) {
             const int64_t cost = ObTimeUtility::current_time() - start;
-            if (cost > SYNC_WASH_MB_TIMEOUT_US) {
+            if (cost > timeout_us) {
               ret = OB_SYNC_WASH_MB_TIMEOUT;
-              COMMON_LOG(WARN, "sync wash mb timeout", K(cost), LITERAL_K(SYNC_WASH_MB_TIMEOUT_US));
+              COMMON_LOG(WARN, "sync wash mb timeout", K(cost), K(timeout_us));
             }
           }
           ++check_idx;
         }
       }  // qclock guard
 
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) && OB_SYNC_WASH_MB_TIMEOUT != ret) {
       } else if (size_retired >= size_to_wash - size_washed || size_to_wash == INT64_MAX) {
         // do recliam if has retired enough memory
         int64_t start_time = ObTimeUtility::current_time();
@@ -1006,9 +1007,9 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
 
       if (!force_flush && check_idx > 0 && 0 == check_idx % check_interval) {
         const int64_t cost = ObTimeUtility::current_time() - start;
-        if (cost > SYNC_WASH_MB_TIMEOUT_US) {
+        if (cost > timeout_us) {
           ret = OB_SYNC_WASH_MB_TIMEOUT;
-          COMMON_LOG(WARN, "sync wash mb timeout", K(cost), LITERAL_K(SYNC_WASH_MB_TIMEOUT_US));
+          COMMON_LOG(WARN, "sync wash mb timeout", K(cost), K(timeout_us));
         }
       }
       ++check_idx;
