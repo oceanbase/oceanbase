@@ -294,6 +294,7 @@ private:
   int wait_all_executing_tasks();
   int process_remote_task_resp();
   bool check_rcode_can_retry(int ret);
+  int cancel_all_async_callbacks();
 private:
   typedef common::ObObjNode<ObIDASTaskOp*> DasOpNode;
   //declare das allocator
