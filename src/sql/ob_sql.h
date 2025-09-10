@@ -361,7 +361,8 @@ private:
                     ObIAllocator &allocator,
                     ObResultSet &result,
                     ObStmt *&basic_stmt,
-                    ParseResult *outline_parse_result = NULL);
+                    ParseResult *outline_parse_result = NULL,
+                    ObOutlineState *outline_state = NULL);
 
   // Generate Physical Plan for given syntax tree
   // called by handle_text_query
@@ -378,7 +379,8 @@ private:
                              ObResultSet &result,
                              const bool is_begin_commit_stmt,
                              const PlanCacheMode mode,
-                             ParseResult *outline_parse_result = NULL);
+                             ParseResult *outline_parse_result = NULL,
+                             ObOutlineState *outline_state = NULL);
 
   int generate_plan(ParseResult &parse_result,
                     ObPlanCacheCtx *pc_ctx,

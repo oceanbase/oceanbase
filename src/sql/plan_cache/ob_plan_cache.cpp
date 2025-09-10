@@ -35,6 +35,8 @@ namespace oceanbase
 {
 namespace sql
 {
+
+#ifdef OB_BUILD_SPM
 struct ObGetCandiBaselinePlanIdOp
 {
   explicit ObGetCandiBaselinePlanIdOp(common::ObIArray<uint64_t> *key_array,
@@ -77,6 +79,7 @@ struct ObGetCandiBaselinePlanIdOp
   bool with_plan_hash_;
   uint64_t plan_hash_value_;
 };
+#endif
 
 struct ObGetKVEntryByNsOp : public ObKVEntryTraverseOp
 {

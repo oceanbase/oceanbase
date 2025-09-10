@@ -1259,18 +1259,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
                                        candi_table_locs))) {
     LOG_WARN("fail to get physical locations", K(ret));
   } else if (OB_FAIL(set_concurrent_degree(outline_param_idx, plan))) {
-    if (OB_REACH_MAX_CONCURRENT_NUM == ret && 0 == plan.get_max_concurrent_num()) {
-      pc_ctx.is_max_curr_limit_ = true;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to check concurrent degree", K(ret));
-    }
-  } else {
-    // do nothing
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+    LOG_WARN("fail to check concurrent degree", K(ret));
   } else {
     if (pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_or_expand_transformed()) {
       need_try_plan_ |= TRY_PLAN_OR_EXPAND;

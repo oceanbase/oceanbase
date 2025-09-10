@@ -369,6 +369,7 @@ struct ObResolverParams
        is_column_ref_(true),
        hidden_column_scope_(T_NONE_SCOPE),
        outline_parse_result_(NULL),
+       outline_state_(NULL),
        is_execute_call_stmt_(false),
        enable_res_map_(false),
        need_check_col_dup_(true),
@@ -439,6 +440,7 @@ public:
   bool is_column_ref_;                   // used to mark normal column ref
   ObStmtScope hidden_column_scope_; // record scope for first hidden column which need check hidden_column_visable in opt_param hint
   ParseResult *outline_parse_result_;
+  ObOutlineState *outline_state_;
   bool is_execute_call_stmt_;
   bool enable_res_map_;
   bool need_check_col_dup_;

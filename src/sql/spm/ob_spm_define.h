@@ -409,7 +409,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t evo_plan_is_fixed_baseline_:     1;
       uint64_t evo_plan_added_:                 1;
       uint64_t finish_start_evolution_:         1;
-      uint64_t reserved_:                      55;
+      uint64_t has_concurrent_limited_:         1;
+      uint64_t reserved_:                      54;
     };
   };
   int64_t spm_mode_;

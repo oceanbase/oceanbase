@@ -317,38 +317,7 @@ void ObGlobalHint::merge_opt_features_version_hint(uint64_t opt_features_version
   }
 }
 
-// zhanyue todo: try remove this later
-bool ObGlobalHint::has_hint_exclude_concurrent() const
-{
-  bool bret = false;
-  return -1 != frozen_version_
-         || -1 != topk_precision_
-         || 0 != sharding_minimum_row_count_
-         || UNSET_QUERY_TIMEOUT != query_timeout_
-         || dblink_hints_.has_valid_hint()
-         || common::INVALID_CONSISTENCY != read_consistency_
-         || OB_USE_PLAN_CACHE_INVALID != plan_cache_policy_
-         || false != force_trace_log_
-         || false != enable_lock_early_release_
-         || false != force_refresh_lc_
-         || !log_level_.empty()
-         || has_parallel_hint()
-         || false != monitor_
-         || ObPDMLOption::NOT_SPECIFIED != pdml_option_
-         || ObParamOption::NOT_SPECIFIED != param_option_
-         || !monitoring_ids_.empty()
-         || !dops_.empty()
-         || false != disable_transform_
-         || false != disable_cost_based_transform_
-         || false != enable_append_
-         || !opt_params_.empty()
-         || !ob_ddl_schema_versions_.empty()
-         || has_gather_opt_stat_hint()
-         || false != has_dbms_stats_hint_
-         || -1 != dynamic_sampling_
-         || flashback_read_tx_uncommitted_
-         || ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_;
-}
+
 
 void ObGlobalHint::reset()
 {
@@ -381,11 +350,13 @@ void ObGlobalHint::reset()
   parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
   dblink_hints_.reset();
+  has_hint_exclude_concurrent_ = false;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
 {
   int ret = OB_SUCCESS;
+  has_hint_exclude_concurrent_ |= other.has_hint_exclude_concurrent_;
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
@@ -429,7 +400,6 @@ int ObGlobalHint::assign(const ObGlobalHint &other)
 }
 
 // hints below not print
-// MAX_CONCURRENT
 // ObDDLSchemaVersionHint
 int ObGlobalHint::print_global_hint(PlanText &plan_text) const
 {
@@ -605,6 +575,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && get_flashback_read_tx_uncommitted()) {
     PRINT_GLOBAL_HINT_STR("FLASHBACK_READ_TX_UNCOMMITTED");
+  }
+  if (OB_SUCC(ret) && UNSET_MAX_CONCURRENT != max_concurrent_ && plan_text.is_used_hint_) { // MAX_CONCURRENT
+    PRINT_GLOBAL_HINT_NUM("MAX_CONCURRENT", max_concurrent_);
   }
   return ret;
 }

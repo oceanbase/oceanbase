@@ -248,7 +248,8 @@ struct ObGlobalHint {
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
 
-  bool has_hint_exclude_concurrent() const;
+  void set_has_hint_exclude_concurrent()  { has_hint_exclude_concurrent_ = true;  }
+  bool has_hint_exclude_concurrent() const  { return has_hint_exclude_concurrent_;  }
   int print_global_hint(PlanText &plan_text) const;
   int print_monitoring_hints(PlanText &plan_text) const;
 
@@ -362,6 +363,8 @@ struct ObGlobalHint {
   ObParallelDASOption parallel_das_dml_option_;
   int64_t dynamic_sampling_;
   ObDBLinkHit dblink_hints_;
+private:
+  bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
 
 // used in physical plan

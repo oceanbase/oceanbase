@@ -45,16 +45,18 @@ struct ObOutlineState
 {
   OB_UNIS_VERSION(1);
 public:
-  ObOutlineState() : outline_version_(), is_plan_fixed_(false) {}
+  ObOutlineState() : outline_version_(), is_plan_fixed_(false), is_prue_concurrent_limit_(false) {}
   ~ObOutlineState(){}
   void reset()
   {
     outline_version_.reset();
     is_plan_fixed_ = false;
+    is_prue_concurrent_limit_ = false;
   }
   TO_STRING_KV(K(outline_version_), K(is_plan_fixed_));
   share::schema::ObSchemaObjVersion outline_version_;
   bool is_plan_fixed_;//whether the plan will be fixed with outline_content
+  bool is_prue_concurrent_limit_;//whether this outline contain max_concurrent hint only
 };
 
 struct AllocCacheObjInfo {
