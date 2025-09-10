@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/code_generator/ob_column_index_provider.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "lib/allocator/page_arena.h"  // for ObArenaAllocator
 namespace oceanbase
 {
 using namespace common;
@@ -751,7 +752,7 @@ int ObRangeGraphGenerator::formalize_final_range_node(ObRangeNode *&range_node)
       total_range_sizes[i] = 0;
       range_sizes[i] = 1;
     }
-    if (OB_FAIL(collect_graph_infos(range_node, total_range_sizes, range_sizes, start_from_zero, min_offset))) {
+    if (OB_FAIL(collect_graph_infos_dp(range_node, total_range_sizes, range_sizes, start_from_zero, min_offset))) {
       LOG_WARN("failed to collect graph infos");
     } else {
       bool need_refine = false;
@@ -839,78 +840,6 @@ OB_INLINE void add_check_overflow(uint64_t &a, const uint64_t b)
   if (__builtin_add_overflow(a, b, &a)) {
     a = UINT64_MAX;
   }
-}
-
-int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
-                                               uint64_t *total_range_sizes,
-                                               uint64_t *range_sizes,
-                                               bool &start_from_zero,
-                                               int64_t &min_offset)
-{
-  int ret = OB_SUCCESS;
-  uint64_t cur_or_count = 0;
-  if (range_node->always_true_ || range_node->always_false_) {
-    ret= OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected pos", KPC(range_node));
-  } else {
-    int64_t idx = range_node->min_offset_;
-    for (const ObRangeNode *cur_node = range_node->or_next_; 
-         -1 == idx && cur_node != nullptr; cur_node = cur_node->or_next_) {
-      idx = cur_node->min_offset_;
-    }
-    if (-1 == idx) {
-      idx = 0;
-    }
-    for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
-      if (cur_node->contain_in_) {
-        cur_or_count += cur_node->in_param_count_;
-      } else if (cur_node->is_not_in_node_) {
-        cur_or_count += cur_node->in_param_count_ + 1;
-      } else if (cur_node->is_domain_node_) {
-        cur_or_count += 25;
-      } else {
-        ++cur_or_count;
-      }
-
-      if (nullptr == cur_node->or_next_ ||
-          cur_node->min_offset_ != cur_node->or_next_->min_offset_ ||
-          cur_node->or_next_->and_next_ != cur_node->and_next_) {
-        if (cur_node->min_offset_ <= 0) {
-          start_from_zero = true;
-        }
-        mul_check_overflow(range_sizes[idx], cur_or_count);
-        min_offset = std::min(idx, min_offset);
-        if (cur_node->and_next_ != nullptr) {
-          int64_t child_min_offset = idx + 1;
-          if (OB_FAIL(SMART_CALL(collect_graph_infos(cur_node->and_next_, total_range_sizes,
-                                                     range_sizes, start_from_zero, 
-                                                     child_min_offset)))) {
-            LOG_WARN("failed to collect graph infos");
-          } else if (idx < child_min_offset) {
-            uint64_t range_size = 1;
-            for (int64_t i = 0; i <= idx; ++i) {
-              mul_check_overflow(range_size, range_sizes[i]);
-            }
-            add_check_overflow(total_range_sizes[idx], range_size);
-          }
-          min_offset = std::min(child_min_offset, min_offset);
-        } else {
-          uint64_t range_size = 1;
-          for (int64_t i = 0; i <= idx; ++i) {
-            mul_check_overflow(range_size, range_sizes[i]);
-          }
-          add_check_overflow(total_range_sizes[idx], range_size);
-          for (int64_t i = idx + 1; i < cur_node->column_cnt_; ++i) {
-            mul_check_overflow(range_size, range_sizes[i]);
-            add_check_overflow(total_range_sizes[i], range_size);
-          }
-        }
-        range_sizes[idx] /= cur_or_count;
-        cur_or_count = 0;
-      }
-    }
-  }
-  return ret;
 }
 
 int ObRangeGraphGenerator::check_skip_scan_valid(ObRangeNode *range_node,
@@ -1531,6 +1460,7 @@ int ObRangeGraphGenerator::crop_final_range_node(ObRangeNode *&range_node, int64
   ObRangeNode *out_range_node = nullptr;
   RangeNodeConnectInfo connect_info;
   bool check_range_graph = ERRSIM_CROP_RANGE_GRAPH_WITH_CHECK;
+  uint64_t proc_count = 0;
   if (OB_ISNULL(out_range_node = range_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -1552,7 +1482,12 @@ int ObRangeGraphGenerator::crop_final_range_node(ObRangeNode *&range_node, int64
   }
    
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(crop_final_range_node(out_range_node, crop_offset, connect_info, refined_ranges, shared_ranges))) {
+  } else if (OB_FAIL(crop_final_range_node(out_range_node, 
+                                           crop_offset, 
+                                           connect_info, 
+                                           refined_ranges, 
+                                           shared_ranges, 
+                                           proc_count))) {
     LOG_WARN("failed to crop final range node", K(ret));
   } else if (OB_ISNULL(out_range_node)) {
     range_node->set_always_true();
@@ -1570,13 +1505,18 @@ int ObRangeGraphGenerator::crop_final_range_node(
                            ObRangeNode *&range_node, int64_t crop_offset,
                            RangeNodeConnectInfo &connect_info,
                            common::hash::ObHashMap<uint64_t, ObRangeNode*> &refined_ranges,
-                           common::hash::ObHashSet<uint64_t> &shared_ranges)
+                           common::hash::ObHashSet<uint64_t> &shared_ranges,
+                           uint64_t &proc_count)
 {
   int ret = OB_SUCCESS;
   ObRangeNode *out_range_node = nullptr;
+  ++proc_count;
   if (OB_ISNULL(range_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null");
+  } else if (OB_UNLIKELY(proc_count % 1000 == 0) &&
+             OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("failed to check status", K(ret));
   } else if (OB_FAIL(refined_ranges.get_refactored(reinterpret_cast<uint64_t>(range_node), 
                                                    out_range_node))) {
     if (OB_HASH_NOT_EXIST == ret) {
@@ -1596,7 +1536,8 @@ int ObRangeGraphGenerator::crop_final_range_node(
                                                               crop_offset,
                                                               connect_info,
                                                               refined_ranges,
-                                                              shared_ranges)))) {
+                                                              shared_ranges,
+                                                              proc_count)))) {
             LOG_WARN("failed to refine range node");
           } else {
             prev_and_next_out = cur_node->and_next_;
@@ -2179,6 +2120,162 @@ int ObRangeGraphGenerator::check_can_general_nlj_range_extraction(
   } 
   return ret;
 }
+
+struct RangeNodeCache 
+{
+  RangeNodeCache() : start_from_zero_(false), min_offset_(-1), range_sizes_(nullptr) {}
+  TO_STRING_KV(K_(start_from_zero), K_(min_offset));
+  bool start_from_zero_;  
+  int64_t min_offset_;
+  uint64_t *range_sizes_;        
+};
+
+static int collect_graph_infos_dp_inner(ObRangeNode *range_node,
+                                        common::hash::ObHashMap<uint64_t, RangeNodeCache*> &memo_map,
+                                        common::ObIAllocator &allocator,
+                                        uint64_t &proc_count,
+                                        RangeNodeCache *&node_cache)
+{
+  int ret = OB_SUCCESS;
+  node_cache = nullptr;
+  ++proc_count;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null range node", K(ret));
+  } else if (OB_UNLIKELY(proc_count % 1000 == 0) &&
+             OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("failed to check status", K(ret));
+  } else if (range_node->always_true_ || range_node->always_false_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected pos", KPC(range_node));
+  } else if (OB_FAIL(memo_map.get_refactored(reinterpret_cast<uint64_t>(range_node), node_cache))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get memo map", K(ret));
+    }
+  }
+  
+  if (OB_SUCC(ret) && OB_ISNULL(node_cache)) {
+    char *ptr = static_cast<char*>(allocator.alloc(sizeof(RangeNodeCache) + range_node->column_cnt_ * sizeof(uint64_t) * 2));
+    int64_t idx = range_node->min_offset_;
+    uint64_t cur_or_count = 0;
+    uint64_t *range_sizes = nullptr;
+    uint64_t *tmp_range_sizes = nullptr;
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      node_cache = new(ptr) RangeNodeCache();
+      node_cache->range_sizes_ = reinterpret_cast<uint64_t*>(ptr + sizeof(RangeNodeCache));
+      range_sizes = node_cache->range_sizes_;
+      tmp_range_sizes = reinterpret_cast<uint64_t*>(ptr + sizeof(RangeNodeCache) + range_node->column_cnt_ * sizeof(uint64_t));
+      
+      for (const ObRangeNode *cur_node = range_node->or_next_; 
+            -1 == idx && cur_node != nullptr; cur_node = cur_node->or_next_) {
+        idx = cur_node->min_offset_;
+      }
+      if (-1 == idx) {
+        idx = 0;
+      }
+      node_cache->min_offset_ = idx;
+      MEMSET(range_sizes, 0, range_node->column_cnt_ * sizeof(uint64_t));
+
+      for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != nullptr; cur_node = cur_node->or_next_) {
+        if (cur_node->contain_in_) {
+          cur_or_count += cur_node->in_param_count_;
+        } else if (cur_node->is_not_in_node_) {
+          cur_or_count += cur_node->in_param_count_ + 1;
+        } else {
+          ++cur_or_count;
+        }
+
+        if (nullptr == cur_node->or_next_ ||
+            cur_node->min_offset_ != cur_node->or_next_->min_offset_ ||
+            cur_node->or_next_->and_next_ != cur_node->and_next_) {
+          if (cur_node->min_offset_ <= 0) {
+            node_cache->start_from_zero_ = true;
+          }
+          MEMSET(tmp_range_sizes, 0, range_node->column_cnt_ * sizeof(uint64_t));
+          for (int64_t i = idx; i < range_node->column_cnt_; ++i) {
+            add_check_overflow(tmp_range_sizes[i], cur_or_count);
+          }
+          if (cur_node->and_next_ != nullptr) {
+            RangeNodeCache *child_cache = nullptr;
+            if (OB_FAIL(SMART_CALL(collect_graph_infos_dp_inner(cur_node->and_next_, 
+                                                                memo_map, 
+                                                                allocator, 
+                                                                proc_count,
+                                                                child_cache)))) {
+              LOG_WARN("failed to collect graph infos");
+            } else if (OB_ISNULL(child_cache)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret));
+            } else {
+              int64_t max_offset = std::max(idx, child_cache->min_offset_);
+              for (int64_t i = max_offset == -1 ? 0 : max_offset; i < range_node->column_cnt_; ++i) {
+                mul_check_overflow(tmp_range_sizes[i], child_cache->range_sizes_[i]);
+              }
+              node_cache->min_offset_ = std::min(child_cache->min_offset_, node_cache->min_offset_);
+              node_cache->start_from_zero_ = node_cache->start_from_zero_ || child_cache->start_from_zero_;
+            }
+          }
+          for (int64_t i = idx; i < range_node->column_cnt_; ++i) {
+            add_check_overflow(range_sizes[i], tmp_range_sizes[i]);
+          }
+          cur_or_count = 0;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(memo_map.set_refactored(reinterpret_cast<uint64_t>(range_node), node_cache))) {
+        LOG_WARN("failed to set memo map", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::collect_graph_infos_dp(ObRangeNode *range_node,
+                                                  uint64_t *total_range_sizes,
+                                                  uint64_t *range_sizes,
+                                                  bool &start_from_zero,
+                                                  int64_t &min_offset)
+{
+  int ret = OB_SUCCESS;
+  uint64_t proc_count = 0;
+  common::hash::ObHashMap<uint64_t, RangeNodeCache*> memo_map;
+  common::ObArenaAllocator arena_allocator("RangeDPArena", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null range node", K(ret));
+  } else if (range_node->always_true_ || range_node->always_false_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected pos", KPC(range_node));
+  } else if (OB_FAIL(memo_map.create(1000, "RangeMemoMap", "RangeMemoMap", MTL_ID()))) {
+    LOG_WARN("failed to create memo map", K(ret));
+  } else {
+    RangeNodeCache *root_cache = nullptr;
+    if (OB_FAIL(collect_graph_infos_dp_inner(range_node, 
+                                             memo_map, 
+                                             arena_allocator, 
+                                             proc_count,
+                                             root_cache))) {
+      LOG_WARN("failed to collect graph infos with dp", K(ret));
+    } else if (OB_ISNULL(root_cache)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null root cache", K(ret));
+    } else {
+      start_from_zero = root_cache->start_from_zero_;
+      min_offset = root_cache->min_offset_;
+      MEMCPY(total_range_sizes, root_cache->range_sizes_, range_node->column_cnt_ * sizeof(uint64_t));
+    }
+  }
+  return ret;
+}
+
+
 
 }
 }
