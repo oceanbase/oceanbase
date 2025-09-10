@@ -4501,7 +4501,8 @@ public:
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
       external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
-      is_mysql_udtf_(false) {
+      is_mysql_udtf_(false),
+      out_params_type_() {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4533,7 +4534,8 @@ public:
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
       external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
-      is_mysql_udtf_(false) {
+      is_mysql_udtf_(false),
+      out_params_type_() {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4560,6 +4562,10 @@ public:
   inline int set_params_type(common::ObIArray<ObRawExprResType> &params_type)
   {
     return params_type_.assign(params_type);
+  }
+  inline int set_out_params_type(common::ObIArray<ObRawExprResType> &out_params_type)
+  {
+    return out_params_type_.assign(out_params_type);
   }
   inline int set_database_name(const common::ObString &database_name)
   {
@@ -4611,6 +4617,7 @@ public:
   inline pl::ObPLIntegerType get_pls_type() const { return pls_type_; }
   inline common::ObIArray<ObRawExprResType> &get_params_type() { return params_type_; }
   inline const common::ObIArray<ObRawExprResType> &get_params_type() const { return params_type_; }
+  inline common::ObIArray<ObRawExprResType> &get_out_params_type() { return out_params_type_; }
   inline common::ObString get_database_name() const { return database_name_; }
   inline common::ObString get_package_name() const { return package_name_; }
   int assign(const ObRawExpr &other) override;
@@ -4747,6 +4754,7 @@ private:
   uint64_t dblink_id_;
   ObExternalRoutineType external_routine_type_;
   bool is_mysql_udtf_;
+  common::ObSEArray<ObRawExprResType, 5, common::ModulePageAllocator, true> out_params_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFRawExpr);
 };

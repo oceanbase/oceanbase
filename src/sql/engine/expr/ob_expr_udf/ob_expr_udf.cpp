@@ -28,7 +28,7 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObExprUDF, ObFuncExprOperator),
                      udf_id_, result_type_, params_type_,
                      udf_package_id_, params_desc_, is_udt_udf_,
-                     nocopy_params_, subprogram_path_, call_in_sql_, loc_, is_udt_cons_);
+                     nocopy_params_, subprogram_path_, call_in_sql_, loc_, is_udt_cons_, out_params_type_);
 
 ObExprUDF::ObExprUDF(common::ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_UDF, N_UDF, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
@@ -43,7 +43,8 @@ ObExprUDF::ObExprUDF(common::ObIAllocator &alloc)
       is_udt_udf_(false),
       call_in_sql_(true),
       loc_(0),
-      is_udt_cons_(false) {}
+      is_udt_cons_(false),
+      out_params_type_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc)) {}
 
 void ObExprUDF::reset()
 {
@@ -319,7 +320,8 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               external_routine_url_,
               external_routine_resource_,
               dblink_id_,
-              is_mysql_udtf_);
+              is_mysql_udtf_,
+              out_params_type_);
   return ret;
 }
 
@@ -345,7 +347,8 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               external_routine_url_,
               external_routine_resource_,
               dblink_id_,
-              is_mysql_udtf_);
+              is_mysql_udtf_,
+              out_params_type_);
   return ret;
 }
 
@@ -371,7 +374,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               external_routine_url_,
               external_routine_resource_,
               dblink_id_,
-              is_mysql_udtf_);
+              is_mysql_udtf_,
+              out_params_type_);
   return len;
 }
 
