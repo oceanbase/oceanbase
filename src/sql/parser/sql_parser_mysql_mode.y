@@ -24314,7 +24314,11 @@ ID_DOT_ID_DOT_ID { $$ = $1; }
 ;
 
 function_name:
-NAME_OB
+STATISTICS
+{
+  make_name_node($$, result->malloc_pool_, "statistics");
+}
+| NAME_OB
 {
   $$ = $1;
 }
