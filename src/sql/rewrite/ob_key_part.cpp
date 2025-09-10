@@ -710,8 +710,8 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
         if (OB_ISNULL(new_param = in_keypart_->create_param_meta(allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate param meta", K(ret));
-        } else if (OB_FAIL(new_param->assign(*param, allocator_))) {
-          LOG_WARN("failed to assign new param", K(ret));
+        } else if (OB_FAIL(new_param->deep_copy(allocator_, *param))) {
+          LOG_WARN("failed to deep copy param", K(ret));
         } else if (OB_FAIL(in_keypart_->in_params_.push_back(new_param))) {
           LOG_WARN("failed to push back new param", K(ret));
         }
@@ -767,6 +767,29 @@ int InParamMeta::assign(const InParamMeta &other, ObIAllocator &alloc)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid in keypart", K(ret));
   } else if (OB_FAIL(pos_.assign(other.pos_))) {
+    LOG_WARN("failed to assign other", K(ret));
+  } else if (OB_FAIL(vals_.reserve(other.vals_.count()))) {
+    LOG_WARN("failed to reserve vals count", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.vals_.count(); ++i) {
+      ObObj new_val;
+      if (OB_FAIL(ob_write_obj(alloc, other.vals_.at(i), new_val))) {
+        LOG_WARN("failed to copy obj", K(ret));
+      } else if (OB_FAIL(vals_.push_back(new_val))) {
+        LOG_WARN("failed to push back new val", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int InParamMeta::deep_copy( ObIAllocator &alloc, const InParamMeta &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(other.vals_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid in keypart", K(ret));
+  } else if (OB_FAIL(pos_.deep_copy(alloc, other.pos_))) {
     LOG_WARN("failed to assign other", K(ret));
   } else if (OB_FAIL(vals_.reserve(other.vals_.count()))) {
     LOG_WARN("failed to reserve vals count", K(ret));
