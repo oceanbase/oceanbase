@@ -83,7 +83,9 @@ private:
     SERVICE_NAME,
     TOTAL_CPU_TIME,
     TOP_INFO,
-    MEMORY_USAGE
+    MEMORY_USAGE,
+    TOP_TIME,
+    TOP_TRACE_ID
   };
   class FillScanner
   {
@@ -98,6 +100,7 @@ private:
         table_schema_(NULL)
     {
       trace_id_[0] = '\0';
+      top_trace_id_[0] = '\0';
     }
     virtual ~FillScanner(){}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
@@ -119,7 +122,9 @@ private:
       share::schema::ObSchemaGetterGuard* schema_guard_;
       ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
       char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+      char top_trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
       const share::schema::ObTableSchema *table_schema_;
+      char pl_info_string_[24] = "In inner PL processing.";
       DISALLOW_COPY_AND_ASSIGN(FillScanner);
   };
   sql::ObSQLSessionMgr *session_mgr_;

@@ -937,6 +937,7 @@ public:
     old_db_priv_set_ = OB_PRIV_SET_EMPTY;
     is_inner_mock_ = false;
     is_system_trigger_ = false;
+    saved_pl_internal_time_split_point_ = 0;
   }
 
   int is_inited() { return session_info_ != NULL; }
@@ -1120,6 +1121,7 @@ private:
   ObCurTraceId::TraceId trace_id_;
   bool is_inner_mock_;
   bool is_system_trigger_;
+  int64_t saved_pl_internal_time_split_point_;
 };
 
 struct PlTransformTreeCtx

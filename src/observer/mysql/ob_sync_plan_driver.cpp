@@ -237,6 +237,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
     }
   }
+  session_.set_top_trace_id(nullptr);
   //if the error code is ob_timeout, we add more error info msg for dml query.
   if (OB_TIMEOUT == ret && session_.is_user_session()) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - session_.get_query_start_time());

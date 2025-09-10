@@ -7693,6 +7693,8 @@ def_table_schema(
   ('total_cpu_time', 'double', 'false'),
   ('top_info', 'varchar:MAX_COLUMN_VARCHAR_LENGTH', 'true'),
   ('memory_usage', 'bigint', 'true'),
+  ('top_time', 'double', 'false'),
+  ('top_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -24444,7 +24446,9 @@ SELECT
   SERVICE_NAME,
   cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
   TOP_INFO,
-  MEMORY_USAGE
+  MEMORY_USAGE,
+  TOP_TIME,
+  TOP_TRACE_ID
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -24498,7 +24502,9 @@ def_table_schema(
     SERVICE_NAME,
     cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
     TOP_INFO,
-    MEMORY_USAGE
+    MEMORY_USAGE,
+    TOP_TIME,
+    TOP_TRACE_ID
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -62453,7 +62459,9 @@ SELECT
   CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
   SERVICE_NAME,
   TOP_INFO,
-  MEMORY_USAGE
+  MEMORY_USAGE,
+  TOP_TIME,
+  TOP_TRACE_ID
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -62509,7 +62517,9 @@ def_table_schema(
   CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
   SERVICE_NAME,
   TOP_INFO,
-  MEMORY_USAGE
+  MEMORY_USAGE,
+  TOP_TIME,
+  TOP_TRACE_ID
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
