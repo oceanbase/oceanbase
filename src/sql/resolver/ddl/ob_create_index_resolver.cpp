@@ -143,6 +143,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 8> input_index_columns_name;
+  bool is_prefix_index = false;
   if (OB_ISNULL(index_column_node) || OB_ISNULL(crt_idx_stmt) || OB_ISNULL(tbl_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_column_node), KP(crt_idx_stmt), KP(tbl_schema));
@@ -241,6 +242,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
           LOG_WARN("index prefix len invalid", K(ret), "prefix_len", sort_item.prefix_len_);
           LOG_USER_ERROR(OB_KEY_PART_0, sort_item.column_name_.length(), sort_item.column_name_.ptr());
         }
+        is_prefix_index = true;
       } else {
         sort_item.prefix_len_ = 0;
       }
@@ -326,7 +328,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
         bool is_explicit_order = (NULL != col_node->children_[2]
             && 1 != col_node->children_[2]->is_empty_);
         if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
-            index_column_node->num_child_, index_keyname_value, is_explicit_order, sort_item.is_func_index_))) {
+            index_column_node->num_child_, index_keyname_value, is_explicit_order, sort_item.is_func_index_, NULL, is_prefix_index))) {
           LOG_WARN("fail to resolve spatial index constraint", K(ret), K(sort_item.column_name_));
         }
       }

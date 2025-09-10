@@ -7770,7 +7770,8 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     const int64_t index_keyname_value,
     bool is_explicit_order,
     bool is_func_index,
-    ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols)
+    ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols,
+    bool is_prefix_index)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
@@ -7840,7 +7841,7 @@ int ObDDLResolver::resolve_spatial_index_constraint(
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
       }
     } else if (OB_FAIL(resolve_spatial_index_constraint(*column_schema, column_num,
-        index_keyname_value, is_oracle_mode, is_explicit_order))) {
+        index_keyname_value, is_oracle_mode, is_explicit_order, is_prefix_index))) {
       LOG_WARN("resolve spatial index constraint fail", K(ret), K(column_num), K(index_keyname_value));
     }
   }
@@ -7869,7 +7870,8 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     int64_t column_num,
     const int64_t index_keyname_value,
     bool is_oracle_mode,
-    bool is_explicit_order)
+    bool is_explicit_order,
+    bool is_prefix_index)
 {
   int ret = OB_SUCCESS;
   bool is_spatial_index = index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY);
@@ -7930,6 +7932,9 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     if (column_num != 1) { // spatial only can be built in one column
       ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
       LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    } else if (is_prefix_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Spatial index doesn't support unique prefix keys.", K(ret));
     } else if (column_schema.is_virtual_generated_column()) {
       ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
       LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, column_schema.get_column_name());

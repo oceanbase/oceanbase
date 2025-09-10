@@ -546,13 +546,15 @@ public:
       const int64_t index_keyname_value,
       bool is_explicit_order,
       bool is_func_index,
-      ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols = NULL);
+      ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols = NULL,
+      bool is_prefix_index = false);
   int resolve_spatial_index_constraint(
       const share::schema::ObColumnSchemaV2 &column_schema,
       int64_t column_num,
       const int64_t index_keyname_value,
       bool is_oracle_mode,
-      bool is_explicit_order);
+      bool is_explicit_order,
+      bool is_prefix_index = false);
   int resolve_fts_index_constraint(
       const share::schema::ObTableSchema &table_schema,
       const common::ObString &column_name,
