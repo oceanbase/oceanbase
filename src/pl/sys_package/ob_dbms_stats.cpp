@@ -6298,9 +6298,24 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
                                    ObStatPrefs *&stat_pref)
 {
   int ret = OB_SUCCESS;
-  ObCharset::caseup(ctx.get_my_session()->get_local_collation_connection(), opt_name);
-  ObCharset::caseup(ctx.get_my_session()->get_local_collation_connection(), opt_value);
-  if (0 == opt_name.case_compare("CASCADE")) {
+  ObString upper_opt_name;
+  ObString upper_opt_value;
+  if (OB_FAIL(ObCharset::toupper(ctx.get_my_session()->get_local_collation_connection(),
+                                 opt_name,
+                                 upper_opt_name,
+                                 allocator))) {
+    LOG_WARN("failed to toupper opt name", K(ret));
+  } else if (OB_FAIL(ObCharset::toupper(ctx.get_my_session()->get_local_collation_connection(),
+                                        opt_value,
+                                        upper_opt_value,
+                                        allocator))) {
+    LOG_WARN("failed to toupper opt value", K(ret));
+  } else {
+    opt_name = upper_opt_name;
+    opt_value = upper_opt_value;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (0 == opt_name.case_compare("CASCADE")) {
     ObCascadePrefs *tmp_pref = NULL;
     if (OB_FAIL(new_stat_prefs(allocator, ctx.get_my_session(), opt_value, tmp_pref))) {
       LOG_WARN("failed to new stat prefs", K(ret));
@@ -6526,7 +6541,15 @@ int ObDbmsStats::convert_vaild_ident_name(common::ObIAllocator &allocator,
           ident_name.ptr()[ident_name.length() - 1] == '\"') {
         ident_name.assign(ident_name.ptr() + 1, ident_name.length() - 2);
       } else {
-        ObCharset::caseup(CS_TYPE_UTF8MB4_BIN, ident_name);
+        ObString upper_ident_name;
+        if (OB_FAIL(ObCharset::toupper(CS_TYPE_UTF8MB4_BIN,
+                                       ident_name,
+                                       upper_ident_name,
+                                       allocator))) {
+          LOG_WARN("failed to toupper ident name", K(ret));
+        } else {
+          ident_name = upper_ident_name;
+        }
       }
     }
   }
