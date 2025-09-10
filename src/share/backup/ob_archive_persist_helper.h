@@ -173,6 +173,8 @@ public:
       const share::SCN &scn, ObTenantArchivePieceAttr &piece) const;
   int get_pieces_by_range(common::ObISQLClient &proxy, const int64_t dest_id,
       const int64_t start_piece_id, const int64_t end_piece_id, ObIArray<ObTenantArchivePieceAttr> &pieces) const;
+  int check_piece_continuity_between_two_scn(common::ObISQLClient &proxy, const int64_t dest_id,
+      const share::SCN &start_scn, const share::SCN &end_scn, bool &is_continuous) const;
 
 private:
   int parse_round_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const;

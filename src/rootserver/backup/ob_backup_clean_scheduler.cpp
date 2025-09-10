@@ -1210,7 +1210,27 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
           }
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(ObBackupCleanJobOperator::move_job_to_his(trans, tenant_id_, job_attr_->job_id_))) {
+
+      if (OB_SUCC(ret) && job_attr_->is_delete_backup_all()) {
+        // set is_cleaning to false for DELETE_BACKUP_ALL type job's target path
+        ObBackupDest backup_dest;
+        if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
+          LOG_WARN("failed to set backup dest", K(ret), K(job_attr_->backup_path_));
+        } else if (OB_FAIL(backup_service_->check_leader())) {
+          LOG_WARN("failed to check leader", K(ret));
+        } else if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::set_extension_cleaning_status(
+            trans, gen_user_tenant_id(tenant_id_), backup_dest, false/*is_cleaning*/))) {
+          LOG_WARN("failed to clear dest cleaning mark", K(ret), K(tenant_id_), K(backup_dest));
+        } else {
+          LOG_INFO("[BACKUP_CLEAN] clear dest cleaning mark for DELETE_BACKUP_ALL job",
+                  K(tenant_id_), K(backup_dest), K(job_attr_->job_id_), K(job_attr_->result_));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(backup_service_->check_leader())) {
+        LOG_WARN("failed to check leader", K(ret));
+      } else if (OB_FAIL(ObBackupCleanJobOperator::move_job_to_his(trans, tenant_id_, job_attr_->job_id_))) {
         LOG_WARN("failed to move job to history", K(ret));
       }
     }
@@ -1638,6 +1658,21 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
     } else if (OB_FAIL(ObBackupCleanJobOperator::update_task_count(trans, *job_attr_, true/*is_total*/))) {
       LOG_WARN("failed to update job task count", K(ret)); 
     }
+
+    if (OB_SUCC(ret) && job_attr_->is_delete_backup_all()) {
+      // set is_cleaning to true for DELETE_BACKUP_ALL type job's target path
+      ObBackupDest backup_dest;
+      if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
+        LOG_WARN("failed to set backup dest", K(ret), "backup_path", job_attr_->backup_path_);
+      } else if (OB_FAIL(backup_service_->check_leader())) {
+        LOG_WARN("failed to check leader", K(ret));
+      } else if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::set_extension_cleaning_status(
+              trans, tenant_id_, backup_dest, true/*is_cleaning*/))) {
+        LOG_WARN("failed to set extension clean status", K(ret), K(tenant_id_), K(backup_dest));
+      } else {
+        LOG_INFO("success set extension clean status to true", K(ret), K(tenant_id_), K(backup_dest));
+      }
+    }
     DEBUG_SYNC(BACKUP_DELETE_STATUS_INIT); 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(trans.end(true))) {
@@ -1890,53 +1925,36 @@ int ObSysTenantBackupDeleteMgr::handle_user_tenant_backup_delete_()
   bool is_valid = false;
   int64_t cnt = 0;
   ObBackupCleanJobAttr new_job_attr;
-  bool can_start = true;
-  for (int64_t i = 0; OB_SUCC(ret) && can_start && i < job_attr_->executor_tenant_id_.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < job_attr_->executor_tenant_id_.count(); ++i) {
+    is_valid = false;
+    cnt = 0;
     const uint64_t user_tenant_id = job_attr_->executor_tenant_id_.at(i);
-    bool is_valid = false;
     if (OB_FAIL(ObBackupCleanCommon::check_tenant_status(*schema_service_, user_tenant_id, is_valid))) {
       LOG_WARN("fail to check tenant status", K(ret), K(user_tenant_id));
     } else if (!is_valid) {
-      LOG_INFO("tenant has been dropped or invalid, skip this tenant", K(user_tenant_id));
-    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs_of_user_tenant(*sql_proxy_, user_tenant_id, cnt))) {
-      // TODO(yuhan): bad case, if tenant is always has clean job, sys tenant job will never be started
-      LOG_WARN("fail to cnt user tenant backup delete job", K(ret), K(user_tenant_id));
+      LOG_WARN("tenant status not valid, this tenant shouldn't be backup", K(user_tenant_id), K(is_valid));
+    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(
+                       *sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
+      LOG_WARN("fail to cnt user backup delete job initiated by cur sys tenant job", K(ret), K(user_tenant_id));
     } else if (cnt != 0) {
-      can_start = false;
-      LOG_INFO("user tenant has clean job in progress, can't clean now", K(user_tenant_id));
+      LOG_INFO("user tenant job has been inserted, just pass", K(user_tenant_id));
+    } else if (OB_FAIL(do_handle_user_tenant_backup_delete_(user_tenant_id))) {
+      if (OB_BACKUP_CAN_NOT_START == ret) {
+        LOG_WARN("tenant can't start backup now just pass", K(ret));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to do insert user tenant job", K(ret), K(user_tenant_id));
+      }
     }
   }
-  if (OB_SUCC(ret) && can_start) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < job_attr_->executor_tenant_id_.count(); ++i) {
-      is_valid = false;
-      cnt = 0;
-      const uint64_t user_tenant_id = job_attr_->executor_tenant_id_.at(i);
-      if (OB_FAIL(ObBackupCleanCommon::check_tenant_status(*schema_service_, user_tenant_id, is_valid))) {
-        LOG_WARN("fail to check tenant status", K(ret), K(user_tenant_id));
-      } else if (!is_valid) {
-        LOG_WARN("tenant status not valid, this tenant shouldn't be backup", K(user_tenant_id), K(is_valid));
-      } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(*sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
-        LOG_WARN("fail to cnt user backup delete job initiated by cur sys tenant job", K(ret), K(user_tenant_id));
-      } else if (cnt != 0) {
-        LOG_INFO("user tenant job has been inserted, just pass", K(user_tenant_id));
-      } else if (OB_FAIL(do_handle_user_tenant_backup_delete_(user_tenant_id))) {
-        if (OB_BACKUP_CAN_NOT_START == ret) {
-          LOG_WARN("tenant can't start backup now just pass", K(ret));
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to do insert user tenant job", K(ret), K(user_tenant_id));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObBackupCleanStatus next_status;
-      next_status.status_ = ObBackupCleanStatus::Status::DOING;
-      if (OB_FAIL(advance_status_(*sql_proxy_, next_status))) {
-        LOG_WARN("fail to advance sys job status", K(ret), K(*job_attr_), K(next_status));
-      } else {
-        backup_service_->wakeup();
-        LOG_INFO("succeed handle user tenant backup delete, advance sys job to DOING", K(*job_attr_), K(next_status));
-      }
+  if (OB_SUCC(ret)) {
+    ObBackupCleanStatus next_status;
+    next_status.status_ = ObBackupCleanStatus::Status::DOING;
+    if (OB_FAIL(advance_status_(*sql_proxy_, next_status))) {
+      LOG_WARN("fail to advance sys job status", K(ret), K(*job_attr_), K(next_status));
+    } else {
+      backup_service_->wakeup();
+      LOG_INFO("succeed handle user tenant backup delete, advance sys job to DOING", K(*job_attr_), K(next_status));
     }
   }
   return ret;
@@ -2020,7 +2038,8 @@ int ObSysTenantBackupDeleteMgr::statistic_user_tenant_job_()
     } else if (!is_valid) {
       finish_user_backup_job++;
       LOG_WARN("tenant status not valid, just pass the tenant", K(user_tenant_id), K(is_valid));
-    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(*sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
+    } else if (OB_FAIL(ObBackupCleanJobOperator::cnt_jobs(
+                       *sql_proxy_, user_tenant_id, job_attr_->tenant_id_, job_attr_->job_id_, cnt))) {
       LOG_WARN("fail to cnt user backup delete job initiated by cur sys tenant job", K(ret), K(user_tenant_id));
     } else if (0 == cnt) {
       finish_user_backup_job++;

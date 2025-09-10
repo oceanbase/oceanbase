@@ -213,40 +213,6 @@ int ObBackupCleanJobOperator::cnt_jobs(
   return ret;
 }
 
-int ObBackupCleanJobOperator::cnt_jobs_of_user_tenant(
-    common::ObISQLClient &proxy,
-    const uint64_t tenant_id,
-    int64_t &cnt)
-{
-  int ret = OB_SUCCESS;
-  cnt = 0;
-  ObSqlString sql;
-  ObArray<ObBackupCleanJobAttr> job_attrs;
-  if (!is_valid_tenant_id(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else {
-    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
-      if (OB_FAIL(fill_select_job_sql_(sql))) {
-        LOG_WARN("failed to fill select backup job sql", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" where %s=%lu", OB_STR_TENANT_ID, tenant_id))) {
-        LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret), K(sql));
-      } else if (OB_FAIL(parse_job_result_(*result, job_attrs))) {
-        LOG_WARN("failed to parse result", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      cnt = job_attrs.count();
-    }
-  }
-  return ret;
-}
 
 int ObBackupCleanJobOperator::fill_select_job_sql_(ObSqlString &sql)
 {

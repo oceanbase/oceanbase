@@ -47,8 +47,9 @@ public:
       common::ObIArray<share::ObBackupSetFileDesc> &backup_set_infos) = 0;
 
   // Method to get the latest full backup set for a specific path
-  virtual int get_latest_full_backup_set(
+  virtual int get_latest_valid_full_backup_set(
       const uint64_t tenant_id,
+      share::ObArchivePersistHelper &archive_helper,
       const share::ObBackupPathString &backup_path,
       share::ObBackupSetFileDesc &latest_backup_desc) = 0;
 
@@ -112,8 +113,9 @@ public:
       const share::ObBackupPathString &backup_path,
       share::ObBackupSetFileDesc &oldest_backup_desc) override;
 
-  int get_latest_full_backup_set(
+  int get_latest_valid_full_backup_set(
       const uint64_t tenant_id,
+      share::ObArchivePersistHelper &archive_helper,
       const share::ObBackupPathString &backup_path,
       share::ObBackupSetFileDesc &latest_backup_desc) override;
 

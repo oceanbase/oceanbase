@@ -215,6 +215,7 @@ public:
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const share::ObBackupDest &backup_dest,
+      const bool need_lock,
       char *extension,
       const int64_t buffer_len);
   static int get_backup_dest_extensions(
@@ -355,6 +356,16 @@ public:
       char *extension,
       const int64_t extension_length,
       bool &do_not_need_update);
+  static int get_extension_cleaning_status(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const ObBackupDest &backup_dest,
+      bool &is_clean);
+  static int set_extension_cleaning_status(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupDest &backup_dest,
+    const bool is_clean);
 };
 
 }//share

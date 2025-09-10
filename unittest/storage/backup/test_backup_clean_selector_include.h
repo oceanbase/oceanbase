@@ -101,7 +101,9 @@ public:
   int get_backup_set_files_specified_dest(
       const uint64_t tid, const int64_t did,
       ObIArray<share::ObBackupSetFileDesc> &infos) override;
-  int get_latest_full_backup_set(const uint64_t tid,
+
+  int get_latest_valid_full_backup_set(const uint64_t tid,
+                                share::ObArchivePersistHelper &archive_helper,
                                  const share::ObBackupPathString &path,
                                  share::ObBackupSetFileDesc &desc) override;
   int get_oldest_full_backup_set(
@@ -296,11 +298,15 @@ int MockBackupDataProvider::get_oldest_full_backup_set(const uint64_t tenant_id,
     return OB_ENTRY_NOT_EXIST;
 }
 
-int MockBackupDataProvider::get_latest_full_backup_set(
-    const uint64_t tid, const share::ObBackupPathString &path,
+int MockBackupDataProvider::get_latest_valid_full_backup_set(
+    const uint64_t tid,
+    share::ObArchivePersistHelper &archive_helper,
+    const share::ObBackupPathString &path,
     share::ObBackupSetFileDesc &desc) {
   int ret = OB_SUCCESS;
   int64_t latest_id = -1;
+  UNUSED(tid);
+  UNUSED(archive_helper);
 
   for (int64_t i = 0; i < backup_sets_.count(); ++i) {
     const auto &set = backup_sets_.at(i);

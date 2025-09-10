@@ -382,6 +382,7 @@ const char *const BACKUP_ZONE = "zone=";
 const char *const BACKUP_IDC = "idc=";
 const char *const DEST_ID = "dest_id=";
 const char *const ENCRYPT_KEY = "encrypt_key=";
+const char *const IS_CLEANING = "is_cleaning=";
 const char *const OB_STR_INITIATOR_JOB_ID = "initiator_job_id";
 const char *const OB_STR_EXECUTOR_TENANT_ID = "executor_tenant_id";
 const char *const OB_STR_DEST_ID = "dest_id";
