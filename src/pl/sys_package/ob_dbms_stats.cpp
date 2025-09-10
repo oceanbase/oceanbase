@@ -4297,8 +4297,7 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(param.allocator_));
-  } else if (est_percent.is_null() ||
-            (is_virtual_table(param.table_id_) && !is_oracle_mapping_real_virtual_table(param.table_id_))) {
+  } else if (est_percent.is_null() || sample_not_supported(param)) {
     //if specify estimate percent null meanings 100% percent sample
     //https://community.oracle.com/tech/developers/discussion/2205871/null-for-estimate-percent-of-dbms-stats?spm=a2o8d.corp_prod_issue_detail_v2.0.0.316db27cDq1yD6
     param.sample_info_.set_percent(100.0);
@@ -4440,6 +4439,8 @@ int ObDbmsStats::use_default_gather_stat_options(ObExecContext &ctx,
     LOG_WARN("failed to get default stat options", K(ret));
   } else if (OB_FAIL(parse_granularity_and_method_opt(ctx, param))) {
     LOG_WARN("failed to parse granularity and method opt", K(ret));
+  } else if (sample_not_supported(param)) {
+    param.sample_info_.set_percent(100.0);
   }
   return ret;
 }
@@ -4607,8 +4608,9 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
   //virtual table(not include real agent table) doesn't gather histogram.
   bool is_vt = is_virtual_table(param.table_id_) &&
                !share::is_oracle_mapping_real_virtual_table(param.table_id_);
+  bool is_external_table = share::schema::ObTableType::EXTERNAL_TABLE == param.ref_table_type_;
   bool use_size_auto = false;
-  if (0 == param.method_opt_.case_compare("Z") && !is_vt) {
+  if (0 == param.method_opt_.case_compare("Z") && !is_vt && !is_external_table) {
     if (OB_FAIL(set_default_column_params(param.column_params_))) {
       LOG_WARN("failed to set default column params", K(ret));
     } else {
@@ -4617,7 +4619,7 @@ int ObDbmsStats::parse_granularity_and_method_opt(ObExecContext &ctx,
   } else {
     // method_opt => null, do not gather histogram, gather basic column stat
     const char *method_opt_str = "FOR ALL COLUMNS SIZE 1";
-    if (param.method_opt_.empty() || is_vt) {
+    if (param.method_opt_.empty() || is_vt || is_external_table) {
       param.method_opt_.assign_ptr(method_opt_str, strlen(method_opt_str));
     }
     if (OB_FAIL(ObDbmsStats::parse_method_opt(ctx, param.allocator_,
@@ -7915,6 +7917,12 @@ int ObDbmsStats::collect_executed_part_ids(const ObTableStatParam &stat_param,
     }
   }
   return ret;
+}
+
+bool ObDbmsStats::sample_not_supported(const ObTableStatParam &param)
+{
+  return (is_virtual_table(param.table_id_) && !is_oracle_mapping_real_virtual_table(param.table_id_)) ||
+         share::schema::ObTableType::EXTERNAL_TABLE == param.ref_table_type_;
 }
 
 }
