@@ -740,10 +740,10 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
 
   STAT_PRINT("{");
   STAT_PRINT("\"is_complete\":%d", is_complete());
-  STAT_PRINT(",\"incr_mem_used\":%ld", get_incr_vsag_mem_used());
-  STAT_PRINT(",\"incr_mem_hold\":%ld", get_incr_vsag_mem_hold());
-  STAT_PRINT(",\"snap_mem_used\":%ld", get_snap_vsag_mem_used());
-  STAT_PRINT(",\"snap_mem_hold\":%ld", get_snap_vsag_mem_hold());
+  STAT_PRINT(",\"incr_mem_used\":%lld", get_incr_vsag_mem_used());
+  STAT_PRINT(",\"incr_mem_hold\":%lld", get_incr_vsag_mem_hold());
+  STAT_PRINT(",\"snap_mem_used\":%lld", get_snap_vsag_mem_used());
+  STAT_PRINT(",\"snap_mem_hold\":%lld", get_snap_vsag_mem_hold());
 
   if (type_ != VIAT_MAX && OB_SUCC(ret)) {
     if (OB_FAIL(get_hnsw_param(param))) {
@@ -760,23 +760,33 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
     }
   }
   STAT_PRINT(",\"snap_index_type\":%d", int(get_snap_index_type()));
-  STAT_PRINT(",\"ref_cnt\":%ld", ATOMIC_LOAD(&ref_cnt_) - 1);
-  STAT_PRINT(",\"idle_cnt\":%ld", idle_cnt_);
+  STAT_PRINT(",\"ref_cnt\":%lld", ATOMIC_LOAD(&ref_cnt_) - 1);
+  STAT_PRINT(",\"idle_cnt\":%lld", idle_cnt_);
 
-  if (!index_identity_.empty()) {
+  if (OB_SUCC(ret) && !index_identity_.empty()) {
     STAT_PRINT(",\"index\":\"%s\"", helper.convert(index_identity_));
   }
-  if (nullptr != incr_data_) {
-    STAT_PRINT(",\"incr_data_scn\":%lu", incr_data_->scn_.get_val_for_inner_table_field());
+  if (OB_SUCC(ret) && nullptr != incr_data_) {
+    int64_t incr_cnt = 0;
+    if (OB_NOT_NULL(get_incr_index()) && OB_FAIL(obvectorutil::get_index_number(get_incr_index(), incr_cnt))) {
+      LOG_WARN("failed to get inc index number.", K(ret));
+    }
+    STAT_PRINT(",\"incr_data_scn\":%llu", incr_data_->scn_.get_val_for_inner_table_field());
+    STAT_PRINT(",\"incr_index_cnt\":%lld", incr_cnt);
   }
   if (nullptr != vbitmap_data_) {
-    STAT_PRINT(",\"vbitmap_data_scn\":%lu", vbitmap_data_->scn_.get_val_for_inner_table_field());
+    STAT_PRINT(",\"vbitmap_data_scn\":%llu", vbitmap_data_->scn_.get_val_for_inner_table_field());
   }
-  if (nullptr != snap_data_) {
-    STAT_PRINT(",\"snap_data_scn\":%lu", snap_data_->scn_.get_val_for_inner_table_field());
+  if (OB_SUCC(ret) && nullptr != snap_data_) {
+    int64_t snap_cnt = 0;
+    if (OB_NOT_NULL(get_snap_index()) && OB_FAIL(obvectorutil::get_index_number(get_snap_index(), snap_cnt))) {
+      LOG_WARN("failed to get snap index number.", K(ret));
+    }
+    STAT_PRINT(",\"snap_data_scn\":%llu", snap_data_->scn_.get_val_for_inner_table_field());
+    STAT_PRINT(",\"snap_index_cnt\":%lld", snap_cnt);
   }
   if (nullptr != all_vsag_use_mem_) {
-    STAT_PRINT(",\"all_index_mem_used\":%lu", ATOMIC_LOAD(all_vsag_use_mem_));
+    STAT_PRINT(",\"all_index_mem_used\":%llu", ATOMIC_LOAD(all_vsag_use_mem_));
   }
   if (OB_SUCC(ret)) {
     ObRbMemMgr *mem_mgr = nullptr;
@@ -785,7 +795,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mem_mgr is null", K(tenant_id));
     } else {
-      STAT_PRINT(",\"all_index_bitmap_used\":%lu", mem_mgr->get_vec_idx_used());
+      STAT_PRINT(",\"all_index_bitmap_used\":%lld", mem_mgr->get_vec_idx_used());
     }
   }
   STAT_PRINT("}");
@@ -798,13 +808,13 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
     } \
   }
   pos = 0;
-  SYNC_INFO_PRINT("{\"incr_cnt\":%lu", follower_sync_statistics_.incr_count_);
-  SYNC_INFO_PRINT(",\"vbitmap_cnt\":%lu", follower_sync_statistics_.vbitmap_count_);
-  SYNC_INFO_PRINT(",\"snap_cnt\":%lu", follower_sync_statistics_.snap_count_);
-  SYNC_INFO_PRINT(",\"sync_total_cnt\":%lu", follower_sync_statistics_.sync_count_);
-  SYNC_INFO_PRINT(",\"sync_fail_cnt\":%lu", follower_sync_statistics_.sync_fail_);
-  SYNC_INFO_PRINT(",\"last_succ_time\":%ld", follower_sync_statistics_.last_succ_time_);
-  SYNC_INFO_PRINT(",\"last_fail_time\":%ld", follower_sync_statistics_.last_fail_time_);
+  SYNC_INFO_PRINT("{\"incr_cnt\":%lld", follower_sync_statistics_.incr_count_);
+  SYNC_INFO_PRINT(",\"vbitmap_cnt\":%lld", follower_sync_statistics_.vbitmap_count_);
+  SYNC_INFO_PRINT(",\"snap_cnt\":%lld", follower_sync_statistics_.snap_count_);
+  SYNC_INFO_PRINT(",\"sync_total_cnt\":%lld", follower_sync_statistics_.sync_count_);
+  SYNC_INFO_PRINT(",\"sync_fail_cnt\":%lld", follower_sync_statistics_.sync_fail_);
+  SYNC_INFO_PRINT(",\"last_succ_time\":%lld", follower_sync_statistics_.last_succ_time_);
+  SYNC_INFO_PRINT(",\"last_fail_time\":%lld", follower_sync_statistics_.last_fail_time_);
   SYNC_INFO_PRINT(",\"last_fail_code\":%d", follower_sync_statistics_.last_fail_code_);
   SYNC_INFO_PRINT("}");
 
