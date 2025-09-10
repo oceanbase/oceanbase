@@ -1082,6 +1082,7 @@ int ObDbmsStatsExecutor::do_set_column_stats(ObIAllocator &allocator,
         LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
       }
     }
+
     //6.set hist_param TODO @jiangxiu.wt
     //other options support later.
     LOG_TRACE("succeed to do set column stats", K(param), K(*column_stat));

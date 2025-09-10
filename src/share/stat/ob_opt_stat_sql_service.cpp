@@ -334,82 +334,108 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatSqlService::batch_fetch_table_stats(sqlclient::ObISQLConnection *conn,
-                                                 const uint64_t tenant_id,
-                                                 const uint64_t table_id,
-                                                 const ObIArray<int64_t> &part_ids,
-                                                 ObIArray<ObOptTableStat*> &all_part_stats)
+int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
+                                          const ObIArray<const ObOptTableStat::Key*> &keys,
+                                          ObIArray<ObOptTableStat*> &all_part_stats)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(conn)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret));
+  uint64_t table_id;
+  ObSEArray<int64_t, 16> part_ids;
+  if (keys.empty()) {
+    //do nothing
   } else {
-    ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      ObSqlString sql;
-      ObSqlString part_list;
-      ObSqlString part_str;
-      uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-      if (!inited_) {
-        ret = OB_NOT_INIT;
-        LOG_WARN("sql service has not been initialized.", K(ret));
-      } else if (OB_FAIL(sql.append_fmt("SELECT partition_id, "
-                                        "object_type, "
-                                        "row_cnt as row_count, "
-                                        "avg_row_len as avg_row_size, "
-                                        "macro_blk_cnt as macro_block_num, "
-                                        "micro_blk_cnt as micro_block_num, "
-                                        "stattype_locked as stattype_locked,"
-                                        "stale_stats as stale_stats,"
-                                        "last_analyzed,"
-                                        "spare1 as sample_size FROM %s", share::OB_ALL_TABLE_STAT_TNAME))) {
-        LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
-      } else if (OB_FAIL(generate_in_list(part_ids, part_list))) {
-        LOG_WARN("failed to generate in list", K(ret));
-      } else if (!part_list.empty() &&
-                 OB_FAIL(part_str.append_fmt(" AND partition_id in %s", part_list.ptr()))) {
-        LOG_WARN("fail to append partition string.", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld AND TABLE_ID=%ld %s",
-                                        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                                        ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
-                                        !part_str.empty() ? part_str.ptr() : " "))) {
-        LOG_WARN("fail to append SQL where string.", K(ret));
-      } else if (OB_FAIL(conn->execute_read(exec_tenant_id, sql.ptr(), res))) {
-        LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
-      } else if (NULL == (result = res.get_result())) {
+    table_id = keys.at(0)->table_id_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
+      if (OB_ISNULL(keys.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to execute ", "sql", sql.ptr(), K(ret));
+        LOG_WARN("get unexpected null", K(ret), K(i));
+      } else if (OB_FAIL(part_ids.push_back(keys.at(i)->partition_id_))) {
+        LOG_WARN("push back error", K(ret));
       }
-      while (OB_SUCC(ret)) {
-        ObOptTableStat stat;
-        stat.set_table_id(table_id);
-        if (OB_FAIL(result->next())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("get next row failed", K(ret));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
-        } else if (OB_FAIL(fill_table_stat(*result, stat))) {
-          LOG_WARN("failed to fill table stat", K(ret));
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(batch_fetch_table_stats(tenant_id, table_id, part_ids, all_part_stats))) {
+       LOG_WARN("batch fetch table stats error", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t tenant_id,
+                                                 const uint64_t table_id,
+                                                 const ObIArray<int64_t> &part_ids,
+                                                 ObIArray<ObOptTableStat *> &all_part_stats,
+                                                 sqlclient::ObISQLConnection *conn)
+{
+  int ret = OB_SUCCESS;
+
+  ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    sqlclient::ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    ObSqlString part_list;
+    ObSqlString part_str;
+    uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    if (!inited_) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("sql service has not been initialized.", K(ret));
+    } else if (OB_FAIL(sql.append_fmt("SELECT partition_id, "
+                                      "object_type, "
+                                      "row_cnt as row_count, "
+                                      "avg_row_len as avg_row_size, "
+                                      "macro_blk_cnt as macro_block_num, "
+                                      "micro_blk_cnt as micro_block_num, "
+                                      "stattype_locked as stattype_locked,"
+                                      "stale_stats as stale_stats,"
+                                      "last_analyzed,"
+                                      "spare1 as sample_size FROM %s",
+                                      share::OB_ALL_TABLE_STAT_TNAME))) {
+      LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
+    } else if (OB_FAIL(generate_in_list(part_ids, part_list))) {
+      LOG_WARN("failed to generate in list", K(ret));
+    } else if (!part_list.empty() && OB_FAIL(part_str.append_fmt(" AND partition_id in %s", part_list.ptr()))) {
+      LOG_WARN("fail to append partition string.", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld AND TABLE_ID=%ld %s",
+                                      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                      ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
+                                      !part_str.empty() ? part_str.ptr() : " "))) {
+      LOG_WARN("fail to append SQL where string.", K(ret));
+    } else if (conn != NULL && OB_FAIL(conn->execute_read(exec_tenant_id, sql.ptr(), res))) {
+      LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
+    } else if (conn == NULL && OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
+    } else if (NULL == (result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to execute ", "sql", sql.ptr(), K(ret));
+    }
+    while (OB_SUCC(ret)) {
+      ObOptTableStat stat;
+      stat.set_table_id(table_id);
+      if (OB_FAIL(result->next())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row failed", K(ret));
         } else {
-          bool found_it = false;
-          for (int64_t i = 0; OB_SUCC(ret) && i < all_part_stats.count(); ++i) {
-            if (OB_ISNULL(all_part_stats.at(i))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected error", K(ret));
-            } else if (all_part_stats.at(i)->get_table_id() == stat.get_table_id() &&
-                      all_part_stats.at(i)->get_partition_id() == stat.get_partition_id()) {
-              found_it = true;
-              *all_part_stats.at(i) = stat;
-            }
-          }
-          if (OB_SUCC(ret) && !found_it) {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_FAIL(fill_table_stat(*result, stat))) {
+        LOG_WARN("failed to fill table stat", K(ret));
+      } else {
+        bool found_it = false;
+        for (int64_t i = 0; OB_SUCC(ret) && i < all_part_stats.count(); ++i) {
+          if (OB_ISNULL(all_part_stats.at(i))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret), K(all_part_stats), K(stat));
+            LOG_WARN("get unexpected error", K(ret));
+          } else if (all_part_stats.at(i)->get_table_id() == stat.get_table_id() &&
+                     all_part_stats.at(i)->get_partition_id() == stat.get_partition_id()) {
+            found_it = true;
+            *all_part_stats.at(i) = stat;
           }
+        }
+        if (OB_SUCC(ret) && !found_it) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(all_part_stats), K(stat));
         }
       }
     }
@@ -526,12 +552,12 @@ int ObOptStatSqlService::update_column_stat(share::schema::ObSchemaGetterGuard *
     LOG_WARN("failed to construct histogram insert sql", K(ret));
   } else if (!only_update_col_stat &&
              OB_FAIL(conn->execute_write(exec_tenant_id, delete_histogram.ptr(), affected_rows))) {
-    LOG_WARN("failed to execute write", K(delete_histogram));
+    LOG_WARN("failed to execute write", K(ret), K(delete_histogram));
   } else if (need_histogram &&
              OB_FAIL(conn->execute_write(exec_tenant_id, insert_histogram.ptr(), affected_rows))) {
-    LOG_WARN("failed to execute write", K(insert_histogram));
+    LOG_WARN("failed to execute write", K(ret), K(insert_histogram));
   } else if (OB_FAIL(conn->execute_write(exec_tenant_id, column_stats_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to execute write", K(column_stats_sql));
+    LOG_WARN("failed to execute write", K(ret), K(column_stats_sql));
   }
   return ret;
 }
