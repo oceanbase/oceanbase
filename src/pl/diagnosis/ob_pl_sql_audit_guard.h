@@ -101,7 +101,8 @@ public:
                     observer::ObQueryRetryCtrl &retry_ctrl,
                     sql::ObPLSPITraceIdGuard &traceid_guard,
                     sql::stmt::StmtType stmt_type,
-                    bool is_ps_cursor_open = false);
+                    bool is_ps_cursor_open = false,
+                    ObPLCursorInfo *cursor = nullptr);
 
   ~ObPLSqlAuditGuard();
 
@@ -134,6 +135,7 @@ private:
   lib::ObMallocCallbackGuard memory_guard_;
   int64_t plsql_compile_time_;
   bool is_ps_cursor_open_;
+  ObPLCursorInfo *cursor_;
 };
 
 }

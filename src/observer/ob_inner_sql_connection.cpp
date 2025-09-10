@@ -612,7 +612,8 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                          const ObString &ps_sql,
                                          bool is_from_pl,
                                          ObString *pl_exec_params,
-                                         const bool is_for_sslog)
+                                         const bool is_for_sslog,
+                                         pl::ObPLCursorInfo *cursor)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlan *plan = result_set.get_physical_plan();
@@ -627,6 +628,12 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
   audit_record.exec_timestamp_ = exec_timestamp;
   audit_record.exec_timestamp_.update_stage_time();
+
+  if (OB_NOT_NULL(cursor) && cursor->is_streaming()) {
+    int64_t current_exec_time = audit_record.exec_timestamp_.executor_t_;
+    cursor->add_cursor_exec_time(current_exec_time);
+  }
+
   audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
   audit_record.plsql_compile_time_ = session.get_plsql_compile_time();
   if (audit_record.pl_trace_id_.is_invalid() &&
@@ -651,7 +658,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   }
   if (enable_sql_audit) {
     ret = process_audit_record(result_set, sql_ctx, session, last_ret, execution_id,
-              ps_stmt_id, has_tenant_resource, ps_sql, is_from_pl);
+              ps_stmt_id, has_tenant_resource, ps_sql, is_from_pl, cursor);
     if (NULL != pl_exec_params) {
       audit_record.params_value_ = pl_exec_params->ptr();
       audit_record.params_value_len_ = pl_exec_params->length();
@@ -683,7 +690,8 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
                                                int64_t ps_stmt_id,
                                                bool has_tenant_resource,
                                                const ObString &ps_sql,
-                                               bool is_from_pl)
+                                               bool is_from_pl,
+                                               pl::ObPLCursorInfo *cursor)
 {
   int ret = OB_SUCCESS;
 
@@ -741,7 +749,9 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
     }
 
     //update v$sql statistics
-    if (OB_SUCC(last_ret) && session.get_local_ob_enable_plan_cache()) {
+    if (((OB_SUCC(last_ret) && OB_ISNULL(cursor))|| (OB_NOT_NULL(cursor) && OB_READ_NOTHING == last_ret)) && session.get_local_ob_enable_plan_cache()) {
+      int64_t old_total_time = audit_record.exec_timestamp_.executor_t_;
+      audit_record.exec_timestamp_.executor_t_ = OB_NOT_NULL(cursor) ? cursor->get_cursor_total_exec_time() : audit_record.exec_timestamp_.executor_t_;
       if (NULL != plan) {
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
@@ -753,6 +763,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
                                 table_row_count_list);
         }
       }
+      audit_record.exec_timestamp_.executor_t_ = old_total_time;
     }
   }
   return ret;
