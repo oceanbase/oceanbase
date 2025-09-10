@@ -180,6 +180,10 @@ int ObDropFTSIndexTask::process()
 int ObDropFTSIndexTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  int8_t drop_domain_index_finish = static_cast<int8_t>(drop_domain_index_finish_);
+  int8_t drop_doc_word_index_finish = static_cast<int8_t>(drop_doc_word_index_finish_);
+  int8_t drop_doc_rowkey_index_finish = static_cast<int8_t>(drop_doc_rowkey_index_finish_);
+  int8_t drop_rowkey_doc_index_finish = static_cast<int8_t>(drop_rowkey_doc_index_finish_);
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
@@ -195,6 +199,26 @@ int ObDropFTSIndexTask::serialize_params_to_message(char *buf, const int64_t buf
     LOG_WARN("fail to serialize aux doc word aux table info", K(ret), K(fts_doc_word_));
   } else if (OB_FAIL(ddl_stmt_str_.serialize(buf, buf_size, pos))) {
     LOG_WARN("fail to serialize ddl stmt string", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              drop_domain_index_finish))) {
+    LOG_WARN("fail to serialize drop domain index finish", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              drop_doc_word_index_finish))) {
+    LOG_WARN("fail to serialize drop doc word index finish", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              drop_doc_rowkey_index_finish))) {
+    LOG_WARN("fail to serialize drop doc rowkey index finish", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              drop_rowkey_doc_index_finish))) {
+    LOG_WARN("fail to serialize drop rowkey doc index finish", K(ret));
   }
   return ret;
 }
@@ -208,6 +232,10 @@ int ObDropFTSIndexTask::deserialize_params_from_message(
   int ret = OB_SUCCESS;
   ObFTSDDLChildTaskInfo tmp_info;
   ObString tmp_ddl_stmt_str;
+  int8_t drop_domain_index_finish = 0;
+  int8_t drop_doc_word_index_finish = 0;
+  int8_t drop_doc_rowkey_index_finish = 0;
+  int8_t drop_rowkey_doc_index_finish = 0;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(buf_size));
@@ -236,18 +264,77 @@ int ObDropFTSIndexTask::deserialize_params_from_message(
     LOG_WARN("fail to deserialize drop index arg", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, tmp_ddl_stmt_str, ddl_stmt_str_))) {
     LOG_WARN("fail to copy ddl stmt string", K(ret), K(tmp_ddl_stmt_str));
+  } else if (OB_UNLIKELY(pos >= buf_size)) {
+    // The end of the message has been reached. It is an old version message without drop index arg.
+    // just skip.
+  } else if (OB_FAIL(serialization::decode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              &drop_domain_index_finish))) {
+      LOG_WARN("fail to deserialize drop domain index finish", K(ret));
+  } else if (OB_FAIL(serialization::decode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              &drop_doc_word_index_finish))) {
+      LOG_WARN("fail to deserialize drop doc word index finish", K(ret));
+  } else if (OB_FAIL(serialization::decode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              &drop_doc_rowkey_index_finish))) {
+      LOG_WARN("fail to deserialize drop doc rowkey index finish", K(ret));
+  } else if (OB_FAIL(serialization::decode_i8(buf,
+                                              buf_size,
+                                              pos,
+                                              &drop_rowkey_doc_index_finish))) {
+      LOG_WARN("fail to deserialize drop rowkey doc index finish", K(ret));
+  } else {
+    drop_domain_index_finish_ = static_cast<bool>(drop_domain_index_finish);
+    drop_doc_word_index_finish_ = static_cast<bool>(drop_doc_word_index_finish);
+    drop_doc_rowkey_index_finish_ = static_cast<bool>(drop_doc_rowkey_index_finish);
+    drop_rowkey_doc_index_finish_ = static_cast<bool>(drop_rowkey_doc_index_finish);
   }
   return ret;
 }
 
 int64_t ObDropFTSIndexTask::get_serialize_param_size() const
 {
+  int8_t drop_domain_index_finish = static_cast<int8_t>(drop_domain_index_finish_);
+  int8_t drop_doc_word_index_finish = static_cast<int8_t>(drop_doc_word_index_finish_);
+  int8_t drop_doc_rowkey_index_finish = static_cast<int8_t>(drop_doc_rowkey_index_finish_);
+  int8_t drop_rowkey_doc_index_finish = static_cast<int8_t>(drop_rowkey_doc_index_finish_);
   return ObDDLTask::get_serialize_param_size()
        + rowkey_doc_.get_serialize_size()
        + doc_rowkey_.get_serialize_size()
        + domain_index_.get_serialize_size()
        + fts_doc_word_.get_serialize_size()
-       + ddl_stmt_str_.get_serialize_size();
+       + ddl_stmt_str_.get_serialize_size()
+       + serialization::encoded_length_i8(drop_domain_index_finish)
+       + serialization::encoded_length_i8(drop_doc_word_index_finish)
+       + serialization::encoded_length_i8(drop_doc_rowkey_index_finish)
+       + serialization::encoded_length_i8(drop_rowkey_doc_index_finish);
+}
+
+int ObDropFTSIndexTask::update_task_message(common::ObISQLClient &proxy)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  int64_t pos = 0;
+  ObString msg;
+  common::ObArenaAllocator allocator("ObDropFTSIndex");
+  const int64_t serialize_param_size = get_serialize_param_size();
+
+  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_param_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", KR(ret), K(serialize_param_size));
+  } else if (OB_FAIL(serialize_params_to_message(buf, serialize_param_size, pos))) {
+    LOG_WARN("failed to serialize params to message", KR(ret));
+  } else {
+    msg.assign(buf, serialize_param_size);
+    if (OB_FAIL(ObDDLTaskRecordOperator::update_message(proxy, tenant_id_, task_id_, msg))) {
+      LOG_WARN("failed to update message", KR(ret));
+    }
+  }
+  return ret;
 }
 
 int ObDropFTSIndexTask::check_switch_succ()
@@ -411,6 +498,9 @@ int ObDropFTSIndexTask::check_drop_index_finish(
   } else {
     ret = error_message.ret_code_;
     has_finished = true;
+    if (OB_SUCCESS == ret && OB_FAIL(update_task_message(*GCTX.sql_proxy_))) {
+      LOG_WARN("fail to update drop fulltext index task message", K(ret));
+    }
     LOG_INFO("wait drop index finish", K(ret), K(tenant_id), K(task_id), K(table_id), K(has_finished));
   }
   return ret;
