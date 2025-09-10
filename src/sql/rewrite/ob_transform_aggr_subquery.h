@@ -181,7 +181,7 @@ private:
   int transform_with_join_first(ObDMLStmt *&stmt,
                                 bool &trans_happened);
 
-  int check_stmt_valid(ObDMLStmt &stmt, bool &is_valid);
+  int check_stmt_valid(ObDMLStmt &stmt, bool &is_valid, bool &post_groupby_only);
 
   int check_join_first_validity(ObQueryRefRawExpr &query_ref,
                                 const bool is_vector_assign,
@@ -202,6 +202,7 @@ private:
   int get_trans_param(ObDMLStmt &stmt,
                       TransformParam &trans_param,
                       ObRawExpr *&root,
+                      const bool post_groupby_only,
                       bool &post_group_by);
 
   int get_trans_view(ObDMLStmt &stmt,
