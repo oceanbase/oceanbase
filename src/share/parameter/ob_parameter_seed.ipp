@@ -2803,3 +2803,8 @@ DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETE
 DEF_BOOL(_enable_runtime_filter_adaptive_apply, OB_TENANT_PARAMETER, "True",
          "Enable or disable runtime filter adaptive apply.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "override backup start scn in errsim"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
