@@ -559,10 +559,14 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
     if (OB_FAIL(ret)) {
     } else if (new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_MAX) {
       // type is reset, check new set is same as old, only support rebuild from hnsw <==> hnsw_sq
-      if ((new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ) ||
-          (old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ)) {
+      if ((new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && 
+           new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ && 
+           new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_BQ) ||
+          (old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && 
+           old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ && 
+           old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_BQ)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("it must be rebuild from hnsw <==> hnsw_sq now", K(ret), K(new_vec_param), K(old_vec_param));
+        LOG_WARN("it must be rebuild hnsw now", K(ret), K(new_vec_param), K(old_vec_param));
       } else {
         new_type_is_set = true;
       }
@@ -646,9 +650,14 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
         }
       }
     }
-
     if (OB_FAIL(ret)) {
     } else if (new_distance_is_set && new_type_is_set) {
+      if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ == new_vec_param.type_
+          && ObVectorIndexDistAlgorithm::VIDA_L2 != new_vec_param.dist_algorithm_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support distance algorithm for hnsw bq index", K(ret), K(new_index_params));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "current distance algorithm for hnsw bq index is");
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unexpected setting of vector index param, distance or type has not been set", 
@@ -673,6 +682,7 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
   }
   return ret;
 }
+
 bool ObVectorIndexUtil::is_expr_type_and_distance_algorithm_match(
      const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm)
 {
