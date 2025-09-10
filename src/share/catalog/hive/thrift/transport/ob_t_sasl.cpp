@@ -165,6 +165,9 @@ void TSasl::dispose_sasl_context()
 }
 /*---------------------end of TSasl----------------------------*/
 /*---------------------start of TSaslClient----------------------------*/
+
+// Define static mutex for TSaslClient
+oceanbase::lib::ObMutex TSaslClient::static_mutex_;
 TSaslClient::TSaslClient(const ObString &service, const ObString &server_FQDN,
                          const sasl_callback_t *callbacks, const ObString &mechanisms,
                          const ObString &authentication_id)
@@ -300,6 +303,8 @@ void TSaslClient::sasl_init(const sasl_callback_t *callbacks) {
 
 void TSaslClient::setup_client_with_kerberos()
 {
+  LockGuard lock(static_mutex_);
+
   SaslContext::instance().refresh_kerberos_context();
 
   sasl_init(SaslContext::instance().get_general_callbacks());
