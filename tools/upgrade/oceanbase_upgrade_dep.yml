@@ -121,3 +121,7 @@
       - 4.3.5.4
 
 - version: 4.3.5.4
+  can_be_upgraded_to:
+      - 4.3.5.5
+
+- version: 4.3.5.5

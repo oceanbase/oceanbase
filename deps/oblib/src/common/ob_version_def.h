@@ -147,9 +147,10 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_4_3_5_2 (oceanbase::common::cal_version(4, 3, 5, 2))
 #define CLUSTER_VERSION_4_3_5_3 (oceanbase::common::cal_version(4, 3, 5, 3))
 #define CLUSTER_VERSION_4_3_5_4 (oceanbase::common::cal_version(4, 3, 5, 4))
+#define CLUSTER_VERSION_4_3_5_5 (oceanbase::common::cal_version(4, 3, 5, 5))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
-#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_3_5_4
+#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_3_5_5
 
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // 1. After 4.0, each cluster_version is corresponed to a data version.
@@ -194,7 +195,8 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define DATA_VERSION_4_3_5_2 (oceanbase::common::cal_version(4, 3, 5, 2))
 #define DATA_VERSION_4_3_5_3 (oceanbase::common::cal_version(4, 3, 5, 3))
 #define DATA_VERSION_4_3_5_4 (oceanbase::common::cal_version(4, 3, 5, 4))
-#define DATA_CURRENT_VERSION DATA_VERSION_4_3_5_4
+#define DATA_VERSION_4_3_5_5 (oceanbase::common::cal_version(4, 3, 5, 5))
+#define DATA_CURRENT_VERSION DATA_VERSION_4_3_5_5
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // LAST_BARRIER_DATA_VERSION should be the latest barrier data version before DATA_CURRENT_VERSION
 #define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_2_1_0
