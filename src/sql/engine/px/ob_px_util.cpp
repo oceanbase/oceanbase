@@ -2282,8 +2282,6 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   } else {
     ctx.set_frames(frames);
     ctx.set_frame_cnt(frame_cnt);
-    ctx.set_ori_frames(frames);
-    ctx.set_ori_frame_cnt(frame_cnt);
     // init const vector
     ObEvalCtx eval_ctx(ctx);
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
