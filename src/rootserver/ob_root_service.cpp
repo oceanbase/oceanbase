@@ -610,7 +610,6 @@ ObRootService::ObRootService()
     refresh_server_task_(*this),
     check_server_task_(task_queue_, server_checker_),
     self_check_task_(*this),
-    load_ddl_task_(*this),
     refresh_io_calibration_task_(*this),
     zone_storage_operation_task_(*this),
     event_table_clear_task_(ROOTSERVICE_EVENT_INSTANCE,
@@ -1568,29 +1567,6 @@ int ObRootService::schedule_update_all_server_config_task()
     LOG_WARN("fail to add timer task", KR(ret));
   } else {
     LOG_INFO("add update server config task success");
-  }
-  return ret;
-}
-
-int ObRootService::schedule_load_ddl_task()
-{
-  int ret = OB_SUCCESS;
-  const bool did_repeat = false;
-#ifdef ERRSIM
-  const int64_t delay = 1000L * 1000L; //1s
-#else
-  const int64_t delay = 5L * 1000L * 1000L; //5s
-#endif
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (task_queue_.exist_timer_task(load_ddl_task_)) {
-    // ignore error
-    LOG_WARN("load ddl task already exist", K(ret));
-  } else if (OB_FAIL(task_queue_.add_timer_task(load_ddl_task_, delay, did_repeat))) {
-    LOG_WARN("fail to add timer task", K(ret));
-  } else {
-    LOG_INFO("succeed to add load ddl task");
   }
   return ret;
 }
@@ -6606,12 +6582,6 @@ int ObRootService::start_timer_tasks()
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(schedule_load_ddl_task())) {
-      LOG_WARN("schedule load ddl task failed", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     if (OB_FAIL(schedule_refresh_io_calibration_task())) {
       LOG_WARN("schedule refresh io calibration task failed", K(ret));
     }
@@ -10076,28 +10046,6 @@ ObAsyncTask *ObRootService::ObReloadUnitManagerTask::deep_copy(char *buf, const 
     LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size), KP(buf));
   } else {
     task = new (buf) ObReloadUnitManagerTask(root_service_, unit_manager_);
-  }
-  return task;
-}
-
-ObRootService::ObLoadDDLTask::ObLoadDDLTask(ObRootService &root_service)
-  : ObAsyncTimerTask(root_service.task_queue_), root_service_(root_service)
-{
-  set_retry_times(INT64_MAX);
-}
-
-int ObRootService::ObLoadDDLTask::process()
-{
-  return ObSysDDLSchedulerUtil::recover_task();
-}
-
-ObAsyncTask *ObRootService::ObLoadDDLTask::deep_copy(char *buf, const int64_t buf_size) const
-{
-  ObLoadDDLTask *task = nullptr;
-  if (nullptr == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buf is not enough", K(buf_size), "request_size", sizeof(*this));
-  } else {
-    task = new (buf) ObLoadDDLTask(root_service_);
   }
   return task;
 }
