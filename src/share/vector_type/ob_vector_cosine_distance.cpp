@@ -25,9 +25,9 @@ int ObVectorCosineDistance<float>::cosine_distance_func(const float *a, const fl
       LIB_LOG(WARN, "failed to cal cosine similarity", K(ret));
     }
   } else if (::isnan(similarity)) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_NUMERIC_OVERFLOW;
       LIB_LOG(WARN, "cosine value is nan", K(ret), K(similarity));
-      FORWARD_USER_ERROR(OB_INVALID_ARGUMENT, "cosine value is nan");
+      FORWARD_USER_ERROR(OB_NUMERIC_OVERFLOW, "cosine value is nan");
   } else {
     distance = get_cosine_distance(similarity);
   }

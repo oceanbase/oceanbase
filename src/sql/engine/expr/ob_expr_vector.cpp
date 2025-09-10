@@ -14,6 +14,7 @@
 #include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "share/vector_type/ob_vector_norm.h"
+#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {
@@ -188,6 +189,10 @@ int ObExprVectorDistance::calc_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDa
         } else {
           LOG_WARN("failed to calc distance", K(ret), K(dis_type));
         }
+      } else if (::isinf(distance)) {
+        ret = OB_NUMERIC_OVERFLOW;
+        LOG_WARN("distance value is overflow", K(distance));
+        FORWARD_USER_ERROR(OB_NUMERIC_OVERFLOW, "distance value is overflow");
       } else {
         res_datum.set_double(distance);
       }
