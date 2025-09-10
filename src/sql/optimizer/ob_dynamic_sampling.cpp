@@ -1582,8 +1582,14 @@ int ObDynamicSamplingUtils::check_ds_can_be_applied_to_filter(const ObRawExpr *f
   } else if (filter->is_column_ref_expr()) {
     //Dynamic Sampling of columns with LOB-related types is prohibited, as projecting such type columns is particularly slow.
     //bug:
+    const ObColumnRefRawExpr *column_ref = static_cast<const ObColumnRefRawExpr *>(filter);
     if (!ObDynamicSamplingUtils::is_valid_ds_col_type(filter->get_data_type())) {
       no_use = true;
+    } else if (column_ref->is_generated_column() && column_ref->is_hidden_column()
+              && OB_NOT_NULL(column_ref->get_dependant_expr())) {
+      if (OB_FAIL(SMART_CALL(check_ds_can_be_applied_to_filter(column_ref->get_dependant_expr(), no_use, total_expr_cnt)))) {
+        LOG_WARN("failed to check ds can use filter", K(ret));
+      }
     }
   } else {/*do nothing*/}
   if (OB_SUCC(ret) && !no_use) {
