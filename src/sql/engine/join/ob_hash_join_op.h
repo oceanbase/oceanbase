@@ -1093,6 +1093,9 @@ private:
                                     const int64_t batch_size,
                                     bool &has_null,
                                     const ObBatchRows *child_brs);
+  int prepare_part_rows_array(uint64_t row_num);
+  void free_part_rows_array();
+
 private:
   typedef int (ObHashJoinOp::*ReadFunc)();
   typedef int (ObHashJoinOp::*state_function_func_type)();
@@ -1177,7 +1180,6 @@ private:
   bool tuple_need_join_;  // for left_semi, left_anti_semi
   bool first_get_row_;
   HashJoinDrainMode drain_mode_;
-  int64_t cur_bkid_; // for left,anti
   int64_t remain_data_memory_size_;
   int64_t nth_nest_loop_;
   int64_t cur_nth_row_;
@@ -1279,6 +1281,13 @@ private:
   bool statistics_collect_done_;
   ObStatisticsCollectorOp *statistics_collector_op_;
   const ExprFixedArray *left_join_row_;
+  // used for need left output join
+  using PartRowsArray = common::ObSegmentArray<const ObHashJoinStoredJoinRow *,
+                                               OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                               common::ModulePageAllocator>;
+  uint64_t cur_row_idx_;
+  ModulePageAllocator *part_rows_alloc_;
+  PartRowsArray *left_part_rows_;
 };
 
 inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)
