@@ -3044,3 +3044,6 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
+         "Enable or disable defensive checks for garbage collection on shared storage.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
