@@ -324,7 +324,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init global load data stat map failed", KR(ret));
     } else if (OB_FAIL(init_pre_setting())) {
       LOG_ERROR("init pre setting failed", KR(ret));
-    } else if (GCONF._enable_numa_aware && OB_FAIL(AFFINITY_CTRL.init())) {
+    } else if (GCONF._enable_numa_aware && OB_FAIL(AFFINITY_CTRL.init(GCONF.strict_check_os_params))) {
       LOG_ERROR("init affinity ctrl topology failed", KR(ret));
     } else if (OB_FAIL(init_global_context())) {
       LOG_ERROR("init global context failed", KR(ret));

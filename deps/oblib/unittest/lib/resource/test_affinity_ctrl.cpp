@@ -29,7 +29,7 @@ TEST(TestAffiCtrl, test0)
   int ret;
   int node_status;
 
-  ret = AFFINITY_CTRL.init();
+  ret = AFFINITY_CTRL.init(true);
   ASSERT_EQ(ret, 0);
 
   ASSERT_EQ(AFFINITY_CTRL.get_tls_node(), OB_NUMA_SHARED_INDEX);
