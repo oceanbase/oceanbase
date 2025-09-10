@@ -248,6 +248,9 @@ private:
                                     const ObRawExpr *left_expr,
                                     const bool is_root_condition,
                                     ObRawExpr *&right_expr);
+  int try_cast_expr_to_int(ObRawExprFactory *expr_factory,
+                           const ObSQLSessionInfo *session,
+                           ObSysFunRawExpr *&expr);
 private:
   // data members
   ObExprResolveContext &ctx_;

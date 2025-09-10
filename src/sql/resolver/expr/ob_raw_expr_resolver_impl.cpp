@@ -5083,6 +5083,33 @@ int ObRawExprResolverImpl::process_sub_query_node(const ParseNode *node, ObRawEx
   return ret;
 }
 
+int ObRawExprResolverImpl::try_cast_expr_to_int(ObRawExprFactory *expr_factory,
+                                                const ObSQLSessionInfo *session,
+                                                ObSysFunRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObExprResType cast_dst_type;
+  ObRawExpr *new_expr = NULL;
+  cast_dst_type.set_type(ObIntType);
+  if (OB_ISNULL(expr_factory) ||
+      OB_ISNULL(session) ||
+      OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(expr->formalize(session))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory,
+                                                             session,
+                                                             *expr,
+                                                             cast_dst_type,
+                                                             new_expr))) {
+    LOG_WARN("failed to add cast to expr above", K(ret));
+  } else {
+    expr = static_cast<ObSysFunRawExpr *>(new_expr);
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -5220,6 +5247,12 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
         LOG_WARN("floor expr is null", K(ret));
       } else if (OB_FAIL(window_size_expr->set_param_expr(div_expr))) {
         LOG_WARN("failed to set param expr", K(ret));
+      } else if (lib::is_mysql_mode() &&
+                 GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0 &&
+                 OB_FAIL(try_cast_expr_to_int(&ctx_.expr_factory_,
+                                              ctx_.session_info_,
+                                              window_size_expr))) {
+        LOG_WARN("failed to cast expr to int", K(ret));
       } else if (OB_FAIL(agg_expr->add_real_param_expr(window_size_expr))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));
       } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], param_expr)))) {
