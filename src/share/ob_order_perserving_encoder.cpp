@@ -790,11 +790,24 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
     *to = 0x00;
     *(to+1) = 0x00;
     to_len += 2;
+  } else if (cs == CS_TYPE_GBK_CHINESE_CI) {
+    if (with_empty_str) {
+      *to = 0x00;
+      to++;
+      to_len++;
+    }
+    if (is_mem) {
+      MEMSET(to, 0x00, 4);
+    } else {
+      MEMSET(to, 0x00, 4);
+      *(to+1) = 0x20;
+      *(to+3) = 0x20;
+    }
+    to_len += 4;
   } else if (cs == CS_TYPE_UTF8MB4_BIN
            || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN
            || cs == CS_TYPE_GB18030_2022_BIN
            || cs == CS_TYPE_UTF8MB4_GENERAL_CI
-           || cs == CS_TYPE_GBK_CHINESE_CI
            || cs == CS_TYPE_UTF16_GENERAL_CI
            || cs == CS_TYPE_UTF16_BIN
            || cs == CS_TYPE_GB18030_CHINESE_CI
