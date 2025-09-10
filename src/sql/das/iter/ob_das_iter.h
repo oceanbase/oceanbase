@@ -16,6 +16,8 @@
 #include "lib/container/ob_fixed_array.h"
 #include "common/row/ob_row_iterator.h"
 #include "sql/das/iter/ob_das_iter_define.h"
+#include "sql/das/ob_das_define.h"
+#include "share/ob_i_tablet_scan.h"
 
 namespace oceanbase
 {

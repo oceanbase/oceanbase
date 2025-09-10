@@ -15,6 +15,7 @@
 #include "share/ob_define.h"
 #include "share/ob_ls_id.h"
 #include "share/location_cache/ob_location_struct.h"
+#include "share/ob_i_tablet_scan.h"
 #include "common/ob_tablet_id.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
@@ -457,6 +458,52 @@ enum ObTSCIRScanType : uint16_t
   OB_IR_BLOCK_MAX_SCAN,
   OB_VEC_SPIV_BLOCK_MAX_SCAN
   // OB_VEC_SPIV_INDEX_AGG,
+};
+
+struct ObDASPushDownTopN
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASPushDownTopN()
+  : order_type_(NULLS_FIRST_ASC),
+    sort_key_(nullptr),
+    limit_expr_(nullptr),
+    offset_expr_(nullptr),
+    with_ties_(false),
+    is_push_into_index_(false)
+    {}
+  ~ObDASPushDownTopN() {}
+
+  TO_STRING_KV(K_(order_type), K_(sort_key), K_(limit_expr), K_(offset_expr), K_(with_ties), K_(is_push_into_index));
+
+  OB_INLINE bool is_valid() const
+  {
+    return nullptr != limit_expr_;
+  }
+
+  OB_INLINE ObDASPushDownTopN& operator=(const ObDASPushDownTopN &other)
+  {
+    if (OB_LIKELY(this != &other)) {
+      order_type_ = other.order_type_;
+      sort_key_ = other.sort_key_;
+      limit_expr_ = other.limit_expr_;
+      offset_expr_ = other.offset_expr_;
+      with_ties_ = other.with_ties_;
+      is_push_into_index_ = other.is_push_into_index_;
+    }
+    return *this;
+  }
+
+  static int prepare_limit_param(ObEvalCtx &eval_ctx,
+                                 const ObDASPushDownTopN &push_down_topn,
+                                 ObLimitParam &limit_param);
+
+  ObOrderDirection order_type_;
+  ObExpr *sort_key_;
+  ObExpr *limit_expr_;
+  ObExpr *offset_expr_;
+  bool with_ties_;
+  bool is_push_into_index_;
 };
 
 }  // namespace sql
