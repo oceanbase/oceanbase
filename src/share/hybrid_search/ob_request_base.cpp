@@ -23,10 +23,17 @@ namespace share
 int get_op_precedence(ObItemType op_type) {
   switch (op_type) {
     case T_OP_OR:
+      return PREC_OR;
     case T_OP_XOR:
-      return PREC_OR_XOR;
+      return PREC_XOR;
     case T_OP_AND:
       return PREC_AND;
+    case T_OP_BIT_OR:
+    case T_OP_BIT_AND:
+    case T_OP_BIT_XOR:
+    case T_OP_BIT_LEFT_SHIFT:
+    case T_OP_BIT_RIGHT_SHIFT:
+      return PREC_BIT;
     case T_OP_EQ:
     case T_OP_NSEQ:
     case T_OP_LE:
@@ -39,12 +46,6 @@ int get_op_precedence(ObItemType op_type) {
     case T_OP_IS:
     case T_OP_IS_NOT:
       return PREC_COMP;
-    case T_OP_BIT_OR:
-    case T_OP_BIT_AND:
-    case T_OP_BIT_XOR:
-    case T_OP_BIT_LEFT_SHIFT:
-    case T_OP_BIT_RIGHT_SHIFT:
-      return PREC_BIT;
     case T_OP_ADD:
     case T_OP_MINUS:
       return PREC_ADD;

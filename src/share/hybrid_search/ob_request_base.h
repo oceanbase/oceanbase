@@ -26,14 +26,15 @@ namespace share
 {
 
 enum OpPrecedence {
-  PREC_OR_XOR = 1,     // OR, XOR
-  PREC_AND = 2,        // AND
-  PREC_COMP = 3,       // =, <>, <, <=, >, >=, LIKE, IN, IS
-  PREC_BIT = 4,        // |, &, <<, >>
-  PREC_ADD = 5,        // +, -
-  PREC_MUL = 6,        // *, /, DIV, MOD
-  PREC_POW = 7,        // ^
-  PREC_UNARY = 8       // NOT, ~, -, +
+  PREC_OR = 1,         // OR
+  PREC_XOR,            // XOR
+  PREC_AND,            // AND
+  PREC_BIT,            // |, &, <<, >>
+  PREC_COMP,           // =, <>, <, <=, >, >=, LIKE, IN, IS, IS NOT
+  PREC_ADD,            // +, -
+  PREC_MUL,            // *, /, DIV, MOD
+  PREC_POW,            // ^
+  PREC_UNARY           // NOT, ~, -, +
 };
 
 int get_op_precedence(ObItemType op_type);
