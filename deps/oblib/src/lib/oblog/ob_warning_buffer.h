@@ -272,10 +272,13 @@ inline void ob_reset_tsi_warning_buffer()
 class ObWarningBufferIgnoreScope
 {
 public:
-  ObWarningBufferIgnoreScope()
+  ObWarningBufferIgnoreScope(bool deep_copy_ori_warning_buffer = false)
       : ignore_scope_warn_buf_(), ori_warn_buf_(ob_get_tsi_warning_buffer()) {
     ignore_scope_warn_buf_.reset();
     ob_setup_tsi_warning_buffer(&ignore_scope_warn_buf_);
+    if (deep_copy_ori_warning_buffer) {
+      ignore_scope_warn_buf_ = *ori_warn_buf_;
+    }
   }
   ~ObWarningBufferIgnoreScope() {
     ob_setup_tsi_warning_buffer(ori_warn_buf_);
