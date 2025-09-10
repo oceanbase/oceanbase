@@ -54,7 +54,7 @@ int ObSemiStructColumnEncoder::do_init_()
   if (ctx_->null_or_nop_cnt_ > 0) {
     column_header_.set_has_null_or_nop_bitmap();
   }
-  if (ctx_->nop_cnt_ > 0) {
+  if (OB_UNLIKELY(ctx_->nop_cnt_ > 0)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("nop is not supported in semistruct json column", K(ret));
   } else if (OB_ISNULL(semistruct_ctx_ = ctx_->semistruct_ctx_)) {
@@ -85,7 +85,7 @@ int ObSemiStructColumnEncoder::store_column(ObMicroBufferWriter &buf_writer)
   } else if (OB_ISNULL(semistruct_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("semistruct_ctx is null", K(ret));
-  } else if (ctx_->has_stored_meta_) {
+  } else if (OB_UNLIKELY(ctx_->has_stored_meta_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid state", K(ret), KPC(ctx_));
   } else if (OB_FAIL(store_column_meta(buf_writer))) {

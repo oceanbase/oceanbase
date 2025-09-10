@@ -30,17 +30,17 @@ int ObSemiStructEncodeMetaDesc::deserialize(
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || pos + sizeof(ObSemiStructEncodeHeader) > len) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(pos + sizeof(ObSemiStructEncodeHeader) > len)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("buf is invalid", K(ret), KP(buf), K(len), K(pos), "size", sizeof(ObSemiStructEncodeHeader));
   } else {
     int64_t offset = pos;
     semistruct_header_ = reinterpret_cast<const ObSemiStructEncodeHeader *>(buf + offset);
     offset += sizeof(ObSemiStructEncodeHeader);
-    if (semistruct_header_->type_ != ObSemiStructEncodeHeader::Type::JSON) {
+    if (OB_UNLIKELY(semistruct_header_->type_ != ObSemiStructEncodeHeader::Type::JSON)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("semistruct_header is incorrect", K(ret), KPC(semistruct_header_));
-    } else if (pos + semistruct_header_->header_len_ > len) {
+    } else if (OB_UNLIKELY(pos + semistruct_header_->header_len_ > len)) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("buf is invalid", K(ret), KP(buf), K(len), K(pos), KPC(semistruct_header_));
     } else {
