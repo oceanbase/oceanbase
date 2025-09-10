@@ -1196,6 +1196,8 @@ int ObRestorePersistHelper::transfer_tablet(
   } else if (total_tablet_cnt == finish_tablet_cnt && finish_tablet_cnt > 0) {
     if (OB_FAIL(ls_restore_progress_table_operator.decrease_column_by_one(trans, src_ls_key, OB_STR_FINISH_TABLET_COUNT, affected_rows))) {
       LOG_WARN("failed to decrease finish tablet count in ls restore progress table", K(ret), K(src_ls_key));
+    } else if (OB_FAIL(ls_restore_progress_table_operator.increase_column_by_one(trans, dest_ls_key, OB_STR_FINISH_TABLET_COUNT, affected_rows))) {
+      LOG_WARN("failed to decrease finish tablet count in ls restore progress table", K(ret), K(dest_ls_key));
 #ifdef ERRSIM
     } else {
       LOG_INFO("correct restore progress after transfer backfill", K(src_ls_key), K(dest_ls_key));
