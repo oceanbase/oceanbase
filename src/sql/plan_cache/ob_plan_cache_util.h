@@ -923,6 +923,15 @@ struct ObPlanStat
     }
   }
 
+  inline void get_evo_records(ObEvoRecordsGuard &guard)
+  {
+    guard.reset();
+    ObEvolutionRecords *evo_records = ATOMIC_LOAD(&(evolution_stat_.records_));
+    if (ATOMIC_LOAD(&is_evolution_)) {
+      guard.set_evo_records(evo_records);
+    }
+  }
+
   /* XXX: support printing maxium 30 class members.
    * if you want to print more members, remove some first
    */

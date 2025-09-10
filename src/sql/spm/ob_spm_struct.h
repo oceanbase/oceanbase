@@ -29,6 +29,7 @@ public:
     MEMCPY(use_evo_plan_, other.use_evo_plan_, RECORDS_SIZE * sizeof(bool));
     MEMCPY(receive_ts_, other.receive_ts_, RECORDS_SIZE * sizeof(int64_t));
     MEMCPY(elapsed_t_, other.elapsed_t_, RECORDS_SIZE * sizeof(int64_t));
+    ref_count_ = other.ref_count_;
   }
 
   void set_record_for_get_plan(const int64_t evo_idx, const bool use_evo_plan, const int64_t receive_ts)
@@ -54,6 +55,7 @@ public:
     MEMSET(use_evo_plan_, 0, RECORDS_SIZE * sizeof(bool));
     MEMSET(receive_ts_, 0, RECORDS_SIZE * sizeof(int64_t));
     MEMSET(elapsed_t_, 0, RECORDS_SIZE * sizeof(int64_t));
+    ref_count_ = 0;
   }
 
   bool check_executing_evo_plan_exists()
@@ -89,6 +91,9 @@ public:
     }
     return ret;
   }
+  void inc_ref_count()  { ATOMIC_INC(&ref_count_);  }
+  void dec_ref_count()  { ATOMIC_DEC(&ref_count_);  }
+  bool is_referenced() const { return ATOMIC_LOAD(&ref_count_) > 0; }
 
   DECLARE_TO_STRING {
     int64_t pos = 0;
@@ -117,6 +122,34 @@ private:
   bool use_evo_plan_[RECORDS_SIZE];
   int64_t receive_ts_[RECORDS_SIZE];
   int64_t elapsed_t_[RECORDS_SIZE];
+  int64_t ref_count_;
+};
+
+class ObEvoRecordsGuard {
+public:
+  ObEvoRecordsGuard()
+  : evo_records_(NULL)
+  {}
+  ~ObEvoRecordsGuard() { reset(); }
+
+  void set_evo_records(ObEvolutionRecords *evo_records)  {
+    reset();
+    if (NULL != evo_records)  {
+      evo_records->inc_ref_count();
+      evo_records_ = evo_records;
+    }
+  }
+
+  void reset()  {
+    if (NULL != evo_records_) {
+      evo_records_->dec_ref_count();
+      evo_records_ = NULL;
+    }
+  }
+  ObEvolutionRecords *get_evo_records() { return evo_records_;  }
+  TO_STRING_KV(KPC_(evo_records));
+private:
+  ObEvolutionRecords *evo_records_;
 };
 
 class ObEvolutionStat
