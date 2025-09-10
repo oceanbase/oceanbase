@@ -158,7 +158,8 @@ public:
   static int check_dep_schema(ObSchemaGetterGuard &schema_guard,
                               const DependencyTable &dep_schema_objs,
                               int64_t merge_version,
-                              bool &match);
+                              bool &match,
+                              bool is_check_package_state = false);
 
   int read_dll_from_disk(ObSQLSessionInfo *session_info,
                           schema::ObSchemaGetterGuard &schema_guard,
@@ -198,16 +199,21 @@ public:
   static int encode_pl_extra_info(char *buf,
                                const int64_t len,
                                int64_t &pos,
-                               const sql::DependenyTableStore &dep_table);
+                               const sql::DependenyTableStore &dep_table,
+                               schema::ObSchemaGetterGuard &schema_guard);
 
   static int decode_and_check_extra_info(char *buf,
                                          const int64_t len,
                                          const ObPLDependencyTable &dep_table,
-                                         bool &match);
+                                         bool &match,
+                                         schema::ObSchemaGetterGuard &schema_guard);
 
   template<typename DependencyTable>
   static int get_pl_extra_info(const DependencyTable &dep_table,
-                               ObPLExtraInfo& extra_info);
+                               ObPLExtraInfo& extra_info,
+                               schema::ObSchemaGetterGuard &schema_guard);
+  static bool is_extra_info_column_exist(const uint64_t data_version);
+  static bool is_stack_size_column_exist(const uint64_t data_version);
 
 private:
   uint64_t tenant_id_;

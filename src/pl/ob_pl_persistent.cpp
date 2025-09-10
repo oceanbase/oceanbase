@@ -478,9 +478,10 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
 
 template<typename DependencyTable>
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
-                                          const DependencyTable &dep_schema_objs,
-                                          int64_t merge_version,
-                                          bool &match)
+                                              const DependencyTable &dep_schema_objs,
+                                              int64_t merge_version,
+                                              bool &match,
+                                              bool is_check_package_state)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
@@ -505,6 +506,9 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         match = false;
       } else if (new_version <= merge_version) {
         match = true;
+      } else if (!is_check_package_state
+                 && SEQUENCE_SCHEMA == dep_schema_objs.at(i).get_schema_type()) {
+        // do nothing when check disk cache for sequence schema
       } else {
         match = false;
       }
@@ -521,8 +525,11 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         // do nothing
       } else if (table_schema->get_schema_version() <= merge_version) {
         match = true;
-      } else {
+      } else if (is_check_package_state) {
         match = false;
+      } else {
+        // here do not set false , will check column info later
+        match = true;
       }
     }
   }
@@ -532,6 +539,18 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
 
   return ret;
 }
+
+template int ObRoutinePersistentInfo::check_dep_schema<ObPLDependencyTable>(ObSchemaGetterGuard &schema_guard,
+                                          const ObPLDependencyTable &dep_schema_objs,
+                                          int64_t merge_version,
+                                          bool &match,
+                                          bool is_check_package_state);
+
+template int ObRoutinePersistentInfo::check_dep_schema<sql::DependenyTableStore>(ObSchemaGetterGuard &schema_guard,
+                                          const sql::DependenyTableStore &dep_schema_objs,
+                                          int64_t merge_version,
+                                          bool &match,
+                                          bool is_check_package_state);
 
 int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                                             schema::ObSchemaGetterGuard &schema_guard,
@@ -612,7 +631,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                   } else if (OB_FAIL(decode_and_check_extra_info(extra_info.ptr(),
                                                                  extra_info.length(),
                                                                  unit_ast.get_dependency_table(),
-                                                                 match))) {
+                                                                 match,
+                                                                 schema_guard))) {
                     LOG_WARN("failed to decode_stack_sizes", K(ret));
                   }
                 }
@@ -696,7 +716,8 @@ int ObRoutinePersistentInfo::mask_special_compile_mode(ObSQLSessionInfo &session
 int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf,
                                                const int64_t len,
                                                int64_t &pos,
-                                               const sql::DependenyTableStore &dep_table)
+                                               const sql::DependenyTableStore &dep_table,
+                                               schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   ObPLExtraInfo extra_info;
@@ -706,7 +727,7 @@ int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf,
   } else if (OB_UNLIKELY(pos + dep_obj_ids_md5_len > len)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("buffer is not enough", K(ret), K(pos), K(len));
-  } else if (OB_FAIL(get_pl_extra_info(dep_table, extra_info))) {
+  } else if (OB_FAIL(get_pl_extra_info(dep_table, extra_info, schema_guard))) {
     LOG_WARN("failed to get pl extra info for disk cache check", K(ret));
   } else {
     MEMCPY(buf + pos, extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len);
@@ -718,7 +739,8 @@ int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf,
 int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
                                                          const int64_t len,
                                                          const ObPLDependencyTable &dep_table,
-                                                         bool &match)
+                                                         bool &match,
+                                                         schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -735,7 +757,7 @@ int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
     pos += dep_obj_ids_md5_len;
   }
   // get current extra_info
-  OZ (get_pl_extra_info(dep_table, extra_info));
+  OZ (get_pl_extra_info(dep_table, extra_info, schema_guard));
   if (OB_SUCC(ret)) {
     // check whether extra_info match
     if (std::strcmp(stored_dep_obj_ids_md5, extra_info.dep_obj_ids_md5_) != 0) {
@@ -748,20 +770,67 @@ int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
   return ret;
 }
 
+bool ob_schema_obj_version_less(const share::schema::ObSchemaObjVersion &a,
+                                const share::schema::ObSchemaObjVersion &b)
+{
+  return a.object_id_ < b.object_id_;
+}
+
 template<typename DependencyTable>
 int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
-                                               ObPLExtraInfo& extra_info)
+                                               ObPLExtraInfo& extra_info,
+                                               schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  ObArray<int64_t> dep_obj_ids;
+  ObPLDependencyTable dep_table_objs;
   char *buf = NULL;
   ObSqlString concat_ids_sql;
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_table.count(); ++i) {
-    OZ (add_var_to_array_no_dup(dep_obj_ids, dep_table.at(i).object_id_));
+    OZ (add_var_to_array_no_dup(dep_table_objs, dep_table.at(i)));
   }
-  OX (lib::ob_sort(dep_obj_ids.begin(), dep_obj_ids.end()));
-  for (int64_t i = 0; OB_SUCC(ret) && i < dep_obj_ids.count(); ++i) {
-    OZ (concat_ids_sql.append_fmt("%ld", dep_obj_ids.at(i)));
+  OX (lib::ob_sort(dep_table_objs.begin(), dep_table_objs.end(), ob_schema_obj_version_less));
+  for (int64_t i = 0; OB_SUCC(ret) && i < dep_table_objs.count(); ++i) {
+    OZ (concat_ids_sql.append_fmt("%ld", dep_table_objs.at(i).object_id_));
+    if(OB_SUCC(ret) &&  DEPENDENCY_TABLE == dep_table_objs.at(i).object_type_) {
+      // get column info and encode to extra_info
+      const ObTableSchema *table_schema = nullptr;
+      OZ (schema_guard.get_table_schema(MTL_ID(),
+                                        dep_table_objs.at(i).object_id_,
+                                        table_schema));
+      if (OB_SUCCESS != ret) {
+        LOG_WARN("failed to get table schema", K(ret), K(dep_table_objs.at(i)));
+      } else if (nullptr == table_schema) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get an unexpected null table schema", K(dep_table_objs.at(i).object_id_));
+      } else if (table_schema->is_index_table()) {
+        // do nothing
+      } else {
+        OZ (concat_ids_sql.append_fmt("%s", table_schema->get_table_name()));
+        ObTableSchema::const_column_iterator cs_iter = table_schema->column_begin();
+        ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
+        for (; OB_SUCC(ret) && cs_iter != cs_iter_end; ++cs_iter) {
+          const ObColumnSchemaV2 *column_schema = *cs_iter;
+          if (column_schema->is_hidden()) {
+            // do nothing
+          } else {
+            // column_id_,meta_type_,charset_type_,accuracy_,is_invisible_col_,column_name_
+            OZ (concat_ids_sql.append_fmt("%ld%d%d%ld%ld%d%s",
+                                          column_schema->get_column_id(),
+                                          static_cast<uint8_t>(column_schema->get_meta_type().get_type()),
+                                          static_cast<uint8_t>(column_schema->get_meta_type().get_extend_type()),
+                                          static_cast<uint64_t>(column_schema->get_charset_type()),
+                                          static_cast<uint64_t>(column_schema->get_accuracy().get_accuracy()),
+                                          static_cast<uint8_t>(column_schema->is_invisible_column()),
+                                          column_schema->get_column_name()));
+            // extended_type_info
+            const common::ObIArray<common::ObString>& type_info = column_schema->get_extended_type_info();
+            for (int64_t j = 0; OB_SUCC(ret) && j < type_info.count(); ++j) {
+              OZ (concat_ids_sql.append_fmt("%s", type_info.at(j).ptr()));
+            }
+          }
+        }
+      }
+    }
   }
   OZ (ObSQLUtils::md5(concat_ids_sql.string(), extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len));
   return ret;
@@ -769,11 +838,13 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
 
 template int ObRoutinePersistentInfo::get_pl_extra_info<ObPLDependencyTable>(
                                           const ObPLDependencyTable &dep_schema_objs,
-                                          ObPLExtraInfo& extra_info);
+                                          ObPLExtraInfo& extra_info,
+                                          schema::ObSchemaGetterGuard &schema_guard);
 
 template int ObRoutinePersistentInfo::get_pl_extra_info<sql::DependenyTableStore>(
                                           const sql::DependenyTableStore &dep_schema_objs,
-                                          ObPLExtraInfo& extra_info);
+                                          ObPLExtraInfo& extra_info,
+                                          schema::ObSchemaGetterGuard &schema_guard);
 int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetterGuard &schema_guard,
                                                           const ObString &binary,
                                                           const ObString &stack_sizes,
@@ -872,7 +943,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
       }
     }
     OZ (encode_stack_sizes(buf, stack_size_length, pos, unit));
-    OZ (encode_pl_extra_info(buf, stack_size_length + extra_info_length, pos, unit.get_dependency_table()));
+    OZ (encode_pl_extra_info(buf,
+            stack_size_length + extra_info_length, pos, unit.get_dependency_table(), schema_guard));
     if (OB_SUCC(ret)) {
       buf[stack_size_length + extra_info_length - 1] = '\0';
       extra_info_str.assign_ptr(buf + stack_size_length, extra_info_length);
