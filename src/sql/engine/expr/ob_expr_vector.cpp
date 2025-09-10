@@ -229,6 +229,22 @@ int ObExprVectorL2Distance::calc_l2_distance(const ObExpr &expr, ObEvalCtx &ctx,
   return ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::EUCLIDEAN);
 }
 
+ObExprVectorL2Squared::ObExprVectorL2Squared(ObIAllocator &alloc)
+    : ObExprVectorDistance(alloc, T_FUN_SYS_L2_SQUARED, N_VECTOR_L2_SQUARED, 2, NOT_ROW_DIMENSION) {}
+
+int ObExprVectorL2Squared::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                                    ObExpr &rt_expr) const
+{
+    int ret = OB_SUCCESS;
+    rt_expr.eval_func_ = ObExprVectorL2Squared::calc_l2_squared;
+    return ret;
+}
+
+int ObExprVectorL2Squared::calc_l2_squared(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  return ObExprVectorDistance::calc_distance(expr, ctx, res_datum, ObVecDisType::EUCLIDEAN_SQUARED);
+}
+
 ObExprVectorCosineDistance::ObExprVectorCosineDistance(ObIAllocator &alloc)
     : ObExprVectorDistance(alloc, T_FUN_SYS_COSINE_DISTANCE, N_VECTOR_COS_DISTANCE, 2, NOT_ROW_DIMENSION) {}
 

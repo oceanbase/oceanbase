@@ -160,6 +160,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprVectorL2Distance);
 };
 
+class ObExprVectorL2Squared : public ObExprVectorDistance
+{
+public:
+  explicit ObExprVectorL2Squared(common::ObIAllocator &alloc);
+  virtual ~ObExprVectorL2Squared() {};
+
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+
+  static int calc_l2_squared(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprVectorL2Squared);
+};
+
 class ObExprVectorCosineDistance : public ObExprVectorDistance
 {
 public:

@@ -61,6 +61,9 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
     case T_FUN_SYS_L2_DISTANCE:
       dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
       break;
+    case T_FUN_SYS_L2_SQUARED:
+      dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED;
+      break;
     case T_FUN_SYS_INNER_PRODUCT:
       dis_type = ObExprVectorDistance::ObVecDisType::DOT;
       break;

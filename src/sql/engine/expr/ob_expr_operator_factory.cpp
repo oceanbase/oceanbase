@@ -1308,6 +1308,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprLocalDynamicFilter);
     REG_OP(ObExprFormatProfile);
     REG_OP(ObExprBucket);
+    REG_OP(ObExprVectorL2Squared);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

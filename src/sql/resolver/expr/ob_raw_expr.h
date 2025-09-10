@@ -2326,6 +2326,7 @@ public:
   bool is_multiset_expr() const;
   bool is_vector_sort_expr() const {
     return get_expr_type() == T_FUN_SYS_L2_DISTANCE ||
+           get_expr_type() == T_FUN_SYS_L2_SQUARED ||
            get_expr_type() == T_FUN_SYS_INNER_PRODUCT ||
            get_expr_type() == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
            get_expr_type() == T_FUN_SYS_COSINE_DISTANCE; }

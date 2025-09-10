@@ -1413,7 +1413,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCheckLocationAccess::eval_check_location_access,               /* 849 */
   ObExprUDF::eval_external_udf,                                        /* 850 */
   ObExprStartUpMode::eval_startup_mode,                                /* 851 */
-  NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
+  ObExprVectorL2Squared::calc_l2_squared,                              /* 852 */
 #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   ObExprTmpFileOpen::eval_tmp_file_open,                              /* 853 */
   ObExprTmpFileClose::eval_tmp_file_close,                            /* 854 */

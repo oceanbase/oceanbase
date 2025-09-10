@@ -711,7 +711,8 @@ bool ObVectorIndexUtil::is_expr_type_and_distance_algorithm_match(
 {
   bool is_match = false;
   switch (expr_type) {
-    case T_FUN_SYS_L2_DISTANCE: {
+    case T_FUN_SYS_L2_DISTANCE:
+    case T_FUN_SYS_L2_SQUARED: {
       if (ObVectorIndexDistAlgorithm::VIDA_L2 == algorithm) {
         is_match = true;
       }
