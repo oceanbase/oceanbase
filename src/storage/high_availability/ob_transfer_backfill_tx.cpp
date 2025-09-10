@@ -1750,6 +1750,9 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
 
     // report restore stat
     if (OB_FAIL(ret)) {
+#ifdef ERRSIM
+    } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_TRASNFER_TABLET_RESTORE_STAT))) {
+#endif
     } else if (ObTabletRestoreStatus::is_minor_and_major_meta(param.restore_status_)
                || ObTabletRestoreStatus::is_remote(param.restore_status_)) {
       ObTransferUtils::transfer_tablet_restore_stat(ctx_->tenant_id_, ctx_->src_ls_id_, ctx_->dest_ls_id_);
