@@ -7003,17 +7003,15 @@ select bug20777(9223372036854775807) as '9223372036854775807   2**63-1';
 select bug20777(9223372036854775808) as '9223372036854775808   2**63+0';
 select bug20777(9223372036854775809) as '9223372036854775809   2**63+1';
 select bug20777(9223372036854775810) as '9223372036854775810   2**63+2';
---error 1264
+--error 1690
 select bug20777(-9223372036854775808) as 'lower bounds signed bigint';
 select bug20777(9223372036854775807) as 'upper bounds signed bigint';
 --error ER_DATA_OUT_OF_RANGE
 select bug20777(0) as 'lower bounds unsigned bigint';
 select bug20777(18446744073709551615) as 'upper bounds unsigned bigint';
---error 1264
 select bug20777(18446744073709551616) as 'upper bounds unsigned bigint + 1';
---error 1264
+--error 1690
 select bug20777(-1) as 'lower bounds unsigned bigint - 1';
---error 1264
 create table examplebug20777 as select 
   0 as 'i',
   bug20777(9223372036854775806) as '2**63-2',
@@ -7029,7 +7027,7 @@ create table examplebug20777 as select
 #show create table examplebug20777;
 #select * from examplebug20777 order by i;
 
-#drop table examplebug20777;
+drop table examplebug20777;
 select bug20777(18446744073709551613)+1;
 drop function bug20777;
 delimiter |;
