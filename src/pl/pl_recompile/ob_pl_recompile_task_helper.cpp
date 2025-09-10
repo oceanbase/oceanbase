@@ -365,7 +365,10 @@ int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLPro
             cur_max_schema_version = cur_max_schema_version > schema_version ? cur_max_schema_version : schema_version;
             if (is_pl_drop_ddl_operation(operation_type) || is_sql_drop_ddl_operation(operation_type)) {
               OZ (ob_write_string(allocator, table_name, table_name_deep_copy));
-              OZ (ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version)));
+              if (OB_SUCC(ret)) {
+                int tmp_ret = ddl_drop_obj_map.set_refactored(table_id, std::make_pair(table_name_deep_copy, schema_version));
+                ret = OB_HASH_EXIST == tmp_ret ? OB_SUCCESS : tmp_ret;
+              }
             } else if (is_pl_create_ddl_operation(operation_type)) {
               ObPLRecompileInfo tmp_tuple(table_id);
               OZ (add_var_to_array_no_dup(dep_objs, tmp_tuple));
@@ -505,8 +508,10 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
               coll_type = share::schema::ObUDTObjectType::clear_object_id_mask(key_id);
               OZ (find_udt_id(sql_proxy, tenant_id, coll_type, key_id));
             }
-            int tmp_ret = in_disk_cache_obj.set_refactored(key_id);
-            ret = OB_HASH_EXIST == tmp_ret ? OB_SUCCESS : tmp_ret;
+            if (OB_SUCC(ret)) {
+              int tmp_ret = in_disk_cache_obj.set_refactored(key_id);
+              ret = OB_HASH_EXIST == tmp_ret ? OB_SUCCESS : tmp_ret;
+            }
           }
           SET_ITERATE_END_RET;
         }
