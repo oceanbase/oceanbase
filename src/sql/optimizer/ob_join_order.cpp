@@ -592,9 +592,11 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> range_exprs;
   ObSEArray<OrderItem, 8> range_orders;
+  ObSqlSchemaGuard *schema_guard = nullptr;
   if (OB_ISNULL(path) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(path->strong_sharding_) || OB_ISNULL(path->table_partition_info_) ||
-      OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
+      OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx()) ||
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
   } else if (OB_FALSE_IT(path->is_local_order_ = false)) {
@@ -609,14 +611,22 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     // Hence we should not use the ordering from oracle agent table.
     path->ordering_.reset();
   } else if (path->use_das_ &&
-             !path->ordering_.empty() &&
-             path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() > 1) {
-    if (get_plan()->get_optimizer_context().is_das_keep_order_enabled()) {
-      // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
-      // otherwise the order is totally not guaranteed.
-      path->is_local_order_ = true;
-    } else {
-      path->ordering_.reset();
+             !path->ordering_.empty()) {
+    const ObTableSchema *table_schema = nullptr;
+    bool is_partitioned_table = false;
+    if (OB_FAIL(schema_guard->get_table_schema(path->index_id_, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (table_schema->is_partitioned_table()) {
+      if (get_plan()->get_optimizer_context().is_das_keep_order_enabled()) {
+        // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
+        // otherwise the order is totally not guaranteed.
+        path->is_local_order_ = true;
+      } else {
+        path->ordering_.reset();
+      }
     }
   } else if (path->ordering_.empty() || is_at_most_one_row_ || !path->strong_sharding_->is_distributed()) {
     path->is_local_order_ = false;
