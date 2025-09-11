@@ -52,6 +52,7 @@ public:
   void runTimerTask() override;
   int update_mview_mds_op();
   static const int64_t MVIEW_MDS_OP_INTERVAL = 5 * 1000 * 1000; // 5s
+  static const int64_t MVIEW_MDS_OP_EXPIRE_TIME = 60 * 1000 * 1000; // 60s
 private:
   bool is_inited_;
   bool in_sched_;

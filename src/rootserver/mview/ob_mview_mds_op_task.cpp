@@ -90,6 +90,7 @@ int ObMViewMdsOpTask::CollectNeedDeleteMdsFunctor::
       ret = OB_SUCCESS;
       LOG_INFO("mview_mds_op", "txid", mv_mds_kv.first, "mds", mv_mds_kv.second);
     } else if (OB_HASH_NOT_EXIST) {
+      ret = OB_SUCCESS; 
       if (OB_FAIL(del_tx_id_.push_back(mv_mds_kv.first))) {
         LOG_WARN("del_tx_id push failed", KR(ret), K(mv_mds_kv.first));
       }
@@ -147,12 +148,17 @@ int ObMViewMdsOpTask::update_mview_mds_op()
     LOG_WARN("fail to foreach mview mds map", K(ret));
   } else {
     for (int64_t idx = 0; idx < del_tx_id.count() && OB_SUCC(ret); idx++) {
-      if (OB_FAIL(mview_mds_map.erase_refactored(del_tx_id.at(idx)))) {
-        LOG_WARN("erash tx_id failed", KR(ret), K(del_tx_id.at(idx)));
-        if (OB_HASH_NOT_EXIST == ret) {
-          // id not exist, not need return failed
-          ret = OB_SUCCESS;
+      ObMViewOpArg arg;
+      if (OB_FAIL(mview_mds_map.get_refactored(del_tx_id.at(idx), arg))) {
+        LOG_WARN("get mview mds failed", KR(ret), K(del_tx_id.at(idx)));
+      } else if (arg.start_ts_ + MVIEW_MDS_OP_EXPIRE_TIME > ObTimeUtil::current_time()) {
+        if (OB_FAIL(mview_mds_map.erase_refactored(del_tx_id.at(idx)))) {
+          LOG_WARN("erase tx_id failed", KR(ret), K(del_tx_id.at(idx)));
         }
+      }
+      if (OB_HASH_NOT_EXIST == ret) {
+        // id not exist, not need return failed
+        ret = OB_SUCCESS;
       }
     }
   }
