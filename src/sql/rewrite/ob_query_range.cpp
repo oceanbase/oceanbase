@@ -7236,6 +7236,8 @@ int ObQueryRange::store_range(ObNewRange *range,
 
 int ObQueryRange::and_first_search(ObSearchState &search_state,
                                    ObKeyPart *cur,
+                                   bool force_use_start,
+                                   bool force_use_end,
                                    ObQueryRangeArray &ranges,
                                    bool &all_single_value_ranges,
                                    const ObDataTypeCastParams &dtc_params)
@@ -7248,122 +7250,165 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
       || OB_ISNULL(cur)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K_(search_state.start), K_(search_state.end), K(cur));
-  } else if (cur->is_in_key()) {
-    if (OB_FAIL(and_first_in_key(search_state, cur, ranges, all_single_value_ranges, dtc_params))) {
-      LOG_WARN("failed to and in key range", K(ret));
-    }
   } else {
-    int copy_depth = search_state.depth_;
-    bool copy_produce_range = search_state.produce_range_;
-
-    // 1. generate current key part range, fill missing part as (min, max)
-    int64_t i = cur->pos_.offset_;
-    if (!cur->is_always_true() && !cur->is_always_false() && search_state.depth_ < i) {
-      for (int64_t j = search_state.depth_; j < i; ++j) {
-        if (lib::is_oracle_mode()) {
-          // Oracle 存储层使用 NULL Last
-          search_state.start_[j].set_min_value();
-          search_state.end_[j].set_max_value();
-        } else {
-          search_state.start_[j].set_min_value();
-          search_state.end_[j].set_max_value();
+    bool copy_force_no_start = search_state.force_no_use_start_;
+    bool copy_force_no_end = search_state.force_no_use_end_;
+    for (; OB_SUCC(ret) && cur != nullptr; cur = cur->or_next_) {
+      if (cur->is_in_key()) {
+        if (OB_FAIL(and_first_in_key(search_state, cur, force_use_start, force_use_end,
+                                     ranges, all_single_value_ranges, dtc_params))) {
+          LOG_WARN("failed to and in key range", K(ret));
         }
-        search_state.include_start_[j] = false;
-        search_state.include_end_[j] = false;
-      }
-    }
-    if (search_state.max_exist_index_ >= search_state.depth_ + 1) {
-      // get the larger scope
-      if (search_state.start_[i] > cur->normal_keypart_->start_) {
-        search_state.start_[i] = cur->normal_keypart_->start_;
-        search_state.include_start_[i] = cur->normal_keypart_->include_start_;
-      }
-      if (search_state.end_[i] < cur->normal_keypart_->end_) {
-        search_state.end_[i] = cur->normal_keypart_->end_;
-        search_state.include_end_[i] = cur->normal_keypart_->include_end_;
-      }
-    } else {
-      search_state.start_[i] = cur->normal_keypart_->start_;
-      search_state.end_[i] = cur->normal_keypart_->end_;
-      search_state.max_exist_index_ = search_state.depth_ + 1;
-      search_state.include_start_[i] = cur->normal_keypart_->include_start_;
-      search_state.include_end_[i] = cur->normal_keypart_->include_end_;
-    }
-
-    // 2. process next and key part
-    bool need_process_and_next = false;
-    if (NULL != cur->and_next_ && i >= 0) {
-      need_process_and_next = cur->and_next_->is_in_key() ?
-                             (i + 1 == cur->and_next_->in_keypart_->get_min_offset()) : 
-                             (i + 1 == cur->and_next_->pos_.offset_);
-    }
-    if (need_process_and_next) {
-      // current key part is not equal value
-      // include_start_/include_end_ is ignored
-      if (cur->normal_keypart_->start_ != cur->normal_keypart_->end_) {
-        search_state.produce_range_ = false;
-      }
-      search_state.depth_++;
-      if (OB_FAIL(SMART_CALL(and_first_search(search_state,
-                                              cur->and_next_,
-                                              ranges,
-                                              all_single_value_ranges,
-                                              dtc_params)))) {
       } else {
-        search_state.depth_ = copy_depth;
-      }
-    }
+        int copy_depth = search_state.depth_;
+        bool copy_produce_range = search_state.produce_range_;
+        
+        // 1. generate current key part range, fill missing part as (min, max)
+        int64_t i = cur->pos_.offset_;
+        if (!cur->is_always_true() && !cur->is_always_false() && search_state.depth_ < i) {
+          for (int64_t j = search_state.depth_; j < i; ++j) {
+            if (lib::is_oracle_mode()) {
+              // Oracle 存储层使用 NULL Last
+              search_state.start_[j].set_min_value();
+              search_state.end_[j].set_max_value();
+            } else {
+              search_state.start_[j].set_min_value();
+              search_state.end_[j].set_max_value();
+            }
+            search_state.include_start_[j] = false;
+            search_state.include_end_[j] = false;
+          }
+        }
+        if (search_state.max_exist_index_ >= search_state.depth_ + 1) {
+          // get the larger scope
+          if (search_state.force_no_use_start_) {
+            // do nothing
+          } else if (force_use_start) {
+            search_state.start_[i] = cur->normal_keypart_->start_;
+            search_state.include_start_[i] = cur->normal_keypart_->include_start_;
+          } else if (search_state.start_[i] > cur->normal_keypart_->start_) {
+            search_state.start_[i] = cur->normal_keypart_->start_;
+            search_state.include_start_[i] = cur->normal_keypart_->include_start_;
+            force_use_start = true;
+          } else if (search_state.start_[i] < cur->normal_keypart_->start_) {
+            search_state.force_no_use_start_ = true;
+          }
+          if (search_state.force_no_use_end_) {
+            // do nothing
+          } else if (force_use_end) {
+            search_state.end_[i] = cur->normal_keypart_->end_;
+            search_state.include_end_[i] = cur->normal_keypart_->include_end_;
+          } else if (search_state.end_[i] < cur->normal_keypart_->end_) {
+            search_state.end_[i] = cur->normal_keypart_->end_;
+            search_state.include_end_[i] = cur->normal_keypart_->include_end_;
+            force_use_end = true;
+          } else if (search_state.end_[i] > cur->normal_keypart_->end_) {
+            search_state.force_no_use_end_ = true;
+          }
+        } else {
+          if (!search_state.force_no_use_start_) {
+            search_state.start_[i] = cur->normal_keypart_->start_;
+            search_state.include_start_[i] = cur->normal_keypart_->include_start_;
+          }
+          if (!search_state.force_no_use_end_) {
+            search_state.end_[i] = cur->normal_keypart_->end_;
+            search_state.include_end_[i] = cur->normal_keypart_->include_end_;        
+          }
+          if (!(search_state.force_no_use_start_ && search_state.force_no_use_end_)) {
+            search_state.max_exist_index_ = search_state.depth_ + 1;
+          }
+        }
 
-    // 3. to check if need to  output
-    //copy_produce_range的作用是控制range能不能够输出，不是所有递归到最后都能输出
-    //例如：a>1 and a<=2 and ((b>1 and b < 2) or (b > 4, and b < 5))
-    //这个例子不能抽成两段range，只能抽成一段range
-    //因为如果抽成两段range->(1, max;2, 2) or (1, max;2, 5)这两段区间是有重叠的
-    //如果前缀是一个范围的时候，后缀的范围只能用来确定边界值，所以应该只记录后缀所有区间的总的起始边界和结束边界
-    //这个range应该是(1, max; 2, 5)
-    if (OB_SUCC(ret)) {
-      // several case need to output:
-      // that previous key parts are all equal value is necessary,
-      // 1. current key part is not equal value;
-      // 2. current key part is equal value and and_next_ is NULL,
-      // 3. current key part is equal value and and_next_ is not NULL, but consequent key does not exist.
-      bool not_consequent = false;
-      if (NULL != cur->and_next_) {
-        not_consequent = cur->and_next_->is_in_key() ?
-                         !is_contain(cur->and_next_->in_keypart_->offsets_, i + 1) :
-                         i + 1 != cur->and_next_->pos_.offset_;
-      }
-      if (copy_produce_range
-          && (NULL == cur->and_next_ ||
-              cur->normal_keypart_->start_ != cur->normal_keypart_->end_ ||
-              not_consequent)) {
-        if (OB_FAIL(generate_cur_range(search_state,
-                                       copy_depth,
-                                       copy_produce_range,
-                                       ranges,
-                                       all_single_value_ranges,
-                                       cur->is_phy_rowid_key_part()))) {
-          LOG_WARN("failed to generate cur range", K(ret));
+        // 2. process next and key part
+        bool need_process_and_next = false;
+        if (NULL != cur->and_next_ && i >= 0) {
+          need_process_and_next = cur->and_next_->is_in_key() ?
+                                (i + 1 == cur->and_next_->in_keypart_->get_min_offset()) : 
+                                (i + 1 == cur->and_next_->pos_.offset_);
+        }
+        if (need_process_and_next) {
+          // current key part is not equal value
+          // include_start_/include_end_ is ignored
+          if (cur->normal_keypart_->start_ != cur->normal_keypart_->end_) {
+            search_state.produce_range_ = false;
+          }
+          search_state.depth_++;
+          if (OB_FAIL(SMART_CALL(and_first_search(search_state,
+                                                  cur->and_next_,
+                                                  force_use_start,
+                                                  force_use_end,
+                                                  ranges,
+                                                  all_single_value_ranges,
+                                                  dtc_params)))) {
+          } else {
+            search_state.depth_ = copy_depth;
+          }
+        } else {
+          if (force_use_start) {
+            for (int64_t j = i + 1; j < search_state.max_exist_index_; ++j) {
+              search_state.start_[j].set_min_value();
+              search_state.include_start_[j] = false;
+            }
+          }
+          if (force_use_end) {
+            for (int64_t j = i + 1; j < search_state.max_exist_index_; ++j) {
+              search_state.end_[j].set_max_value();
+              search_state.include_end_[j] = false;
+            }
+          }
+        }
+        search_state.force_no_use_start_ = copy_force_no_start;
+        search_state.force_no_use_end_ = copy_force_no_end;
+        force_use_start = false;
+        force_use_end = false;
+
+        // 3. to check if need to  output
+        //copy_produce_range的作用是控制range能不能够输出，不是所有递归到最后都能输出
+        //例如：a>1 and a<=2 and ((b>1 and b < 2) or (b > 4, and b < 5))
+        //这个例子不能抽成两段range，只能抽成一段range
+        //因为如果抽成两段range->(1, max;2, 2) or (1, max;2, 5)这两段区间是有重叠的
+        //如果前缀是一个范围的时候，后缀的范围只能用来确定边界值，所以应该只记录后缀所有区间的总的起始边界和结束边界
+        //这个range应该是(1, max; 2, 5)
+        if (OB_SUCC(ret)) {
+          // several case need to output:
+          // that previous key parts are all equal value is necessary,
+          // 1. current key part is not equal value;
+          // 2. current key part is equal value and and_next_ is NULL,
+          // 3. current key part is equal value and and_next_ is not NULL, but consequent key does not exist.
+          bool not_consequent = false;
+          if (NULL != cur->and_next_) {
+            not_consequent = cur->and_next_->is_in_key() ?
+                            !is_contain(cur->and_next_->in_keypart_->offsets_, i + 1) :
+                            i + 1 != cur->and_next_->pos_.offset_;
+          }
+          if (copy_produce_range
+              && (NULL == cur->and_next_ ||
+                  cur->normal_keypart_->start_ != cur->normal_keypart_->end_ ||
+                  not_consequent)) {
+            if (OB_FAIL(generate_cur_range(search_state,
+                                          copy_depth,
+                                          copy_produce_range,
+                                          ranges,
+                                          all_single_value_ranges,
+                                          cur->is_phy_rowid_key_part()))) {
+              LOG_WARN("failed to generate cur range", K(ret));
+            }
+          }
         }
       }
-    }
-  }
-  if (OB_SUCC(ret) && cur->or_next_ != NULL) {
-    // 4. has or item
-    if (contain_in_) {
-      if (OB_ISNULL(search_state.valid_offsets_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid null offsets", K(ret));
-      } else if (OB_FAIL(remove_and_next_offset(cur, *search_state.valid_offsets_))) {
-        LOG_WARN("failed to revert offsets", K(ret));
-      } else if (OB_FAIL(set_valid_offsets(cur->or_next_, search_state.valid_offsets_))) {
-        LOG_WARN("failed to get valid offsets", K(ret));
+      
+      if (OB_SUCC(ret) && cur->or_next_ != NULL) {
+        if (contain_in_) {
+          if (OB_ISNULL(search_state.valid_offsets_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid null offsets", K(ret));
+          } else if (OB_FAIL(remove_and_next_offset(cur, *search_state.valid_offsets_))) {
+            LOG_WARN("failed to revert offsets", K(ret));
+          } else if (OB_FAIL(set_valid_offsets(cur->or_next_, search_state.valid_offsets_))) {
+            LOG_WARN("failed to get valid offsets", K(ret));
+          }
+        }
       }
-    }
-    cur = cur->or_next_;
-    if (OB_SUCC(ret) &&
-        OB_FAIL(SMART_CALL(and_first_search(search_state, cur, ranges, all_single_value_ranges, dtc_params)))) {
-      LOG_WARN("failed to do and first search", K(ret));
     }
   }
   return ret;
@@ -7371,6 +7416,8 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
 
 int ObQueryRange::and_first_in_key(ObSearchState &search_state,
                                    ObKeyPart *cur,
+                                   bool force_use_start,
+                                   bool force_use_end,
                                    ObQueryRangeArray &ranges,
                                    bool &all_single_value_ranges,
                                    const ObDataTypeCastParams &dtc_params)
@@ -7386,34 +7433,61 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
   } else {
     int64_t param_val_cnt = cur->in_keypart_->get_param_val_cnt();
     int64_t valid_off_cnt = cur->in_keypart_->get_valid_offset_cnt(max_valid_off);
+    bool copy_force_no_start = search_state.force_no_use_start_;
+    bool copy_force_no_end = search_state.force_no_use_end_;
+    int copy_depth = search_state.depth_;
+    bool copy_produce_range = search_state.produce_range_;
     for (int64_t or_depth = 0; OB_SUCC(ret) && or_depth < param_val_cnt; ++or_depth) {
-      int copy_depth = search_state.depth_;
-      bool copy_produce_range = search_state.produce_range_;
-      int64_t copy_max_exist_index = search_state.max_exist_index_;
+      int64_t last_offset = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < cur->in_keypart_->in_params_.count(); ++i) {
         const InParamMeta *param_meta = cur->in_keypart_->in_params_.at(i);
         const ObObj &val = param_meta->vals_.at(or_depth);
         int64_t offset = param_meta->pos_.offset_;
         if (offset <= max_valid_off) {
+          last_offset = offset;
           if (search_state.max_exist_index_ >= search_state.depth_ + 1) {
             // get the larger scope
-            if (search_state.start_[offset] > val) {
+            if (search_state.force_no_use_start_) {
+              // do nothing
+            } else if (force_use_start) {
               search_state.start_[offset] = val;
+              search_state.include_start_[offset] = true;
+            } else if (search_state.start_[offset] > val) {
+              search_state.start_[offset] = val;
+              search_state.include_start_[offset] = true;
+              force_use_start = true;
+            } else if (search_state.start_[offset] < val) {
+              search_state.force_no_use_start_ = true;
             }
-            if (search_state.end_[offset] < val) {
+            if (search_state.force_no_use_end_) {
+              // do nothing
+            } else if (force_use_end) {
               search_state.end_[offset] = val;
+              search_state.include_end_[offset] = true;
+            } else if (search_state.end_[offset] < val) {
+              search_state.end_[offset] = val;
+              search_state.include_end_[offset] = true;
+              force_use_end = true;
+            } else if (search_state.end_[offset] > val) {
+              search_state.force_no_use_end_ = true;
             }
           } else {
-            search_state.start_[offset] = val;
-            search_state.end_[offset] = val;
-            search_state.max_exist_index_ = search_state.depth_ + 1;
-            // the next in param is not existed or not valid, no need to add depth
-            if (i < valid_off_cnt - 1) {
-              ++search_state.depth_;
+            if (!search_state.force_no_use_start_) {
+              search_state.start_[offset] = val;
+              search_state.include_start_[offset] = true;
+            }
+            if (!search_state.force_no_use_end_) {
+              search_state.end_[offset] = val;
+              search_state.include_end_[offset] = true;
+            }
+            if (!(search_state.force_no_use_start_ && search_state.force_no_use_end_)) {
+              search_state.max_exist_index_ = search_state.depth_ + 1;
             }
           }
-          search_state.include_start_[offset] = true;
-          search_state.include_end_[offset] = true;
+          // the next in param is not existed or not valid, no need to add depth
+          if (i < valid_off_cnt - 1) {
+            ++search_state.depth_;
+          }
         }
       }
       if (OB_FAIL(ret)) {
@@ -7421,14 +7495,12 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
         ++search_state.depth_;
         if (OB_FAIL(SMART_CALL(and_first_search(search_state,
                                                 cur->and_next_,
+                                                force_use_start,
+                                                force_use_end,
                                                 ranges,
                                                 all_single_value_ranges,
                                                 dtc_params)))) {
           LOG_WARN("failed to do and first search", K(ret));
-        } else {
-          // reset search_state
-          search_state.depth_ = copy_depth;
-          search_state.produce_range_ = copy_produce_range;
         }
       } else if (copy_produce_range) {
         if (OB_FAIL(generate_cur_range(search_state,
@@ -7439,7 +7511,26 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
                                        cur->is_phy_rowid_key_part()))) {
           LOG_WARN("failed to generate cur range", K(ret));
         }
+      } else {
+        if (force_use_start) {
+          for (int64_t j = last_offset + 1; j < search_state.max_exist_index_; ++j) {
+            search_state.start_[j].set_min_value();
+            search_state.include_start_[j] = false;
+          }
+        }
+        if (force_use_end) {
+          for (int64_t j = last_offset + 1; j < search_state.max_exist_index_; ++j) {
+            search_state.end_[j].set_max_value();
+            search_state.include_end_[j] = false;
+          }
+        }
       }
+      search_state.produce_range_ = copy_produce_range;
+      search_state.depth_ = copy_depth;
+      search_state.force_no_use_start_ = copy_force_no_start;
+      search_state.force_no_use_end_ = copy_force_no_end;
+      force_use_start = false;
+      force_use_end = false;
     }
   }
   return ret;
@@ -8080,6 +8171,8 @@ OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
       search_state.depth_ = 0;
       search_state.produce_range_ = true;
       search_state.is_equal_range_ = table_graph_.is_equal_range_;
+      bool force_use_start = false;
+      bool force_use_end = false;
       if (OB_FAIL(search_state.range_set_.create(range_size_ == 0 ? RANGE_BUCKET_SIZE : range_size_))) {
         LOG_WARN("create range set bucket failed", K(ret));
       } else if (contain_in_ &&
@@ -8087,6 +8180,8 @@ OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
         LOG_WARN("failed to get max valid offset", K(ret));
       } else if (OB_FAIL(SMART_CALL(and_first_search(search_state,
                                                      head_key,
+                                                     force_use_start,
+                                                     force_use_end,
                                                      ranges,
                                                      all_single_value_ranges,
                                                      dtc_params)))) {
