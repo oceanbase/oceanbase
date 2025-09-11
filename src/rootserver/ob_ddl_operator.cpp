@@ -11695,7 +11695,7 @@ int ObDDLOperator::init_tenant_scheduled_job(
                      sys_variable,
                      tenant_id,
                      trans))) {
-    LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
+    LOG_WARN("create scheduled manage dynamic partition job failed", KR(ret), K(tenant_id));
   }
   return ret;
 }
