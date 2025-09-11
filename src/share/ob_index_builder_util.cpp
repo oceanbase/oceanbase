@@ -1138,6 +1138,8 @@ int ObIndexBuilderUtil::generate_prefix_column(
         int32_t data_len = static_cast<int32_t>(min(sort_item.prefix_len_, old_column->get_data_length()));
         prefix_column.set_data_length(data_len);
         prefix_column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        // Clear skip index attribute for virtual generated columns to avoid validation errors
+        prefix_column.set_skip_index_attr(0);
         if (is_pad_char_to_full_length(sql_mode)) {
           prefix_column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
         }
