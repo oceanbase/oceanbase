@@ -284,6 +284,7 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
                                  ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
+  const int64_t max_concurrent = global_hint_.max_concurrent_;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(allocator), K(session_info), K(stmt));
@@ -298,9 +299,12 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
     LOG_WARN("failed to generate stmt name after resolve", K(ret));
   } else if (OB_FAIL(distribute_hint_to_orig_stmt(stmt))) {
     LOG_WARN("faild to distribute hint to orig stmt", K(ret));
-  } else if (OB_FAIL(!has_outline_data() && !has_user_def_outline() && OB_FAIL(global_hint_.assign(global_hint)))) {
+  } else if (has_outline_data() || has_user_def_outline()) {
+    LOG_TRACE("finish init query hint", K(has_outline_data()), K(has_user_def_outline()), K(*this));
+  } else if (OB_FAIL(global_hint_.assign(global_hint))) {
     LOG_WARN("failed to combine global hint", K(ret));
   } else {
+    global_hint_.merge_max_concurrent_hint(max_concurrent);
     LOG_TRACE("finish init query hint", K(*this));
   }
   return ret;
