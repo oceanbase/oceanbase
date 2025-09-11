@@ -4204,6 +4204,24 @@ int ObDMLStmt::update_column_item_rel_id()
       }
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_pseudo_column_like_exprs().count(); i ++) {
+    ObRawExpr *expr = get_pseudo_column_like_exprs().at(i);
+    uint64_t table_id = OB_INVALID_ID;
+    if (OB_ISNULL(expr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(expr));
+    } else if (expr->is_pseudo_column_expr() &&
+               OB_INVALID_ID != (table_id = static_cast<ObPseudoColumnRawExpr *>(expr)->get_table_id())) {
+      expr->get_relation_ids().reuse();
+      int64_t rel_id = get_table_bit_index(table_id);
+      if (rel_id <= 0 || rel_id > table_items_.count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(rel_id), K(table_items_.count()));
+      } else if (OB_FAIL(expr->add_relation_id(rel_id))) {
+        LOG_WARN("fail to add relation id", K(rel_id), K(ret));
+      }
+    }
+  }
 
   return ret;
 }
