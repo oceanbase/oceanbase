@@ -665,6 +665,8 @@ private:
   static int determine_auto_sample_table(ObExecContext &ctx,
                                          ObTableStatParam &param);
 
+
+  static bool sample_not_supported(const ObTableStatParam &param);
 };
 
 }
