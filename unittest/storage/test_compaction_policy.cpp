@@ -636,6 +636,10 @@ int TestCompactionPolicy::mock_table_store(
       LOG_WARN("failed to add table", K(ret));
     }
   }
+  if (major_table_handles.count() > 0) {
+    tablet_handle.get_obj()->table_store_cache_.last_major_snapshot_version_ =
+        major_table_handles.at(major_table_handles.count() - 1).get_table()->get_snapshot_version();
+  }
 
   ObSEArray<ObITable *, 8> minor_tables;
   for (int64_t i = 0; OB_SUCC(ret) && i < minor_table_handles.count(); ++i) {
@@ -1687,10 +1691,10 @@ TEST_F(TestCompactionPolicy, check_mv_hist_minor_merge_policy_with_large_minor)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  param.merge_type_ = ObMergeType::HISTORY_MINOR_MERGE;
   ObGetMergeTablesResult result;
   FakeLS ls;
-  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ret = ObPartitionMergePolicy::get_hist_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   // mv not care about if large sstable, sstable count (3) > minor_compact_trigger (2), schedule minor merge
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -1725,6 +1729,78 @@ TEST_F(TestCompactionPolicy, check_mv_hist_minor_merge_policy_with_two_mini)
   FakeLS ls;
   ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+}
+
+TEST_F(TestCompactionPolicy, check_minor_across_major)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+      "10            0            200        200          1        \n"
+      "11            1            150        150        150      \n"
+      "11            150          200        200        200      \n"
+      "11            200          250        250        250      \n"
+      "11            250          300        300        300      \n"
+      "11            300          350        350        350      \n";
+
+  ret = prepare_tablet(key_data, 350, 350);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, result.handle_.get_count());
+  ASSERT_EQ(200, result.handle_.get_table(0)->get_start_scn().get_val_for_gts());
+}
+
+TEST_F(TestCompactionPolicy, check_minor_across_major2)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+      "10            0            200        200          1        \n"
+      "11            1            150        150        250      \n"
+      "11            150          200        250        250      \n"
+      "11            200          250        250        250      \n"
+      "11            250          300        300        300      \n"
+      "11            300          350        350        350      \n";
+
+  ret = prepare_tablet(key_data, 350, 350);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, result.handle_.get_count());
+  ASSERT_EQ(200, result.handle_.get_table(0)->get_start_scn().get_val_for_gts());
 }
 
 } //unittest
