@@ -1792,6 +1792,10 @@ ObPLSPITraceIdGuard::ObPLSPITraceIdGuard(const ObString &sql,
   if (OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
     origin_trace_id_.set(*ObCurTraceId::get_trace_id());
 
+    if (!session_.get_top_trace_id().is_valid()) {
+      session_.set_top_trace_id(ObCurTraceId::get_trace_id());
+    }
+
     if (reused_trace_id != nullptr && reused_trace_id->is_valid()) {
       // do not log when fetching from cursor
       ObCurTraceId::get_trace_id()->set(*reused_trace_id);
@@ -1806,6 +1810,7 @@ ObPLSPITraceIdGuard::ObPLSPITraceIdGuard(const ObString &sql,
               "to", new_trace_id);
 
       ObCurTraceId::get_trace_id()->set(new_trace_id);
+      session_.set_current_trace_id(&new_trace_id);
     }
   }
 }
@@ -1818,6 +1823,11 @@ ObPLSPITraceIdGuard::~ObPLSPITraceIdGuard()
     curr_trace_id.set(*ObCurTraceId::get_trace_id());
     session_.set_last_trace_id(ObCurTraceId::get_trace_id());
     ObCurTraceId::get_trace_id()->set(origin_trace_id_);
+    session_.set_current_trace_id(&origin_trace_id_);
+
+    if (origin_trace_id_ == session_.get_top_trace_id()) {
+      session_.set_top_trace_id(nullptr);
+    }
 
     if (OB_FAIL(ret) && ret != OB_READ_NOTHING) {
       LOG_WARN("sql execution finished, trace id restored",
@@ -10030,7 +10040,8 @@ ObSPIExecEnvGuard::ObSPIExecEnvGuard(
 {
   if (!is_ps_cursor_) {
     query_start_time_bk_ = session_info.get_query_start_time();
-    session_info.set_query_start_time(ObTimeUtility::current_time());
+    session_info.set_pl_spi_query_info(ObTimeUtility::current_time());
+    session_info.set_use_pl_inner_info_string(false);
   }
 }
 
@@ -10038,7 +10049,7 @@ ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
 {
   session_info_.get_retry_info_for_update().clear();
   if (!is_ps_cursor_) {
-    session_info_.set_query_start_time(query_start_time_bk_);
+    session_info_.reset_pl_spi_query_info(query_start_time_bk_);
   }
 }
 

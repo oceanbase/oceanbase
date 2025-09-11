@@ -773,6 +773,9 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
                         : ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
     OZ (session_info.store_top_query_string(cur_query_));
     OX (session_info.reset_query_string());
+
+    OX (session_info.set_pl_cur_query_start_time_bak(session_info.get_query_start_time()));
+    OX (session_info.set_pl_internal_time_split_point(ObTimeUtility::current_time()));
     OZ (recursion_ctx_.init(session_info));
     // set top level sql id
     ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
@@ -805,6 +808,10 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
 
+  if (OB_SUCC(ret) && !session_info.get_use_pl_inner_info_string()) {
+    saved_pl_internal_time_split_point_ = session_info.get_pl_internal_time_split_point();
+  }
+  OX (session_info.set_use_pl_inner_info_string(true));
   if (OB_SUCC(ret) && OB_NOT_NULL(routine) && is_function_or_trigger && lib::is_mysql_mode() &&
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
@@ -1104,6 +1111,7 @@ void ObPLContext::destory(
       }
       session_info.reset_top_query_string();
     }
+    session_info.set_pl_cur_query_start_time_bak(0);
     // 无论如何恢复session上的状态
     session_info.set_pl_stack_ctx(NULL);
     session_info_ = NULL;
@@ -1146,7 +1154,10 @@ void ObPLContext::destory(
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
-
+  if (0 != saved_pl_internal_time_split_point_) {
+    session_info.set_pl_internal_time_split_point(saved_pl_internal_time_split_point_);
+  }
+  OX (session_info.set_use_pl_inner_info_string(false));
   if (is_autonomous_) {
     int end_trans_ret = end_autonomous(ctx, session_info);
     ret = OB_SUCCESS == ret ? end_trans_ret : ret;

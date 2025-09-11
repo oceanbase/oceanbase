@@ -4027,6 +4027,8 @@ SERVICE_NAME	varchar(64)	YES		NULL
 TOTAL_CPU_TIME	bigint(21)	NO		NULL	
 TOP_INFO	varchar(262143)	YES		NULL	
 MEMORY_USAGE	bigint(20)	YES		NULL	
+TOP_TIME	double	NO		NULL	
+TOP_TRACE_ID	varchar(64)	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PROCESSLIST limit 1);
 cnt
 1
@@ -4074,6 +4076,8 @@ SERVICE_NAME	varchar(64)	NO
 TOTAL_CPU_TIME	bigint(21)	NO			
 TOP_INFO	varchar(262143)	NO			
 MEMORY_USAGE	bigint(20)	NO			
+TOP_TIME	double	NO			
+TOP_TRACE_ID	varchar(64)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PROCESSLIST limit 1);
 cnt
 1
