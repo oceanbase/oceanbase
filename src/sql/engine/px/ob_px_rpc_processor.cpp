@@ -175,6 +175,8 @@ int ObInitSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
+    arg.exec_ctx_->set_ori_frames(arg.exec_ctx_->get_frames());
+    arg.exec_ctx_->set_ori_frame_cnt(arg.exec_ctx_->get_frame_cnt());
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {
