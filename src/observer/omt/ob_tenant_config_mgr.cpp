@@ -613,30 +613,20 @@ int ObTenantConfigMgr::update_local(uint64_t tenant_id, int64_t expected_version
         LOG_WARN("read config from __tenant_parameter failed",
                  KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
       } else {
-        DRWLock::RDLockGuard guard(rwlock_);
-        ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
-        if (OB_FAIL(ret)) {
-          LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
+        ObSystemConfig temp_config;
+        temp_config.init();
+        if (OB_FAIL(temp_config.update(result))) {
+          LOG_WARN("failed to load tenant config", K(ret));
         } else {
-          // not to save to file and publish special config until rwlock_ is wrlocked
-          ret = config->update_local(expected_version, result,
-                                      false /* save2file */, false /* publish_special_config */);
+          DRWLock::WRLockGuard guard(rwlock_);
+          ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
+          if (OB_FAIL(ret)) {
+            LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
+          } else {
+            ret = config->update_local(expected_version, temp_config.get_map());
+          }
         }
-      }
-      if (OB_SUCC(ret)) {
-        DRWLock::WRLockGuard guard(rwlock_);
-        if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
-          LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
-        } else if (OB_FAIL(config->config_mgr_->dump2file_unsafe())) {
-          LOG_WARN("Dump to file failed", K(ret));
-        } else if (OB_FAIL(config->publish_special_config_after_dump())) {
-          LOG_WARN("publish special config after dump failed", K(tenant_id), K(ret));
-        }
-#ifdef ERRSIM
-        else if (OB_FAIL(config->build_errsim_module_())) {
-          LOG_WARN("failed to build errsim module", K(ret), K(tenant_id));
-        }
-#endif
+        temp_config.clear();
       }
     }
   }

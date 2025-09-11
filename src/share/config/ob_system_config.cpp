@@ -96,6 +96,21 @@ int ObSystemConfig::update(ObMySQLProxy::MySQLResult &result)
   return ret;
 }
 
+int ObSystemConfig::update_from_map(const hashmap &temp_map)
+{
+  int ret = OB_SUCCESS;
+  for (hashmap::const_iterator it = temp_map.begin(); OB_SUCC(ret) && it != temp_map.end(); ++it) {
+    const ObSystemConfigKey &key = it->first;
+    const ObSystemConfigValue *value = it->second;
+    int64_t version = key.get_version();
+    version_ = max(version_, version);
+    if (OB_NOT_NULL(value)) {
+      ret = update_value(key, *value);
+    }
+  }
+  return ret;
+}
+
 int ObSystemConfig::find_newest(const ObSystemConfigKey &key,
                                 const ObSystemConfigValue *&pvalue,
                                 int64_t &max_version) const

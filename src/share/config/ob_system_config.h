@@ -38,6 +38,7 @@ public:
   int clear();
   int init();
   int update(ObMySQLProxy::MySQLResult &result);
+  int update_from_map(const hashmap &temp_map);
 
   int find_newest(const ObSystemConfigKey &key,
                   const ObSystemConfigValue *&pvalue,
@@ -51,6 +52,7 @@ public:
   int64_t to_string(char *buf, const int64_t len) const;
   int reload(FILE *fp);
   int64_t get_version() const { return version_; }
+  const hashmap &get_map() const { return map_; }
 
 private:
   int update_value(const ObSystemConfigKey &key, const ObSystemConfigValue &value);

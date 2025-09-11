@@ -351,10 +351,15 @@ int ObConfigManager::update_local(int64_t expected_version)
       if (OB_FAIL(sql_client_retry_weak.read(result, sqlstr))) {
         LOG_WARN("read config from __all_sys_parameter failed", K(sqlstr), K(ret));
       } else {
-        DRWLock::WRLockGuard guard(OTC_MGR.rwlock_);
-        if (OB_FAIL(system_config_.update(result))) {
+        ObSystemConfig temp_config;
+        temp_config.init();
+        if (OB_FAIL(temp_config.update(result))) {
           LOG_WARN("failed to load system config", K(ret));
+        } else {
+          // only the CONFIG_MGR will access system_config_ and the operation is serial, no need to lock
+          system_config_.update_from_map(temp_config.get_map());
         }
+        temp_config.clear();
       }
       if (OB_FAIL(ret)) {
       } else if (expected_version != ObSystemConfig::INIT_VERSION && (system_config_.get_version() < current_version_
@@ -375,8 +380,13 @@ int ObConfigManager::update_local(int64_t expected_version)
     if ('\0' == dump_path_[0]) {
       ret = OB_NOT_INIT;
       LOG_ERROR("Dump path doesn't set, stop read config", K(ret));
-    } else if (OB_FAIL(server_config_.read_config())) {
-      LOG_ERROR("Read server config failed", K(ret));
+    } else {
+      DRWLock::WRLockGuard guard(OTC_MGR.rwlock_); // avoid dump2file is executed at the same time
+      if (OB_FAIL(server_config_.read_config())) {
+        LOG_ERROR("Read server config failed", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(reload_config())) {
       LOG_WARN("Reload configuration failed", K(ret));
     } else {

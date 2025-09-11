@@ -88,15 +88,14 @@ public:
   const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
   int64_t get_create_timestamp() const { return create_timestamp_; }
   int got_version(int64_t version, const bool remove_repeat);
-  int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
-                   bool save2file = true, bool publish_special_config = true);
+  int update_local(int64_t expected_version, const common::ObSystemConfig::hashmap &temp_map,
+                   bool save2file = true);
 
   OB_UNIS_VERSION(1);
+private:
 #ifdef ERRSIM
-public:
   int build_errsim_module_();
 #endif
-private:
   // whitout lock, only used inner
   int add_extra_config_unsafe(const char *config_str,
                        int64_t version = 0 ,

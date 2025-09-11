@@ -193,15 +193,20 @@ int ObAllVirtualTenantParameterStat::update_seed()
                      "from __all_seed_parameter";
   ObSQLClientRetryWeak sql_client_retry_weak(GCTX.sql_proxy_);
   SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+    ObSystemConfig temp_config;
+    temp_config.init();
     if (OB_FAIL(seed_config_.init(&(OTC_MGR)))) {
       SERVER_LOG(WARN, "seed config init failed", K(ret));
     } else if (OB_FAIL(sql_client_retry_weak.read(result, OB_SYS_TENANT_ID, from_seed))) {
       SERVER_LOG(WARN, "read config from __all_seed_parameter failed", K(from_seed), K(ret));
-    } else if (OB_FAIL(seed_config_.update_local(ObSystemConfig::INIT_VERSION, result, false))) {
+    } else if (OB_FAIL(temp_config.update(result))) {
+      SERVER_LOG(WARN, "read config to temp_config failed", K(from_seed), K(ret));
+    } else if (OB_FAIL(seed_config_.update_local(ObSystemConfig::INIT_VERSION, temp_config.get_map(), false))) {
       SERVER_LOG(WARN, "update seed config failed", K(ret));
     } else {
       tenant_iter_ = seed_config_.get_container().begin();
     }
+    temp_config.clear();
   }
   return ret;
 }
