@@ -295,7 +295,8 @@ public:
                             bool has_tenant_resource,
                             const ObString &ps_sql,
                             bool is_from_pl = false,
-                            ObString *pl_exec_params = NULL);
+                            ObString *pl_exec_params = NULL,
+                            pl::ObPLCursorInfo *cursor = nullptr);
   static int process_audit_record(sql::ObResultSet &result_set,
                                   sql::ObSqlCtx &sql_ctx,
                                   sql::ObSQLSessionInfo &session,
@@ -304,7 +305,8 @@ public:
                                   int64_t ps_stmt_id,
                                   bool has_tenant_resource,
                                   const ObString &ps_sql,
-                                  bool is_from_pl = false);
+                                  bool is_from_pl = false,
+                                  pl::ObPLCursorInfo *cursor = nullptr);
   static void record_stat(sql::ObSQLSessionInfo &session,
                           const sql::stmt::StmtType type,
                           const int64_t ret,

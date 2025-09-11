@@ -30,7 +30,8 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     ObString ps_sql,
     observer::ObQueryRetryCtrl &retry_ctrl,
     ObPLSPITraceIdGuard &traceid_guard,
-    stmt::StmtType stmt_type)
+    stmt::StmtType stmt_type,
+    ObPLCursorInfo *cursor)
   : exec_ctx_(exec_ctx),
     session_info_(session_info),
     spi_result_(spi_result),
@@ -42,7 +43,8 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     stmt_type_(stmt_type),
     sql_used_memory_size_(0),
     pmcb_(0, sql_used_memory_size_),
-    memory_guard_(pmcb_)
+    memory_guard_(pmcb_),
+    cursor_(cursor)
 
 {
   enable_perf_event_ = lib::is_diagnose_info_enabled();
@@ -93,20 +95,21 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
       session_info_.get_raw_audit_record().try_cnt_ = retry_ctrl_.get_retry_times();
       session_info_.get_raw_audit_record().pl_trace_id_.set(traceid_guard_.origin_trace_id_);
       observer::ObInnerSQLConnection::process_record(*(spi_result_.get_result_set()),
-                                                     spi_result_.get_sql_ctx(),
-                                                     session_info_,
-                                                     record_.time_record_,
-                                                     ret_,
-                                                     session_info_.get_current_execution_id(),
-                                                     OB_INVALID_ID, //FIXME@hr351303
-                                                     max_wait_desc_,
-                                                     total_wait_desc_,
-                                                     record_.exec_record_,
-                                                     record_.exec_timestamp_,
-                                                     true,
-                                                     ps_sql_,
-                                                     true,
-                                                     spi_result_.get_exec_params_str_ptr());
+                                                       spi_result_.get_sql_ctx(),
+                                                       session_info_,
+                                                       record_.time_record_,
+                                                       ret_,
+                                                       session_info_.get_current_execution_id(),
+                                                       OB_INVALID_ID, //FIXME@hr351303
+                                                       max_wait_desc_,
+                                                       total_wait_desc_,
+                                                       record_.exec_record_,
+                                                       record_.exec_timestamp_,
+                                                       true,
+                                                       ps_sql_,
+                                                       true,
+                                                       spi_result_.get_exec_params_str_ptr(),
+                                                       cursor_);
       session_info_.get_raw_audit_record().exec_record_ = record_bak;
       session_info_.get_raw_audit_record().try_cnt_ = try_cnt;
       session_info_.get_raw_audit_record().pl_trace_id_.reset();
