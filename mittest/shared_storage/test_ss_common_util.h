@@ -527,6 +527,7 @@ int TestSSCommonUtil::restart_micro_cache(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(micro_cache), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));
   } else {
+    LOG_INFO("start prev micro_cache destroy");
     micro_cache->stop();
     micro_cache->wait();
     micro_cache->destroy();

@@ -858,6 +858,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
 
   // 6. execute persist micro_meta
+  int64_t ori_reusable_blk_cnt = phy_blk_mgr_->get_reusable_blocks_cnt();
   ori_micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_ = 0; // manully set this value as 0
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.start_op());
@@ -866,17 +867,21 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(ori_micro_ckpt_cnt + 1, cache_stat.task_stat().micro_ckpt_cnt_);
   ASSERT_EQ((WRITE_BLK_CNT - 1) * micro_cnt, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_EQ(blk_ckpt_used_cnt, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
+  int64_t delta_reusable_blk_cnt = phy_blk_mgr_->get_reusable_blocks_cnt() - ori_reusable_blk_cnt;
   micro_ckpt_used_cnt = phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt();
   ASSERT_LT(0, micro_ckpt_used_cnt);
-  ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_,
+            phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt() + delta_reusable_blk_cnt);
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
 
   // 7. execute phy_block checkpoint
   ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.start_op());
   blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = ObTimeUtility::current_time_us() - SS_SCAN_REUSABLE_BLK_INTERVAL_US;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.gen_checkpoint());
   ASSERT_EQ(ori_blk_ckpt_cnt + 1, cache_stat.task_stat().blk_ckpt_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr_->get_reusable_blocks_cnt());
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.total_blk_cnt_ - 2, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());

@@ -197,10 +197,13 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_access_ghost_persisted_meta)
     ASSERT_EQ(true, meta_info.is_in_l1());
     ASSERT_EQ(true, meta_info.is_in_ghost());
   }
+
+  ASSERT_EQ(OB_SUCCESS, micro_cache_->clear_micro_cache());
 }
 
 TEST_F(TestSSBatchMicroCheckpointTask, test_batch_micro_meta_ckpt)
 {
+  LOG_INFO("TEST: start test_batch_micro_meta_ckpt");
   ASSERT_NE(nullptr, micro_cache_);
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache_->phy_blk_mgr_;
   ObSSMicroRangeManager &micro_range_mgr = micro_cache_->micro_range_mgr_;
