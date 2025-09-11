@@ -1431,16 +1431,6 @@ int ObTableLocation::init(
       loc_meta_.select_leader_ = 0;
       loc_meta_.is_weak_read_ = 1;
     }
-    if (OB_FAIL(ret)) {
-    } else if (!(session_info->is_inner() ||
-          (stmt.get_query_ctx()->is_contain_inner_table_ &&
-           !stmt.get_query_ctx()->has_dml_write_stmt_ &&
-           !stmt.get_query_ctx()->is_contain_select_for_update_)) &&
-        loc_meta_.select_leader_ &&
-        static_cast<ObRoutePolicyType>(loc_meta_.route_policy_) == FORCE_READONLY_ZONE) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is FORCE_READONLY_ZONE, strong read request");
-    }
   }
   return ret;
 }
