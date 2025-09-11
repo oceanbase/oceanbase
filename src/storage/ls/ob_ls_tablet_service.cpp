@@ -2393,6 +2393,12 @@ int ObLSTabletService::create_tablet(
   tablet_handle.reset();
 
   const bool is_split_dest_tablet = storage::ObTabletMdsUserDataType::START_SPLIT_DST == create_type;
+#ifdef ERRSIM
+  if (is_split_dest_tablet) {
+    LOG_INFO("stuck the process fo creating the split dest tablet", K(tablet_id), K(data_tablet_id), K(clog_checkpoint_scn));
+    DEBUG_SYNC(PARTITION_SPLIT_REPLAY_CREATE_TABLET);
+  }
+#endif 
   if (OB_FAIL(ObTabletCreateDeleteHelper::prepare_create_msd_tablet())) {
     LOG_WARN("fail to prepare create msd tablet", K(ret));
   } else {
