@@ -25,7 +25,7 @@ int ObDummyTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 
 int ObDummyTableRowIterator::get_next_row()
 {
-  return OB_NOT_SUPPORTED;
+  return OB_ITER_END;
 }
 
 int ObDummyTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
