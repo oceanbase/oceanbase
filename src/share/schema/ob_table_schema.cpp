@@ -9595,7 +9595,7 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
       LOG_WARN("part_func_str is empty", KR(ret), KPC(this));
     }else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_part_func_str, partition_key_ids))) {
       is_prefix = false;
-      if (OB_ERR_BAD_FIELD_ERROR == ret) {
+      if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ERR_PARSE_SQL == ret) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get part keys", K(ret), K(ori_part_func_str));
@@ -9625,7 +9625,7 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
           LOG_WARN("sub_part_func_str is empty", KR(ret), KPC(this));
         } else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_sub_part_func_str, sub_partition_key_ids))) {
           is_prefix = false;
-          if (OB_ERR_BAD_FIELD_ERROR == ret) {
+          if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ERR_PARSE_SQL == ret) {
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to get part keys", K(ret), K(ori_sub_part_func_str));
