@@ -857,6 +857,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       ObPLDataType &dst_pl_type,
                                       bool is_sys_package)
 {
+#define IS_LOB_TYPE(type) (ObLobType == (type) || ObLongTextType == (type))
+
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
   if (OB_FAIL(ret)) {
@@ -870,11 +872,21 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                  || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type()
                                       : expr->get_result_type().is_mysql_question_mark_type()))) {
     OX (match_info =
-      (ObRoutineMatchInfo::MatchInfo(false,
-                                     ObUnknownType,
-                                     dst_pl_type.get_obj_type())));
-  } else if (T_NULL == expr->get_expr_type()
-            || ObNullTC == ob_obj_type_class(src_type)) {
+            (ObRoutineMatchInfo::MatchInfo(false, ObUnknownType, dst_pl_type.get_obj_type())));
+  } else if (resolve_ctx.params_.is_prepare_with_params_
+             && resolve_ctx.is_prepare_protocol_
+             && (IS_LOB_TYPE(dst_pl_type.get_obj_type())
+                 && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type())
+             && expr->get_result_type().is_oracle_question_mark_type()) {
+    // JDBC sends blob params with MYSQL_TYPE_STRING type, which observer would parse as ObCharType.
+    //   => expr result type here is deduced to ObCharType + length == 2000.
+    //   => blob params would branch to ObUnknownType branch above, because it's recognized as a
+    //      oracle question mark.
+    // for blob formal type in prepare with params scenario, keep it compatible with that in prepare
+    // without params scenario.
+    OX (match_info =
+            (ObRoutineMatchInfo::MatchInfo(false, ObUnknownType, dst_pl_type.get_obj_type())));
+  } else if (T_NULL == expr->get_expr_type() || ObNullTC == ob_obj_type_class(src_type)) {
     // NULL可以匹配任何类型
     OX (match_info =
       (ObRoutineMatchInfo::MatchInfo(false,
@@ -901,11 +913,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                KPC(expr));
     }
     if (OB_FAIL(ret)) {
-    } else if ((ObLobType == src_type || ObLongTextType == src_type)
-               && (ObLobType == dst_pl_type.get_obj_type()
-                  || ObLongTextType == dst_pl_type.get_obj_type())) {
-      if (src_coll_type
-            == dst_pl_type.get_meta_type()->get_collation_type()
+    } else if (IS_LOB_TYPE(src_type) && IS_LOB_TYPE(dst_pl_type.get_obj_type())) {
+      if (src_coll_type == dst_pl_type.get_meta_type()->get_collation_type()
           || (src_coll_type != CS_TYPE_BINARY
               && dst_pl_type.get_meta_type()->get_collation_type() != CS_TYPE_BINARY)) {
         OX (match_info =
@@ -918,11 +927,9 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                  K(ret), K(src_type_id), K(dst_pl_type), K(src_type));
       }
     } else if (lib::is_oracle_mode()
-              && (((ObLobType == src_type || ObLongTextType == src_type)\
-                 && CS_TYPE_BINARY == src_coll_type)
-              || ((ObLobType == dst_pl_type.get_obj_type()
-                   || ObLongTextType == dst_pl_type.get_obj_type())
-                  && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type()))) {
+               && ((IS_LOB_TYPE(src_type) && CS_TYPE_BINARY == src_coll_type)
+                   || (IS_LOB_TYPE(dst_pl_type.get_obj_type())
+                       && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type()))) {
       if (ObRawType == src_type || ObRawType == dst_pl_type.get_obj_type()) {
         // Raw and Blob can matched!
         OX (match_info =
@@ -941,6 +948,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                K(src_type), K(src_type_id), K(dst_pl_type), K(match_info), KPC(expr));
   }
   return ret;
+
+#undef IS_LOB_TYPE
 }
 
 int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
@@ -1372,10 +1381,11 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
   routine_info = NULL;
   CK (match_infos.count() > 1);
   CK (OB_NOT_NULL(match_infos.at(0).routine_info_));
-  // TODO: 处理Prepare协议下的选择, 因为Prepare时没有参数类型, 如果存在多个匹配, 随机选择一个
+  LOG_DEBUG("match information for pick routine", K(match_infos));
+  // TODO: 处理Prepare协议下的选择, 因为Prepare时没有参数类型, 如果存在多个匹配, 选择第一个
   for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
     if (match_infos.at(i).has_unknow_type()) {
-      routine_info = match_infos.at(i).routine_info_;
+      routine_info = match_infos.at(0).routine_info_;  // pick first
       break;
     }
   }
