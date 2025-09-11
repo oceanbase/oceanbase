@@ -388,7 +388,10 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
   }
 
   ObSQLSessionInfo *session = NULL;
-  if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
+  if (OB_ISNULL(sqc_init_args_->exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
     LOG_WARN("session is null, which is unexpected!", K(ret));
   } else if (is_session_query_locked_) {
     if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session->get_query_lock().unlock()))) {
