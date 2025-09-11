@@ -25,6 +25,7 @@
 #include "share/ob_upgrade_utils.h"  // ObUpgradeChecker
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
+#include "rootserver/ob_balance_ls_primary_zone.h" // ObBalanceLSPrimaryZone
 
 namespace oceanbase
 {
@@ -1252,6 +1253,9 @@ int ObRecoveryLSService::do_standby_balance_()
     LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
   } else if (OB_UNLIKELY(ERRSIM_STANDBY_BALANCE)) {
     LOG_WARN("ERRSIM_STANDBY_BALANCE opened, do nothing", KR(ret), K(tenant_id_));
+  } else if (ObShareUtil::is_tenant_enable_rebalance(tenant_id_)
+      && OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_schema))) {
+    LOG_WARN("failed to adjust user ls primary zone", KR(ret), K(tenant_schema));
   } else {
     ObTenantLSInfo tenant_info(proxy_, &tenant_schema, tenant_id_);
     bool is_balanced = false;

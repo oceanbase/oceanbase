@@ -97,6 +97,8 @@ private:
   int try_process_current_job(int64_t &job_cnt, bool &job_is_suspend);
   //according to primary_zone and unit group
   int ls_balance_(int64_t &job_cnt);
+  // according to primary_zone
+  int balance_primary_zone_();
   // according balance group strategy
   int partition_balance_(bool enable_transfer = false);
   //if job finish success, job cnt is zero or one
