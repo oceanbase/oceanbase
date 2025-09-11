@@ -14,6 +14,7 @@
 #include "lib/json/ob_json.h"
 #include "lib/string/ob_string.h"
 #include "sql/parser/parse_node.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 
 #ifndef _OB_CATALOG_PROPERTIES_H_
 #define _OB_CATALOG_PROPERTIES_H_
@@ -77,9 +78,11 @@ public:
     QUOTA_NAME,
     COMPRESSION_CODE,
     REGION,
+    API_MODE,
     MAX_OPTIONS
   };
-  ObODPSCatalogProperties() : ObCatalogProperties(CatalogType::ODPS_TYPE) {}
+  ObODPSCatalogProperties() : ObCatalogProperties(CatalogType::ODPS_TYPE),
+              api_mode_(sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {}
   virtual ~ObODPSCatalogProperties() {}
   virtual int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const override;
   virtual int load_from_string(const common::ObString &str,
@@ -100,6 +103,7 @@ public:
       "QUOTA_NAME",
       "COMPRESSION_CODE",
       "REGION",
+      "API_MODE"
   };
   common::ObString access_type_;
   common::ObString access_id_;
@@ -111,6 +115,7 @@ public:
   common::ObString quota_;
   common::ObString compression_code_;
   common::ObString region_;
+  sql::ObODPSGeneralFormat::ApiMode api_mode_;
 };
 
 class ObFilesystemCatalogProperties : public ObCatalogProperties

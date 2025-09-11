@@ -25,6 +25,7 @@
 #include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/catalog/ob_catalog_properties.h"
+#include "share/catalog/odps/ob_odps_catalog.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "share/stat/ob_lake_table_stat.h"
 
@@ -22566,6 +22567,24 @@ int ObJoinOrder::get_lake_table_partition_values(ObIArray<ObString> &partition_v
       LOG_WARN("unexpected null table partition info", K(ret));
     } else if (OB_FAIL(lake_table_partition_info->get_partition_values(partition_values))) {
       LOG_WARN("failed to get partition values", K(ret));
+    }
+  } else if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ODPS) {
+    int64_t ref_table_id = table_partition_info_->get_ref_table_id();
+    const ObTableSchema *table_schema = NULL;
+    ObSqlSchemaGuard *schema_guard = NULL;
+    if (OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(ref_table_id));
+    } else if (OB_FAIL(ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(*allocator_,
+                                                                table_partition_info_,
+                                                                table_schema,
+                                                                partition_values))) {
+      LOG_WARN("failed to get lake table partition values", K(ret));
     }
   } else {
     // For other lake table formats (ICEBERG, ODPS), use empty partition names (global stats)

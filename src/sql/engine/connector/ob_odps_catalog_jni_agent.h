@@ -33,7 +33,7 @@ public:
     */
     int do_init(ObIAllocator &allocator, const share::ObODPSCatalogProperties &properties);
     int do_query_table_list(ObIAllocator &allocator, ObIArray<ObString> &tbl_names);
-    int do_query_table_info(ObIAllocator &allocator, const ObString &tbl_name, int64_t &last_modification_time_s);
+    int do_query_table_info(ObIAllocator &allocator, const ObString &tbl_name, int64_t &last_ddl_time_s, int64_t &last_modification_time_s);
     int do_query_table_option(ObString access_id_, ObString access_key_, ObString project_name_, ObString tableName);
     int do_close();
 private:

@@ -24,8 +24,9 @@
 #include "share/ob_errno.h"
 
 GETJNIENV getJNIEnv = NULL;
+// hdfs detach current thread is a call back function
+// but jdbc pulgs use this function to detach current thread
 DETACHCURRENTTHREAD detachCurrentThread = NULL;
-DESTROYJNIENV destroyJNIEnv = NULL;
 
 // hdfs functions
 HdfsGetPathInfoFunc obHdfsGetPathInfo = NULL;
@@ -78,6 +79,17 @@ JVMFunctionHelper &JVMFunctionHelper::getInstance() {
   return helper;
 }
 
+JVMFunctionHelper::JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK) {
+    int ret = OB_SUCCESS;
+    if (is_inited_) {
+      // do nothing
+    } else if (OB_FAIL(do_init_())) {
+      is_inited_ = false;
+    } else {
+      is_inited_ = true;
+    }
+}
+
 int JVMFunctionHelper::jni_find_class(const char *clazz, jclass* gen_clazz) {
   int ret = OB_SUCCESS;
   jclass cls = jni_env_->FindClass(clazz);
@@ -114,46 +126,6 @@ int JVMFunctionHelper::get_env(JNIEnv *&env) {
   return ret;
 }
 
-int JVMFunctionHelper::inc_ref()
-{
-  int ret = OB_SUCCESS;
-  LockGuard guard(lock_);
-  if (java_env_ctx_.referece_times_ < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid jvm reference times", K(ret), K(java_env_ctx_.referece_times_));
-  } else {
-    java_env_ctx_.referece_times_ += 1;
-  }
-  return ret;
-}
-
-int JVMFunctionHelper::dec_ref()
-{
-  int ret = OB_SUCCESS;
-  LockGuard guard(lock_);
-  if (java_env_ctx_.referece_times_ < 1) {
-    LOG_WARN("jvm reference times is less than expected decrease ref", K(ret),
-             K(java_env_ctx_.referece_times_));
-    java_env_ctx_.referece_times_ = 0;
-  } else {
-    java_env_ctx_.referece_times_ -= 1;
-}
-  return ret;
-}
-
-int JVMFunctionHelper::cur_ref()
-{
-  int ret = OB_SUCCESS;
-  return java_env_ctx_.referece_times_;
-}
-
-int JVMFunctionHelper::reset_ref()
-{
-  int ret = OB_SUCCESS;
-  LockGuard guard(lock_);
-  java_env_ctx_.referece_times_ = 0;
-  return ret;
-}
 
 void *JVMFunctionHelper::ob_alloc_jni(void* ctxp, int64_t size)
 {
@@ -422,7 +394,6 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     LOG_TRACE("succ to open jvm and hdfs lib from patch", KP(hdfs_lib_handle_), K(ObString(hdfs_lib_buf)), K(ObString(hdfs_lib_buf)));
     LIB_SYMBOL(hdfs_lib_handle_, "getJNIEnv", getJNIEnv, GETJNIENV);
     LIB_SYMBOL(hdfs_lib_handle_, "detachCurrentThread", detachCurrentThread, DETACHCURRENTTHREAD);
-    LIB_SYMBOL(hdfs_lib_handle_, "destroyJNIEnv", destroyJNIEnv, DESTROYJNIENV);
     // link related useful hdfs func
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsGetPathInfo", obHdfsGetPathInfo, HdfsGetPathInfoFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsFreeFileInfo", obHdfsFreeFileInfo, HdfsFreeFileInfoFunc);
@@ -454,7 +425,6 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
 
     int user_error_len = STRLEN(hdfs_lib_buf);
     if (OB_ISNULL(getJNIEnv) || OB_ISNULL(detachCurrentThread) ||
-        OB_ISNULL(destroyJNIEnv) ||
         /* hdfs funcs */
         OB_ISNULL(obHdfsGetPathInfo) ||
         OB_ISNULL(obHdfsFreeFileInfo) || OB_ISNULL(obHdfsDelete) ||
@@ -482,7 +452,6 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
       }
       getJNIEnv = nullptr;
       detachCurrentThread = nullptr;
-      destroyJNIEnv = nullptr;
       obHdfsGetPathInfo = nullptr;
       obHdfsFreeFileInfo = nullptr;
       obHdfsDelete = nullptr;
@@ -553,46 +522,6 @@ int JVMFunctionHelper::load_lib(ObJavaEnvContext &java_env_ctx,
   return ret;
 }
 
-int JVMFunctionHelper::detach_current_thread()
-{
-  int ret = OB_SUCCESS;
-  LockGuard guard(lock_);
-  if (OB_ISNULL(jni_env_)) {
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("failed to detach thread for null jni env", K(ret));
-  } else if (OB_ISNULL(detachCurrentThread)) {
-    ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
-    LOG_WARN("method detachCurrentThread not exists", K(ret));
-  } else { /* do nothing */}
-  LOG_TRACE("start to detatch current thread", K(ret));
-  if (OB_SUCC(ret)) {
-    jint rv = detachCurrentThread();
-    if (0 != rv) {
-      ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("failed to detatch current thread", K(ret), K(rv));
-    }
-    // Note: jni_env_ should re-get
-    jni_env_ = nullptr;
-  }
-  return ret;
-}
-
-int JVMFunctionHelper::destroy_env()
-{
-  int ret = OB_SUCCESS;
-  // TODO(bitao): support destroy env
-  // if (OB_ISNULL(destroyJNIEnv)) {
-  //   ret = OB_JNI_DESTORY_JVM_ERROR;
-  //   LOG_WARN("failed to get critical method point `destoryJNIEnv`", K(ret));
-  // } else if (OB_FAIL(destroyJNIEnv())) {
-  //   ret = OB_JNI_DESTORY_JVM_ERROR;
-  //   LOG_WARN("failed to destory jni env", K(ret));
-  // } else {
-  //   jni_env_ = nullptr;
-  // }
-  return ret;
-}
-
 int JVMFunctionHelper::check_valid_env() {
   int ret = OB_SUCCESS;
   // TODO(bitao): add a more efficient method to check jni env whether can be used.
@@ -622,18 +551,6 @@ int JVMFunctionHelper::init_jni_env() {
     const char *cp = std::getenv("CLASSPATH");
     const char *ch = std::getenv("CONNECTOR_PATH");
     LOG_TRACE("get env variables in init_jni_env", K(ret), K(jh), K(jo), K(cp), K(ch));
-  }
-  return ret;
-}
-
-int JVMFunctionHelper::check_jni_exception_(JNIEnv *env) {
-  int ret = OB_SUCCESS;
-  jthrowable thr = env->ExceptionOccurred();
-  if (!OB_ISNULL(thr)) {
-    ret = OB_JNI_JAVA_EXCEPTION_ERROR;
-    env->ExceptionDescribe();
-    env->ExceptionClear();
-    env->DeleteLocalRef(thr);
   }
   return ret;
 }

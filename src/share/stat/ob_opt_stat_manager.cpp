@@ -1112,6 +1112,7 @@ int ObOptStatManager::get_external_table_stat(const uint64_t tenant_id,
                                                                                 lake_table_metadata->table_id_,
                                                                                 schema_guard,
                                                                                 fetch_partition_names,
+                                                                                partition_names,
                                                                                 handle,
                                                                                 column_handles))) {
           LOG_WARN("failed to load external table stat and put cache", K(ret), K(tenant_id), K(ref_table_id));

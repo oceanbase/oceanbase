@@ -423,9 +423,16 @@
          switch (dep.get_ref_obj_type()) {
            case ObObjectType::TABLE:
            case ObObjectType::VIEW:
-             if (OB_FAIL(table_ids.push_back(dep.get_ref_obj_id()))) {
-               LOG_WARN("fail to push back table id", KR(ret), K(dep));
-             }
+            // create view v1 as select * from odps_catalog.default.table;
+            // catalog table should not check
+            // because  resolver gen table schema temporarily
+            // this schema will not store in rs do not need
+            // to check check_max_dependency_version_
+            if (!is_external_object_id(dep.get_ref_obj_id())) {
+              if (OB_FAIL(table_ids.push_back(dep.get_ref_obj_id()))) {
+                LOG_WARN("fail to push back table id", KR(ret), K(dep));
+              }
+            }
              break;
            case ObObjectType::PROCEDURE:
            case ObObjectType::FUNCTION:
@@ -482,7 +489,6 @@
    }
    return ret;
  }
-
  int ObCreateViewHelper::check_max_dependency_version_(const common::ObIArray<uint64_t> &obj_ids,
                                                        const common::ObIArray<ObSchemaIdVersion> &versions)
  {

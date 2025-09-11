@@ -364,6 +364,7 @@ int ObCachedCatalogMetaGetter::fetch_lake_table_metadata(ObIAllocator &allocator
 
 int ObCachedCatalogMetaGetter::fetch_table_statistics(
     ObIAllocator &allocator,
+    sql::ObSqlSchemaGuard &sql_schema_guard,
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
@@ -371,6 +372,7 @@ int ObCachedCatalogMetaGetter::fetch_table_statistics(
     ObIArray<ObOptExternalColumnStat *> &external_table_column_stats)
 {
   return delegate_.fetch_table_statistics(allocator,
+                                          sql_schema_guard,
                                           table_metadata,
                                           partition_values,
                                           column_names,

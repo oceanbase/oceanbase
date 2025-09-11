@@ -222,6 +222,7 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
 }
 
 int ObHMSCatalog::fetch_table_statistics(ObIAllocator &allocator,
+                                         sql::ObSqlSchemaGuard &sql_schema_guard,
                                          const ObILakeTableMetadata *table_metadata,
                                          const ObIArray<ObString> &partition_values,
                                          const ObIArray<ObString> &column_names,

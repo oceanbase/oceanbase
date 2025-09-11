@@ -484,7 +484,7 @@ int ObExternalTableAccessService::table_scan(
     ObString file_path = obj_ptr[ObExternalTableUtils::FILE_URL].get_string();
     // ODPS外表会在每个SQC中加一个DUMMY_FILE，因此ODPS_FORMAT遇到DUMMY_FILE依然要用ObODPSTableRowIterator处理
     if (param.external_file_format_.format_type_ != ObExternalFileFormat::ODPS_FORMAT &&
-        file_path.compare_equal("#######DUMMY_FILE#######")) {
+        file_path.compare_equal(ObExternalTableUtils::dummy_file_name())) {
       if (OB_ISNULL(row_iter = OB_NEWx(ObDummyTableRowIterator, (scan_param.allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
@@ -930,7 +930,7 @@ int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count,
 
 bool ObExternalTableRowIterator::is_dummy_file(const ObString &file_url)
 {
-  return (0 == file_url.compare("#######DUMMY_FILE#######"));
+  return (0 == file_url.compare(ObExternalTableUtils::dummy_file_name()));
 }
 
 int ObExternalTableRowIterator::build_delete_bitmap(const ObString &data_file_path,

@@ -190,6 +190,7 @@ int ObCatalogMetaGetter::fetch_latest_table_schema_version(const uint64_t tenant
 
 int ObCatalogMetaGetter::fetch_table_statistics(
     ObIAllocator &allocator,
+    sql::ObSqlSchemaGuard &sql_schema_guard,
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
@@ -208,6 +209,7 @@ int ObCatalogMetaGetter::fetch_table_statistics(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("catalog is nullptr", K(ret));
   } else if (OB_FAIL(catalog->fetch_table_statistics(allocator,
+                                                     sql_schema_guard,
                                                      table_metadata,
                                                      partition_values,
                                                      column_names,

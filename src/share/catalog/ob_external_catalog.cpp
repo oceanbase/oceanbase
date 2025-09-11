@@ -16,6 +16,7 @@
 #include "share/schema/ob_column_schema.h"
 #include "share/stat/ob_opt_external_table_stat.h"
 #include "share/stat/ob_opt_external_column_stat.h"
+#include "sql/ob_sql_context.h"
 namespace oceanbase
 {
 namespace share
@@ -116,6 +117,7 @@ int ObILakeTableMetadata::build_table_schema(share::schema::ObTableSchema *&tabl
 
 int ObIExternalCatalog::fetch_table_statistics(
     ObIAllocator &allocator,
+    sql::ObSqlSchemaGuard &sql_schema_guard,
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,

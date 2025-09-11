@@ -253,7 +253,6 @@ public:
   };
 
 public:
-  static int check_jni_exception_(JNIEnv *env);
   static OdpsType get_odps_type_by_string(ObString type);
   static int get_jni_class(JNIEnv *env, const char *class_name, jclass &class_obj);
   static int get_jni_method(JNIEnv *env, jclass class_obj, const char *method_name, const char *method_signature, jmethodID &method_id);

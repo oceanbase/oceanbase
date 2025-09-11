@@ -486,7 +486,7 @@ private:
   apsara::odps::sdk::IRecordWriterPtr record_writer_;
 #endif
 #ifdef OB_BUILD_JNI_ODPS
-  ObOdpsJniUploaderMgr::OdpsUploader uploader_;
+  ObOdpsPartitionJNIUploaderMgr::OdpsUploader uploader_;
   std::shared_ptr<arrow::Schema> arrow_schema_;
 #endif
   uint32_t block_id_;

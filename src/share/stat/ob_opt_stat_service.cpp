@@ -631,7 +631,8 @@ int ObOptStatService::load_external_table_stat_and_put_cache(const uint64_t tena
   const uint64_t catalog_id,
   const uint64_t table_id,
   sql::ObSqlSchemaGuard &schema_guard,
-  ObIArray<ObString> &partition_names,
+  ObIArray<ObString> &key_partition_names,
+  const ObIArray<ObString> &all_partition_names,
   ObOptExternalTableStatHandle &handle,
   ObIArray<ObOptExternalColumnStatHandle> &column_handles)
 {
@@ -654,23 +655,42 @@ int ObOptStatService::load_external_table_stat_and_put_cache(const uint64_t tena
     LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(extract_column_names_from_table_schema(*table_schema, column_names))) {
     LOG_WARN("failed to extract column names from table schema", K(ret));
-  } else if (OB_FAIL(fetch_external_table_statistics_from_catalog(stat_allocator,
-                                                                  schema_guard,
-                                                                  lake_table_metadata,
-                                                                  partition_names,
-                                                                  column_names,
-                                                                  external_table_stat,
-                                                                  external_column_stats))) {
-    LOG_WARN("failed to fetch external table statistics from catalog", K(ret));
-  } else if (OB_FAIL(put_external_table_stats_to_cache(tenant_id,
-                                                       catalog_id,
-                                                       table_id,
-                                                       partition_names,
-                                                       external_table_stat,
-                                                       external_column_stats,
-                                                       handle,
-                                                       column_handles))) {
-    LOG_WARN("failed to put external table stats to cache", K(ret));
+  } else {
+    if (lake_table_metadata->get_format_type() != ObLakeTableFormat::ODPS) {
+      if (OB_FAIL(fetch_external_table_statistics_from_catalog(stat_allocator,
+                                                                      schema_guard,
+                                                                      lake_table_metadata,
+                                                                      key_partition_names,
+                                                                      column_names,
+                                                                      external_table_stat,
+                                                                      external_column_stats))) {
+        LOG_WARN("failed to fetch external table statistics from catalog", K(ret));
+      }
+    } else {
+      // odps tunnel 比较特殊不能获得所有分区rowcount api限制 需要通过选中分区缩放，其他通过全局分区缩放
+      // 如果只有一个分区那么all_partition_names 就是key_partition_names
+      if (OB_FAIL(fetch_external_table_statistics_from_catalog(stat_allocator,
+                                                                schema_guard,
+                                                                lake_table_metadata,
+                                                                all_partition_names,
+                                                                column_names,
+                                                                external_table_stat,
+                                                                external_column_stats))) {
+        LOG_WARN("failed to fetch external table statistics from catalog", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(put_external_table_stats_to_cache(tenant_id,
+                                                        catalog_id,
+                                                        table_id,
+                                                        key_partition_names,
+                                                        external_table_stat,
+                                                        external_column_stats,
+                                                        handle,
+                                                        column_handles))) {
+      LOG_WARN("failed to put external table stats to cache", K(ret));
+    }
   }
   if (OB_NOT_NULL(external_table_stat)) {
     external_table_stat->~ObOptExternalTableStat();
@@ -730,6 +750,7 @@ int ObOptStatService::fetch_external_table_statistics_from_catalog(ObIAllocator 
       share::ObCachedCatalogMetaGetter catalog_getter(*schema_getter_guard, allocator);
       // Fetch table and column statistics via catalog
       if (OB_FAIL(catalog_getter.fetch_table_statistics(allocator,
+                                                        schema_guard,
                                                         lake_table_metadata,
                                                         partition_names,
                                                         column_names,

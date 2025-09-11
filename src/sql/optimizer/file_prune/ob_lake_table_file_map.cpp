@@ -181,6 +181,47 @@ int ObLakeTableFileDesc::add_lake_table_file_desc(const ObLakeTableFileMapKey &k
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObOdpsPartitionKey, table_ref_id_, partition_str_);
+
+ObOdpsPartitionKey::ObOdpsPartitionKey()
+: table_ref_id_(OB_INVALID_ID)
+{}
+
+
+ObOdpsPartitionKey::ObOdpsPartitionKey(uint64_t table_ref_id, const ObString &partition_str)
+: table_ref_id_(table_ref_id),
+  partition_str_(partition_str)
+{}
+
+int ObOdpsPartitionKey::assign(const ObOdpsPartitionKey &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    table_ref_id_ = other.table_ref_id_;
+    partition_str_ = other.partition_str_;
+  }
+  return ret;
+}
+
+void ObOdpsPartitionKey::reset()
+{
+  table_ref_id_ = OB_INVALID_ID;
+  partition_str_.reset();
+}
+
+
+int ObOdpsPartitionKey::hash(uint64_t &hash_val) const
+{
+  int ret = OB_SUCCESS;
+  hash_val = do_hash(table_ref_id_, hash_val);
+  hash_val = do_hash(partition_str_, hash_val);
+  return ret;
+}
+
+bool ObOdpsPartitionKey::operator== (const ObOdpsPartitionKey &other) const
+{
+  return table_ref_id_ == other.table_ref_id_ && partition_str_ == other.partition_str_;
+}
 
 }
 }

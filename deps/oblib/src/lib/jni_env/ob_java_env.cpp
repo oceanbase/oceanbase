@@ -311,5 +311,23 @@ int ObJavaEnv::setup_java_env() {
   return ret;
 }
 
+int ObJavaEnv::check_version_valid()
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(version_valid_)) {
+  } else {
+    ret = OB_VERSION_NOT_MATCH;
+    LOG_WARN("java env version is not valid", K(ret));
+  }
+  return ret;
+}
+
+int ObJavaEnv::set_version_valid(bool valid)
+{
+  int ret = OB_SUCCESS;
+  version_valid_ = valid;
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

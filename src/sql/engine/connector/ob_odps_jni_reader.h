@@ -110,7 +110,10 @@ public:
   int get_odps_partition_row_count(ObIAllocator &allocator,
                                    const ObString &partition_spec,
                                    int64_t &row_count);
-  int get_odps_partition_specs(ObIAllocator &allocator,
+  int get_odps_partition_phy_size(ObIAllocator &allocator,
+                                const ObString &partition_spec,
+                                int64_t &phy_size);
+  int get_odps_partition_row_count_specs(ObIAllocator &allocator,
                                ObSEArray<ObString, 4> &partition_specs);
   int get_odps_partition_phy_specs(ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs);
   int get_odps_mirror_data_columns(ObIAllocator &allocator,

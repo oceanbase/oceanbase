@@ -266,7 +266,7 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
   return ret;
 }
 
-int ObODPSTableRowIterator::create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader)
+int ObODPSTableRowIterator::create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader, const ObString &session_id)
 {
   int ret = OB_SUCCESS;
   try {
@@ -275,7 +275,7 @@ int ObODPSTableRowIterator::create_downloader(const ObString &part_spec, apsara:
     std::string project(odps_format_.project_.ptr(), odps_format_.project_.length());
     std::string table(odps_format_.table_.ptr(), odps_format_.table_.length());
     std::string std_part_spec(part_spec.ptr(), part_spec.length());
-    std::string download_id("");
+    std::string download_id(session_id.ptr(), session_id.length());
     std::string schema(odps_format_.schema_.ptr(), odps_format_.schema_.length());
     download_handle = tunnel_.CreateDownload(project,
                                              table,
@@ -396,7 +396,7 @@ int ObODPSTableRowIterator::next_task()
               if (OB_HASH_NOT_EXIST == ret) {
                 ret = OB_SUCCESS;
                 ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader *temp_downloader = NULL;
-                ObIAllocator &allocator = sqc->get_sqc_ctx().gi_pump_.get_odps_mgr().get_allocator();
+                ObIAllocator &allocator = sqc->get_sqc_ctx().gi_pump_.get_odps_downloader_mgr().get_allocator();
                 if (sqc->get_sqc_ctx().gi_pump_.get_pump_args().empty()) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("unexpected empty gi pump args", K(ret));
@@ -425,7 +425,8 @@ int ObODPSTableRowIterator::next_task()
                 } else {
                   if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format_, false))) {
                     LOG_WARN("failed to init tunnel", K(ret), K(part_id));
-                  } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec, temp_downloader->odps_partition_downloader_))) {
+                  } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec,
+                      temp_downloader->odps_partition_downloader_, common::ObString::make_empty_string()))) {
                     LOG_WARN("failed create odps partition downloader", K(ret), K(part_id));
                   }
                   temp_downloader->tunnel_ready_cond_.lock();
@@ -2821,90 +2822,60 @@ int ObOdpsPartitionDownloaderMgr::init_downloader(int64_t bucket_size) {
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
-                                                  const ObString &properties,
-                                                  ObIArray<ObExternalFileInfo> &external_table_files,
-                                                  bool &use_partition_gi)
+int ObOdpsPartitionDownloaderMgr::init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSTableRowIterator &odps_driver)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
-  ObODPSTableRowIterator odps_driver;
   common::ObArenaAllocator arena_alloc;
-  use_partition_gi = false;
-  int64_t uncollect_statistics_part_cnt = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  int64_t max_parttition_count_to_collect_statistic = 5;
-  if (OB_LIKELY(tenant_config.is_valid())) {
-    max_parttition_count_to_collect_statistic = tenant_config->_max_partition_count_to_collect_statistic;
-  }
-  for (int64_t i = 0; i < external_table_files.count(); ++i) {
-    if (external_table_files.at(i).file_size_ < 0 && ++uncollect_statistics_part_cnt > max_parttition_count_to_collect_statistic) {
-      break;
-    }
-  }
-  if (uncollect_statistics_part_cnt > max_parttition_count_to_collect_statistic) {
-    use_partition_gi = true;
-  } else if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc))) {
-    LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (OB_FAIL(odps_driver.init_tunnel(external_odps_format.odps_format_))) {
-    LOG_WARN("failed to init tunnel", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
-      const share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
-      apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
-      if (INT64_MAX == odps_partition.file_id_
-          && 0 == odps_partition.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
-        // do nothing
-        *(const_cast<int64_t*>(&odps_partition.file_size_)) = 0;
-      } else if (odps_partition.file_size_ >= 0) {
-        // do nothing
-      } else if (OB_FAIL(odps_driver.create_downloader(odps_partition.file_url_,
-                                                       odps_partition_downloader))) {
-        LOG_WARN("failed create odps partition downloader", K(ret), K(i), K(odps_partition.part_id_), K(odps_partition.file_url_));
-      } else {
-        try {
-          *(const_cast<int64_t*>(&odps_partition.file_size_)) = odps_partition_downloader->GetRecordCount();
-          odps_partition_downloader->Complete();
-        } catch (apsara::odps::sdk::OdpsException& ex) {
-          if (OB_SUCC(ret)) {
-            ret = OB_ODPS_ERROR;
-            LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
-            LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-          }
-        } catch (const std::exception& ex) {
-          if (OB_SUCC(ret)) {
-            ret = OB_ODPS_ERROR;
-            LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
-            LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-          }
-        } catch (...) {
-          if (OB_SUCC(ret)) {
-            ret = OB_ODPS_ERROR;
-            LOG_WARN("caught exception when create odps upload session", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString part_spec,
-                                                  const ObString &properties,
-                                                  int64_t &row_count)
-{
-  int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_odps_format;
-  ObODPSTableRowIterator odps_driver;
-  common::ObArenaAllocator arena_alloc;
-  row_count = 0;
   if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc))) {
     LOG_WARN("failed to init external_odps_format", K(ret));
   } else if (OB_FAIL(odps_driver.init_tunnel(external_odps_format.odps_format_))) {
     LOG_WARN("failed to init tunnel", K(ret));
+  }
+  return ret;
+}
+
+int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString &part_spec,
+                                                  const bool get_part_table_size,
+                                                  ObODPSTableRowIterator &odps_driver,
+                                                  int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  sql::ObExternalFileFormat external_odps_format;
+  row_count = 0;
+  if (get_part_table_size) {
+    apsara::odps::sdk::IODPSTablePtr table_handle = odps_driver.get_table_handle();
+    if (OB_ISNULL(table_handle)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table handle is null", K(ret));
+    } else {
+      try {
+        if (part_spec.empty()) {
+          // ODPSQz non partition part_spec is empty
+          row_count = table_handle->GetSize();
+        } else {
+          std::string str_part_spec(part_spec.ptr(), part_spec.length());
+          apsara::odps::sdk::IODPSPartitionPtr partition_ptr = table_handle->GetPartition(str_part_spec);
+          if (OB_ISNULL(partition_ptr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("partition is null", K(ret));
+          } else {
+            row_count = partition_ptr->GetPartitionSize();
+          }
+        }
+      } catch (apsara::odps::sdk::OdpsException& ex) {
+        if (OB_SUCC(ret)) {
+          ret = OB_ODPS_ERROR;
+          LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
+          LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+        }
+      }
+    }
   } else {
     apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
-    if (OB_FAIL(odps_driver.create_downloader(part_spec, odps_partition_downloader))) {
+    // ODPSQz create downloader accpect part spec empty
+    if (OB_FAIL(odps_driver.create_downloader(part_spec,
+        odps_partition_downloader, common::ObString::make_empty_string()))) {
       LOG_WARN("failed create odps partition downloader", K(ret), K(part_spec));
     } else {
       try {
@@ -2913,19 +2884,19 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString part_spec,
       } catch (apsara::odps::sdk::OdpsException& ex) {
         if (OB_SUCC(ret)) {
           ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+          LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
           LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
         }
       } catch (const std::exception& ex) {
         if (OB_SUCC(ret)) {
           ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when create odps upload session", K(ret), K(ex.what()));
+          LOG_WARN("caught exception when fetch record count", K(ret), K(ex.what()));
           LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
         }
       } catch (...) {
         if (OB_SUCC(ret)) {
           ret = OB_ODPS_ERROR;
-          LOG_WARN("caught exception when create odps upload session", K(ret));
+          LOG_WARN("caught exception when fetch record count", K(ret));
         }
       }
     }
@@ -2933,10 +2904,10 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(const ObString part_spec,
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneralFormat &odps_format,
-                                                        const ObString &external_partition,
-                                                        bool is_overwrite,
-                                                        apsara::odps::sdk::IUploadPtr &upload)
+int ObOdpsPartitionUploaderMgr::create_upload_session(const sql::ObODPSGeneralFormat &odps_format,
+                                                      const ObString &external_partition,
+                                                      bool is_overwrite,
+                                                      apsara::odps::sdk::IUploadPtr &upload)
 {
   int ret = OB_SUCCESS;
   apsara::odps::sdk::Configuration conf;
@@ -3061,85 +3032,6 @@ int ObOdpsPartitionDownloaderMgr::create_upload_session(const sql::ObODPSGeneral
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::init_uploader(const ObString &properties,
-                                                const ObString &external_partition,
-                                                bool is_overwrite,
-                                                int64_t parallel)
-{
-  int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_properties;
-  apsara::odps::sdk::IUploadPtr upload;
-  apsara::odps::sdk::IRecordWriterPtr record_writer;
-  void *ptr;
-  OdpsUploader *uploader;
-  if (inited_) {
-    // do nothing
-  } else if (properties.empty()) {
-    // do nothing
-  } else if (OB_FAIL(external_properties.load_from_string(properties, arena_alloc_))) {
-    LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (sql::ObExternalFileFormat::ODPS_FORMAT != external_properties.format_type_) {
-    // do nothing
-  } else if (!odps_mgr_map_.created() &&
-             OB_FAIL(odps_mgr_map_.create(parallel, "IntoOdps"))) {
-    LOG_WARN("create hash table failed", K(ret), K(parallel));
-  } else if (OB_FAIL(external_properties.odps_format_.decrypt())) {
-    LOG_WARN("failed to decrypt odps format", K(ret));
-  } else {
-    ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOdps"));
-    try {
-      if (OB_FAIL(create_upload_session(external_properties.odps_format_,
-                                        external_partition,
-                                        is_overwrite,
-                                        upload))) {
-        LOG_WARN("failed to create upload session", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < parallel; i++) {
-          if (OB_UNLIKELY(!(record_writer = upload->OpenWriter(i, true)))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexcepted null ptr", K(ret));
-          } else if (OB_ISNULL(ptr = arena_alloc_.alloc(sizeof(OdpsUploader)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate uploader", K(ret), K(sizeof(OdpsUploader)));
-          } else {
-            uploader = new(ptr) OdpsUploader();
-            uploader->record_writer_ = record_writer;
-            uploader->upload_ = upload;
-          }
-          if (OB_SUCC(ret)
-              && OB_FAIL(odps_mgr_map_.set_refactored(i, reinterpret_cast<int64_t>(uploader)))) {
-            LOG_WARN("failed to set refactored", K(ret), K(i));
-          }
-        }
-      }
-    } catch (apsara::odps::sdk::OdpsException& ex) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ODPS_ERROR;
-        LOG_WARN("caught exception when init odps tunnel", K(ret), K(ex.what()));
-        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-      }
-    } catch (const std::exception& ex) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ODPS_ERROR;
-        LOG_WARN("caught exception when init odps tunnel", K(ret), K(ex.what()));
-        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-      }
-    } catch (...) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ODPS_ERROR;
-        LOG_WARN("caught exception when init odps tunnel", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    inited_ = true;
-    is_download_ = false;
-    ATOMIC_STORE(&ref_, parallel);
-    LOG_TRACE("succ to init odps uploader", K(ret), K(ref_));
-  }
-  return ret;
-}
-
 int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader)
 {
   int ret = OB_SUCCESS;
@@ -3182,73 +3074,6 @@ int ObOdpsPartitionDownloaderMgr::get_odps_downloader(int64_t part_id, apsara::o
   return ret;
 }
 
-int ObOdpsPartitionDownloaderMgr::get_odps_uploader(int64_t task_id,
-                                                    apsara::odps::sdk::IUploadPtr &upload,
-                                                    apsara::odps::sdk::IRecordWriterPtr &record_writer)
-{
-  int ret = OB_SUCCESS;
-  int64_t value = 0;
-  OdpsUploader *uploader = NULL;
-  if (OB_FAIL(odps_mgr_map_.get_refactored(task_id, value))) {
-    LOG_WARN("failed to get uploader", K(ret), K(task_id));
-  } else if (OB_ISNULL(uploader = reinterpret_cast<OdpsUploader *>(value))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected value", K(ret), K(value));
-  } else if (OB_UNLIKELY(!uploader->upload_ || !uploader->record_writer_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexcepted null ptr", K(ret));
-  } else {
-    upload = uploader->upload_;
-    record_writer = uploader->record_writer_;
-  }
-  return ret;
-}
-
-int ObOdpsPartitionDownloaderMgr::commit_upload()
-{
-  int ret = OB_SUCCESS;
-  std::vector<uint32_t> blocks;
-  uint32_t block_id = 0;
-  uint32_t task_count = static_cast<uint32_t>(odps_mgr_map_.size());
-  OdpsUploader *uploader = NULL;
-  try {
-    for (OdpsMgrMap::iterator iter = odps_mgr_map_.begin();
-         OB_SUCC(ret) && iter != odps_mgr_map_.end(); iter++) {
-      if (OB_ISNULL(uploader = reinterpret_cast<OdpsUploader *>(iter->second))
-          || OB_UNLIKELY(!uploader->record_writer_ || !uploader->upload_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexcepted null ptr", K(ret));
-      } else {
-        uploader->record_writer_->Close();
-        blocks.push_back(block_id);
-        block_id++;
-        // 所有线程都成功才commit
-        if (block_id == task_count && true == ATOMIC_LOAD(&need_commit_)) {
-          uploader->upload_->Commit(blocks);
-        }
-        uploader->~OdpsUploader();
-      }
-    }
-  } catch (apsara::odps::sdk::OdpsException& ex) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ODPS_ERROR;
-      LOG_WARN("caught exception when commit", K(ret), K(ex.what()));
-      LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-    }
-  } catch (const std::exception& ex) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ODPS_ERROR;
-      LOG_WARN("caught exception when commit", K(ret), K(ex.what()));
-      LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
-    }
-  } catch (...) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ODPS_ERROR;
-      LOG_WARN("caught exception when commit", K(ret));
-    }
-  }
-  return ret;
-}
 
 int ObOdpsPartitionDownloaderMgr::reset()
 {
@@ -3325,6 +3150,156 @@ int ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader::reset()
       LOG_WARN("odps exception occured when calling Complete method", K(ret));
     }
   }
+  return ret;
+}
+
+int ObOdpsPartitionUploaderMgr::init_uploader(const sql::ObODPSGeneralFormat &odps_format,
+                                              const ObString &external_partition,
+                                              bool is_overwrite,
+                                              int64_t parallel)
+{
+  int ret = OB_SUCCESS;
+  apsara::odps::sdk::IUploadPtr upload;
+  apsara::odps::sdk::IRecordWriterPtr record_writer;
+  void *ptr;
+  OdpsUploader *uploader;
+  if (inited_) {
+    // do nothing
+  } else if (!odps_mgr_map_.created() &&
+             OB_FAIL(odps_mgr_map_.create(parallel, "IntoOdps"))) {
+    LOG_WARN("create hash table failed", K(ret), K(parallel));
+  } else  {
+    ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOdps"));
+    try {
+      if (OB_FAIL(create_upload_session(odps_format,
+                                        external_partition,
+                                        is_overwrite,
+                                        upload))) {
+        LOG_WARN("failed to create upload session", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < parallel; i++) {
+          if (OB_UNLIKELY(!(record_writer = upload->OpenWriter(i, true)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexcepted null ptr", K(ret));
+          } else if (OB_ISNULL(ptr = arena_alloc_.alloc(sizeof(OdpsUploader)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate uploader", K(ret), K(sizeof(OdpsUploader)));
+          } else {
+            uploader = new(ptr) OdpsUploader();
+            uploader->record_writer_ = record_writer;
+            uploader->upload_ = upload;
+          }
+          if (OB_SUCC(ret)
+              && OB_FAIL(odps_mgr_map_.set_refactored(i, reinterpret_cast<int64_t>(uploader)))) {
+            LOG_WARN("failed to set refactored", K(ret), K(i));
+          }
+        }
+      }
+    } catch (apsara::odps::sdk::OdpsException& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when init odps tunnel", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (const std::exception& ex) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when init odps tunnel", K(ret), K(ex.what()));
+        LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+      }
+    } catch (...) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ODPS_ERROR;
+        LOG_WARN("caught exception when init odps tunnel", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    inited_ = true;
+    ATOMIC_STORE(&ref_, parallel);
+    LOG_TRACE("succ to init odps uploader", K(ret), K(ref_));
+  }
+  return ret;
+}
+
+int ObOdpsPartitionUploaderMgr::get_odps_uploader(int64_t task_id,
+                                                    apsara::odps::sdk::IUploadPtr &upload,
+                                                    apsara::odps::sdk::IRecordWriterPtr &record_writer)
+{
+  int ret = OB_SUCCESS;
+  int64_t value = 0;
+  OdpsUploader *uploader = NULL;
+  if (OB_FAIL(odps_mgr_map_.get_refactored(task_id, value))) {
+    LOG_WARN("failed to get uploader", K(ret), K(task_id));
+  } else if (OB_ISNULL(uploader = reinterpret_cast<OdpsUploader *>(value))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected value", K(ret), K(value));
+  } else if (OB_UNLIKELY(!uploader->upload_ || !uploader->record_writer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else {
+    upload = uploader->upload_;
+    record_writer = uploader->record_writer_;
+  }
+  return ret;
+}
+
+int ObOdpsPartitionUploaderMgr::commit_upload()
+{
+  int ret = OB_SUCCESS;
+  std::vector<uint32_t> blocks;
+  uint32_t block_id = 0;
+  uint32_t task_count = static_cast<uint32_t>(odps_mgr_map_.size());
+  OdpsUploader *uploader = NULL;
+  try {
+    for (OdpsMgrMap::iterator iter = odps_mgr_map_.begin();
+         OB_SUCC(ret) && iter != odps_mgr_map_.end(); iter++) {
+      if (OB_ISNULL(uploader = reinterpret_cast<OdpsUploader *>(iter->second))
+          || OB_UNLIKELY(!uploader->record_writer_ || !uploader->upload_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null ptr", K(ret));
+      } else {
+        uploader->record_writer_->Close();
+        blocks.push_back(block_id);
+        block_id++;
+        // 所有线程都成功才commit
+        if (block_id == task_count && true == ATOMIC_LOAD(&need_commit_)) {
+          uploader->upload_->Commit(blocks);
+        }
+        uploader->~OdpsUploader();
+      }
+    }
+  } catch (apsara::odps::sdk::OdpsException& ex) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ODPS_ERROR;
+      LOG_WARN("caught exception when commit", K(ret), K(ex.what()));
+      LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+    }
+  } catch (const std::exception& ex) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ODPS_ERROR;
+      LOG_WARN("caught exception when commit", K(ret), K(ex.what()));
+      LOG_USER_ERROR(OB_ODPS_ERROR, ex.what());
+    }
+  } catch (...) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ODPS_ERROR;
+      LOG_WARN("caught exception when commit", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOdpsPartitionUploaderMgr::reset()
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    // do nothing
+  } else {
+    odps_mgr_map_.destroy();
+    arena_alloc_.clear();
+  }
+  inited_ = false;
   return ret;
 }
 

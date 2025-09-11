@@ -234,7 +234,13 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
 #endif
     } else {
 #if defined (OB_BUILD_JNI_ODPS)
-      if (external_file_format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+      if (external_file_format.odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+         // tunnel api
+        if (OB_FAIL(split_granule_by_partition_line_tunnel(
+                allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+          LOG_WARN("failed to split granule by partition line", K(ret));
+        }
+      } else {
         if (external_file_format.odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
           if (OB_FAIL(split_granule_by_total_byte(allocator, parallelism, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
             LOG_WARN("failed to split granule by total byte", K(ret));
@@ -243,12 +249,6 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
           if (OB_FAIL(split_granule_by_total_row(allocator, parallelism, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
             LOG_WARN("failed to split granule by total row", K(ret));
           }
-        }
-      } else {
-        // tunnel api
-        if (OB_FAIL(split_granule_by_partition_line_tunnel(
-                allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
-          LOG_WARN("failed to split granule by partition line", K(ret));
         }
       }
 #else

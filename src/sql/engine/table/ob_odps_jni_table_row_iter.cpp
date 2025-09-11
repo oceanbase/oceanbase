@@ -2008,17 +2008,9 @@ int ObODPSJNITableRowIterator::pull_partition_info()
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
     ObSEArray<ObString, 4> partition_specs;
-    if (api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-      if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_phy_specs(arena_alloc_, partition_specs))) {
-        LOG_WARN("failed to get partition specs", K(ret));
-      }
-    } else {
-      if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_specs(arena_alloc_, partition_specs))) {
-        LOG_WARN("failed to get partition specs", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-
+    // just get partition
+    if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_phy_specs(arena_alloc_, partition_specs))) {
+      LOG_WARN("failed to get partition specs", K(ret));
     } else if (OB_FAIL(extract_odps_partition_specs(partition_specs))) {
       LOG_WARN("failed to extract partition specs", K(ret));
     } else { /* do nothing */
@@ -2164,6 +2156,42 @@ int ObODPSJNITableRowIterator::get_serilize_session(ObIAllocator &alloc, ObStrin
   return ret;
 }
 
+int ObODPSJNITableRowIterator::fetch_partition_row_count(const ObString &part_spec, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null odps jni scanner", K(ret));
+  } else if (!odps_jni_schema_scanner_->is_inited()) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("jni scanner is not inited", K(ret));
+  } else if (!odps_jni_schema_scanner_->is_opened()) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("jni scanner is not opened", K(ret));
+  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_row_count(arena_alloc_, part_spec, row_count))) {
+    LOG_WARN("failed to get partition specs", K(ret));
+  }
+  return ret;
+}
+
+int ObODPSJNITableRowIterator::fetch_partition_size(const ObString &part_spec, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null odps jni scanner", K(ret));
+  } else if (!odps_jni_schema_scanner_->is_inited()) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("jni scanner is not inited", K(ret));
+  } else if (!odps_jni_schema_scanner_->is_opened()) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("jni scanner is not opened", K(ret));
+  } else if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_phy_size(arena_alloc_, part_spec, row_count))) {
+    LOG_WARN("failed to get partition specs", K(ret));
+  }
+  return ret;
+}
+
 void ObODPSJNITableRowIterator::reset()
 {
   LOG_INFO("show read rows", K(read_rows_));
@@ -2189,27 +2217,6 @@ int ObODPSJNITableRowIterator::StateValues::reuse()
   if (OB_NOT_NULL(odps_jni_scanner_)) {
     (void)odps_jni_scanner_->do_close();
     odps_jni_scanner_.reset();
-  }
-  return ret;
-}
-
-int ObODPSJNITableRowIterator::fetch_partition_row_count(const ObString &part_spec, int64_t &row_count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(odps_jni_schema_scanner_.get())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexcepted null odps jni scanner", K(ret));
-  } else if (!odps_jni_schema_scanner_->is_inited()) {
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("jni scanner is not inited", K(ret));
-  } else if (!odps_jni_schema_scanner_->is_opened()) {
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("jni scanner is not opened", K(ret));
-  } else {
-    if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_row_count(arena_alloc_, part_spec, row_count))) {
-      LOG_WARN("failed to get partition specs", K(ret));
-    } else { /* do nothing */
-    }
   }
   return ret;
 }
@@ -4305,82 +4312,47 @@ bool ObODPSJNITableRowIterator::is_zero_time(const ObObj &obj)
 
 // =================== LONG FUNC END ==================================
 
-// ------------------- ObOdpsPartitionJNIScannerMgr -------------------
+// ------------------- ObOdpsPartitionJNIDownloaderMgr -------------------
 /*
- * 切分任务
+ * 刷新数据
  */
-int ObOdpsPartitionJNIScannerMgr::fetch_row_count(ObExecContext &exec_ctx, uint64_t tenant_id, const ObString &properties,
-    ObIArray<ObExternalFileInfo> &external_table_files, bool &use_partition_gi)
+int ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
-  ObODPSJNITableRowIterator odps_driver;
   common::ObArenaAllocator arena_alloc;
-  use_partition_gi = false;
-  int64_t uncollect_statistics_part_cnt = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  int64_t max_parttition_count_to_collect_statistic = 5;
-  if (OB_LIKELY(tenant_config.is_valid())) {
-    max_parttition_count_to_collect_statistic = tenant_config->_max_partition_count_to_collect_statistic;
-  }
-  for (int64_t i = 0; i < external_table_files.count(); ++i) {
-    if (external_table_files.at(i).file_size_ < 0 &&
-        ++uncollect_statistics_part_cnt > max_parttition_count_to_collect_statistic) {
-      break;
-    }
-  }
-  if (uncollect_statistics_part_cnt > max_parttition_count_to_collect_statistic) {
-    use_partition_gi = true;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc))) {
     LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
-    LOG_WARN("failed to init odps jni scanner", K(ret));
+  } else if (get_part_table_size) {
+    if (OB_FAIL(odps_driver.init_jni_schema_scanner(external_odps_format.odps_format_, session))) {
+      LOG_WARN("failed to init jni scanner", K(ret));
+    }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
-      const share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
-      /*if (0 != odps_partition.file_id_) {
-        if (INT64_MAX == odps_partition.file_id_ && 0 == odps_partition.file_url_.compare("#######DUMMY_FILE#######")) {
-          // do nothing
-          *(const_cast<int64_t *>(&odps_partition.file_size_)) = 0;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected file id", K(ret), K(i), K(odps_partition.file_id_), K(odps_partition.part_id_));
-        }
-      } else */
-      if (odps_partition.file_size_ >= 0) {
-        // do nothing
-      } else {
-        int64_t record_count = 0;
-        if (OB_FAIL(odps_driver.fetch_partition_row_count(odps_partition.file_url_, record_count))) {
-          LOG_WARN("failed to fetch partition row count", K(ret), K(odps_partition.file_url_));
-        } else {
-          *(const_cast<int64_t *>(&odps_partition.file_size_)) = record_count;
-        }
-      }
+    if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, session))) {
+      LOG_WARN("failed to init jni scanner", K(ret));
     }
   }
-
   return ret;
 }
 
 /*
  * 刷新数据
  */
-int ObOdpsPartitionJNIScannerMgr::fetch_row_count(
-    ObExecContext &exec_ctx, const ObString part_spec, const ObString &properties, int64_t &row_count)
+int ObOdpsPartitionJNIDownloaderMgr::fetch_row_count(
+  const ObString& part_spec, const bool get_part_table_size, ObODPSJNITableRowIterator &odps_driver, int64_t &row_count)
 {
   int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_odps_format;
-  common::ObArenaAllocator arena_alloc;
-  ObODPSJNITableRowIterator odps_driver;
-  if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc))) {
-    LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
-    LOG_WARN("failed to init jni scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_partition_row_count(part_spec, row_count))) {
-    LOG_WARN("failed to pull partition infos", K(ret));
+  if (get_part_table_size) { // 1 get size 0 get row count
+    if (OB_FAIL(odps_driver.fetch_partition_size(part_spec, row_count))) {
+      LOG_WARN("failed to pull partition infos", K(ret));
+    }
   } else {
-    /* do nothing */
+    if (OB_FAIL(odps_driver.fetch_partition_row_count(part_spec, row_count))) {
+      LOG_WARN("failed to pull partition infos", K(ret));
+    }
   }
   return ret;
 }
@@ -4388,8 +4360,8 @@ int ObOdpsPartitionJNIScannerMgr::fetch_row_count(
 /*
  * 刷新数据
  */
-int ObOdpsPartitionJNIScannerMgr::fetch_storage_row_count(
-    ObExecContext &exec_ctx, const ObString part_spec, const ObString &properties,  int64_t &row_count)
+int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
+    ObSQLSessionInfo *session, const ObString part_spec, const ObString &properties,  int64_t &row_count)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_odps_format;
@@ -4401,7 +4373,7 @@ int ObOdpsPartitionJNIScannerMgr::fetch_storage_row_count(
     LOG_WARN("failed to init jni scanner", K(ret));
   } else if (OB_FAIL(odps_driver.init_part_spec(part_spec))) {
     LOG_WARN("failed to init jni scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
+  } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, session))) {
     LOG_WARN("failed to init jni scanner", K(ret));
   } else if (OB_FAIL(odps_driver.get_file_total_row_count(row_count))) {
     LOG_WARN("failed to pull partition infos", K(ret));
@@ -4411,7 +4383,7 @@ int ObOdpsPartitionJNIScannerMgr::fetch_storage_row_count(
   return ret;
 }
 
-int ObOdpsPartitionJNIScannerMgr::fetch_storage_api_total_task(ObExecContext &exec_ctx,
+int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_total_task(ObExecContext &exec_ctx,
                                                                const ExprFixedArray &ext_file_column_expr,
                                                                const ObString &part_list_str,
                                                                const ObDASScanCtDef &das_ctdef,
@@ -4450,7 +4422,7 @@ int ObOdpsPartitionJNIScannerMgr::fetch_storage_api_total_task(ObExecContext &ex
   return ret;
 }
 
-int ObOdpsPartitionJNIScannerMgr::fetch_storage_api_split_by_row(ObExecContext &exec_ctx,
+int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(ObExecContext &exec_ctx,
                                                                  const ExprFixedArray &ext_file_column_expr,
                                                                  const ObString &part_list_str,
                                                                  const ObDASScanCtDef &das_ctdef,
@@ -4486,7 +4458,7 @@ int ObOdpsPartitionJNIScannerMgr::fetch_storage_api_split_by_row(ObExecContext &
   return ret;
 }
 
-int ObOdpsPartitionJNIScannerMgr::reset()
+int ObOdpsPartitionJNIDownloaderMgr::reset()
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -4498,7 +4470,7 @@ int ObOdpsPartitionJNIScannerMgr::reset()
 
 // ================================================================================================================
 
-int ObOdpsJniUploaderMgr::create_writer_params_map(ObIAllocator &alloc, const sql::ObODPSGeneralFormat &odps_format,
+int ObOdpsPartitionJNIUploaderMgr::create_writer_params_map(ObIAllocator &alloc, const sql::ObODPSGeneralFormat &odps_format,
     const ObString &external_partition, bool is_overwrite, common::hash::ObHashMap<ObString, ObString> &odps_params_map)
 {
   int ret = OB_SUCCESS;
@@ -4571,50 +4543,41 @@ int ObOdpsJniUploaderMgr::create_writer_params_map(ObIAllocator &alloc, const sq
   return ret;
 }
 
-int ObOdpsJniUploaderMgr::init_writer_params_in_px(
-    const ObString &properties, const ObString &external_partition, bool is_overwrite, int64_t parallel)
+int ObOdpsPartitionJNIUploaderMgr::init_writer_params_in_px(
+    sql::ObODPSGeneralFormat &odps_format, const ObString &external_partition, bool is_overwrite, int64_t parallel)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_properties;
   // This entry is first time to setup java env
-  if (properties.empty()) {
-    // do nohting
-  } else if (OB_FAIL(external_properties.load_from_string(properties, write_arena_alloc_))) {
-    LOG_WARN("failed to parser external odps format", K(ret));
-  } else if (OB_FAIL(external_properties.odps_format_.decrypt())) {
-    LOG_WARN("failed to dump odps format", K(ret));
-  } else if (sql::ObExternalFileFormat::ODPS_FORMAT != external_properties.format_type_) {
+  if (OB_FAIL(ObJniConnector::java_env_init())) {
+    LOG_WARN("failed to env init", K(ret));
+  } else if (inited_) {
     // do nothing
-  } else {
-    if (OB_FAIL(ObJniConnector::java_env_init())) {
-      LOG_WARN("failed to env init", K(ret));
-    } else if (inited_) {
-      // do nothing
-    } else if (OB_FAIL(create_writer_params_map(write_arena_alloc_,
-                  external_properties.odps_format_,
-                  external_partition,
-                  is_overwrite,
-                  odps_params_map_))) {
-      LOG_WARN("failed to init writer params", K(ret));
-    } else if (OB_FAIL(get_writer_sid(write_arena_alloc_, odps_params_map_, sid_))) {
-      LOG_WARN("failed to session id of the writer");
-    } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("session_id"), sid_))) {
-      LOG_WARN("failed to add session id to params", K(ret));
-    }
-
-    if (OB_SUCC(ret)) {
-      inited_ = true;
-      init_parallel_ = parallel;
-      ATOMIC_STORE(&ref_, parallel);
-      LOG_TRACE("succ to init odps uploader", K(ret), K(ref_));
-    }
+  } else if (OB_FAIL(create_writer_params_map(write_arena_alloc_,
+                external_properties.odps_format_,
+                external_partition,
+                is_overwrite,
+                odps_params_map_))) {
+    LOG_WARN("failed to init writer params", K(ret));
+  } else if (OB_FAIL(get_writer_sid(write_arena_alloc_, odps_params_map_, sid_))) {
+    LOG_WARN("failed to session id of the writer");
+  } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("session_id"), sid_))) {
+    LOG_WARN("failed to add session id to params", K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    inited_ = true;
+    init_parallel_ = parallel;
+    ATOMIC_STORE(&ref_, parallel);
+    LOG_TRACE("succ to init odps uploader", K(ret), K(ref_));
+  }
+
   //  成功后上层出去之后由ObSelectIntoOp::destroy析构
   // 如果不幸没走到op由析构函数兜底
   return ret;
 }
 
-int ObOdpsJniUploaderMgr::get_writer_sid(
+int ObOdpsPartitionJNIUploaderMgr::get_writer_sid(
     ObIAllocator &alloc, const common::hash::ObHashMap<ObString, ObString> &odps_params_map, ObString &sid)
 {
   int ret = OB_SUCCESS;
@@ -4636,7 +4599,7 @@ int ObOdpsJniUploaderMgr::get_writer_sid(
   return ret;
 }
 
-int ObOdpsJniUploaderMgr::get_odps_uploader_in_px(
+int ObOdpsPartitionJNIUploaderMgr::get_odps_uploader_in_px(
     int task_id, const common::ObFixedArray<ObExpr *, common::ObIAllocator> &select_exprs, OdpsUploader &odps_uploader)
 {
   int ret = OB_SUCCESS;
@@ -4660,7 +4623,7 @@ int ObOdpsJniUploaderMgr::get_odps_uploader_in_px(
   return ret;
 }
 
-int ObOdpsJniUploaderMgr::append_block_id(long block_id) {
+int ObOdpsPartitionJNIUploaderMgr::append_block_id(long block_id) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_holder_ptr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4673,7 +4636,7 @@ int ObOdpsJniUploaderMgr::append_block_id(long block_id) {
   return ret;
 }
 
-int ObOdpsJniUploaderMgr::commit_session(int64_t num_block) {
+int ObOdpsPartitionJNIUploaderMgr::commit_session(int64_t num_block) {
   int ret= OB_SUCCESS;
   if (OB_ISNULL(session_holder_ptr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4686,7 +4649,7 @@ int ObOdpsJniUploaderMgr::commit_session(int64_t num_block) {
   return ret;
 }
 
-void ObOdpsJniUploaderMgr::release_hold_session()
+void ObOdpsPartitionJNIUploaderMgr::release_hold_session()
 {
   LockGuard guard(lock_);
   if (OB_NOT_NULL(session_holder_ptr_.get())) {
@@ -4696,7 +4659,7 @@ void ObOdpsJniUploaderMgr::release_hold_session()
   return;
 }
 
-int ObOdpsJniUploaderMgr::reset()
+int ObOdpsPartitionJNIUploaderMgr::reset()
 {
   int ret = OB_SUCCESS;
   odps_params_map_.destroy();

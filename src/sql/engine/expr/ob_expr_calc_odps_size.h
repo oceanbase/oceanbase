@@ -29,6 +29,15 @@ public:
                                 ObExprResType &type1,
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result_type3(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                ObExprResType &type3,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_array,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
   static int calc_odps_size(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const override;

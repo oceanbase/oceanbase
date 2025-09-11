@@ -86,7 +86,8 @@ public:
                                              const uint64_t catalog_id,
                                              const uint64_t table_id,
                                              sql::ObSqlSchemaGuard &schema_guard,
-                                             ObIArray<ObString> &partition_names,
+                                             ObIArray<ObString> &key_partition_names,
+                                             const ObIArray<ObString> &all_partition_names,
                                              ObOptExternalTableStatHandle &handle,
                                              ObIArray<ObOptExternalColumnStatHandle> &column_handles);
 

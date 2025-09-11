@@ -16,10 +16,16 @@
 #include "share/catalog/ob_catalog_properties.h"
 #include "share/schema/ob_table_schema.h"
 
+
+
 #include <share/catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.h>
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObSqlSchemaGuard;
+} // namespace sql
 namespace share
 {
 
@@ -100,6 +106,7 @@ public:
   // 如果 partition_values 为空，table_stat 返回的是整个表的统计信息。如果 partition_values 有值，则返回分区合并后的值
   // column_stats 返回的是合并后的列统计信息。
   virtual int fetch_table_statistics(ObIAllocator &allocator,
+                                     sql::ObSqlSchemaGuard &sql_schema_guard,
                                      const ObILakeTableMetadata *table_metadata,
                                      const ObIArray<ObString> &partition_values,
                                      const ObIArray<ObString> &column_names,
@@ -156,11 +163,12 @@ public:
                                         ObILakeTableMetadata *&table_metadata) = 0;
 
   virtual int fetch_table_statistics(ObIAllocator &allocator,
-                                    const ObILakeTableMetadata *table_metadata,
-                                    const ObIArray<ObString> &partition_values,
-                                    const ObIArray<ObString> &column_names,
-                                    ObOptExternalTableStat *&external_table_stat,
-                                    ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) = 0;
+                                     sql::ObSqlSchemaGuard &sql_schema_guard,
+                                     const ObILakeTableMetadata *table_metadata,
+                                     const ObIArray<ObString> &partition_values,
+                                     const ObIArray<ObString> &column_names,
+                                     ObOptExternalTableStat *&external_table_stat,
+                                     ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) = 0;
 
   virtual int fetch_partitions(ObIAllocator &allocator,
                                const ObILakeTableMetadata *table_metadata,
