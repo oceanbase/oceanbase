@@ -246,7 +246,9 @@ private:
         valid_offsets_(NULL),
         allocator_(allocator),
         range_set_(),
-        is_phy_rowid_range_(false)
+        is_phy_rowid_range_(false),
+        force_no_use_start_(false),
+        force_no_use_end_(false)
     {
     }
 
@@ -307,6 +309,8 @@ private:
     common::ObIAllocator &allocator_;
     common::hash::ObHashSet<ObRangeWrapper, common::hash::NoPthreadDefendMode> range_set_;
     bool is_phy_rowid_range_;
+    bool force_no_use_start_;
+    bool force_no_use_end_;
   };
 
   struct ObRangeGraph
@@ -804,11 +808,15 @@ private:
   // find all single range
   int and_first_search(ObSearchState &search_state,
                        ObKeyPart *cur,
+                       bool force_use_start,
+                       bool force_use_end,
                        ObQueryRangeArray &ranges,
                        bool &all_single_value_ranges,
                        const common::ObDataTypeCastParams &dtc_params);
   int and_first_in_key(ObSearchState &search_state,
                        ObKeyPart *cur,
+                       bool force_use_start,
+                       bool force_use_end,
                        ObQueryRangeArray &ranges,
                        bool &all_single_value_ranges,
                        const ObDataTypeCastParams &dtc_params);
