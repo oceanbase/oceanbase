@@ -963,7 +963,11 @@ int ObRangeGraphGenerator::get_max_precise_pos(ObRangeNode *range_node,
 {
   int ret = OB_SUCCESS;
   max_precise_pos = ctx_.column_cnt_;
-  if (!pre_range_graph_->is_precise_get()) {
+  if (range_node != NULL && 
+      range_node->always_true_ && 
+      range_node->and_next_ == NULL) {
+    max_precise_pos = 0;
+  } else if (!pre_range_graph_->is_precise_get()) {
     bool equals[ctx_.column_cnt_];
     MEMSET(equals, 0, sizeof(bool) * ctx_.column_cnt_);
     ret = inner_get_max_precise_pos(range_node, equals, max_precise_pos, start_pos);
