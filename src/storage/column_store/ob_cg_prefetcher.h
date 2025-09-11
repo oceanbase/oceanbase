@@ -68,7 +68,7 @@ public:
   }
   OB_INLINE bool is_prefetched_full() const
   {
-    return micro_data_prefetch_idx_  - cur_micro_data_read_idx_ == max_micro_handle_cnt_
+    return micro_data_prefetch_idx_  - cur_micro_data_read_idx_ == MAX_DATA_PREFETCH_DEPTH
         || access_ctx_->micro_block_handle_mgr_.reach_hold_limit();
   }
   OB_INLINE bool can_index_filter_skip(blocksstable::ObMicroIndexInfo &index_info)
