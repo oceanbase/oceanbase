@@ -91,7 +91,36 @@ OB_SERIALIZE_MEMBER(AgentVtAccessMeta,
                     access_row_types_,
                     key_types_);
 
-OB_DEF_SERIALIZE(ObTableScanCtDef)
+int ObTableScanCtDef::serialize(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
+      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    const int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        RPC_WARN("serialize fail", K(ret));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(CLS, serial_size);
+      ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObTableScanCtDef::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   bool has_lookup = (lookup_ctdef_ != nullptr);
@@ -167,58 +196,90 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   return len;
 }
 
-OB_DEF_DESERIALIZE(ObTableScanCtDef)
+int ObTableScanCtDef::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   bool has_lookup = false;
-  OB_UNIS_DECODE(pre_query_range_);
-  OB_UNIS_DECODE(flashback_item_.need_scn_);
-  OB_UNIS_DECODE(flashback_item_.flashback_query_expr_);
-  OB_UNIS_DECODE(flashback_item_.flashback_query_type_);
-  OB_UNIS_DECODE(bnlj_param_idxs_);
-  OB_UNIS_DECODE(scan_flags_);
-  OB_UNIS_DECODE(scan_ctdef_);
-  OB_UNIS_DECODE(has_lookup);
-  if (OB_SUCC(ret) && has_lookup) {
-    void *ctdef_buf = allocator_.alloc(sizeof(ObDASScanCtDef));
-    if (OB_ISNULL(ctdef_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate das scan ctdef buffer failed", K(ret), K(sizeof(ObDASScanCtDef)));
-    } else {
-      lookup_ctdef_ = new(ctdef_buf) ObDASScanCtDef(allocator_);
-      OB_UNIS_DECODE(*lookup_ctdef_);
+  int64_t version = 0;
+  int64_t len = 0;
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
+  if (OB_SUCC(ret)) {
+    if (len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("buf length not enough", K(len), K(pos), K(data_len));
     }
-    if (OB_SUCC(ret)) {
-      void *loc_meta_buf = allocator_.alloc(sizeof(ObDASTableLocMeta));
-      if (OB_ISNULL(loc_meta_buf)) {
+  }
+  if (OB_SUCC(ret)) {
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
+
+    OB_UNIS_DECODE(pre_query_range_);
+    OB_UNIS_DECODE(flashback_item_.need_scn_);
+    OB_UNIS_DECODE(flashback_item_.flashback_query_expr_);
+    OB_UNIS_DECODE(flashback_item_.flashback_query_type_);
+    OB_UNIS_DECODE(bnlj_param_idxs_);
+    OB_UNIS_DECODE(scan_flags_);
+    OB_UNIS_DECODE(scan_ctdef_);
+    OB_UNIS_DECODE(has_lookup);
+    if (OB_SUCC(ret) && has_lookup) {
+      void *ctdef_buf = allocator_.alloc(sizeof(ObDASScanCtDef));
+      if (OB_ISNULL(ctdef_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate table loc meta failed", K(ret));
+        LOG_WARN("allocate das scan ctdef buffer failed", K(ret), K(sizeof(ObDASScanCtDef)));
       } else {
-        lookup_loc_meta_ = new(loc_meta_buf) ObDASTableLocMeta(allocator_);
-        OB_UNIS_DECODE(*lookup_loc_meta_);
+        lookup_ctdef_ = new(ctdef_buf) ObDASScanCtDef(allocator_);
+        OB_UNIS_DECODE(*lookup_ctdef_);
+      }
+      if (OB_SUCC(ret)) {
+        void *loc_meta_buf = allocator_.alloc(sizeof(ObDASTableLocMeta));
+        if (OB_ISNULL(loc_meta_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate table loc meta failed", K(ret));
+        } else {
+          lookup_loc_meta_ = new(loc_meta_buf) ObDASTableLocMeta(allocator_);
+          OB_UNIS_DECODE(*lookup_loc_meta_);
+        }
       }
     }
+    bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
+    OB_UNIS_DECODE(has_dppr_tbl);
+    if (OB_SUCC(ret) && has_dppr_tbl) {
+      OZ(allocate_dppr_table_loc());
+      OB_UNIS_DECODE(*das_dppr_tbl_);
+    }
+    OB_UNIS_DECODE(calc_part_id_expr_);
+    OB_UNIS_DECODE(global_index_rowkey_exprs_);
+    OB_UNIS_DECODE(flashback_item_.fq_read_tx_uncommitted_);
+
+    if (version == 2) {
+      bool is_new_query_range = scan_flags_.is_new_query_range();
+      if (is_new_query_range) {
+        OB_UNIS_DECODE(pre_range_graph_);
+      }
+      OB_UNIS_DECODE(flags_);
+    } else {
+      // abandoned fields, please remove me at next barrier version
+      bool abandoned_always_false_aux_lookup = false;
+      bool abandoned_always_false_text_ir = false;
+      OB_UNIS_DECODE(abandoned_always_false_aux_lookup);
+      OB_UNIS_DECODE(abandoned_always_false_text_ir);
+      OB_UNIS_DECODE(attach_spec_);
+      OB_UNIS_DECODE(flags_);
+      bool is_new_query_range = scan_flags_.is_new_query_range();
+      if (is_new_query_range) {
+        OB_UNIS_DECODE(pre_range_graph_);
+      }
+    }
+
+    pos = pos_orig + len;
   }
-  bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
-  OB_UNIS_DECODE(has_dppr_tbl);
-  if (OB_SUCC(ret) && has_dppr_tbl) {
-    OZ(allocate_dppr_table_loc());
-    OB_UNIS_DECODE(*das_dppr_tbl_);
-  }
-  OB_UNIS_DECODE(calc_part_id_expr_);
-  OB_UNIS_DECODE(global_index_rowkey_exprs_);
-  OB_UNIS_DECODE(flashback_item_.fq_read_tx_uncommitted_);
-  // abandoned fields, please remove me at next barrier version
-  bool abandoned_always_false_aux_lookup = false;
-  bool abandoned_always_false_text_ir = false;
-  OB_UNIS_DECODE(abandoned_always_false_aux_lookup);
-  OB_UNIS_DECODE(abandoned_always_false_text_ir);
-  OB_UNIS_DECODE(attach_spec_);
-  OB_UNIS_DECODE(flags_);
-  bool is_new_query_range = scan_flags_.is_new_query_range();
-  if (is_new_query_range) {
-    OB_UNIS_DECODE(pre_range_graph_);
-  }
+
   return ret;
 }
 

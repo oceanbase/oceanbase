@@ -1942,7 +1942,34 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo::ApplicationInfo)
   return len;
 }
 
-OB_DEF_SERIALIZE(ObSQLSessionInfo)
+int ObSQLSessionInfo::serialize(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
+      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    const int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+      RPC_WARN("serialize fail", K(ret));
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(CLS, serial_size);
+      ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   BASE_SER((ObSQLSessionInfo, ObBasicSessionInfo));
@@ -1975,37 +2002,67 @@ OB_DEF_SERIALIZE(ObSQLSessionInfo)
   return ret;
 }
 
-OB_DEF_DESERIALIZE(ObSQLSessionInfo)
+int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  BASE_DESER((ObSQLSessionInfo, ObBasicSessionInfo));
-  LST_DO_CODE(OB_UNIS_DECODE,
-      thread_data_.cur_query_start_time_,
-      user_priv_set_,
-      db_priv_set_,
-      trans_type_,
-      global_sessid_,
-      inner_flag_,
-      is_max_availability_mode_,
-      session_type_,
-      has_temp_table_flag_,
-      enable_early_lock_release_,
-      enable_role_array_,
-      in_definer_named_proc_,
-      priv_user_id_,
-      xa_end_timeout_seconds_,
-      prelock_,
-      proxy_version_,
-      min_proxy_version_ps_,
-      thread_data_.is_in_retry_,
-      ddl_info_,
-      gtt_session_scope_unique_id_,
-      gtt_trans_scope_unique_id_,
-      gtt_session_scope_ids_,
-      gtt_trans_scope_ids_,
-      affected_rows_,
-      unit_gc_min_sup_proxy_version_);
-  (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
+  int64_t version = 0;
+  int64_t len = 0;
+
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
+  if (OB_SUCC(ret)) {
+    if (len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("buf length not enough", K(len), K(pos), K(data_len));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
+
+    BASE_DESER((ObSQLSessionInfo, ObBasicSessionInfo));
+    LST_DO_CODE(OB_UNIS_DECODE,
+        thread_data_.cur_query_start_time_,
+        user_priv_set_,
+        db_priv_set_,
+        trans_type_,
+        global_sessid_,
+        inner_flag_,
+        is_max_availability_mode_,
+        session_type_,
+        has_temp_table_flag_,
+        enable_early_lock_release_,
+        enable_role_array_,
+        in_definer_named_proc_,
+        priv_user_id_,
+        xa_end_timeout_seconds_,
+        prelock_,
+        proxy_version_,
+        min_proxy_version_ps_,
+        thread_data_.is_in_retry_,
+        ddl_info_,
+        gtt_session_scope_unique_id_,
+        gtt_trans_scope_unique_id_,
+        gtt_session_scope_ids_,
+        gtt_trans_scope_ids_);
+
+    if (version == 2) {
+      affected_rows_ = 0;
+    } else {
+      OB_UNIS_DECODE(affected_rows_);
+    }
+
+    OB_UNIS_DECODE(unit_gc_min_sup_proxy_version_);
+    (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
+
+    pos = pos_orig + len;
+  }
+
   return ret;
 }
 
