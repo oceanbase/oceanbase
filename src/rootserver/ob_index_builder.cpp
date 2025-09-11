@@ -1261,7 +1261,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
       const bool is_drop_vec_spiv_task = (!arg.is_inner_ && index_schema.is_vec_spiv_index_aux()) || arg.is_parent_task_dropping_spiv_index_;
       const bool is_drop_fts_task = (!arg.is_inner_ && index_schema.is_fts_index_aux()) || arg.is_parent_task_dropping_fts_index_;
       const bool is_drop_multivalue_task = (!arg.is_inner_ && index_schema.is_multivalue_index_aux()) || arg.is_parent_task_dropping_multivalue_index_;
-
+      ObTableLockOwnerID owner_id;
       ObDDLType ddl_type = DDL_INVALID;
       if (is_drop_fts_task) {
         ddl_type = ObDDLType::DDL_DROP_FTS_INDEX;
@@ -1288,6 +1288,16 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
       }
       if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         LOG_WARN("fail to create drop fts index task", K(ret), K(param));
+      } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                     task_record.task_id_))) {
+        LOG_WARN("fail to get owner id", K(ret), K(task_record.task_id_));
+      } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(data_schema,
+                                                            inc_data_tablet_ids,
+                                                            del_data_tablet_ids,
+                                                            index_schema,
+                                                            owner_id,
+                                                            trans))) {
+        LOG_WARN("failed to lock online ddl lock", K(ret));
       }
     } else if (is_drop_dense_vec_index) {
       ObDDLType ddl_type = DDL_INVALID;
