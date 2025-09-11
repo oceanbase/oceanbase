@@ -243,7 +243,7 @@ void GetPartitionsByNamesOperation::execute_impl(ThriftHiveMetastoreClient *clie
 /* --------------------- start of ObHiveMetastoreClient ---------------------*/
 ObHiveMetastoreClient::ObHiveMetastoreClient()
     : allocator_(nullptr), socket_(), transport_(), protocol_(), hive_metastore_client_(), uri_(),
-      properties_(), hms_keytab_(), hms_principal_(), hms_krb5conf_(),
+      properties_(), hms_keytab_(), hms_principal_(), hms_krb5conf_(), service_(), server_FQDN_(),
       state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), conn_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       kerberos_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), is_inited_(false), is_opened_(false),
       last_kinit_ts_(0), client_id_(0), client_pool_(nullptr), is_in_use_(false), socket_timeout_(-1)
@@ -278,6 +278,8 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
   int ret = OB_SUCCESS;
 
   ObHMSCatalogProperties hive_catalog_properties;
+  // Using temp_allocator to avoid the memory leak when the properties is too long.
+  ObArenaAllocator temp_allocator;
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("hive metastore client already setup and opened", K(ret));
@@ -288,7 +290,7 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
     LOG_WARN("failed to write properties", K(ret), K(properties));
   } else if (OB_FAIL(ob_write_string(*allocator_, uri, uri_, true))) {
     LOG_WARN("failed to write metastore uri", K(ret), K(uri));
-  } else if (OB_FAIL(hive_catalog_properties.load_from_string(properties_, *allocator_))) {
+  } else if (OB_FAIL(hive_catalog_properties.load_from_string(properties_, temp_allocator))) {
     LOG_WARN("failed to init hive catalog properties", K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator_,
                                      hive_catalog_properties.principal_,
@@ -344,9 +346,11 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
                   K(hms_krb5conf_));
         ObString cache_name;
         ObString temp_princ;
+        // Using temp_allocator to store temp variables.
+        ObArenaAllocator temp_allocator;
         if (OB_FAIL(init_kerberos(hms_keytab_, hms_principal_, hms_krb5conf_, cache_name))) {
           LOG_WARN("failed to init kerberos env", K(ret));
-        } else if (OB_FAIL(ob_write_string(*allocator_, hms_principal_, temp_princ, true))) {
+        } else if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
           LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
         } else {
           // service and server_FQDN can seperate by principal.
@@ -356,22 +360,20 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
           // kerberos config.
           ObString tmp_service = temp_princ.split_on('/').trim_space_only();
           ObString tmp_server_FQDN = temp_princ.split_on('@').trim_space_only();
-          ObString service;
-          ObString server_FQDN;
-          // Note: service and server_FQDN should be c_style.
-          if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service, true))) {
+          // Note: service_ and server_FQDN_ should be c_style.
+          if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
             LOG_WARN("failed to write service value", K(ret), K(tmp_service));
-          } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN, true))) {
+          } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN_, true))) {
             LOG_WARN("failed to write service_FQDN value", K(ret), K(tmp_server_FQDN));
-          } else if (OB_UNLIKELY(service.empty())) {
+          } else if (OB_UNLIKELY(service_.empty())) {
             ret = OB_INVALID_HMS_SERVICE;
-            LOG_WARN("service should not be empty", K(ret), K(temp_princ), K(service));
-          } else if (OB_UNLIKELY(server_FQDN.empty())) {
+            LOG_WARN("service should not be empty", K(ret), K(temp_princ), K_(service));
+          } else if (OB_UNLIKELY(server_FQDN_.empty())) {
             ret = OB_INVALID_HMS_SERVICE_FQDN;
-            LOG_WARN("service_FQDN should not be empty", K(ret), K(temp_princ), K(server_FQDN));
+            LOG_WARN("service_FQDN should not be empty", K(ret), K(temp_princ), K(server_FQDN_));
           } else {
             transport_
-                = TSaslClientTransport::wrap_client_transports(service, server_FQDN, transport_);
+                = TSaslClientTransport::wrap_client_transports(service_, server_FQDN_, transport_);
           }
         }
       }
@@ -497,11 +499,31 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
   int ret = OB_SUCCESS;
 
   SpinWLockGuard guard(state_lock_);
+  if (OB_NOT_NULL(allocator_)) {
+    // Check to avoid double free.
+    if (!uri_.empty()) {
+      allocator_->free(uri_.ptr());
+    }
+    if (!hms_keytab_.empty()) {
+      allocator_->free(hms_keytab_.ptr());
+    }
+    if (!hms_principal_.empty()) {
+      allocator_->free(hms_principal_.ptr());
+    }
+    if (!hms_krb5conf_.empty()) {
+      allocator_->free(hms_krb5conf_.ptr());
+    }
+    if (!properties_.empty()) {
+      allocator_->free(properties_.ptr());
+    }
+    if (!service_.empty()) {
+      allocator_->free(service_.ptr());
+    }
+    if (!server_FQDN_.empty()) {
+      allocator_->free(server_FQDN_.ptr());
+    }
+  }
 
-  hms_keytab_.reset();
-  hms_principal_.reset();
-  hms_krb5conf_.reset();
-  properties_.reset();
   is_inited_ = false;
   client_id_ = 0;
   socket_timeout_ = -1;

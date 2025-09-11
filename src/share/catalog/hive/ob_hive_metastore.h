@@ -626,6 +626,8 @@ private:
   ObString hms_keytab_;
   ObString hms_principal_;
   ObString hms_krb5conf_;
+  ObString service_;
+  ObString server_FQDN_;
 
   // minor lock for state, ref, conn, kerberos
   mutable SpinRWLock state_lock_;

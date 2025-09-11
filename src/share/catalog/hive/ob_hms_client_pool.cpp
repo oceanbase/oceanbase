@@ -96,6 +96,13 @@ ObHMSClientPool::~ObHMSClientPool()
     client_queue_->~HMSClientList();
     allocator_->free(client_queue_);
     client_queue_ = nullptr;
+
+    if (!uri_.empty()) {
+      allocator_->free(uri_.ptr());
+    }
+    if (!properties_.empty()) {
+      allocator_->free(properties_.ptr());
+    }
   }
 
   // Reset state
@@ -118,6 +125,7 @@ int ObHMSClientPool::init(const uint64_t &tenant_id,
 {
   int ret = OB_SUCCESS;
   ObHMSCatalogProperties hms_properties;
+  ObArenaAllocator temp_allocator;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObHMSClientPool init twice", K(ret));
@@ -135,9 +143,9 @@ int ObHMSClientPool::init(const uint64_t &tenant_id,
   } else if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid allocator", K(ret), KP(allocator));
-  } else if (OB_FAIL(hms_properties.load_from_string(properties, *allocator))) {
+  } else if (OB_FAIL(hms_properties.load_from_string(properties, temp_allocator))) {
     LOG_WARN("fail to init hms catalog properties", K(ret), K_(properties));
-  } else if (OB_FAIL(hms_properties.decrypt(*allocator))) {
+  } else if (OB_FAIL(hms_properties.decrypt(temp_allocator))) {
     LOG_WARN("failed to decrypt", K(ret));
   } else {
     pool_size_ = hms_properties.max_client_pool_size_;
@@ -973,11 +981,10 @@ void ObHMSClientPoolMgr::destroy()
     if (pool_map_.created()) {
       destroy_pool_map();
     }
-    if (OB_NOT_NULL(inner_allocator_)) {
-      inner_allocator_->reset();
+    if (OB_LIKELY(nullptr != inner_allocator_)) {
       inner_allocator_ = nullptr;
     }
-    if (OB_NOT_NULL(mem_context_)) {
+    if (OB_LIKELY(nullptr != mem_context_)) {
       DESTROY_CONTEXT(mem_context_);
       mem_context_ = nullptr;
     }
