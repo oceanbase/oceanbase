@@ -476,7 +476,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
       LOG_WARN("failed to freeze src tablet", KR(ret), K(leader_addr));
     } else if (OB_FAIL(create_commit_versions.assign(res.create_commit_versions_))) {
       LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FALSE_IT(data_tablet_size = res.tablet_sizes_.at(0))) {
+    } else if (OB_FALSE_IT(data_tablet_size = std::max(static_cast<int64_t>(2), res.tablet_sizes_.at(0)))) {
     } else if (data_tablet_size < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid data tablet size", K(ret), K(data_tablet_size));
