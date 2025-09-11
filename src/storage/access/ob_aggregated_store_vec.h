@@ -77,8 +77,7 @@ public:
       const ObTableAccessContext *context,
       const int32_t col_offset,
       blocksstable::ObIMicroBlockReader *reader,
-      const ObPushdownRowIdCtx &pd_row_id_ctx,
-      const bool reserve_memory) override;
+      const ObPushdownRowIdCtx &pd_row_id_ctx) override;
   int agg_pushdown_decoder(
       blocksstable::ObIMicroBlockReader *reader,
       const int32_t col_offset, // column store is 0
@@ -166,8 +165,7 @@ public:
   int collect_aggregated_result() override;
   int get_agg_group(const sql::ObExpr *expr, ObAggGroupVec *&agg_group);
   int do_aggregate(
-      blocksstable::ObIMicroBlockReader *reader,
-      const bool reserve_memory,
+      blocksstable::ObIMicroBlockReader *reader = nullptr,
       const int64_t bound_row_id = OB_INVALID_CS_ROW_ID);
   int reset_agg_row_id();
   OB_INLINE bool has_aggr_with_expr() const { return has_aggr_with_expr_; }

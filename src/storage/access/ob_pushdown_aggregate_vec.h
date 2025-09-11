@@ -109,7 +109,7 @@ public:
                                               const int32_t col_offset,
                                               const int32_t *row_ids,
                                               const int64_t row_count) const
-  { return reader->can_pushdown_decoder(*basic_info_.col_param_, col_offset, row_ids, row_count, *this); }
+  { return OB_NOT_NULL(reader) && reader->can_pushdown_decoder(*basic_info_.col_param_, col_offset, row_ids, row_count, *this); }
   OB_INLINE virtual bool need_access_data() const { return true; }
   OB_INLINE virtual bool need_get_row_ids() const { return true; }
   OB_INLINE int64_t get_agg_idx() const { return agg_idx_; }
@@ -239,8 +239,8 @@ public:
                             const int32_t *row_ids,
                             const int64_t row_count) const override
   {
-    UNUSEDx(reader, col_offset, row_ids, row_count);
-    return is_param_null_prop();
+    UNUSEDx(col_offset, row_ids, row_count);
+    return OB_NOT_NULL(reader) && is_param_null_prop();
   }
   OB_INLINE bool need_access_data() const override { return !is_param_null_prop(); }
   OB_INLINE bool need_get_row_ids() const override { return !is_param_null_prop() || exclude_null_; }
@@ -334,6 +334,7 @@ public:
                         const share::ObAggrParamProperty &param_prop,
                         common::ObIAllocator &allocator,
                         const bool exclude_null);
+  void reset() override;
   int init(const ObTableAccessParam &param) override;
   int eval(blocksstable::ObStorageDatum &datum,
            const int64_t row_count = 1,
@@ -349,8 +350,19 @@ public:
   int eval_index_info(const blocksstable::ObMicroIndexInfo &index_info,
                       const bool is_cg,
                       const int64_t agg_row_idx = 0) override;
+  int agg_pushdown_decoder(blocksstable::ObIMicroBlockReader *reader,
+                           const int32_t col_offset,
+                           const ObPushdownRowIdCtx &pd_row_id_ctx) override;
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
                          const int32_t col_index, bool &can_agg) override;
+  bool can_pushdown_decoder(blocksstable::ObIMicroBlockReader *reader,
+                            const int32_t col_offset,
+                            const int32_t *row_ids,
+                            const int64_t row_count) const override
+  {
+    UNUSEDx(col_offset, row_ids, row_count);
+    return OB_NOT_NULL(reader) && is_fixed_length_type();
+  }
   OB_INLINE bool need_access_data() const override
   {
     return !is_fixed_length_type();
@@ -359,7 +371,7 @@ public:
   {
     return exclude_null_ || !is_fixed_length_type();
   }
-  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(op_nsize), K_(exclude_null));
+  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(op_nsize), KP_(row_id_buffer), K_(exclude_null));
 protected:
   int set_op_nsize();
   int get_datum_op_nsize(blocksstable::ObStorageDatum &datum, int64_t &length);
@@ -372,6 +384,7 @@ protected:
   }
 private:
   int64_t op_nsize_;
+  int32_t *row_id_buffer_;
   bool exclude_null_;
 };
 

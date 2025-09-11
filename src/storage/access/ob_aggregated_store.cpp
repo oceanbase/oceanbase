@@ -85,10 +85,8 @@ int ObCGAggCells::eval_batch(
     const ObTableAccessContext *context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const ObPushdownRowIdCtx &pd_row_id_ctx,
-    const bool reserve_memory)
+    const ObPushdownRowIdCtx &pd_row_id_ctx)
 {
-  UNUSED(reserve_memory);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(col_offset < 0 || !pd_row_id_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

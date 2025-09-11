@@ -848,19 +848,14 @@ int ObCountAggCellVec::eval_batch(
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
     if (!need_get_row_ids()) {
       data += row_count;
+    } else if (OB_UNLIKELY(nullptr != reader && is_param_null_prop())) {
+      // defensive check, COUNT aggregate should be pushdown to decoder in such scenario.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected, should be pushdown to decoder", K(ret), KPC(this),
+        KP(reader), K(col_offset), KP(row_ids), K(row_count), K(row_offset), K(agg_row_idx), K(need_eval));
     } else if (nullptr == reader || !is_param_null_prop()) { // row scan or group by pushdown
       if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx, need_eval))) {
         LOG_WARN("Failed to aggregate batch rows", K(ret));
-      }
-    } else { // block scan and only has count aggregate in one column
-      int64_t valid_row_count = 0;
-      if (OB_ISNULL(row_ids)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected, row_ids is null", K(ret), KPC(this), K(row_count));
-      } else if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, basic_info_.col_param_, valid_row_count))) {
-        LOG_WARN("Failed to get row count from micro block decoder", K(ret), KPC(this), K(row_count));
-      } else {
-        data += valid_row_count;
       }
     }
     LOG_DEBUG("[PD_COUNT_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
@@ -1280,18 +1275,36 @@ ObSumOpNSizeAggCellVec::ObSumOpNSizeAggCellVec(
     const bool exclude_null)
       : ObAggCellVec(agg_idx, basic_info, param_prop, allocator),
         op_nsize_(0),
+        row_id_buffer_(nullptr),
         exclude_null_(exclude_null)
 {
   agg_type_ = PD_SUM_OP_SIZE;
 }
 
+void ObSumOpNSizeAggCellVec::reset()
+{
+  ObAggCellVec::reset();
+  if (nullptr != row_id_buffer_) {
+    allocator_.free(row_id_buffer_);
+    row_id_buffer_ = nullptr;
+  }
+}
+
 int ObSumOpNSizeAggCellVec::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
+  void *buf = nullptr;
   if (OB_FAIL(ObAggCellVec::init(param))) {
     LOG_WARN("Failed to init agg cell", K(ret));
   } else if (OB_FAIL(set_op_nsize())) {
     LOG_WARN("Failed to get op size", K(ret));
+  } else if (need_get_row_ids()) {
+    if (OB_ISNULL(buf = allocator_.alloc(sizeof(int32_t) * AGGREGATE_STORE_BATCH_SIZE))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc row_ids", K(ret), K(AGGREGATE_STORE_BATCH_SIZE));
+    } else {
+      row_id_buffer_ = reinterpret_cast<int32_t *>(buf);
+    }
   }
   return ret;
 }
@@ -1389,20 +1402,76 @@ int ObSumOpNSizeAggCellVec::eval_batch(
     int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
     if (!need_get_row_ids()) {
       data += row_count * op_nsize_;
+    } else if (OB_UNLIKELY(nullptr != reader && is_fixed_length_type())) {
+      // defensive check, SumOpNSize aggregate should be pushdown to decoder in such scenario.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected, should be pushdown to decoder", K(ret), KPC(this),
+        K(reader), K(col_offset), KP(row_ids),K(row_count), K(row_offset), K(agg_row_idx), K(need_eval));
     } else if (nullptr == reader || !is_fixed_length_type()) { // nullptr == reader means row scan or group by pushdown
       if (OB_FAIL(ObAggCellVec::eval_batch(reader, col_offset, row_ids, row_count, row_offset, agg_row_idx, need_eval))) {
         LOG_WARN("Failed to aggregate batch rows", K(ret));
       }
-    } else {
-      int64_t valid_row_count = 0;
-      if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, basic_info_.col_param_, valid_row_count))) {
-        LOG_WARN("Failed to get row count from micro block reader", K(ret), K(row_count), KPC(this));
-      } else {
-        data += (row_count - valid_row_count) * sizeof(ObDatum) + valid_row_count * op_nsize_;
-      }
     }
     LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate eval batch rows", K(ret), K(col_offset), K(row_count),
                 K(row_offset), K(agg_row_idx), K(need_eval), K(data), K(reader), KP(row_ids), KPC(this));
+  }
+  return ret;
+}
+
+int ObSumOpNSizeAggCellVec::agg_pushdown_decoder(blocksstable::ObIMicroBlockReader *reader,
+                                                 const int32_t col_offset,
+                                                 const ObPushdownRowIdCtx &pd_row_id_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (is_agg_finish(pd_row_id_ctx)) {
+  } else if (can_pushdown_decoder(reader, col_offset, pd_row_id_ctx.row_ids_, pd_row_id_ctx.row_cap_)) {
+    const int64_t row_count = pd_row_id_ctx.get_row_count();
+    AggrRowPtr row = static_cast<char *>(basic_info_.rows_[0]->get_extra_payload(basic_info_.row_meta_));
+    char *agg_cell = basic_info_.agg_ctx_.row_meta().locate_cell_payload(agg_idx_, row);
+    int64_t &data = *reinterpret_cast<int64_t *>(agg_cell);
+    if (!need_get_row_ids()) {
+      data += row_count * op_nsize_;
+    } else {
+      int64_t valid_row_count = 0;
+      if (nullptr != pd_row_id_ctx.row_ids_) {
+        if (OB_FAIL(reader->get_row_count(col_offset, pd_row_id_ctx.row_ids_, pd_row_id_ctx.row_cap_, false, basic_info_.col_param_, valid_row_count))) {
+          LOG_WARN("Failed to get row count from micro block decoder", K(ret), K(pd_row_id_ctx), KPC(this));
+        } else {
+          data += (row_count - valid_row_count) * sizeof(ObDatum) + valid_row_count * op_nsize_;
+        }
+      } else {
+        int64_t base_idx = 0;
+        while (OB_SUCC(ret) && base_idx < row_count) {
+          int64_t batch_row_count = MIN(AGGREGATE_STORE_BATCH_SIZE, row_count - base_idx);
+          if (batch_row_count <= DEFAULT_CS_BATCH_ROW_COUNT) {
+          #if OB_USE_MULTITARGET_CODE
+            if (common::is_arch_supported(ObTargetArch::AVX2)) {
+              specific::avx2::copy_row_ids(row_id_buffer_, batch_row_count, pd_row_id_ctx.get_row_id(base_idx));
+            } else {
+          #endif
+            specific::normal::copy_row_ids(row_id_buffer_, batch_row_count, pd_row_id_ctx.get_row_id(base_idx));
+          #if OB_USE_MULTITARGET_CODE
+            }
+          #endif
+          } else {
+            for (int64_t i = 0; i < batch_row_count; ++i) {
+              row_id_buffer_[i] = pd_row_id_ctx.get_row_id(base_idx + i);
+            }
+          }
+          if (OB_FAIL(reader->get_row_count(col_offset, row_id_buffer_, batch_row_count, false, basic_info_.col_param_, valid_row_count))) {
+            LOG_WARN("Failed to get row count from micro block decoder", K(ret), K(pd_row_id_ctx), KPC(this));
+          } else {
+            data += (batch_row_count - valid_row_count) * sizeof(ObDatum) + valid_row_count * op_nsize_;
+          }
+          base_idx += batch_row_count;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      agg_row_id_ = pd_row_id_ctx.bound_row_id_;
+    }
+    LOG_DEBUG("[PD_SUMOPNSIZE_AGGREGATE] aggregate pushdown to decoder", K(ret),
+      K(data), K(col_offset), K(pd_row_id_ctx), K(reader), KPC(this));
   }
   return ret;
 }
