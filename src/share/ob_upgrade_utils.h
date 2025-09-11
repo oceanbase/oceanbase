@@ -394,6 +394,7 @@ private:
   int post_upgrade_for_replace_tenant_();
   int post_upgrade_for_scheduled_trigger_partition_balance();
   int post_upgrade_for_scheduled_trigger_dump_data_dict();
+  int post_upgrade_for_upload_cluster_info_();
 };
 
 /* =========== special upgrade processor end   ============= */

@@ -17,6 +17,7 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "share/ob_ss_file_util.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_cluster_info.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/shared_storage/ob_file_helper.h"
@@ -1179,6 +1180,31 @@ TEST_F(TestFileManager, test_ss_format)
   ASSERT_EQ(OB_SUCCESS, ObSSFormatUtil::read_ss_format(storage_dest, ss_format));
   ASSERT_EQ(cur_cluster_version, ss_format.body_.cluster_version_);
   ASSERT_EQ(cur_us, ss_format.body_.create_timestamp_);
+}
+
+TEST_F(TestFileManager, test_ss_cluster_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  ObBackupDest storage_dest;
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.get_storage_dest(storage_dest));
+  // step 1: is exist ss_cluster_info
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, is_exist));
+  ASSERT_EQ(false, is_exist);
+  // step 2: write ss_cluster_info
+  ObSSClusterInfo ss_cluster_info;
+  const uint64_t cluster_id = 12345;
+  const common::ObRegion cluster_region("test_region");
+  ASSERT_EQ(OB_SUCCESS, ss_cluster_info.init(cluster_id, cluster_region));
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info));
+  // step 3: is exist ss_cluster_info
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, is_exist));
+  ASSERT_EQ(true, is_exist);
+  // step 4: read ss_cluster_info
+  ObSSClusterInfo read_ss_cluster_info;
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::read_ss_cluster_info(storage_dest, read_ss_cluster_info));
+  ASSERT_EQ(cluster_id, read_ss_cluster_info.body_.logservice_cluster_id_);
+  ASSERT_EQ(1, cluster_region == read_ss_cluster_info.body_.cluster_region_);
 }
 
 TEST_F(TestFileManager, test_list_and_delete_dir_operator)

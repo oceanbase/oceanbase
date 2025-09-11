@@ -3546,7 +3546,7 @@ int ObReplaceTenantResolver::resolve(const ParseNode &parse_tree)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not in shared storage mode, replace tenant is");
   } else if (OB_UNLIKELY(T_REPLACE_TENANT != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("type is not T_ADD_LS_REPLICA", KR(ret), "type", get_type_name(parse_tree.type_));
+    LOG_WARN("type is not T_REPLACE_TENANT", KR(ret), "type", get_type_name(parse_tree.type_));
   } else if (OB_ISNULL(parse_tree.children_) || OB_UNLIKELY(parse_tree.num_child_ != 4)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", KR(ret), "type", get_type_name(parse_tree.type_),

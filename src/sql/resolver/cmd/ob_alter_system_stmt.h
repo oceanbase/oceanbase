@@ -1580,7 +1580,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid args", K(tenant_id), K(ls_id), K(tablet_id_array), K(src), K(dest));
     } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
-      LOG_WARN("failed to assign tablet id array", K(ret), K(tenant_id), K(tablet_id_array));
+      COMMON_LOG(WARN,"failed to assign tablet id array", K(ret), K(tenant_id), K(tablet_id_array));
     } else {
       tenant_id_ = tenant_id;
       ls_id_ = ls_id;

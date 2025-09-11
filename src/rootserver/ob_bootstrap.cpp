@@ -27,9 +27,11 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/object_storage/ob_device_connectivity.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_cluster_info.h"
 #endif
 #include "share/inner_table/ob_load_inner_table_schema.h"
 #include "rootserver/ob_load_inner_table_schema_executor.h"
+#include "rootserver/ob_disaster_recovery_replace_tenant.h"
 
 namespace oceanbase
 {
@@ -355,24 +357,10 @@ int ObPreBootstrap::check_and_notify_shared_storage_info()
     // Check storage-dest connectivity
     if (FAILEDx(device_conn_check_mgr.check_device_connectivity(storage_dest))) {
       LOG_WARN("fail to check device connectivity", KR(ret), K(storage_dest));
+    } else if (OB_FAIL(wirte_ss_format_and_cluster_info_(storage_dest))) {
+      LOG_WARN("fail to write ss_format and cluster_info", KR(ret), K(storage_dest));
     }
-    // Check and write the ss-format file to prevent from write conflict with another cluster
-    //   in same shared-storage directory
-    bool is_ss_format_exist = false;
-    ObSSFormat ss_format;
-    if (FAILEDx(ObSSFormatUtil::is_exist_ss_format(storage_dest, is_ss_format_exist))) {
-      LOG_WARN("fail to judge ss_format exist", KR(ret), K(storage_dest), K(is_ss_format_exist));
-    } else if (OB_UNLIKELY(is_ss_format_exist)) {
-      ret = OB_FILE_ALREADY_EXIST;
-      LOG_ERROR("ss_format file already exist, shared storage must use new path"
-                "as the object storage path", KR(ret), K(is_ss_format_exist), K(storage_dest));
-      LOG_USER_ERROR(OB_ENTRY_EXIST, "ss_format file already exist,"
-                    "shared storage must use new path as the object storage path");
-    } else if (OB_FAIL(ss_format.init(CLUSTER_CURRENT_VERSION, ObTimeUtility::fast_current_time()))) {
-      LOG_WARN("fail to init ss_format", KR(ret), K(CLUSTER_CURRENT_VERSION));
-    } else if (OB_FAIL(ObSSFormatUtil::write_ss_format(storage_dest, ss_format))) {
-      LOG_ERROR("fail to write ss_format file", KR(ret), K(storage_dest), K(ss_format));
-    }
+
     // Notify rs_list nodes with shared-storage info
     if (OB_SUCC(ret)) {
       ObNotifySharedStorageInfoArg rpc_arg;
@@ -396,6 +384,51 @@ int ObPreBootstrap::check_and_notify_shared_storage_info()
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;
 }
+
+int ObPreBootstrap::wirte_ss_format_and_cluster_info_(const ObBackupDest &storage_dest)
+{
+  int ret = OB_SUCCESS;
+  // Check and write the ss-format file to prevent from write conflict with another cluster
+  // in same shared-storage directory
+  bool is_ss_format_exist = false;
+  bool is_ss_cluster_info_exist = false;
+  ObSSFormat ss_format;
+  ObSSClusterInfo ss_cluster_info;
+  uint64_t logservice_cluster_id = OB_INVALID_ID;
+  if (FAILEDx(ObSSFormatUtil::is_exist_ss_format(storage_dest, is_ss_format_exist))) {
+    LOG_WARN("fail to judge ss_format exist", KR(ret), K(storage_dest), K(is_ss_format_exist));
+  } else if (OB_UNLIKELY(is_ss_format_exist)) {
+    ret = OB_FILE_ALREADY_EXIST;
+    LOG_ERROR("ss_format file already exist, shared storage must use new path"
+              "as the object storage path", KR(ret), K(is_ss_format_exist), K(storage_dest));
+    LOG_USER_ERROR(OB_ENTRY_EXIST, "ss_format file already exist,"
+                  "shared storage must use new path as the object storage path");
+  } else if (OB_FAIL(ss_format.init(CLUSTER_CURRENT_VERSION, ObTimeUtility::fast_current_time()))) {
+    LOG_WARN("fail to init ss_format", KR(ret), K(CLUSTER_CURRENT_VERSION));
+  } else if (OB_FAIL(ObSSFormatUtil::write_ss_format(storage_dest, ss_format))) {
+    LOG_ERROR("fail to write ss_format file", KR(ret), K(storage_dest), K(ss_format));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, is_ss_cluster_info_exist))) {
+    LOG_WARN("fail to judge ss_cluster_info exist", KR(ret), K(storage_dest));
+  } else if (OB_UNLIKELY(is_ss_cluster_info_exist)) {
+    ret = OB_FILE_ALREADY_EXIST;
+    LOG_ERROR("ss_cluster_info file already exist, shared storage must use new path"
+              "as the object storage path", KR(ret), K(is_ss_cluster_info_exist), K(storage_dest));
+    LOG_USER_ERROR(OB_ENTRY_EXIST, "ss_cluster_info file already exist,"
+                  "shared storage must use new path as the object storage path");
+  } else if (rs_list_.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rs_list size must larger than 0", K(ret));
+  } else if (OB_FAIL(ObDRReplaceTenant::get_logservice_cluster_id(logservice_cluster_id))) {
+    LOG_WARN("fail to get logservice cluster id", KR(ret));
+  } else if (OB_FAIL(ss_cluster_info.init(logservice_cluster_id, rs_list_.at(0).region_))) {
+    LOG_WARN("fail to init ss_cluster_info", KR(ret), K(logservice_cluster_id), K(CLUSTER_CURRENT_VERSION));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info))) {
+    LOG_ERROR("fail to write ss_cluster_info file", KR(ret), K(storage_dest), K(ss_cluster_info));
+  }
+  FLOG_INFO("write ss_cluster_info", KR(ret), K(ss_cluster_info), K(ss_format));
+  return ret;
+}
+
 #endif
 
 int ObPreBootstrap::notify_sys_tenant_root_key()

@@ -20,10 +20,12 @@
 #endif
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_server_zone_op_service.h"
+#include "rootserver/ob_disaster_recovery_replace_tenant.h"
 #include "src/pl/ob_pl.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_cluster_info.h"
 #endif
 #include "share/ncomp_dll/ob_flush_ncomp_dll_task.h"
 #include "rootserver/ob_tenant_ddl_service.h"
@@ -2077,7 +2079,9 @@ int ObUpgradeFor4410Processor::post_upgrade_for_replace_tenant_()
     uint64_t max_unit_id = OB_INVALID_ID;
     common::ObSEArray<uint64_t, 128> server_id_in_cluster;
     common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> zone_list;
-    if (OB_FAIL(id_fetcher.fetch_max_id(*GCTX.sql_proxy_, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, max_server_id))) {
+    if (OB_FAIL(post_upgrade_for_upload_cluster_info_())) {
+      LOG_WARN("fail to upload cluster info", KR(ret));
+    } else if (OB_FAIL(id_fetcher.fetch_max_id(*GCTX.sql_proxy_, OB_SYS_TENANT_ID, OB_MAX_USED_SERVER_ID_TYPE, max_server_id))) {
       LOG_WARN("fail to get max server id", KR(ret));
     } else if (OB_FAIL(id_fetcher.fetch_max_id(*GCTX.sql_proxy_, OB_SYS_TENANT_ID, OB_MAX_USED_UNIT_ID_TYPE, max_unit_id))) {
       LOG_WARN("fail to get max unit id", KR(ret));
@@ -2098,6 +2102,41 @@ int ObUpgradeFor4410Processor::post_upgrade_for_replace_tenant_()
     }
   }
 #endif
+#endif
+  return ret;
+}
+
+int ObUpgradeFor4410Processor::post_upgrade_for_upload_cluster_info_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  bool file_exist = false;
+  ObSSClusterInfo ss_cluster_info;
+  share::ObBackupDest storage_dest;
+  uint64_t logservice_cluster_id = OB_INVALID_ID;
+  ObArray<common::ObRegion> region_array;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(OB_SERVER_FILE_MGR.get_storage_dest(storage_dest))) {
+    LOG_WARN("fail to get storage dest", KR(ret));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, file_exist))) {
+    LOG_WARN("fail to judge ss_cluster_info exist", KR(ret), K(storage_dest));
+  } else if (file_exist) {
+    LOG_INFO("ss_cluster_info file already exist, skip", KR(ret), K(storage_dest));
+  } else if (OB_FAIL(share::ObZoneTableOperation::get_region_list(*GCTX.sql_proxy_, region_array))) {
+    LOG_WARN("failed to get region list", K(ret));
+  } else if (0 == region_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("region array is empty", K(ret));
+  } else if (OB_FAIL(ObDRReplaceTenant::get_logservice_cluster_id(logservice_cluster_id))) {
+    LOG_WARN("fail to get logservice cluster id", KR(ret));
+  } else if (OB_FAIL(ss_cluster_info.init(logservice_cluster_id, region_array.at(0)))) {
+    LOG_WARN("fail to init ss_cluster_info", KR(ret), K(logservice_cluster_id), K(region_array));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info))) {
+    LOG_WARN("fail to write ss_cluster_info file", KR(ret), K(storage_dest));
+  }
+  FLOG_INFO("post upgrade for upload cluster info finished", KR(ret), K(file_exist), K(region_array), K(ss_cluster_info));
 #endif
   return ret;
 }

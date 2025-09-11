@@ -1335,7 +1335,7 @@ int ObServerZoneOpService::store_max_unit_id_in_palf_kv(const uint64_t max_unit_
     LOG_WARN("not support in non-shared storage mode", KR(ret), K(max_unit_id));
   } else {
     KEY_OF_RESOURCE_IN_PALF_KV(ObServerZoneOpService::PALF_KV_MAX_UNIT_ID_FORMAT_STR)
-    if (FAILEDx(store_max_resource_id_in_palf_kv_(row_key, max_unit_id))) {
+    if (FAILEDx(store_max_uint_in_palf_kv_(row_key, max_unit_id))) {
       LOG_WARN("store max_unit_id in palf kv failed", KR(ret), K(row_key), K(max_unit_id));
     }
     PALF_KV_LOG_INFO("store max_unit_id in palf_kv", KR(ret), K(row_key), K(max_unit_id));
@@ -1348,14 +1348,14 @@ int ObServerZoneOpService::generate_new_unit_id_from_palf_kv(uint64_t &new_unit_
   int ret = OB_SUCCESS;
   uint64_t orig_max_unit_id = OB_INVALID_ID;
   KEY_OF_RESOURCE_IN_PALF_KV(ObServerZoneOpService::PALF_KV_MAX_UNIT_ID_FORMAT_STR)
-  if (FAILEDx(get_resource_id_in_palf_kv_(row_key, orig_max_unit_id))) {
+  if (FAILEDx(get_uint_in_palf_kv_(row_key, orig_max_unit_id))) {
     LOG_WARN("fail to get max unit id in palf kv", KR(ret));
   } else if (orig_max_unit_id == OB_INVALID_ID) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig_max_unit_id is invalid", KR(ret), K(orig_max_unit_id));
   } else if (FALSE_IT(new_unit_id = orig_max_unit_id + 1)) {
-  } else if (OB_FAIL(cas_resource_id_in_palf_kv_(row_key, orig_max_unit_id, new_unit_id))) {
-    LOG_WARN("store resource_id in palf kv failed", KR(ret), K(row_key), K(orig_max_unit_id), K(new_unit_id));
+  } else if (OB_FAIL(cas_uint_in_palf_kv_(row_key, orig_max_unit_id, new_unit_id))) {
+    LOG_WARN("cas uint in palf kv failed", KR(ret), K(row_key), K(orig_max_unit_id), K(new_unit_id));
   }
   PALF_KV_LOG_INFO("generate new unit_id from palf_kv", KR(ret), K(orig_max_unit_id), K(new_unit_id));
   return ret;
@@ -1389,7 +1389,7 @@ int ObServerZoneOpService::store_data_version_in_palf_kv(
     LOG_WARN("not support in non-shared storage mode", KR(ret));
   } else {
     KEY_OF_DATA_VERSION_IN_PALF_KV
-    if (FAILEDx(store_max_resource_id_in_palf_kv_(row_key, data_version))) {
+    if (FAILEDx(store_max_uint_in_palf_kv_(row_key, data_version))) {
       LOG_WARN("store data_version in palf kv failed", KR(ret), K(row_key), KDV(data_version));
     }
     PALF_KV_LOG_INFO("store data_version in palf_kv", KR(ret), K(tenant_id), K(row_key), KDV(data_version));
@@ -1410,7 +1410,7 @@ int ObServerZoneOpService::get_data_version_in_palf_kv(
     LOG_WARN("not in ss mode", KR(ret));
   } else {
     KEY_OF_DATA_VERSION_IN_PALF_KV
-    if (FAILEDx(get_resource_id_in_palf_kv_(row_key, data_version))) {
+    if (FAILEDx(get_uint_in_palf_kv_(row_key, data_version))) {
       LOG_WARN("get resource_id in palf kv failed", KR(ret), K(row_key));
     }
     PALF_KV_LOG_INFO("get data_version in palf_kv", KR(ret), K(tenant_id), K(row_key), KDV(data_version));
@@ -1418,33 +1418,33 @@ int ObServerZoneOpService::get_data_version_in_palf_kv(
   return ret;
 }
 
-int ObServerZoneOpService::store_max_resource_id_in_palf_kv_(
+int ObServerZoneOpService::store_max_uint_in_palf_kv_(
     const common::ObString &row_key,
-    const uint64_t max_resource_id)
+    const uint64_t max_uint)
 {
   int ret = OB_SUCCESS;
-  uint64_t orignal_resource_id = OB_INVALID_ID;
-  if (OB_UNLIKELY(OB_INVALID_ID == max_resource_id || row_key.empty())) {
+  uint64_t orignal_uint = OB_INVALID_ID;
+  if (OB_UNLIKELY(OB_INVALID_ID == max_uint || row_key.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(max_resource_id), K(row_key));
-  } else if (OB_FAIL(get_resource_id_in_palf_kv_(row_key, orignal_resource_id))) {
+    LOG_WARN("invalid argument", KR(ret), K(max_uint), K(row_key));
+  } else if (OB_FAIL(get_uint_in_palf_kv_(row_key, orignal_uint))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      if (OB_FAIL(insert_resource_id_in_palf_kv_(row_key, max_resource_id))) {
-        LOG_WARN("store server_id in palf kv failed", KR(ret), K(row_key), K(max_resource_id));
+      if (OB_FAIL(insert_uint_in_palf_kv_(row_key, max_uint))) {
+        LOG_WARN("store server_id in palf kv failed", KR(ret), K(row_key), K(max_uint));
       }
     } else {
       LOG_WARN("get all resource id in palf_kv failed", KR(ret), K(row_key));
     }
-  } else if (max_resource_id > orignal_resource_id) {
-    LOG_INFO("small resource_id in palf_kv, need update", K(orignal_resource_id), K(max_resource_id));
-    if (OB_FAIL(cas_resource_id_in_palf_kv_(row_key, orignal_resource_id, max_resource_id))) {
-      LOG_WARN("store resource_id in palf kv failed", KR(ret), K(row_key), K(orignal_resource_id), K(max_resource_id));
+  } else if (max_uint > orignal_uint) {
+    LOG_INFO("small uint in palf_kv, need update", K(orignal_uint), K(max_uint));
+    if (OB_FAIL(cas_uint_in_palf_kv_(row_key, orignal_uint, max_uint))) {
+      LOG_WARN("store uint in palf kv failed", KR(ret), K(row_key), K(orignal_uint), K(max_uint));
     }
   } else {
-    FLOG_INFO("orignal_resource_id in palf_kv is more bigger than max_resource_id, no need update");
+    FLOG_INFO("orignal_uint in palf_kv is more bigger than max_uint, no need update");
   }
-  PALF_KV_LOG_INFO("store max_resource_id in palf_kv", KR(ret), K(row_key), K(max_resource_id), K(orignal_resource_id));
+  PALF_KV_LOG_INFO("store max_uint in palf_kv", KR(ret), K(row_key), K(max_uint), K(orignal_uint));
   return ret;
 }
 
@@ -1460,85 +1460,85 @@ int ObServerZoneOpService::store_max_resource_id_in_palf_kv_(
     }                                                                                                                             \
   } while (0)                                                                                                                     \
 
-int ObServerZoneOpService::cas_resource_id_in_palf_kv_(
+int ObServerZoneOpService::cas_uint_in_palf_kv_(
     const common::ObString &row_key,
-    const uint64_t orig_resource_id,
-    const uint64_t new_resource_id)
+    const uint64_t orig_uint,
+    const uint64_t new_uint)
 {
   int ret = OB_SUCCESS;
   sslog::ObSSLogKVPalfAdapter palf_kv_adapter;
   const int64_t cluster_id = GCONF.cluster_id;
-  if (OB_UNLIKELY(OB_INVALID_ID == orig_resource_id || OB_INVALID_ID == new_resource_id || row_key.empty())) {
+  if (OB_UNLIKELY(OB_INVALID_ID == orig_uint || OB_INVALID_ID == new_uint || row_key.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(orig_resource_id), K(new_resource_id), K(row_key));
+    LOG_WARN("invalid argument", KR(ret), K(orig_uint), K(new_uint), K(row_key));
   } else if (OB_FAIL(palf_kv_adapter.init(cluster_id, OB_SYS_TENANT_ID))) {
     LOG_WARN("init palf kv adapter failed", KR(ret), K(cluster_id));
   } else {
     bool expected = false;
     const int64_t MAX_UINT64_LEN = 128;
-    common::ObString orig_resource_id_str;
-    common::ObString new_resource_id_str;
-    char orig_resource_id_char[MAX_UINT64_LEN] = {'\0'};
-    char new_resource_id_char[MAX_UINT64_LEN] = {'\0'};
-    SERIALIZE_RESOURCE_ID_FOR_PALF_KV(orig_resource_id, orig_resource_id_char, orig_resource_id_str);
-    SERIALIZE_RESOURCE_ID_FOR_PALF_KV(new_resource_id, new_resource_id_char, new_resource_id_str);
-    if (FAILEDx(palf_kv_adapter.cas(row_key, orig_resource_id_str, new_resource_id_str, expected))) {
-      LOG_WARN("cas resource_id in palf kv failed", KR(ret), K(row_key), K(orig_resource_id_str), K(new_resource_id_str));
+    common::ObString orig_uint_str;
+    common::ObString new_uint_str;
+    char orig_uint_char[MAX_UINT64_LEN] = {'\0'};
+    char new_uint_char[MAX_UINT64_LEN] = {'\0'};
+    SERIALIZE_RESOURCE_ID_FOR_PALF_KV(orig_uint, orig_uint_char, orig_uint_str);
+    SERIALIZE_RESOURCE_ID_FOR_PALF_KV(new_uint, new_uint_char, new_uint_str);
+    if (FAILEDx(palf_kv_adapter.cas(row_key, orig_uint_str, new_uint_str, expected))) {
+      LOG_WARN("cas uint in palf kv failed", KR(ret), K(row_key), K(orig_uint_str), K(new_uint_str));
     } else if (!expected) {
       ret = OB_EAGAIN;
-      LOG_WARN("cas resource_id in palf kv failed", KR(ret), K(row_key), K(orig_resource_id_str), K(new_resource_id_str));
+      LOG_WARN("cas uint in palf kv failed", KR(ret), K(row_key), K(orig_uint_str), K(new_uint_str));
     }
-    PALF_KV_LOG_INFO("store resource_id in palf_kv", KR(ret), K(row_key), K(orig_resource_id), K(new_resource_id));
+    PALF_KV_LOG_INFO("store uint in palf_kv", KR(ret), K(row_key), K(orig_uint), K(new_uint));
   }
   return ret;
 }
 
-int ObServerZoneOpService::insert_resource_id_in_palf_kv_(
+int ObServerZoneOpService::insert_uint_in_palf_kv_(
     const common::ObString &row_key,
-    const uint64_t resource_id)
+    const uint64_t uint_val)
 {
   int ret = OB_SUCCESS;
   sslog::ObSSLogKVPalfAdapter palf_kv_adapter;
   const int64_t cluster_id = GCONF.cluster_id;
-  if (OB_UNLIKELY(OB_INVALID_ID == resource_id || row_key.empty())) {
+  if (OB_UNLIKELY(OB_INVALID_ID == uint_val || row_key.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(resource_id), K(row_key));
+    LOG_WARN("invalid argument", KR(ret), K(uint_val), K(row_key));
   } else if (OB_FAIL(palf_kv_adapter.init(cluster_id, OB_SYS_TENANT_ID))) {
     LOG_WARN("init palf kv adapter failed", KR(ret), K(cluster_id));
   } else {
-    common::ObString resource_id_str;
+    common::ObString uint_str;
     const int64_t MAX_UINT64_LEN = 128;
-    char resource_id_char[MAX_UINT64_LEN] = {'\0'};
-    SERIALIZE_RESOURCE_ID_FOR_PALF_KV(resource_id, resource_id_char, resource_id_str);
-    if (FAILEDx(palf_kv_adapter.put(row_key, resource_id_str))) { // insert
-      LOG_WARN("put root key into palf kv failed", KR(ret), K(row_key), K(resource_id_str));
+    char uint_char[MAX_UINT64_LEN] = {'\0'};
+    SERIALIZE_RESOURCE_ID_FOR_PALF_KV(uint_val, uint_char, uint_str);
+    if (FAILEDx(palf_kv_adapter.put(row_key, uint_str))) { // insert
+      LOG_WARN("put uint_val into palf kv failed", KR(ret), K(row_key), K(uint_str));
     }
-    PALF_KV_LOG_INFO("store resource_id in palf_kv", KR(ret), K(row_key), K(resource_id_str), K(resource_id));
+    PALF_KV_LOG_INFO("store uint_val in palf_kv", KR(ret), K(row_key), K(uint_str), K(uint_val));
   }
   return ret;
 }
 
-int ObServerZoneOpService::get_resource_id_in_palf_kv_(
+int ObServerZoneOpService::get_uint_in_palf_kv_(
     const common::ObString &row_key,
-    uint64_t &resource_id)
+    uint64_t &uint_val)
 {
   int ret = OB_SUCCESS;
-  resource_id = OB_INVALID_ID;
+  uint_val = OB_INVALID_ID;
   sslog::ObSSLogKVPalfAdapter palf_kv_adapter;
   const int64_t cluster_id = GCONF.cluster_id;
   ObTenantMutilAllocator allocator(OB_SYS_TENANT_ID);
-  common::ObStringBuffer resource_id_str(&allocator);
+  common::ObStringBuffer uint_str(&allocator);
   if (OB_UNLIKELY(row_key.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_key));
   } else if (OB_FAIL(palf_kv_adapter.init(cluster_id, OB_SYS_TENANT_ID))) {
     LOG_WARN("init palf kv adapter failed", KR(ret), K(cluster_id));
-  } else if (OB_FAIL(palf_kv_adapter.get(row_key, resource_id_str))) {
-    LOG_WARN("get root key from palf kv failed", KR(ret), K(row_key));
-  } else if (OB_FAIL(trans_str_to_uint_(common::ObString(resource_id_str.length(), resource_id_str.ptr()), resource_id))) {
-    LOG_WARN("trans str to uint failed", KR(ret), K(resource_id_str));
+  } else if (OB_FAIL(palf_kv_adapter.get(row_key, uint_str))) {
+    LOG_WARN("get row key from palf kv failed", KR(ret), K(row_key));
+  } else if (OB_FAIL(trans_str_to_uint_(common::ObString(uint_str.length(), uint_str.ptr()), uint_val))) {
+    LOG_WARN("trans str to uint failed", KR(ret), K(uint_str));
   }
-  PALF_KV_LOG_INFO("get resource_id in palf_kv", KR(ret), K(row_key), K(resource_id_str), K(resource_id));
+  PALF_KV_LOG_INFO("get uint_val in palf_kv", KR(ret), K(row_key), K(uint_str), K(uint_val));
   return ret;
 }
 
@@ -1556,12 +1556,8 @@ int ObServerZoneOpService::trans_str_to_uint_(
     int64_t copy_len = MIN(str_val.length(), MAX_UINT64_LEN);
     MEMCPY(resource_id_char, str_val.ptr(), copy_len);
     char *end_ptr = NULL;
-    uint64_t ret_resource_id = strtoull(resource_id_char, &end_ptr, 10);
-    if (*str_val.ptr() != '\0' && *end_ptr == '\0') {
-      ret_val = ret_resource_id;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected val str", KR(ret), K(str_val), K(ret_resource_id));
+    if (OB_FAIL(ob_strtoull(resource_id_char, end_ptr, ret_val))) {
+      LOG_WARN("failed to trans str to uint", K(resource_id_char));
     }
   }
   PALF_KV_LOG_INFO("trans str to uint", KR(ret), K(str_val), K(ret_val));

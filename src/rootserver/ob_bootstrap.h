@@ -110,6 +110,7 @@ private:
 #endif
 #ifdef OB_BUILD_SHARED_STORAGE
   virtual int check_and_notify_shared_storage_info();
+  virtual int wirte_ss_format_and_cluster_info_(const ObBackupDest &storage_dest);
 #endif
   virtual int notify_sys_tenant_server_unit_resource();
   int create_sslog_ls_(const common::ObArray<share::ObUnit> &unit_array);
