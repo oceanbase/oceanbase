@@ -308,11 +308,10 @@ class AdjustSortContext
 class AllocGIContext
 {
 public:
-  enum GIState {
+  enum GIState { //FARM COMPAT WHITELIST
     GIS_NORMAL = 0,
     GIS_IN_PARTITION_WISE,
     GIS_PARTITION_WITH_AFFINITY,
-    GIS_PARTITION,
     GIS_AFFINITY,
   };
 public:
@@ -325,7 +324,8 @@ public:
 		multi_child_op_above_count_in_dfo_(0),
 		partition_count_(0),
     hash_part_(false),
-    is_valid_for_gi_(false)
+    is_valid_for_gi_(false),
+    is_force_partition_(false)
   {
   }
   ~AllocGIContext()
@@ -334,7 +334,6 @@ public:
   bool managed_by_gi();
   bool is_in_partition_wise_state();
   bool is_in_pw_affinity_state();
-  bool is_partition_gi() { return GIS_PARTITION == state_; };
   void set_in_partition_wise_state(ObLogicalOperator *op_ptr);
   bool is_in_affinity_state();
   void set_in_affinity_state(ObLogicalOperator *op_ptr);
@@ -350,8 +349,8 @@ public:
   bool multi_child_op_above() { return 0 != multi_child_op_above_count_in_dfo_; }
   void delete_multi_child_op_count() { multi_child_op_above_count_in_dfo_--; }
   void reset_state() { state_ = GIS_NORMAL; }
-  void set_force_partition() { state_ = GIS_PARTITION; }
-  bool force_partition() { return GIS_PARTITION == state_; }
+  void set_force_partition() { is_force_partition_ = true; }
+  bool is_force_partition() { return is_force_partition_; }
   // MANUAL_TABLE_DOP情况下，exchange operator在 alloc_gi_pre才能够被调用
   int push_current_dfo_dop(int64_t dop);
   // MANUAL_TABLE_DOP情况下，exchange operator在 alloc_gi_post才能够被调用
@@ -372,6 +371,7 @@ public:
   // 记录了当前GI直系TSC的是否是hash/key分区表
   bool hash_part_;
   bool is_valid_for_gi_;
+  bool is_force_partition_;
 };
 
 class ObAllocGIInfo
