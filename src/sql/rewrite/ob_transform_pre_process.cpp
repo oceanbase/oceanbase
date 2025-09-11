@@ -8129,6 +8129,7 @@ int ObTransformPreProcess::build_rowid_expr(ObSelectStmt *select_stmt,
                                                           index_keys,
                                                           part_expr,
                                                           subpart_expr,
+                                                          true,
                                                           rowid_expr))) {
         LOG_WARN("build rowid col_expr failed", K(ret));
       } else if (OB_FAIL(select_stmt->check_and_get_same_rowid_expr(rowid_expr, same_rowid_expr))) {

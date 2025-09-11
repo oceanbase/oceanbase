@@ -930,6 +930,7 @@ int ObLogDelUpd::build_rowid_expr(uint64_t table_id,
                                                       rowkeys,
                                                       part_expr,
                                                       subpart_expr,
+                                                      false,
                                                       rowid_sysfun_expr))) {
     LOG_WARN("failed to build rowid col expr", K(ret));
   } else if (OB_ISNULL(rowid_sysfun_expr)) {
