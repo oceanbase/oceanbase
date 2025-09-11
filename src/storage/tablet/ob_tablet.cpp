@@ -2733,6 +2733,8 @@ int ObTablet::load_deserialize_v2(
       LOG_WARN("fail to alloc and new", K(ret));
     } else if (OB_FAIL(mds_data_->deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize mds data", K(ret), K(len), K(new_pos));
+    } else {
+      tablet_meta_.extra_medium_info_ = mds_data_->extra_medium_info_;
     }
   }
 
@@ -2921,6 +2923,7 @@ int ObTablet::deserialize(
       } else if (OB_FAIL(mds_data->deserialize(buf, len, new_pos))) {
         LOG_WARN("fail to deserialize mds data", K(ret));
       } else {
+        tablet_meta_.extra_medium_info_ = mds_data->extra_medium_info_;
         mds_data_ = mds_data;
         start_pos += sizeof(ObTabletMdsData);
         remain -= sizeof(ObTabletMdsData);
