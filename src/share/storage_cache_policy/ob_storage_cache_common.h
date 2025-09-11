@@ -25,6 +25,7 @@ namespace schema
 {
 class ObPartition;
 class ObSubPartition;
+class ObTableSchema;
 }
 }
 namespace storage
