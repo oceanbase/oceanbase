@@ -1564,6 +1564,7 @@ ObTenantIOManager::ObTenantIOManager()
     request_count_(0),
     result_count_(0),
     tenant_id_(0),
+    io_cancel_count_(0),
     io_config_(),
     io_clock_(),
     io_allocator_(),
@@ -1659,6 +1660,7 @@ void ObTenantIOManager::destroy()
   io_memory_limit_ = 0;
   request_count_ = 0;
   result_count_ = 0;
+  io_cancel_count_ = 0;
   group_id_index_map_.destroy();
   io_allocator_.destroy();
   LOG_INFO("destroy tenant io manager success", K(tenant_id_));
@@ -2528,6 +2530,7 @@ int ObTenantIOManager::print_io_status()
     ObIOMode mode = ObIOMode::MAX_MODE;
     ObIOGroupMode group_mode = ObIOGroupMode::MODECNT;
     int tmp_ret = OB_SUCCESS;
+    const int64_t io_cancel_count = get_and_reset_io_cancel_count();
     for (int64_t i = 0; i < info.count(); ++i) {
       if (OB_TMP_FAIL(transform_usage_index_to_group_config_index(i, group_config_index))) {
         continue;
@@ -2768,6 +2771,12 @@ int ObTenantIOManager::print_io_status()
       (void)callback_mgr_.to_string(io_status, sizeof(io_status));
       LOG_INFO("[IO STATUS CALLBACK]", K_(tenant_id), KCSTRING(io_status));
     }
+    LOG_INFO("[IO STATUS CANCEL]", K_(tenant_id), K(io_cancel_count));
+#ifdef ENABLE_DEBUG_LOG
+    if (io_cancel_count > 10000) {
+      LOG_ERROR("too much io cancelled", K_(tenant_id), K(io_cancel_count));
+    }
+#endif
   }
   return ret;
 }

@@ -498,11 +498,18 @@ public:
   void dec_ref();
   int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
   const ObIOFuncUsages& get_io_func_infos();
+  void inc_io_cancel_count() { ATOMIC_FAA(&io_cancel_count_, 1); }
+  int64_t get_and_reset_io_cancel_count()
+  {
+    const int64_t count = ATOMIC_LOAD(&io_cancel_count_);
+    ATOMIC_STORE(&io_cancel_count_, 0);
+    return count;
+  }
   OB_INLINE int64_t get_object_storage_io_timeout_ms() const { return io_config_.param_config_.object_storage_io_timeout_ms_; }
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(ref_cnt_), K(io_memory_limit_), K(request_count_), K(result_count_),
        K(io_config_), K(io_clock_), K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_memory_limit_),
-       K(request_count_), K(result_count_));
+       K(request_count_), K(result_count_), K(io_cancel_count_));
 private:
   friend class ObIORequest;
   friend class ObIOResult;
@@ -513,6 +520,7 @@ private:
   int64_t request_count_;
   int64_t result_count_;
   uint64_t tenant_id_;
+  int64_t io_cancel_count_;
   ObTenantIOConfig io_config_;
   ObTenantIOClock io_clock_;
   ObIOAllocator io_allocator_;
