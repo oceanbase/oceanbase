@@ -1611,6 +1611,7 @@ public:
   static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params, 
                                                     ObSelectStmt *&subquery, 
                                                     ObTransformerCtx *ctx,
+                                                    const bool is_set_child_stmt = false,
                                                     const bool skip_const_in_select = false,
                                                     const bool skip_const_in_cond = true);
   
@@ -1622,17 +1623,17 @@ public:
   static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                     ObSelectStmt *right_query);
 
-  static int replace_none_correlated_exprs(ObIArray<ObRawExpr*> &exprs,
-                                          const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                          int &pos,
-                                          ObIArray<ObRawExpr*> &new_column_list,
-                                          const bool skip_const = true);
-
-  static int replace_none_correlated_expr(ObRawExpr *&expr,
-                                          const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                          int &pos,
-                                          ObIArray<ObRawExpr*> &new_column_list,
-                                          const bool skip_const = true);
+  static int replace_non_correlated_exprs_after_pullup(ObSelectStmt *stmt, 
+                                                       const ObIArray<ObExecParamRawExpr *> &exec_params, 
+                                                       ObIArray<ObRawExpr*> &column_exprs,
+                                                       const bool skip_const_in_select,
+                                                       const bool skip_const_in_cond);
+  static int replace_non_correlated_expr(ObRawExpr *&expr,
+                                         const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                         int &pos,
+                                         ObIArray<ObRawExpr*> &new_column_list,
+                                         const bool skip_const = true);
+  static bool is_param_always_a_const_expr(const ObRawExpr &expr, const int64_t param_idx);
 
   static int pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                      ObIArray<ObRawExpr*> &exprs,
