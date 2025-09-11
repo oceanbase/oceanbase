@@ -573,6 +573,7 @@ public:
   }
 
   int renew_single_snap_index(bool mem_saving_mode);
+  int renew_snapdata_in_lock();
   int set_adaptor_ctx_flag(ObVectorQueryAdaptorResultContext *ctx);
 
   ObString &get_index_identity() { return index_identity_; };
