@@ -371,8 +371,6 @@ public:
       int64_t &actual_evict_num,
       const bool force_evict = false);
   int expire(const int64_t expire_before_time_us, int64_t &actual_expire_num);
-  template<typename MacroHandleType>
-  int evict_one_cached_macro(MacroHandleType &macro_handle, bool &is_evicted);
 
   int64_t cached_macro_count() const
   {
@@ -434,16 +432,6 @@ private:
     bool operator()(const ObPCachedExtLRUMapPairType &map_entry);
   private:
     DISALLOW_COPY_AND_ASSIGN(ObPCachedExtLRUDeletePred);
-  };
-
-  class ObPCachedExtLRUEvictUnusedMacroDeletePred final : public ObPCachedExtLRUDeletePred
-  {
-  public:
-    explicit ObPCachedExtLRUEvictUnusedMacroDeletePred(ObPCachedExtLRU &lru);
-    virtual ~ObPCachedExtLRUEvictUnusedMacroDeletePred();
-    bool operator()(const ObPCachedExtLRUMapPairType &map_entry);
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ObPCachedExtLRUEvictUnusedMacroDeletePred);
   };
 
   class ObPCachedExtLRUReadCB final : public ObPCachedExtLRUBaseCB
@@ -511,10 +499,7 @@ public:
   int64_t cached_macro_count() const;
   int64_t disk_size_allocated() const;
   int check_disk_space(bool &is_full) const;
-  int check_disk_usage_and_evict_if_needed(const bool trigger_force_evict = false);
-
-  template<typename MacroHandleType>
-  int evict_one_cached_macro(MacroHandleType &macro_handle, bool &is_evicted);
+  int check_disk_usage_and_evict_if_needed();
 
 private:
   // check internal + external disk usage
@@ -619,8 +604,6 @@ public:
       const int64_t expect_evict_num,
       int64_t &actual_evict_num,
       const bool force_evict = false);
-  template<typename MacroHandleType>
-  int evict_one_cached_macro(MacroHandleType &macro_handle, bool &is_evicted);
   int cleanup_orphaned_path();
 
   static bool is_read_range_valid(const int64_t offset, const int64_t size);

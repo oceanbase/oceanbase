@@ -294,16 +294,6 @@ int ObBlockManager::alloc_object(ObStorageObjectHandle &object_handle) {
         FLOG_INFO("successfully alloc block", K(macro_id));
       }
     }
-  } else if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-    ret = OB_SUCCESS;
-    bool is_evicted = false;
-    if (OB_FAIL(OB_EXTERNAL_FILE_DISK_SPACE_MGR.evict_one_cached_macro(object_handle, is_evicted))) {
-      LOG_WARN("Failed to evict one unused macro from external table disk cache", KR(ret));
-    } else if (!is_evicted) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_WARN("Failed to evict one unused macro from external table disk cache",
-          KR(ret), K(is_evicted));
-    }
   }
   return ret;
 }
@@ -348,16 +338,6 @@ int ObBlockManager::alloc_block(ObMacroBlockHandle &macro_handle) {
         ATOMIC_AAF(&alloc_num_, 1);
         FLOG_INFO("successfully alloc block", K(macro_id));
       }
-    }
-  } else if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-    ret = OB_SUCCESS;
-    bool is_evicted = false;
-    if (OB_FAIL(OB_EXTERNAL_FILE_DISK_SPACE_MGR.evict_one_cached_macro(macro_handle, is_evicted))) {
-      LOG_WARN("Failed to evict one unused macro from external table disk cache", KR(ret));
-    } else if (!is_evicted) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_WARN("Failed to evict one unused macro from external table disk cache",
-          KR(ret), K(is_evicted));
     }
   }
 
