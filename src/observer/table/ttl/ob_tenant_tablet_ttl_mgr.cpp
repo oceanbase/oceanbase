@@ -771,22 +771,24 @@ int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *
   int ret = OB_SUCCESS;
   ObKVAttr attr;
   ObHbaseModeType mode_type = ObHbaseModeType::OB_INVALID_MODE_TYPE;
+  bool is_table_model = false;
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema is null", KR(ret));
   } else if (!table_schema->get_kv_attributes().empty()) {
     if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), attr))) {
       LOG_WARN("fail to parse kv attributes", KR(ret), K(table_schema->get_kv_attributes()));
+    } else if (FALSE_IT(is_table_model = attr.type_ == ObKVAttr::ObTTLTableType::TABLE)) {
     } else if (attr.type_ == ObKVAttr::ObTTLTableType::REDIS) {
       if (OB_FAIL(ObRedisHelper::check_redis_ttl_schema(*table_schema, attr.redis_model_))) {
         LOG_WARN("fail to check redis schema", KR(ret), K(table_schema->get_table_name()));
       }
-    } else if (attr.type_ != ObKVAttr::ObTTLTableType::HBASE) {
+    } else if (attr.type_ != ObKVAttr::ObTTLTableType::HBASE && !is_table_model) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid ObKVAttr type", K(ret), K(attr));
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !is_table_model) {
       param.max_version_ = attr.max_version_;
       param.ttl_ = attr.ttl_;
       param.is_redis_table_ = (attr.type_ == ObKVAttr::ObTTLTableType::REDIS);
@@ -795,7 +797,7 @@ int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *
       LOG_DEBUG("success to find a hbase ttl partition", KR(ret), K(param));
     }
   }
-  if (OB_SUCC(ret) && !param.is_redis_table_) {
+  if (OB_SUCC(ret) && !param.is_redis_table_ && !is_table_model) {
     if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, mode_type))) {
       LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
     } else if (mode_type == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
