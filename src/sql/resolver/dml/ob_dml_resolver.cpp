@@ -7884,6 +7884,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
           table_version.object_type_ = DEPENDENCY_TABLE;
           table_version.version_ = tab_schema->get_schema_version();
           table_version.is_db_explicit_ = params_.is_in_view_ ? true : is_db_explicit;
+          table_version.invoker_db_id_ = database_id;
           uint64_t dep_db_id = tab_schema->get_database_id();
           if (common::is_cte_table(table_version.object_id_)) {
             // do nothing
