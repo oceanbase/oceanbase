@@ -1994,7 +1994,8 @@ int ObDbmsStatsExecutor::determine_auto_sample_table(ObExecContext &ctx, ObTable
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    param.is_auto_sample_size_ = !table_schema->is_vir_table();
+    param.is_auto_sample_size_ = !table_schema->is_vir_table() &&
+                                 !table_schema->is_external_table();
   }
   return ret;
 }

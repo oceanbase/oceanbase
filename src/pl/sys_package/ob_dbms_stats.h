@@ -686,6 +686,8 @@ private:
   static int append_part_id_if_valid(hash::ObHashMap<int64_t, ObPartitionStatInfo *> &id_to_part_stat_map,
                                      int64_t part_id,
                                      ObIArray<int64_t> &part_ids);
+
+  static bool sample_not_supported(const ObTableStatParam &param);
 };
 
 }
