@@ -7,7 +7,7 @@ import mysql.connector
 from mysql.connector import errorcode
 import logging
 import re
-
+from my_utils import set_session_timeout_for_upgrade
 import config
 import opts
 import run_modules
@@ -65,6 +65,8 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
     cur = conn.cursor(buffered=True)
     try:
       query_cur = actions.QueryCursor(cur)
+      if timeout != 0:
+        set_session_timeout_for_upgrade(cur, timeout)
       actions.check_server_version_by_cluster(cur)
 
       if run_modules.MODULE_BEGIN_UPGRADE in my_module_set:

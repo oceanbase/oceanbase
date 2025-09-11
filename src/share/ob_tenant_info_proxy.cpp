@@ -409,6 +409,7 @@ int ObAllTenantInfoProxy::load_pure_tenant_info_(const uint64_t tenant_id,
     } else if(for_update && OB_FAIL(sql.append(" for update"))) {
       LOG_WARN("failed to assign sql", KR(ret), K(sql));
     } else {
+      DEBUG_SYNC(BEFORE_GET_TENANT_INFO);
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
         if (OB_FAIL(proxy->read(res, exec_tenant_id, sql.ptr()))) {

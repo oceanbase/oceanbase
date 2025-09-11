@@ -307,6 +307,23 @@ private:
   Worker::CompatMode last_compat_mode_;
 };
 
+class WorkerTimeoutGuard
+{
+public:
+  WorkerTimeoutGuard(int64_t abs_timeout_ts)
+  {
+    prev_abs_timeout_ = THIS_WORKER.get_timeout_ts();
+    THIS_WORKER.set_timeout_ts(abs_timeout_ts);
+  }
+  ~WorkerTimeoutGuard()
+  {
+    THIS_WORKER.set_timeout_ts(prev_abs_timeout_);
+  }
+private:
+  int64_t prev_abs_timeout_;
+};
+
+
 #ifdef ERRSIM
 //set current errsim module in code snippet and set last errsim module when guard destructor
 class ErrsimModuleGuard final
