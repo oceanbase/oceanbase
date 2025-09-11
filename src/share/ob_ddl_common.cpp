@@ -23,6 +23,7 @@
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h" // for OTTZ_MGR
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
@@ -523,6 +524,80 @@ int ObDDLUtil::get_sys_log_handler_role_and_proposal_id(
         LOG_WARN("log_handler is null", KR(ret), KP(log_handler));
       } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
         LOG_WARN("fail to get role and epoch", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_rs_specific_table_tablets(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    const uint64_t index_table_id,
+    const uint64_t task_id,
+    ObIArray<ObTabletID> &tablet_ids)
+{
+
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  const ObDatabaseSchema *db_schema = nullptr;
+  ObAlterTableArg alter_table_arg;
+
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id ||
+      OB_INVALID_ID == index_table_id || OB_INVALID_ID == task_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), K(task_id));
+  } else if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(table_schema)) { // skip
+    LOG_INFO("table not exist", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(alter_table_arg.alter_table_schema_.set_origin_table_name(table_schema->get_table_name_str()))) {
+    LOG_WARN("failed to set orig table name", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, table_schema->get_database_id(), db_schema))) {
+    LOG_WARN("fail to get database schema", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(db_schema)) { // skip
+    LOG_INFO("database not exist", K(ret), K(tenant_id), K(table_schema->get_database_id()));
+  } else if (OB_FAIL(alter_table_arg.alter_table_schema_.set_origin_database_name(db_schema->get_database_name_str()))) {
+    LOG_WARN("failed to set orig database name", K(ret));
+  } else {
+    alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id);
+    alter_table_arg.ddl_task_type_ = share::GET_SPECIFIC_TABLE_TABLETS;
+    alter_table_arg.table_id_ = data_table_id;
+    alter_table_arg.hidden_table_id_ = index_table_id;
+    alter_table_arg.exec_tenant_id_ = tenant_id;
+    alter_table_arg.tz_info_wrap_.set_tz_info_offset(0);
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT;
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
+    alter_table_arg.compat_mode_ = lib::Worker::CompatMode::MYSQL;
+    ObTZMapWrap tz_map_wrap;
+    int64_t rpc_timeout = 0;
+    ObSArray<uint64_t> target_tablet_ids;
+
+    if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, DDL_TASK_GET_SPECIFIC_TABLE_TABLET_FAILED))) {
+      LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
+    } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap))) {
+      LOG_WARN("get tenant timezone map failed", K(ret), K(tenant_id));
+    } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id, index_table_id, rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+        execute_ddl_task(alter_table_arg, target_tablet_ids))) {
+      LOG_WARN("fail to get table tablet ids", K(ret));
+    } else {
+      LOG_INFO("success to get specific table tablet ids", K(ret), K(alter_table_arg), K(target_tablet_ids));
+      for (int64_t i = 0; OB_SUCC(ret) && i < target_tablet_ids.count(); ++i) {
+        ObTabletID tmp_tablet_id(target_tablet_ids.at(i));
+        if (OB_FAIL(tablet_ids.push_back(tmp_tablet_id))) {
+          LOG_WARN("fail to push back target tablet id", K(ret));
+        }
       }
     }
   }

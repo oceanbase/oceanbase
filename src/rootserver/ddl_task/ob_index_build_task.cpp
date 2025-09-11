@@ -20,6 +20,7 @@
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "share/schema/ob_mlog_info.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -791,6 +792,12 @@ int ObIndexBuildTask::hold_snapshot(
     } else if (need_acquire_lob && data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+    } else if (index_table_schema->is_vec_vid_rowkey_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
+    } else if (index_table_schema->is_vec_index_snapshot_data_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
     } else if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
@@ -819,6 +826,7 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
     ObSEArray<ObTabletID, 2> tablet_ids;
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *data_table_schema = nullptr;
+    const ObTableSchema *index_table_schema = nullptr;
     ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
@@ -855,6 +863,20 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
       } else {
         LOG_WARN("failed to get data lob piece table snapshot", K(ret));
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, index_table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(object_id_));
+    } else if (OB_ISNULL(index_table_schema)) {
+      // ignore ret
+      LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(index_table_schema));
+    } else if (index_table_schema->is_vec_vid_rowkey_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
+    } else if (index_table_schema->is_vec_index_snapshot_data_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
     }
 
     if (OB_SUCC(ret) && tablet_ids.count() > 0 && OB_FAIL(batch_release_snapshot(snapshot, tablet_ids))) {

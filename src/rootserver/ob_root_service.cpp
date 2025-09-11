@@ -4305,6 +4305,13 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         }
         break;
       }
+      case share::GET_SPECIFIC_TABLE_TABLETS: {
+        if (OB_FAIL(ddl_service_.get_specific_table_tablet_ids(
+            const_cast<obrpc::ObAlterTableArg &>(arg), obj_ids))) {
+          LOG_WARN("failed to get specific table tablet id", K(ret));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown ddl task type", K(ret), K(arg.ddl_task_type_));

@@ -7008,6 +7008,57 @@ int ObDDLService::remap_index_tablets_and_take_effect(
   return ret;
 }
 
+int ObDDLService::get_specific_table_tablet_ids(
+    obrpc::ObAlterTableArg &alter_table_arg, ObSArray<uint64_t> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t data_table_id = alter_table_arg.table_id_;
+  const int64_t target_index_id = alter_table_arg.hidden_table_id_;
+  const int64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (data_table_id == OB_INVALID_ID || target_index_id == OB_INVALID_ID || tenant_id == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(data_table_id), K(target_index_id), K(tenant_id));
+  } else {
+    const ObTableSchema *data_table_schema = NULL;
+    const ObTableSchema *target_index_schema = NULL;
+    ObSchemaGetterGuard schema_guard;
+    schema_guard.set_session_id(alter_table_arg.session_id_);
+    ObArray<ObTabletID> target_tablet_ids;
+
+    if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+      LOG_WARN("fail to get old index table schema", K(ret), K(data_table_id));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpectd null pointer", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, target_index_id, target_index_schema))) {
+      LOG_WARN("fail to get new index table schema", K(ret), K(target_index_id));
+    } else if (OB_ISNULL(target_index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpectd null pointer", K(ret));
+    } else if (!target_index_schema->is_vec_vid_rowkey_type() &&
+               !target_index_schema->is_vec_index_snapshot_data_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index table must be vec vid_rowkey/snapshot_data index type", K(ret), K(target_index_schema));
+    } else if (OB_FAIL(ObVectorIndexUtil::get_rowkey_vid_tablets(schema_guard, *data_table_schema, tenant_id, target_tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_index_id));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < target_tablet_ids.count(); ++i) {
+        const uint64_t tmp_tablet_id = target_tablet_ids.at(i).id();
+        if (OB_FAIL(tablet_ids.push_back(tmp_tablet_id))) {
+          LOG_WARN("fail to push back tablet id", K(ret), K(tmp_tablet_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::switch_index_name_and_status_for_vec_index_table(obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;

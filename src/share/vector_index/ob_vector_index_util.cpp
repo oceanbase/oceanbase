@@ -1451,6 +1451,42 @@ int ObVectorIndexUtil::check_rowkey_tid_table_readable(
   return ret;
 }
 
+/*
+ make sure schema_guard is newest
+*/
+int ObVectorIndexUtil::get_rowkey_vid_tablets(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &data_table_schema,
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+
+  if (tenant_id == OB_INVALID_TENANT_ID || !data_table_schema.is_user_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(data_table_schema));
+  } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObSimpleTableSchemaV2 *index_table_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+      } else if (!index_table_schema->is_vec_rowkey_vid_type()) {
+        // skip not spec index type
+      } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, simple_index_infos.at(i).table_id_, tablet_ids))) {
+        LOG_WARN("fail to get tablets", K(ret), K(simple_index_infos.at(i).table_id_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::get_right_index_tid_in_rebuild(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,

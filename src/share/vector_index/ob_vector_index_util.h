@@ -668,6 +668,11 @@ public:
       int64_t &cid_vector_ith, int64_t &rowkey_cid_ith,
       int64_t &sq_meta_ith, int64_t &pq_centroid_ith,
       int64_t &pq_code_ith);
+  static int get_rowkey_vid_tablets(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_table_schema,
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObTabletID> &tablet_ids);
 
   static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                   const uint64_t vidx_table_id,
