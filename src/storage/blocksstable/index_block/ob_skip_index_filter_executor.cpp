@@ -62,6 +62,7 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
   } else if (OB_UNLIKELY(ob_is_string_type(obj_meta.get_type())
       && ObCharset::usemb(obj_meta.get_collation_type())
       && !max_datum.is_null()
+      && !agg_row_reader_.has_correct_max_prefix()
       && max_datum.len_ > ObSkipIndexColMeta::SAFE_MBCHARSET_PREFIX_MAX_LEN)) {
     // Invalid agg result for string type whose prefix max might not accurate on mbcharset
     min_datum.set_null();

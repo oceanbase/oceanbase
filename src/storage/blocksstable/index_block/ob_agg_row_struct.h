@@ -32,6 +32,7 @@ public:
   static const int64_t AGG_COL_MAX_OFFSET_SIZE = 2; // total size of agg_data < 1K, at most 64K
   static const int64_t AGG_ROW_HEADER_VERSION = 1;
   static const int64_t AGG_ROW_HEADER_VERSION_2 = 2;
+  static const int64_t AGG_ROW_HEADER_VERSION_3 = 3;
   static const int64_t TYPE_BITMAP_IDX = 0;
   static const int64_t PREFIX_BITMAP_IDX = 1;
 public:
@@ -39,7 +40,8 @@ public:
   ~ObAggRowHeader() = default;
   bool is_valid() const
   {
-    return (version_ == AGG_ROW_HEADER_VERSION || version_ == AGG_ROW_HEADER_VERSION_2) && agg_col_cnt_ > 0 && agg_col_idx_size_ > 0 && agg_col_idx_off_size_ > 0
+    return (version_ == AGG_ROW_HEADER_VERSION || version_ == AGG_ROW_HEADER_VERSION_2 || version_ == AGG_ROW_HEADER_VERSION_3) 
+           && agg_col_cnt_ > 0 && agg_col_idx_size_ > 0 && agg_col_idx_off_size_ > 0
            && bitmap_size_ == AGG_COL_TYPE_BITMAP_SIZE;
   }
   TO_STRING_KV(K_(version), K_(length), K_(agg_col_cnt), K_(agg_col_idx_size),
@@ -118,6 +120,10 @@ public:
   int read(const ObSkipIndexColMeta &meta, ObDatum &datum); // use meta get datum
   int read(const ObSkipIndexColMeta &meta, ObDatum &datum, bool &is_prefix);
   void reset();
+  inline bool has_correct_max_prefix()
+  {
+    return OB_NOT_NULL(header_) && header_->version_ >= ObAggRowHeader::AGG_ROW_HEADER_VERSION_3;
+  }
 private:
   int inner_init(const char *buf, const int64_t buf_size);
   int binary_search_col(const int64_t col_idx, int64_t &pos);

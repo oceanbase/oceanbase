@@ -483,6 +483,7 @@ int ObAggCellVec::read_agg_datum(
           && get_agg_expr()->obj_meta_.is_string_type()
           && ObCharset::usemb(get_agg_expr()->obj_meta_.get_collation_type())
           && !skip_index_datum_.is_null()
+          && !agg_row_reader_->has_correct_max_prefix()
           && skip_index_datum_.len_ > ObSkipIndexColMeta::SAFE_MBCHARSET_PREFIX_MAX_LEN)) {
         // Invalid agg result for string type whose prefix max might not accurate on mbcharset
         skip_index_datum_.set_null();

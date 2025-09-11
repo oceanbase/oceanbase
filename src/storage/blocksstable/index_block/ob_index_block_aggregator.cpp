@@ -420,9 +420,8 @@ int ObColMaxAggregator::cmp_with_prefix(
         const int64_t right_char_num = ObCharset::strlen_char(coll, right_str.ptr(), right_str.length());
         if (left_char_num == right_char_num
             || (left_char_num < right_char_num && tmp_res > 0)
-            || (left_char_num > right_char_num && tmp_res > 0)) {
-            // TODO: fix this case on new observer version with compatible ensurance by data version
-            // || (left_char_num > right_char_num && tmp_res < 0)) {
+            || (!enable_revise_max_prefix(major_working_cluster_version_) && left_char_num > right_char_num && tmp_res > 0)
+            || (enable_revise_max_prefix(major_working_cluster_version_) && left_char_num > right_char_num && tmp_res < 0)) {
           cmp_res = tmp_res;
         } else {
           const bool left_shorter = left_char_num < right_char_num;

@@ -215,6 +215,11 @@ OB_INLINE static bool enable_skip_index_min_max_prefix(const int64_t data_versio
   return data_version >= DATA_VERSION_4_3_5_2;
 }
 
+OB_INLINE static bool enable_revise_max_prefix(const int64_t data_version)
+{
+  return data_version >= DATA_VERSION_4_3_5_5;
+}
+
 int get_prefix_for_string_tc_datum(
     const ObDatum &orig_datum,
     const ObObjType obj_type,
