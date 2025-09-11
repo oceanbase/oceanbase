@@ -875,7 +875,7 @@ bool ObOrcTableRowIterator::is_contain_attribute_key(const orc::Type *type)
 {
   bool contains_id = false;
 
-  if (type != nullptr && type->hasAttributeKey(ICEBERG_ID_KEY)) {
+  if (type != nullptr && (type->hasAttributeKey(ICEBERG_ID_KEY) || type->getSubtypeCount() > 0)) {
     contains_id = true;
   }
 
