@@ -17,6 +17,7 @@
 #include "ob_disaster_recovery_task_utils.h"
 #include "common/ob_member_list.h"
 #include "share/ob_rpc_struct.h"
+#include "share/config/ob_server_config.h"
 #include "src/share/ls/ob_ls_table_operator.h"
 #include "src/share/ob_ls_id.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
@@ -89,6 +90,7 @@ void ObDRCreateSSLOGTask::runTimerTask()
     bool is_exist = false;
     bool is_hidden_sys = false;
     bool tenant_schema_is_ready = false;
+    bool locality_is_matched = false;
     ObLSService *ls_service = MTL(ObLSService*);
     int64_t orig_paxos_replica_number = 0;
     common::ObAddr leader_server;
@@ -122,6 +124,10 @@ void ObDRCreateSSLOGTask::runTimerTask()
       LOG_WARN("check tenant will be deleted failed", KR(ret));
     } else if (is_tenant_will_be_deleted) {
       LOG_INFO("tenant will be deleted, does not create sslog ls", K_(tenant_id));
+    } else if (OB_FAIL(check_locality_for_add_sslog_(locality_is_matched))) {
+      LOG_WARN("fail to check locality for add sslog", KR(ret), K_(tenant_id));
+    } else if (!locality_is_matched) {
+      LOG_INFO("locality is not matched, does not create sslog ls", K_(tenant_id));
     } else if (OB_FAIL(get_params_for_add_sslog_(orig_paxos_replica_number, leader_server))) {
       LOG_WARN("fail to get params for add sslog", KR(ret), K_(tenant_id));
     } else {
@@ -159,6 +165,44 @@ void ObDRCreateSSLOGTask::runTimerTask()
       }
     }
   }
+}
+
+int ObDRCreateSSLOGTask::check_locality_for_add_sslog_(
+    bool &locality_is_matched)
+{
+  int ret = OB_SUCCESS;
+  locality_is_matched = false;
+  ObZone current_zone;
+  schema::ObSchemaGetterGuard sys_schema_guard;
+  const schema::ObTenantSchema *tenant_schema = NULL;
+  common::ObArray<share::ObZoneReplicaAttrSet> zone_locality_array;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("create sslog task is not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, sys_schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(sys_schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema is null", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array_inherit(sys_schema_guard, zone_locality_array))) {
+    LOG_WARN("fail to get zone replica attr array", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(current_zone.assign(GCONF.zone.str()))) {
+    LOG_WARN("fail to assign zone", KR(ret), K(GCONF.zone.str()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !locality_is_matched && i < zone_locality_array.count(); ++i) {
+      const share::ObZoneReplicaAttrSet &zone_locality = zone_locality_array.at(i);
+      if (zone_locality.zone_ == current_zone) {
+        locality_is_matched = true;
+        LOG_INFO("locality is matched", K_(tenant_id), K(current_zone), K(zone_locality));
+      }
+    } // end for
+  }
+  return ret;
 }
 
 int ObDRCreateSSLOGTask::get_params_for_add_sslog_(
