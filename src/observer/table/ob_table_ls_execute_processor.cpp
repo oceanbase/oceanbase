@@ -1223,10 +1223,10 @@ int ObTableLSExecuteP::try_process()
   if (OB_FAIL(ret)) {
   } else if (is_new_try_process()) {
     if (OB_FAIL(new_try_process())) {
-      LOG_WARN("fail to new try process", K(ret));
+      LOG_WARN("fail to new try process", K(ret), K_(retry_count));
     }
   } else if (OB_FAIL(old_try_process())) {
-    LOG_WARN("fail to old try process", K(ret));
+    LOG_WARN("fail to old try process", K(ret), K_(retry_count));
   }
 
 #ifndef NDEBUG

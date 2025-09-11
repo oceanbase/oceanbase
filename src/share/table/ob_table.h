@@ -1772,7 +1772,8 @@ public:
   TO_STRING_KV(K_(index_name),
                K_(scan_range_columns),
                K_(key_ranges),
-               K_(filter_string));
+               K_(filter_string),
+               K_(tablet_ids));
 private:
   ObTableBitMap scan_range_cols_bp_; 
   const ObIArray<ObString> *all_rowkey_names_; // do not serialize 

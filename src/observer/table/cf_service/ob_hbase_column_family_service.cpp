@@ -437,20 +437,23 @@ int ObHbaseColumnFamilyService::del(const ObHbaseQuery &hbase_query, ObTableExec
   wide_row.set_need_append_family(false);
   ObNewRow cell;
   ObIHbaseAdapter *adapter = nullptr;
+  const ObTableQuery table_query = hbase_query.get_query();
+  int64_t tablet_cnt = table_query.get_tablet_ids().count();
   if (OB_FAIL(query(hbase_query, exec_ctx, hbase_result_iter))) {
     LOG_WARN("fail to query", K(ret), K(hbase_query));
   } else if (OB_FAIL(adapter_guard.get_hbase_adapter(adapter))) {
-    LOG_WARN("fail to get hbase adapter", K(ret));
+    LOG_WARN("fail to get hbase adapter", K(ret), K(tablet_cnt));
   } else if (OB_ISNULL(hbase_result_iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("hbase result iter is null", K(ret));
   } else if (OB_FAIL(hbase_result_iter->get_next_result(wide_row))) {
     if (ret != OB_ITER_END) {
-      LOG_WARN("fail to get next result");
+      LOG_WARN("fail to get next result", K(ret), K(tablet_cnt), K(wide_row));
     } else {
       ret = OB_SUCCESS;
     }
   }
+
   while (OB_SUCC(ret)) {
     if (OB_FAIL(wide_row.get_row(cell))) {
       if (OB_ARRAY_OUT_OF_RANGE != ret) {
@@ -467,7 +470,7 @@ int ObHbaseColumnFamilyService::del(const ObHbaseQuery &hbase_query, ObTableExec
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(delete_cell(hbase_query, exec_ctx, cell, *adapter))) {
-        LOG_WARN("fail to delete one cell", K(ret), K(hbase_query), K(cell));
+        LOG_WARN("fail to delete one cell", K(ret), K(hbase_query), K(cell), K(tablet_cnt), K(wide_row));
       }
     }
   }

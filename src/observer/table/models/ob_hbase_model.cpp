@@ -942,7 +942,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
     const LSOPGrouper::OpInfo &op_info = group.ops_.at(i);
     if (OB_ISNULL(op_info.op_->get_query())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query is null", K(ret), K(op_info));
+      LOG_WARN("query is null", K(ret), K(op_info), K(i));
     } else {
       ObHbaseQuery *query = nullptr;
       if (OB_ISNULL(query = OB_NEWx(ObHbaseQuery, &ctx.get_allocator(),
@@ -951,11 +951,11 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                                    *op_info.op_->get_query(),
                                    is_multi_cf_req_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to create query", K(ret));
+        LOG_WARN("failed to create query", K(ret), K(i));
       } else if (OB_FAIL(queries.push_back(query))) {
         query->~ObHbaseQuery();
         ctx.get_allocator().free(query);
-        LOG_WARN("failed to add query", K(ret), K(queries));
+        LOG_WARN("failed to add query", K(ret), K(queries), K(i));
       }
     }
   }
@@ -964,7 +964,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
       if (!is_multi_cf_req_) {
         if (OB_FAIL(cf_service.del(*queries.at(i), ctx))) {
-          LOG_WARN("failed to process query", K(ret), K(*queries.at(i)));
+          LOG_WARN("failed to process query", K(ret), K(*queries.at(i)), K(i));
         }
       } else {
         // Note: This object is a copy of ObHbaseCFIterator::iterable_result_
@@ -975,12 +975,12 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
         ObNewRow cell;
         ObHbaseQueryResultIterator *hbase_result_iter = nullptr;
         if (OB_FAIL(cf_service.query(*queries.at(i), ctx, hbase_result_iter))) {
-          LOG_WARN("failed to query", K(ret), K(*queries.at(i)));
+          LOG_WARN("failed to query", K(ret), K(*queries.at(i)), K(i));
         } else {
           while (OB_SUCC(ret)) {
             if (OB_FAIL(hbase_result_iter->get_next_result(wide_row))) {
               if (ret != OB_ITER_END) {
-                LOG_WARN("failed to get next result", K(ret), K(*queries.at(i)));
+                LOG_WARN("failed to get next result", K(ret), K(*queries.at(i)), K(i));
               }
             }
             if (ret == OB_ITER_END && wide_row.rows_.count() > 0) {
@@ -1025,7 +1025,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                   // set real table id and invalid tablet id to avoid 4377
                   new_query.set_table_id(real_simple_schema->get_table_id());
                   if (OB_FAIL(cf_service.del(new_query, cell, ctx))) {
-                    LOG_WARN("failed to delete cell", K(ret), K(new_query), K(cell));
+                    LOG_WARN("failed to delete cell", K(ret), K(new_query), K(cell), K(i));
                   }
                 }
               }

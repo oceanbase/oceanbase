@@ -581,7 +581,7 @@ int ObTablePartCalculator::calc(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (!table_schema->is_partitioned_table()) {
@@ -601,7 +601,7 @@ int ObTablePartCalculator::calc(const ObString table_name,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_name, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_name));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1092,7 +1092,7 @@ int ObTablePartCalculator::calc(const ObTableSchema &table_schema,
   subpart_range.border_flag_ = range.border_flag_;
   ObDASTabletMapper tablet_mapper;
   tablet_mapper.set_table_schema(&table_schema);
-
+  tablet_ids.reset();
   if (ObPartitionLevel::PARTITION_LEVEL_ZERO == part_level) {
     if (OB_FAIL(tablet_ids.push_back(table_schema.get_tablet_id()))) {
       LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids));
@@ -1134,7 +1134,7 @@ int ObTablePartCalculator::calc(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1157,7 +1157,7 @@ int ObTablePartCalculator::calc(const ObString table_name,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_name, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_name));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1179,7 +1179,7 @@ int ObTablePartCalculator::calc(uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_id));
   } else if (!table_schema->is_partitioned_table()) {
@@ -1209,7 +1209,7 @@ int ObTablePartCalculator::calc(const ObString table_name,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
-
+  tablet_ids.reset();
   if (OB_FAIL(get_table_schema(table_name, table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(table_name));
   } else if (!table_schema->is_partitioned_table()) {
