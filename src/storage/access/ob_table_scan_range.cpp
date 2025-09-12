@@ -309,6 +309,7 @@ int ObTableScanRange::init_ranges(
     const int64_t range_cnt = ranges.count();
     if (0 == range_cnt) {
       if (OB_LIKELY(enable_new_false_range_)) {
+        status_ = EMPTY;
       } else {
         ObDatumRange datum_range;
         datum_range.set_whole_range();

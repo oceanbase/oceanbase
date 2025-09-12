@@ -46,6 +46,7 @@ int ObMultipleScanMerge::open(const ObDatumRange &range)
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid range, ", K(range), K(ret));
   } else if (OB_FAIL(ObMultipleMerge::open())) {
     STORAGE_LOG(WARN, "Fail to open ObMultipleMerge, ", K(ret));
