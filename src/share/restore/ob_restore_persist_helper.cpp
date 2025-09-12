@@ -1269,12 +1269,13 @@ int ObRestorePersistHelper::move_ls_restore_progress_to_history(common::ObMySQLT
   int64_t affected_rows = 0;
   ObSqlString sql;
   const char *columns = "TENANT_ID, JOB_ID, LS_ID, SVR_IP, SVR_PORT, RESTORE_SCN, START_REPLAY_SCN, LAST_REPLAY_SCN, TABLET_COUNT, FINISH_TABLET_COUNT, TOTAL_BYTES, FINISH_BYTES, TRACE_ID, RESULT, COMMENT";
+  const char *select_columns = "TENANT_ID, JOB_ID, LS_ID, SVR_IP, SVR_PORT, RESTORE_SCN, START_REPLAY_SCN, LAST_REPLAY_SCN, TABLET_COUNT, TABLET_COUNT, TOTAL_BYTES, TOTAL_BYTES, TRACE_ID, RESULT, COMMENT";
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (%s)", OB_ALL_LS_RESTORE_HISTORY_TNAME, columns))) {
     LOG_WARN("failed to assign fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" SELECT %s FROM %s", columns, OB_ALL_LS_RESTORE_PROGRESS_TNAME))) {
+  } else if (OB_FAIL(sql.append_fmt(" SELECT %s FROM %s", select_columns, OB_ALL_LS_RESTORE_PROGRESS_TNAME))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else if (OB_FAIL(trans.write(gen_meta_tenant_id(tenant_id_), sql.ptr(), group_id_, affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql));
