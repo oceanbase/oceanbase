@@ -299,6 +299,15 @@ public:
     }
   }
   OB_INLINE bool server_can_retry() const { return option_flag_ & OB_TABLE_OPTION_SERVER_CAN_RETRY; }
+  void set_distribute_need_tablet_id(bool need_tablet_id)
+  {
+    if (need_tablet_id) {
+      option_flag_ |= OB_TABLE_OPTION_NEED_TABLET_ID;
+    } else {
+      option_flag_ &= (~OB_TABLE_OPTION_NEED_TABLET_ID);
+    }
+  }
+  OB_INLINE bool distribute_need_tablet_id() const { return option_flag_ & OB_TABLE_OPTION_NEED_TABLET_ID; }
 
   VIRTUAL_TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
@@ -340,6 +349,15 @@ public:
     }
   }
   OB_INLINE bool server_can_retry() const { return option_flag_ & OB_TABLE_OPTION_SERVER_CAN_RETRY; }
+  void set_distribute_need_tablet_id(bool need_tablet_id)
+  {
+    if (need_tablet_id) {
+      option_flag_ |= OB_TABLE_OPTION_NEED_TABLET_ID;
+    } else {
+      option_flag_ &= (~OB_TABLE_OPTION_NEED_TABLET_ID);
+    }
+  }
+  OB_INLINE bool distribute_need_tablet_id() const { return option_flag_ & OB_TABLE_OPTION_NEED_TABLET_ID; }
   TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
                K_(table_id),

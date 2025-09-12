@@ -171,6 +171,7 @@ protected:
                     const ObTabletID &arg_tablet_id,
                     const uint64_t table_id,
                     ObTabletID &tablet_id);
+  int check_local_execute(const ObTabletID &tablet_id);
   ObTableProccessType get_stat_process_type(bool is_readonly,
                                             bool is_same_type,
                                             bool is_same_properties_names,

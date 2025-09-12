@@ -50,6 +50,7 @@ namespace table
 #define OB_TABLE_OPTION_USE_PUT (INT64_C(1) << 1)
 #define OB_TABLE_OPTION_RETURN_ONE_RES (INT64_C(1) << 2)
 #define OB_TABLE_OPTION_SERVER_CAN_RETRY (INT64_C(1) << 3)
+#define OB_TABLE_OPTION_NEED_TABLET_ID (INT64_C(1) << 4)
 
 using common::ObString;
 using common::ObRowkey;
@@ -1459,7 +1460,7 @@ class ObTableQueryResult: public ObTableEntityIterator
 public:
   ObTableQueryResult();
   virtual ~ObTableQueryResult() {}
-  void reset();
+  virtual void reset();
   void reset_except_property();
   void rewind();
   virtual int get_next_entity(const ObITableEntity *&entity) override;
@@ -1580,6 +1581,12 @@ public:
       query_session_id_(0)
   {}
   virtual ~ObTableQueryAsyncResult() {}
+  virtual void reset()
+  {
+    ObTableQueryResult::reset();
+    is_end_ = false;
+    query_session_id_ = 0;
+  }
 public:
   INHERIT_TO_STRING_KV("ObTableQueryResult", ObTableQueryResult, K_(is_end), K_(query_session_id));
 public:
@@ -2296,6 +2303,8 @@ public:
            && key_index_ != -1
            && cells_.count() > 0;
   }
+  OB_INLINE const ObHCell &get_cell(int64_t idx) const { return cells_[idx]; }
+  OB_INLINE ObHCell &get_cell(int64_t idx) { return cells_[idx]; }
   TO_STRING_KV(K_(real_table_name), K_(flags), K_(key_index), K_(cells));
 public:
   union {

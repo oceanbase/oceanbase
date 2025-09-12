@@ -1166,6 +1166,10 @@ int ObTableLSExecuteP::new_try_process()
                                      get_timeout_ts(),
                                      !exec_ctx_.get_ls_id().is_valid()/*need_global_snapshot*/))) {
         LOG_WARN("fail to start transaction", K(ret));
+      } else if (!trans_param_.tx_snapshot_.is_ls_snapshot()
+                 && arg_.ls_op_->at(0).get_tablet_id().is_valid()
+                 && OB_FAIL(check_local_execute(arg_.ls_op_->at(0).get_tablet_id()))) {
+        LOG_WARN("fail to check local execute", K(ret));
       } else if (model->get_new_requests().count() == 0 || model->get_new_results().count() == 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("request or result is empty", K(ret), K(model->get_new_requests().count()));
