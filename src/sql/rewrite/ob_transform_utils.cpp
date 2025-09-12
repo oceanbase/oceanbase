@@ -17089,22 +17089,20 @@ int ObTransformUtils::check_enable_global_parallel_execution(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::is_cost_based_trans_enable(ObTransformerCtx *ctx,
-                                                 const ObGlobalHint &global_hint,
-                                                 bool &is_enabled)
+bool ObTransformUtils::is_cost_based_trans_enable(ObTransformerCtx &ctx,
+                                                 const ObGlobalHint &global_hint)
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (global_hint.disable_cost_based_transform()) {
+  bool is_enabled = true;
+  if (global_hint.disable_cost_based_transform()) {
     is_enabled = false;
+  } else if (TransPolicy::ENABLE_TRANS == ctx.cbqt_policy_) {
+    is_enabled = true;
+  } else if (TransPolicy::LIMITED_TRANS == ctx.cbqt_policy_) {
+    is_enabled = !(ctx.complex_cbqt_table_num_ > 0 && ctx.max_table_num_ > ctx.complex_cbqt_table_num_);
   } else {
-    is_enabled = TransPolicy::ENABLE_TRANS == ctx->cbqt_policy_ ||
-      (TransPolicy::LIMITED_TRANS == ctx->cbqt_policy_ &&
-        !(ctx->complex_cbqt_table_num_ > 0 && ctx->max_table_num_ > ctx->complex_cbqt_table_num_));
+    is_enabled = false;
   }
-  return ret;
+  return is_enabled;
 }
 
 int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,
