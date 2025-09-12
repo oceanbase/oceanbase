@@ -332,7 +332,7 @@ public:
   T_DEF_INT_INFT(fetch_log_rpc_timeout_sec, OB_CLUSTER_PARAMETER, 15, 1, "fetch log rpc timeout in seconds");
 
   // Upper limit of progress difference between partitions, in seconds
-  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 30, 1, "dml progress limit in seconds");
+  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 3, 1, "dml progress limit in seconds");
 
   // The Sys Tenant is not filtered by default
   T_DEF_BOOL(enable_filter_sys_tenant, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
@@ -617,6 +617,8 @@ public:
   T_DEF_INT_INFT(sorted_list_auto_treeify_threshold, OB_CLUSTER_PARAMETER, 32, 0, "treeify list auto-treeify mode treeify threshold");
   T_DEF_INT_INFT(sorted_list_auto_untreeify_threshold, OB_CLUSTER_PARAMETER, 30, 0, "treeify list auto-treeify mode treeify threshold");
   DEF_CAP(meta_data_inc_trans_size_upper_limit, OB_CLUSTER_PARAMETER, "4G", "[0M,]", "meta data increment part_trans_task size upper limit");
+  T_DEF_BOOL(enable_hard_mem_limit, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  T_DEF_INT_INFT(hard_mem_limit_threshold, OB_CLUSTER_PARAMETER, 100, 100, "value of expect_hard_memory_limit/memory_limit * 100");
 
 #undef OB_CLUSTER_PARAMETER
 

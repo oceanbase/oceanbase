@@ -55,7 +55,11 @@ void FetchStreamPool::destroy()
 
 int FetchStreamPool::alloc(FetchStream *&fs)
 {
-  return pool_.alloc(fs);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OBCDC_ALLOC_RETRY_ON_FAIL("FetchStream", pool_, fs))) {
+
+  }
+  return ret;
 }
 
 int FetchStreamPool::free(FetchStream *fs)

@@ -27,6 +27,7 @@
 
 #include "ob_log_utils.h"                           // _M_
 #include "sql/engine/expr/ob_expr_lob_utils.h"      // ObTextStringHelper
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -148,7 +149,7 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
         || pos <= 0) {
       OBLOG_LOG(ERROR, "obj print_sql_literal fail", KR(ret), K(obj), K(MAX_EXT_PRINT_LEN), K(pos));
       ret = common::OB_SUCCESS == ret ? common::OB_ERR_UNEXPECTED : ret;
-    } else if (NULL == (ptr = (char *)allocator.alloc(pos))) {
+    } else if (OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("obj2str", char, ptr, allocator, pos)) {
       OBLOG_LOG(ERROR, "allocate memory fail", "size", pos);
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
     } else {
@@ -191,7 +192,7 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
       }
 
       if (OB_SUCC(ret) && str_len > 0) {
-        if (OB_ISNULL(dst_buf = allocator.alloc(str_len))) {
+        if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL("obj2str_destbuf", dst_buf, allocator, str_len))) {
           OBLOG_LOG(ERROR, "allocate memory fail", K(str_len));
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
@@ -378,7 +379,7 @@ int ObObj2strHelper::convert_bit_obj_to_decimal_str_(const common::ObObj &obj,
 
     if (OB_FAIL(common::databuff_printf(buf, MAX_BIT_DECIMAL_STR_LENGTH, pos, "%lu", value))) {
       OBLOG_LOG(ERROR, "databuff_printf fail", K(pos), K(value));
-    } else if (OB_ISNULL(ptr = (char *)allocator.alloc(pos))) {
+    } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("obj2str_bit_to_decimal", char, ptr, allocator, pos))) {
       OBLOG_LOG(ERROR, "allocate memory fail", "size", pos);
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
     } else {
@@ -438,7 +439,7 @@ int ObObj2strHelper::convert_mysql_timestamp_to_utc_(const common::ObObj &obj,
   if (OB_FAIL(common::databuff_printf(buf, MAX_TIMESTAMP_UTC_LONG_STR_LENGTH, pos, "%ld.%06ld",
           utc_time / usec_mod_val, std::abs(utc_time) % usec_mod_val))) {
     OBLOG_LOG(ERROR, "databuff_printf fail", K(pos), K(utc_time), K(usec_mod_val));
-  } else if (OB_ISNULL(ptr = (char *)allocator.alloc(pos))) {
+  } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("obj2str_mysql_timestamp_to_utc", char, ptr, allocator, pos))) {
     OBLOG_LOG(ERROR, "allocate memory fail", "size", pos);
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -511,9 +512,9 @@ int ObObj2strHelper::convert_char_obj_to_padding_obj_(const lib::Worker::CompatM
             K(padding_res));
       } else {
         int64_t all_size = padding_res.length() + str.length();
-        char *res_ptr = static_cast<char*>(allocator.alloc(all_size));
+        char *res_ptr = nullptr;
 
-        if (OB_ISNULL(res_ptr)) {
+        if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("obj2str_padding_obj", char, res_ptr, allocator, all_size))) {
           OBLOG_LOG(ERROR, "allocate memory failed", KR(ret));
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {

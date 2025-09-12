@@ -16,6 +16,7 @@
 
 #include "lib/allocator/ob_malloc.h"        // ob_free
 #include "lib/utility/ob_print_utils.h"     // databuff_printf
+#include "ob_log_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -110,7 +111,7 @@ int ObLogAdaptString::alloc_buf_(const int64_t data_size, char *&data_buf)
   // First prepare the buffer, if the buffer is empty, then create a new buffer
   if (NULL == buf_.get_data()) {
     int64_t alloc_size = std::max(expected_buf_size, STRING_DEFAULT_SIZE);
-    char *new_buf = static_cast<char *>(ob_malloc(alloc_size, attr_));
+    char *new_buf = static_cast<char *>(ob_cdc_malloc(alloc_size, attr_.label_));
 
     if (OB_ISNULL(new_buf)) {
       LOG_ERROR("allocate memory fail", K(new_buf), K(alloc_size), K(expected_buf_size));
@@ -123,7 +124,7 @@ int ObLogAdaptString::alloc_buf_(const int64_t data_size, char *&data_buf)
   // If there is not enough space left in the buffer, reallocate a larger space
   else if (buf_.get_remain() < expected_buf_size) {
     int64_t realloc_size = buf_.get_capacity() + std::max(expected_buf_size, STRING_DEFAULT_SIZE);
-    char *new_buf = static_cast<char *>(ob_realloc(buf_.get_data(), realloc_size, attr_));
+    char *new_buf = static_cast<char *>(ob_cdc_realloc(buf_.get_data(), realloc_size, attr_));
 
     if (OB_ISNULL(new_buf)) {
       LOG_ERROR("realloc memory fail", K(new_buf), K(realloc_size), K(expected_buf_size));

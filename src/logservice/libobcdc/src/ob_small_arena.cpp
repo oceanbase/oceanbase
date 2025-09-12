@@ -19,6 +19,7 @@
 #include "lib/utility/utility.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/allocator/ob_malloc.h"
+#include "ob_log_utils.h"
 
 namespace oceanbase
 {
@@ -158,7 +159,7 @@ void ObSmallArena::alloc_small_page_()
   ObMemAttr mem_attr;
   mem_attr.label_ = common::ObModIds::OB_LOG_PART_TRANS_TASK_SMALL;
 
-  if (OB_ISNULL(ptr = ob_malloc(page_size_, mem_attr))) {
+  if (OB_ISNULL(ptr = ob_cdc_malloc(page_size_, mem_attr.label_))) {
     LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc small page error", K(ptr), K(page_size_));
   } else {
     new_cur_page = new (ptr) SmallPage();

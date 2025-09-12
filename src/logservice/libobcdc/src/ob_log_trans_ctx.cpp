@@ -101,7 +101,8 @@ TransCtx::TransCtx() :
     is_trans_sorted_(false),
     br_out_queue_(),
     allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
-    lock_(ObLatchIds::OBCDC_TRANS_CTX_LOCK)
+    lock_(ObLatchIds::OBCDC_TRANS_CTX_LOCK),
+    br_ready_cond_()
 {}
 
 TransCtx::~TransCtx()
@@ -850,6 +851,7 @@ int TransCtx::append_sorted_br(ObLogBR *br)
   } else if (OB_FAIL(br_out_queue_.push(const_cast<ObLogBR*>(br)))) {
     LOG_ERROR("failed to push br into output queue", KR(ret));
   } else {
+    br_ready_cond_.signal();
     inc_total_br_count_();
   }
 
@@ -872,28 +874,44 @@ int TransCtx::has_valid_br(volatile bool &stop_flag)
         ret = OB_EMPTY_RESULT;
       }
     } else {
-      ob_usleep(2 * 1000); // sleep 2ms
+      // wait br ready or timeout:
+      IGNORE_RETURN br_ready_cond_.timedwait(WAIT_BR_TIME);
     }
   }
 
   return ret;
 }
 
-int TransCtx::pop_br_for_committer(ObLogBR *&br)
+int TransCtx::next_br_for_committer(ObLogBR *&br, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   common::ObLink* br_task = NULL;
 
-  if (OB_FAIL(br_out_queue_.pop(br_task))) {
-    // may get OB_EAGAIN, handle by caller
-  } else if (OB_ISNULL(br_task)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get null br from br_out_queue", KR(ret), KPC(this), "trans_sort_finish", is_trans_sorted());
-  } else if (OB_ISNULL(br = static_cast<ObLogBR*>(br_task))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("failed to cast ObLink to ObLogBR", KP(br_task), KPC(this));
-  } else {
-    /* succ pop br from br_queue */
+  while(OB_SUCC(ret) && !stop_flag) {
+    if (OB_FAIL(br_out_queue_.pop(br_task))) {
+      if (OB_EAGAIN == ret) {
+        if (is_trans_commit_finish()) {
+          ret = OB_ITER_END;
+        } else {
+          IGNORE_RETURN br_ready_cond_.timedwait(WAIT_BR_TIME);
+          ret = OB_SUCCESS;
+        }
+      }
+    } else {
+      break;
+    }
+  }
+
+  if (OB_SUCC(ret) && !stop_flag) {
+    if (OB_ISNULL(br_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get null br from br_out_queue", KR(ret), KPC(this), "trans_sort_finish", is_trans_sorted());
+    } else if (OB_ISNULL(br = static_cast<ObLogBR*>(br_task))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to cast ObLink to ObLogBR", KP(br_task), KPC(this));
+    } else {
+      /* succ pop br from br_queue */
+    }
   }
 
   return ret;
@@ -901,8 +919,8 @@ int TransCtx::pop_br_for_committer(ObLogBR *&br)
 
 void TransCtx::wait_trans_redo_dispatched_(volatile bool &stop_flag)
 {
-  static const int64_t PRINT_INTERVAL = 5 * _SEC_;
-  static const int64_t WAIT_SLEEP_TIME = 10 * _MSEC_;
+  static const int64_t PRINT_INTERVAL = 1 * _SEC_;
+  static const int64_t WAIT_SLEEP_TIME = 1 * _MSEC_;
 
   while (! ATOMIC_LOAD(&is_trans_redo_dispatched_) && !stop_flag) {
     ob_usleep(WAIT_SLEEP_TIME);

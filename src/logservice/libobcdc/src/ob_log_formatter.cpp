@@ -1064,9 +1064,8 @@ int ObLogFormatter::init_row_value_array_(const int64_t row_value_num)
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t size = sizeof(RowValue) * row_value_num;
-    void *ptr = allocator_.alloc(size);
 
-    if (NULL == (row_value_array_ = static_cast<RowValue *>(ptr))) {
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("row_value_arr", RowValue, row_value_array_, allocator_, size))) {
       LOG_ERROR("allocate memory for RowValue fail", K(size), K(row_value_num));
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
@@ -1096,9 +1095,8 @@ int ObLogFormatter::init_calc_generated_column_array_(const int64_t calc_generat
     LOG_ERROR("invalid argument", KR(ret), K(calc_generated_column_num));
   } else {
     int64_t size = sizeof(sql::ObCalcGeneratedColumn) * calc_generated_column_num;
-    void *ptr = allocator_.alloc(size);
 
-    if (OB_ISNULL(calc_generated_column_array_ = static_cast<sql::ObCalcGeneratedColumn *>(ptr))) {
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("calc_gen_col_arr", sql::ObCalcGeneratedColumn, calc_generated_column_array_, allocator_, size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allocate memory for ObCalcGeneratedColumn fail", KR(ret), K(size), K(calc_generated_column_num));
     } else {
@@ -1394,7 +1392,7 @@ int ObLogFormatter::fill_normal_cols_(
               ObString new_col_str_with_header;
               ObObj *new_col_obj = nullptr;
 
-              if (OB_ISNULL(new_col_obj = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj))))) {
+              if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("new_col_obj", ObObj, new_col_obj, allocator, sizeof(ObObj)))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 LOG_ERROR("alloc new_col_obj failed", KR(ret));
               } else if (OB_FAIL(storage::ObLobManager::fill_lob_header(allocator, *new_col_str, new_col_str_with_header))) {
@@ -1464,7 +1462,7 @@ int ObLogFormatter::fill_normal_cols_(
               ObString old_col_str_with_header;
               ObObj *old_col_obj = nullptr;
 
-              if (OB_ISNULL(old_col_obj = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj))))) {
+              if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("old_col_obj", ObObj, old_col_obj, allocator, sizeof(ObObj)))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 LOG_ERROR("alloc old_col_obj failed", KR(ret));
               } else if (OB_FAIL(storage::ObLobManager::fill_lob_header(allocator, *old_col_str, old_col_str_with_header))) {
@@ -1736,8 +1734,8 @@ int ObLogFormatter::cal_virtual_generated_column_value_(
         int16_t usr_column_idx = 0;
         sql::ObCalcGeneratedColumnInfo *dep_generated_column_info = nullptr;
 
-        if (OB_ISNULL(dep_generated_column_info = static_cast<sql::ObCalcGeneratedColumnInfo *>(
-            allocator.alloc(sizeof(sql::ObCalcGeneratedColumnInfo))))) {
+        if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("ObCalcGeneratedColumnInfo",
+            sql::ObCalcGeneratedColumnInfo, dep_generated_column_info, allocator, sizeof(sql::ObCalcGeneratedColumnInfo)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("alloc memory for ObCalcGeneratedColumnInfo fail", KR(ret));
         } else if (FALSE_IT(new (dep_generated_column_info) ObCalcGeneratedColumnInfo(allocator))) {
@@ -1806,7 +1804,7 @@ int ObLogFormatter::cal_virtual_generated_column_value_(
 
         if (OB_SUCC(ret)) {
           ObString *res_str = nullptr;
-          if (OB_ISNULL(res_str = static_cast<ObString *>(allocator.alloc(sizeof(ObString))))) {
+          if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("res_str", ObString, res_str, allocator, sizeof(ObString)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_ERROR("allocate memory for res_str", KR(ret));
           } else if (OB_FAIL(obj2str_helper_->obj2str(full_table_schema->get_tenant_id(),
@@ -1939,9 +1937,9 @@ int ObLogFormatter::fill_orig_default_value_(
         } else {
           // default vlaue
           const common::ObString *orig_default_value_str = column_schema_info->get_orig_default_value_str();
-          ObString *str = static_cast<ObString *>(allocator.alloc(sizeof(ObString)));
+          ObString *str = nullptr;
 
-          if (OB_ISNULL(str)) {
+          if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("orig_default_value", ObString, str, allocator, sizeof(ObString)))) {
             LOG_ERROR("allocate memory for ObString fail", K(sizeof(ObString)));
             ret = OB_ALLOCATE_MEMORY_FAILED;
           } else if (OB_ISNULL(orig_default_value_str)) {
@@ -1965,7 +1963,7 @@ int ObLogFormatter::fill_orig_default_value_(
             const char *ptr = orig_default_value_str->ptr();
             char *ptr_copy = NULL;
 
-            if (OB_ISNULL(ptr_copy = static_cast<char *>(allocator.alloc(length)))) {
+            if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("orig_default_value_copy", char, ptr_copy, allocator, length))) {
               LOG_ERROR("allocate memory fail", K(length));
               ret = OB_ALLOCATE_MEMORY_FAILED;
             } else {
@@ -2503,10 +2501,10 @@ int ObLogFormatter::init_dml_unique_id_(DmlStmtTask &stmt_task,
     } else {
       common::ObIAllocator &allocator= log_entry_task.get_allocator();
       const int64_t buf_len = dml_stmt_unique_id.get_dml_unique_id_length();
-      char *buf = static_cast<char*>(allocator.alloc(buf_len));
+      char *buf = nullptr;
       int64_t pos = 0;
 
-      if (OB_ISNULL(buf)) {
+      if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("dml_unique_id", char, buf, allocator, buf_len))) {
         LOG_ERROR("allocate memory for trans id buffer fail", K(buf));
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(dml_stmt_unique_id.customized_to_string(buf, buf_len, pos))) {

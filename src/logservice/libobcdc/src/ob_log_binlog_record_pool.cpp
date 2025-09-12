@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_binlog_record_pool.h"
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -62,7 +63,7 @@ int ObLogBRPool::alloc(ObLogBR *&br, void *host/* = NULL */, void *stmt_task/* n
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("BRPool has not been initialized");
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(unserilized_pool_.alloc(unserilized_br))) {
+  } else if (OB_FAIL(OBCDC_ALLOC_RETRY_ON_FAIL("alloc_br", unserilized_pool_, unserilized_br))) {
     LOG_ERROR("alloc binlog record fail", KR(ret));
   } else {
     br = unserilized_br;

@@ -22,6 +22,7 @@
 #include "lib/atomic/atomic128.h"
 #include "lib/atomic/ob_atomic.h"  // inc_update
 #include "ob_log_factory.h"        // BigBlock
+#include "ob_log_utils.h"
 
 namespace oceanbase
 {
@@ -128,7 +129,7 @@ int ObLogBatchBuffer::init(const int64_t buffer_size,
     next_flush_block_id_ = 0;
 
     for (int64_t i = 0; i < block_count_; i++) {
-      char *alloc_buf = static_cast<char *>(ob_malloc(buffer_size, "CDCBufBlock"));
+      char *alloc_buf = static_cast<char *>(ob_cdc_malloc(buffer_size, "CDCBufBlock"));
       if (OB_ISNULL(alloc_buf)) {
         LOG_ERROR("alloc_buf is NULL");
         ret = OB_ALLOCATE_MEMORY_FAILED;

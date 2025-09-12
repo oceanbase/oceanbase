@@ -36,7 +36,7 @@
             LOG_WARN(#func " retry for too many times", K(retry_cnt), KP(&var), K(var)); \
           } \
           /* sleep 5 ms*/ \
-          ob_usleep(5 * 1000); \
+          ob_usleep(1 * 1000); \
         }\
       } \
       if ((common::ObSimpleThreadPool::has_set_stop())) \

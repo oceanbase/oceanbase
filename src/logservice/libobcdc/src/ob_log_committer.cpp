@@ -334,7 +334,7 @@ int ObLogCommitter::alloc_checkpoint_task_(PartTransTask &task, CheckpointTask *
 
   size = sizeof(CheckpointTask);
 
-  if (OB_ISNULL(ptr = checkpoint_queue_allocator_.alloc(size))) {
+  if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL("committer_checkpint_queue", ptr, checkpoint_queue_allocator_, size))) {
     LOG_ERROR("alloc memory for CheckpointTask fail", K(size));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -674,7 +674,7 @@ int ObLogCommitter::dispatch_heartbeat_binlog_record_(const int64_t heartbeat_ti
   if (OB_ISNULL(tag_br_alloc_)) {
     LOG_ERROR("invalid tag_br_alloc_ fail", KR(ret), K(tag_br_alloc_));
     ret = OB_INVALID_ERROR;
-  } else if (OB_FAIL(tag_br_alloc_->alloc(br, NULL))) {
+  } else if (OB_FAIL(OBCDC_ALLOC_RETRY_ON_FAIL("heartbeat_br", (*tag_br_alloc_), br, nullptr))) {
     LOG_ERROR("alloc binlog record for HEARTBEAT fail", KR(ret));
   } else if (OB_ISNULL(br)) {
     LOG_ERROR("alloc binlog record for HEARTBEAT fail", KR(ret), K(br));
@@ -1283,12 +1283,12 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
 
     // Assign BEGIN and COMMIT, place them at the beginning and end
     // BEGIN/COMMIT does not need to set host information
-    if (OB_FAIL(tag_br_alloc_->alloc(begin_br, NULL))) {
+    if (OB_FAIL(OBCDC_ALLOC_RETRY_ON_FAIL("begin_br", (*tag_br_alloc_), begin_br, nullptr))) {
       LOG_ERROR("alloc begin binlog record fail", KR(ret));
     } else if (OB_ISNULL(begin_br)) {
       LOG_ERROR("alloc begin binlog record fail", KR(ret), K(begin_br));
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(tag_br_alloc_->alloc(commit_br, NULL))) {
+    } else if (OB_FAIL(OBCDC_ALLOC_RETRY_ON_FAIL("commit_br", (*tag_br_alloc_), commit_br, nullptr))) {
       LOG_ERROR("alloc commit binlog record fail", KR(ret));
     } else if (OB_ISNULL(commit_br)) {
       LOG_ERROR("alloc commit binlog record fail", KR(ret), K(commit_br));
@@ -1324,12 +1324,9 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         uint64_t retry_count = 0;
 
         if (OB_FAIL(next_ready_br_task_(trans_ctx, br_task))) {
-          if (OB_EAGAIN == ret) {
-            ob_usleep(10*1000);
+          if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
-            if (OB_UNLIKELY(0 == (++retry_count) % 100)) {
-              LOG_DEBUG("waiting for next ready br", KR(ret), K(trans_ctx));
-            }
+            break;
           } else {
             LOG_ERROR("next_ready_br_task_ fail", KR(ret), KPC(br_task));
           }
@@ -1390,7 +1387,7 @@ int ObLogCommitter::next_ready_br_task_(TransCtx &trans_ctx, ObLogBR *&br_task)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(trans_ctx.pop_br_for_committer(br_task))) {
+  if (OB_FAIL(trans_ctx.next_br_for_committer(br_task, stop_flag_))) {
     // ERROR will handle by caller, note: OB_EAGIN means waiting sorter append br to trans_ctx or no more br
   } else if (OB_ISNULL(br_task)) {
     LOG_ERROR("invalid task", K(br_task));

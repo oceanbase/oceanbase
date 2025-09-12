@@ -761,7 +761,7 @@ int FetchLogARpc::alloc_rpc_request_(const ObLSID &ls_id,
   if (OB_UNLIKELY(! ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid ls_id", KR(ret), K(ls_id));
-  } else if (OB_ISNULL(buf = ob_malloc(size, ObModIds::OB_LOG_FETCH_LOG_ARPC_REQUEST))) {
+  } else if (OB_ISNULL(buf = ob_cdc_malloc(size, ObModIds::OB_LOG_FETCH_LOG_ARPC_REQUEST))) {
     LOG_ERROR("allocate memory for RpcRequest fail", K(size));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_ISNULL(req = new(buf) RpcRequest(*this, ls_id, rpc_timeout))) {
@@ -1415,7 +1415,7 @@ int FetchLogARpcResultPool::alloc(FetchLogARpcResult *&result)
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
   } else {
-    ret = pool_.alloc(result);
+    OBCDC_ALLOC_RETRY_ON_FAIL("fetch_log_arpc_res", pool_, result);
   }
   return ret;
 }

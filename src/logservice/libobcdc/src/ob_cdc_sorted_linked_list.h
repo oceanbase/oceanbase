@@ -16,6 +16,7 @@
 #define OCEANBSE_OBCDC_SORTED_LINKED_LIST_
 
 #include "ob_cdc_sorted_list.h"
+#include "ob_cdc_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -200,8 +201,7 @@ private:
   {
     int ret = OB_SUCCESS;
     int64_t alloc_size = sizeof(ListNodeType);
-    node = static_cast<ListNodeType*>(allocator_.alloc(alloc_size));
-    if (OB_ISNULL(node)) {
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("sorted_linked_list_node", ListNodeType, node, allocator_, alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OBLOG_LOG(ERROR, "alloc memory for list node failed", KR(ret), K(val), K(alloc_size));
     } else {

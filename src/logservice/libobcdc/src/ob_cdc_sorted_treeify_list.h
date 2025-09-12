@@ -18,6 +18,7 @@
 #include "lib/container/ob_rbtree.h"
 #include "ob_cdc_sorted_linked_list.h"
 #include "ob_log_config.h"
+#include "ob_cdc_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -98,9 +99,9 @@ public:
   {
     int ret = OB_SUCCESS;
     int64_t alloc_size = sizeof(NodeType);
-    NodeType *node = static_cast<NodeType*>(allocator_.alloc(alloc_size));
+    NodeType *node = nullptr;
 
-    if (OB_ISNULL(node)) {
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("SortedTreeifyList::push", NodeType, node, allocator_, alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OBLOG_LOG(ERROR, "alloc memory for node failed", KR(ret), K(alloc_size));
     } else {

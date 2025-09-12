@@ -36,6 +36,7 @@
 #include "share/schema/ob_schema_service.h"   // ObSchemaService
 #include "share/inner_table/ob_inner_table_schema.h"   // OB_ALL_SEQUENCE_VALUE_TID
 #include "ob_cdc_define.h"
+#include "ob_cdc_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -274,9 +275,10 @@ bool is_ob_election_errno(int err);
 // Encapsulated temporary memory allocator
 void *ob_cdc_malloc(
     const int64_t nbyte,
-    const lib::ObLabel &lable = ObModIds::OB_LOG_TEMP_MEMORY,
+    const lib::ObLabel &label = ObModIds::OB_LOG_TEMP_MEMORY,
     const uint64_t tenant_id = OB_SERVER_TENANT_ID);
 void ob_cdc_free(void *ptr);
+void *ob_cdc_realloc(void *ptr, const int64_t nbyte, const ObMemAttr &attr);
 
 class ObLogBufAllocator : public common::ObIAllocator
 {

@@ -1,0 +1,135 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#define USING_LOG_PREFIX OBLOG
+
+#include "ob_cdc_signal_handle.h"
+#include "lib/thread/ob_thread_name.h"
+#include "ob_cdc_mem_mgr.h"
+
+
+namespace oceanbase
+{
+using namespace common;
+using namespace lib;
+
+namespace libobcdc
+{
+
+void ObCDCSignalHandle::run1()
+{
+  int ret = OB_SUCCESS;
+  set_thread_name("SignalHandle");
+  sigset_t   waitset;
+  if (OB_FAIL(add_signums_to_set(waitset))) {
+    LOG_ERROR("Add signal set error", K(ret));
+  } else {
+    int signum = -1;
+    //to check _stop every second
+    struct timespec timeout = {1, 0};
+    while (!has_set_stop()) {//need not to check ret
+      {
+        oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT);
+        signum = sigtimedwait(&waitset, NULL, &timeout);
+      }
+      if (-1 == signum) {
+        //do not log error, because timeout will also return -1.
+      } else if (OB_FAIL(deal_signals(signum))) {
+        LOG_WARN("Deal signal error", K(ret), K(signum));
+      } else {
+        //do nothing
+      }
+    }
+  }
+}
+
+int ObCDCSignalHandle::change_signal_mask()
+{
+  int ret = OB_SUCCESS;
+  sigset_t block_set, old_set;
+  if (OB_FAIL(add_signums_to_set(block_set))) {
+    LOG_ERROR("Add signal set error", K(ret));
+  } else if (0 != pthread_sigmask(SIG_BLOCK, &block_set, &old_set)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Fail to change mask of blcked signals", K(ret));
+  } else {
+    //do nothing
+  }
+  return ret;
+}
+
+int ObCDCSignalHandle::add_signums_to_set(sigset_t &sig_set)
+{
+  int ret = OB_SUCCESS;
+  if (0 != sigemptyset(&sig_set)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Empty signal set error", K(ret));
+  } else {
+    int rc = 0;
+    int signals[] = {SIGPIPE, SIGTERM, SIGUSR1,
+                     40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                     50, 51, 52, 53, 55, 56, 57, 59, 60, 62,
+                     63, 64};
+    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(signals); ++i) {
+      if (0 != (rc = sigaddset(&sig_set, signals[i]))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("failed to add signal to block", "signum", signals[i], K(ret), K(rc));
+      }
+    }
+  }
+  return ret;
+}
+
+//signal http://blog.csdn.net/yiyeguzhou100/article/details/51316175
+int ObCDCSignalHandle::deal_signals(int signum)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("received signal", K(signum));
+  switch (signum)
+  {
+    case SIGPIPE: {
+      break;
+    }
+    case SIGTERM: {
+      raise(SIGKILL);
+      break;
+    }
+    case 41: {
+      int64_t version = ::oceanbase::common::ObTimeUtility::current_time();
+      OB_LOGGER.down_log_level(version);
+      // ASYNC_LOG_LOGGER.down_log_level();
+      //to echo info when change to warn level
+      LOG_WARN("Signal 41 down ObLogger level", "current level", OB_LOGGER.get_level());
+      break;
+    }
+    case 42: {
+      int64_t version = ::oceanbase::common::ObTimeUtility::current_time();
+      OB_LOGGER.up_log_level(version);
+      // ASYNC_LOG_LOGGER.up_log_level();
+      LOG_WARN("Signal 42 up ObLogger level", "current level", OB_LOGGER.get_level());
+      break;
+    }
+    case 49: {
+      ob_print_mod_memory_usage();
+      ObCDCMemController::get_instance().print_mem_stat();
+      break;
+    }
+    default: {
+      LOG_WARN("Ignore unknown signal", K(signum));
+      break;
+    }
+  }
+  return ret;
+}
+
+} // end of namespace libobcdc
+} // end of namespace oceanbase

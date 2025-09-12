@@ -138,7 +138,7 @@ int ObCDCUdtValueMap::add_hidden_column_value_(
 {
   int ret = OB_SUCCESS;
   ColValue *cv_node = nullptr;
-  if (OB_ISNULL(cv_node = static_cast<ColValue *>(allocator_.alloc(sizeof(ColValue))))) {
+  if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("hidden_cv", ColValue, cv_node, allocator_, sizeof(ColValue)))) {
     LOG_ERROR("allocate memory for ColValue fail", "size", sizeof(ColValue));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -189,7 +189,7 @@ int ObCDCUdtValueMap::create_udt_value_(uint64_t udt_set_id, ColValue *&cv_node)
   ColumnSchemaInfo *column_schema_info = nullptr;
   if (OB_FAIL(tb_schema_info_->get_main_column_of_udt(udt_set_id, column_schema_info))) {
     LOG_ERROR("get_main_column_of_udt fail", KR(ret), K(udt_set_id));
-  } else if (OB_ISNULL(cv_node = static_cast<ColValue *>(allocator_.alloc(sizeof(ColValue))))) {
+  } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("create_udt_cv_node", ColValue, cv_node, allocator_, sizeof(ColValue)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for ColValue fail", KR(ret), "size", sizeof(ColValue));
   } else if (OB_FAIL(column_values_.add(cv_node))) {

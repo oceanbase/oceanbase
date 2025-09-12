@@ -79,7 +79,7 @@ int ObLogEntryTaskPool::alloc(
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("RowDataTaskPool has not been initialized", KR(ret));
-  } else if (OB_ISNULL(ptr = allocator_.alloc())) {
+  } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL("log_entry_task", ptr, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc log_entry_task failed", KR(ret), K_(alloc_cnt), "memory_hold", allocator_.hold());
   } else {

@@ -17,6 +17,7 @@
 #include "ob_log_formatter.h"                // IObLogFormatter
 #include "ob_log_trace_id.h"                 // ObLogTraceIdGuard
 #include "storage/lob/ob_ext_info_callback.h"       // ObExtInfoLog
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 
@@ -394,10 +395,8 @@ int ObCDCLobDataMerger::get_lob_col_fra_ctx_list_(
   transaction::ObTxSEQ seq_no = seq_no_start;
 
   for (int64_t idx = 0; OB_SUCC(ret) && idx < seq_no_cnt; ++idx, ++seq_no) {
-    LobColumnFragmentCtx *lob_col_fragment_ctx
-      = static_cast<LobColumnFragmentCtx *>(allocator.alloc(sizeof(LobColumnFragmentCtx)));
-
-    if (OB_ISNULL(lob_col_fragment_ctx)) {
+    LobColumnFragmentCtx *lob_col_fragment_ctx = nullptr;
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("LobColumnFragmentCtx", LobColumnFragmentCtx, lob_col_fragment_ctx, allocator, sizeof(LobColumnFragmentCtx)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc LobColumnFragmentCtx memory failed", KR(ret));
     } else {
@@ -594,7 +593,7 @@ int ObCDCLobDataMerger::merge_fragments_(
     if (OB_UNLIKELY(0 >= data_len)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("lob_data_len is 0, there should be no outrow lob_col_value", K(task), K(data_len), K(lob_data));
-    } else if (OB_ISNULL(buf = static_cast<char *>(lob_data_out_row_ctx_list.get_allocator().alloc(sizeof(char) * (data_len + 1))))) {
+    } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("out_row_lob_data_buf", char, buf, lob_data_out_row_ctx_list.get_allocator(), sizeof(char) * (data_len + 1)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("buf is nullptr", KR(ret), K(is_new_col), K(task), K(lob_data), K(data_len));
     } else {

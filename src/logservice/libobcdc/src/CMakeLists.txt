@@ -36,8 +36,10 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_lob_aux_table_schema_info.cpp
   ob_cdc_lob_aux_table_parse.cpp
   ob_cdc_malloc_sample_info.cpp
+  ob_cdc_mem_mgr.cpp
   ob_cdc_miss_log_handler.cpp
   ob_cdc_server_endpoint_access_info.cpp
+  ob_cdc_signal_handle.cpp
   ob_cdc_tenant_checkpoint.cpp
   ob_cdc_tenant_endpoint_provider.cpp
   ob_cdc_udt.cpp
@@ -149,7 +151,6 @@ ob_set_subtarget(obcdc_object_list common
 ob_add_new_object_target(obcdc_objects obcdc_object_list)
 
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
-target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
 if (OB_STRICT_COMPILE_FLAGS)
   target_compile_options(obcdc_objects PRIVATE)
 else()

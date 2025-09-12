@@ -19,6 +19,7 @@
 #include "lib/ob_define.h"
 #include "lib/time/ob_time_utility.h"     // ObTimeUtility
 #include "share/ob_errno.h"               // KR
+#include "ob_log_utils.h"
 
 namespace oceanbase
 {
@@ -60,7 +61,7 @@ int ObConcurrentSeqQueue::init(const int64_t limit, const ObMemAttr &memattr)
     LOG_ERROR("invalid argument", KR(ret), K(limit));
   } else if (OB_UNLIKELY(limit_ > 0 || NULL != items_)) {
     ret = OB_INIT_TWICE;
-  } else if (OB_ISNULL(items_ = (SeqItem *)ob_malloc(alloc_size, memattr))) {
+  } else if (OB_ISNULL(items_ = (SeqItem *)libobcdc::ob_cdc_malloc(alloc_size, memattr.label_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed", K(alloc_size), KR(ret), K(items_));
   } else {

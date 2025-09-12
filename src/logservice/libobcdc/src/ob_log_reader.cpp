@@ -276,7 +276,7 @@ int ObLogReader::read_store_service_(ObLogEntryTask &log_entry_task,
     int64_t data_len = 0;
 
     if (is_big_row) {
-      data_buf = static_cast<char *>(ob_malloc(value_len + 1, "CDCRdBigRow"));
+      data_buf = static_cast<char *>(ob_cdc_malloc(value_len + 1, "CDCRdBigRow"));
 
       if (OB_ISNULL(data_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

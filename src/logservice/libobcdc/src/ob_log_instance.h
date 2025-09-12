@@ -36,6 +36,7 @@
 #include "ob_cdc_global_info.h"                           // ObCDCGlobalInfo
 #include "ob_log_fetcher_dispatcher.h"                    // ObLogFetcherDispatcher
 #include "ob_log_meta_data_service.h"                     // ObLogMetaDataService
+#include "ob_cdc_signal_handle.h"                         // ObCDCSignalHandle
 
 namespace oceanbase
 {
@@ -140,6 +141,15 @@ public:
   virtual int launch();
   virtual void stop();
   virtual int get_tenant_ids(std::vector<uint64_t> &tenant_ids);
+  virtual void get_mem_stat(
+    int64_t &expected_usage,
+    int64_t &hard_mem_limit,
+    int64_t &memory_hold,
+    int64_t &memory_used,
+    int64_t &redo_dispatch_limit,
+    int64_t &redo_dispatched) const override final;
+
+  virtual void get_task_stat(CDCTaskStat &task_stat) const override final;
 
 public:
   void mark_stop_flag(const char *stop_reason);
@@ -223,7 +233,6 @@ private:
   void run1() override;
   int daemon_handle_storage_op_thd_();
   void reload_config_();
-  void print_tenant_memory_usage_();
   void global_flow_control_();
   void dump_pending_trans_info_();
   int revert_participants_(PartTransTask *participants);
@@ -290,7 +299,6 @@ private:
   int config_data_start_schema_version_(const int64_t global_data_start_schema_version);
   int update_data_start_schema_version_on_split_mode_();
   int set_all_tenant_compat_mode_();
-  void dump_malloc_sample_();
 
 private:
   static ObLogInstance *instance_;
@@ -335,6 +343,7 @@ private:
 
   // Partitioned Task Pool allocator
   common::ObConcurrentFIFOAllocator trans_task_pool_alloc_;
+  ObCDCSignalHandle       signal_handle_;
 
   // External global exposure of variables via TCTX
 public:

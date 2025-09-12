@@ -21,6 +21,7 @@
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"   // ObConcurrentFIFOAllocator
 #include "lib/queue/ob_link_queue.h"                      // ObLinkQueue
 #include "lib/queue/ob_fixed_queue.h"                     // ObFixedQueue
+#include "ob_cdc_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -270,7 +271,7 @@ private:
   {
     TaskType *ret_task = NULL;
     int64_t alloc_size = static_cast<int64_t>(sizeof(TaskType));
-    if (OB_ISNULL(ret_task = static_cast<TaskType*>(alloc_->alloc(alloc_size)))) {
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("TransTaskPool::new_task_", TaskType, ret_task, (*alloc_), alloc_size))) {
       OBLOG_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "failed to alloc task", K(ret_task), K(alloc_size));
     } else {
       new(ret_task)TaskType();
@@ -301,7 +302,7 @@ private:
       ret = common::OB_INIT_TWICE;
     } else {
       int64_t size = static_cast<int64_t>(sizeof(TaskType) * cnt);
-      void *buf = common::ob_malloc(size, common::ObModIds::OB_LOG_PART_TRANS_TASK_POOL);
+      void *buf = ob_cdc_malloc(size, common::ObModIds::OB_LOG_PART_TRANS_TASK_POOL);
       if (OB_ISNULL(prealloc_pool_tasks_ = static_cast<TaskType*>(buf))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         OBLOG_LOG(ERROR, "err alloc task pool", KR(ret), K(size));
@@ -372,7 +373,7 @@ private:
       ret = common::OB_INIT_TWICE;
     } else {
       int64_t size = page_size * cnt;
-      prealloc_pages_ = common::ob_malloc(size,
+      prealloc_pages_ = ob_cdc_malloc(size,
           common::ObModIds::OB_LOG_PART_TRANS_TASK_PREALLOC_PAGE);
 
       if (OB_ISNULL(prealloc_pages_)) {

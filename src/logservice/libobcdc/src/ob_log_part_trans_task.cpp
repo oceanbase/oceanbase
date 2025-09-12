@@ -1889,7 +1889,7 @@ void *ObLogEntryTask::alloc(const int64_t size)
   void *alloc_ret = NULL;
 
   if (size > 0) {
-    alloc_ret = arena_allocator_.alloc(size);
+    OBCDC_ALLOC_MEM_CHECK_NULL("ObLogEntryTask::alloc", alloc_ret, arena_allocator_, size);
   }
 
   return alloc_ret;
@@ -2773,7 +2773,7 @@ int PartTransTask::alloc_log_entry_node_(const palf::LSN &lsn, LogEntryNode *&lo
   if (OB_UNLIKELY(!lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid lsn of log_entry", KR(ret), K_(tls_id), K_(trans_id), K(lsn));
-  } else if (OB_ISNULL(log_entry_node = static_cast<LogEntryNode*>(allocator_.alloc(sizeof(LogEntryNode))))) {
+  } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("log_entry_node", LogEntryNode, log_entry_node, allocator_, sizeof(LogEntryNode)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc log_entry_node failed", KR(ret), K(lsn));
   } else {
@@ -3536,7 +3536,7 @@ void *PartTransTask::alloc(const int64_t size)
 {
   void *alloc_ret = NULL;
   if (size > 0) {
-    alloc_ret = allocator_.alloc(size);
+    OBCDC_ALLOC_MEM_CHECK_NULL("PartTransTask::alloc", alloc_ret, allocator_, size);
   }
   return alloc_ret;
 }

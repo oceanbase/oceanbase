@@ -23,6 +23,7 @@
 #include "ob_log_instance.h"            // TCTX
 #include "ob_log_config.h"              // TCONF
 #include "ob_cdc_lob_aux_table_parse.h" // parse_aux_lob_meta_table_row
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;

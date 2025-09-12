@@ -135,7 +135,7 @@ int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans, vola
         break;
       } else if (!has_memory_to_dispatch_redo) {
         // sleep 5 ms and retry current PartTransTask
-        ob_usleep(5 * _MSEC_);
+        ob_usleep(1 * _MSEC_);
       } else {
         /* dispatch one redo of PartTransTask success */
         monitor.mark_and_get_cost("get_and_dispatch_redo_done", true);
@@ -175,7 +175,7 @@ int ObLogTransRedoDispatcher::dispatch_by_turn_(TransCtx &trans, volatile bool &
       }
     } else if (!trans_dispatch_ctx_.is_trans_dispatched()) {
       ob_usleep(200); // sleep 200 us
-      if (OB_UNLIKELY(++retry_cnt % 50000 == 0)) {
+      if (OB_UNLIKELY(++retry_cnt % 500000 == 0)) {
         // print each 5 sec
         // TODO: simply log content
         LOG_WARN("trans dispatch_by_turn for too many times", KR(ret), K(retry_cnt), K(trans), K_(trans_dispatch_ctx));

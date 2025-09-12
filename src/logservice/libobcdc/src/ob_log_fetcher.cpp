@@ -851,7 +851,7 @@ void *ObLogFetcher::alloc_decompression_buf(int64_t size)
 {
   void *buf = NULL;
   if (IS_INIT) {
-    buf = decompression_alloc_.alloc(size);
+    OBCDC_ALLOC_MEM_CHECK_NULL("decompress_buf", buf, decompression_alloc_, size);
   }
   return buf;
 }

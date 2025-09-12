@@ -35,6 +35,7 @@
 #include "rpc/obmysql/ob_mysql_global.h"                // MYSQL_TYPE_*
 #include "ob_log_config.h"
 #include "ob_log_schema_cache_info.h"                   // ColumnSchemaInfo
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -671,19 +672,35 @@ bool is_ob_election_errno(int err)
 
 void *ob_cdc_malloc(
     const int64_t nbyte,
-    const lib::ObLabel &lable,
+    const lib::ObLabel &label,
     const uint64_t tenant_id)
 {
   ObMemAttr memattr;
   memattr.tenant_id_ = tenant_id;
-  memattr.label_ = lable;
+  memattr.label_ = label;
+  void* ret = nullptr;
+  bool hang_on_alloc_fail = true;
 
-  return ob_malloc(nbyte, memattr);
+  while(OB_ISNULL(ret = ob_malloc(nbyte, memattr)) && hang_on_alloc_fail) {
+    ObCDCMemController::get_instance().handle_when_alloc_fail(label.str_, hang_on_alloc_fail);
+  }
+
+  return ret;
 }
 
 void ob_cdc_free(void *ptr)
 {
   ob_free(ptr);
+}
+
+void *ob_cdc_realloc(void *ptr, const int64_t nbyte, const ObMemAttr &attr)
+{
+  bool hang_on_alloc_fail = true;
+  void *nptr = nullptr;
+  while(OB_ISNULL(nptr = ob_realloc(ptr, nbyte, attr)) || hang_on_alloc_fail) {
+    ObCDCMemController::get_instance().handle_when_alloc_fail(attr.label_.str_, hang_on_alloc_fail);
+  }
+  return nptr;
 }
 
 void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &column_schema)

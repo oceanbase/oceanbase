@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_block.h"
+#include "ob_log_utils.h"
 
 namespace oceanbase
 {
@@ -107,7 +108,7 @@ int BigBlock::init(const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(buf_ = static_cast<char *>(ob_malloc(buf_size, "CDCBigBlock")))) {
+  if (OB_ISNULL(buf_ = static_cast<char *>(ob_cdc_malloc(buf_size, "CDCBigBlock")))) {
     LOG_ERROR("allocate memory for mutator row data fail", K(buf_size));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {

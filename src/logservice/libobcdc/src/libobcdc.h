@@ -50,6 +50,34 @@ struct ObCDCError
   const char *errmsg_;  ///< error message
 };
 
+struct CDCTaskStat
+{
+  CDCTaskStat();
+  ~CDCTaskStat();
+  void reset();
+  int64_t fetcher_part_trans_count_;
+  int64_t ddl_in_process_part_trans_count_;
+  int64_t seq_queue_part_trans_count_;
+  int64_t seq_ready_trans_count_;
+  int64_t seqed_trans_count_;
+  int64_t storage_task_count_;
+  int64_t reader_task_count_;
+  int64_t dml_parser_redo_count_;
+  int64_t formatter_br_count_;
+  int64_t formatter_redo_count_;
+  int64_t formatter_lob_stmt_count_;
+  int64_t lob_merger_task_count_;
+  int64_t sorter_task_count_;
+  int64_t committer_dml_task_count_;
+  int64_t committer_ddl_task_count_;
+  int64_t br_queue_dml_count_;
+  int64_t br_queue_ddl_count_;
+  int64_t rc_part_trans_count_;
+  int64_t rc_br_count_;
+  int64_t out_ddl_br_count_;
+  int64_t out_dml_br_count_;
+};
+
 typedef void (* ERROR_CALLBACK) (const ObCDCError &err);
 
 class IObCDCInstance
@@ -138,6 +166,31 @@ public:
   /// @retval OB_SUCCESS      success
   /// @retval other value     fail
   virtual int get_tenant_ids(std::vector<uint64_t> &tenant_ids) = 0;
+
+  /*
+  * get obcdc memory usage stat
+  * @param [out] expected_usage       expected memory usage(aka memory_limit in config, cdc may use memory more than this value)
+  * @param [out] hard_mem_limit       hard mem limit(cdc will use memory at most with this value, if enable_hard_mem_limit is 0, hard_mem_limit won't be effective)
+  * @param [out] memory_hold          memory hold by obcdc (memory hold by cdc)
+  * @param [out] memory_used          memory used by obcdc (memory used by cdc)
+  * @param [out] redo_dispatch_limit  limit for redo can be dispatch and handled
+  * @param [out] redo_dispatched      redo size in handling(increase while redo read from local_storage, decrease while redo is recycled(after user release_record))
+  *
+  * @note
+  * memory_hold - mmeory_used is memory cached by cdc(not in use)
+  */
+  virtual void get_mem_stat(
+    int64_t &expected_usage,
+    int64_t &hard_mem_limit,
+    int64_t &memory_hold,
+    int64_t &memory_used,
+    int64_t &redo_dispatch_limit,
+    int64_t &redo_dispatched) const = 0;
+
+  /*
+  * get task queue stat in obcdc
+  */
+  virtual void get_task_stat(CDCTaskStat &task_stat) const = 0;
 };
 
 class ObCDCFactory

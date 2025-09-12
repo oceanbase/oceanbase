@@ -15,6 +15,7 @@
 #include "ob_cdc_lob_ctx.h"
 #include "lib/utility/ob_print_utils.h"    // databuff_printf
 #include "ob_log_utils.h"                   // md5
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -36,18 +37,24 @@ int ObLobColCtx::init(
     set_col_value(COLUMN_VALUE_IS_EMPTY, 0);
     LOG_DEBUG("seq_no_cnt is 0, use empty string as lob_column_value", KPC(this));
   } else {
-    ObString **fragment_cb_array =
-      static_cast<ObString **>(allocator.alloc(seq_no_cnt * sizeof(ObString*)));
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < seq_no_cnt; ++idx) {
-      *(fragment_cb_array + idx) = static_cast<ObString *>(allocator.alloc(sizeof(ObString)));
-    }
-
-    if (OB_ISNULL(fragment_cb_array)) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    ObString **fragment_cb_array = nullptr;
+    if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("lob_fragment_cb_array_pointer_pointer", ObString*, fragment_cb_array, allocator, seq_no_cnt * sizeof(ObString*)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc fragment_cb_array memory failed", KR(ret), K(seq_no_cnt));
     } else {
-      set_col_ref_cnt(seq_no_cnt);
-      fragment_cb_array_ = fragment_cb_array;
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < seq_no_cnt; ++idx) {
+        ObString* fragment_cb = nullptr;
+        if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("lob_fragment_cb", ObString, fragment_cb, allocator, sizeof(ObString)))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc fragment_cb memory failed", KR(ret), K(idx));
+        } else {
+          *(fragment_cb_array + idx) = fragment_cb;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        set_col_ref_cnt(seq_no_cnt);
+        fragment_cb_array_ = fragment_cb_array;
+      }
     }
   }
 

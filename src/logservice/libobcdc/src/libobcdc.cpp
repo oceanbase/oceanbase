@@ -57,5 +57,31 @@ void ObCDCFactory::deconstruct(IObCDCInstance *log)
   ObLogInstance::destroy_instance();
 }
 
+CDCTaskStat::CDCTaskStat() { reset(); }
+CDCTaskStat::~CDCTaskStat() { reset(); }
+void CDCTaskStat::reset()
+{
+  fetcher_part_trans_count_ = 0;
+  ddl_in_process_part_trans_count_ = 0;
+  seq_queue_part_trans_count_ = 0;
+  seq_ready_trans_count_ = 0;
+  seqed_trans_count_ = 0;
+  storage_task_count_ = 0;
+  reader_task_count_ = 0;
+  dml_parser_redo_count_ = 0;
+  formatter_br_count_ = 0;
+  formatter_redo_count_ = 0;
+  formatter_lob_stmt_count_ = 0;
+  lob_merger_task_count_ = 0;
+  sorter_task_count_ = 0;
+  committer_dml_task_count_ = 0;
+  committer_ddl_task_count_ = 0;
+  br_queue_dml_count_ = 0;
+  br_queue_ddl_count_ = 0;
+  rc_part_trans_count_ = 0;
+  rc_br_count_ = 0;
+  out_ddl_br_count_ = 0;
+  out_dml_br_count_ = 0;
+}
 } // namespace libobcdc
 } // namespace oceanbase

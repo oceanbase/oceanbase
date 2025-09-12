@@ -19,6 +19,7 @@
 #include "ob_log_part_trans_task.h"
 #include "ob_log_tenant.h"
 #include "ob_log_instance.h"
+#include "ob_cdc_mem_mgr.h"
 
 using namespace oceanbase::common;
 
@@ -235,8 +236,8 @@ int ObCDCLobAuxMetaStorager::memory_put_(
     const int64_t lob_data_len)
 {
   int ret = OB_SUCCESS;
-  void *alloc_lob_data = lob_aux_meta_allocator_.alloc(lob_data_len);
-  if (OB_ISNULL(alloc_lob_data)) {
+  void *alloc_lob_data = nullptr;
+  if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL("lob_aux_data", alloc_lob_data, lob_aux_meta_allocator_, lob_data_len))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", KR(ret), K(key),
       "md5", calc_md5_cstr(lob_data, lob_data_len), K(lob_data_len));
@@ -359,7 +360,7 @@ int ObCDCLobAuxMetaStorager::disk_get_(
   } else if (value.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("data is emptry", KR(ret), K(key));
-  } else if (OB_ISNULL(lob_data_ptr = static_cast<char*>(allocator.alloc(value.length())))) {
+  } else if (OB_ISNULL(OBCDC_ALLOC_MEM_CHECK_NULL_WITH_CAST("lob_data_from_disk", char, lob_data_ptr, allocator, value.length()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc fail", KR(ret), "size", value.length(), K(key));
   } else {

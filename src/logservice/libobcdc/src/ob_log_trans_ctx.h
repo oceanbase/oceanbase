@@ -21,6 +21,7 @@
 #include "lib/allocator/page_arena.h"             // ObArenaAllocator
 #include "lib/lock/ob_spin_lock.h"                // ObSpinLock
 #include "lib/queue/ob_link_queue.h"              // ObSpLinkQueue
+#include "common/ob_queue_thread.h"               // ObCond
 #include "storage/tx/ob_trans_define.h"  // ObTransID
 
 #include "ob_log_part_trans_task.h"               // PartTransTask, IStmtTask, DmlStmtTask
@@ -264,7 +265,7 @@ public:
   /// @retval OB_EMPTY_RESULT trans doesn't has valid br until sorter process finish
   /// @retval other_err_code  unexpected error
   int has_valid_br(volatile bool &stop_flag);
-  int pop_br_for_committer(ObLogBR *&br);
+  int next_br_for_committer(ObLogBR *&br, volatile bool &stop_flag);
   // for unittest end
 
 public:
@@ -361,6 +362,8 @@ private:
   }
   // wait until trans redo dispatched.
   void wait_trans_redo_dispatched_(volatile bool &stop_flag);
+private:
+  static const int64_t WAIT_BR_TIME = 1 * _MSEC_;
 
 private:
   IObLogTransCtxMgr         *host_;
@@ -394,6 +397,7 @@ private:
   // allocator
   common::ObArenaAllocator  allocator_;
   mutable common::ObSpinLock lock_;
+  common::ObCond             br_ready_cond_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(TransCtx);
