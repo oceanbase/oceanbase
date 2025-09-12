@@ -457,10 +457,8 @@ public:
                                 ObIArray<ObRawExpr *> &from,
                                 ObIArray<ObRawExpr *> &to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
-  static int contain_virtual_generated_column(ObRawExpr *&expr,
-                                  bool &is_contain_vir_gen_column);
-  static int extract_virtual_generated_column_parents(
-  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs);
+  static int extract_virtual_generated_columns(ObRawExpr *&expr,
+                                               ObIArray<ObRawExpr *> &vir_gen_columns);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
