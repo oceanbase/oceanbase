@@ -119,6 +119,7 @@
 #include "parallel_ddl/ob_create_index_helper.h" // ObCreateIndexHelper
 #include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
+#include "lib/string/ob_sensitive_string.h"
 
 namespace oceanbase
 {
@@ -10465,7 +10466,7 @@ int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg
       } else if (OB_FAIL(value.assign(item.value_.ptr()))) {
         LOG_WARN("fail to assign value", K(ret));
       } else if (OB_FAIL(config_parser_mgr.init(name, value, exec_tenant_id))) {
-        LOG_WARN("fail to init backup config parser mgr", K(ret), K(item));
+        LOG_WARN("fail to init backup config parser mgr", K(ret), K(name), KS(value.ptr()));
       } else if (OB_FAIL(config_parser_mgr.update_inner_config_table(rpc_proxy_, trans))) {
         LOG_WARN("fail to update inner config table", K(ret));
       }

@@ -20,6 +20,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/ob_license_utils.h"
+#include "lib/string/ob_sensitive_string.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -338,7 +339,7 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("config parser must not be nullptr", K(ret));
   } else if (OB_FAIL(config_parser->parse_from(value))) {
-    LOG_WARN("fail to parse value", K(ret), K(type), K(value));
+    LOG_WARN("fail to parse value", K(ret), K(type), KS(value.ptr()));
   } else {
     is_inited_ = true;
   }
@@ -564,7 +565,7 @@ int ObLogArchiveDestConfigParser::parse_from(const common::ObSqlString &value)
     // allow set empty archive dest
     is_empty_ = true;
   } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
-    LOG_WARN("fail to set config value", K(ret), K(value));
+    LOG_WARN("fail to set config value", K(ret), KS(value.ptr()));
   } else {
     token = tmp_str;
     for (char *str = token; OB_SUCC(ret); str = nullptr) {
@@ -719,19 +720,19 @@ int ObLogArchiveDestConfigParser::do_parse_sub_config_(const common::ObString &c
     } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
     } else if (0 == STRCASECMP(token, OB_STR_BINDING)) {
       if (OB_FAIL(do_parse_log_archive_mode_(token, saveptr))) {
-        LOG_WARN("fail to do parse log archive mode", K(token), K(saveptr));
+        LOG_WARN("fail to do parse log archive mode", KS(token), K(saveptr));
       }
     } else if (0 == STRCASECMP(token, OB_STR_LOCATION)) {
       if (OB_FAIL(do_parse_log_archive_dest_(token, saveptr))) {
-        LOG_WARN("fail to do parse log archive dest", K(ret), K(token), K(saveptr));
+        LOG_WARN("fail to do parse log archive dest", K(ret), KS(token), K(saveptr));
       }
     } else if (0 == STRCASECMP(token, OB_STR_PIECE_SWITCH_INTERVAL)) {
       if (OB_FAIL(do_parse_piece_switch_interval_(token, saveptr))) {
-        LOG_WARN("fail to do parse piece switch interval", K(ret), K(token), K(saveptr));
+        LOG_WARN("fail to do parse piece switch interval", K(ret), KS(token), K(saveptr));
       }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("log archive dest does not has this config", K(ret), K(token));
+      LOG_WARN("log archive dest does not has this config", K(ret));
     }
   }
   return ret;

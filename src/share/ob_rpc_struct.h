@@ -82,6 +82,7 @@
 #include "share/ob_heartbeat_handler.h"
 #include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
+#include "lib/string/ob_sensitive_string.h"
 namespace oceanbase
 {
 namespace rootserver
@@ -6143,7 +6144,7 @@ public:
   ObAdminSetConfigItem() : name_(), value_(), comment_(), zone_(), server_(), tenant_name_(),
                            exec_tenant_id_(common::OB_SYS_TENANT_ID), tenant_ids_(),
                            want_to_set_tenant_config_(false) {}
-  TO_STRING_KV(K_(name), K_(value), K_(comment), K_(zone), K_(server), K_(tenant_name),
+  TO_STRING_KV(K_(name), KS(value_.ptr()), K_(comment), K_(zone), K_(server), K_(tenant_name),
                K_(exec_tenant_id), K_(tenant_ids), K_(want_to_set_tenant_config));
 
   common::ObFixedLengthString<common::OB_MAX_CONFIG_NAME_LEN> name_;
