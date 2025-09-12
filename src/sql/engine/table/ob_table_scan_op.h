@@ -150,7 +150,8 @@ public:
       allocator_(allocator),
       calc_part_id_expr_(NULL),
       global_index_rowkey_exprs_(allocator),
-      pre_range_graph_(allocator)
+      pre_range_graph_(allocator),
+      flags_(0)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
