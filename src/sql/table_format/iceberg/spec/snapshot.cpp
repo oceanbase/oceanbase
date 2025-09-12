@@ -33,7 +33,8 @@ namespace iceberg
 Snapshot::Snapshot(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
       v1_manifests(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      summary(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      summary(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      cached_manifest_file_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 
@@ -148,15 +149,39 @@ int64_t Snapshot::get_convert_size() const
   return 0;
 }
 
-int Snapshot::get_manifest_files(ObIAllocator &allocator,
-                                 const ObString &access_info,
+int Snapshot::get_manifest_files(const ObString &access_info,
+                                 ObIArray<ManifestFile *> &manifest_files)
+{
+  int ret = OB_SUCCESS;
+  if (cached_manifest_file_.empty()) {
+    if (OB_FAIL(get_manifest_files_(access_info, cached_manifest_file_))) {
+      LOG_WARN("failed to load manifest file into cache", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(cached_manifest_file_.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ManifestFile is empty", K(ret));
+    } else if (OB_FAIL(manifest_files.reserve(cached_manifest_file_.size()))) {
+      LOG_WARN("failed to reserve manifest file", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cached_manifest_file_.size(); i++) {
+        OZ(manifest_files.push_back(cached_manifest_file_.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
+int Snapshot::get_manifest_files_(const ObString &access_info,
                                  ObIArray<ManifestFile *> &manifest_files) const
 {
   int ret = OB_SUCCESS;
   if (!v1_manifests.empty()) {
     // handle manifest v1
     for (int i = 0; OB_SUCC(ret) && i < v1_manifests.size(); ++i) {
-      ManifestFile *manifest_file = OB_NEWx(ManifestFile, &allocator, allocator);
+      ManifestFile *manifest_file = OB_NEWx(ManifestFile, &allocator_, allocator_);
       if (OB_ISNULL(manifest_file)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate manifest file", K(ret));
@@ -167,7 +192,7 @@ int Snapshot::get_manifest_files(ObIAllocator &allocator,
         manifest_file->sequence_number = 0L;
         manifest_file->min_sequence_number = 0L;
         manifest_file->added_snapshot_id = snapshot_id;
-        OZ(ob_write_string(allocator, v1_manifests.at(i), manifest_file->manifest_path));
+        OZ(ob_write_string(allocator_, v1_manifests.at(i), manifest_file->manifest_path));
         OZ(manifest_files.push_back(manifest_file));
       }
     }
@@ -189,7 +214,7 @@ int Snapshot::get_manifest_files(ObIAllocator &allocator,
         avro::DataFileReader<avro::GenericDatum> avro_reader(std::move(input_stream));
         avro::GenericDatum generic_datum(avro_reader.dataSchema());
         while (OB_SUCC(ret) && avro_reader.read(generic_datum)) {
-          ManifestFile *manifest_file = OB_NEWx(ManifestFile, &allocator, allocator);
+          ManifestFile *manifest_file = OB_NEWx(ManifestFile, &allocator_, allocator_);
           if (OB_ISNULL(manifest_file)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to allocate manifest file", K(ret));

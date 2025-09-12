@@ -571,11 +571,11 @@ ObCatalogAvroUtils::get_primitive_map(const avro::GenericRecord &avro_record,
                                       ObIArray<std::pair<K, V>> &value)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum avro_datum;
+  const avro::GenericDatum *avro_datum = NULL;
   if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
     LOG_WARN("failed to get avro array", K(ret), K(key));
-  } else if (avro::Type::AVRO_ARRAY == avro_datum.type()) {
-    const avro::GenericArray &avro_array = avro_datum.value<avro::GenericArray>();
+  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
+    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
     for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
       const avro::GenericDatum &element = avro_array.value()[i];
       if (avro::Type::AVRO_RECORD != element.type()) {
@@ -601,11 +601,11 @@ ObCatalogAvroUtils::get_binary_map(ObIAllocator &allocator,
                                    ObIArray<std::pair<K, V>> &value)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum avro_datum;
+  const avro::GenericDatum *avro_datum = NULL;
   if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
     LOG_WARN("failed to get avro array", K(ret), K(key));
-  } else if (avro::Type::AVRO_ARRAY == avro_datum.type()) {
-    const avro::GenericArray &avro_array = avro_datum.value<avro::GenericArray>();
+  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
+    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
     for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
       const avro::GenericDatum &element = avro_array.value()[i];
       if (avro::Type::AVRO_RECORD != element.type()) {
@@ -646,13 +646,11 @@ ObCatalogAvroUtils::get_primitive_array(const avro::GenericRecord &avro_record,
                                         ObIArray<V> &value)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum avro_datum;
+  const avro::GenericDatum *avro_datum = NULL;
   if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
     LOG_WARN("failed to get avro map", K(ret), K(key));
-  } else if (avro::Type::AVRO_NULL == avro_datum.type()) {
-    value.reset();
-  } else if (avro::Type::AVRO_ARRAY == avro_datum.type()) {
-    const avro::GenericArray &avro_array = avro_datum.value<avro::GenericArray>();
+  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
+    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
     for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
       const avro::GenericDatum &avro_element = avro_array.value()[i];
       OZ(value.push_back(avro_element.value<V>()));
@@ -664,18 +662,18 @@ ObCatalogAvroUtils::get_primitive_array(const avro::GenericRecord &avro_record,
 template <avro::Type T>
 int ObCatalogAvroUtils::get_value(const avro::GenericRecord &avro_record,
                                   const ObString &key,
-                                  avro::GenericDatum &value)
+                                  const avro::GenericDatum *&value) // 使用指针，避免 GenericDatum 昂贵的深拷贝
 {
   int ret = OB_SUCCESS;
   std::string key_str(key.ptr(), key.length());
   if (!avro_record.hasField(key_str)) {
-    value = avro::GenericDatum(); // assign a null GenericDatum
+    value = NULL;
   } else {
     const avro::GenericDatum &field_datum = avro_record.field(key_str);
     if (avro::Type::AVRO_NULL == field_datum.type()) {
-      value = avro::GenericDatum(); // assign a null GenericDatum
+      value = &field_datum; // assign a null GenericDatum
     } else if (T == field_datum.type()) {
-      value = field_datum;
+      value = &field_datum;
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid avro type", K(ret), K(key), K(T), K(field_datum.type()));

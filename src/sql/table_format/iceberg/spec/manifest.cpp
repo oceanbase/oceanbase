@@ -334,18 +334,21 @@ int DataFile::get_partitions_(const ManifestMetadata &manifest_metadata,
                               const avro::GenericRecord &avro_data_file)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum partition_generic_datum;
+  const avro::GenericDatum *partition_generic_datum = NULL;
   if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_RECORD>(avro_data_file,
                                                                      PARTITION,
                                                                      partition_generic_datum))) {
     LOG_WARN("failed to get avro partition", K(ret));
-  } else if (avro::Type::AVRO_RECORD != partition_generic_datum.type()) {
+  } else if (OB_ISNULL(partition_generic_datum)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("partition is illegal type", K(ret), K(partition_generic_datum.type()));
+    LOG_WARN("partition is null", K(ret));
+  } else if (avro::Type::AVRO_RECORD != partition_generic_datum->type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("partition is illegal type", K(ret), K(partition_generic_datum->type()));
   } else if (OB_FAIL(DataFile::read_partition_values_from_avro(
                  allocator_,
                  manifest_metadata,
-                 partition_generic_datum.value<avro::GenericRecord>(),
+                 partition_generic_datum->value<avro::GenericRecord>(),
                  partition))) {
     LOG_WARN("fail to get partition values", K(ret));
   }
@@ -388,7 +391,7 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   const Transform &transform = partition_field->transform;
   const ObString &partition_column_name = partition_field->name;
-  avro::GenericDatum partition_avro_datum;
+  const avro::GenericDatum *partition_avro_datum = NULL;
   ObObjType result_type;
   if (OB_FAIL(transform.get_result_type(column_schema->get_data_type(), result_type))) {
     LOG_WARN("failed to get result_type", K(ret));
@@ -399,10 +402,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_bool(partition_avro_datum.value<bool>());
+          obj.set_bool(partition_avro_datum->value<bool>());
         }
         break;
       }
@@ -411,10 +414,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                         partition_column_name,
                                                                         partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_int32(partition_avro_datum.value<int32_t>());
+          obj.set_int32(partition_avro_datum->value<int32_t>());
         }
         break;
       }
@@ -423,10 +426,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_int(partition_avro_datum.value<int64_t>());
+          obj.set_int(partition_avro_datum->value<int64_t>());
         }
         break;
       }
@@ -435,10 +438,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                           partition_column_name,
                                                                           partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_float(partition_avro_datum.value<float>());
+          obj.set_float(partition_avro_datum->value<float>());
         }
         break;
       }
@@ -447,10 +450,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                            partition_column_name,
                                                                            partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_double(partition_avro_datum.value<double>());
+          obj.set_double(partition_avro_datum->value<double>());
         }
         break;
       }
@@ -459,14 +462,14 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                           partition_column_name,
                                                                           partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else if (column_schema->get_data_precision() <= 0
                    || column_schema->get_data_scale() <= 0) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid decimal type", K(ret));
         } else {
-          const avro::GenericFixed &fixed_datum = partition_avro_datum.value<avro::GenericFixed>();
+          const avro::GenericFixed &fixed_datum = partition_avro_datum->value<avro::GenericFixed>();
           int32_t buffer_size
               = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_schema->get_data_precision());
           uint8_t *buf = static_cast<uint8_t *>(allocator.alloc(buffer_size));
@@ -490,10 +493,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                         partition_column_name,
                                                                         partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_date(partition_avro_datum.value<int32_t>());
+          obj.set_date(partition_avro_datum->value<int32_t>());
         }
         break;
       }
@@ -502,10 +505,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_time(partition_avro_datum.value<int64_t>());
+          obj.set_time(partition_avro_datum->value<int64_t>());
         }
         break;
       }
@@ -515,10 +518,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_datetime(partition_avro_datum.value<int64_t>());
+          obj.set_datetime(partition_avro_datum->value<int64_t>());
         }
         break;
       }
@@ -528,10 +531,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
           LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
           obj.set_null();
         } else {
-          obj.set_timestamp(partition_avro_datum.value<int64_t>());
+          obj.set_timestamp(partition_avro_datum->value<int64_t>());
         }
         break;
       }
@@ -543,10 +546,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                         partition_column_name,
                                                                         partition_avro_datum))) {
             LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-          } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+          } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
             obj.set_null();
           } else {
-            std::vector<uint8_t> bytes = partition_avro_datum.value<std::vector<uint8_t>>();
+            std::vector<uint8_t> bytes = partition_avro_datum->value<std::vector<uint8_t>>();
             ObString deep_copy_str;
             OZ(ob_write_string(allocator,
                                ObString(bytes.size(), reinterpret_cast<const char *>(bytes.data())),
@@ -560,10 +563,10 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
             LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-          } else if (avro::Type::AVRO_NULL == partition_avro_datum.type()) {
+          } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
             obj.set_null();
           } else {
-            std::string str = partition_avro_datum.value<std::string>();
+            std::string str = partition_avro_datum->value<std::string>();
             ObString deep_copy_str;
             OZ(ob_write_string(allocator, ObString(str.size(), str.data()), deep_copy_str));
             OX(obj.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN));
@@ -721,16 +724,19 @@ int ManifestEntry::get_data_file_(const ManifestMetadata &manifest_metadata,
                                   const avro::GenericRecord &avro_manifest_entry)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum field_datum;
+  const avro::GenericDatum *field_datum = NULL;
   if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_RECORD>(avro_manifest_entry,
                                                                      DATA_FILE,
                                                                      field_datum))) {
     LOG_WARN("failed to get data_file", K(ret));
-  } else if (avro::Type::AVRO_RECORD != field_datum.type()) {
+  } else if (OB_ISNULL(field_datum) ) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data_file is illegal type", K(ret), K(field_datum.type()));
+    LOG_WARN("get null data_file", K(ret));
+  } else if (avro::Type::AVRO_RECORD != field_datum->type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data_file is illegal type", K(ret), K(field_datum->type()));
   } else if (OB_FAIL(data_file.init_from_avro(manifest_metadata,
-                                              field_datum.value<avro::GenericRecord>()))) {
+                                              field_datum->value<avro::GenericRecord>()))) {
     LOG_WARN("failed to init data_file", K(ret));
   }
 

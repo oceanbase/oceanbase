@@ -74,7 +74,8 @@ int PartitionFieldSummary::init_from_avro(const avro::GenericRecord &avro_partit
 
 ManifestFile::ManifestFile(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      partitions(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_))
+      partitions(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      cached_manifest_entries_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_))
 {
 }
 
@@ -233,15 +234,15 @@ int ManifestFile::init_from_avro(const avro::GenericRecord &avro_manifest_file)
 int ManifestFile::get_partitions_(const avro::GenericRecord &avro_manifest_file)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum field_datum;
+  const avro::GenericDatum *field_datum = NULL;
   if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_ARRAY>(avro_manifest_file,
                                                                     PARTITIONS,
                                                                     field_datum))) {
     LOG_WARN("failed to get partitions", K(ret));
-  } else if (avro::Type::AVRO_NULL == field_datum.type()) {
+  } else if (NULL == field_datum || avro::Type::AVRO_NULL == field_datum->type()) {
     partitions.reset();
   } else {
-    const avro::GenericArray &datum_array = field_datum.value<avro::GenericArray>();
+    const avro::GenericArray &datum_array = field_datum->value<avro::GenericArray>();
     for (size_t i = 0; OB_SUCC(ret) && i < datum_array.value().size(); i++) {
       PartitionFieldSummary *summary = NULL;
       const avro::GenericDatum &element_datum = datum_array.value()[i];
@@ -262,8 +263,32 @@ int ManifestFile::get_partitions_(const avro::GenericRecord &avro_manifest_file)
   return ret;
 }
 
-int ManifestFile::get_manifest_entries(ObIAllocator &allocator,
-                                       const ObString &access_info,
+int ManifestFile::get_manifest_entries(const ObString &access_info,
+                                       ObIArray<ManifestEntry *> &manifest_entries)
+{
+  int ret = OB_SUCCESS;
+  if (cached_manifest_entries_.empty()) {
+    if (OB_FAIL(get_manifest_entries_(access_info, cached_manifest_entries_))) {
+      LOG_WARN("failed to get manifest entries", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(cached_manifest_entries_.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("empty manifest entry", K(ret));
+    } else if (OB_FAIL(manifest_entries.reserve(cached_manifest_entries_.size()))) {
+      LOG_WARN("failed to reserve manifest entries", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cached_manifest_entries_.size(); i++) {
+        OZ(manifest_entries.push_back(cached_manifest_entries_[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+int ManifestFile::get_manifest_entries_(const ObString &access_info,
                                        ObIArray<ManifestEntry *> &manifest_entries) const
 {
   int ret = OB_SUCCESS;
@@ -281,14 +306,14 @@ int ManifestFile::get_manifest_entries(ObIAllocator &allocator,
       std::unique_ptr<avro::DataFileReaderBase> avro_reader_base
           = std::make_unique<avro::DataFileReaderBase>(std::move(input_stream));
       const std::map<std::string, std::vector<uint8_t>> &metadata = avro_reader_base->metadata();
-      ManifestMetadata manifest_metadata(allocator);
+      ManifestMetadata manifest_metadata(allocator_);
       if (OB_FAIL(manifest_metadata.init_from_metadata(metadata))) {
         LOG_WARN("failed to init manifest metadata", K(ret));
       } else {
         avro::DataFileReader<avro::GenericDatum> avro_reader(std::move(avro_reader_base));
         avro::GenericDatum generic_datum(avro_reader.dataSchema());
         while (OB_SUCC(ret) && avro_reader.read(generic_datum)) {
-          ManifestEntry *manifest_entry = OB_NEWx(ManifestEntry, &allocator, allocator);
+          ManifestEntry *manifest_entry = OB_NEWx(ManifestEntry, &allocator_, allocator_);
           if (avro::Type::AVRO_RECORD != generic_datum.type()) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid manifest entry", K(ret), K(generic_datum.type()));

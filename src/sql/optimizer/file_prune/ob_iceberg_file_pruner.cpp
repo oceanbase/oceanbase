@@ -1070,7 +1070,8 @@ int ObIcebergFilePrunner::check_manifest_file_in_bound(ObIAllocator &allocator,
 }
 
 int ObIcebergFilePrunner::prune_data_files(ObExecContext &exec_ctx,
-                                           ObIArray<iceberg::ManifestEntry*> &manifest_entries,
+                                           const ObIArray<iceberg::ManifestEntry*> &manifest_entries,
+                                           const bool is_hash_aggregate,
                                            hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
                                            ObIArray<ObIcebergFileDesc*> &file_descs)
 {
@@ -1082,6 +1083,11 @@ int ObIcebergFilePrunner::prune_data_files(ObExecContext &exec_ctx,
   uint64_t last_part_idx = 0;
   if (!need_all_ && OB_FAIL(file_filter.init(column_ids_, column_metas_))) {
     LOG_WARN("failed to init skip filter executor");
+  }
+  if (OB_SUCC(ret) && is_hash_aggregate) {
+    if (OB_FAIL(part_key_map.create(manifest_entries.count(), "PartKetMap", "LakeTableLoc"))) {
+      LOG_WARN("create range set bucket failed", K(ret));
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < manifest_entries.count(); ++i) {
     iceberg::ManifestEntry* manifest_entry = manifest_entries.at(i);
@@ -1117,21 +1123,31 @@ int ObIcebergFilePrunner::prune_data_files(ObExecContext &exec_ctx,
     if (OB_SUCC(ret) && in_bound) {
       if (manifest_entry->is_data_file()) {
         ObIcebergFileDesc *file_desc = OB_NEWx(ObIcebergFileDesc, &allocator_, allocator_);
-        ObLakeTablePartKey part_key;
         uint64_t part_idx = OB_INVALID_ID;
         if (OB_ISNULL(file_desc)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory for ObIcebergFileDesc");
-        } else if (OB_FAIL(part_key.from_manifest_entry(manifest_entry))) {
-          LOG_WARN("failed to from manifest entry");
-        } else if (OB_FAIL(part_key_map.get_refactored(part_key, part_idx))) {
-          if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
-            part_idx = last_part_idx++;
-            if (OB_FAIL(part_key_map.set_refactored(part_key, part_idx))) {
-              LOG_WARN("failed to set part id");
+        } else {
+          if (is_hash_aggregate) {
+            ObLakeTablePartKey part_key;
+            if (OB_UNLIKELY(!part_key_map.created())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("part_key_map is not created", K(ret));
+            } else if (OB_FAIL(part_key.from_manifest_entry(manifest_entry))) {
+              LOG_WARN("failed to from manifest entry");
+            } else if (OB_FAIL(part_key_map.get_refactored(part_key, part_idx))) {
+              if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+                part_idx = last_part_idx++;
+                if (OB_FAIL(part_key_map.set_refactored(part_key, part_idx))) {
+                  LOG_WARN("failed to set part id");
+                }
+              } else {
+                LOG_WARN("failed to get part id bu part key");
+              }
             }
           } else {
-            LOG_WARN("failed to get part id bu part key");
+            // do nothing
+            // 生成唯一 part id 开销很大，非必要不创建
           }
         }
         if (OB_SUCC(ret)) {

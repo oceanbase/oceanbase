@@ -181,7 +181,7 @@ public:
   template <avro::Type T>
   static int get_value(const avro::GenericRecord &avro_record,
                        const ObString &key,
-                       avro::GenericDatum &value);
+                       const avro::GenericDatum *&value);
 };
 
 } // namespace iceberg

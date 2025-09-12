@@ -34,6 +34,7 @@ public:
   : ObTablePartitionInfo(PartitionInfoType::LAKE_TABLE),
     is_hash_aggregate_(false),
     hash_count_(0),
+    first_bucket_partition_value_offset_(-1),
     file_pruner_(NULL),
     iceberg_file_descs_()
   {}
@@ -42,6 +43,7 @@ public:
   : ObTablePartitionInfo(allocator, PartitionInfoType::LAKE_TABLE),
     is_hash_aggregate_(false),
     hash_count_(0),
+    first_bucket_partition_value_offset_(-1),
     file_pruner_(NULL),
     iceberg_file_descs_()
   {}
@@ -90,7 +92,6 @@ public:
                                      const ObIArray<ObRawExpr*> &filter_exprs);
 
   int select_location_for_iceberg(ObExecContext *exec_ctx,
-                                  const ObIArray<iceberg::PartitionSpec*> &partition_specs,
                                   hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
                                   ObIArray<ObIcebergFileDesc*> &file_descs);
 
@@ -108,6 +109,8 @@ private:
   bool is_hash_aggregate_;
   // hash聚合的外表的总分区数
   int64_t hash_count_;
+  // 第一个使用 bucket 的 partition value 的 offset
+  int64_t first_bucket_partition_value_offset_ = -1;
   ObILakeTableFilePruner *file_pruner_;
   ObSEArray<ObIcebergFileDesc*, 16, common::ModulePageAllocator, true> iceberg_file_descs_;
 };

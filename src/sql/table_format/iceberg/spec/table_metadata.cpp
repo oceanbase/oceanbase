@@ -242,6 +242,18 @@ int TableMetadata::get_current_snapshot(const Snapshot *&snapshot) const
   return ret;
 }
 
+int TableMetadata::get_current_snapshot(Snapshot *&snapshot)
+{
+  int ret = OB_SUCCESS;
+  const Snapshot *current_snapshot = NULL;
+  if (OB_FAIL(get_current_snapshot(current_snapshot))) {
+    LOG_WARN("failed to get current snapshot", K(ret));
+  } else {
+    snapshot = const_cast<Snapshot *>(current_snapshot);
+  }
+  return ret;
+}
+
 int TableMetadata::get_schema(int32_t schema_id, const Schema *&schema) const
 {
   int ret = OB_SUCCESS;
