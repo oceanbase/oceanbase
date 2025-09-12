@@ -1743,6 +1743,7 @@ int ObPL::execute(ObExecContext &ctx,
                      is_called_from_sql);
     OZ (pl.init(params, is_anonymous));
     OZ (pl.execute(is_first_execute));
+    pl.try_clear_complex_obj();
     OZ (pl.deep_copy_result_if_need(allocator));
     pl.final(ret);
     if (OB_SUCC(ret)) {
@@ -3367,14 +3368,29 @@ int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
   if (func_.get_ret_type().is_composite_type() && result_.is_ext()) {
     CK (OB_NOT_NULL(ctx_.exec_ctx_));
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-    OZ (ObUserDefinedType::deep_copy_obj(ctx_.exec_ctx_->get_allocator(), result_, new_obj, false));
-    ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
     if (OB_SUCC(ret)) {
-      OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
-      if (OB_FAIL(ret)) {
-        ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
-      } else {
-        result_ = new_obj;
+      ObIAllocator *alloc = &ctx_.exec_ctx_->get_allocator();
+      ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
+      // we will destroy this obj in pl final interface
+      if (OB_NOT_NULL(session) &&
+         OB_NOT_NULL(session->get_pl_context())) {
+        pl::ObPLExecCtx *parent_exec_ctx = nullptr;
+        ObIArray<ObPLExecState *> &exec_stack = session->get_pl_context()->get_exec_stack();
+        if (exec_stack.count() > 1 &&
+            OB_NOT_NULL(exec_stack.at(exec_stack.count() - 2))) {
+          parent_exec_ctx = &exec_stack.at(exec_stack.count() - 2)->get_exec_ctx();
+          alloc = parent_exec_ctx->get_top_expr_allocator();
+        }
+      }
+      OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj, false));
+      ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
+      if (OB_SUCC(ret)) {
+        OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
+        if (OB_FAIL(ret)) {
+          ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
+        } else {
+          result_ = new_obj;
+        }
       }
     }
   } else if (func_.get_ret_type().is_obj_type() && result_.need_deep_copy()) {
@@ -4053,6 +4069,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
     OZ (ctx_.exec_ctx_->init_pl_ctx());
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
   }
+  OX (cur_complex_obj_count_ = ctx_.exec_ctx_->get_pl_ctx()->get_objects().count());
   OZ (get_params().reserve(func_.get_variables().count()));
   ObObjParam param;
   for (int64_t i = 0; OB_SUCC(ret) && i < func_.get_variables().count(); ++i) {
@@ -4932,6 +4949,16 @@ int ObPLExecState::check_pl_priv(
   return ret;
 }
 
+void ObPLExecState::try_clear_complex_obj()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx())) {
+    ctx_.exec_ctx_->get_pl_ctx()->reset_obj_range_to_end(cur_complex_obj_count_);
+  } else {
+    LOG_ERROR("pl ctx is null, unexpected error");
+  }
+}
+
 int ObPLExecState::execute(bool is_first_execute)
 {
   int ret = OB_SUCCESS;
@@ -5016,6 +5043,7 @@ int ObPLExecState::execute(bool is_first_execute)
         if (eptr != nullptr) {
           ret = OB_SUCCESS == ret ? (NULL != ctx_.status_ ? *ctx_.status_ : OB_ERR_UNEXPECTED)
               : ret;
+          try_clear_complex_obj();
           final(ret); // 避免当前执行的pl内数组内存泄漏, 捕获到异常后先执行final, 然后将异常继续向上抛
           _Unwind_RaiseException(eptr);
         }

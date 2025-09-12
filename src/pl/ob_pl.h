@@ -793,7 +793,8 @@ public:
     profiler_time_stack_(nullptr),
     need_free_(),
     param_converted_(),
-    coverage_info_()
+    coverage_info_(),
+    cur_complex_obj_count_(INT64_MAX)
   { }
   virtual ~ObPLExecState();
 
@@ -878,6 +879,7 @@ public:
   }
   ObPLContext *get_top_pl_context() { return top_context_; }
   ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
+  void try_clear_complex_obj();
 
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
@@ -911,6 +913,7 @@ private:
   common::ObSEArray<bool,8> need_free_;
   common::ObSEArray<bool,8> param_converted_;
   hash::ObHashSet<std::pair<uint64_t, uint64_t>> coverage_info_;
+  int64_t cur_complex_obj_count_; // for destory plctx record's obj
 };
 
 class ObPLCallStackTrace;
