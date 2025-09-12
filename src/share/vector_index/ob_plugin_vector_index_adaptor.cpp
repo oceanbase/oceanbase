@@ -3030,6 +3030,11 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
       if (OB_FAIL(table_scan_iter->get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
+          if (!ctx->get_ls_leader()) {
+            ctx->status_ = PVQ_REFRESH;
+            LOG_INFO("query result need refresh adapter, ls leader",
+                     K(ret), K(ls_id), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()));
+          }
         } else {
           LOG_WARN("failed to get next row", K(ret));
         }
