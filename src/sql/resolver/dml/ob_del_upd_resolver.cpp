@@ -96,7 +96,8 @@ ObDelUpdResolver::~ObDelUpdResolver()
 
 int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
                                           ObIArray<ObTableAssignment> &table_assigns,
-                                          ObStmtScope scope)
+                                          ObStmtScope scope,
+                                          const bool is_insert_into_set)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
@@ -199,7 +200,9 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(add_additional_function_according_to_type(column, expr, scope, true))) {
+          // for insert into set statements, we treat the assigned values as VALUES clause,
+          // keep assigned expr as QUESTIONMARK type and do not build column convert expr.
+          if (OB_FAIL(add_additional_function_according_to_type(column, expr, scope, true, is_insert_into_set))) {
             LOG_WARN("fail to add additional function", K(ret), K(column));
           } else if (OB_FAIL(recursive_values_expr(expr))) {
             LOG_WARN("fail to resolve values expr", K(ret));
@@ -347,8 +350,7 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             CK (OB_NOT_NULL(c_expr));
             if (OB_FAIL(ret)) {
             } else if (col_expr->get_result_type().get_obj_meta().is_enum_or_set()
-              || col_expr->get_result_type().get_obj_meta().is_urowid()
-              || params_.is_batch_stmt_) {
+              || col_expr->get_result_type().get_obj_meta().is_urowid()) {
               // enum, set, rowid do not support cast
               int64_t param_idx = 0;
               OZ (c_expr->get_value().get_unknown(param_idx));
@@ -356,6 +358,11 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
               CK (param_idx < params_.param_list_->count());
               OX (const_cast<ObObjParam &>(
               params_.param_list_->at(param_idx)).set_need_to_check_type(true));
+            } else if (params_.is_batch_stmt_) {
+              OX (c_expr->set_result_type(col_expr->get_result_type()));
+              if (col_expr->get_result_type().get_obj_meta().is_collection_sql_type()) {
+                c_expr->set_subschema_id(col_expr->get_subschema_id());
+              }
             } else {
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
               OX (c_expr->set_result_type(col_expr->get_result_type()));

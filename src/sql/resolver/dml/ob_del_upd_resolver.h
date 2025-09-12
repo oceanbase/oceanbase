@@ -56,7 +56,8 @@ protected:
 
   int resolve_assignments(const ParseNode &parse_node,
                           common::ObIArray<ObTableAssignment> &table_assigns,
-                          ObStmtScope scope);
+                          ObStmtScope scope,
+                          const bool is_insert_into_set = false);
 
   int resolve_column_and_values(const ParseNode &assign_list,
                                 ObIArray<ObColumnRefRawExpr *> &target_list,

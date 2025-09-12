@@ -570,7 +570,7 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
   if (OB_ISNULL(insert_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid insert stmt", K(ret), K(insert_stmt));
-  } else if (OB_FAIL(resolve_assignments(assign_list, tables_assign, current_scope_))) {
+  } else if (OB_FAIL(resolve_assignments(assign_list, tables_assign, current_scope_, true))) {
     LOG_WARN("resolve insert set assignment list failed", K(ret));
   } else {
     ObArray<ObRawExpr*> value_row;
