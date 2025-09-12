@@ -332,15 +332,20 @@ struct ObAuditRecordData {
     stmt_type_ = sql::stmt::T_NONE;
     sql_memory_used_ = nullptr;
     trans_status_ = INVALID_STATUS;
+    cursor_elapsed_ = 0;
   }
 
   int64_t get_elapsed_time() const
   {
     int64_t elapsed_time = 0;
-    if (OB_UNLIKELY(exec_timestamp_.multistmt_start_ts_ > 0)) {
-      elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.multistmt_start_ts_;
+    if (cursor_elapsed_ > 0) {
+      elapsed_time = cursor_elapsed_;
     } else {
-      elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.receive_ts_;
+      if (OB_UNLIKELY(exec_timestamp_.multistmt_start_ts_ > 0)) {
+        elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.multistmt_start_ts_;
+      } else {
+        elapsed_time = exec_timestamp_.executor_end_ts_ - exec_timestamp_.receive_ts_;
+      }
     }
     return elapsed_time;
   }
@@ -458,6 +463,7 @@ struct ObAuditRecordData {
   int64_t plsql_compile_time_;
   ObTransStatus trans_status_;
   int64_t insert_update_or_replace_duplicate_row_count_;
+  int64_t cursor_elapsed_;
 };
 
 } //namespace sql

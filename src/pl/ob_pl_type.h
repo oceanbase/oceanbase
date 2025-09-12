@@ -957,7 +957,8 @@ public:
     is_scrollable_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
-    cursor_total_exec_time_(0)
+    cursor_total_exec_time_(0),
+    cursor_total_elapsed_time_(0)
   {
     reset();
   }
@@ -977,7 +978,8 @@ public:
     is_need_check_snapshot_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
-    cursor_total_exec_time_(0)
+    cursor_total_exec_time_(0),
+    cursor_total_elapsed_time_(0)
   {
     reset();
   }
@@ -1031,6 +1033,7 @@ public:
     sql_trace_id_.reset();
     is_packed_ = false;
     cursor_total_exec_time_ = 0;
+    cursor_total_elapsed_time_ = 0;
   }
 
   void reset()
@@ -1183,6 +1186,8 @@ public:
   inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
   inline bool is_packed() { return is_packed_; }
 
+  inline int64_t get_cursor_total_elapsed_time() const { return cursor_total_elapsed_time_; }
+  inline void add_cursor_elapsed_time(int64_t time) { cursor_total_elapsed_time_ += time; }
   inline int64_t get_cursor_total_exec_time() const { return cursor_total_exec_time_; }
   inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
 
@@ -1251,6 +1256,7 @@ protected:
   ObCurTraceId::TraceId sql_trace_id_; // trace id of cursor sql statement
   bool is_packed_;
   int64_t cursor_total_exec_time_;
+  int64_t cursor_total_elapsed_time_;
 };
 
 class ObPLGetCursorAttrInfo
