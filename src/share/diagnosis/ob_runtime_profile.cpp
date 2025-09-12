@@ -445,51 +445,6 @@ int convert_persist_profile_to_realtime(const char *persist_profile, const int64
   return ret;
 }
 
-template<typename MetricType>
-int ObOpProfile<MetricType>::merge_profile(const ObOpProfile<ObMetric> *other_profile, ObIAllocator *alloc)
-{
-  int ret = OB_NOT_IMPLEMENT;
-  return ret;
-}
-
-template<>
-int ObOpProfile<ObMergeMetric>::merge_profile(const ObOpProfile<ObMetric> *other_profile, ObIAllocator *alloc)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(other_profile)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("other profile is null");
-  } else if (get_id() != other_profile->get_id()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("profile name is not the same", K(get_id()), K(other_profile->get_id()));
-  } else {
-    ObOpProfile<ObMetric>::MetricWrap *cur_metric_wrap = other_profile->get_metric_head();
-    while (OB_SUCC(ret) && nullptr != cur_metric_wrap) {
-      ObMergeMetric *new_metric = nullptr;
-      if (OB_FAIL(get_or_register_metric(static_cast<ObMetricId>(cur_metric_wrap->elem_.get_metric_id()), new_metric))) {
-        LOG_WARN("failed to get or register metric", K(cur_metric_wrap->elem_.get_metric_id()));
-      } else {
-        new_metric->update(cur_metric_wrap->elem_.value());
-      }
-      cur_metric_wrap = cur_metric_wrap->next_;
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      ObOpProfile<ObMetric>::ProfileWrap *cur_child_wrap = other_profile->get_child_head();
-      while (OB_SUCC(ret) && nullptr != cur_child_wrap) {
-        ObOpProfile<ObMergeMetric> *new_child = nullptr;
-        if (OB_FAIL(get_or_register_child(cur_child_wrap->elem_->get_id(), new_child))) {
-          LOG_WARN("failed to get or register child", K(cur_child_wrap->elem_->get_id()));
-        } else if(OB_FAIL(new_child->merge_profile(cur_child_wrap->elem_, alloc))) {
-          LOG_WARN("failed to merge profile", K(cur_child_wrap->elem_->get_id()));
-        }
-        cur_child_wrap = cur_child_wrap->next_;
-      }
-    }
-  }
-  return ret;
-}
-
 ObProfileSwitcher::ObProfileSwitcher(ObProfileId name)
 {
   int ret = OB_SUCCESS;

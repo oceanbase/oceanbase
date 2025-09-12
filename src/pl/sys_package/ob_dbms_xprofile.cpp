@@ -68,7 +68,7 @@ int ObDbmsXprofile::display_profile(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to cast int");
   } else if (params.at(idx).is_null() && FALSE_IT(fetch_all_op = true)) {
   } else if (!fetch_all_op && OB_FAIL(params.at(idx++).get_number(num_val))) {
-    LOG_WARN("failed to get number value for op_id");
+    LOG_WARN("failed to get number value for op_id", K(idx));
   } else if (!fetch_all_op && OB_FAIL(num_val.cast_to_int64(op_id))) {
     LOG_WARN("failed to cast int");
   } else {
@@ -89,7 +89,7 @@ int ObDbmsXprofile::display_profile(ObExecContext &ctx, ParamStore &params, ObOb
       LOG_WARN("failed to set profile display type");
     } else if (OB_FAIL(set_display_level(level, profile_text.display_level_))) {
       LOG_WARN("failed to set profile display level");
-    } else if (OB_FAIL(format_profile_result(ctx, profile_items, profile_text))) {
+    } else if (OB_FAIL(format_profile_result(ctx, profile_items, trace_id, profile_text))) {
       LOG_WARN("failed to format sql profile");
     } else if (OB_FAIL(set_display_result(ctx, profile_text, result))) {
       LOG_WARN("failed to convert profile text to string");
@@ -126,7 +126,7 @@ int ObDbmsXprofile::set_display_level(int64_t level, metric::Level &display_leve
 
 int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
                                           ObIArray<ObProfileItem> &profile_items,
-                                          ProfileText &profile_text)
+                                          const ObString &trace_id, ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
   profile_text.buf_len_ = 1024 * 1024;
@@ -141,7 +141,8 @@ int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
       LOG_WARN("failed to flatten op profile");
     }
   } else if (ProfileDisplayType::AGGREGATED == profile_text.type_) {
-    if (OB_FAIL(aggregate_op_profile(profile_items, profile_text))) {
+    if (OB_FAIL(aggregate_op_profile(ctx, profile_items, profile_items.at(0).sql_id_, trace_id,
+                                     profile_text))) {
       LOG_WARN("failed to aggregate op profile");
     }
   }
@@ -179,20 +180,26 @@ int ObDbmsXprofile::flatten_op_profile(const ObIArray<ObProfileItem> &profile_it
   return ret;
 }
 
-int ObDbmsXprofile::aggregate_op_profile(const ObIArray<ObProfileItem> &profile_items,
+int ObDbmsXprofile::aggregate_op_profile(ObExecContext &ctx,
+                                         const ObIArray<ObProfileItem> &profile_items,
+                                         const ObString &sql_id,
+                                         const ObString &trace_id,
                                          ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(format_summary_info(profile_items, profile_text))) {
+  ObTMArray<ObMergedProfileItem> merged_items;
+  if (OB_FAIL(ObProfileUtil::get_merged_profiles(&ctx.get_allocator(), profile_items, merged_items))) {
+    LOG_WARN("failed to get merged profiles");
+  } else if (OB_FAIL(format_summary_info(merged_items, sql_id, trace_id, profile_text))) {
     LOG_WARN("failed to format summary info");
-  // TODO impl agg profile, now use flatten way
-  } else if (OB_FAIL(flatten_op_profile(profile_items, profile_text))) {
+  } else if (OB_FAIL(format_agg_profiles(merged_items, profile_text))) {
     LOG_WARN("failed to format agg profile");
   }
   return ret;
 }
 
-int ObDbmsXprofile::format_summary_info(const ObIArray<ObProfileItem> &profile_items,
+int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
+                                        const ObString &sql_id, const ObString &trace_id,
                                         ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
@@ -200,55 +207,78 @@ int ObDbmsXprofile::format_summary_info(const ObIArray<ObProfileItem> &profile_i
   int64_t &pos = profile_text.pos_;
   char *buf = profile_text.buf_;
 
-  int64_t current_op_id = profile_items.at(0).op_id_;
-  int64_t i = 0;
-  ObTMArray<std::pair<int64_t, int64_t>> db_times; // <db_time, idx_in_array>
-  int64_t op_max_db_time = 0;
-  int64_t total_db_time = 0;
-  while (i < profile_items.count() && OB_SUCC(ret)) {
-    const ObProfileItem &cur = profile_items.at(i);
-    if (current_op_id != cur.op_id_) {
-      if (OB_FAIL(db_times.push_back(std::make_pair(op_max_db_time, i - 1)))) {
-        LOG_WARN("failed to push back db time");
-      } else {
-        total_db_time += op_max_db_time;
-        op_max_db_time = cur.db_time_;
-        current_op_id = cur.op_id_;
-      }
+  uint64_t total_db_time = 0;
+  ObTMArray<ObMergedProfileItem> copied_items;
+  if (OB_FAIL(copied_items.reserve(merged_items.count()))) {
+    LOG_WARN("failed to reserve", K(merged_items.count()));
+  }
+
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(copied_items.push_back(merged_items.at(i)))) {
+      LOG_WARN("failed to push back");
     } else {
-      op_max_db_time = max(op_max_db_time, cur.db_time_);
+      total_db_time += merged_items.at(i).max_db_time_;
     }
-    i++;
   }
-  if (OB_FAIL(ret)) {
-    // push last op db time
-  } else if (OB_FAIL(db_times.push_back(std::make_pair(op_max_db_time, i - 1)))) {
-    LOG_WARN("failed to push back db time");
-  } else if (FALSE_IT(total_db_time += op_max_db_time)) {
-  } else if (OB_FAIL(BUF_PRINTF("Top Most Time-consuming Operators:\n"))) {
-  } else {
-    lib::ob_sort(db_times.begin(), db_times.end());
+
+  OZ(BUF_PRINTF("Trace ID: "));
+  if (OB_SUCC(ret)) {
+    pos += trace_id.to_string(buf + pos, buf_len - pos);
+  }
+  OZ(BUF_PRINTF("\nSQL ID: "));
+  if (OB_SUCC(ret)) {
+    pos += sql_id.to_string(buf + pos, buf_len - pos);
+  }
+
+  if (OB_SUCC(ret) && total_db_time > 0) {
+    lib::ob_sort(copied_items.begin(), copied_items.end(), ObMergedProfileItem::cmp_by_db_time);
+    OZ(BUF_PRINTF("\nTop Most Time-consuming Operators:\n"));
     static constexpr int64_t TOP_K = 10;
-    int64_t db_time;
-    int64_t idx;
     double rate;
-    for (int64_t k = 0; k < TOP_K && k < db_times.count() && OB_SUCC(ret); ++k) {
-      const std::pair<int64_t, int64_t> pr = db_times.at(db_times.count() - k - 1);
-      db_time = pr.first;
-      idx = pr.second;
-      if (total_db_time != 0) {
-        rate = double(db_time) / total_db_time * 100;
-      } else {
-        rate = 0;
+    for (int64_t k = 0; k < TOP_K && k < copied_items.count() && OB_SUCC(ret); ++k) {
+      const ObMergedProfileItem &cur = copied_items.at(copied_items.count() - k - 1);
+      rate = double(cur.max_db_time_) / total_db_time * 100;
+      if (rate < 1) {
+        break;
       }
-      const ObProfileItem &cur = profile_items.at(idx);
       OZ(BUF_PRINTF("  %ld. ", k + 1));
-      OZ(BUF_PRINTF("%s(id=%ld): %ldms, (%.2f%%)\n",
-                    (cur.profile_ ? cur.profile_->get_name_str() : ""), cur.op_id_,
-                    db_time / 1000UL / 1000UL, rate));
+      OZ(BUF_PRINTF("%s(id=%ld): %.3fms, (%.2f%%)\n", cur.profile_->get_name_str(), cur.op_id_,
+                    double(cur.max_db_time_) / 1000 / 1000, rate));
     }
   }
+  return ret;
+}
+
+int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
+                                        ProfileText &profile_text)
+{
+  int ret = OB_SUCCESS;
+  int64_t buf_len = profile_text.buf_len_;
+  int64_t &pos = profile_text.pos_;
+  char *buf = profile_text.buf_;
   OZ(BUF_PRINTF("\nProfile Details:\n"));
+
+  metric::Level display_level = profile_text.display_level_;
+  const char *json = nullptr;
+  ObArenaAllocator arena_alloc;
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    if (i % 32 == 0) {
+      arena_alloc.reset_remain_one_page();
+    }
+    const ObMergedProfileItem &item = merged_items.at(i);
+    int64_t format_size = item.profile_->get_format_size() + item.plan_depth_;
+    if (format_size + pos > buf_len) {
+      LOG_WARN("too many profile to print", K(merged_items.count()), K(pos), K(format_size),
+               K(buf_len));
+      break;
+    } else if (OB_FAIL(item.profile_->to_format_json(&arena_alloc, json, true, display_level))) {
+      LOG_WARN("failed to format profile", K(item.profile_->get_name_str()), K(buf_len), K(pos));
+    } else {
+      for (int64_t j = 0; j < item.plan_depth_ && OB_SUCC(ret); ++j) { OZ(BUF_PRINTF(" ")); }
+      OZ(BUF_PRINTF("%ld ", item.op_id_));
+      OZ(BUF_PRINTF("%s\n", json));
+    }
+  }
   return ret;
 }
 

@@ -125,6 +125,7 @@ TEST_F(ObRuntimeProfileTest, test_more_metrics)
 int main(int argc, char **argv)
 {
   int ret = OB_SUCCESS;
+  static_assert(std::is_pod<ObOpProfile<ObMetric>::MetricWrap>::value, "keep MetricWrap as pod");
   system("rm -f test_runtime_profile.log*");
   OB_LOGGER.set_file_name("test_runtime_profile.log", true, true);
   OB_LOGGER.set_log_level("TRACE", "TRACE");

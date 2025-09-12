@@ -23,7 +23,8 @@ namespace oceanbase
 namespace common
 {
 class ObObj;
-class ObProfileItem;
+struct ObProfileItem;
+struct ObMergedProfileItem;
 
 } // namespace common
 namespace sql
@@ -60,22 +61,21 @@ private:
   static int set_display_level(int64_t level, metric::Level &display_level);
 
   static int format_profile_result(sql::ObExecContext &ctx, ObIArray<ObProfileItem> &profile_items,
-                                   ProfileText &profile_text);
+                                   const ObString &trace_id, ProfileText &profile_text);
 
   static int flatten_op_profile(const ObIArray<ObProfileItem> &profile_items,
                                 ProfileText &profile_text);
 
-  static int aggregate_op_profile(const ObIArray<ObProfileItem> &profile_items,
+  static int aggregate_op_profile(sql::ObExecContext &ctx, const ObIArray<ObProfileItem> &profile_items,
+                                  const ObString &sql_id, const ObString &trace_id,
                                   ProfileText &profile_text);
 
-  static int format_summary_info(const ObIArray<ObProfileItem> &profile_items,
+  static int format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
+                                 const ObString &sql_id, const ObString &trace_id,
                                  ProfileText &profile_text);
 
-  static int format_agg_profiles(const ObIArray<ObProfileItem> &profile_items,
+  static int format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
                                  ProfileText &profile_text);
-
-  static int format_one_agg_profile(const ObIArray<ObProfileItem> &profile_items, int64_t start_idx,
-                                    int end_idx, ProfileText &profile_text);
 
   static int set_display_result(sql::ObExecContext &ctx, ProfileText &profile_text,
                                 common::ObObj &result);

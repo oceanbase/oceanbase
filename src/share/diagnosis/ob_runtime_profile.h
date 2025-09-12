@@ -126,6 +126,7 @@ public:
   int to_format_json(ObIAllocator *alloc, const char *&result, bool with_outside_label = true,
                      metric::Level display_level = metric::Level::STANDARD);
   ObProfileId get_id() const { return id_; }
+  bool enable_rich_format() { return enable_rich_format_; }
   inline const char *get_name_str() const
   {
     return ObProfileNameSet::get_profile_name(id_, enable_rich_format_);
@@ -136,7 +137,7 @@ public:
   ProfileWrap *get_child_head() const { return child_head_; }
 
   // get metric value if exists
-  OB_INLINE void get_metric_value(ObMetricId metric_id, bool &exist, uint64_t &value)
+  OB_INLINE void get_metric_value(ObMetricId metric_id, bool &exist, uint64_t &value) const
   {
     uint8_t arr_idx = metrics_id_map_[metric_id];
     if (arr_idx != UINT8_MAX) {
@@ -149,6 +150,21 @@ public:
     } else {
       exist = false;
     }
+  }
+
+  // get metric if exists, return null if not exists
+  const MetricType *get_metric(ObMetricId metric_id) const
+  {
+    const MetricType *metric = nullptr;
+    uint8_t arr_idx = metrics_id_map_[metric_id];
+    if (arr_idx != UINT8_MAX) {
+      if (arr_idx < LOCAL_METRIC_CNT) {
+        metric = &local_metrics_[arr_idx].elem_;
+      } else {
+        metric = &non_local_metrics_.at(arr_idx - LOCAL_METRIC_CNT)->elem_;
+      }
+    }
+    return metric;
   }
 
   // get metric if exists, register metric if not exists
@@ -176,9 +192,6 @@ public:
   int convert_current_profile_to_persist(char *buf, int64_t &buf_pos, const int64_t buf_len,
                                          const int64_t max_head_count, ObProfileHead *profile_head,
                                          int32_t &id, int32_t parent_idx);
-
-  int merge_profile(const ObOpProfile<ObMetric> *other_profile, ObIAllocator *alloc);
-
 private:
   int to_format_json_(char *buf, const int64_t buf_len, int64_t &pos, metric::Level display_level);
   int64_t get_persist_profile_size(int64_t metric_count, int64_t child_cnt);

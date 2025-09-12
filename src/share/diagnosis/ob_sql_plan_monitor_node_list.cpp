@@ -172,10 +172,11 @@ int ObPlanMonitorNodeList::revert_monitor_node(ObMonitorNode &node)
 }
 
 int ObPlanMonitorNodeList::convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array,
-                                                    common::ObIAllocator *alloc)
+                                                    common::ObIAllocator *alloc,
+                                                    bool fetch_profile)
 {
   int ret = OB_SUCCESS;
-  ObPlanMonitorNodeList::ObMonitorNodeTraverseCall call(array, alloc);
+  ObPlanMonitorNodeList::ObMonitorNodeTraverseCall call(array, alloc, fetch_profile);
   if (OB_FAIL(node_map_.foreach_refactored(call))) {
     LOG_WARN("fail to traverse node map", K(ret));
   }
@@ -220,7 +221,7 @@ int ObPlanMonitorNodeList::ObMonitorNodeTraverseCall::recursive_add_node_to_arra
     } else {
       ObMonitorNode &last_node = node_array_.at(node_array_.count() - 1);
       last_node.covert_to_static_node();
-      if (OB_NOT_NULL(last_node.profile_)
+      if (fetch_profile_ && OB_NOT_NULL(last_node.profile_)
           && OB_FAIL(last_node.profile_->to_persist_profile(last_node.raw_profile_,
                                                             last_node.raw_profile_len_, alloc_))) {
         LOG_WARN("failed to persist profile");
