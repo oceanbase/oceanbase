@@ -2453,7 +2453,8 @@ int ObDelUpdLogPlan::check_update_primary_key(ObSchemaGetterGuard &schema_guard,
     if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(*index_schema, vid_type))) {
       LOG_WARN("failed to determine vid type", K(ret), K(vid_type));
     } else if (vid_type == ObDocIDType::HIDDEN_INC_PK) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->assignments_.count() && !index_dml_info->is_update_primary_key_; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->assignments_.count()
+                          && !index_dml_info->is_vec_hnsw_index_vid_opt_; ++i) {
         ObColumnRefRawExpr *col_expr = index_dml_info->assignments_.at(i).column_expr_;
         ObIndexType index_type = INDEX_TYPE_MAX;
         bool is_col_has_vec_idx = false;
