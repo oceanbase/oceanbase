@@ -1765,6 +1765,11 @@ int ObService::prepare_server_for_adding_server(
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (arg.is_cluster_version_valid() && GET_MIN_CLUSTER_VERSION() != arg.get_cluster_version()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "adding server with other cluster version is");
+    LOG_WARN("adding server with other cluster version is not supported",
+          KR(ret), K(arg), KDV(GET_MIN_CLUSTER_VERSION()), KDV(arg.get_cluster_version()));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant data version", KR(ret));
   } else if (arg.get_sys_tenant_data_version() > 0

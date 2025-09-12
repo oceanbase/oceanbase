@@ -8204,6 +8204,7 @@ OB_SERIALIZE_MEMBER(ObPrepareServerForAddingServerArg, mode_, sys_tenant_data_ve
 #ifdef OB_BUILD_TDE_SECURITY
     , root_key_type_, root_key_
 #endif
+    , cluster_version_
 );
 int ObPrepareServerForAddingServerArg::init(
     const Mode &mode,
@@ -8214,12 +8215,16 @@ int ObPrepareServerForAddingServerArg::init(
     , const RootKeyType &root_key_type,
     const ObString &root_key
 #endif
+    , const uint64_t cluster_version
     )
 {
   int ret = OB_SUCCESS;
-  if (0 == sys_tenant_data_version || !is_valid_server_id(server_id)) {
+  if (0 == sys_tenant_data_version
+   || !is_valid_server_id(server_id)
+   || INVALID_CLUSTER_VERSION == cluster_version) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(mode), K(sys_tenant_data_version), K(server_id));
+    LOG_WARN("invalid arg", KR(ret), K(mode), K(sys_tenant_data_version),
+      K(server_id), K(cluster_version));
   } else {
     mode_ = mode;
     sys_tenant_data_version_ = sys_tenant_data_version;
@@ -8228,6 +8233,7 @@ int ObPrepareServerForAddingServerArg::init(
     root_key_type_ = root_key_type;
     root_key_ = root_key;
 #endif
+    cluster_version_ = cluster_version;
     if (OB_FAIL(zone_storage_infos_.assign(zone_storage_infos))) {
       LOG_WARN("failed to assign zone_storage_infos_.assign", KR(ret), K(zone_storage_infos),
                K(zone_storage_infos_));
@@ -8245,6 +8251,7 @@ int ObPrepareServerForAddingServerArg::assign(const ObPrepareServerForAddingServ
     root_key_type_ = other.root_key_type_;
     root_key_= other.root_key_;
 #endif
+    cluster_version_ = other.cluster_version_;
     if (OB_FAIL(zone_storage_infos_.assign(other.zone_storage_infos_))) {
       LOG_WARN("failed to assign zone_storage_infos_.assign", KR(ret), K(other.zone_storage_infos_),
           K(zone_storage_infos_));
@@ -8265,6 +8272,7 @@ void ObPrepareServerForAddingServerArg::reset()
   root_key_type_ = INVALID;
   root_key_.reset();
 #endif
+  cluster_version_ = INVALID_CLUSTER_VERSION;
 }
 OB_SERIALIZE_MEMBER(
     ObPrepareServerForAddingServerResult,

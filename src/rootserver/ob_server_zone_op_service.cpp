@@ -288,6 +288,7 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
 #ifdef OB_BUILD_TDE_SECURITY
           , root_key_type, root_key_str
 #endif
+          , GET_MIN_CLUSTER_VERSION()
           ))) {
     LOG_WARN("fail to init rpc arg", KR(ret), K(sys_tenant_data_version), K(server_id),
         K(zone_storage_infos)

@@ -10099,6 +10099,7 @@ struct ObPrepareServerForAddingServerArg
 {
   OB_UNIS_VERSION(1);
 public:
+  const static uint64_t INVALID_CLUSTER_VERSION = 0;
   enum Mode { // FARM COMPAT WHITELIST
     ADD_SERVER,
     BOOTSTRAP
@@ -10109,18 +10110,20 @@ public:
 #ifdef OB_BUILD_TDE_SECURITY
  , root_key_type_(INVALID), root_key_()
 #endif
+ , cluster_version_(INVALID_CLUSTER_VERSION)
   {}
   TO_STRING_KV(K_(mode), K_(sys_tenant_data_version), K_(server_id), K_(zone_storage_infos)
 #ifdef OB_BUILD_TDE_SECURITY
       , K_(root_key_type), K_(root_key)
 #endif
+      , K_(cluster_version)
       );
   int init(const Mode &mode, const uint64_t sys_tenant_data_version, const uint64_t server_id,
       const ObIArray<share::ObZoneStorageTableInfo> &zone_storage_infos
 #ifdef OB_BUILD_TDE_SECURITY
       , const RootKeyType &root_key_type, const ObString &root_key
 #endif
-  );
+      , const uint64_t cluster_version);
   int assign(const ObPrepareServerForAddingServerArg &other);
   bool is_valid() const;
   void reset();
@@ -10131,6 +10134,14 @@ public:
   uint64_t get_sys_tenant_data_version() const
   {
     return sys_tenant_data_version_;
+  }
+  uint64_t get_cluster_version() const
+  {
+    return cluster_version_;
+  }
+  bool is_cluster_version_valid() const
+  {
+    return cluster_version_ != INVALID_CLUSTER_VERSION;
   }
   uint64_t get_server_id() const
   {
@@ -10160,6 +10171,7 @@ private:
   RootKeyType root_key_type_;
   ObString root_key_;
 #endif
+  uint64_t cluster_version_;
 };
 struct ObPrepareServerForAddingServerResult
 {
