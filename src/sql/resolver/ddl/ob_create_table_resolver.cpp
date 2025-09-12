@@ -3763,6 +3763,8 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
                                     part_info.part_func_exprs_,
                                     part_info.part_keys_))) {
         SQL_RESV_LOG(WARN, "resolve part func failed", KR(ret));
+      } else if (OB_FAIL(formalize_part_str(part_info.part_func_exprs_, func_expr_name))) {
+        LOG_WARN("failed to formalize part str");
       } else if (OB_FAIL(partition_option->set_part_expr(func_expr_name))) {
         SQL_RESV_LOG(WARN, "set partition express string failed", KR(ret));
       } else if (OB_FAIL(set_partition_keys(table_schema, part_info.part_keys_,

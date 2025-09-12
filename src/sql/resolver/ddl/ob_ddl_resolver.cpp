@@ -10955,52 +10955,51 @@ int ObDDLResolver::resolve_hash_or_key_partition_basic_infos(ParseNode *node,
 
   if (OB_SUCC(ret)) {
     ObSEArray<ObString, 4> partition_keys;
+    ObSEArray<ObRawExpr *, 4> part_func_exprs;
     if (NULL == partition_fun_node->children_[1]) { //partition by key()
       part_func_type = share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT;
       if (OB_FAIL(build_partition_key_info(table_schema, partition_keys, part_func_type))) {
         LOG_WARN("failed to build partition key info", K(ret), K(table_schema));
       }
     } else {
-      ObSEArray<ObRawExpr *, 4> dummy_part_func_exprs;
       if (OB_FAIL(resolve_part_func(params_, partition_fun_node, part_func_type,
-                                    table_schema, dummy_part_func_exprs, partition_keys))) {
+                                    table_schema, part_func_exprs, partition_keys))) {
         LOG_WARN("failed to resolve part func", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-       if (OB_FAIL(set_partition_keys(table_schema, partition_keys, is_subpartition))) {
+      func_expr_name.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
+      if (OB_FAIL(set_partition_keys(table_schema, partition_keys, is_subpartition))) {
         LOG_WARN("failed to set partition keys", K(ret), K(table_schema), K(is_subpartition));
+      } else if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                      *allocator_, session_info_->get_dtc_params(), func_expr_name))) {
+        LOG_WARN("fail to copy and convert string charset", K(ret));
+      } else if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT != part_func_type &&
+                OB_FAIL(formalize_part_str(part_func_exprs, func_expr_name))) {
+        LOG_WARN("failed to formalize part str");
+      } else if (!lib::is_oracle_mode()) {
+        //TODO(yaoying.yyy:maybe not valid here, if expr include table name or databae name)
+        ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, func_expr_name);
       }
-    }
-  }
 
-  if (OB_SUCC(ret)) {
-    func_expr_name.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
-    if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                  *allocator_, session_info_->get_dtc_params(), func_expr_name))) {
-      LOG_WARN("fail to copy and convert string charset", K(ret));
-    } else if (!lib::is_oracle_mode()) {
-      //TODO(yaoying.yyy:maybe not valid here, if expr include table name or databae name)
-      ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, func_expr_name);
-    }
-
-    //TODO now, just for compat inner_table process.
-    if (OB_FAIL(ret)) {
-    } else if (is_inner_table(table_id_)) {
-      // 这里为什么先获取part str再改变part func type?
-      ObSqlString part_expr;
-      bool is_oracle_mode = lib::is_oracle_mode();
-      const uint64_t tenant_id = session_info_->get_effective_tenant_id();
-      if (static_cast<int64_t>(table_id_) > 0
-          && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
-                     tenant_id, table_id_, is_oracle_mode))) {
-        LOG_WARN("fail to check oralce mode", KR(ret), K(tenant_id), K_(table_id));
-      } else if (OB_FAIL(get_part_str_with_type(is_oracle_mode, part_func_type, func_expr_name, part_expr))) {
-        SQL_RESV_LOG(WARN, "Failed to get part str with type", K(ret));
-      } else if (OB_FAIL(ob_write_string(*allocator_, part_expr.string(), func_expr_name))) {
-        LOG_WARN("failed to copy string", K(part_expr.string()));
-      } else if (PARTITION_FUNC_TYPE_KEY == part_func_type) {
-        part_func_type = PARTITION_FUNC_TYPE_KEY;
+      //TODO now, just for compat inner_table process.
+      if (OB_FAIL(ret)) {
+      } else if (is_inner_table(table_id_)) {
+        // 这里为什么先获取part str再改变part func type?
+        ObSqlString part_expr;
+        bool is_oracle_mode = lib::is_oracle_mode();
+        const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+        if (static_cast<int64_t>(table_id_) > 0
+            && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
+                      tenant_id, table_id_, is_oracle_mode))) {
+          LOG_WARN("fail to check oralce mode", KR(ret), K(tenant_id), K_(table_id));
+        } else if (OB_FAIL(get_part_str_with_type(is_oracle_mode, part_func_type, func_expr_name, part_expr))) {
+          SQL_RESV_LOG(WARN, "Failed to get part str with type", K(ret));
+        } else if (OB_FAIL(ob_write_string(*allocator_, part_expr.string(), func_expr_name))) {
+          LOG_WARN("failed to copy string", K(part_expr.string()));
+        } else if (PARTITION_FUNC_TYPE_KEY == part_func_type) {
+          part_func_type = PARTITION_FUNC_TYPE_KEY;
+        }
       }
     }
   }
@@ -11040,6 +11039,8 @@ int ObDDLResolver::resolve_range_partition_basic_infos(ParseNode *node,
       LOG_WARN("resolve part func failed", K(ret));
     } else if (OB_FAIL(set_partition_keys(table_schema, partition_keys, is_subpartition))) {
       LOG_WARN("Failed to set partition keys", K(ret), K(table_schema), K(is_subpartition));
+    } else if (OB_FAIL(formalize_part_str(part_func_exprs, func_expr_name))) {
+      LOG_WARN("failed to formalize part str");
     }
   }
   return ret;
@@ -11078,6 +11079,8 @@ int ObDDLResolver::resolve_list_partition_basic_infos(ParseNode *node,
       LOG_WARN("resolve part func failed", K(ret));
     } else if (OB_FAIL(set_partition_keys(table_schema, partition_keys, is_subpartition))) {
       LOG_WARN("Failed to set partition keys", K(ret), K(table_schema), K(is_subpartition));
+    } else if (OB_FAIL(formalize_part_str(part_func_exprs, func_expr_name))) {
+      LOG_WARN("failed to formalize part str");
     }
   }
   return ret;
@@ -14393,6 +14396,59 @@ int ObDDLResolver::get_partition_keys_by_part_func_expr(
         LOG_WARN("expect delimiter", K(ret), K(part_func_expr_str), K(pos), K(wc_value));
       } else {
         pos += wc.length();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::formalize_part_str(ObIArray<ObRawExpr*> &part_exprs, ObString &part_str)
+{
+  int ret = OB_SUCCESS;
+  char* part_str_buf = nullptr;
+  int64_t pos = 0;
+  int64_t buf_size = OB_MAX_SQL_LENGTH;
+  ObIArray<ObRawExpr*> *part_exprs_ptr = &part_exprs;
+  ObSEArray<ObRawExpr*, 4> hash_part_exprs;
+  if (OB_ISNULL(allocator_) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(allocator_), KP(schema_checker_), KP(session_info_));
+  } else if (OB_ISNULL(part_str_buf = static_cast<char*>(allocator_->alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for part expr", K(buf_size));
+  } else if (1 == part_exprs.count() && OB_NOT_NULL(part_exprs.at(0)) &&
+             (T_FUN_SYS_PART_HASH == part_exprs.at(0)->get_expr_type() ||
+              T_FUN_SYS_PART_KEY == part_exprs.at(0)->get_expr_type())) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_exprs.at(0)->get_param_count(); ++i) {
+      if (OB_FAIL(hash_part_exprs.push_back(part_exprs.at(0)->get_param_expr(i)))) {
+        LOG_WARN("failed to push back hash part param");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      part_exprs_ptr = &hash_part_exprs;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    HEAP_VAR(char[OB_MAX_SQL_LENGTH], expr_str_buf) {
+      int64_t expr_pos = 0;
+      ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_SQL_LENGTH, &expr_pos,
+                                    schema_checker_->get_schema_guard(), TZ_INFO(session_info_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_exprs_ptr->count(); ++i) {
+        MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
+        expr_pos = 0;
+        if (OB_FAIL(expr_printer.do_print(part_exprs_ptr->at(i), T_NONE_SCOPE, true))) {
+          LOG_WARN("print expr definition failed", K(ret));
+        } else if (OB_FAIL(databuff_printf(part_str_buf,
+                                           OB_MAX_SQL_LENGTH,
+                                           pos,
+                                           0 == i ? "%.*s" : ", %.*s",
+                                           static_cast<int>(expr_pos),
+                                           expr_str_buf))) {
+          LOG_WARN("fail to print expr_str_buf", K(i), K(expr_str_buf));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        part_str.assign_ptr(part_str_buf, pos);
       }
     }
   }
