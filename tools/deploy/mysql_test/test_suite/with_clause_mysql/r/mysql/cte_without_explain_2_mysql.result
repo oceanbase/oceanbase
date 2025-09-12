@@ -845,11 +845,11 @@ with RECURSIVE
 |    3 |    3 |
 |    4 |    4 |
 |    5 |    5 |
-|    7 | NULL |
 |   10 | NULL |
-|    8 | NULL |
 |    6 | NULL |
 |    9 | NULL |
+|    8 | NULL |
+|    7 | NULL |
 +------+------+
 
 with RECURSIVE
