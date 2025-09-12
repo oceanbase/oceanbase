@@ -216,6 +216,21 @@ bool ObAshRefreshTask::require_snapshot_ahead()
     bret = true;
     LOG_INFO("force enable snapshot ahead");
   }
+  ObActiveSessHistList &ash_list = ObActiveSessHistList::get_instance();
+  const int64_t read_pos = ash_list.read_pos();
+  const int64_t size = ash_list.size();
+  if (write_pos >= read_pos &&
+      write_pos <= read_pos + size) {
+    FLOG_WARN_RET(OB_SUCCESS, "check need snapshot ahead, write pos in range", K(bret),
+                 K(prev_write_pos_), K(write_pos),
+                 K(read_pos),
+                 K(size));
+  } else {
+    FLOG_ERROR_RET(OB_ERR_UNEXPECTED, "check need snapshot ahead, write pos out of range", K(bret),
+                 K(prev_write_pos_), K(write_pos),
+                 K(read_pos),
+                 K(size));
+  }
   return bret;
 }
 
