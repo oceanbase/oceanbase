@@ -1187,8 +1187,13 @@ int ObDbmsStatsUtils::get_current_opt_stats(ObIAllocator &allocator,
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected error", K(ret), K(idx), K(column_stats.count()));
             } else if (table_stats.at(i) != NULL && column_stats.at(idx) != NULL && column_stats.at(idx)->get_num_distinct() > 0) {
-              column_stats.at(idx)->set_num_not_null(table_stats.at(i)->get_row_count() - column_stats.at(idx)->get_num_null());
-              column_stats.at(idx)->set_total_col_len(column_stats.at(idx)->get_num_not_null() * column_stats.at(idx)->get_avg_len());
+              int64_t num_not_null = table_stats.at(i)->get_row_count() - column_stats.at(idx)->get_num_null();
+              if (num_not_null < 0) {
+                num_not_null = 0;
+                column_stats.at(idx)->set_num_null(table_stats.at(i)->get_row_count());
+              }
+              column_stats.at(idx)->set_num_not_null(num_not_null);
+              column_stats.at(idx)->set_total_col_len(num_not_null * column_stats.at(idx)->get_avg_len());
             }
           }
         }

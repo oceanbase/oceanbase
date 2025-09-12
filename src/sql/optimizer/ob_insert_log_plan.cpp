@@ -442,11 +442,19 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
     // shouldn't gather stats if the stmt is insert update.
     // if the online_opt_stat_gather is enable, should gather opt_stats even there is no hint.
     // if the online_opt_stat_gather is disable, only gather opt_stats when there is hint.
-    need_osg = need_gathering
-               && !get_optimizer_context().get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint()
-               && online_sys_var
-               && ((get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator())
-                   || use_pdml());
+    if (!need_gathering ||
+        get_optimizer_context().get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint()) {
+      need_osg = false;
+    } else if (get_optimizer_context().get_query_ctx()->get_global_hint().has_gather_opt_stat_hint()) {
+      need_osg = true;
+    } else if (!online_sys_var) {
+      need_osg = false;
+    } else if (use_pdml() ||
+               get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator()) {
+      need_osg = true;
+    } else {
+      need_osg = false;
+    }
     LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg), K(need_gathering));
   }
   return ret;
