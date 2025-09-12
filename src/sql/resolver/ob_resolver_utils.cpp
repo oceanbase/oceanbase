@@ -886,6 +886,11 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
     // without params scenario.
     OX (match_info =
             (ObRoutineMatchInfo::MatchInfo(false, ObUnknownType, dst_pl_type.get_obj_type())));
+  } else if (resolve_ctx.params_.is_prepare_with_params_
+             && resolve_ctx.is_prepare_protocol_
+             && ObNullType == expr->get_result_type().get_type()) {
+    OX (match_info =
+            (ObRoutineMatchInfo::MatchInfo(false, ObNullType, dst_pl_type.get_obj_type())));
   } else if (T_NULL == expr->get_expr_type() || ObNullTC == ob_obj_type_class(src_type)) {
     // NULL可以匹配任何类型
     OX (match_info =
@@ -1490,6 +1495,19 @@ int ObResolverUtils::pick_routine(ObIArray<ObRoutineMatchInfo> &match_infos,
     LOG_WARN("PLS-00307: too many declarations of 'string' match this call",
               K(ret), K(match_infos));
   }
+
+  if (OB_ERR_FUNC_DUP == ret && OB_ISNULL(routine_info)) {
+    for (int64_t i = 0; i < match_infos.count(); ++i) {
+      if (match_infos.at(i).has_null_actual_params()) {
+        routine_info = match_infos.at(0).routine_info_;
+        ret = OB_SUCCESS;
+        break;
+      }
+    }
+    LOG_DEBUG("prepare with params fails back to old behavior for null params at abnormal case",
+              K(ret), KPC(routine_info));
+  }
+
   return ret;
 }
 

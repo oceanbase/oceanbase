@@ -94,6 +94,15 @@ public:
     return match_info_.at(i).dest_type_;
   }
 
+  bool has_null_actual_params()
+  {
+    bool has_null_actual_params = false;
+    for (int64_t i = 0; i < match_info_.count(); ++i) {
+      has_null_actual_params = has_null_actual_params || ObNullType == match_info_.at(i).src_type_;
+    }
+    return has_null_actual_params;
+  }
+
 public:
   const share::schema::ObIRoutineInfo *routine_info_;
   common::ObSEArray<MatchInfo, 16> match_info_;
