@@ -5317,6 +5317,47 @@ ObResolverUtils::deduce_external_file_format_from_pseudo_column_name(const commo
   return type;
 }
 
+
+int refine_external_column_expr_name(ObRawExprFactory &expr_factory,
+                                     ObPseudoColumnRawExpr &file_column_expr,
+                                     ColumnIndexType column_index_type)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString temp_str;
+  ObString refined_column_name;
+  OZ (temp_str.append("externalrow$col"));
+
+  if (OB_SUCC(ret)) {
+    switch (column_index_type) {
+      case ColumnIndexType::NAME: {
+        ret = temp_str.append_fmt("_by_name('%.*s')",
+                                  file_column_expr.get_data_access_path().length(),
+                                  file_column_expr.get_data_access_path().ptr());
+        break;
+      }
+      case ColumnIndexType::ID: {
+        ret = temp_str.append_fmt("_by_id(%lu)", file_column_expr.get_column_idx());
+        break;
+      }
+      case ColumnIndexType::POSITION: {
+        ret = temp_str.append_fmt("_by_position(%lu)", file_column_expr.get_column_idx());
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column index type", K(ret), K(column_index_type));
+        break;
+      }
+    }
+  }
+
+  OZ (ob_write_string(expr_factory.get_allocator(), temp_str.string(), refined_column_name));
+  if (OB_SUCC(ret)) {
+    file_column_expr.set_expr_name(refined_column_name);
+  }
+  return ret;
+}
+
 int ObResolverUtils::build_file_column_expr_for_parquet(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -5396,8 +5437,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             // string data stored in parquet file as UTF8 format
             file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
-          if (ob_is_enum_or_set_type(column_expr->get_data_type())
-              || ob_is_text_tc(column_expr->get_data_type())) {
+          if (ob_is_enum_or_set_type(column_expr->get_data_type())) {
             if (is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
               file_column_expr->set_data_type(ObRawType);
             } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
@@ -5449,6 +5489,11 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected column index type", K(ret), K(column_index_type));
           break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(refine_external_column_expr_name(expr_factory, *file_column_expr, column_index_type))) {
+          LOG_WARN("fail to refine external column expr name");
         }
       }
     }

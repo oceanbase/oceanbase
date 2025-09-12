@@ -297,6 +297,7 @@ private:
     static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
                                           const orc::Type &type);
     int load_string_col(ObEvalCtx &eval_ctx);
+    int load_lob_col(ObEvalCtx &eval_ctx);
     int load_year_vec(ObEvalCtx &eval_ctx);
     int load_int32_vec(ObEvalCtx &eval_ctx);
     int load_int64_vec(ObEvalCtx &eval_ctx);

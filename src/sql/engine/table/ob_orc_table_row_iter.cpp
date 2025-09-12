@@ -1954,7 +1954,10 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     }
   } else if (ob_is_year_tc(datum_type.type_) && orc::TypeKind::INT == type_kind) {
     func = &DataLoader::load_year_vec;
-  } else if (ob_is_string_tc(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)) {
+  } else if (ob_is_large_text(datum_type.type_) && orc::TypeKind::STRING == type_kind) {
+    func = &DataLoader::load_lob_col;
+  } else if (ob_is_string_tc(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)
+             || ob_is_large_text(datum_type.type_)) {
     //convert orc enum/string to enum/string vector
     switch (type_kind) {
       case orc::TypeKind::STRING:
@@ -2461,6 +2464,71 @@ int ObOrcTableRowIterator::DataLoader::load_string_col(ObEvalCtx &eval_ctx)
             LOG_WARN("data too long", K(ret), K(length), K(file_col_expr_->max_length_));
           } else {
             text_vec->set_length(i, length);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::load_lob_col(ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
+  CK (OB_NOT_NULL(file_col_expr_));
+  if (OB_SUCC(ret)) {
+    StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx));
+    CK (OB_NOT_NULL(text_vec));
+    CK (VEC_DISCRETE == text_vec->get_format());
+    if (OB_SUCC(ret)) {
+      const bool is_oracle_mode = lib::is_oracle_mode();
+      const bool is_byte_length = is_oracle_byte_length(
+        is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
+      const orc::StringVectorBatch *string_batch =
+        dynamic_cast<const orc::StringVectorBatch *>(batch_);
+      CK (OB_NOT_NULL(string_batch));
+      CK (OB_NOT_NULL(string_batch->data.data()));
+      CK (OB_NOT_NULL(string_batch->length.data()));
+      if (OB_FAIL(ret)) {
+      } else if (string_batch->hasNulls) {
+        CK (OB_NOT_NULL(string_batch->notNull.data()));
+        for (int64_t i = 0; OB_SUCC(ret) && i < string_batch->numElements; i++) {
+          const char not_null = string_batch->notNull.data()[i];
+          if (not_null == 1) {
+            const int64_t length = string_batch->length[i];
+            const char *data = string_batch->data[i];
+            if (length == 0 && is_oracle_mode) {
+              text_vec->set_null(i);
+            } else {
+              if (OB_UNLIKELY(length > file_col_expr_->max_length_ &&
+                  (is_byte_length ||
+                     ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, length) > file_col_expr_->max_length_))) {
+                ret = OB_ERR_DATA_TOO_LONG;
+                LOG_WARN("data too long", K(ret), K(length), K(file_col_expr_->max_length_));
+              } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(*file_col_expr_, eval_ctx,
+                                                                              ObString(length, data), i))) {
+                LOG_WARN("fail to lob result", K(ret));
+              }
+            }
+          } else {
+            text_vec->set_null(i);
+          }
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < string_batch->numElements; i++) {
+          const int64_t length = string_batch->length[i];
+          const char *data = string_batch->data[i];
+          if (length == 0 && is_oracle_mode) {
+            text_vec->set_null(i);
+          } else if (OB_UNLIKELY(length > file_col_expr_->max_length_ &&
+               (is_byte_length ||
+                 ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, length) > file_col_expr_->max_length_))) {
+            ret = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("data too long", K(ret), K(length), K(file_col_expr_->max_length_));
+          } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(*file_col_expr_, eval_ctx,
+                                                                          ObString(length, data), i))) {
+            LOG_WARN("fail to lob result", K(ret));
           }
         }
       }

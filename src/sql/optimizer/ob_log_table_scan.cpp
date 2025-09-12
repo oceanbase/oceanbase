@@ -2091,8 +2091,8 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
       } else {
-        ObIArray<ObRawExpr*> &column_values = get_ext_column_dependent_exprs();
-        EXPLAIN_PRINT_EXPRS(column_values, type);
+        ObIArray<ObRawExpr*> &dependent_exprs = get_ext_column_dependent_exprs();
+        EXPLAIN_PRINT_EXPRS(dependent_exprs, type);
       }
     }
     END_BUF_PRINT(plan_item.access_predicates_,
