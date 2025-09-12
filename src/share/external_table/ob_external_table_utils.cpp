@@ -279,8 +279,12 @@ int ObExternalTableUtils::convert_lake_table_new_range(const sql::ObILakeTableFi
       file_format = ObExternalFileFormat::FormatType::PARQUET_FORMAT;
     } else if (iceberg_file->file_format_ == iceberg::DataFileFormat::ORC) {
       file_format = ObExternalFileFormat::FormatType::ORC_FORMAT;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported file format", K(ret), K(iceberg_file->file_format_));
     }
-    if (OB_FAIL(make_external_table_scan_range(iceberg_file->file_url_,
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(make_external_table_scan_range(iceberg_file->file_url_,
                                                ObString::make_empty_string(),
                                                iceberg_file->file_size_,
                                                iceberg_file->modification_time_,
