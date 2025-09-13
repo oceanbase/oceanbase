@@ -8409,9 +8409,11 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
 {
   int ret = OB_SUCCESS;
   is_pushed = false;
-  if (OB_ISNULL(top) || OB_ISNULL(limit_expr) || OB_ISNULL(pushed_expr) || OB_ISNULL(get_stmt())) {
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  if (OB_ISNULL(top) || OB_ISNULL(limit_expr) || OB_ISNULL(pushed_expr) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(ret));
+    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(schema_guard), K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN == top->get_type()) {
     ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(top);
     ObRawExpr *new_limit_expr = NULL;
@@ -8430,11 +8432,14 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr())) &&
          table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL) {
+      // we need to determine whether a table is partitioned based on its schema rather than relying
+      // on the current partition pruning result, which is essential to address issues caused by query plan reuse.
       bool das_multi_partition = false;
-      if (table_scan->use_das() && NULL != table_scan->get_table_partition_info()) {
-        int64_t partition_count = table_scan->get_table_partition_info()->
-                                  get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
-        if (1 != partition_count) {
+      if (table_scan->use_das()) {
+        const ObTableSchema *index_schema = nullptr;
+        if (OB_FAIL(schema_guard->get_table_schema(table_scan->get_index_table_id(), index_schema))) {
+          LOG_WARN("failed to get index schema", K(ret));
+        } else if (index_schema->is_partitioned_table()) {
           das_multi_partition = true;
         }
       }
