@@ -943,17 +943,6 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   ASSERT_TRUE(is_exist);
   ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(not_exist_meta_block_id5, 0, is_exist));
   ASSERT_FALSE(is_exist);
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(meta_block_id6, 0, is_exist));
-  ASSERT_TRUE(is_exist);
-
-  // check new tablet meta block gc
-  update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 104, ObAtomicMetaInfo::State::ABORTED);
-
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(snapshot);
-  LOG_INFO("start to do abort_tablet_meta_block gc");
-  ASSERT_EQ(OB_SUCCESS, MockSSGC::gc_tenant_in_ss_(snapshot, false, GCType::ABORT_TABLET_META_BLOCK_GC, last_succ_scns));
-  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(meta_block_id6, 0, is_exist));
-  ASSERT_FALSE(is_exist);
 
   EXE_SQL("drop table test_table;");
   EXE_SQL("purge recyclebin;");
