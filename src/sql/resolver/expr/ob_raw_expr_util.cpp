@@ -10087,6 +10087,31 @@ int ObRawExprUtils::extract_local_vars_for_gencol(ObRawExpr *expr,
   return ret;
 }
 
+int ObRawExprUtils::extract_local_vars_for_prefix_gen_col(ObColumnSchemaV2 &origin_col,
+                                                          const ObSQLSessionInfo &session,
+                                                          ObColumnSchemaV2 &gen_col)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> dep_columns;
+  ObSEArray<const ObSessionSysVar *, 4> var_array;
+  if (FALSE_IT(gen_col.get_local_session_var().reset())) {
+  } else if (OB_FAIL(gen_col.get_local_session_var().reserve_max_local_vars_capacity())) {
+    LOG_WARN("failed to reserve capacity", K(ret));
+  } else if (OB_FAIL(ObExprOperator::add_local_var_to_expr(share::SYS_VAR_COLLATION_CONNECTION, 
+                                                           &session, 
+                                                           gen_col.get_local_session_var()))) {
+    LOG_WARN("failed to add collation_connection", K(ret));
+  } else if (is_mysql_mode() && (ObCharType == origin_col.get_data_type() || 
+                                 ObNCharType == origin_col.get_data_type())) {
+    if (OB_FAIL(ObExprOperator::add_local_var_to_expr(share::SYS_VAR_SQL_MODE, 
+                                                      &session, 
+                                                      gen_col.get_local_session_var()))) {
+      LOG_WARN("failed to add collation_connection", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::ora_cmp_integer(const ObConstRawExpr &const_expr, const int64_t v, int &cmp_ret)
 {
   int ret = OB_SUCCESS;

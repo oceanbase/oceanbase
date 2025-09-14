@@ -1327,6 +1327,9 @@ public:
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
                                            const ObSQLSessionInfo *session,
                                            ObColumnSchemaV2 &gen_col);
+  static int extract_local_vars_for_prefix_gen_col(ObColumnSchemaV2 &origin_col,
+                                                  const ObSQLSessionInfo &session,
+                                                  ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
   /*
     in mysql mode: ret left_expr <=> right_expr
