@@ -577,6 +577,8 @@ int ObRebuildIndexTask::refresh_related_mviews(const ObDDLTaskStatus new_status)
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("task status not match", KR(ret), K(task_status_));
   } else if (OB_FAIL(check_refresh_related_mviews_end(is_refresh_mviews_end))) {
+    refresh_related_mviews_ret_code_ = INT64_MAX;
+    update_refresh_related_mviews_job_time_ = 0;
     LOG_WARN("failed to check purge mlog end", KR(ret));
   } else if (!is_refresh_mviews_end && update_refresh_related_mviews_job_time_ == 0) {
     ObRefreshRelatedMviewsTask task(tenant_id_, object_id_, old_mlog_tid, new_mlog_tid, schema_version_, trace_id_, task_id_);
@@ -1037,6 +1039,7 @@ int ObRebuildIndexTask::check_refresh_related_mviews_end(bool &is_end)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_REFRESH_RELATED_MVIEWS_TASK_ERROR);
 int ObRefreshRelatedMviewsTask::process() {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1050,6 +1053,9 @@ int ObRefreshRelatedMviewsTask::process() {
   } else if (OB_UNLIKELY(tenant_id_ == OB_INVALID_ID || base_table_id_ == OB_INVALID_ID || old_mlog_tid_ == OB_INVALID_ID || new_mlog_tid_ == OB_INVALID_ID)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(base_table_id_), K(old_mlog_tid_), K(new_mlog_tid_));
+  } else if (OB_UNLIKELY(ERRSIM_REFRESH_RELATED_MVIEWS_TASK_ERROR)) {
+    ret = ERRSIM_REFRESH_RELATED_MVIEWS_TASK_ERROR;
+    LOG_WARN("errsim in refresh related mviews task", KR(ret));
   } else {
     ObDDLService &ddl_service = root_service->get_ddl_service();
     ObMultiVersionSchemaService &schema_service = ddl_service.get_schema_service();

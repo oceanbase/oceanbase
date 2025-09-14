@@ -145,17 +145,16 @@ void ObMViewTrimMLogTask::runTimerTask()
   } else {
     THIS_WORKER.set_compatibility_mode(is_oracle_mode ? Worker::CompatMode::ORACLE
                                                       : Worker::CompatMode::MYSQL);
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObMViewUtils::create_inner_session(tenant_id_, schema_guard, free_session_ctx, session))) {
-    LOG_WARN("failed to create inner session", KR(ret));
-  } else {
-    const int64_t mlog_count = mlog_ids.count();
-    for (int64_t i = 0; i < mlog_count; ++i) {
-      const uint64_t mlog_id = mlog_ids.at(i);
-      int64_t tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(trim_mlog_impl(mlog_id, schema_guard, sql_proxy, session))) {
-        LOG_WARN("failed to trim mlog", KR(tmp_ret), K(mlog_id));
+    if (OB_FAIL(ObMViewUtils::create_inner_session(tenant_id_, schema_guard, free_session_ctx, session))) {
+      LOG_WARN("failed to create inner session", KR(ret));
+    } else {
+      const int64_t mlog_count = mlog_ids.count();
+      for (int64_t i = 0; i < mlog_count; ++i) {
+        const uint64_t mlog_id = mlog_ids.at(i);
+        int64_t tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(trim_mlog_impl(mlog_id, schema_guard, sql_proxy, session))) {
+          LOG_WARN("failed to trim mlog", KR(tmp_ret), K(mlog_id));
+        }
       }
     }
   }
