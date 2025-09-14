@@ -3426,6 +3426,9 @@ int ObRpcNotifyTenantThreadP::process()
         rootserver::ObArbitrationService *service = MTL(rootserver::ObArbitrationService*);
         WAKE_UP_TENANT_SERVICE
 #endif
+      } else if (obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObRestoreService *service = MTL(rootserver::ObRestoreService*);
+        WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));

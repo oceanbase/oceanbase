@@ -128,6 +128,7 @@ static int fill_multi_path_restore_scn_without_compl_log_(
   static int check_multi_path_using_complement_log_(
              ObIArray<ObString> &multi_path_array,
              bool &use_complement_log);
+  static int notify_restore_service(const uint64_t tenant_id);
 private:
   static int fill_backup_info_(
              const obrpc::ObPhysicalRestoreTenantArg &arg,
