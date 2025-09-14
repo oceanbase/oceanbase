@@ -143,7 +143,6 @@ public:
 
   int check_table_writeable(bool &is_writeable);
   int generate_opt_stat_monitoring_info_rows(observer::ObOptDmlStatMapGetter &getter);
-  int clean_useless_dml_stat_info();
   static int update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats,
                                                    common::sqlclient::ObISQLConnection *conn = nullptr);
   int get_col_usage_info(const bool with_check,
