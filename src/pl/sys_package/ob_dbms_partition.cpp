@@ -16,6 +16,7 @@
 #include "pl/ob_pl_package_manager.h"
 #include "rootserver/ob_tenant_event_def.h"
 #include "share/ob_dynamic_partition_manager.h"
+#include "lib/string/ob_sql_string.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,18 @@ int ObDBMSPartition::manage_dynamic_partition(ObExecContext &exec_ctx, ParamStor
           LOG_WARN("fail to init dynamic partition manager", KR(tmp_ret), KPC(table_schema));
         } else if (OB_TMP_FAIL(dynamic_partition_manager.execute(precreate_time_str, time_unit_strs, skipped))) {
           LOG_WARN("fail to execute dynamic partition manage", KR(tmp_ret), K(precreate_time_str), K(time_unit_strs));
+          ObSqlString warn_msg;
+          int fmt_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (fmt_ret = warn_msg.append_fmt("dynamic partition management failed on table %.*s, reason: %s",
+                                                           table_schema->get_table_name_str().length(),
+                                                           table_schema->get_table_name_str().ptr(),
+                                                           common::ob_strerror(tmp_ret)))) {
+            LOG_WARN("fail to append fmt", KR(fmt_ret));
+            // fallback if formatting failed, directly use the error message from ob_strerror
+            FORWARD_USER_WARN(tmp_ret, common::ob_strerror(tmp_ret));
+          } else {
+            FORWARD_USER_WARN(tmp_ret, warn_msg.ptr());
+          }
         }
 
         if (!skipped) {
