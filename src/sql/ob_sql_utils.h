@@ -612,6 +612,15 @@ public:
                                                     ObString &sql_text,
                                                     int64_t convert_flag = 0,
                                                     int64_t *action_flag = NULL);
+  // similar to convert_sql_text_from_schema_for_resolve, 
+  // but only for generated column definition text
+  static int convert_gen_col_def_text_from_schema_for_resolve(
+             common::ObIAllocator &allocator,
+             const common::ObDataTypeCastParams &dtc_params,
+             const ObColumnSchemaV2 *column_schema,
+             common::ObString &gen_col_def_text,
+             int64_t convert_flag = 0,
+             int64_t *action_flag = NULL);
   /**
    * @brief convert_sql_text_to_schema_for_storing
    * @param dtc_params, collation settings from session

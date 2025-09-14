@@ -268,6 +268,12 @@ public:
                                    uint64_t *index_tid_arr,
                                    int64_t &index_count);
 
+  static int dbms_stat_set_names(ObSQLSessionInfo *session_info,
+                                 ObCharsetType client_charset_type,
+                                 ObCharsetType connection_charset_type,
+                                 ObCharsetType result_charset_type,
+                                 ObCollationType collation_type);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
