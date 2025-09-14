@@ -92,9 +92,15 @@ int JoinHashTable::init_generic_ht(JoinTableCtx &hjt_ctx, ObIAllocator &allocato
   return ret;
 }
 
-int JoinHashTable::build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count) {
+int JoinHashTable::build_prepare(JoinTableCtx &ctx, int64_t row_count, int64_t bucket_count, ObIAllocator *alloc) {
+  int ret = OB_SUCCESS;
   ctx.reuse();
-  return hash_table_->build_prepare(row_count, bucket_count);
+  if (ctx.need_mark_match() && OB_FAIL(ctx.prepare_part_rows_array(row_count, alloc))) {
+    LOG_WARN("failed to prepare part rows array", K(ret));
+  } else if (OB_FAIL(hash_table_->build_prepare(row_count, bucket_count))) {
+    LOG_WARN("failed to hash table build prepare", K(ret));
+  }
+  return ret;
 }
 
 int JoinHashTable::build(JoinPartitionRowIter &iter, JoinTableCtx &ctx) {
@@ -112,6 +118,9 @@ int JoinHashTable::build(JoinPartitionRowIter &iter, JoinTableCtx &ctx) {
     } else if (OB_FAIL(hash_table_->insert_batch(ctx,
             const_cast<ObHJStoredRow **>(ctx.stored_rows_), read_size, used_buckets, collisions))) {
       LOG_WARN("fail to insert batch", K(ret));
+    }
+    if (OB_SUCC(ret) && ctx.need_mark_match() && OB_FAIL(ctx.insert_left_part_rows(read_size))) {
+      LOG_WARN("fail to insert batch into left part rows", K(ret));
     }
     LOG_DEBUG("build hash join table", K(read_size), K(ret));
   }
@@ -134,11 +143,6 @@ int JoinHashTable::probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info) {
 
 int JoinHashTable::probe_batch(JoinTableCtx &ctx, OutputInfo &output_info) {
   return hash_table_->probe_batch(ctx, output_info);
-}
-
-int JoinHashTable::get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info)
-{
-  return hash_table_->get_unmatched_rows(ctx, output_info);
 }
 
 } // end namespace sql

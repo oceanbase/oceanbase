@@ -118,6 +118,77 @@ int ObHJStoredRow::attach_rows(const ObExprPtrIArray &exprs,
   return ret;
 }
 
+int JoinTableCtx::prepare_part_rows_array(uint64_t row_num, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == left_part_rows_) {
+    void *alloc_buf = allocator->alloc(sizeof(ModulePageAllocator));
+    void *array_buf = allocator->alloc(sizeof(PartRowsArray));
+    if (OB_ISNULL(alloc_buf) || OB_ISNULL(array_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (OB_NOT_NULL(alloc_buf)) {
+        allocator->free(alloc_buf);
+      }
+      if (OB_NOT_NULL(array_buf)) {
+        allocator->free(array_buf);
+      }
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      page_alloc_ = new (alloc_buf) ModulePageAllocator(*allocator);
+      page_alloc_->set_label("HtOpAlloc");
+      left_part_rows_ = new (array_buf) PartRowsArray(*page_alloc_);
+      if (OB_FAIL(left_part_rows_->reserve(row_num))) {
+        LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
+      }
+    }
+  } else {
+    left_part_rows_->reuse();
+    if (OB_FAIL(left_part_rows_->reserve(row_num))) {
+      LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    read_row_idx_ = 0;
+  }
+  return ret;
+}
+
+int JoinTableCtx::insert_left_part_rows(uint64_t row_num)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(left_part_rows_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_num; i++) {
+      left_part_rows_->push_back(stored_rows_[i]);
+    } 
+  }
+  return ret;
+}
+
+int JoinTableCtx::get_unmatched_rows(OutputInfo &output_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t batch_idx = 0;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
+  while (OB_SUCC(ret) && batch_idx < *max_output_cnt_) {
+    if (read_row_idx_ >= left_part_rows_->count()) {
+      ret = OB_ITER_END;
+      break;
+    }
+    if (!left_part_rows_->at(read_row_idx_)->is_match(build_row_meta_)) {
+      output_info.left_result_rows_[batch_idx++] = left_part_rows_->at(read_row_idx_);
+    }
+    read_row_idx_ += 1;
+  }
+  output_info.selector_cnt_ = batch_idx;
+  return ret;
+}
+
 
 } // end namespace sql
 } // end namespace oceanbase

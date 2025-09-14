@@ -768,7 +768,7 @@ int ObHashJoinVecOp::do_drain_exch()
 void ObHashJoinVecOp::destroy()
 {
   sql_mem_processor_.unregister_profile_if_necessary();
-  jt_ctx_.reset();
+  jt_ctx_.reset(alloc_);
   if (OB_LIKELY(nullptr != alloc_)) {
     alloc_ = nullptr;
   }
@@ -875,7 +875,10 @@ int ObHashJoinVecOp::reuse_for_next_chunk()
     LOG_WARN("failed to calc basic info", K(ret));
   } else {
     // reuse buckets
-    OZ(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()));
+    OZ(cur_join_table_->build_prepare(jt_ctx_,
+                                      profile_.get_row_count(),
+                                      profile_.get_bucket_size(),
+                                      alloc_));
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(right_part_->rescan())) {
       LOG_WARN("failed to rescan right", K(ret));
@@ -2155,7 +2158,10 @@ int ObHashJoinVecOp::prepare_hash_table()
     }
     if (OB_FAIL(ret)) {
     } else {
-      if (OB_FAIL(cur_join_table_->build_prepare(jt_ctx_, profile_.get_row_count(), profile_.get_bucket_size()))) {
+      if (OB_FAIL(cur_join_table_->build_prepare(jt_ctx_,
+                                                 profile_.get_row_count(),
+                                                 profile_.get_bucket_size(),
+                                                 alloc_))) {
         LOG_WARN("trace failed to  prepare hash table",
                 K(profile_.get_expect_size()), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
                 K(get_mem_used()), K(sql_mem_processor_.get_mem_bound()), K(cur_dumped_partition_));
@@ -2903,7 +2909,7 @@ int ObHashJoinVecOp::fill_left_unmatched_result()
     brs_.skip_->reset(brs_.size_);
     brs_.all_rows_active_ = true;
   }
-  if (OB_FAIL(cur_join_table_->get_unmatched_rows(jt_ctx_, output_info_))) {
+  if (OB_FAIL(jt_ctx_.get_unmatched_rows(output_info_))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get unmatched batch", K(ret));
     }
