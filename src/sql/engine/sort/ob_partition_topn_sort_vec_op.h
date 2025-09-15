@@ -185,9 +185,9 @@ private:
   struct TopnNode
   {
     TopnNode(Compare &cmp, common::ObIAllocator *allocator = NULL):
-      reuse_idx_(-1), top_row_(nullptr), rows_array_(), ties_array_() {
-      rows_array_.set_block_allocator(ModulePageAllocator(*allocator, "SortOpRows"));
-      ties_array_.set_block_allocator(ModulePageAllocator(*allocator, "SortOpRows"));
+      reuse_idx_(-1), top_row_(nullptr),
+      rows_array_(64, ModulePageAllocator(*allocator, "SortOpRows")),
+      ties_array_(64, ModulePageAllocator(*allocator, "SortOpRows")) {
     }
     ~TopnNode() {
       rows_array_.reset();
@@ -198,8 +198,8 @@ private:
     uint64_t hash_val_{0};
     int64_t reuse_idx_{-1};
     Store_Row *top_row_{nullptr};
-    common::ObArray<Store_Row *> rows_array_;
-    common::ObArray<Store_Row *> ties_array_;
+    common::ObSEArray<Store_Row *, 16> rows_array_;
+    common::ObSEArray<Store_Row *, 8> ties_array_;
   };
   struct PartTopnNode
   {
