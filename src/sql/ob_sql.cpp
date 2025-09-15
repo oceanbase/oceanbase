@@ -2479,7 +2479,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       }
       if (OB_FAIL(session.store_query_string(sql))) {
         LOG_WARN("store query string fail", K(ret));
-      } else if (FALSE_IT(generate_ps_sql_id(ps_info->get_no_param_sql(), context))) {
+      } else if (FALSE_IT(generate_ps_sql_id(sql, context))) {
       } else if (OB_LIKELY(ObStmt::is_dml_stmt(stmt_type))) {
         //if plan not exist, generate plan
         ObPlanCacheCtx pc_ctx(sql, PC_PS_MODE, allocator, context, ectx,
@@ -2492,9 +2492,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         pc_ctx.set_is_inner_sql(is_inner_sql);
         pc_ctx.ab_params_ = ps_ab_params;
         pc_ctx.is_arraybinding_ = (ps_info->get_num_of_returning_into() > 0);
-        pc_ctx.parameterized_ps_sql_.assign_ptr(
-            ps_info->get_no_param_sql().ptr(),
-            ps_info->get_no_param_sql().length());
         pc_ctx.ps_need_parameterized_ = ps_info->is_ps_need_parameterization();
         int64_t timeout = 0;
         session.get_query_timeout(timeout);
@@ -5811,7 +5808,7 @@ void ObSql::generate_sql_id(ObPlanCacheCtx &pc_ctx,
             || PC_PS_MODE == pc_ctx.mode_
             || PC_PL_MODE == pc_ctx.mode_
             || OB_SUCCESS != err_code) {
-    signature_sql = PC_PS_MODE == pc_ctx.mode_ ? pc_ctx.parameterized_ps_sql_ : pc_ctx.raw_sql_ ;
+    signature_sql = pc_ctx.raw_sql_;
    // if err happens in parameterization, not generate format_sql;
     signature_format_sql.reset();
   } else {
