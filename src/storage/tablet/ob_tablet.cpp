@@ -2188,7 +2188,6 @@ int ObTablet::init_empty_shell(
 {
   int ret = OB_SUCCESS;
   ObTabletCreateDeleteMdsUserData user_data;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -2200,8 +2199,6 @@ int ObTablet::init_empty_shell(
     LOG_WARN("fail to init last_persisted_committed_tablet_status", K(ret), K(user_data));
   } else if (OB_FAIL(wait_release_memtables_())) {
     LOG_ERROR("fail to release memtables", K(ret), K(old_tablet));
-  } else if (OB_FAIL(cleanup_ddl_kvs())) {
-    LOG_WARN("fail to release ddl kvs", K(ret), K(old_tablet));
   } else if (OB_FAIL(mark_mds_table_switched_to_empty_shell_())) {// to avoid calculate it's rec_scn
     LOG_WARN("fail to mark mds table switched to empty shell", K(ret), K(old_tablet));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
@@ -5603,23 +5600,6 @@ int ObTablet::wait_release_memtables_()
     }
   } while (OB_FAIL(ret));
 
-  return ret;
-}
-
-int ObTablet::cleanup_ddl_kvs()
-{
-  int ret = OB_SUCCESS;
-  ObTabletPointer *tablet_ptr= pointer_hdl_.get_tablet_pointer();
-  if (OB_NOT_NULL(tablet_ptr)) {
-    ObDDLKvMgrHandle kv_mgr_handle;
-    tablet_ptr->get_ddl_kv_mgr(kv_mgr_handle);
-    ObTabletDDLKvMgr *ddl_kv_mgr = kv_mgr_handle.get_obj();
-    if (nullptr != ddl_kv_mgr && ddl_kv_mgr->is_inited()) {
-      if (OB_FAIL(ddl_kv_mgr->cleanup())) {
-        LOG_WARN("clean up ddl kv mgr failed", K(ret));
-      }
-    }
-  }
   return ret;
 }
 
