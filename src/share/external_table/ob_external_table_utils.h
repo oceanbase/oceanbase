@@ -476,7 +476,7 @@ class ObExternalTableUtils {
     if (OB_LIKELY(tenant_config.is_valid()) && static_cast<int64_t>(tenant_config->_dop_of_collect_external_table_statistics) > 0) {
       dop_of_collect_external_table_statistics = tenant_config->_dop_of_collect_external_table_statistics;
     } else {
-      int64_t default_dop = max((partition_strs.count() / 4 > 0) ? (partition_strs.count() / 4) : 1, parallel);
+      int64_t default_dop = (partition_strs.count() / 4 > 0) ? (partition_strs.count() / 4) : 1;
       double min_cpu;
       double max_cpu;
       if (OB_ISNULL(GCTX.omt_)) {

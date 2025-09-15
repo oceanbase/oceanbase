@@ -471,7 +471,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
           #if defined(OB_BUILD_CPP_ODPS)
             // get row count for odps partition
             sql::ObODPSTableRowIterator odps_driver;
-            if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::init_odps_driver(1, session, format_str, odps_driver))) {
+            if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::init_odps_driver(0, session, format_str, odps_driver))) {
               LOG_WARN("failed to init odps driver", K(ret));
             } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_row_count(max_partition, 0, odps_driver, max_row_count))) {
               LOG_WARN("failed to fetch row count", K(ret));
@@ -487,7 +487,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         } else {
           #if defined(OB_BUILD_JNI_ODPS)
             ObODPSJNITableRowIterator odps_driver;
-            if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(1, session, format_str, odps_driver))) {
+            if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(0, session, format_str, odps_driver))) {
               LOG_WARN("failed to init odps driver", K(ret));
             } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_row_count(max_partition, 0, odps_driver, max_row_count))) {
               LOG_WARN("failed to fetch row count", K(ret));
@@ -656,10 +656,13 @@ int ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(common::ObIAllo
       if (OB_FAIL(table_schema->get_partition_by_part_id(partition_id,
                                                           CHECK_PARTITION_MODE_NORMAL,
                                                           partition))) {
+        // do nothing as no partition
         LOG_WARN("failed to get partition by part id", K(ret), K(partition_id));
+        ret = OB_SUCCESS;
       } else if (OB_ISNULL(partition)) {
-        ret = OB_ERR_UNEXPECTED;
+        // do nothing as no partition
         LOG_WARN("partition is null", K(ret), K(partition_id));
+        ret = OB_SUCCESS;
       } else if (OB_ISNULL(partition_value = partition_values.alloc_place_holder())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for partition value", K(ret));
