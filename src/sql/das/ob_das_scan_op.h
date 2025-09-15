@@ -287,6 +287,7 @@ public:
       task_type_(ObDASScanTaskType::SCAN),
       das_execute_local_info_(nullptr),
       das_execute_remote_info_(nullptr),
+      do_local_dynamic_filter_(false),
       local_dynamic_filter_params_(),
       topn_param_()
   { }
@@ -314,6 +315,7 @@ public:
                        K_(scan_rows_size),
                        K_(das_tasks_key),
                        K_(in_row_cache_threshold),
+                       K_(do_local_dynamic_filter),
                        K_(local_dynamic_filter_params),
                        K_(topn_param));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
@@ -353,6 +355,7 @@ public:
   ObDASScanTaskType task_type_;
   ObDasExecuteLocalInfo *das_execute_local_info_;
   ObDasExecuteRemoteInfo *das_execute_remote_info_;
+  bool do_local_dynamic_filter_;
   common::ObSEArray<common::ObDatum, 1> local_dynamic_filter_params_;
   common::ObLimitParam topn_param_;
 

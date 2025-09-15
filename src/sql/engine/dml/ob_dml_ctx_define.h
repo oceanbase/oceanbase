@@ -979,6 +979,7 @@ public:
       unique_key_conv_exprs_(alloc),
       unique_index_rowkey_exprs_(alloc),
       das_index_scan_ctdef_(NULL),
+      lookup_ctdef_for_batch_(NULL),
       alloc_(alloc)
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
@@ -989,11 +990,12 @@ public:
   bool is_upd_rowkey_;
 
   /* for opt path */
-  bool do_opt_path_;                     // is do opt path
-  bool do_index_lookup_;                 // is do index lookup
-  ExprFixedArray unique_key_conv_exprs_;      // index unique conv exprs
-  ExprFixedArray unique_index_rowkey_exprs_;  // index unique rowkey exprs
-  ObDASScanCtDef *das_index_scan_ctdef_; // scan the unique index table
+  bool do_opt_path_;                         // is do opt path
+  bool do_index_lookup_;                     // is do index lookup
+  ExprFixedArray unique_key_conv_exprs_;     // index unique conv exprs
+  ExprFixedArray unique_index_rowkey_exprs_; // index unique rowkey exprs
+  ObDASScanCtDef *das_index_scan_ctdef_;     // scan the unique index table
+  ObDASScanCtDef *lookup_ctdef_for_batch_;   // lookup data table by batch
   common::ObIAllocator &alloc_;
 };
 
