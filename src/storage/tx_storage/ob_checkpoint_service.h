@@ -16,14 +16,56 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
 #include "share/scn.h"
+#include "storage/tx_storage/ob_ls_handle.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+class ObLS;
+
 namespace checkpoint
 {
 class ObDataCheckpoint;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+
+struct ScheLSUploadTask {
+public:
+  ScheLSUploadTask() : ls_handle_() {}
+  ~ScheLSUploadTask() {
+    ls_handle_.reset();
+  }
+  void run();
+
+  storage::ObLSHandle &ls_handle() { return ls_handle_; }
+
+private:
+  storage::ObLSHandle ls_handle_;
+};
+
+class ObSSScheUploadThreadPool : public lib::TGTaskHandler {
+public:
+  static const int64_t SS_SCHE_UPLOAD_THREAD_NUM = 8;
+  static const int64_t SS_SCHE_UPLOAD_MINI_MODE_THREAD_NUM = 4;
+public:
+  ObSSScheUploadThreadPool() : tg_id_(-1) {}
+  virtual ~ObSSScheUploadThreadPool() {}
+  int init();
+  int start();
+  void stop();
+  void wait();
+  void destroy();
+  virtual void handle(void *task) override;
+
+  int push_task(ScheLSUploadTask *task);
+  int get_tg_id() { return tg_id_; }
+
+private:
+  int tg_id_;
+};
+
+#endif
 
 class ObCheckPointService
 {
@@ -37,6 +79,8 @@ public:
         traversal_flush_task_(),
 #ifdef OB_BUILD_SHARED_STORAGE
         check_clog_disk_usage_task_(*this),
+        prev_ss_advance_ckpt_task_ts_(0),
+        ss_sche_upload_thread_pool_(),
         ss_update_ckpt_scn_timer_(),
         ss_update_ckpt_lsn_timer_(),
         ss_advance_ckpt_timer_(),
@@ -44,7 +88,7 @@ public:
         ss_update_ckpt_scn_task_(),
         ss_update_ckpt_lsn_task_(),
         ss_advance_ckpt_task_(),
-        ss_schedule_upload_task_()
+        ss_schedule_upload_task_(*this)
 #else
         check_clog_disk_usage_task_(*this)
 #endif
@@ -107,6 +151,7 @@ private:
   ObCheckClogDiskUsageTask check_clog_disk_usage_task_;
 
 #ifdef OB_BUILD_SHARED_STORAGE
+
 public:
   static int64_t SS_UPDATE_CKPT_INTERVAL;
   static int64_t SS_TRY_ADVANCE_CKPT_INTERVAL;
@@ -115,6 +160,7 @@ public:
 public:
   void set_prev_ss_advance_ckpt_task_ts(int64_t rhs) { prev_ss_advance_ckpt_task_ts_ = rhs; }
   int64_t prev_ss_advance_ckpt_task_ts() { return prev_ss_advance_ckpt_task_ts_; }
+  ObSSScheUploadThreadPool &ss_sche_upload_thread_pool() { return ss_sche_upload_thread_pool_; }
 
 private:
   class ObSSUpdateCkptSCNTask : public common::ObTimerTask {
@@ -132,14 +178,18 @@ private:
     virtual void runTimerTask() override;
   };
 
-  struct ObSSScheduleIncUploadTask : public common::ObTimerTask
-  {
+  struct ObSSScheduleIncUploadTask : public common::ObTimerTask {
   public:
+    ObSSScheduleIncUploadTask(ObCheckPointService &host_ckpt_sv) : host_ckpt_sv_(host_ckpt_sv) {}
     virtual void runTimerTask() override;
+
+  public:
+    ObCheckPointService &host_ckpt_sv_;
   };
 
 private:
   int64_t prev_ss_advance_ckpt_task_ts_;
+  ObSSScheUploadThreadPool ss_sche_upload_thread_pool_;
   common::ObTimer ss_update_ckpt_scn_timer_;
   common::ObTimer ss_update_ckpt_lsn_timer_;
   common::ObTimer ss_advance_ckpt_timer_;
