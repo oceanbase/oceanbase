@@ -12189,6 +12189,8 @@ int ObDDLOperator::update_table_status(const ObTableSchema &orig_table_schema,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_STOP_UPDATE_VIEW_COLUMNS);
+
 int ObDDLOperator::update_view_columns(const ObTableSchema &view_schema,
                                         common::ObMySQLTransaction &trans)
 {
@@ -12198,6 +12200,8 @@ int ObDDLOperator::update_view_columns(const ObTableSchema &view_schema,
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(ERRSIM_STOP_UPDATE_VIEW_COLUMNS)) {
+    LOG_WARN("stop update view columns, ERRSIM_STOP_UPDATE_VIEW_COLUMNS", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(view_schema.get_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version < DATA_VERSION_4_1_0_0) {
