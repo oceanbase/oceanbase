@@ -92,6 +92,7 @@
 #include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
 #endif
+#include "rootserver/restore/ob_restore_service.h"
 
 namespace oceanbase
 {
@@ -2970,6 +2971,14 @@ int ObRpcNotifyTenantThreadP::process()
           arbitration_service->wakeup();
         }
 #endif
+      } else if (obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObRestoreService *restore_service = MTL(rootserver::ObRestoreService*);
+        if (OB_ISNULL(restore_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("arbitration service is null", KR(ret), K(arg_), KP(restore_service));
+        } else {
+          restore_service->wakeup();
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));

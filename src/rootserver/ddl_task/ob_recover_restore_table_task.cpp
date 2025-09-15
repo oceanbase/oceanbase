@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "ob_recover_restore_table_task.h"
 #include "rootserver/ob_root_service.h"
+#include "rootserver/restore/ob_restore_util.h"  // ObRestoreUtil
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -142,11 +143,14 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
 int ObRecoverRestoreTableTask::success()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(cleanup())) {
     LOG_WARN("clean up failed", K(ret));
+  } else if (OB_TMP_FAIL(ObRestoreUtil::notify_restore_service(dst_tenant_id_))) {
+    LOG_WARN("wakeup restore serivice failed", K_(dst_tenant_id), K(tmp_ret));
   }
   return ret;
 }
@@ -154,6 +158,7 @@ int ObRecoverRestoreTableTask::success()
 int ObRecoverRestoreTableTask::fail()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("RestoreDDLClean");
   bool already_cleanuped = false;
 
@@ -233,6 +238,10 @@ int ObRecoverRestoreTableTask::fail()
     if (OB_FAIL(cleanup())) {
       LOG_WARN("clean up failed", K(ret));
     }
+  }
+
+  if (OB_TMP_FAIL(ObRestoreUtil::notify_restore_service(dst_tenant_id_))) {
+    LOG_WARN("wakeup restore serivice failed", K_(dst_tenant_id), K(tmp_ret));
   }
   return ret;
 }
