@@ -3140,7 +3140,8 @@ int PalfHandleImpl::receive_log_(const common::ObAddr &server,
   int ret = OB_SUCCESS;
   TruncateLogInfo truncate_log_info;
 #ifdef ERRSIM
-  if (!GCONF.palf_inject_receive_log_error_zone.get_value_string().empty()) {
+  const uint64_t tenant_id = MTL_ID();
+  if (!GCONF.palf_inject_receive_log_error_zone.get_value_string().empty() && !is_sys_tenant(tenant_id)) {
     if (0 == strcmp(GCONF.zone.str(), GCONF.palf_inject_receive_log_error_zone.str())) {
       ret = OB_ERROR;
       LOG_WARN("palf receive log errsim", K(ret));
