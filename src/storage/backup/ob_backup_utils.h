@@ -98,7 +98,7 @@ private:
       const storage::ObSSTableArray *major_sstable_array_ptr,
       common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   static int lock_policy_table_then_check(
-      common::ObMySQLTransaction &trans, const uint64_t tenant_id, bool &policy_exists, bool log_only);
+      common::ObMySQLTransaction &trans, const uint64_t tenant_id, const bool log_only, bool &policy_exists);
 };
 
 struct ObBackupTabletCtx final {

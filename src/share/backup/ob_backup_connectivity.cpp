@@ -1319,6 +1319,95 @@ int ObBackupStorageInfoOperator::update_last_check_time(
   return ret;
 }
 
+int ObBackupStorageInfoOperator::set_backup_dest_status(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupDest &backup_dest,
+    const bool is_deleting)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObDMLSqlSplicer dml;
+  int64_t affected_rows = 0;
+  bool is_deleting_already = false;
+  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(get_backup_dest_status(proxy, gen_user_tenant_id(tenant_id), backup_dest, is_deleting_already))) {
+    LOG_WARN("failed to get backup dest status", K(ret), K(tenant_id), K(backup_dest));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup dest not exist", K(tenant_id), K(backup_dest));
+      is_deleting_already = false;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_deleting_already == is_deleting) {
+    LOG_INFO("backup dest status have no change, skip update", K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, gen_user_tenant_id(tenant_id)))
+      || OB_FAIL(dml.add_pk_column(OB_STR_PATH, backup_dest.get_root_path().ptr()))
+      || OB_FAIL(dml.add_pk_column(OB_STR_BACKUP_DEST_ENDPOINT, backup_dest.get_storage_info()->endpoint_))
+      || OB_FAIL(dml.add_column(OB_STR_BACKUP_DEST_STATUS,
+          is_deleting ? OB_STR_BACKUP_DEST_STATUS_DELETING : OB_STR_BACKUP_DEST_STATUS_NORMAL))) {
+    LOG_WARN("failed to fill on item", K(ret), K(backup_dest));
+  } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
+    LOG_WARN("failed to splice update sql", K(ret));
+  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to execute sql", K(ret), K(sql));
+  } else if (1 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, invalid affected rows", K(ret), K(affected_rows));
+  } else {
+    LOG_INFO("change backup dest status", K(sql), K(tenant_id), K(backup_dest), K(is_deleting));
+  }
+  return ret;
+}
+
+int ObBackupStorageInfoOperator::get_backup_dest_status(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupDest &backup_dest,
+    bool &is_deleting)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  is_deleting = false;
+
+  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT %s FROM %s WHERE tenant_id = %lu AND path = '%s' AND endpoint = '%s'",
+      OB_STR_BACKUP_DEST_STATUS, OB_ALL_BACKUP_STORAGE_INFO_TNAME,
+      tenant_id, backup_dest.get_root_path().ptr(), backup_dest.get_storage_info()->endpoint_))) {
+    LOG_WARN("fail to assign sql", K(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        int64_t tmp_real_str_len = 0;
+        char status[OB_DEFAULT_STATUS_LENTH] = { 0 };
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_STATUS,
+          status, OB_DEFAULT_STATUS_LENTH, tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+        is_deleting = strcmp(status, OB_STR_BACKUP_DEST_STATUS_DELETING) == 0;
+      } else if (OB_ITER_END == ret) {
+        ret = OB_ENTRY_NOT_EXIST;
+        is_deleting = false;
+        LOG_INFO("path is not exist, it's not cleaning", K(ret), K(tenant_id));
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupStorageInfoOperator::get_check_file_name(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
@@ -2709,140 +2798,6 @@ int ObBackupChangeExternalStorageDestUtil::process_src_info_in_extension_before_
     }
   }
 
-  return ret;
-}
-
-int ObBackupChangeExternalStorageDestUtil::get_extension_cleaning_status(
-    common::ObISQLClient &proxy,
-    const uint64_t tenant_id,
-    const ObBackupDest &backup_dest,
-    bool &is_clean)
-{
-  int ret = OB_SUCCESS;
-  is_clean = false;
-  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
-  } else {
-    char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
-              proxy, tenant_id, backup_dest, false/*need_lock*/, extension, sizeof(extension)))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-        is_clean = false;
-        LOG_INFO("path is not exist, it's not cleaning", K(ret), K(tenant_id));
-      } else {
-        LOG_WARN("failed to get backup dest extension", K(ret), K(tenant_id), K(backup_dest));
-      }
-    } else {
-      char tmp[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-      char *token = NULL;
-      char *saved_ptr = NULL;
-      if (OB_FAIL(databuff_printf(tmp, sizeof(tmp), "%s", extension))) {
-        LOG_WARN("failed to copy extension", K(ret), K(extension));
-      } else {
-        token = tmp;
-        for (char *str = token; OB_SUCC(ret); str = NULL) {
-          token = ::strtok_r(str, "&", &saved_ptr);
-          if (NULL == token) {
-            break;
-          } else if (0 == strncmp(IS_CLEANING, token, strlen(IS_CLEANING))) {
-            const char *value = token + strlen(IS_CLEANING);
-            if (0 == strcmp(value, "true")) {
-              is_clean = true;
-            } else if (0 == strcmp(value, "false")) {
-              is_clean = false;
-            } else {
-              LOG_WARN("invalid is_cleaning value", K(value));
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObBackupChangeExternalStorageDestUtil::set_extension_cleaning_status(
-    common::ObISQLClient &proxy,
-    const uint64_t tenant_id,
-    const ObBackupDest &backup_dest,
-    const bool is_clean)
-{
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
-  } else {
-    char old_extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
-        proxy, gen_user_tenant_id(tenant_id), backup_dest, true/*need_lock*/, old_extension, sizeof(old_extension)))) {
-      LOG_WARN("failed to get backup dest extension", K(ret), K(tenant_id), K(backup_dest));
-    } else {
-      char tmp_for_parse[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-      char new_extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
-      char *token = NULL;
-      char *saved_ptr = NULL;
-      int64_t pos = 0;
-
-      if (OB_FAIL(databuff_printf(tmp_for_parse, sizeof(tmp_for_parse), "%s", old_extension))) {
-        LOG_WARN("failed to copy extension", K(ret), K(old_extension));
-      } else {
-        token = tmp_for_parse;
-        for (char *str = token; OB_SUCC(ret); str = NULL) {
-          token = ::strtok_r(str, "&", &saved_ptr);
-          if (NULL == token) {
-            break;
-          } else if (0 != strncmp(IS_CLEANING, token, strlen(IS_CLEANING))) {
-            int64_t token_len = strlen(token);
-            int64_t delimiter_len = (pos > 0) ? 1 : 0;
-            if (pos + delimiter_len + token_len >= sizeof(new_extension)) {
-              ret = OB_SIZE_OVERFLOW;
-              LOG_WARN("extension buffer overflow", K(ret), K(pos), K(token_len), K(sizeof(new_extension)));
-            } else {
-              if (pos > 0 && OB_FAIL(databuff_printf(new_extension, sizeof(new_extension), pos, "&"))) {
-                LOG_WARN("failed to add delimiter", K(ret));
-              } else if (OB_FAIL(databuff_printf(new_extension, sizeof(new_extension), pos, "%s", token))) {
-                LOG_WARN("failed to add token", K(ret), K(token));
-              }
-            }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          const char *is_cleaning_value = is_clean ? "true" : "false";
-          int64_t is_cleaning_len = strlen(IS_CLEANING) + strlen(is_cleaning_value);
-          int64_t delimiter_len = (pos > 0) ? 1 : 0;
-
-          if (pos + delimiter_len + is_cleaning_len >= sizeof(new_extension)) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("extension buffer overflow when adding is_cleaning", K(ret), K(pos), K(is_cleaning_len), K(sizeof(new_extension)));
-          } else {
-            if (pos > 0 && OB_FAIL(databuff_printf(new_extension, sizeof(new_extension), pos, "&"))) {
-              LOG_WARN("failed to add delimiter", K(ret));
-            } else if (OB_FAIL(databuff_printf(new_extension, sizeof(new_extension),
-                                                pos, "%s%s", IS_CLEANING, is_cleaning_value))) {
-              LOG_WARN("failed to add is_cleaning", K(ret), K(is_clean));
-            }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (0 != strcmp(old_extension, new_extension)) {
-            if (OB_FAIL(ObBackupStorageInfoOperator::update_backup_dest_extension(proxy,
-                          gen_user_tenant_id(tenant_id), backup_dest, new_extension))) {
-              LOG_WARN("failed to update backup dest extension", K(ret), K(tenant_id), K(new_extension));
-            } else {
-              LOG_INFO("success update is_cleaning status", K(is_clean), K(old_extension), K(new_extension));
-            }
-          } else {
-            LOG_INFO("is_cleaning status is already correct, no need to update", K(is_clean), K(old_extension));
-          }
-        }
-      }
-    }
-  }
   return ret;
 }
 

@@ -3791,6 +3791,7 @@ def_table_schema(
     ('last_check_time', 'int', 'true', '0'),
     ('max_iops', 'int', 'false', '0'),
     ('max_bandwidth', 'int', 'false', '0'),
+    ('status', 'varchar:64', 'true', 'NORMAL')
   ],
 )
 
@@ -28333,7 +28334,8 @@ def_table_schema(
         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
       ELSE
         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
-    END AS MAX_BANDWIDTH_DISPLAY
+    END AS MAX_BANDWIDTH_DISPLAY,
+    STATUS
     FROM oceanbase.__all_virtual_backup_storage_info
 """.replace("\n", " ")
 )
@@ -29883,7 +29885,8 @@ def_table_schema(
         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
       ELSE
         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
-    END AS MAX_BANDWIDTH_DISPLAY
+    END AS MAX_BANDWIDTH_DISPLAY,
+    STATUS
     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -61249,7 +61252,8 @@ def_table_schema(
         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
       ELSE
         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
-    END AS MAX_BANDWIDTH_DISPLAY
+    END AS MAX_BANDWIDTH_DISPLAY,
+    STATUS
     FROM SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")

@@ -4988,6 +4988,7 @@ LAST_CHECK_TIMESTAMP	timestamp(6)	YES
 MAX_IOPS	bigint(20)	NO			
 MAX_BANDWIDTH	bigint(20)	NO			
 MAX_BANDWIDTH_DISPLAY	varchar(29)	NO			
+STATUS	varchar(64)	YES			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_STORAGE_INFO|%') then 2

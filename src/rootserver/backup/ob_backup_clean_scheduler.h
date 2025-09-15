@@ -206,6 +206,8 @@ private:
   int delete_backup_all_meta_info_files_();
   int delete_backup_dest_meta_info_files_(share::ObBackupDest &backup_dest);
   int delete_archive_dest_meta_info_files_(share::ObBackupDest &log_archive_dest);
+  int check_delete_all_dest_path_in_use_(common::ObISQLClient &trans);
+
   struct CompareBackupSetInfo
   {
     bool operator()(const share::ObBackupSetFileDesc &lhs,

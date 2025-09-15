@@ -188,9 +188,11 @@ int ObBackupCleanResolver::resolve(const ParseNode &parse_tree)
     ObBackupPathString backup_dest_str;
     share::ObBackupDestType::TYPE dest_type = share::ObBackupDestType::DEST_TYPE_MAX;
     ObBackupCleanStmt *stmt = create_stmt<ObBackupCleanStmt>();
-
+    uint64_t compat_version = 0;
     // check if the clean type is supported, and get the parameters
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_4_1_0) {
       // before 4.4.1, only CANCEL_DELETE is supported
       if (share::ObNewBackupCleanType::TYPE::CANCEL_DELETE != clean_type) {
         ret = OB_NOT_SUPPORTED;

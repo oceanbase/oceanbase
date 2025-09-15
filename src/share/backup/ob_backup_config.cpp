@@ -453,9 +453,17 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     ObBackupDest backup_dest_tmp;
     if (OB_FAIL(backup_dest_tmp.set(config_items_.at(0).value_.ptr()))) {
       LOG_WARN("fail to set backup dest", K(ret), K_(tenant_id), K_(config_items));
-    } else if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::get_extension_cleaning_status(
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
                        trans, tenant_id_, backup_dest_tmp, is_cleaning))) {
-      LOG_WARN("fail to check backup dest exist", K(ret), K_(tenant_id), K_(config_items));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("backup dest is not exist, it's a new backup dest and it is not cleaning",
+                  K(ret), K_(tenant_id), K_(config_items));
+      } else {
+        LOG_WARN("fail to check backup dest exist", K(ret), K_(tenant_id), K_(config_items));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (is_cleaning) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("A backup cleaning is in progress, set it again is not allowed", K(ret), K_(tenant_id), K_(config_items));
@@ -702,9 +710,17 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     LOG_WARN("fail to check dest checksum type", K(ret));
   } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
     LOG_WARN("fail to set backup dest", K(ret));
-  } else if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::get_extension_cleaning_status(
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
                       trans, tenant_id_, backup_dest, is_cleaning))) {
-    LOG_WARN("fail to check backup dest exist", K(ret), K_(tenant_id), K_(backup_dest));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup dest is not exist, it's a new backup dest and it is not cleaning",
+                K(ret), K_(tenant_id), K_(backup_dest));
+    } else {
+      LOG_WARN("fail to check backup dest exist", K(ret), K_(tenant_id), K_(backup_dest));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (is_cleaning) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("A backup cleaning is in progress, set it again is not allowed", K(ret), K_(tenant_id), K_(backup_dest));
@@ -1272,7 +1288,7 @@ int ObBackupConfigUtil::admin_set_backup_config(
       bool need_lock_and_check = (0 == strcmp(item.name_.ptr(), share::OB_STR_DATA_BACKUP_DEST));
       if (need_lock_and_check) {
         bool exists = false;
-        if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, exec_tenant_id, exists, true/*log_only*/))) {
+        if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, exec_tenant_id, true/*log_only*/, exists))) {
           LOG_WARN("fail to check log only policy exist", K(ret));
         } else if (exists) {
           ret = OB_BACKUP_DEST_NOT_ALLOWED_TO_SET;

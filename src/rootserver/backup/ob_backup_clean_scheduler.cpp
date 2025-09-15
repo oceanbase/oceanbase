@@ -25,6 +25,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "rootserver/ob_root_utils.h"
+#include "storage/tablelock/ob_lock_utils.h"
 
 namespace oceanbase
 {
@@ -103,7 +104,7 @@ int ObBackupCleanScheduler::add_delete_policy_(const ObDeletePolicyAttr &policy_
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(policy_attr.tenant_id_)))) {
     LOG_WARN("failed to start transaction", K(ret), "tenant_id", policy_attr.tenant_id_);
   } else if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(
-                        trans, policy_attr.tenant_id_, policy_exists, false/*log_only*/))) {
+                        trans, policy_attr.tenant_id_, false/*log_only*/, policy_exists))) {
     LOG_WARN("failed to lock and check policy exists", K(ret));
   } else if (policy_exists) {
     ret = OB_ENTRY_EXIST;
@@ -159,7 +160,7 @@ int ObBackupCleanScheduler::drop_delete_policy_(const ObDeletePolicyAttr &policy
   } else {
     bool exists = false;
     // lock policy table and check if policy exists
-    if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, policy_attr.tenant_id_, exists, false/*log_only*/))) {
+    if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, policy_attr.tenant_id_, false/*log_only*/, exists))) {
       LOG_WARN("failed to lock and check policy exists", K(ret));
     } else if (exists) {
       if (OB_FAIL(ObDeletePolicyOperator::drop_delete_policy(trans, policy_attr))) {
@@ -1211,19 +1212,21 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
         }
       }
 
-      if (OB_SUCC(ret) && job_attr_->is_delete_backup_all()) {
-        // set is_cleaning to false for DELETE_BACKUP_ALL type job's target path
+      // if is delete backup all, we need to delete the line in storage info table before move job to history
+      if (OB_FAIL(ret)) {
+      } else if (job_attr_->is_delete_backup_all()) {
         ObBackupDest backup_dest;
-        if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
-          LOG_WARN("failed to set backup dest", K(ret), K(job_attr_->backup_path_));
+        if (job_attr_->result_ != OB_SUCCESS) {
+          LOG_WARN("job is not success, do not delete backup dest in storage info table", K(*job_attr_));
+        } else if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
+          LOG_WARN("failed to init backup dest", K(ret), "path", job_attr_->backup_path_);
         } else if (OB_FAIL(backup_service_->check_leader())) {
           LOG_WARN("failed to check leader", K(ret));
-        } else if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::set_extension_cleaning_status(
-            trans, gen_user_tenant_id(tenant_id_), backup_dest, false/*is_cleaning*/))) {
-          LOG_WARN("failed to clear dest cleaning mark", K(ret), K(tenant_id_), K(backup_dest));
+        } else if (OB_FAIL(ObBackupStorageInfoOperator::remove_backup_storage_info(
+                            trans, job_attr_->tenant_id_, backup_dest))) {
+          LOG_WARN("failed to delete backup dest in storage info table", K(ret), "dest", backup_dest);
         } else {
-          LOG_INFO("[BACKUP_CLEAN] clear dest cleaning mark for DELETE_BACKUP_ALL job",
-                  K(tenant_id_), K(backup_dest), K(job_attr_->job_id_), K(job_attr_->result_));
+          LOG_INFO("[BACKUP_CLEAN] delete backup dest in storage info table", K(ret), "dest", backup_dest);
         }
       }
 
@@ -1629,6 +1632,61 @@ int ObUserTenantBackupDeleteMgr::check_current_task_exist_(bool &is_exist)
   return ret;
 }
 
+int ObUserTenantBackupDeleteMgr::check_delete_all_dest_path_in_use_(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  const uint64_t tenant_id = job_attr_->tenant_id_;
+  int64_t dest_id = ObBackupDeleteSelector::INVALID_CLEAN_ID;
+  if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA == job_attr_->backup_path_type_) {
+    ObBackupHelper backup_helper;
+    ObBackupPathString backup_path;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ObBackupDataProvider not inited", K(ret));
+    } else if (OB_FAIL(backup_helper.init(tenant_id, trans))) {
+      LOG_WARN("failed to init backup helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(backup_helper.get_backup_dest(backup_path))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get backup dest", K(ret), K(tenant_id));
+      }
+    } else if (OB_FAIL(backup_dest.set(backup_path.ptr()))) {
+      LOG_WARN("failed to set backup dest", K(ret), K(backup_path));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, tenant_id, backup_dest, dest_id))) {
+      LOG_WARN("failed to get dest id", K(ret), K(tenant_id), K(backup_dest));
+    } else if (dest_id == job_attr_->dest_id_) {
+      ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
+      LOG_WARN("current writing dest does not support deletion",
+                K(ret), "current_dest_id", dest_id, "dest_id", job_attr_->dest_id_);
+    }
+  } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == job_attr_->backup_path_type_) {
+    ObArchivePersistHelper archive_helper;
+    common::ObArray<std::pair<int64_t, int64_t>> dest_array;
+    if (OB_FAIL(archive_helper.init(tenant_id))) {
+      LOG_WARN("failed to init archive helper", K(ret), K(tenant_id));
+    } else if (OB_FAIL(archive_helper.get_valid_dest_pairs(trans, dest_array))) {
+      LOG_WARN("failed to get valid dest pairs", K(ret));
+    } else if (0 == dest_array.count()) {
+      ret = OB_SUCCESS;
+    } else if (1 != dest_array.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, dest_array count is not exactly 1", K(ret), K(dest_array));
+    } else {
+      std::pair<int64_t, int64_t> archive_dest = dest_array.at(0);
+      if (archive_dest.second == job_attr_->dest_id_) {
+        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        LOG_WARN("current writing dest does not support deletion",
+                  K(ret), "archive_dest_id", archive_dest.second, "dest_id", job_attr_->dest_id_);
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsupported dest_type for check backup dest status", K(ret), "dest_type", job_attr_->backup_path_type_);
+  }
+  return ret;
+}
 int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
 {
   int ret = OB_SUCCESS;
@@ -1662,15 +1720,24 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
     if (OB_SUCC(ret) && job_attr_->is_delete_backup_all()) {
       // set is_cleaning to true for DELETE_BACKUP_ALL type job's target path
       ObBackupDest backup_dest;
-      if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
+      if (OB_FAIL(oceanbase::transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(
+              trans,
+              gen_meta_tenant_id(tenant_id_),
+              share::OB_ALL_BACKUP_DELETE_POLICY_TID,
+              transaction::tablelock::SHARE_ROW_EXCLUSIVE,
+              false))) {
+        LOG_WARN("failed to lock policy table", K(ret));
+      } else if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
         LOG_WARN("failed to set backup dest", K(ret), "backup_path", job_attr_->backup_path_);
       } else if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("failed to check leader", K(ret));
-      } else if (OB_FAIL(ObBackupChangeExternalStorageDestUtil::set_extension_cleaning_status(
-              trans, tenant_id_, backup_dest, true/*is_cleaning*/))) {
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::set_backup_dest_status(
+              trans, tenant_id_, backup_dest, true/*deleting*/))) {
         LOG_WARN("failed to set extension clean status", K(ret), K(tenant_id_), K(backup_dest));
+      } else if (OB_FAIL(check_delete_all_dest_path_in_use_(trans))) {
+        LOG_WARN("failed to check current backup dest status", K(ret));
       } else {
-        LOG_INFO("success set extension clean status to true", K(ret), K(tenant_id_), K(backup_dest));
+        LOG_INFO("success set backup dest status to deleting", K(ret), K(tenant_id_), K(backup_dest));
       }
     }
     DEBUG_SYNC(BACKUP_DELETE_STATUS_INIT); 
