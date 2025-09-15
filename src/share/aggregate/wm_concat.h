@@ -133,6 +133,8 @@ public:
     ObAggrInfo &info = agg_ctx.aggr_infos_.at(agg_col_idx);
     ObIArray<ObExpr *> &param_exprs = info.param_exprs_;
     int32_t append_length = 0;
+    common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "wm_concat",
+                                           common::ObCtxIds::WORK_AREA));
 
     // append all candidate strings
     ObString candidate_string;
@@ -142,7 +144,7 @@ public:
                               ->get_vector(agg_ctx.eval_ctx_)
                               ->get_string(row_num);
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-              agg_ctx.allocator_,
+              tmp_allocator,
               param_exprs.at(0)->get_vector(agg_ctx.eval_ctx_),
               param_exprs.at(0)->datum_meta_,
               param_exprs.at(0)->obj_meta_.has_lob_header(), lob_data,
@@ -223,32 +225,67 @@ protected:
   }
 
   /**
-   * extend string buffer
+   * Calculate optimal buffer size using adaptive growth strategy
+   * - Small sizes (< 1KB): 2x growth to reduce allocation frequency
+   * - Medium sizes (1KB - 64KB): 1.5x growth for balanced approach
+   * - Large sizes (> 64KB): 1.25x growth to avoid excessive memory usage
+   * - Add padding based on current size to reduce future reallocations
    */
-  inline int extend_string(ObString &base_string, const int32_t length,
+  inline int32_t calculate_optimal_buffer_size(int32_t current_size, int32_t needed_size,
+                                               int32_t concat_str_max_len) {
+    // Ensure we meet the minimum requirement
+    int32_t target_size = needed_size;
+
+    // Apply adaptive growth strategy based on current buffer size
+    if (current_size < 1024) {
+      target_size = max(needed_size, current_size * 2);
+      // Add extra padding for small buffers to reduce future reallocations
+      target_size += 512;
+    } else if (current_size < 65536) {
+      // Medium buffers: balanced growth
+      target_size = max(needed_size, current_size + current_size / 2); // 1.5x
+      // Add moderate padding
+      target_size += current_size / 8;
+    } else {
+      // Large buffers: conservative growth to avoid excessive memory usage
+      target_size = max(needed_size, current_size + current_size / 4); // 1.25x
+      // Minimal padding for large buffers
+      target_size += min(4096, current_size / 16);
+    }
+
+    // Ensure we don't exceed the maximum allowed size
+    return min(target_size, concat_str_max_len);
+  }
+
+  /**
+   * extend string buffer with adaptive growth strategy
+   */
+  inline int extend_string(ObString &base_string, const int32_t length, const int32_t concat_str_max_len,
                            common::ObArenaAllocator &allocator) {
     int ret = OB_SUCCESS;
     int original_length = base_string.length();
-    bool use_tmp_allocator = false;
+    int current_size = base_string.size();
+
     if (OB_LIKELY(length > original_length)) {
-      use_tmp_allocator = true;
-      char *tmp = static_cast<char *>(allocator.alloc((const int64_t)length));
+      // Use adaptive buffer size calculation
+      int buf_len = calculate_optimal_buffer_size(current_size, length, concat_str_max_len);
+      char *tmp = static_cast<char *>(allocator.alloc((const int64_t)buf_len));
       if (OB_ISNULL(tmp)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "allocate memory failed", K(ret), K(original_length),
-                K(length), K(allocator.get_label()), K(allocator.used()),
+                K(buf_len), K(current_size), K(length),
+                K(allocator.get_label()), K(allocator.used()),
                 K(allocator.total()));
       } else {
         if (original_length > 0) {
           MEMCPY(tmp, base_string.ptr(), original_length);
           allocator.free(base_string.ptr()); // actually not work
         }
-        base_string = ObString(length, original_length, tmp);
+        base_string = ObString(buf_len, original_length, tmp);
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "Unexpected condition", K(length),
-              K(original_length));
+      SQL_LOG(WARN, "Unexpected condition", K(length), K(original_length));
     }
     return ret;
   }
@@ -266,7 +303,6 @@ public:
     ObIVector *vec = param_expr->get_vector(agg_ctx.eval_ctx_);
 
     uint64_t concat_str_max_len = OB_MAX_PACKET_LENGTH;
-
     if (!row_sel.is_empty()) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "row_sel is null", K(ret));
@@ -319,7 +355,7 @@ public:
             SQL_LOG(WARN, "result of string concatenation is too long", K(ret), K(needed_length),
                                                                      K(OB_MAX_PACKET_LENGTH));
           } else if (needed_length > base_string.size() &&
-              OB_FAIL(extend_string(base_string, needed_length,
+              OB_FAIL(extend_string(base_string, needed_length, concat_str_max_len,
                                     agg_ctx.allocator_))) {
             SQL_LOG(WARN, "ensure string space failed", K(ret));
           }
