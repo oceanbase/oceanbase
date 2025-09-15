@@ -17,6 +17,7 @@
 #include "share/ob_define.h"
 #include "sql/table_format/iceberg/spec/manifest_list.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
+#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {
@@ -538,40 +539,69 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
         }
         break;
       }
-      case ObVarcharType: {
+      case ObMediumTextType: {
         if (ObCollationType::CS_TYPE_BINARY == column_schema->get_collation_type()) {
-          // binary
+          // iceberg binary type
+          ObString deep_copy_str;
+          ObString lob_with_header;
           if (OB_FAIL(
                   ObCatalogAvroUtils::get_value<avro::Type::AVRO_BYTES>(avro_record_partition,
                                                                         partition_column_name,
                                                                         partition_avro_datum))) {
             LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-          } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+          } else if (NULL == partition_avro_datum
+                     || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
             obj.set_null();
           } else {
             std::vector<uint8_t> bytes = partition_avro_datum->value<std::vector<uint8_t>>();
-            ObString deep_copy_str;
             OZ(ob_write_string(allocator,
                                ObString(bytes.size(), reinterpret_cast<const char *>(bytes.data())),
                                deep_copy_str));
-            OX(obj.set_varbinary(deep_copy_str));
+            OZ(storage::ObLobManager::fill_lob_header(allocator, deep_copy_str, lob_with_header));
+            OX(obj.set_string(ObObjType::ObMediumTextType, lob_with_header));
+            OX(obj.set_has_lob_header());
+            OX(obj.set_collation_type(ObCollationType::CS_TYPE_BINARY));
           }
         } else {
-          // string
+          // iceberg string type
+          ObString deep_copy_str;
+          ObString lob_with_header;
           if (OB_FAIL(
                   ObCatalogAvroUtils::get_value<avro::Type::AVRO_STRING>(avro_record_partition,
                                                                          partition_column_name,
                                                                          partition_avro_datum))) {
             LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-          } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+          } else if (NULL == partition_avro_datum
+                     || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
             obj.set_null();
           } else {
             std::string str = partition_avro_datum->value<std::string>();
             ObString deep_copy_str;
             OZ(ob_write_string(allocator, ObString(str.size(), str.data()), deep_copy_str));
+            OZ(storage::ObLobManager::fill_lob_header(allocator, deep_copy_str, lob_with_header));
+            OX(obj.set_string(ObObjType::ObMediumTextType, lob_with_header));
+            OX(obj.set_has_lob_header());
             OX(obj.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN));
-            OX(obj.set_varchar(deep_copy_str));
           }
+        }
+        break;
+      }
+      case ObVarcharType: {
+        // fixed/uuid
+        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_BYTES>(avro_record_partition,
+                                                                          partition_column_name,
+                                                                          partition_avro_datum))) {
+          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
+        } else if (NULL == partition_avro_datum
+                   || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+          obj.set_null();
+        } else {
+          std::vector<uint8_t> bytes = partition_avro_datum->value<std::vector<uint8_t>>();
+          ObString deep_copy_str;
+          OZ(ob_write_string(allocator,
+                             ObString(bytes.size(), reinterpret_cast<const char *>(bytes.data())),
+                             deep_copy_str));
+          OX(obj.set_varbinary(deep_copy_str));
         }
         break;
       }

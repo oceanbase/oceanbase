@@ -188,6 +188,8 @@ int ObExternalTableColumnSchemaHelper::setup_varchar(const bool &is_oracle_mode,
 }
 
 int ObExternalTableColumnSchemaHelper::setup_string(const bool &is_oracle_mode,
+                                                    ObCharsetType cs_type,
+                                                    ObCollationType collation,
                                                     ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
@@ -195,8 +197,8 @@ int ObExternalTableColumnSchemaHelper::setup_string(const bool &is_oracle_mode,
   column_schema.set_data_type(ObMediumTextType);
   column_schema.set_is_string_lob(); // 默认为ob的string类型
   column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
-  column_schema.set_collation_type(ObCharset::get_system_collation());
-  column_schema.set_charset_type(CHARSET_UTF8MB4);
+  column_schema.set_collation_type(collation);
+  column_schema.set_charset_type(cs_type);
   return ret;
 }
 

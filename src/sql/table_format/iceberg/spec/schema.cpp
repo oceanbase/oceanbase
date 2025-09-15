@@ -270,17 +270,21 @@ int Schema::set_column_schema_type_by_type_str(const ObString type_str,
       LOG_WARN("failed to setup timestamp tz ns");
     }
   } else if (0 == type_str.case_compare(TYPE_STRING)) {
-    int64_t varchar_len
-        = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
-    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
-                                                                 varchar_len,
-                                                                 ObCharsetType::CHARSET_UTF8MB4,
-                                                                 ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                                                 column_schema))) {
-      LOG_WARN("failed to setup varchar");
+    if (OB_FAIL(
+            ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
+                                                            ObCharsetType::CHARSET_UTF8MB4,
+                                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                                            column_schema))) {
+      LOG_WARN("failed to setup string");
     }
-  } else if (0 == type_str.case_compare(TYPE_BINARY) || 0 == type_str.case_compare(TYPE_UUID)
-             || type_str.prefix_match_ci(TYPE_FIXED)) {
+  } else if (0 == type_str.case_compare(TYPE_BINARY)) {
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
+                                                                ObCharsetType::CHARSET_UTF8MB4,
+                                                                ObCollationType::CS_TYPE_BINARY,
+                                                                column_schema))) {
+      LOG_WARN("failed to setup string");
+    }
+  } else if (0 == type_str.case_compare(TYPE_UUID) || type_str.prefix_match_ci(TYPE_FIXED)) {
     // UUID & FIXED used binary type directly
     int64_t varchar_len
         = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
@@ -420,6 +424,7 @@ int Schema::parse_primitive_type_in_complex_type(ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("mysql didn't support timestamp_ns", K(ret));
   } else if (0 == type_str.case_compare(TYPE_STRING)) {
+    // ob array 不支持 string(lob)，暂时用 varchar 代替
     return_type = "VARCHAR(65535)";
   } else if (0 == type_str.case_compare(TYPE_BINARY) || 0 == type_str.case_compare(TYPE_UUID)
              || type_str.prefix_match_ci(TYPE_FIXED)) {

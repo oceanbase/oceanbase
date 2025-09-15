@@ -760,6 +760,8 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
     } else if (original_field_type.prefix_match(STRING)
                || original_field_type.prefix_match(BINARY)) {
       if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(is_oracle_mode,
+                                                                  CHARSET_UTF8MB4,
+                                                                  ObCharset::get_system_collation(),
                                                                   column_schema))) {
         LOG_WARN("failed to setup string", K(ret));
       } else if (OB_LIKELY(is_csv_format) && OB_LIKELY(!is_open_csv)

@@ -203,15 +203,32 @@ int Conversions::convert_statistics_binary_to_ob_obj(
         break;
       }
       case ObVarcharType: {
-        // aka string / binary
+        // 现在只有 iceberg fixed/uuid 类型会使用 varchar 类型
         ObString tmp;
-        if (!collation_type.has_value()) {
+        if (!collation_type.has_value() || ObCollationType::CS_TYPE_BINARY != collation_type.value()) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("collation_type must not be null", K(ret));
+          LOG_WARN("collation_type must be binary", K(ret));
         } else if (OB_FAIL(ob_write_string(allocator, binary, tmp))) {
           LOG_WARN("failed to copy string", K(tmp), K(ret));
         } else {
-          ob_obj.set_varchar(tmp);
+          ob_obj.set_varbinary(tmp);
+        }
+        break;
+      }
+      case ObMediumTextType: {
+        // aka iceberg string / binary
+        ObString deep_copy_str;
+        ObString lob_with_header;
+        if (!collation_type.has_value()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("collation_type must not be null", K(ret));
+        } else if (OB_FAIL(ob_write_string(allocator, binary, deep_copy_str))) {
+          LOG_WARN("failed to copy string", K(deep_copy_str), K(ret));
+        } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator, deep_copy_str, lob_with_header))) {
+          LOG_WARN("failed to fill lob header");
+        } else {
+          ob_obj.set_string(ObObjType::ObMediumTextType, lob_with_header);
+          ob_obj.set_has_lob_header();
           ob_obj.set_collation_type(collation_type.value());
         }
         break;
@@ -243,7 +260,7 @@ int Conversions::convert_statistics_binary_to_ob_obj(
                                                     ob_obj))) {
       LOG_WARN("failed to convert statistics binary to ob object", K(ret));
     }
-  } else if (ObObjType::ObVarcharType == type) {
+  } else if (ObObjType::ObVarcharType == type || ObObjType::ObMediumTextType == type) {
     if (OB_FAIL(convert_statistics_binary_to_ob_obj(allocator,
                                                     binary,
                                                     type,
@@ -284,7 +301,7 @@ int Conversions::convert_statistics_binary_to_ob_obj(ObIAllocator &allocator,
                                                     ob_obj))) {
       LOG_WARN("failed to convert statistics binary to ob object", K(ret));
     }
-  } else if (ObObjType::ObVarcharType == type) {
+  } else if (ObObjType::ObVarcharType == type || ObObjType::ObMediumTextType == type) {
     if (OB_FAIL(convert_statistics_binary_to_ob_obj(allocator,
                                                     binary,
                                                     type,
