@@ -1954,20 +1954,19 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     }
   } else if (ob_is_year_tc(datum_type.type_) && orc::TypeKind::INT == type_kind) {
     func = &DataLoader::load_year_vec;
-  } else if (ob_is_large_text(datum_type.type_) && orc::TypeKind::STRING == type_kind) {
-    func = &DataLoader::load_lob_col;
   } else if (ob_is_string_tc(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)
              || ob_is_large_text(datum_type.type_)) {
     //convert orc enum/string to enum/string vector
+    bool is_lob = ob_is_large_text(datum_type.type_);
     switch (type_kind) {
       case orc::TypeKind::STRING:
       case orc::TypeKind::VARCHAR:
       case orc::TypeKind::BINARY:
-        func = &DataLoader::load_string_col;
+        func = is_lob ? &DataLoader::load_lob_col : &DataLoader::load_string_col;
         break;
       case orc::TypeKind::CHAR:
         if (ob_is_char(datum_type.type_, datum_type.cs_type_)) {
-          func = &DataLoader::load_string_col;
+          func = is_lob ? &DataLoader::load_lob_col : &DataLoader::load_string_col;
           break;
         }
       default:
