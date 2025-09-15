@@ -9803,9 +9803,6 @@ int ObSelectLogPlan::create_transform_distinct_agg_plan(
     } else if (!inner_groupby_plans.empty()) {
       LOG_TRACE("succeed to allocate inner group by plan for transforming distinct agg", K(inner_groupby_plans.count()), K(inner_groupby_helper));
       OPT_TRACE("succeed to allocate inner group by plan for transforming distinct agg");
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to generate group by plan", K(ret));
     }
   };
   SMART_VAR(GroupingOpHelper, outter_groupby_helper) {
