@@ -17374,6 +17374,7 @@ int ObDDLService::create_hidden_table(
   const ObTableSchema *orig_table_schema = NULL;
   const ObDatabaseSchema *orig_database_schema = nullptr;
   common::ObArenaAllocator allocator_for_redef(lib::ObLabel("StartRedefTable"));
+  bool has_conflict_ddl = false;
   if (OB_UNLIKELY(!create_hidden_table_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create_hidden_table_arg is invalid", K(ret), K(create_hidden_table_arg));
@@ -17382,6 +17383,17 @@ int ObDDLService::create_hidden_table(
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(sql_proxy_,
+                                                                     tenant_id,
+                                                                     table_id,
+                                                                     0 /* task_id */,
+                                                                     create_hidden_table_arg.get_ddl_type(),
+                                                                     has_conflict_ddl))) {
+    LOG_WARN("fail to check has conflict ddl",
+        K(ret), K(tenant_id), K(table_id), K(create_hidden_table_arg.get_ddl_type()));
+  } else if (has_conflict_ddl) {
+    ret = OB_EAGAIN;
+    LOG_WARN("there are conflict ddl", K(ret), K(table_id));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, orig_table_schema))) {
