@@ -1104,26 +1104,28 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 K(parse_tree.children_));
           } else {
             show_resv_ctx.condition_node_ = parse_tree.children_[1];
-            uint64_t show_db_id;
-            if (OB_FAIL(get_database_info(parse_tree.children_[0],
-                                          database_name,
-                                          real_tenant_id,
-                                          show_resv_ctx,
-                                          show_db_id))) {
-              LOG_WARN("fail to get database info", K(ret));
-            } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("database id is invalid", K(ret), K(show_db_id));
-            } else {
-              int64_t proc_type = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
-              show_resv_ctx.stmt_type_ = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? stmt::T_SHOW_PROCEDURE_STATUS : stmt::T_SHOW_FUNCTION_STATUS;
-              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PROCEDURE_STATUS);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PROCEDURE_STATUS,
-                            OB_SYS_DATABASE_NAME, OB_ALL_ROUTINE_TNAME,
-                            OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
-                            OB_MYSQL_SCHEMA_NAME, OB_PROC_TNAME,
-                            show_db_id, proc_type);
+            bool skip_db_filter = OB_ISNULL(parse_tree.children_[0]);
+            uint64_t show_db_id = OB_INVALID_ID;
+            if (!skip_db_filter) {
+              if (OB_FAIL(get_database_info(parse_tree.children_[0],
+                                            database_name,
+                                            real_tenant_id,
+                                            show_resv_ctx,
+                                            show_db_id))) {
+                LOG_WARN("fail to get database info", K(ret));
+              } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("database id is invalid", K(ret), K(show_db_id));
+              }
             }
+            int64_t proc_type = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
+            show_resv_ctx.stmt_type_ = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? stmt::T_SHOW_PROCEDURE_STATUS : stmt::T_SHOW_FUNCTION_STATUS;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PROCEDURE_STATUS);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PROCEDURE_STATUS,
+                          OB_SYS_DATABASE_NAME, OB_ALL_ROUTINE_TNAME,
+                          OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
+                          OB_MYSQL_SCHEMA_NAME, OB_PROC_TNAME,
+                          show_db_id, skip_db_filter ? "true" : "false", proc_type);
           }
         }();
         break;
@@ -3606,7 +3608,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLE_STATUS,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PROCEDURE_STATUS,
                        NULL,
-                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and d.database_id = %ld and p.routine_type = %ld ORDER BY name COLLATE utf8mb4_bin ASC",
+                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and (d.database_id = %ld or %s) and p.routine_type = %ld ORDER BY name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRIGGERS,
