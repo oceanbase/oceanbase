@@ -76,6 +76,9 @@ private:
                           obrpc::ObCreateUDTArg &crt_udt_arg);
   int resolve_type_nested_table(const ParseNode *nested_node,
                                 obrpc::ObCreateUDTArg &crt_udt_arg);
+  int resolve_impl(const ParseNode *type_def_node,
+                   obrpc::ObCreateUDTArg &udt_arg,
+                   const ObString &object_spec);
   int resolve_type_define(const ParseNode *type_def_node,
                         obrpc::ObCreateUDTArg &crt_udt_arg,
                         const ObString &object_spec);
