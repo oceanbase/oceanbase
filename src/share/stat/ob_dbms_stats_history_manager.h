@@ -179,6 +179,11 @@ private:
                                      hash::ObHashMap<ObOptColumnStat::Key, bool> &having_stat_part_col_map,
                                      const int64_t saving_time);
 
+  static int clean_useless_dml_stat_info(ObMySQLTransaction &trans,
+                                         uint64_t tenant_id,
+                                         const uint64_t start_time,
+                                         const uint64_t max_duration_time);
+
   static int remove_useless_column_stats(ObMySQLTransaction &trans,
                                          uint64_t tenant_id,
                                          const uint64_t start_time,

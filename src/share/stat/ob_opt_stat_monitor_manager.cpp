@@ -213,11 +213,8 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
           LOG_WARN("failed to flush opt stat monitoring info caused by unknow error",
                                                 K(ret), K(all_server_arr.at(i).get_addr()), K(arg));
           //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later.
-          if (ignore_failed) {
-            LOG_USER_WARN(OB_ERR_DBMS_STATS_PL, "failed to flush opt stat monitoring info");
-            if (OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
-              LOG_WARN("failed to push back", K(ret));
-            }
+          if (ignore_failed && OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
@@ -383,9 +380,7 @@ int ObOptStatMonitorManager::update_dml_stat_info()
     if (OB_SUCC(ret)) {
       bool no_check = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
       uint64_t data_version = 0;
-      if (OB_FAIL(clean_useless_dml_stat_info())) {
-        LOG_WARN("failed to clean useless dml stat info", K(ret));
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
        LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(data_version));
       } else if (data_version < DATA_VERSION_4_2_4_0 || no_check) {
         //do nothing
@@ -644,46 +639,6 @@ int ObOptStatMonitorManager::generate_opt_stat_monitoring_info_rows(observer::Ob
   if (OB_FAIL(dml_stat_map_.foreach_refactored(getter))) {
     LOG_WARN("fail to generate opt stat monitoring info rows", K(ret));
   } else {/*do nothing*/}
-  return ret;
-}
-
-int ObOptStatMonitorManager::clean_useless_dml_stat_info()
-{
-  int ret = OB_SUCCESS;
-  ObSqlString delete_table_sql;
-  ObSqlString delete_part_sql;
-  int64_t affected_rows1 = 0;
-  int64_t affected_rows2 = 0;
-  const char* all_table_name = NULL;
-  if (OB_FAIL(ObSchemaUtils::get_all_table_name(tenant_id_, all_table_name))) {
-    LOG_WARN("failed to get all table name", K(ret));
-  } else if (OB_FAIL(delete_table_sql.append_fmt("DELETE FROM %s m WHERE (NOT EXISTS (SELECT 1 " \
-            "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
-            "AND t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND db.database_name != '__recyclebin')) "\
-            "AND table_id > %ld;",
-            share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_DATABASE_TNAME,
-            OB_MAX_INNER_TABLE_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(delete_part_sql.append_fmt("DELETE /*+leading(view3, m1) use_nl(view3, m1)*/FROM %s m1 WHERE (tenant_id, table_id, tablet_id) IN ( "\
-            "SELECT /*+leading(m, view1, view2, t, db) use_hash(m,view1) use_hash((m,view1),view2) use_nl((m,view1,view2),t), use_nl((m,view1,view2,t),db)*/ "\
-            "m.tenant_id, m.table_id, m.tablet_id FROM %s m, %s t, %s db WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
-            "AND t.tenant_id = db.tenant_id AND t.database_id = db.database_id AND db.database_name != '__recyclebin' "\
-            "AND NOT EXISTS (SELECT 1 FROM %s p WHERE  p.table_id = m.table_id AND p.tenant_id = m.tenant_id AND p.tablet_id = m.tablet_id) "\
-            "AND NOT EXISTS (SELECT 1 FROM %s sp WHERE  sp.table_id = m.table_id AND sp.tenant_id = m.tenant_id AND sp.tablet_id = m.tablet_id)) "\
-            "AND table_id > %ld;",
-            share::OB_ALL_MONITOR_MODIFIED_TNAME, share::OB_ALL_MONITOR_MODIFIED_TNAME,
-            all_table_name, share::OB_ALL_DATABASE_TNAME, share::OB_ALL_PART_TNAME,
-            share::OB_ALL_SUB_PART_TNAME, OB_MAX_INNER_TABLE_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, delete_table_sql.ptr(), affected_rows1))) {
-    LOG_WARN("failed to execute sql", K(ret), K(delete_table_sql));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, delete_part_sql.ptr(), affected_rows2))) {
-    LOG_WARN("failed to execute sql", K(ret), K(delete_part_sql));
-  } else {
-    LOG_TRACE("succeed to clean useless monitor modified_data", K(tenant_id_), K(delete_table_sql),
-                                                                K(affected_rows1), K(delete_part_sql),
-                                                                K(affected_rows2));
-  }
   return ret;
 }
 
