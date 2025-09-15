@@ -586,6 +586,16 @@ private:
     ObIArray<common::ObString> &file_urls, ObIArray<int64_t> *file_sizes = nullptr,
     ObIArray<common::ObString> *content_digests = nullptr,
     ObIArray<int64_t> *modify_times = nullptr);
+  static int prepare_single_scan_range_(const uint64_t tenant_id,
+                                        const ObDASScanCtDef &das_ctdef,
+                                        ObDASScanRtDef *das_rtdef,
+                                        ObExecContext &exec_ctx,
+                                        ObIArray<int64_t> &partition_ids,
+                                        common::ObIArray<common::ObNewRange *> &ranges,
+                                        common::ObIAllocator &range_allocator,
+                                        common::ObIArray<common::ObNewRange *> &new_range,
+                                        bool is_file_on_disk,
+                                        ObExecContext &ctx);
 private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);

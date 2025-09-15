@@ -487,7 +487,47 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
                                                     ObIAllocator &range_allocator,
                                                     ObIArray<ObNewRange *> &new_range,
                                                     bool is_file_on_disk,
-                                                    ObExecContext &ctx) {
+                                                    ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ranges.empty())) {
+    // always false
+    new_range.reset();
+    ObNewRange *range = NULL;
+    if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to new a ptr", K(ret));
+    } else if (OB_FAIL(convert_external_table_empty_range(ObExternalTableUtils::dummy_file_name(),
+                                                          ObString(""), // content_digest
+                                                          0, // file_size
+                                                          0, // modify_time
+                                                          0, // file_id
+                                                          0, // ref_table_id
+                                                          range_allocator,
+                                                          *range))) {
+      LOG_WARN("failed to convert external table empty range", K(ret));
+    } else if (OB_FAIL(new_range.push_back(range))) {
+      LOG_WARN("failed to push back range");
+    }
+  } else if (OB_FAIL(prepare_single_scan_range_(tenant_id, das_ctdef, das_rtdef,exec_ctx,
+                                                partition_ids, ranges, range_allocator,
+                                                new_range, is_file_on_disk, ctx))) {
+    LOG_WARN("failed to prepare single scan range");
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::prepare_single_scan_range_(const uint64_t tenant_id,
+                                                     const ObDASScanCtDef &das_ctdef,
+                                                     ObDASScanRtDef *das_rtdef,
+                                                     ObExecContext &exec_ctx,
+                                                     ObIArray<int64_t> &partition_ids,
+                                                     ObIArray<ObNewRange *> &ranges,
+                                                     ObIAllocator &range_allocator,
+                                                     ObIArray<ObNewRange *> &new_range,
+                                                     bool is_file_on_disk,
+                                                     ObExecContext &ctx)
+{
   int ret = OB_SUCCESS;
   ObSEArray<ObExternalFileInfo, 16> file_urls;
   ObSEArray<ObNewRange *, 4> tmp_ranges;
@@ -737,11 +777,29 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_range(ObExecContext &ex
                                                                ObIArray<ObNewRange *> &new_ranges)
 {
   int ret = OB_SUCCESS;
-  new_ranges.reset();
   ObLakeTableFileMap *map = nullptr;
   if (OB_ISNULL(tab_loc) || OB_ISNULL(tablet_loc) || OB_ISNULL(tablet_loc->loc_meta_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null table loc or tablet loc", KP(tab_loc), K(tablet_loc));
+  } else if (OB_UNLIKELY(new_ranges.empty())) {
+    // always false
+    ObNewRange *range = NULL;
+    if (OB_UNLIKELY(tab_loc->get_tablet_locs().size() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected tablets counts", K(tab_loc->get_tablet_locs()));
+    } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObNewRange");
+    } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(nullptr,
+                                                                          0, // file_id
+                                                                          tablet_loc->partition_id_, // part_id
+                                                                          range_allocator,
+                                                                          *range))) {
+      LOG_WARN("failed to make lake table range");
+    } else if (OB_FAIL(new_ranges.push_back(range))) {
+      LOG_WARN("failed to push back range");
+    }
+  } else if (OB_FALSE_IT(new_ranges.reset())) {
   } else if (OB_FAIL(exec_ctx.get_lake_table_file_map(map))) {
     LOG_WARN("failed to get lake table file map");
   } else if (OB_ISNULL(map)) {
@@ -766,6 +824,8 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_range(ObExecContext &ex
                                                                             range_allocator,
                                                                             *range))) {
         LOG_WARN("failed to make lake table range");
+      } else if (OB_FAIL(new_ranges.push_back(range))) {
+        LOG_WARN("failed to push back range");
       }
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < files->count(); ++j) {
