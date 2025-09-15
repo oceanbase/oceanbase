@@ -2321,7 +2321,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::get_next_batch(const int64_t
     if (OB_ITER_END != ret) {
       SQL_ENG_LOG(WARN, "failed to get next batch stored rows", K(ret));
     }
-  } else if (read_rows > 0 && use_heap_sort_ && OB_FAIL(adjust_topn_read_rows(sk_rows_, read_rows))) {
+  } else if (read_rows > 0 && !use_partition_topn_sort_ && OB_FAIL(adjust_topn_read_rows(sk_rows_, read_rows))) {
     SQL_ENG_LOG(WARN, "failed to adjust read rows with ties", K(ret));
   } else if (OB_FAIL(attach_rows(read_rows))) {
     SQL_ENG_LOG(WARN, "failed to attach rows", K(ret));
