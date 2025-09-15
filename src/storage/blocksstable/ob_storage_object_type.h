@@ -111,8 +111,6 @@ enum class ObStorageObjectType : uint8_t
     EXTERNAL_TABLE_FILE,
     MACRO_CACHE_CKPT_DATA,
     MACRO_CACHE_CKPT_META,
-    SHARED_INC_MAJOR_DATA_MACRO,
-    SHARED_INC_MAJOR_META_MACRO,
     MAX
 };
 static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
