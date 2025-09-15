@@ -240,7 +240,8 @@ public:
   int get_all_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                    const common::ObPartID part_id,
                                    common::ObIArray<common::ObTabletID> &tablet_ids,
-                                   common::ObIArray<common::ObObjectID> &out_part_ids);
+                                   common::ObIArray<common::ObObjectID> &out_part_ids,
+                                   const bool need_dedup);
   int get_all_tablet_and_object_id(common::ObIArray<common::ObTabletID> &tablet_ids,
                                    common::ObIArray<common::ObObjectID> &out_part_ids);
   int get_default_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,

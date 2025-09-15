@@ -997,6 +997,10 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  int get_part_idx_by_tablets(
+      const ObIArray<uint64_t> &tablet_ids,
+      ObIArray<int64_t> &part_idx,
+      ObIArray<int64_t> &subpart_idx) const;
   int get_part_id_by_tablet(
       const ObTabletID &tablet_id,
       int64_t &part_id,

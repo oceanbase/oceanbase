@@ -266,8 +266,14 @@ int ObDASTabletMapper::get_tablet_and_object_id(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid part level", KR(ret), K(part_level));
     }
-    OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
-    OZ(append_array_no_dup(object_ids, tmp_part_ids));
+    if (OB_FAIL(ret)) {
+    } else if (tablet_ids.empty() && object_ids.empty()) {
+      OZ(tablet_ids.assign(tmp_tablet_ids));
+      OZ(object_ids.assign(tmp_part_ids));
+    } else {
+      OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
+      OZ(append_array_no_dup(object_ids, tmp_part_ids));
+    }
   } else {
     if (part_level == PARTITION_LEVEL_TWO) {
       ret = OB_NOT_SUPPORTED;
@@ -560,7 +566,8 @@ int ObDASTabletMapper::get_tablet_and_object_id(const ObPartitionLevel part_leve
 int ObDASTabletMapper::get_all_tablet_and_object_id(const ObPartitionLevel part_level,
                                                     const ObPartID part_id,
                                                     ObIArray<ObTabletID> &tablet_ids,
-                                                    ObIArray<ObObjectID> &out_part_ids)
+                                                    ObIArray<ObObjectID> &out_part_ids,
+                                                    const bool need_dedup)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = NULL == table_schema_ ? vt_svr_pair_->get_table_id()
@@ -571,9 +578,17 @@ int ObDASTabletMapper::get_all_tablet_and_object_id(const ObPartitionLevel part_
   ObSEArray<ObTabletID, 4> tmp_tablet_ids;
   ObSEArray<ObObjectID, 4> tmp_part_ids;
   OZ (get_tablet_and_object_id(part_level, part_id, whole_range, tmp_tablet_ids, tmp_part_ids));
-  OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
-  OZ(append_array_no_dup(out_part_ids, tmp_part_ids));
-
+  if (OB_FAIL(ret)) {
+  } else if (tablet_ids.empty() && out_part_ids.empty()) {
+    OZ(tablet_ids.assign(tmp_tablet_ids));
+    OZ(out_part_ids.assign(tmp_part_ids));
+  } else if (!need_dedup) {
+    OZ(append(tablet_ids, tmp_tablet_ids));
+    OZ(append(out_part_ids, tmp_part_ids));
+  } else {
+    OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
+    OZ(append_array_no_dup(out_part_ids, tmp_part_ids));
+  }
   return ret;
 }
 
@@ -582,26 +597,27 @@ int ObDASTabletMapper::get_all_tablet_and_object_id(ObIArray<ObTabletID> &tablet
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(table_schema_)) {
+    bool need_dedup = !out_part_ids.empty();
     if (!table_schema_->is_partitioned_table()) {
       if (OB_FAIL(get_non_partition_tablet_id(tablet_ids, out_part_ids))) {
         LOG_WARN("get non partition tablet id failed", K(ret));
       }
     } else if (PARTITION_LEVEL_ONE == table_schema_->get_part_level()) {
       if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                             tablet_ids, out_part_ids))) {
+                                               tablet_ids, out_part_ids, need_dedup))) {
         LOG_WARN("fail to get tablet ids", K(ret));
       }
     } else {
       ObArray<ObTabletID> tmp_tablet_ids;
       ObArray<ObObjectID> tmp_part_ids;
       if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                               tmp_tablet_ids, tmp_part_ids))) {
+                                               tmp_tablet_ids, tmp_part_ids, false))) {
         LOG_WARN("Failed to get all part ids", K(ret));
       }
       for (int64_t idx = 0; OB_SUCC(ret) && idx < tmp_part_ids.count(); ++idx) {
         ObObjectID part_id = tmp_part_ids.at(idx);
         if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_TWO, part_id,
-                                                 tablet_ids, out_part_ids))) {
+                                                 tablet_ids, out_part_ids, need_dedup))) {
           LOG_WARN("fail to get tablet ids", K(ret));
         }
       }

@@ -3950,6 +3950,7 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
     LOG_WARN("fail to get index schema", K(ret), K(ref_table_id), K(table_id));
   }
   int64_t N = partitions.count();
+  ObArray<int64_t> table_part_ids;
   for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
     ObLogicalOperator::PartInfo part_info;
     const ObOptTabletLoc &part_loc = partitions.at(i).get_partition_location();
@@ -3982,17 +3983,27 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
           }
         }
         OZ(part_infos.push_back(part_info));
+        LOG_TRACE("explain print partition", K(tablet_id), K(part_info), K(ref_table_id));
       } else {
-        OZ(table_schema->get_part_idx_by_tablet(tablet_id, part_info.part_id_, part_info.subpart_id_));
-        OZ(part_infos.push_back(part_info));
+        OZ(table_part_ids.push_back(part_loc.get_partition_id()));
       }
-      // if (OB_FAIL(ret) || part_info.part_id_ == OB_INVALID_INDEX) {
-      //   //do nothing
-      // } else if (!table_schema->is_external_table() || common::ObTabletID::INVALID_TABLET_ID == tablet_id.id()) {
-      //   //do nothing
-      // } else {
-      // }
-      LOG_TRACE("explain print partition", K(tablet_id), K(part_info), K(ref_table_id));
+    }
+  }
+  if (OB_SUCC(ret) && table_part_ids.count() > 0) {
+    ObArray<int64_t> part_idx;
+    ObArray<int64_t> subpart_idx;
+    if (OB_FAIL(table_schema->get_part_idx_by_part_id(table_part_ids, part_idx, subpart_idx))) {
+      LOG_WARN("failed to get part idx", K(ret));
+    } else if (OB_UNLIKELY(part_idx.count() != subpart_idx.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected part idx", K(part_idx), K(subpart_idx));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_idx.count(); ++i) {
+      ObLogicalOperator::PartInfo part_info;
+      part_info.part_id_ = part_idx.at(i);
+      part_info.subpart_id_ = subpart_idx.at(i);
+      OZ(part_infos.push_back(part_info));
+      LOG_TRACE("explain print partition", K(part_info), K(ref_table_id));
     }
   }
   if (OB_SUCC(ret)) {
