@@ -686,7 +686,11 @@ int detect_java_runtime() {
       LOG_USER_WARN(
           OB_INVALID_ARGUMENT,
           "run jvm without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`");
-    } else { /* do nothing */}
+    } else if (OB_ISNULL(STRSTR(java_opts, "-Xrs"))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'JAVA_OPTS' without critical config `-Xrs`", K(ret), K(java_opts));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `-Xrs`");
+    }
   }
 
   if (OB_SUCC(ret)) {
