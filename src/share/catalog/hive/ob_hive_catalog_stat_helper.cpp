@@ -1429,8 +1429,15 @@ int ObHiveCatalogStatHelper::convert_hive_value_to_obobj(
         int32_t val_len = data_len;
 
         if (ob_is_decimal_int_tc(obj_type)) {
-          // Set as decimal int directly
-          obj_value.set_decimal_int(val_len, stats_data.scale, decint);
+          // Set as decimal int directly, need to allocate memory for the data
+          ObDecimalInt *allocated_decint = nullptr;
+          if (OB_ISNULL(allocated_decint = static_cast<ObDecimalInt *>(allocator.alloc(val_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory for decimal int", K(ret), K(val_len));
+          } else {
+            MEMCPY(allocated_decint, decint, val_len);
+            obj_value.set_decimal_int(val_len, stats_data.scale, allocated_decint);
+          }
         } else if (obj_type == common::ObNumberType ||
                    obj_type == common::ObUNumberType) {
           // Convert to number format
