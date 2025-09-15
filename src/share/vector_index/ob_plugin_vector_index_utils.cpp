@@ -1230,11 +1230,10 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null column schema ptr", K(ret));
-        } else if (col_schema->is_vec_hnsw_vid_column() || col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
-          if (vid_column_id != 0) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("vid col and pk increment col both exist", K(ret), K(vid_column_id), K(col_schema->get_column_id()));
-          } else {
+        } else if (col_schema->is_vec_hnsw_vid_column()) {
+          vid_column_id = col_schema->get_column_id();
+        } else if (col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
+          if (vid_column_id == 0) {  // vid_column_id != 0 means it has been assigned by vid col.
             vid_column_id = col_schema->get_column_id();
           }
         } else if (col_schema->is_vec_hnsw_type_column()) {
@@ -1300,11 +1299,10 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
           LOG_WARN("unexpected null column schema ptr", K(ret));
         } else if (col_schema->is_vec_hnsw_scn_column()) {
           scn_column_id = col_schema->get_column_id();
-        } else if (col_schema->is_vec_hnsw_vid_column() || col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
-          if (vid_column_id != 0) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("vid col and pk increment col both exist", K(ret), K(vid_column_id), K(col_schema->get_column_id()));
-          } else {
+        } else if (col_schema->is_vec_hnsw_vid_column()) {
+          vid_column_id = col_schema->get_column_id();
+        } else if (col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
+          if (vid_column_id == 0) {  // vid_column_id != 0 means it has been assigned by vid col.
             vid_column_id = col_schema->get_column_id();
           }
         } else if (col_schema->is_vec_hnsw_type_column()) {
