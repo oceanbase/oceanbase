@@ -11830,5 +11830,18 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "plsql_can_transform_sql_to_assign": {
+    "id": 10755,
+    "name": "plsql_can_transform_sql_to_assign",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "4.4.2.0",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

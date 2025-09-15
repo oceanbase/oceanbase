@@ -539,6 +539,7 @@ public:
   const common::ObString get_local_nls_date_format() const;
   const common::ObString get_local_nls_timestamp_format() const;
   const common::ObString get_local_nls_timestamp_tz_format() const;
+  bool get_local_plsql_can_transform_sql_to_assign() const;
   int get_local_nls_format(const ObObjType type, ObString &format_str) const;
   int set_time_zone(const common::ObString &str_val, const bool is_oralce_mode,
                     const bool need_check_valid /* true */);
@@ -1876,7 +1877,8 @@ public:
         ob_enable_parameter_anonymous_block_(false),
         current_default_catalog_(0),
         security_version_(0),
-        ob_enable_ps_parameter_anonymous_block_(false)
+        ob_enable_ps_parameter_anonymous_block_(false),
+        plsql_can_transform_sql_to_assign_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1947,6 +1949,7 @@ public:
       security_version_ = 0;
       ob_enable_ps_parameter_anonymous_block_ = false;
       current_default_catalog_ = 0;
+      plsql_can_transform_sql_to_assign_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2001,7 +2004,8 @@ public:
             ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_ &&
             security_version_ == other.security_version_ &&
             ob_enable_ps_parameter_anonymous_block_ == other.ob_enable_ps_parameter_anonymous_block_ &&
-            current_default_catalog_ == other.current_default_catalog_;
+            current_default_catalog_ == other.current_default_catalog_ &&
+            plsql_can_transform_sql_to_assign_ == other.plsql_can_transform_sql_to_assign_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2190,6 +2194,7 @@ public:
     uint64_t current_default_catalog_;
     uint64_t security_version_;
     bool ob_enable_ps_parameter_anonymous_block_;
+    bool plsql_can_transform_sql_to_assign_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2313,6 +2318,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, plsql_can_transform_sql_to_assign);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, current_default_catalog);
     void set_autocommit_info(bool inc_value)
     {
@@ -2391,9 +2397,10 @@ private:
       bool inc_security_version_:1;
       bool inc_ob_enable_ps_parameter_anonymous_block_:1;
       bool inc_current_default_catalog_:1;
+      bool inc_plsql_can_transform_sql_to_assign_:1;
       // when add new inc bit, please update reserved_bits_,
       // so that the total bits is 64
-      int reserved_bits_:5;
+      int reserved_bits_:4;
     };
     union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
@@ -2808,7 +2815,10 @@ inline const common::ObString ObBasicSessionInfo::get_local_nls_timestamp_tz_for
 {
   return sys_vars_cache_.get_nls_timestamp_tz_format();
 }
-
+inline bool ObBasicSessionInfo::get_local_plsql_can_transform_sql_to_assign() const
+{
+  return sys_vars_cache_.get_plsql_can_transform_sql_to_assign();
+}
 inline int ObBasicSessionInfo::get_local_nls_format(const ObObjType type, ObString &format_str) const
 {
   int ret = common::OB_SUCCESS;
@@ -2866,6 +2876,7 @@ public:
     COLLATION_DATABASE,
     PLSQL_CCFLAGS,
     PLSQL_OPTIMIZE_LEVEL,
+    PLSQL_CAN_TRANSFORM_TO_ASSIGN,
     MAX_ENV,
   };
 
@@ -2876,6 +2887,7 @@ public:
     share::SYS_VAR_COLLATION_DATABASE,
     share::SYS_VAR_PLSQL_CCFLAGS,
     share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
+    share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
     share::SYS_VAR_INVALID
   };
 
@@ -2885,7 +2897,8 @@ public:
     collation_connection_(CS_TYPE_INVALID),
     collation_database_(CS_TYPE_INVALID),
     plsql_ccflags_(),
-    plsql_optimize_level_(2)  // default PLSQL_OPTIMIZE_LEVEL = 2
+    plsql_optimize_level_(2),  // default PLSQL_OPTIMIZE_LEVEL = 2
+    plsql_can_transform_to_assign_(1)  // default PLSQL_CAN_TRANSFORM_TO_ASSIGN = 1
   { }
 
   virtual ~ObExecEnv() {}
@@ -2895,7 +2908,8 @@ public:
                K_(collation_connection),
                K_(collation_database),
                K_(plsql_ccflags),
-               K_(plsql_optimize_level));
+               K_(plsql_optimize_level),
+               K_(plsql_can_transform_to_assign));
 
   void reset();
 
@@ -2923,6 +2937,9 @@ public:
   int64_t get_plsql_optimize_level() { return plsql_optimize_level_; }
   void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
 
+  bool get_plsql_can_transform_to_assign() { return plsql_can_transform_to_assign_; }
+  void set_plsql_can_transform_to_assign(bool can_transform) { plsql_can_transform_to_assign_ = can_transform; }
+
 private:
   ObSQLMode sql_mode_;
   ObCollationType charset_client_;
@@ -2930,6 +2947,7 @@ private:
   ObCollationType collation_database_;
   ObString plsql_ccflags_;
   int64_t plsql_optimize_level_;
+  bool plsql_can_transform_to_assign_;
 };
 
 
