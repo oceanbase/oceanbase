@@ -1336,6 +1336,10 @@ TEST_F(TestTxCallbackList, parallel_replay_and_replay_fail_parallel_start_pos) {
 
 namespace memtable
 {
+// override free_mvcc_row_callback is only intended to avoid errors during free,
+// don't really want to free the callback object.
+// if the callback object is really freed, the UT execution will report
+// an error "callback has not submitted log yet when commit callback".
 void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
 {
   if (OB_ISNULL(cb)) {
@@ -1345,7 +1349,7 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   } else {
     ATOMIC_INC(&callback_free_count_);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
-    ctx_cb_allocator_.free(cb);
+    // delete cb;
     cb = NULL;
   }
 }

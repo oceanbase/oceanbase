@@ -207,18 +207,9 @@ void ObTransCallbackMgr::reset()
       }
     }
   }
-  if (NULL != cb_allocators_) {
-    for (int i = 0; i < MAX_CB_ALLOCATOR_COUNT; ++i) {
-      cb_allocators_[i].reset();
-    }
-  }
   if (OB_NOT_NULL(callback_lists_)) {
     cb_allocator_.free(callback_lists_);
     callback_lists_ = NULL;
-  }
-  if (OB_NOT_NULL(cb_allocators_)) {
-    cb_allocator_.free(cb_allocators_);
-    cb_allocators_ = NULL;
   }
   parallel_stat_ = 0;
   write_epoch_ = 0;
@@ -240,13 +231,13 @@ void ObTransCallbackMgr::reset()
 
 void ObTransCallbackMgr::free_mvcc_row_callback(ObITransCallback *cb)
 {
-  int64_t owner = cb->owner_;
+  int64_t owner = cb->owner_; // 0: use obj pool, 1: use cb_allocator_
   if (-1 == owner) {
     TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "callback free failed", KPC(cb));
   } else if (0 == owner) {
     mem_ctx_obj_pool_.free<ObMvccRowCallback>(cb);
-  } else if (0 < owner && MAX_CB_ALLOCATOR_COUNT >= owner && OB_NOT_NULL(cb_allocators_)) {
-    cb_allocators_[owner - 1].free(cb);
+  } else if (1 == owner) {
+    cb_allocator_.free(cb);
   } else {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected cb", KPC(cb));
 #ifdef ENABLE_DEBUG_LOG
@@ -257,55 +248,18 @@ void ObTransCallbackMgr::free_mvcc_row_callback(ObITransCallback *cb)
 
 void *ObTransCallbackMgr::alloc_mvcc_row_callback()
 {
-  int ret = OB_SUCCESS;
   ObITransCallback *callback = nullptr;
-  const int64_t tid = get_itid() + 1;
-  const int64_t slot = tid % MAX_CB_ALLOCATOR_COUNT;
-  int64_t stat = ATOMIC_LOAD(&parallel_stat_);
-
-  if (PARALLEL_STMT == stat || (for_replay_ && parallel_replay_)) {
-    if (NULL == cb_allocators_) {
-      WRLockGuard guard(rwlock_);
-      if (NULL == cb_allocators_) {
-        ObMemtableCtxCbAllocator *tmp_cb_allocators = nullptr;
-        if (NULL == (tmp_cb_allocators = (ObMemtableCtxCbAllocator *)cb_allocator_.alloc(
-                       sizeof(ObMemtableCtxCbAllocator) * MAX_CB_ALLOCATOR_COUNT))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          TRANS_LOG(WARN, "alloc cb allocator fail", K(ret));
-        } else {
-          for (int i = 0; OB_SUCC(ret) && i < MAX_CB_ALLOCATOR_COUNT; ++i) {
-            UNUSED(new(tmp_cb_allocators + i) ObMemtableCtxCbAllocator());
-            if (OB_FAIL(tmp_cb_allocators[i].init(MTL_ID()))) {
-              TRANS_LOG(ERROR, "cb_allocator_ init error", K(ret));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            cb_allocators_ = tmp_cb_allocators;
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (NULL == cb_allocators_) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "cb allocators is not inited", K(ret));
-      } else {
-        callback = (ObITransCallback *)(cb_allocators_[slot].alloc(sizeof(ObMvccRowCallback)));
-        if (nullptr != callback) {
-          callback->owner_ = slot + 1;
-        }
-      }
+  if (PARALLEL_STMT == parallel_stat_ || (for_replay_ && parallel_replay_)) {
+    cb_allocator_.expand_nway();
+    callback = (ObITransCallback *)(cb_allocator_.alloc(sizeof(ObMvccRowCallback)));
+    if (nullptr != callback) {
+      callback->owner_ = 1;
     }
   } else {
     callback = (ObITransCallback *)(mem_ctx_obj_pool_.alloc<ObMvccRowCallback>());
     if (nullptr != callback) {
       callback->owner_ = 0;
     }
-  }
-
-  if (OB_FAIL(ret)) {
-    callback = nullptr;
   }
 
   return callback;

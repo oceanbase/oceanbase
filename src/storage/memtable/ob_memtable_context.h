@@ -234,12 +234,15 @@ private:
 // The page size is 8K, support concurrency, but at a poor performance.
 class ObMemtableCtxCbAllocator final : public common::ObIAllocator
 {
+  enum { NWay_NUM = 16};
 public:
   explicit ObMemtableCtxCbAllocator()
-    : alloc_count_(0),
+    : ctx_cb_mem_limiter_(),
+      alloc_count_(0),
       free_count_(0),
       alloc_size_(0),
-      is_inited_(false) {}
+      is_inited_(false),
+      expand_nway_called_(false) {}
   ~ObMemtableCtxCbAllocator()
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
@@ -256,8 +259,8 @@ public:
       TRANS_LOG(ERROR, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
     }
     if (IS_NOT_INIT) {
-      if (OB_FAIL(allocator_.init(NULL,
-                                  common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+      if (OB_FAIL(allocator_.init(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                  ctx_cb_mem_limiter_,
                                   attr))) {
         TRANS_LOG(ERROR, "callback allocator init failed", K(ret), K(lbt()), K(tenant_id));
       } else {
@@ -266,6 +269,7 @@ public:
     }
     if (OB_SUCC(ret)) {
       allocator_.set_attr(attr);
+      allocator_.set_nway(1);
     }
     ATOMIC_STORE(&alloc_count_, 0);
     ATOMIC_STORE(&free_count_, 0);
@@ -279,11 +283,19 @@ public:
       OB_SAFE_ABORT();
     }
     if (!only_check) {
-      allocator_.reset();
+      allocator_.purge();
       ATOMIC_STORE(&alloc_count_, 0);
       ATOMIC_STORE(&free_count_, 0);
       ATOMIC_STORE(&alloc_size_, 0);
       ATOMIC_STORE(&is_inited_, false);
+    }
+  }
+  inline void expand_nway()
+  {
+    if (!expand_nway_called_) {
+      if (ATOMIC_BCAS(&expand_nway_called_, false, true)) {
+        allocator_.set_nway(NWay_NUM);
+      }
     }
   }
   void *alloc(const int64_t size) override
@@ -313,12 +325,14 @@ public:
     }
   }
 private:
-  ObFIFOAllocator allocator_;
+  ObBlockAllocMgr ctx_cb_mem_limiter_;
+  ObVSliceAllocT<NWay_NUM> allocator_;
   int64_t alloc_count_;
   int64_t free_count_;
   int64_t alloc_size_;
   // used to record the init condition of FIFO allocator
   bool is_inited_;
+  bool expand_nway_called_;
 };
 
 class ObMemtable;
