@@ -188,12 +188,11 @@ public:
   void set_is_index_back(bool is_index_back) { is_index_back_ = is_index_back; }
   void set_can_extract_range(bool can_extract_range) { can_extract_range_ = can_extract_range; }
   /*
-   * a global index that cannot extract range and is index back 
-   * may have highly variable cost for different queries
-   * sharding info is not that matter for such index so we skip comparing it 
-   * and let other dimensions to decide the comparison result
+   * a global index that cannot extract range and is index back is unstable,
+   * it may have highly variable cost for different queries.
    */
-  inline bool should_skip_compare() const { return is_global_index_ && !can_extract_range_ && is_index_back_; }
+  inline bool is_unstable_global_index() const 
+  { return is_global_index_ && !can_extract_range_ && is_index_back_; }
 private:
   ObShardingInfo *sharding_info_;
   bool is_single_get_;
