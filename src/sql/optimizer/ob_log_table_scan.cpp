@@ -572,11 +572,16 @@ int ObLogTableScan::copy_filter_with_virtual_gen_columns(ObRawExpr *&filter)
     ObRawExprReplacer replacer;
     for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_columns.count(); ++j) {
       ObRawExpr *copied_expr = NULL;
-      if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
-                                        vir_gen_columns.at(j)->get_expr_class(),
-                                        vir_gen_columns.at(j)->get_expr_type(),
-                                        copied_expr))) {
+      if (OB_ISNULL(vir_gen_columns.at(j)) || !vir_gen_columns.at(j)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extract null or non column expr", K(ret), KPC(vir_gen_columns.at(j)));
+      } else if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
+                                                                              vir_gen_columns.at(j)->get_expr_class(),
+                                                                              vir_gen_columns.at(j)->get_expr_type(),
+                                                                              copied_expr))) {
         LOG_WARN("failed to create raw expr", K(ret));
+      } else if (OB_FAIL(copier.add_skipped_expr(static_cast<ObColumnRefRawExpr*>(vir_gen_columns.at(j))->get_dependant_expr()))) {
+        LOG_WARN("failed to add skipped dependant expr", K(ret));
       } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_columns.at(j)))) {
         LOG_WARN("failed to assign old expr", K(ret));
       } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_columns.at(j), copied_expr))) {
