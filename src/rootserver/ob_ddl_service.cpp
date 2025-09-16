@@ -28476,7 +28476,7 @@ int ObDDLService::check_table_exists(const uint64_t tenant_id,
           || (TMP_TABLE_ORA_SESS == expected_table_type && tmp_table_schema->is_oracle_trx_tmp_table())) {
         //ignore
       } else if (TMP_TABLE == expected_table_type) {
-        if (!tmp_table_schema->is_tmp_table()) {
+        if (!tmp_table_schema->is_mysql_tmp_table()) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("Table type not equal!", K(expected_table_type), K(table_item), K(*tmp_table_schema), K(ret));
         }

@@ -99,6 +99,7 @@ public:
 
 private:
   int check_inner_stat_();
+  int check_enable_clean_( bool &enable_clean);
   int gather_tables_(const uint64_t table_session_id, const bool check_host, ObArray<uint64_t> &tables);
   int drop_tables_(const uint64_t table_session_id, const ObArray<uint64_t> &tables);
   int detect_session_alive_(const uint64_t table_session_id, bool local_only, const ObArray<ObAddr> *dest_server, bool &is_alive);

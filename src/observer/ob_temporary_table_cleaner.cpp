@@ -286,9 +286,11 @@ int ObSessionTmpTableCleaner::remove_task(const uint64_t table_session_id)
   return ret;
 }
 
-int ObSessionTmpTableCleaner::normal_table_clean()
+int ObSessionTmpTableCleaner::check_enable_clean_( bool &enable_clean)
 {
   int ret = OB_SUCCESS;
+  enable_clean = false;
+  bool is_oracle_mode = false;
   uint64_t data_version = 0;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
@@ -298,7 +300,25 @@ int ObSessionTmpTableCleaner::normal_table_clean()
     LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
   } else if (data_version < DATA_VERSION_4_3_5_4) {
     // skip
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id_, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode with tenant_id ", KR(ret), K_(tenant_id));
+  } else if (is_oracle_mode) {
+    // skip
   } else {
+    enable_clean = true;
+  }
+  return ret;
+}
+
+int ObSessionTmpTableCleaner::normal_table_clean()
+{
+  int ret = OB_SUCCESS;
+  bool enable_clean = false;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(check_enable_clean_(enable_clean))) {
+    LOG_WARN("fail to check enable clean", KR(ret));
+  } else if (enable_clean) {
     ObArray<uint64_t> session_ids;
     {
       SpinRLockGuard guard(lock_);
@@ -328,6 +348,8 @@ int ObSessionTmpTableCleaner::normal_table_clean()
         }
       }
     }
+  } else {
+    LOG_TRACE("not enable to clean", KR(ret));
   }
   return ret;
 }
@@ -335,16 +357,12 @@ int ObSessionTmpTableCleaner::normal_table_clean()
 int ObSessionTmpTableCleaner::standalone_table_clean()
 {
   int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
+  bool enable_clean = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
-    LOG_INFO("not primary tenant, temp table clean skip", K_(tenant_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-    LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
-  } else if (data_version < DATA_VERSION_4_3_5_4) {
-    // skip
-  } else {
+  } else if (OB_FAIL(check_enable_clean_(enable_clean))) {
+    LOG_WARN("fail to check enable clean", KR(ret));
+  } else if (enable_clean) {
 
     if (OB_FAIL(gather_residual_sessions_local_())) {
       LOG_WARN("fail to gather sessions", KR(ret));
@@ -357,6 +375,8 @@ int ObSessionTmpTableCleaner::standalone_table_clean()
     } else if (is_leader && OB_FAIL(gather_residual_sessions_global_())) {
       LOG_WARN("fail to gather sessions", KR(ret));
     }
+  } else {
+    LOG_TRACE("not enable to clean", KR(ret));
   }
   return ret;
 }
@@ -628,7 +648,7 @@ int ObSessionTmpTableCleaner::drop_tables_(const uint64_t table_session_id, cons
                K(table_id), K(table_session_id), K(table_schema->get_session_id()));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, table_schema->get_database_id(), database_schema))) {
       LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K(table_schema->get_database_id()));
-    } else {
+    } else if (table_schema->is_mysql_tmp_table() || table_schema->is_ctas_tmp_table()) {
       if (USER_TABLE == table_schema->get_table_type()) {
         // CTAS table
         drop_table_arg.table_type_ = share::schema::USER_TABLE;
