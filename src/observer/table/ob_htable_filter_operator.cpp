@@ -777,7 +777,7 @@ int ObHTableRowIterator::get_next_result_internal(ResultType*& result)
       if (time_to_live_ > 0) {
         column_tracker_->set_ttl(time_to_live_);
       }
-      if (max_version_ > 0) {
+      if (max_version_ > 0 && !htable_filter_.is_keep_max_versions()) {
         int32_t real_max_version = std::min(column_tracker_->get_max_version(), max_version_);
         column_tracker_->set_max_version(real_max_version);
       }

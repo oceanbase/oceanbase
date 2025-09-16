@@ -872,6 +872,8 @@ public:
   int32_t get_row_offset_per_column_family() const { return offset_per_row_per_cf_; }
   const ObString &get_filter() const { return filter_string_; }
   void clear_columns() { select_column_qualifier_.reset(); }
+  void set_keep_max_versions(bool keep_max_versions) { keep_max_versions_ = keep_max_versions; }
+  bool is_keep_max_versions() const { return keep_max_versions_; }
   uint64_t get_checksum() const;
   int deep_copy(ObIAllocator &allocator, ObHTableFilter &dst) const;
 
@@ -882,7 +884,8 @@ public:
                K_(max_versions),
                K_(limit_per_row_per_cf),
                K_(offset_per_row_per_cf),
-               K_(filter_string));
+               K_(filter_string),
+               K_(keep_max_versions));
 private:
   bool is_valid_;
   ObSEArray<ObString, 16> select_column_qualifier_;
@@ -892,6 +895,7 @@ private:
   int32_t limit_per_row_per_cf_;  // default -1 means unlimited
   int32_t offset_per_row_per_cf_; // default 0
   ObString filter_string_;
+  bool keep_max_versions_; // default false, if true, kv_attributes's max_versions will be ignored
 };
 
 enum ObTableAggregationType

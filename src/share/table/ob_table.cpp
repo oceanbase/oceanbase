@@ -1737,7 +1737,8 @@ ObHTableFilter::ObHTableFilter()
      max_versions_(1),
      limit_per_row_per_cf_(-1),
      offset_per_row_per_cf_(0),
-     filter_string_()
+     filter_string_(),
+     keep_max_versions_(false)
 {}
 
 void ObHTableFilter::reset()
@@ -1750,7 +1751,7 @@ void ObHTableFilter::reset()
   limit_per_row_per_cf_ = -1;
   offset_per_row_per_cf_ = 0;
   filter_string_.reset();
-
+  keep_max_versions_ = false;
 }
 
 int ObHTableFilter::add_column(const ObString &qualifier)
@@ -1883,7 +1884,8 @@ OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
                        max_versions_,
                        limit_per_row_per_cf_,
                        offset_per_row_per_cf_,
-                       filter_string_);
+                       filter_string_,
+                       keep_max_versions_);
 
 ////////////////////////////////////////////////////////////////
 int ObTableQueryIterableResultBase::append_family(ObNewRow &row, ObString family_name)

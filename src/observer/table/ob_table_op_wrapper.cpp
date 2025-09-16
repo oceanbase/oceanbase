@@ -665,6 +665,9 @@ int ObHTableDeleteExecutor::generate_filter(const ObITableEntity &entity,
   } else if (OB_FAIL(filter.add_column(qualifier))) {
     LOG_WARN("failed to add column", K(ret));
   }
+  // The scan for Delete needs to delete according to the max_versions identified by the upper layer,
+  // and should not be overridden by the max_versions from kv_attributes.
+  filter.set_keep_max_versions(true);
   int64_t timestamp = -htable_cell.get_timestamp();        // negative to get the original value
   if (-ObHTableConstants::LATEST_TIMESTAMP == timestamp) {  // INT64_MAX
     // delete the most recently added cell
