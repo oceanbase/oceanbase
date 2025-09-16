@@ -378,9 +378,13 @@ int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) c
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dimension type is different",
              "dim_type", get_dim_type(), "other.dim_type", other.get_dim_type());
-  } else if (should_skip_compare()
-             || static_cast<const ObShardingInfoDim &>(other).should_skip_compare()) {
-    status = ObSkylineDim::EQUAL;
+  // if one of them is unstable global index, we treat the other one as dominated
+  } else if (is_unstable_global_index() &&
+             !static_cast<const ObShardingInfoDim &>(other).is_unstable_global_index()) {
+    status = ObSkylineDim::RIGHT_DOMINATED;
+  } else if (!is_unstable_global_index() &&
+             static_cast<const ObShardingInfoDim &>(other).is_unstable_global_index()) {
+    status = ObSkylineDim::LEFT_DOMINATED;
   } else {
     status = ObSkylineDim::EQUAL;
     const ObShardingInfoDim &tmp = static_cast<const ObShardingInfoDim &>(other);
