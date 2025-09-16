@@ -277,6 +277,7 @@ private:
 #define CVP(version) VP(version)
 // print data version in human readable way
 #define KDV(x) #x, DVP(x)
+#define KDV_(x) #x, DVP(x##_)
 // print cluster version in human readable way
 #define KCV(x) #x, CVP(x)
 #endif /* OCEABASE_OBSERVER_OB_CLUSTER_VERSION_H_*/

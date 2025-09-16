@@ -24161,7 +24161,7 @@ int ObDDLService::get_alter_system_table_schema_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig_schema and hard_code_schema table_id not match", KR(ret), K(orig_schema),
         K(hard_code_schema));
-  } else if (OB_FAIL(ObRootInspection::check_and_get_system_table_column_diff(orig_schema,
+  } else if (OB_FAIL(ObSysTableInspection::check_and_get_system_table_column_diff(orig_schema,
           hard_code_schema, add_column_ids, alter_column_ids))) {
     LOG_WARN("fail to check system table's column schemas", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(new_schema.assign(orig_schema))) {

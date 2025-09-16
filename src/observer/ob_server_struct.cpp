@@ -109,6 +109,7 @@ ObGlobalContext &ObGlobalContext::operator=(const ObGlobalContext &other)
     inner_sql_rpc_proxy_ = other.inner_sql_rpc_proxy_;
     executor_rpc_ = other.executor_rpc_;
     sql_proxy_ = other.sql_proxy_;
+    oracle_sql_proxy_ = other.oracle_sql_proxy_;
     rs_mgr_ = other.rs_mgr_;
     bandwidth_throttle_ = other.bandwidth_throttle_;
     vt_par_ser_ = other.vt_par_ser_;

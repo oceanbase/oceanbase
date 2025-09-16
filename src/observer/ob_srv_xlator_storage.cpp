@@ -111,4 +111,5 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
 #ifdef OB_BUILD_ARBITRATION
     RPC_PROCESSOR(ObFetchArbMemberP, gctx_);
 #endif
+    RPC_PROCESSOR(ObCheckSysTableSchemaP, gctx_);
 }
