@@ -488,6 +488,7 @@ public:
     return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();
   }
   static int32_t get_json_max_depth_config();
+  static int32_t get_json_max_depth_config(ObSQLSessionInfo *session);
 
   static int is_allow_partial_update(const ObExpr &expr, ObEvalCtx &ctx, const ObString &locator_str, bool &allow_partial_update);
   static bool is_json_partial_update_mode(const ObExpr &expr);

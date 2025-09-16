@@ -105,7 +105,14 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
   bool may_match_many = (expr.arg_cnt_ > 2);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  int32_t cached_json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+  int32_t cached_trace_level = 0;
+  if (OB_NOT_NULL(session)) {
+    cached_json_max_depth = session->get_cached_json_document_max_depth();
+    cached_trace_level = session->get_cached_multimodel_memory_trace_level();
+  }
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, cached_trace_level, "json_extract");
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -124,7 +131,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null_result))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (OB_FALSE_IT(allocator.set_baseline_size(j_str.length()))) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base, 0, ObJsonExprHelper::get_json_max_depth_config()))) {
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base, 0, cached_json_max_depth))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
     }

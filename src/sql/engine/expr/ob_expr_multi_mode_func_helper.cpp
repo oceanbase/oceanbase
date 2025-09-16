@@ -89,6 +89,26 @@ MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int
   }
 }
 
+MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int64_t tenant_id, int &ret, 
+                                     int32_t cached_trace_level, const char *func_name)
+    : arena_(arena),
+      baseline_size_(0),
+      type_(type),
+      mem_threshold_flag_(0),
+      check_level_(cached_trace_level > 2 ? 0 : cached_trace_level),
+      func_name_(func_name),
+      children_used_(used()),
+      expect_threshold_(0),
+      ret_(ret),
+      ext_used_(0)
+{
+  uint64_t alloc_tenant = arena.get_arena().get_tenant_id();
+  if (alloc_tenant != tenant_id) {
+    INIT_SUCC(ret);
+    LOG_WARN("[Multi-mode ALARM] different tenants", K(ret), K(alloc_tenant), K(tenant_id));
+  }
+}
+
 MultimodeAlloctor::~MultimodeAlloctor() 
 {
   if (ret_ == OB_SUCCESS && check_level_ > 0 && has_reached_threshold()) {

@@ -67,6 +67,8 @@ class MultimodeAlloctor : public ObIAllocator
 public:
   MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int &ret);
   MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int64_t tenant_id, int &ret, const char *func_name = "");
+  MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int64_t tenant_id, int &ret, 
+                    int32_t cached_trace_level, const char *func_name = "");
   ~MultimodeAlloctor();
 
 public:

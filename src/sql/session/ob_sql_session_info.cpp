@@ -3193,6 +3193,14 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_sql_ccl_rule_, tenant_config->_enable_sql_ccl_rule);
       // 13. enable_ps_parameterize
       ATOMIC_STORE(&enable_ps_parameterize_, tenant_config->enable_ps_parameterize);
+      // 14. JSON and multi-mode related config cache
+      int32_t json_max_depth = tenant_config->json_document_max_depth;
+      if (json_max_depth < JSON_DOCUMENT_MAX_DEPTH || json_max_depth > 1024) {
+        json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+      }
+      ATOMIC_STORE(&json_document_max_depth_, json_max_depth);
+      ATOMIC_STORE(&multimodel_memory_trace_level_, 
+                   tenant_config->_multimodel_memory_trace_level > 2 ? 0 : tenant_config->_multimodel_memory_trace_level);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(

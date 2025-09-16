@@ -279,7 +279,7 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
       if (is_oracle && j_str.length() == 0) {
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
-                                                  expect_type, j_base, parse_flag))) {
+                                                  expect_type, j_base, parse_flag, ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
         if (is_oracle) {
           ret = OB_ERR_JSON_SYNTAX_ERROR;
@@ -2663,6 +2663,17 @@ int ObJsonExprHelper::get_json_max_depth_config()
     if (json_max_depth < JSON_DOCUMENT_MAX_DEPTH || json_max_depth > 1024) {
       json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
     }
+  }
+  return json_max_depth;
+}
+
+int ObJsonExprHelper::get_json_max_depth_config(ObSQLSessionInfo *session)
+{
+  int32_t json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+  if (OB_NOT_NULL(session)) {
+    json_max_depth = session->get_cached_json_document_max_depth();
+  } else {
+    json_max_depth = get_json_max_depth_config();
   }
   return json_max_depth;
 }
