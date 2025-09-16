@@ -6143,6 +6143,7 @@ void ObTableSchema::reset_column_info()
   rowkey_info_.reset();
   shadow_rowkey_info_.reset();
   index_info_.reset();
+  generated_columns_.reset();
   column_array_ = NULL;
   id_hash_array_ = NULL;
   name_hash_array_ = NULL;
