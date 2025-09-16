@@ -986,10 +986,6 @@ void ObPluginVectorIndexService::destroy()
     }
     index_ls_mgr_map_.destroy();
     allocator_.reset();
-    if (memory_context_ != nullptr) {
-      DESTROY_CONTEXT(memory_context_);
-      memory_context_ = nullptr;
-    }
     alloc_.reset();
 
     // destroy vec async task

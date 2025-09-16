@@ -44,10 +44,11 @@ class ObTenantVectorAllocator : public ObVectorMemContext,
                                 public ObIAllocator {
 public:
   ObTenantVectorAllocator() : is_inited_(false), all_used_mem_(0), throttle_tool_(nullptr), memory_context_(nullptr) {}
+  ~ObTenantVectorAllocator() { destroy(); }
   DEFINE_CUSTOM_FUNC_FOR_THROTTLE(Vector);
 
   int init();
-  void destroy() { is_inited_ = false; }
+  void destroy();
   virtual void *alloc(const int64_t size) override { return ObVectorMemContext::alloc(size); }
   void *alloc(const int64_t size, const int64_t expire_ts);
   virtual void *alloc(const int64_t size, const ObMemAttr &attr) override;
