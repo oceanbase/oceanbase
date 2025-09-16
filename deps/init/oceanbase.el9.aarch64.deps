@@ -57,8 +57,8 @@ obdevtools-llvm-17.0.3-232024111415.el8.aarch64.rpm cpp_standard=20
 devdeps-oblogmsg-1.1-52024052811.el8.aarch64.rpm
 devdeps-rocksdb-6.22.1-32024123015.el8.aarch64.rpm
 obstack-2.0.4-172024070513.el8.aarch64.rpm
-obshell-4.3.0.1-12025052014.el8.aarch64.rpm target=community
-#obshell-4.3.1.0-12025070719.el8.aarch64.rpm target=community
+obshell-4.3.1.0-12025070719.el8.aarch64.rpm target=community
+#obshell-4.3.2.0-32025091516.el8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-1.6.0-41.el8.aarch64.rpm target=community
