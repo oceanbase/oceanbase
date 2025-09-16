@@ -719,6 +719,7 @@ struct ObPLExecCtx : public ObPLINS
       exec_ctx_->get_sql_ctx()->is_sensitive_ = is_sensitive;
     }
   }
+  inline sql::ObExecContext *get_exec_ctx() const { return exec_ctx_; }
 
   common::ObIAllocator *allocator_; // Symbol Allocator
   sql::ObExecContext *exec_ctx_;

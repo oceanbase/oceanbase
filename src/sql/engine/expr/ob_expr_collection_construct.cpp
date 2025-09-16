@@ -190,7 +190,8 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
   // we will destroy this obj in pl final interface
   if (OB_NOT_NULL(session) &&
       OB_NOT_NULL(session->get_pl_context()) &&
-      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx())) {
+      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
+      pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
     alloc = pl_exec_ctx->get_top_expr_allocator();
   }
   if (OB_SUCC(ret)) {
