@@ -201,8 +201,8 @@ struct StringBuffer
   }
   OB_INLINE char *seek(int64_t idx) // dangerous
   {
-    if (OB_UNLIKELY(0 > idx || idx > length_)) {
-      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(length_));
+    if (OB_UNLIKELY(0 > idx || idx > capacity_)) {
+      LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "idx out of range", K(idx), K(capacity_));
     }
     return buffer_ + idx;
   }
@@ -616,7 +616,7 @@ protected:
 	 * big5, cp932, gbk, sjis. the escape character (0x5C) may be part of a multi-byte
 	 * character and requires special judgment
 	 */
-	void check_real_escape(StringBuffer &str_buffer, bool &is_real_escape);
+	int check_real_escape(StringBuffer &str_buffer, bool &is_real_escape);
 	/**
 	 * Used to parse whitespace
 	 * @param [in] : pos the position of the first character

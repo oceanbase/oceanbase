@@ -2148,13 +2148,14 @@ int ObFastParserBase::process_comment_content(bool is_mysql_comment)
  * Character sets marked with escape_with_backslash_is_dangerous, such as big5, cp932, gbk, sjis
  * The escape character (0x5C) may be part of a multi-byte character and requires special judgment
  */
-inline void ObFastParserBase::check_real_escape(StringBuffer &str_buffer, bool &is_real_escape)
+inline int ObFastParserBase::check_real_escape(StringBuffer &str_buffer, bool &is_real_escape)
 {
-  if (OB_NOT_NULL(charset_info_) && charset_info_->escape_with_backslash_is_dangerous
-      && str_buffer.length() > 0) {
-    char *cur_pos = str_buffer.seek(str_buffer.length() - 1);
-    char *last_check_pos =
-      str_buffer.seek(last_escape_check_pos_ > 0 ? last_escape_check_pos_ - 1 : 0);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(str_buffer.resize_buffer(str_buffer.length() + 1))) {
+    LOG_WARN("failed to resize buffer", K(ret));
+  } else if (OB_NOT_NULL(charset_info_) && charset_info_->escape_with_backslash_is_dangerous) {
+    char *cur_pos = str_buffer.seek(str_buffer.length());
+    char *last_check_pos = str_buffer.seek(last_escape_check_pos_);
     int error = 0;
     int expected_well_formed_len = cur_pos - last_check_pos;
 
@@ -2171,6 +2172,7 @@ inline void ObFastParserBase::check_real_escape(StringBuffer &str_buffer, bool &
       }
     }
   }
+  return ret;
 }
 
 // [A-Za-z0-9_]
@@ -2289,7 +2291,7 @@ int ObFastParserBase::toupper(const ObCollationType collation_type, const ObStri
       }
     } else {
       size_t size = cs_info->cset->caseup(cs_info, const_cast<char *>(src.ptr()), src.length(),
-                                          str_buffer.buffer(), str_buffer.capacity());
+                                          str_buffer.buffer(), buf_len);
       dst.assign_ptr(str_buffer.buffer(), static_cast<ObString::obstr_size_t>(size));
     }
   }
@@ -2313,7 +2315,7 @@ inline int ObFastParserBase::process_format_token() {
       no_param_sql_[no_param_sql_len_++] = ' ';
       no_param_sql_[no_param_sql_len_] = '\0';
     }
-  } else {
+  } else if (token_len > 0) {
     int64_t pos = copy_begin_pos_;
     skip_invalid_charactar(pos, token_len, raw_sql_);
     if(no_param_sql_len_ + 2 * token_len + 3 + 1 >= alloc_len_ &&
@@ -2340,7 +2342,7 @@ inline int ObFastParserBase::process_format_token() {
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && token_len > 0) {
     copy_end_pos_ = raw_sql_.cur_pos_;
     copy_begin_pos_ = raw_sql_.cur_pos_;
   }
@@ -2706,9 +2708,10 @@ int ObFastParserMysql::process_string(const char quote)
     } else if ('\\' == ch) {
       bool is_real_escape = true;
       bool is_no_backslash_escapes = false;
-      check_real_escape(str_buffer_, is_real_escape);
       IS_NO_BACKSLASH_ESCAPES(sql_mode_, is_no_backslash_escapes);
-      if (!is_real_escape || is_no_backslash_escapes) {
+      if (OB_FAIL(check_real_escape(str_buffer_, is_real_escape))) {
+        LOG_WARN("failed to check real escape", K(ret));
+      } else if (!is_real_escape || is_no_backslash_escapes) {
         if (OB_FAIL(str_buffer_.append_character('\\'))) {
           LOG_WARN("failed to append character", K(ret));
         }
