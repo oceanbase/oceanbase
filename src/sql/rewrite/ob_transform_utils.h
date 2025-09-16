@@ -2045,9 +2045,8 @@ public:
                                      const TableItem *table,
                                      const ObIArray<uint64_t> &column_ids,
                                      double &repeat_rate);
-  static int is_cost_based_trans_enable(ObTransformerCtx *ctx,
-                                        const ObGlobalHint &global_hint,
-                                        bool &is_enabled);
+  static bool is_cost_based_trans_enable(ObTransformerCtx &ctx,
+                                         const ObGlobalHint &global_hint);
   static int check_const_select(ObTransformerCtx *ctx,
                                 const ObSelectStmt *stmt,
                                 bool &is_const_select);
