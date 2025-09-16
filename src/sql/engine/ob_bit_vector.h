@@ -65,7 +65,13 @@ public:
   bool exist(const int64_t idx) const { return at(idx); }
   void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t size)
   {
-    MEMCPY(data_, src.data_, byte_count(size));
+    MEMCPY(data_, src.data_, BYTES_PER_WORD * (size / WORD_BITS));
+    if (0 != size % WORD_BITS) {
+      const int64_t last_word_idx = size / WORD_BITS;
+      const int64_t remain_bits = size % WORD_BITS;
+      data_[last_word_idx] &= ~((1UL << (remain_bits)) - 1); // low bit reset
+      data_[last_word_idx] |= src.data_[last_word_idx] & ((1UL << (remain_bits)) - 1); // copy low bit and keep high bit remain
+    }
   }
   inline void set(const int64_t idx);
   OB_INLINE void atomic_set(const int64_t idx);
