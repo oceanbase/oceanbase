@@ -336,10 +336,10 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
-  ObLSMigrationHandler *ls_migration_handler = nullptr;
   ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
   const bool is_shared_storage = GCTX.is_shared_storage_mode();
   LOG_INFO("start clear dag net ctx", K(ctx_));
 
@@ -351,19 +351,19 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("ls should not be NULL", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), K(ctx_));
   } else {
-    if (OB_SUCCESS != (tmp_ret = update_migration_status_(ls))) {
+    if (OB_TMP_FAIL(update_migration_status_(ls))) {
       LOG_WARN("failed to update migration status", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_SUCCESS != (tmp_ret = report_ls_meta_table_(ls))) {
+    if (OB_TMP_FAIL(report_ls_meta_table_(ls))) {
       LOG_WARN("failed to report ls meta table", K(tmp_ret), K(ret), K(ctx_));
     }
 
-    if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
-    } else if (OB_FAIL(ctx_.get_result(result))) {
+    if (OB_FAIL(ctx_.get_result(result))) {
       LOG_WARN("failed to get ls complate migration ctx result", K(ret), K(ctx_));
     } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
@@ -384,6 +384,10 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
     FLOG_INFO("finish ls complete migration dag net", "ls id", ctx_.arg_.ls_id_, "type", ctx_.arg_.type_, K(cost_ts));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
