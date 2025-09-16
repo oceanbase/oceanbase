@@ -708,6 +708,10 @@ int ObPartitionMajorMerger::merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iter
   int ret = OB_SUCCESS;
   if (OB_FAIL(partition_fuser_->fuse_row(merge_iters))) {
     STORAGE_LOG(WARN, "Failed to fuse row", KPC_(partition_fuser), K(ret));
+    for (int64_t i = 0; i < merge_iters.count(); i++) {
+      const blocksstable::ObDatumRow *merge_row = merge_iters.at(i)->get_curr_row();
+      STORAGE_LOG(WARN, "dump merge rows", K(ret), K(i), KPC(merge_iters.at(i)), KPC(merge_row));
+    }
   } else if (OB_FAIL(process(*partition_fuser_->get_result_row()))) {
     STORAGE_LOG(WARN, "Failed to process row", K(ret), K(*partition_fuser_->get_result_row()));
   } else if (OB_FAIL(partition_fuser_->calc_column_checksum(false))) {

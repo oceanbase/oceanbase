@@ -279,8 +279,14 @@ int ObMajorPartitionMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
   }
 
   if (OB_SUCC(ret) && result_row_.row_flag_.is_exist_without_delete()) {
-    result_row_.row_flag_.reset();
-    result_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    if (nop_pos_.count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "exist nop column", K(ret), K(nop_pos_), K(result_row_));
+    }
+    else {
+      result_row_.row_flag_.reset();
+      result_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    }
   }
   return ret;
 }
