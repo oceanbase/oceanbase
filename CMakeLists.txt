@@ -14,7 +14,7 @@ elseif(OB_BUILD_STANDALONE)
   project("OceanBase_standalone"
     VERSION 4.4.1.0
     DESCRIPTION "OceanBase Standalone Edition"
-    HOMEPAGE_URL "https://open.oceanbase.com/"
+    HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "standalone build enabled")
 else()
