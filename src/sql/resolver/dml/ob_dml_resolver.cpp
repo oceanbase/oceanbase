@@ -20664,7 +20664,7 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
           ObColumnRefRawExpr *match_col = NULL;
           if (OB_ISNULL(cur_match_expr->get_match_columns().at(j)) || !cur_match_expr->get_match_columns().at(j)->is_column_ref_expr()) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column");
           } else if (OB_FALSE_IT(match_col = static_cast<ObColumnRefRawExpr*>(cur_match_expr->get_match_columns().at(j)))) {
           } else if (table_id != OB_INVALID_ID && table_id != match_col->get_table_id()) {
             ret = OB_INVALID_ARGUMENT;
