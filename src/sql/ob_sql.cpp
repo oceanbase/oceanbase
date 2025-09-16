@@ -5324,9 +5324,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   // record whether needs to do parameterization at this time,
   // if exact mode is on, not do parameterizaiton
-  bool is_enable_transform_tree = mode == PC_PS_MODE
-                                      ? pc_ctx.ps_need_parameterized_
-                                      : !session.get_enable_exact_mode();
+  bool is_enable_transform_tree = !session.get_enable_exact_mode();
   //重新解析前将这两个标记reset掉，避免前面查plan cache的操作导致这两个参数在重新生成plan后会出现不幂等的问题
   pc_ctx.not_param_index_.reset();
   pc_ctx.neg_param_index_.reset();
