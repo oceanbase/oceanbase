@@ -664,7 +664,7 @@ typedef common::LinkHashValue<SessionInfoKey> SessionInfoHashValue;
 // ObSQLSessionInfo存储其他执行时状态信息，远程执行SQL执行计划时，**不需要**序列化到远端
 class ObSQLSessionInfo: public common::ObVersionProvider, public ObBasicSessionInfo, public SessionInfoHashValue
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   friend class LinkExecCtxGuard;
   // notice!!! register exec ctx to session for later access

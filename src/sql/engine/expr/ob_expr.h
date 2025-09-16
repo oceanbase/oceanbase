@@ -377,7 +377,7 @@ extern int expr_default_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL);
 
 struct ObExpr
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
 
   const static uint32_t INVALID_EXP_CTX_ID = UINT32_MAX;

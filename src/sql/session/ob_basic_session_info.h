@@ -156,7 +156,7 @@ enum ObSessionRetryStatus
 /// 成员存储一份，方便访问。注意在更新系统变量和序列化的时候保持两份数据的一致。
 class ObBasicSessionInfo
 {
-  OB_UNIS_VERSION_V(1);
+  OB_UNIS_VERSION_V(2);
 public:
   // 256KB ~= 4 * OB_COMMON_MEM_BLOCK_SIZE
   static const int64_t APPROX_MEM_USAGE_PER_SESSION = 256 * 1024L;

@@ -124,7 +124,32 @@ int ObDtlLinkedBuffer::push_batch_id(int64_t batch_id, int64_t rows)
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
+int ObDtlLinkedBuffer::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version < CLUSTER_VERSION_4_2_5_7) {
+    int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+      SQL_DTL_LOG(WARN, "serialize fail", K(ret));
+    } else {
+      int64_t serial_size = pos - pos_bak;
+      int64_t tmp_pos = 0;
+      CHECK_SERIALIZE_SIZE(ObDtlLinkedBuffer, serial_size);
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObDtlLinkedBuffer::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   using namespace oceanbase::common;
   int ret = OB_SUCCESS;
@@ -167,45 +192,78 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
   return ret;
 }
 
-OB_DEF_DESERIALIZE(ObDtlLinkedBuffer)
+int ObDtlLinkedBuffer::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
-  using namespace oceanbase::common;
   int ret = OB_SUCCESS;
-  OB_UNIS_DECODE(size_);
+  int64_t version = 0;
+  int64_t len = 0;
+
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
-    buf_ = (char*)buf + pos;
-    pos += size_;
-    LST_DO_CODE(OB_UNIS_DECODE,
-      is_data_msg_,
-      seq_no_,
-      tenant_id_,
-      is_eof_,
-      timeout_ts_,
-      msg_type_,
-      flags_,
-      dfo_key_,
-      use_interm_result_,
-      batch_id_,
-      batch_info_valid_);
-    if (OB_SUCC(ret) && batch_info_valid_) {
-      LST_DO_CODE(OB_UNIS_DECODE, batch_info_);
-    }
-    if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, dfo_id_, sqc_id_);
-    }
-    if (OB_SUCC(ret)) {
-      enable_channel_sync_ = false;
-      LST_DO_CODE(OB_UNIS_DECODE, enable_channel_sync_);
-    }
-    if (OB_SUCC(ret)) {
-      LST_DO_CODE(OB_UNIS_DECODE, register_dm_info_);
-    }
-    if (OB_SUCC(ret) && seq_no_ == 1) {
-      LST_DO_CODE(OB_UNIS_DECODE, op_info_);
+    if (len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_DTL_LOG(WARN, "can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      SQL_DTL_LOG(WARN, "buf length not enough", K(len), K(pos), K(data_len));
     }
   }
   if (OB_SUCC(ret)) {
-    (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
+
+    using namespace oceanbase::common;
+    OB_UNIS_DECODE(size_);
+    if (OB_SUCC(ret)) {
+      buf_ = (char*)buf + pos;
+      pos += size_;
+      LST_DO_CODE(OB_UNIS_DECODE,
+        is_data_msg_,
+        seq_no_,
+        tenant_id_,
+        is_eof_,
+        timeout_ts_,
+        msg_type_,
+        flags_,
+        dfo_key_,
+        use_interm_result_,
+        batch_id_,
+        batch_info_valid_);
+      if (OB_SUCC(ret) && batch_info_valid_) {
+        LST_DO_CODE(OB_UNIS_DECODE, batch_info_);
+      }
+      if (OB_SUCC(ret)) {
+        LST_DO_CODE(OB_UNIS_DECODE, dfo_id_, sqc_id_);
+      }
+      if (OB_SUCC(ret)) {
+        enable_channel_sync_ = false;
+        LST_DO_CODE(OB_UNIS_DECODE, enable_channel_sync_);
+      }
+      if (OB_SUCC(ret)) {
+        LST_DO_CODE(OB_UNIS_DECODE, register_dm_info_);
+      }
+      if (OB_SUCC(ret) && version == 3) {
+        // mock deserialize row meta
+        int64_t row_meta_version = 0;
+        int64_t row_meta_len = 0;
+        OB_UNIS_DECODE(row_meta_version);
+        OB_UNIS_DECODE(row_meta_len);
+        if (OB_SUCC(ret)) {
+          pos += row_meta_len;
+        }
+      }
+      if (OB_SUCC(ret) && seq_no_ == 1) {
+        LST_DO_CODE(OB_UNIS_DECODE, op_info_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
+    }
+
+    pos = pos_orig + len;
   }
   return ret;
 }

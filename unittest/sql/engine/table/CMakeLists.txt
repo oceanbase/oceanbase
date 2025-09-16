@@ -1,0 +1,1 @@
+sql_unittest(test_table_scan_ctdef_serialize_compat)

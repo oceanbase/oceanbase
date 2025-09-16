@@ -211,7 +211,7 @@ public:
 class ObDtlLinkedBuffer
     : public common::ObLink
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObDtlLinkedBuffer()
       : buf_(), size_(), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),

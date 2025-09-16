@@ -1,6 +1,7 @@
 #sql_unittest(test_exec_context)
 sql_unittest(test_physical_plan)
 sql_unittest(test_sql_fixed_array)
+sql_unittest(test_physical_plan_ctx_serialize_compat)
 
 add_subdirectory(aggregate)
 add_subdirectory(dml)
@@ -13,3 +14,4 @@ add_subdirectory(sort)
 add_subdirectory(join)
 add_subdirectory(monitoring_dump)
 add_subdirectory(load_data)
+add_subdirectory(table)

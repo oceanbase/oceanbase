@@ -97,7 +97,32 @@ DEF_TO_STRING(ObEvalInfo)
   return pos;
 }
 
-OB_DEF_SERIALIZE(ObExpr)
+int ObExpr::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version < CLUSTER_VERSION_4_2_5_7) {
+    int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+      LOG_WARN("serialize failed", K(ret));
+    } else {
+      int64_t serial_size = pos - pos_bak;
+      int64_t tmp_pos = 0;
+      CHECK_SERIALIZE_SIZE(ObExpr, serial_size);
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObExpr::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -142,60 +167,100 @@ OB_DEF_SERIALIZE(ObExpr)
   return ret;
 }
 
-OB_DEF_DESERIALIZE(ObExpr)
+int ObExpr::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE,
-              type_,
-              datum_meta_,
-              obj_meta_,
-              max_length_,
-              obj_datum_map_,
-              ser_eval_func_,
-              serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
-              serialization::make_ser_carray(args_, arg_cnt_),
-              serialization::make_ser_carray(parents_, parent_cnt_),
-              frame_idx_,
-              datum_off_,
-              res_buf_off_,
-              res_buf_len_,
-              expr_ctx_id_,
-              extra_);
+  int64_t version = 0;
+  int64_t len = 0;
 
-  LST_DO_CODE(OB_UNIS_DECODE,
-              eval_info_off_,
-              flag_,
-              ser_eval_batch_func_,
-              eval_flags_off_,
-              pvt_skip_off_);
-  if (0 == eval_info_off_ && OB_SUCC(ret)) {
-    // compatible with 3.0, ObExprDatum::flag_ is ObEvalInfo
-    eval_info_off_ = datum_off_ + sizeof(ObDatum);
-  }
-
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
-    ObExprOperatorType type = T_INVALID;
-    // Add a type before extra_info to determine whether extra_info is empty
-    OB_UNIS_DECODE(type);
-    if (OB_FAIL(ret)) {
-    } else if (T_INVALID != type) {
-      OZ (ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(),
-                                        type, extra_info_));
-      CK (OB_NOT_NULL(extra_info_));
-      OB_UNIS_DECODE(*extra_info_);
+    if (len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("buf length not enough", K(len), K(pos), K(data_len));
     }
   }
-
   if (OB_SUCC(ret)) {
-    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_, datum_meta_.scale_,
-                                                lib::is_oracle_mode(), obj_meta_.has_lob_header());
-    CK(NULL != basic_funcs_);
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
+
+    LST_DO_CODE(OB_UNIS_DECODE,
+                type_,
+                datum_meta_,
+                obj_meta_,
+                max_length_,
+                obj_datum_map_,
+                ser_eval_func_,
+                serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
+                serialization::make_ser_carray(args_, arg_cnt_),
+                serialization::make_ser_carray(parents_, parent_cnt_),
+                frame_idx_,
+                datum_off_,
+                res_buf_off_,
+                res_buf_len_,
+                expr_ctx_id_,
+                extra_);
+
+    LST_DO_CODE(OB_UNIS_DECODE,
+                eval_info_off_,
+                flag_,
+                ser_eval_batch_func_,
+                eval_flags_off_,
+                pvt_skip_off_);
+    if (0 == eval_info_off_ && OB_SUCC(ret)) {
+      // compatible with 3.0, ObExprDatum::flag_ is ObEvalInfo
+      eval_info_off_ = datum_off_ + sizeof(ObDatum);
+    }
+
+    if (OB_SUCC(ret)) {
+      ObExprOperatorType type = T_INVALID;
+      // Add a type before extra_info to determine whether extra_info is empty
+      OB_UNIS_DECODE(type);
+      if (OB_FAIL(ret)) {
+      } else if (T_INVALID != type) {
+        OZ (ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(),
+                                          type, extra_info_));
+        CK (OB_NOT_NULL(extra_info_));
+        OB_UNIS_DECODE(*extra_info_);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_, datum_meta_.scale_,
+                                                  lib::is_oracle_mode(), obj_meta_.has_lob_header());
+      CK(NULL != basic_funcs_);
+    }
+    if (is_batch_result()) {
+      batch_idx_mask_ = UINT64_MAX;
+    }
+    OB_UNIS_DECODE(dyn_buf_header_offset_);
+    if (version == 3) {
+      uint32_t vector_header_off = 0;
+      uint32_t offset_off = 0;
+      uint32_t len_arr_off = 0;
+      uint32_t cont_buf_off = 0;
+      uint32_t null_bitmap_off = 0;
+      uint16_t vec_value_tc = 0;
+      ser_eval_batch_function mock_ser_eval_vector_func = nullptr;
+      LST_DO_CODE(OB_UNIS_DECODE,
+        vector_header_off,
+        offset_off,
+        len_arr_off,
+        cont_buf_off,
+        null_bitmap_off,
+        vec_value_tc,
+        mock_ser_eval_vector_func);
+    }
+    OB_UNIS_DECODE(local_session_var_id_);
+
+    pos = pos_orig + len;
   }
-  if (is_batch_result()) {
-    batch_idx_mask_ = UINT64_MAX;
-  }
-  OB_UNIS_DECODE(dyn_buf_header_offset_);
-  OB_UNIS_DECODE(local_session_var_id_);
   return ret;
 }
 

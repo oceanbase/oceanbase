@@ -136,7 +136,7 @@ struct GroupRescanParamInfo
 typedef common::ObFixedArray<GroupRescanParamInfo, common::ObIAllocator> GroupRescanParamArray;
 struct ObTableScanCtDef
 {
-  OB_UNIS_VERSION(1);
+  OB_UNIS_VERSION(2);
 public:
   ObTableScanCtDef(common::ObIAllocator &allocator)
     : pre_query_range_(allocator),
