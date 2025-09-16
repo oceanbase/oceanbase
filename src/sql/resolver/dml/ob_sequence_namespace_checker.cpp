@@ -107,11 +107,13 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FALSE_IT(dblink_id = dblink_schema->get_dblink_id())) {
-    } else if (OB_FAIL(ObDbLinkSqlService::convert_idenfitier_charset(allocator, sequence_name,
+    } else if (OB_FAIL(ObDbLinkSqlService::convert_idenfitier_charset(
+                        static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()), allocator, sequence_name,
                         session_info, nls_seq_name))) {
       LOG_WARN("convert charset of sequence name failed", K(ret));
-    } else if (OB_FAIL(ObDbLinkSqlService::convert_idenfitier_charset(allocator, database_name,
-                        session_info, nls_db_name))) {
+    } else if (OB_FAIL(ObDbLinkSqlService::convert_idenfitier_charset(
+                       static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()), allocator, database_name,
+                       session_info, nls_db_name))) {
       LOG_WARN("convert charset of database name failed", K(ret));
     } else if (OB_FAIL(session_info->get_dblink_sequence_id(nls_seq_name,
                                                             dblink_id, 

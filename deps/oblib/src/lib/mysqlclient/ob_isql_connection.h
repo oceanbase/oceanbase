@@ -106,15 +106,19 @@ public:
   {}
   virtual ~ObISQLConnection() {
     allocator_.reset();
+    next_conn_ = NULL;
+    reset_init_variables();
+  }
+
+  // sql execute interface
+  void reset_init_variables() {
     last_set_sql_mode_cstr_buf_size_ = 0;
     last_set_sql_mode_cstr_ = NULL;
     last_set_conn_charset_type_ = CHARSET_INVALID;
     last_set_transaction_isolation_cstr_ = NULL;
     ob_query_timeout_ = 0;
-    next_conn_ = NULL;
+    is_inited_ = false;
   }
-
-  // sql execute interface
   virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) = 0;

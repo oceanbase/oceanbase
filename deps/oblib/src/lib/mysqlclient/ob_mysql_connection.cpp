@@ -279,7 +279,7 @@ void ObMySQLConnection::close()
     closed_ = true;
     sessid_ = 0;
     memset(&mysql_, 0, sizeof(MYSQL));
-    set_session_init_status(false);
+    reset_init_variables();
   }
 }
 
