@@ -2042,10 +2042,6 @@ int ObPartitionSplitTask::check_health()
       LOG_WARN("data table or dest table not exist", K(ret), K(is_data_table_exist), K(table_id));
     }
   }
-  if (ObDDLTaskStatus::FAIL == static_cast<ObDDLTaskStatus>(task_status_)
-      || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
-    ret = OB_SUCCESS; // allow clean up
-  }
   check_ddl_task_execute_too_long();
   return ret;
 }

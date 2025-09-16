@@ -1382,9 +1382,9 @@ void ObSSDataSplitHelper::reset()
   for (int64_t i = 0; i < split_sstable_list_handle_.count(); i++) {
     if (split_sstable_list_handle_[i]->is_valid()
         && i < add_minor_op_handle_.count() && add_minor_op_handle_[i]->is_valid()
-        && !add_minor_op_handle_[i]->get_atomic_op()->is_committed()) {
+        && !add_minor_op_handle_[i]->get_atomic_op()->is_finished()) {
       if (OB_FAIL(split_sstable_list_handle_[i]->get_atomic_file()->abort_op_parallel(*add_minor_op_handle_[i]))) {
-        LOG_ERROR("abort failed", K(ret));
+        LOG_WARN("abort failed", K(ret));
       }
     } else {
       LOG_INFO("abort op", K(ret), K(i));
