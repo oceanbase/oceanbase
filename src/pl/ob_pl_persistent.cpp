@@ -261,6 +261,7 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                 int16_t sub_id = 0;
                 OZ (cg.init());
                 if (cg.get_debug_mode()
+                    || cg.get_profile_mode()
                     || !routine_ast->get_is_all_sql_stmt()
                     || !routine_ast->get_obj_access_exprs().empty()) {
                   OZ (SMART_CALL(decode_dll(session_info, schema_guard, routine->get_exec_env(), *routine_ast, *routine, buf, len, pos, cur_level, sub_id)));
@@ -277,6 +278,11 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                   OX (routine->set_has_parallel_affect_factor(routine_ast->has_parallel_affect_factor()));
                   OX (routine->set_ret_type(routine_ast->get_ret_type()));
                   OZ (routine->set_types(routine_ast->get_user_type_table()));
+                  if (OB_SUCC(ret) && cg.get_profile_mode()) {
+                    OX (routine->set_profiler_unit_info(key_id_, routine->get_proc_type()));
+                    OZ (SMART_CALL(
+                          ObPLCodeGenerator::set_profiler_unit_info_recursive(*routine)));
+                  }
                 } else {
                   // simple routine(generate by generate_simpile interface), skip encode header byte
                   OZ (SMART_CALL(decode_dll(session_info, schema_guard, routine->get_exec_env(), *routine_ast, *routine, buf, len, pos, cur_level, sub_id)));
@@ -586,10 +592,10 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
       LOG_WARN("fail to get build_version", K(ret));
     } else if (OB_FAIL(query_inner_sql.assign_fmt(
       "select merge_version, dll %s %s from OCEANBASE.%s where database_id = %ld and key_id = %ld "
-      "and compile_db_id = %ld and arch_type = '%s' and build_version = '%s'",
+      "and compile_db_id = %ld and arch_type = '%.*s' and build_version = '%s'",
         (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) ? "" : ", stack_size",
         (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) ? "" : ", extra_info",
-        OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.ptr(), build_version))) {
+        OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.length(), arch_type_.ptr(), build_version))) {
       LOG_WARN("assign format failed", K(ret));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
