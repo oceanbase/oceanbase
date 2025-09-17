@@ -33,6 +33,7 @@ using namespace storage;
 ERRSIM_POINT_DEF(WAIT_CLOG_SYNC_FAILED);
 ERRSIM_POINT_DEF(SERVER_STOP_BEFORE_UPDATE_MIGRATION_STATUS);
 ERRSIM_POINT_DEF(COMPLETE_START_RUNNING_FAILED);
+ERRSIM_POINT_DEF(CHANGE_MEMBER_LIST_RETRY_TIMES);
 /******************ObLSCompleteMigrationCtx*********************/
 ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
   : ObIHADagNetCtx(),
@@ -1879,11 +1880,16 @@ int ObWaitDataReadyTask::change_member_list_with_retry_()
   const int64_t CHANGE_MEMBER_LIST_RETRY_INTERVAL = 2_s;
   int64_t retry_times = 0;
   bool is_valid_member = false;
+  int64_t CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = OB_MAX_RETRY_TIMES;
 
 #ifdef ERRSIM
-  const int64_t CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = 1;
-#else
-  const int64_t CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = OB_MAX_RETRY_TIMES;
+  ret = CHANGE_MEMBER_LIST_RETRY_TIMES ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = 1;
+  } else {
+    CHANGE_MEMBER_LIST_MAX_RETRY_TIMES = OB_MAX_RETRY_TIMES;
+  }
+  ret = OB_SUCCESS;
 #endif
 
   if (!is_inited_) {
