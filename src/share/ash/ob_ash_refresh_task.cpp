@@ -224,12 +224,18 @@ bool ObAshRefreshTask::require_snapshot_ahead()
     FLOG_WARN_RET(OB_SUCCESS, "check need snapshot ahead, write pos in range", K(bret),
                  K(prev_write_pos_), K(write_pos),
                  K(read_pos),
-                 K(size));
+                 K(size),
+                 K(SPEED_THRESHOLD),
+                 K(next_scheduled_snapshot_interval),
+                 K(SNAPSHOT_THRESHOLD));
   } else {
-    FLOG_ERROR_RET(OB_ERR_UNEXPECTED, "check need snapshot ahead, write pos out of range", K(bret),
+    FLOG_WARN_RET(OB_ERR_UNEXPECTED, "check need snapshot ahead, write pos out of range", K(bret),
                  K(prev_write_pos_), K(write_pos),
                  K(read_pos),
-                 K(size));
+                 K(size),
+                 K(SPEED_THRESHOLD),
+                 K(next_scheduled_snapshot_interval),
+                 K(SNAPSHOT_THRESHOLD));
   }
   return bret;
 }
