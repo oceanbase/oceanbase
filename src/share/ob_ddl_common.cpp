@@ -581,8 +581,6 @@ int ObDDLUtil::get_rs_specific_table_tablets(
     if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
-    } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, DDL_TASK_GET_SPECIFIC_TABLE_TABLET_FAILED))) {
-      LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
     } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap))) {
       LOG_WARN("get tenant timezone map failed", K(ret), K(tenant_id));
     } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
