@@ -2153,13 +2153,13 @@ void ObInnerSQLConnection::record_stat(sql::ObSQLSessionInfo& session,
       if (OB_SUCCESS != ret) {                        \
         EVENT_INC(SQL_FAIL_COUNT);                    \
       }                                               \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);        \
     }                                                 \
-    EVENT_ADD(SQL_##type##_TIME, time_cost);          \
   } else {                                            \
     if (!session.get_is_in_retry()) {                 \
       EVENT_INC(SQL_INNER_##type##_COUNT);            \
+      EVENT_ADD(SQL_INNER_##type##_TIME, time_cost);  \
     }                                                 \
-    EVENT_ADD(SQL_INNER_##type##_TIME, time_cost);    \
   }
 
 #define ADD_CASE(type)                                \
