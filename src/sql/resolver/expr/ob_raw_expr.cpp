@@ -898,7 +898,7 @@ void ObRawExpr::inner_calc_hash()
   expr_hash_ = result_type_.hash(expr_hash_);
 }
 
-bool ObRawExpr::need_extra_calc_type() const
+bool ObRawExpr::need_extra_calc_type(const bool is_mysql_number) const
 {
   return T_OP_ARG_CASE == type_ ||
          T_OP_DIV == type_ ||
@@ -906,14 +906,20 @@ bool ObRawExpr::need_extra_calc_type() const
          T_FUN_SYS_LEAST == type_ ||
          T_FUN_SYS_GREATEST == type_ ||
          T_FUN_SYS_NULLIF == type_ ||
-         T_FUN_SYS_TREAT == type_;
+         T_FUN_SYS_TREAT == type_ ||
+         (is_mysql_number && (
+          T_OP_ADD == type_ ||
+          T_OP_MINUS == type_ ||
+          T_OP_MUL == type_ ||
+          T_FUN_AVG == type_
+         ));
 }
 
 int ObRawExpr::set_extra_calc_type(const ObExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   ObExprResType *result_type = NULL;
-  if (OB_UNLIKELY(!need_extra_calc_type())) {
+  if (OB_UNLIKELY(!need_extra_calc_type(lib::is_mysql_mode() && res_type.is_number()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr type", K(ret), K(type_));
   } else {

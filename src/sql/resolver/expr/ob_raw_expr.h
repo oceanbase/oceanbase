@@ -2218,7 +2218,7 @@ public:
   uint64_t get_range_flag() const { return extra_.range_flag_; }
   int64_t get_encryption_mode() const { return extra_.encryption_mode_; }
   // extra accesstors end
-  bool need_extra_calc_type() const;
+  bool need_extra_calc_type(const bool is_mysql_number) const;
   int set_extra_calc_type(const ObExprResType &res_type);
   const ObExprCalcType &get_extra_calc_meta() const { return extra_.calc_meta_; }
   ObPrecision get_extra_calc_precision() const { return extra_.calc_precision_; }
