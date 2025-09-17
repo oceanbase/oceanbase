@@ -3340,8 +3340,8 @@ void ObMPStmtExecute::record_stat(const stmt::StmtType type, const int64_t end_t
       if (OB_SUCCESS != ret) {                  \
         EVENT_INC(SQL_FAIL_COUNT);              \
       }                                         \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);  \
     }                                           \
-    EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
   if (lib::is_diagnose_info_enabled()) {
     const int64_t time_cost = end_time - get_receive_timestamp();

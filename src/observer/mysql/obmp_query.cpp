@@ -1714,8 +1714,8 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
       if (OB_SUCCESS != ret) {                  \
         EVENT_INC(SQL_FAIL_COUNT);              \
       }                                         \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);  \
     }                                           \
-    EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
   int64_t start_ts = 0;
   if (session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_ > 0) {
