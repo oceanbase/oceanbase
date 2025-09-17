@@ -3030,7 +3030,11 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
       if (OB_FAIL(table_scan_iter->get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
-          if (!ctx->get_ls_leader()) {
+          // when snap table is empty and adaptor mem data for snap is not empty, need to refresh adaptor
+          int64_t current_snapshot_count = 0;
+          if (OB_FAIL(get_snap_index_row_cnt(current_snapshot_count))) {
+            LOG_WARN("fail to get snap index number", K(ret));
+          } else if (current_snapshot_count > 0) {
             ctx->status_ = PVQ_REFRESH;
             LOG_INFO("query result need refresh adapter, ls leader",
                      K(ret), K(ls_id), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()));
