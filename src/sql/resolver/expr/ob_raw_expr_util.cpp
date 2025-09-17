@@ -3814,54 +3814,22 @@ int ObRawExprUtils::extract_col_aggr_exprs(ObRawExpr* expr,
   return ret;
 }
 
-int ObRawExprUtils::contain_virtual_generated_column(ObRawExpr *&expr, bool &is_contain_vir_gen_column)
+int ObRawExprUtils::extract_virtual_generated_columns(ObRawExpr *&expr, ObIArray<ObRawExpr *> &vir_gen_columns)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (expr->is_column_ref_expr() &&
-      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
-      !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
-    is_contain_vir_gen_column = true;
+             static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
+             !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
+    if (OB_FAIL(add_var_to_array_no_dup(vir_gen_columns, expr))) {
+      LOG_WARN("failed to add virtual generated column", K(ret));
+    }
   }
-  for (int64_t j = 0; OB_SUCC(ret) && is_contain_vir_gen_column == false && j < expr->get_param_count(); j++) {
-    if (OB_ISNULL(expr->get_param_expr(j))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param_expr is NULL", K(j), K(ret));
-    } else if (OB_FAIL(SMART_CALL(contain_virtual_generated_column(expr->get_param_expr(j), is_contain_vir_gen_column)))) {
+  for (int64_t j = 0; OB_SUCC(ret) && j < expr->get_param_count(); j++) {
+    if (OB_FAIL(SMART_CALL(extract_virtual_generated_columns(expr->get_param_expr(j), vir_gen_columns)))) {
       LOG_WARN("fail to contain virtual gen column", K(j), K(ret));
-    } else {
-      LOG_TRACE("conclude virtual generated column", K(is_contain_vir_gen_column));
-    }
-  }
-  return ret;
-}
-
-// Extract the parent node of the generated column for
-// deep copying to avoid bugs in shared expression scenarios
-int ObRawExprUtils::extract_virtual_generated_column_parents(
-  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(par_expr) || OB_ISNULL(child_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (child_expr->is_column_ref_expr() &&
-      static_cast<ObColumnRefRawExpr *>(child_expr)->is_virtual_generated_column() &&
-      !static_cast<ObColumnRefRawExpr *>(child_expr)->is_xml_column()) {
-    if (OB_FAIL(add_var_to_array_no_dup(vir_gen_par_exprs, par_expr))) {
-      LOG_WARN("failed to add winfunc exprs", K(ret));
-    }
-  }
-  for (int64_t j = 0; OB_SUCC(ret) && j < child_expr->get_param_count(); j++) {
-    if (OB_ISNULL(child_expr->get_param_expr(j))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param_expr is NULL", K(j), K(ret));
-    } else if (OB_FAIL(SMART_CALL(extract_virtual_generated_column_parents(
-        child_expr, child_expr->get_param_expr(j), vir_gen_par_exprs)))) {
-      LOG_WARN("fail to extract virtual gen column", K(j), K(ret));
-    } else {
     }
   }
   return ret;
