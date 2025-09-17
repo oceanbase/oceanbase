@@ -119,12 +119,18 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "User-Defined Exception"));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
-        max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // ORA-CODE: ERRMSG
+        ObString error_trace_msg = ObString("");
+#ifdef OB_BUILD_ORACLE_PL
+        CK (OB_NOT_NULL(session->get_pl_context()));
+        CK (OB_NOT_NULL(session->get_pl_context()->get_call_stack_trace()));
+        OZ (session->get_pl_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+#endif
+        OX (max_buf_size = error_trace_msg.length() + 1);
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                           "ORA%ld: %.*s", sqlcode,
-                           sqlcode_info->get_sqlmsg().length(),
-                           sqlcode_info->get_sqlmsg().ptr()));
+                           "%.*s",
+                           error_trace_msg.length(),
+                           error_trace_msg.ptr()));
       } else {
         const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
         if (OB_LIKELY(NULL != wb) && wb->get_err_code() == sqlcode) {
@@ -157,13 +163,18 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
         if (sqlcode_info->get_sqlcode() == sqlcode) {
-          max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // ORA-CODE: ERRMSG
-          CK (OB_NOT_NULL(
-            sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
+          ObString error_trace_msg = ObString("");
+#ifdef OB_BUILD_ORACLE_PL
+          CK (OB_NOT_NULL(session->get_pl_context()));
+          CK (OB_NOT_NULL(session->get_pl_context()->get_call_stack_trace()));
+          OZ (session->get_pl_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+#endif
+          OX (max_buf_size = error_trace_msg.length() + 1);
+          CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
           OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                             "ORA%ld: %.*s", sqlcode,
-                             sqlcode_info->get_sqlmsg().length(),
-                             sqlcode_info->get_sqlmsg().ptr()));
+                            "%.*s",
+                            error_trace_msg.length(),
+                            error_trace_msg.ptr()));
         } else {
           CK (OB_NOT_NULL(sqlerrm_result
             = expr.get_str_res_mem(ctx, max_buf_size)));

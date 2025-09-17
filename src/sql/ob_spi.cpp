@@ -1881,7 +1881,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         ObQueryRetryCtrl retry_ctrl;
         ObSPIExecEnvGuard env_guard(*session, spi_result);
         int save_sqlcode = session->get_pl_sqlcode_info()->get_sqlcode();
-        ObString save_sqlmsg = session->get_pl_sqlcode_info()->get_sqlmsg();
 
         do {
 
@@ -1948,7 +1947,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
 
             ObPLSqlCodeInfo *sqlcode_info = session->get_pl_sqlcode_info();
             if (sqlcode_info->get_sqlcode() == OB_SUCCESS) {
-              sqlcode_info->set_sqlcode(save_sqlcode, save_sqlmsg);
+              sqlcode_info->set_sqlcode(save_sqlcode);
             }
 
             if (can_retry) {
@@ -5096,14 +5095,21 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
     ObPLContext *pl_ctx = NULL;
     ObPLExecState *frame = NULL;
     ObIAllocator *expr_allocator = NULL;
-    ObString deep_sqlmsg;
     CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
     CK (pl_ctx->get_exec_stack().count() > 0);
     CK (OB_NOT_NULL(frame = pl_ctx->get_exec_stack().at(0)));
     CK (frame->is_top_call());
     CK (OB_NOT_NULL(expr_allocator = frame->get_exec_ctx().get_top_expr_allocator()));
-    OZ (ob_write_string(*expr_allocator, errmsg_result.get_string(), deep_sqlmsg));
-    OX (sqlcode_info->set_sqlmsg(deep_sqlmsg));
+    if (OB_SUCC(ret) && OB_ISNULL(sqlcode_info->get_sqlmsg_buf())) {
+      char* sqlmsg_buf = NULL;
+      if (OB_ISNULL(sqlmsg_buf = static_cast<char*>(expr_allocator->alloc(OB_PL_SQLMSG_MAX_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc sqlmsg buf", K(ret));
+      } else {
+      OX (sqlcode_info->set_sqlmsg_buf(sqlmsg_buf));
+      }
+    }
+    OX (sqlcode_info->set_sqlmsg(errmsg_result.get_string()));
   }
   
   if (OB_SUCC(ret)) {
@@ -5150,6 +5156,7 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
   int cur_err_code = OB_SUCCESS;
   static const uint32_t STR_LEN = 128;
   char err_msg[STR_LEN] = {0};
+  ObString error_msg = ObString("");
   const ObSqlExpression *errcode_expr = nullptr;
   const ObSqlExpression *errmsg_expr = nullptr;
 
@@ -5214,15 +5221,15 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
     if (OB_ISNULL(errmsg_expr)) {
       if (is_signal) {
         if (type == ObPLConditionType::NOT_FOUND) {
-          sqlcode_info->set_sqlmsg(ObString("Unhandled user-defined not found condition"));
+          error_msg = ObString("Unhandled user-defined not found condition");
         } else {
-          sqlcode_info->set_sqlmsg(ObString("Unhandled user-defined exception condition"));
+          error_msg = ObString("Unhandled user-defined exception condition");
         }
       } else {
         int64_t idx;
         CK (sqlcode_info->get_stack_warning_buf().count() > 0);
         OX (idx = sqlcode_info->get_stack_warning_buf().count() - 1);
-        OX (sqlcode_info->set_sqlmsg(sqlcode_info->get_stack_warning_buf().at(idx).get_err_msg()));
+        OX (error_msg = sqlcode_info->get_stack_warning_buf().at(idx).get_err_msg());
       }
     } else {
       CALC(errmsg_expr, varchar, result);
@@ -5234,13 +5241,13 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
                         static_cast<int32_t>(STRLEN("NULL")), "NULL");
         }
       }
-      OX (sqlcode_info->set_sqlmsg(result.get_string()));
+      OX (error_msg = result.get_string());
     }
   }
 
   if (OB_FAIL(ret)) {
   } else {
-    snprintf(err_msg, STR_LEN, "%.*s", sqlcode_info->get_sqlmsg().length(), sqlcode_info->get_sqlmsg().ptr());
+    snprintf(err_msg, STR_LEN, "%.*s", error_msg.length(), error_msg.ptr());
     if (ObPLConditionType::SQL_WARNING == type) {
       if (OB_ISNULL(errcode_expr)) {
         if (OB_NOT_NULL(wb)) {
@@ -5260,8 +5267,8 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
     } else {
       if (is_signal) {
         LOG_MYSQL_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR,
-                            MIN(sqlcode_info->get_sqlmsg().length(), STR_LEN),
-                            sqlcode_info->get_sqlmsg().ptr());
+                            MIN(error_msg.length(), STR_LEN),
+                            error_msg.ptr());
         if (OB_NOT_NULL(wb)) {
           wb->set_error_code(sqlcode_info->get_sqlcode());
           wb->set_sql_state(sql_state);
