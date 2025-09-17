@@ -30,7 +30,7 @@ using namespace share;
 
 namespace share
 {
-int ObTenantTxDataAllocator::init(const char* label)
+int ObTenantTxDataAllocator::init(const char *label, TxShareThrottleTool* throttle_tool)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
@@ -296,7 +296,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObTxDataTable tx_data_table;
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  tx_data_allocator_.init("test");
+  tx_data_allocator_.init("test", (TxShareThrottleTool*)0x1);
   tx_data_table.tx_data_allocator_ = &tx_data_allocator_;
   tx_data_op_allocator_.init();
 

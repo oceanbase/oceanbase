@@ -25,7 +25,7 @@ using namespace share;
 static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
 
 namespace share {
-int ObTenantTxDataAllocator::init(const char *label)
+int ObTenantTxDataAllocator::init(const char *label, TxShareThrottleTool* throttle_tool)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;

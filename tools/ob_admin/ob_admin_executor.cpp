@@ -18,10 +18,12 @@
 #include "share/io/ob_io_manager.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/ob_file_system_router.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace tools
 {
 
@@ -32,6 +34,15 @@ ObAdminExecutor::ObAdminExecutor()
       config_mgr_(ObServerConfig::get_instance(), reload_config_)
 {
   // 设置MTL上下文
+
+  // 初始化MTL TxShare相关内存分配器
+  ObMemAttr mem_attr;
+  mem_attr.label_ = "OB_ADMIN";
+  ObSharedMemAllocMgr *shared_mem_alloc_mgr = OB_NEW(ObSharedMemAllocMgr, mem_attr.label_);
+  OB_ASSERT(OB_SUCCESS == shared_mem_alloc_mgr->init());
+  OB_ASSERT(OB_SUCCESS == shared_mem_alloc_mgr->start());
+  mock_server_tenant_.set(shared_mem_alloc_mgr);
+
   IGNORE_RETURN ObTimerService::get_instance().start();
   mock_server_tenant_.set(&ObTimerService::get_instance());
   share::ObTenantEnv::set_tenant(&mock_server_tenant_);

@@ -31,7 +31,7 @@ namespace share {
 
 ObTxDataThrottleGuard::~ObTxDataThrottleGuard() {}
 
-int ObTenantTxDataAllocator::init(const char *label)
+int ObTenantTxDataAllocator::init(const char *label, TxShareThrottleTool* throttle_tool)
 {
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;

@@ -54,7 +54,8 @@ public:
     OB_ASSERT(OB_SUCCESS == slice_allocator_.init(
                                 sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr));
     slice_allocator_.set_nway(32);
-    FAKE_ALLOCATOR->init("FAKE_A");
+
+    FAKE_ALLOCATOR->init("FAKE_A", (TxShareThrottleTool*)0x1);
     FAKE_ALLOCATOR2->init();
     tx_data_allocator_ = FAKE_ALLOCATOR;
     is_inited_ = true;
