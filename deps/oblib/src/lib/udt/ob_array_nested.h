@@ -108,7 +108,7 @@ public :
     if (!is_null && typeid(T) != typeid(ObIArrayType)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid data type", K(ret));
-    } else if (OB_UNLIKELY(OB_ISNULL(elem_except))) {
+    } else if (!is_null && OB_UNLIKELY(OB_ISNULL(elem_except))) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "elem except is null", K(ret));
     } else {
