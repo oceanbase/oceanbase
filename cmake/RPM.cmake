@@ -121,8 +121,6 @@ else()
 endif()
 
 if (OB_BUILD_STANDALONE)
-  message(STATUS "oceanbase standalone build")
-  set(CPACK_PACKAGE_NAME "oceanbase-standalone")
   set(CPACK_COMPONENTS_ALL server libs)
   # specify relocatable paths
   set(CPACK_RPM_RELOCATION_PATHS "/usr/bin")
