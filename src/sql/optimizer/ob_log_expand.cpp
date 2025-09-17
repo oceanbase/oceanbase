@@ -364,6 +364,11 @@ int ObLogExpand::inner_replace_op_exprs(ObRawExprReplacer &replacer)
         LOG_WARN("buf printf failed", K(ret));
       } else if (OB_FAIL(expr->get_name(name_buf, name_buf_len, pos))) {
         LOG_WARN("get expr name failed", K(ret));
+        if (ret == OB_SIZE_OVERFLOW) {
+          ret = OB_SUCCESS;// if name exceeds, just truncate name and return
+        }
+      }
+      if (OB_SUCC(ret)) {
       } else {
         ObIAllocator &allocator =
           get_plan()->get_optimizer_context().get_expr_factory().get_allocator();

@@ -9645,6 +9645,8 @@ int ObSelectLogPlan::can_transform_distinct_agg(GroupingOpHelper &groupby_helper
   ObSEArray<ObRawExpr *, 4> tmp_params;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObLogicalOperator *best_plan = NULL;
+  ObSEArray<ObRawExpr*, 8> having_subquery_exprs;
+  ObSEArray<ObRawExpr*, 8> having_normal_exprs;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("get best plan failed", K(ret));
   } else if(OB_ISNULL(best_plan)) {
@@ -9724,6 +9726,33 @@ int ObSelectLogPlan::can_transform_distinct_agg(GroupingOpHelper &groupby_helper
     can_trans_distinct_agg = false;
     distinct_params.reuse();
   } else {
+    // if filter subquery contains aggr items, do not transform distinct agg
+    can_trans_distinct_agg = true;
+    if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(
+          get_stmt()->get_having_exprs(), having_subquery_exprs, having_normal_exprs))) {
+      LOG_WARN("failed to classify subquery exprs", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && can_trans_distinct_agg && i < having_subquery_exprs.count(); i++) {
+      ObRawExpr *having_subquery_expr = having_subquery_exprs.at(i);
+      if (OB_ISNULL(having_subquery_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null expr", K(ret));
+      }
+      for (int j = 0; OB_SUCC(ret) && can_trans_distinct_agg && j < agg_items.count(); j++) {
+        ObAggFunRawExpr *agg_item = agg_items.at(j);
+        bool found = false;
+        if (OB_ISNULL(agg_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null expr", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::find_expr(having_subquery_expr, agg_item, found))) {
+          LOG_WARN("failed to find expr", K(ret));
+        } else {
+          can_trans_distinct_agg = !found;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && can_trans_distinct_agg) {
     can_trans_distinct_agg = true;
     if (OB_FAIL(groupby_helper.non_distinct_aggr_items_.assign(non_distinct_agg_items))) {
       LOG_WARN("assign array failed", K(ret));
