@@ -3217,6 +3217,21 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
   return ret;
 }
 
+int ObCollectionType::convert_anonymous_array(ObPLResolveCtx &ctx,
+                                              ObObj *&src,
+                                              ObObj *&dest) const
+{
+  int ret = OB_SUCCESS;
+  ObPLCollection *dest_collection = NULL;
+  ObPLCollection *src_collection = NULL;
+  CK (src->is_ext() && dest->is_ext());
+  CK (OB_NOT_NULL(src_collection = reinterpret_cast<ObPLCollection *>(src->get_ext())));
+  CK (OB_NOT_NULL(dest_collection = reinterpret_cast<ObPLCollection *>(dest->get_ext())));
+  OX (src_collection->set_type(dest_collection->get_type()));
+  OZ (ObCollectionType::convert(ctx, src, dest));
+  return ret;
+}
+
 int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
                                   ObIAllocator &allocator,
                                   const ObCharsetType charset,
@@ -3686,6 +3701,16 @@ int ObVArrayType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
     if (OB_FAIL(ret)) {
     } else if (src_composite->get_id() == get_user_type_id()) {
       OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else if (is_mocked_anonymous_array_id(src_composite->get_id())) {
+      ObPLNestedTable *src_table = NULL;
+      CK (OB_NOT_NULL(src_table = reinterpret_cast<ObPLNestedTable *>(src->get_ext())));
+      if (OB_SUCC(ret) && src_table->get_count() < this->get_capacity()) {
+        OZ (convert_anonymous_array(ctx, src, dst));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
@@ -3853,6 +3878,8 @@ int ObAssocArrayType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     if (OB_FAIL(ret)) {
     } else if (src_composite->get_id() == get_user_type_id()) {
       OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else if (is_mocked_anonymous_array_id(src_composite->get_id())) {
+      OZ (convert_anonymous_array(ctx, src, dst));
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
