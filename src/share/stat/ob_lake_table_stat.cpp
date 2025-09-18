@@ -15,6 +15,7 @@
 
 #include "share/stat/ob_stat_item.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
+#include "sql/table_format/iceberg/scan/conversions.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/optimizer/file_prune/ob_iceberg_file_pruner.h"
 
@@ -40,15 +41,15 @@ int ObLakeColumnStat::merge(ObLakeColumnStat &other)
   null_count_ += other.null_count_;
   size_ += other.size_;
   record_count_ = other.record_count_;
-  if (!other.min_val_.is_min_value()) {
-    if (min_val_.is_null()) {
+  if (!other.min_val_.is_min_value() && !other.min_val_.is_null()) {
+    if (min_val_.is_min_value()) {
       min_val_ = other.min_val_;
     } else if (min_val_ > other.min_val_) {
       min_val_ = other.min_val_;
     }
   }
-  if (!other.max_val_.is_max_value()) {
-    if (max_val_.is_null()) {
+  if (!other.max_val_.is_max_value() && !other.max_val_.is_null()) {
+    if (max_val_.is_max_value()) {
       max_val_ = other.max_val_;
     } else if (max_val_ < other.max_val_) {
       max_val_ = other.max_val_;
@@ -59,6 +60,7 @@ int ObLakeColumnStat::merge(ObLakeColumnStat &other)
 
 int ObLakeTableStatUtils::construct_stat_from_iceberg(const uint64_t tenant_id,
                                                       const ObIArray<uint64_t> &column_ids,
+                                                      const ObIArray<ObColumnRefRawExpr*> &column_exprs,
                                                       ObIArray<ObIcebergFileDesc*> &file_descs,
                                                       ObLakeTableStat &table_stat,
                                                       ObIArray<ObLakeColumnStat*> &column_stats,
@@ -67,19 +69,28 @@ int ObLakeTableStatUtils::construct_stat_from_iceberg(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObArenaAllocator temp_allocator("LakeTableStat", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   ObSEArray<int32_t, 8> field_ids;
+  ObSEArray<ObColumnMeta, 8> column_metas;
   uint64_t last_analyzed = common::ObTimeUtil::current_time();
   if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null allocator");
-  } else if (OB_UNLIKELY(column_ids.empty())) {
+  } else if (OB_UNLIKELY(column_ids.empty() || column_ids.count() != column_exprs.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected column ids", K(column_ids));
+    LOG_WARN("get unexpected column ids", K(column_ids), K(column_exprs));
+  } else if (OB_FAIL(column_metas.prepare_allocate(column_ids.count()))) {
+    LOG_WARN("failed to init fixed array");
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
       int32_t field_id
           = static_cast<int32_t>(iceberg::ObIcebergUtils::get_iceberg_field_id(column_ids.at(i)));
       ObLakeColumnStat *stat = OB_NEWx(ObLakeColumnStat, allocator);
-      if (OB_ISNULL(stat)) {
+      ObColumnRefRawExpr* col_expr = column_exprs.at(i);
+      if (OB_ISNULL(col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column expr");
+      } else if (OB_FAIL(column_metas.at(i).from_ob_raw_expr_res_type(col_expr->get_result_type()))) {
+        LOG_WARN("failed to init column meta from ob raw expr res type");
+      } else if (OB_ISNULL(stat)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocato memory for ObLakeColumnStat");
       } else if (OB_FAIL(field_ids.push_back(field_id))) {
@@ -122,19 +133,25 @@ int ObLakeTableStatUtils::construct_stat_from_iceberg(const uint64_t tenant_id,
           }
           if (iceberg::ObIcebergUtils::get_map_value(entry->data_file.lower_bounds, field_id, bound)) {
             ObObj min_obj;
-            // TODO binary to obj
-            // min_obj = binary_to_obj(bound, temp_allocator);
-            if (!min_obj.is_null()) {
-            } else {
+            if (OB_FAIL(iceberg::Conversions::convert_statistics_binary_to_ob_obj(temp_allocator,
+                                                                                  bound,
+                                                                                  column_metas.at(j),
+                                                                                  min_obj))) {
+              LOG_WARN("failed to convert statistic binart to obj");
+            } else if (!min_obj.is_null()) {
               tmp_column_stat.min_val_ = min_obj;
             }
           }
-          if (iceberg::ObIcebergUtils::get_map_value(entry->data_file.upper_bounds, field_id, bound)) {
+          if (OB_FAIL(ret)) {
+          } else if (iceberg::ObIcebergUtils::get_map_value(entry->data_file.upper_bounds, field_id, bound)) {
             ObObj max_obj;
-            // TODO binary to obj
-            // max_obj = binary_to_obj(bound, temp_allocator);
-            if (!max_obj.is_null()) {
-              tmp_column_stat.min_val_ = max_obj;
+            if (OB_FAIL(iceberg::Conversions::convert_statistics_binary_to_ob_obj(temp_allocator,
+                                                                                  bound,
+                                                                                  column_metas.at(j),
+                                                                                  max_obj))) {
+              LOG_WARN("failed to convert statistic binart to obj");
+            } else if (!max_obj.is_null()) {
+              tmp_column_stat.max_val_ = max_obj;
             }
           }
           if (OB_SUCC(ret)) {

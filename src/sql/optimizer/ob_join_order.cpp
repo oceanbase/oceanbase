@@ -22471,6 +22471,7 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
     LOG_WARN("unexpected null lake table partition info", K(ret));
   } else if (OB_FAIL(ObLakeTableStatUtils::construct_stat_from_iceberg(MTL_ID(),
                                                                        column_ids,
+                                                                       column_exprs,
                                                                        lake_table_partition_info->get_file_descs(),
                                                                        table_stat,
                                                                        column_stats,
