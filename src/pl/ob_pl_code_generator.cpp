@@ -2557,6 +2557,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     OZ (generator_.get_helper().set_insert_point(generator_.get_current()));
     OZ (generator_.set_debug_location(s));
     OZ (generator_.generate_goto_label(s));
+    OZ (generator_.generate_spi_pl_profiler_before_record(s));
 
     ObLLVMBasicBlock normal;
     ObLLVMType unwind_exception_type, unwind_exception_pointer_type;
@@ -2678,6 +2679,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
                                         s.get_block()->in_warning(), true/*is signal*/));
       OZ (generator_.set_current(normal));
     }
+
+    OZ (generator_.generate_spi_pl_profiler_after_record(s));
   }
   return ret;
 }
