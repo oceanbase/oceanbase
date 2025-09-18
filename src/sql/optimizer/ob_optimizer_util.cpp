@@ -6356,7 +6356,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if ((dst_acc.get_scale() >= 0 &&
                dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
-              (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
+              (-1 == dst_acc.get_precision() &&
+                (-1 == dst_acc.get_scale() || dst_acc.get_scale() == NUMBER_SCALE_UNKNOWN_YET))) {
             is_lossless = true;
           }
         }
