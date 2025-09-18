@@ -4884,6 +4884,7 @@ int ObFetchLocalCacheBlockP::process()
     LOG_WARN("invalid args", KR(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
       ObHAFetchLocalCacheBlockHeader header;
       char *buf = nullptr;
       blocksstable::ObBufferReader data;
@@ -5002,6 +5003,7 @@ int ObGetLocalCacheKeyP::process()
   } else {
     const int64_t start_us = ObTimeUtil::current_time_us();
     MTL_SWITCH(arg_.tenant_id_) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
       if (arg_.job_info_.job_type_ == ObHACacheJobType::MICRO_CACHE_JOB_TYPE) {
         if (OB_FAIL(process_micro_cache_job_())) {
           LOG_WARN("failed to process micro cache job", KR(ret), K(arg_));
