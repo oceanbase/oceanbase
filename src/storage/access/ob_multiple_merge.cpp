@@ -807,8 +807,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
         switch(scan_state_) {
           case ScanState::BATCH: {
             bool can_batch = false;
-            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->do_aggregate())) {
-              LOG_WARN("Fail to aggregate rows", K(ret), KPC(agg_store_vec));
+            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->prepare_batch_scan())) {
+              LOG_WARN("Fail to prepare batch scan", K(ret), KPC(agg_store_vec));
             } else if (OB_FAIL(can_batch_scan(can_batch))) {
               LOG_WARN("fail to check can batch scan", K(ret));
             } else if (!can_batch) {
@@ -839,8 +839,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             break;
           }
           case ScanState::DI_BASE: {
-            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->do_aggregate())) {
-              LOG_WARN("Fail to aggregate rows", K(ret), KPC(agg_store_vec));
+            if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->prepare_batch_scan())) {
+              LOG_WARN("Fail to prepare batch scan", K(ret), KPC(agg_store_vec));
             } else if (need_init_expr_header && access_param_->iter_param_.use_new_format()) {
               sql::ObEvalCtx &eval_ctx = access_param_->get_op()->get_eval_ctx();
               if (OB_FAIL(init_exprs_vector_header(access_param_->output_exprs_, eval_ctx, eval_ctx.max_batch_size_))) {

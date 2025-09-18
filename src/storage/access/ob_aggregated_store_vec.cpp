@@ -806,5 +806,16 @@ int ObAggregatedStoreVec::reset_agg_row_id()
   return ret;
 }
 
+int ObAggregatedStoreVec::prepare_batch_scan()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(do_aggregate())) {
+    LOG_WARN("Failed to aggregate rows", K(ret));
+  } else if (OB_FAIL(reset_agg_row_id())) {
+    LOG_WARN("Failed to reset agg row id", K(ret));
+  }
+  return ret;
+}
+
 } /* namespace stroage */
 } /* namespace oceanbase */
