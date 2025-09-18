@@ -784,10 +784,7 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_range(ObExecContext &ex
   } else if (OB_UNLIKELY(new_ranges.empty())) {
     // always false
     ObNewRange *range = NULL;
-    if (OB_UNLIKELY(tab_loc->get_tablet_locs().size() != 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected tablets counts", K(tab_loc->get_tablet_locs()));
-    } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
+    if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&range_allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for ObNewRange");
     } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(nullptr,
