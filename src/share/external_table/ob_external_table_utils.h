@@ -527,7 +527,7 @@ class ObExternalTableUtils {
         }
       }
       OZ(query_sql.append(")  partition_name(partition_str)),"));
-      OZ(query_sql.append("(select count(*) from oceanbase.__all_dummy);"));
+      OZ(query_sql.append("(select count(*) from internal.oceanbase.__all_dummy);"));
 
       if (file_to_collect > 0) {
         ObMySQLTransaction trans;

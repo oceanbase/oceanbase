@@ -152,12 +152,15 @@ int ObOdpsCatalog::fetch_latest_table_schema_version(const common::ObString &ns_
   int ret = OB_SUCCESS;
   if (GCONF._use_odps_jni_connector) {
 #ifdef OB_BUILD_JNI_ODPS
-    int64_t _last_modification_time_s = 0;
+    int64_t _last_ddl_time_us = 0;
+    int64_t _last_modification_time_us = 0;
     if (OB_ISNULL(jni_catalog_ptr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("jni catalog ptr is null", K(ret));
-    } else if (OB_FAIL(jni_catalog_ptr_->do_query_table_info(allocator_, tbl_name, schema_version, _last_modification_time_s))) {
+    } else if (OB_FAIL(jni_catalog_ptr_->do_query_table_info(allocator_, tbl_name, _last_ddl_time_us, _last_modification_time_us))) {
       LOG_WARN("failed to query table info", K(ret));
+    } else {
+      schema_version = _last_modification_time_us;
     }
 #else
     ret = OB_NOT_SUPPORTED;
@@ -201,7 +204,7 @@ int ObOdpsCatalog::fetch_latest_table_schema_version(const common::ObString &ns_
     }
 
     if (OB_SUCC(ret)) {
-      schema_version = table_ptr->GetLastDDLTime();
+      schema_version = table_ptr->GetLastModifiedTime() * 1000;
     }
 #else
     ret = OB_NOT_SUPPORTED;

@@ -4547,14 +4547,13 @@ int ObOdpsPartitionJNIUploaderMgr::init_writer_params_in_px(
     sql::ObODPSGeneralFormat &odps_format, const ObString &external_partition, bool is_overwrite, int64_t parallel)
 {
   int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_properties;
   // This entry is first time to setup java env
   if (OB_FAIL(ObJniConnector::java_env_init())) {
     LOG_WARN("failed to env init", K(ret));
   } else if (inited_) {
     // do nothing
   } else if (OB_FAIL(create_writer_params_map(write_arena_alloc_,
-                external_properties.odps_format_,
+                odps_format,
                 external_partition,
                 is_overwrite,
                 odps_params_map_))) {
