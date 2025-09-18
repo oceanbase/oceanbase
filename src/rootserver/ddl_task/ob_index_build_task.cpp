@@ -1310,7 +1310,8 @@ int ObIndexBuildTask::create_schedule_queue()
     parallelism_,
     snapshot_version_,
     trace_id_,
-    index_tablet_ids))) {
+    index_tablet_ids,
+    data_format_version_))) {
     LOG_WARN("failed to init tablet scheduler", K(ret), K(tenant_id_), K(index_table_id_), K(index_tablet_ids));
   } else {
     is_sstable_complete_task_submitted_ = true;

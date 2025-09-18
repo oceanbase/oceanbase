@@ -31,7 +31,8 @@ public:
            const int64_t  parallelism,
            const int64_t  snapshot_version,
            const common::ObCurTraceId::TraceId &trace_id,
-           const ObIArray<ObTabletID> &tablets);
+           const ObIArray<ObTabletID> &tablets,
+           const uint64_t data_version);
   int get_next_batch_tablets(const bool is_ddl_retryable,
                              int64_t &parallelism,
                              int64_t &new_execution_id,

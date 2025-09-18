@@ -1267,6 +1267,8 @@ public:
     const uint64_t &tenant_id,
     const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
+    const uint64_t data_version,
+    const ObAddr &addr,
     int64_t &data_row_cnt);
   static int get_ls_host_left_disk_space(
     const uint64_t &tenant_id,

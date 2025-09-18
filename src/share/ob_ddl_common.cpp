@@ -2969,6 +2969,8 @@ int ObDDLUtil::get_tablet_data_row_cnt(
     const uint64_t &tenant_id,
     const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
+    const uint64_t data_version,
+    const ObAddr &addr,
     int64_t &data_row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -2983,11 +2985,27 @@ int ObDDLUtil::get_tablet_data_row_cnt(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObSqlString query_string;
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(query_string.assign_fmt("SELECT max(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu",
-          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, tablet_id.id(), ls_id.id()))) {
-        LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
-      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, query_string.ptr()))) {
-        LOG_WARN("read record failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
+      if (data_version < DATA_VERSION_4_4_1_0) {
+        if (OB_FAIL(query_string.assign_fmt("SELECT max(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu",
+            OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, tablet_id.id(), ls_id.id()))) {
+          LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
+        } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, query_string.ptr()))) {
+          LOG_WARN("read record failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
+        }
+      } else {
+        char ip_buf[common::OB_IP_STR_BUFF];
+        if (!addr.ip_to_string(ip_buf, sizeof(ip_buf))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to execute ip_to_string", K(ret));
+        } else if (OB_FAIL(query_string.assign_fmt("SELECT sum(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu AND svr_ip = '%s' AND svr_port = %d",
+            OB_ALL_VIRTUAL_TABLE_MGR_TNAME, tenant_id, tablet_id.id(), ls_id.id(), ip_buf, addr.get_port()))) {
+          LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
+        } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
+          LOG_WARN("read record failed", K(ret), K(tenant_id), K(query_string));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
@@ -2999,11 +3017,13 @@ int ObDDLUtil::get_tablet_data_row_cnt(
         data_row_cnt = 0;
         LOG_WARN("data size is null", K(ret));
         ret = OB_SUCCESS;
-      } else if (OB_UNLIKELY(!result_obj.is_integer_type())) {
+      } else if (result_obj.is_integer_type()) {
+        data_row_cnt = result_obj.get_int();
+      } else if (result_obj.is_decimal_int()) {
+        data_row_cnt = *result_obj.get_decimal_int()->int64_v_;
+      } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected obj type", K(ret), K(result_obj.get_type()));
-      } else {
-        data_row_cnt = result_obj.get_int();
       }
     }
   }
