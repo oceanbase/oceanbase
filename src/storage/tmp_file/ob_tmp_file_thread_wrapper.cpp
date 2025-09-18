@@ -1274,6 +1274,7 @@ int ObTmpFileSwapTG::shrink_wbp_if_needed_()
   if (wbp_.get_shrink_ctx().is_valid() && ((need_to_shrink = wbp_.need_to_shrink(is_auto)) == false || OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret)) {
     LOG_DEBUG("abort reason", KR(io_finished_ret), K(need_to_shrink));
     wbp_.finish_shrinking();
+    pc_ctrl_.set_flush_all_data(false);
   }
   time_guard.click("wbp_shrink finish one step");
   return ret;
