@@ -48,6 +48,6 @@ obstack-2.0.4-172024070513.el8.aarch64.rpm
 obshell-4.2.5.1-12025010214.el8.aarch64.rpm target=community
 
 [test-utils]
-ob-deploy-2.10.0-3.el8.aarch64.rpm target=community
+ob-deploy-3.6.0-3.el8.aarch64.rpm target=community
 obclient-2.2.2-1.el8.aarch64.rpm target=community
 libobclient-2.2.2-3.el8.aarch64.rpm target=community
