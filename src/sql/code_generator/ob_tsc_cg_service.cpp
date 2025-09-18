@@ -2444,6 +2444,7 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->can_extract_range_ = vc_info.can_extract_range_;
         vec_scan_ctdef->is_spatial_index_ = vc_info.is_spatial_index_;
         vec_scan_ctdef->is_multi_value_index_ = vc_info.is_multi_value_index_;
+        vec_scan_ctdef->all_filters_can_be_picked_out_ = vc_info.all_filters_can_be_picked_out_;
         cg_.phy_plan_->stat_.vec_index_exec_ctx_.cur_path_ = vc_info.adaptive_try_path_;
       }
     }

@@ -320,7 +320,7 @@ private:
                                         transaction::ObTxDesc *trans_desc,
                                         transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&pre_iter_tree,
-                                        bool& need_index_back);
+                                        bool& is_primary_index);
   static int create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
                                         common::ObIAllocator &alloc,
                                         const ObDASBaseCtDef *attach_ctdef,

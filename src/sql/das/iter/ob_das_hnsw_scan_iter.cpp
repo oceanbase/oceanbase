@@ -1740,6 +1740,23 @@ int ObDASHNSWScanIter::get_relevance(ObIAllocator &allocator, ObIArray<double*> 
   return ret;
 }
 
+int ObDASHNSWScanIter::get_relevances(
+    ObIAllocator &allocator,
+    ObIArray<double*> &rel_record,
+    int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
+  guard.set_batch_size(row_count);
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
+    guard.set_batch_idx(i);
+    if (OB_FAIL(get_relevance(allocator, rel_record))) {
+      LOG_WARN("failed to get relevance", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDASHNSWScanIter::get_vid_from_idx_filter(
     ObVectorQueryAdaptorResultContext *ada_ctx,
     ObPluginVectorIndexAdaptor* adaptor,
@@ -2019,45 +2036,62 @@ int ObDASHNSWScanIter::get_pk_increment_from_idx_filter(
       }
 
       if (OB_SUCC(ret)) {
-        ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
-        guard.set_batch_size(scan_row_cnt);
-        for(int i = 0; OB_SUCC(ret) && i < scan_row_cnt; i++) {
-          guard.set_batch_idx(i);
-          int64_t vid = 0;
-          if (OB_FAIL(get_pk_increment(vid))) {
-            LOG_WARN("failed to add rowkey", K(ret), K(i));
-          } else if (if_add_relevance && OB_FAIL(get_relevance(vec_op_alloc_, relevance_record))) {
-            LOG_WARN("failed to get relevance", K(ret), K(i));
-          } else if (go_brute_force_ && brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
-            vids[brute_cnt] = vid;
-            brute_cnt++;
-            if (if_add_relevance && i >= relevance_record.count()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
-            } else if (if_add_relevance && OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
-              LOG_WARN("failed to add relevance", K(ret), K(i));
-            }
+        if (if_add_relevance && OB_FAIL(get_relevances(vec_op_alloc_, relevance_record, scan_row_cnt))) {
+          LOG_WARN("failed to get relevance", K(ret));
+        } else {
+          const ObDASScanCtDef *ctdef = nullptr;
+          ObDASScanRtDef *rtdef = nullptr;
+          if (OB_FAIL(get_ctdef_with_rowkey_exprs(ctdef, rtdef))) {
+            LOG_WARN("failed to get ctdef with rowkey exprs", K(ret));
+          } else if (OB_UNLIKELY(ctdef->rowkey_exprs_.count() != 1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid rowkey cnt", K(ret), K(ctdef->rowkey_exprs_.count()));
           } else {
-            // brute_cnt + batch_row_count already > MAX_HNSW_BRUTE_FORCE_SIZE
-            // do not choose brue force, just add vids to bitmap
-            if (go_brute_force_) {
-              go_brute_force_ = false;
-              lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
-              for (int j = 0; OB_SUCC(ret) && j < brute_cnt; ++j) {
-                if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vids[j]))) {
-                  LOG_WARN("failed to add valid vid", K(ret));
+            ObExpr *expr = ctdef->rowkey_exprs_.at(0);
+            ObEvalCtx::BatchInfoScopeGuard guard(*rtdef->eval_ctx_);
+            guard.set_batch_size(scan_row_cnt);
+            guard.set_batch_idx(0);
+            ObDatum *vid_datums = expr->locate_batch_datums(*rtdef->eval_ctx_);
+            if (go_brute_force_ && brute_cnt + scan_row_cnt < MAX_HNSW_BRUTE_FORCE_SIZE) {
+              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                int64_t vid = vid_datums[i].get_uint64();
+                vids[brute_cnt] = vid;
+                brute_cnt++;
+                if (if_add_relevance) {
+                  if (OB_UNLIKELY(i >= relevance_record.count())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
+                  } else if (OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
+                    LOG_WARN("failed to add relevance", K(ret), K(i));
+                  }
                 }
               }
-            }
+            } else {
+              lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(adaptor->get_tenant_id(), "VIBitmapADPI"));
+              // first, add vids into bitmap
+              if (go_brute_force_) {
+                go_brute_force_ = false;
+                for (int j = 0; OB_SUCC(ret) && j < brute_cnt; ++j) {
+                  if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vids[j]))) {
+                    LOG_WARN("failed to add valid vid", K(ret));
+                  }
+                }
+              }
 
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(adaptor->add_extra_valid_vid(ada_ctx, vid))) {
-              LOG_WARN("failed to add valid vid", K(ret));
-            } else if (if_add_relevance && i >= relevance_record.count()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
-            } else if (if_add_relevance && OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
-              LOG_WARN("failed to add relevance", K(ret), K(i));
+              // then add this batch into bitmap
+              for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
+                int64_t vid = vid_datums[i].get_uint64();
+                if (OB_FAIL(adaptor->add_extra_valid_vid_without_malloc_guard(ada_ctx, vid))) {
+                  LOG_WARN("failed to add valid vid", K(ret));
+                } else if (if_add_relevance) {
+                  if (OB_UNLIKELY(i >= relevance_record.count())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected vid count", K(vec_aux_ctdef_->relevance_col_cnt_), K(relevance_record.count()), K(scan_row_cnt));
+                  } else if (OB_FAIL(add_one_relevance(vid, relevance_record.at(i)))) {
+                    LOG_WARN("failed to add relevance", K(ret), K(i));
+                  }
+                }
+              }
             }
           }
         }

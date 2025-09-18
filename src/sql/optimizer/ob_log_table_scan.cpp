@@ -1875,8 +1875,6 @@ int ObLogTableScan::pick_out_query_range_exprs()
       LOG_WARN("NULL pointer error", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
   } else if (get_contains_fake_cte()) {
     // do nothing
-  } else if (get_vector_index_info().is_vec_adaptive_scan()) {
-    // do nothing
   } else if (OB_FAIL(schema_guard->get_table_schema(table_id_, ref_table_id_, get_stmt(), index_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(index_schema)) {
@@ -1886,32 +1884,48 @@ int ObLogTableScan::pick_out_query_range_exprs()
     LOG_WARN("failed to check is table get", K(ret));
   } else if ((index_schema->is_ordered() || is_get) && NULL != pre_range) {
     const ObIArray<ObRawExpr *> &range_exprs = pre_range->get_range_exprs();
-    ObArray<ObRawExpr *> filter_exprs;
-    if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
-      LOG_WARN("assign filter exprs failed", K(ret));
+    ObVecIndexInfo &vec_index_info = get_vector_index_info();
+    if (vec_index_info.is_vec_adaptive_scan()) {
+      // just check whether all filters can be picked out
+      bool all_picked_out = true;
+      for (int64_t i = 0; i < filter_exprs_.count() && all_picked_out; ++i) {
+        bool found_expr = false;
+        for (int64_t j = 0; !found_expr && j < range_exprs.count(); ++j) {
+          found_expr = (filter_exprs_.at(i) == range_exprs.at(j));
+        }
+        if (!found_expr) {
+          all_picked_out = false;
+        }
+      }
+      vec_index_info.set_all_filters_can_be_picked_out(all_picked_out);
     } else {
-      filter_exprs_.reset();
+      ObArray<ObRawExpr *> filter_exprs;
+      if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+        LOG_WARN("assign filter exprs failed", K(ret));
+      } else {
+        filter_exprs_.reset();
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+        bool found_expr = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !found_expr && j < range_exprs.count(); ++j) {
+          if (filter_exprs.at(i) == range_exprs.at(j)) {
+            //有重复表达式，忽略掉
+            found_expr = true;
+          } else { /* Do nothing */ }
+        }
+        // for virtual table, even if we extract query range, we need to maintain the condition into the filter
+        if (OB_SUCC(ret) && (!found_expr || (is_virtual_table(ref_table_id_)))) {
+          if (OB_FAIL(filter_exprs_.push_back(filter_exprs.at(i)))) {
+            LOG_WARN("add filter expr failed", K(i), K(ret));
+          } else { /* Do nothing */ }
+        }
+        if (OB_SUCC(ret) && found_expr) {
+          if (OB_FAIL(range_conds_.push_back(filter_exprs.at(i)))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else { /*do nothing*/}
+        }
+      } //end for
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
-      bool found_expr = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !found_expr && j < range_exprs.count(); ++j) {
-        if (filter_exprs.at(i) == range_exprs.at(j)) {
-          //有重复表达式，忽略掉
-          found_expr = true;
-        } else { /* Do nothing */ }
-      }
-      // for virtual table, even if we extract query range, we need to maintain the condition into the filter
-      if (OB_SUCC(ret) && (!found_expr || (is_virtual_table(ref_table_id_)))) {
-        if (OB_FAIL(filter_exprs_.push_back(filter_exprs.at(i)))) {
-          LOG_WARN("add filter expr failed", K(i), K(ret));
-        } else { /* Do nothing */ }
-      }
-      if (OB_SUCC(ret) && found_expr) {
-        if (OB_FAIL(range_conds_.push_back(filter_exprs.at(i)))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        } else { /*do nothing*/}
-      }
-    } //end for
   } else { /*do nothing*/ }
   return ret;
 }
