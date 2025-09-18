@@ -5512,7 +5512,7 @@ int ObDDLOperator::init_tenant_spm_configure(uint64_t tenant_id,
     RS_LOG(WARN, "sql append failed", K(ret));
   } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "SPACE_BUDGET_PERCENT", "10"))) {
     RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\");", extract_tenant_id, "PLAN_RETENTION_WEEKS", "53"))) {
+  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\");", extract_tenant_id, "PLAN_RETENTION_WEEKS", "7"))) {
     RS_LOG(WARN, "sql append failed", K(ret));
   } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     RS_LOG(WARN, "execute sql failed", K(ret), K(sql));

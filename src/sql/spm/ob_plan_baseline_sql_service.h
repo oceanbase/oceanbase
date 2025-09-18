@@ -138,6 +138,10 @@ public:
                                const uint64_t tenant_id,
                                const ObBaselineKey& key,
                                const ObPlanBaselineItem& baseline_item);
+  int batch_delete_rows(const uint64_t exec_tenant_id,
+                        ObSqlString &delete_sql,
+                        const int64_t batch_size,
+                        int64_t &total_affected_rows);
 private:
   const static char *EMPTY_STR;
   bool inited_;
