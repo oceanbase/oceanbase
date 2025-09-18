@@ -624,6 +624,10 @@ public:
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
       v.client_ret_ = OB_TIMEOUT;
+    } else if (v.is_interrupted_by_outer_query_) {
+      v.no_more_test_ = true;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.client_ret_ = v.err_;
     } else if (OB_EAGAIN == v.err_ && v.is_from_pl_) {
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_LOCAL;
@@ -705,7 +709,6 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   ObFastFailRetryPolicy fast_fail;
   ObCommonRetryIndexLongWaitPolicy retry_long_wait;
   retry_obj.test(fast_fail).test(retry_long_wait);
-
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
     ObRefreshLocationCacheBlockPolicy block_refresh; // FIXME: why block?
     retry_obj.test(block_refresh);
@@ -1152,6 +1155,10 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
                                                  bool is_part_of_pl_sql)
 {
   int ret = OB_SUCCESS;
+  bool is_interrupted_by_outer_query = IS_INTERRUPTED_BY_OUTER_QUERY();
+  // ignore interrupted state of current checker when execute inner sql during get retry state.
+  ObInterruptChecker tmp_checker;
+  ObInterruptCheckerGuard checker_guard(tmp_checker);
   client_ret = err;
   retry_type_ = RETRY_TYPE_NONE;
   retry_err_code_ = OB_SUCCESS;
@@ -1184,7 +1191,8 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
                              retry_times_,
                              err,
                              retry_type_,
-                             client_ret);
+                             client_ret,
+                             is_interrupted_by_outer_query);
     // do some common checks in this hook, which is not bond to certain error code
     ObQueryRetryCtrl::before_func(retry_param);
     // this 'if' check is necessary, as direct call to func may override

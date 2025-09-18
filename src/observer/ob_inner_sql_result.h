@@ -222,6 +222,7 @@ private:
   bool has_tenant_resource_;
   omt::ObTenant *tenant_;
   ObLDHandle handle_;
+  ObInterruptChecker interrupt_checker_;
 
   DISALLOW_COPY_AND_ASSIGN(ObInnerSQLResult);
 };

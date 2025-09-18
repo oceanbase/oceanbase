@@ -45,35 +45,47 @@ bool ObInterruptChecker::is_interrupted()
 
 ObInterruptCode &ObInterruptChecker::get_interrupt_code()
 {
-  //Returns the first interrupt received
-  return interrupt_code_array_[0];
+  return interrupt_code_array_;
 }
 
 void ObInterruptChecker::interrupt(ObInterruptCode &interrupt_code)
 {
-  //Each checker can only receive up to 16 interrupts
-  // By adding pos + 1 each time, you can count how many interrupts there are in total.
-  int64_t pos = ATOMIC_FAA(&array_pos_, 1);
-  if (pos < T_ARRAY_SIZE) {
-    interrupt_code_array_[pos] = interrupt_code;
+  if (!interrupted_) {
+    interrupt_code_array_ = interrupt_code;
+    interrupted_ = true;
   }
-  interrupted_ = true;
 }
 
 void ObInterruptChecker::clear_status()
 {
   interrupted_ = false;
-  array_pos_ = 0;
   ref_count_ = 0;
-  for (int idx = 0; idx < T_ARRAY_SIZE; ++idx)
-  {
-    interrupt_code_array_[idx].reset();
-  }
+  interrupt_code_array_.reset();
 }
 
 void ObInterruptChecker::clear_interrupt_status()
 {
   interrupted_ = false;
+}
+
+ObInterruptCheckerGuard::ObInterruptCheckerGuard(ObInterruptChecker &new_checker)
+{
+  bakup_checker_ = get_checker();
+  // push new checker to the head of the list.
+  new_checker.set_next(bakup_checker_);
+  new_checker.set_level(bakup_checker_->get_level() + 1);
+  const uint64_t interrupt_checker_deep_level = 100;
+  if (OB_UNLIKELY(new_checker.get_level() == interrupt_checker_deep_level)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "too deep nested interrupt checker");
+  }
+  get_checker() = &new_checker;
+}
+
+ObInterruptCheckerGuard::~ObInterruptCheckerGuard()
+{
+  get_checker()->set_next(nullptr);
+  get_checker() = bakup_checker_;
+  bakup_checker_ = nullptr;
 }
 
 ObGlobalInterruptManager *ObGlobalInterruptManager::getInstance()
