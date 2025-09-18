@@ -10932,11 +10932,12 @@ insert_with_opt_hint opt_priority opt_ignore opt_into single_table_insert opt_on
                            $1->children_[1], /* hint */
                            $3 /*ignore node*/);
 }
-| insert_with_opt_hint opt_priority opt_ignore OVERWRITE single_table_insert
+| insert_with_opt_hint opt_priority opt_ignore OVERWRITE opt_into single_table_insert
 {
   (void)($2);
   (void)($4);
-  if (NULL == $5) {
+  (void)($5);
+  if (NULL == $6) {
     yyerror(NULL, result, "invalid single table insert node\n");
     YYABORT_UNEXPECTED;
   }
@@ -10946,9 +10947,9 @@ insert_with_opt_hint opt_priority opt_ignore opt_into single_table_insert opt_on
   overwrite_node->value_ = 1;
   overwrite_node->is_hidden_const_ = 1;
 
-  $5->children_[2] = NULL; /*duplicate key node is null*/
+  $6->children_[2] = NULL; /*duplicate key node is null*/
   malloc_non_terminal_node($$, result->malloc_pool_, T_INSERT, 5,
-                           $5, /*single or multi table insert node*/
+                           $6, /*single or multi table insert node*/
                            $1->children_[0], /* is replacement */
                            $1->children_[1], /* hint */
                            $3, /*ignore node*/
