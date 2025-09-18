@@ -7861,7 +7861,8 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
     LOG_WARN("in standalone mode, add server is not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add server in standalone mode");
 #endif
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+  }
+  if (FAILEDx(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
     LOG_WARN("failed to get sys tenant data version", KR(ret));
   } else if (GCTX.is_shared_storage_mode() && sys_data_version < DATA_VERSION_4_4_1_0) {
     ret= OB_NOT_SUPPORTED;
