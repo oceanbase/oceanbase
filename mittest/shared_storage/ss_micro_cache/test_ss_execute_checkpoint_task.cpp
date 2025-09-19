@@ -940,7 +940,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   // ensure scan reusable blks must invoke
   blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
   ob_usleep(1000 * 1000);
-  ASSERT_EQ(true, blk_ckpt_task_->ckpt_op_.can_scan_reusable_blocks());
+  ASSERT_EQ(true, blk_ckpt_task_->ckpt_op_.need_scan_reusable_blocks());
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_reuse());
   ASSERT_EQ(alloc_phy_blk_cnt, phy_blk_mgr_->reusable_blks_.size());
   blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.finish_scan_phy_blk();

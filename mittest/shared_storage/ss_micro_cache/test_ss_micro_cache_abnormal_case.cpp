@@ -259,16 +259,20 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
   ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 0);
 
-  ASSERT_EQ(true, blk_ckpt_task.ckpt_op_.can_scan_reusable_blocks());
+  ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.has_free_ckpt_blk());
   bool exist_reusable_ckpt_blks = false;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free(exist_reusable_ckpt_blks));
   ASSERT_EQ(false, exist_reusable_ckpt_blks);
+  ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.has_free_ckpt_blk());
   ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
 
   // 3. third execute phy_blk checkpoint task, but no available block, cuz reusable_blocks can't be reused now.
+  //    Thus, won't execute blk_ckpt.
+  int64_t ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
-  ASSERT_EQ(OB_EAGAIN, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(ori_blk_ckpt_cnt, cache_stat.task_stat().blk_ckpt_cnt_);
   ASSERT_EQ(blk_ckpt_block_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
   ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
 
