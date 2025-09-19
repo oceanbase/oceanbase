@@ -693,61 +693,63 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
   bool is_running = false;
   bool is_cleaning = false;
   if (is_empty_) {
-  } else if (!type_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid parser", K(ret), KPC(this));
-  } else if (backup_dest_.is_empty()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cannot set archive dest without location.", K(ret), K_(backup_dest));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set archive dest without location is");
-  } else if (OB_FAIL(ObTenantArchiveMgr::is_archive_running(trans, tenant_id_, dest_no_, is_running))) {
-    LOG_WARN("failed to check archive running.", K(ret), K_(backup_dest));
-  } else if (is_running) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(backup_dest));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "change archive dest when archive is running is");
-  } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest_))) {
-    LOG_WARN("fail to check dest checksum type", K(ret));
-  } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
-    LOG_WARN("fail to set backup dest", K(ret));
-  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
-                      trans, tenant_id_, backup_dest, is_cleaning))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      LOG_INFO("backup dest is not exist, it's a new backup dest and it is not cleaning",
-                K(ret), K_(tenant_id), K_(backup_dest));
-    } else {
-      LOG_WARN("fail to check backup dest exist", K(ret), K_(tenant_id), K_(backup_dest));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (is_cleaning) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("A backup cleaning is in progress, set it again is not allowed", K(ret), K_(tenant_id), K_(backup_dest));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "cleaning of this dest is in progress, set it again ");
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-    const int64_t lag_target = tenant_config.is_valid() ? tenant_config->archive_lag_target : 0L;
-    const char *extension = backup_dest.get_storage_info()->get_extension();
-    char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
-    ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
-    if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
-                                                    src_locality, sizeof(src_locality), src_type))) {
-      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
-    } else if (ObBackupSrcType::EMPTY != src_type
-                  && OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
-      LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
-    } else if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
-    } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
-      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
-      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
-                          "set backup dest: parameter enable_worm=true is required for bucket with worm.");
+    if (!type_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid parser", K(ret), KPC(this));
+    } else if (backup_dest_.is_empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot set archive dest without location.", K(ret), K_(backup_dest));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set archive dest without location is");
+    } else if (OB_FAIL(ObTenantArchiveMgr::is_archive_running(trans, tenant_id_, dest_no_, is_running))) {
+      LOG_WARN("failed to check archive running.", K(ret), K_(backup_dest));
+    } else if (is_running) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot change archive dest when archive is running.", K(ret), K_(backup_dest));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "change archive dest when archive is running is");
+    } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest_))) {
+      LOG_WARN("fail to check dest checksum type", K(ret));
+    } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
+      LOG_WARN("fail to set backup dest", K(ret));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
+                        trans, tenant_id_, backup_dest, is_cleaning))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("backup dest is not exist, it's a new backup dest and it is not cleaning",
+                  K(ret), K_(tenant_id), K_(backup_dest));
+      } else {
+        LOG_WARN("fail to check backup dest exist", K(ret), K_(tenant_id), K_(backup_dest));
       }
-      LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_cleaning) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("A backup cleaning is in progress, set it again is not allowed", K(ret), K_(tenant_id), K_(backup_dest));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cleaning of this dest is in progress, set it again ");
+    } else {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+      const int64_t lag_target = tenant_config.is_valid() ? tenant_config->archive_lag_target : 0L;
+      const char *extension = backup_dest.get_storage_info()->get_extension();
+      char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+      ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+      if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(ObString(extension),
+                                                      src_locality, sizeof(src_locality), src_type))) {
+        LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+      } else if (ObBackupSrcType::EMPTY != src_type
+                    && OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
+        LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
+      } else if (backup_dest.is_storage_type_s3() && MIN_LAG_TARGET_FOR_S3 > lag_target) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "archive_lag_target is smaller than 60s, set log_archive_dest to S3 is");
+      } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
+        LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+        if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                            "set backup dest: parameter enable_worm=true is required for bucket with worm.");
+        }
+        LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+      }
     }
   }
   return ret;
