@@ -237,13 +237,13 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
     } else {
       rt_expr.eval_func_ = eval_external_udf;
 
-      if (!info->is_py_udf()) {
+      if (!info->is_py_udf() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
         rt_expr.eval_vector_func_ = eval_external_udf_vector;
       }
     }
   } else {
     rt_expr.eval_func_ = eval_udf;
-    if (OB_SUCC(ret) && is_called_in_sql()) {
+    if (OB_SUCC(ret) && is_called_in_sql() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0) {
       rt_expr.eval_batch_func_ = eval_udf_batch;
       if (enable_eval_vector(rt_expr)) {
         rt_expr.eval_vector_func_ = eval_udf_vector;
