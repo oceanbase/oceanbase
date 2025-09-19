@@ -126,6 +126,61 @@ protected:
   }
 };
 
+TEST(FTWordTest, test_hash)
+{
+
+  ObObjMeta default_meta;
+  default_meta.set_varchar();
+  default_meta.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+
+  ObFTWord word_origin(5, "hello", default_meta);
+
+  uint64_t hash_val = 0;
+  int ret = word_origin.hash(hash_val);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  {
+    ObFTWord word2(5, "hello", default_meta);
+    uint64_t hash_val2 = 0;
+    ret = word2.hash(hash_val2);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(hash_val2, hash_val);
+  }
+
+  {
+    // case insensitive
+    ObFTWord word2(5, "hellO", default_meta);
+    uint64_t hash_val2 = 0;
+    ret = word2.hash(hash_val2);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(hash_val2, hash_val);
+  }
+
+  {
+    ObFTWord word2(5, "hell0", default_meta);
+    uint64_t hash_val2 = 0;
+    ret = word2.hash(hash_val2);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_NE(hash_val2, hash_val);
+  }
+
+  {
+    ObFTWord word2(4, "hell", default_meta);
+    uint64_t hash_val2 = 0;
+    ret = word2.hash(hash_val);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_NE(hash_val2, hash_val);
+  }
+
+  {
+    ObFTWord word2(5, "he1lo", default_meta);
+    uint64_t hash_val2 = 0;
+    ret = word2.hash(hash_val2);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_NE(hash_val2, hash_val);
+  }
+}
+
 TEST_F(FTParserTest, test_cache)
 {
   int ret = OB_SUCCESS;
