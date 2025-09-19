@@ -21,6 +21,25 @@ using namespace oceanbase::sql;
 
 namespace oceanbase
 {
+
+namespace common
+{
+int ob_obj_read_lob_data(
+    ObIAllocator &allocator,
+    const common::ObObj &obj,
+    ObString &data)
+{
+  int ret = OB_SUCCESS;
+  if (MTL(storage::ObLobManager*) == nullptr) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("lob manager is null", K(ret), K(obj), K(lbt()));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator, obj, data))) {
+    LOG_WARN("read_real_string_data fail", K(ret), K(obj), K(lbt()));
+  }
+  return ret;
+}
+}
+
 namespace sql
 {
 

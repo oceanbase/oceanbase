@@ -1987,6 +1987,7 @@ public:
   static uint32_t v_offset_bits() { return offsetof(ObObj, v_) * 8; }
   int get_char_length(const ObAccuracy accuracy, int32_t &char_len, bool is_oracle_mode) const;
   int convert_string_value_charset(ObCharsetType charset_type, ObIAllocator &allocator);
+  int read_lob_data(ObIAllocator &allocator, ObString &data) const;
 private:
   friend class tests::common::ObjTest;
   friend class ObCompactCellWriter;

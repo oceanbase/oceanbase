@@ -33,6 +33,19 @@
 using namespace oceanbase;
 using namespace oceanbase::common;
 
+namespace oceanbase
+{
+namespace common
+{
+int __attribute__((weak)) ob_obj_read_lob_data(ObIAllocator &allocator, const common::ObObj &obj, ObString &data)
+{
+  int ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support outrow lob read", K(ret), K(obj));
+  return ret;
+}
+}
+}
+
 bool ObLobId::operator==(const ObLobId &other) const
 {
   return tablet_id_ == other.tablet_id_ && lob_id_ == other.lob_id_;
@@ -2201,6 +2214,25 @@ int ObObj::convert_string_value_charset(ObCharsetType charset_type, ObIAllocator
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObObj::read_lob_data(ObIAllocator &allocator, ObString &data) const
+{
+  int ret = OB_SUCCESS;
+  if (is_lob_storage() || get_type() == ObTinyTextType) {
+    ObLobLocatorV2 locator(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
+    if(locator.has_inrow_data()) {
+      if (OB_FAIL(locator.get_inrow_data(data))) {
+        LOG_WARN("fail to get inrow data", K(ret), K(locator), KPC(this), K(lbt()));
+      }
+    } else if (OB_FAIL(ob_obj_read_lob_data(allocator, *this, data))) {
+      LOG_WARN("read data fail", K(ret), K(locator), KPC(this), K(lbt()));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not lob storage type", K(ret), KPC(this), K(lbt()));
   }
   return ret;
 }
