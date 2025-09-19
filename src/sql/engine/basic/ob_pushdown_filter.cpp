@@ -1209,6 +1209,10 @@ int ObPushdownFilterNode::check_filter_info(const storage::ObITableReadInfo &rea
     const int64_t col_count = col_ids_.count();
     const common::ObIArray<ObColDesc> &cols_desc = read_info.get_columns_desc();
     for (int64_t i = 0; is_safe_filter_with_di && i < col_count; i++) {
+      if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == col_ids_.at(i)) {
+        is_safe_filter_with_di = false;
+        break;
+      }
       for (int32_t col_pos = 0; col_pos < cols_desc.count(); col_pos++) {
         if (col_ids_.at(i) == cols_desc.at(col_pos).col_id_) {
           if (is_lob_storage(cols_desc.at(col_pos).col_type_.get_type())) {
