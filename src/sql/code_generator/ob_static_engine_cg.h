@@ -224,7 +224,7 @@ public:
 
   // operator types with rich format disabled
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
-                             const bool in_root_job);
+                             const bool in_root_job, const bool enable_rich_format = false);
 
   // detect physical operator type from logic operator.
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
@@ -234,7 +234,7 @@ public:
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
 
   static int check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
-                                    const ObPhyOperatorType phy_type, bool &disable_vectorize);
+                                    const bool plan_use_rich_format, bool &disable_vectorize);
   static int exist_registered_vec_op(ObLogicalOperator &op, const bool is_root_job, bool &exist);
 
 private:
