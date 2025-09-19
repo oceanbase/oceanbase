@@ -7330,6 +7330,9 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
         rsp_type = ObJsonType;
         rsp_cs_type = CS_TYPE_UTF8MB4_BIN;
         rsp_len = (ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length();
+      } else {
+        rsp_type = aggr_info.expr_->datum_meta_.type_;
+        rsp_cs_type = aggr_info.expr_->datum_meta_.cs_type_;
       }
 
       ObJsonBuffer string_buffer(&tmp_alloc);
@@ -7338,6 +7341,8 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
       } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
         ObIJsonBase *j_base = NULL;
         ObStringBuffer *buff = bin_agg.get_buffer();
+        ObString temp_str;
+        ObString result_str;
         if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
                                                       buff->string(),
                                                       ObJsonInType::JSON_BIN,
@@ -7347,7 +7352,14 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
           LOG_WARN("fail to get real data.", K(ret), K(buff));
         } else if (OB_FAIL(j_base->print(string_buffer, true, buff->length(), false))) {
           LOG_WARN("failed: get json string text", K(ret));
-        } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
+        } else if (FALSE_IT(temp_str = string_buffer.string())) {
+        } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(CS_TYPE_UTF8MB4_BIN,
+                                                                            rsp_cs_type,
+                                                                            &tmp_alloc,
+                                                                            temp_str,
+                                                                            result_str))) {
+          LOG_WARN("charset convert failed for json_arrayagg", K(ret), K(rsp_cs_type));
+        } else if (rsp_type == ObVarcharType && result_str.length() > rsp_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
           if (OB_ISNULL(ObCharset::lltostr(rsp_len, res_ptr, 10, 1))) {
             LOG_WARN("dst_len fail to string.", K(ret));
@@ -7355,7 +7367,7 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
           ret = OB_OPERATE_OVERFLOW;
           LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_arrayagg");
         } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_,concat_result,
-                                                               string_buffer.string(), &aggr_alloc_))) {
+                                                               result_str, &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else if (ob_is_json(rsp_type)) {
@@ -7931,6 +7943,9 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
         rsp_type = ObJsonType;
         rsp_cs_type = CS_TYPE_UTF8MB4_BIN;
         rsp_len = (ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length();
+      } else {
+        rsp_type = aggr_info.expr_->datum_meta_.type_;
+        rsp_cs_type = aggr_info.expr_->datum_meta_.cs_type_;
       }
 
       ObJsonBuffer string_buffer(&tmp_alloc);
@@ -7950,6 +7965,8 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
       } else if (OB_FALSE_IT(buff = bin_agg.get_buffer())) {
       } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
         ObIJsonBase *j_base = NULL;
+        ObString temp_str;
+        ObString result_str;
         if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_alloc,
                                                       buff->string(),
                                                       ObJsonInType::JSON_BIN,
@@ -7959,7 +7976,14 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
           LOG_WARN("fail to get real data.", K(ret), K(buff));
         } else if (OB_FAIL(j_base->print(string_buffer, true, buff->length(), false))) {
           LOG_WARN("failed: get json string text", K(ret));
-        } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
+        } else if (FALSE_IT(temp_str = string_buffer.string())) {
+        } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(CS_TYPE_UTF8MB4_BIN,
+                                                                            rsp_cs_type,
+                                                                            &tmp_alloc,
+                                                                            temp_str,
+                                                                            result_str))) {
+          LOG_WARN("charset convert failed for json_objectagg", K(ret), K(rsp_cs_type));
+        } else if (rsp_type == ObVarcharType && result_str.length() > rsp_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
           if (OB_ISNULL(ObCharset::lltostr(rsp_len, res_ptr, 10, 1))) {
             LOG_WARN("dst_len fail to string.", K(ret));
@@ -7967,7 +7991,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
           ret = OB_OPERATE_OVERFLOW;
           LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_objectagg");
         } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_,concat_result,
-                                                               string_buffer.string(), &aggr_alloc_))) {
+                                                               result_str, &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else if (ob_is_json(rsp_type)) {
