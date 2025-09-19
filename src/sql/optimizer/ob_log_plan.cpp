@@ -18290,6 +18290,8 @@ int ObLogPlan::check_aggr_param_match_pushdown_rule(const uint64_t table_id,
     LOG_WARN("fail to extract column expr", K(ret));
   } else if (column_exprs.count() != 1) {
     can_push = false;
+  } else if (!column_exprs.at(0)->is_column_ref_expr()) {
+    can_push = false;
   } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0)))) {
   } else if (table_id != col_expr->get_table_id() || col_expr->is_pseudo_column_ref()) {
     can_push = false;
