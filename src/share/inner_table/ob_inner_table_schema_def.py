@@ -8423,6 +8423,9 @@ all_ai_model_endpoint_def = dict(
 def_table_schema(**all_ai_model_endpoint_def)
 
 # 573 : __wr_active_session_history_v2
+# 574: __all_tenant_macro_block_copy_task
+# 575: __all_tenant_macro_block_copy_task_progress
+# 576: __all_tenant_macro_block_copy_task_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17170,6 +17173,9 @@ def_table_schema(
 )
 
 # 12576: __all_virtual_wr_active_session_history_v2
+# 12577: __all_virtual_macro_block_copy_task
+# 12578: __all_virtual_macro_block_copy_task_progress
+# 12579: __all_virtual_macro_block_copy_task_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
