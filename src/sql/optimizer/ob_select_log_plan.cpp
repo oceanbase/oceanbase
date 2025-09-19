@@ -9823,6 +9823,7 @@ int ObSelectLogPlan::create_transform_distinct_agg_plan(
       inner_groupby_helper.force_use_hash_ = true;
       inner_groupby_helper.force_use_merge_ = false;
       inner_groupby_helper.ignore_stmt_distinct_or_rollup_ = true;
+      inner_groupby_helper.is_trans_distinct_agg_ = true;
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(candi_allocate_normal_group_by(
@@ -9853,6 +9854,7 @@ int ObSelectLogPlan::create_transform_distinct_agg_plan(
     if (OB_SUCC(ret)) {
       // if exists group_concat aggregation, can't use hash algorithm
       outter_groupby_helper.ignore_stmt_distinct_or_rollup_ = !(get_stmt()->has_concat_agg());
+      outter_groupby_helper.is_trans_distinct_agg_ = true;
       if (groupby_helper.ignore_hint_) { outter_groupby_helper.set_ignore_hint(); }
       if (OB_FAIL(candi_allocate_normal_group_by(
             true, reduce_exprs, outter_group_exprs, outter_group_dirs, having_exprs,

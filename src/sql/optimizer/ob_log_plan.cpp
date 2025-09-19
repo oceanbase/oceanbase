@@ -5771,7 +5771,12 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                        DistAlgo::DIST_PARTITION_WISE |
                        DistAlgo::DIST_HASH_HASH |
                        DistAlgo::DIST_PULL_TO_LOCAL;
-  if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)) {
+  if (groupby_helper.is_trans_distinct_agg_) {
+    group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
+    group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
+  }
+  if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)
+      && !groupby_helper.is_trans_distinct_agg_) {
     force_slave_mapping = true;
   }
   if (OB_ISNULL(top) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
@@ -5852,6 +5857,7 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                                                                        is_partition_wise))) {
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
     } else if (is_partition_wise &&
+              !groupby_helper.is_trans_distinct_agg_ &&
                (top->is_parallel_more_than_part_cnt(2) || force_slave_mapping ||
                 DistAlgo::DIST_HASH_HASH_LOCAL == group_dist_methods)) {
       group_dist_methods = DistAlgo::DIST_HASH_HASH_LOCAL;
