@@ -74,7 +74,8 @@ public:
       block_max_spec_(alloc),
       relevance_col_cnt_(0),
       is_hybrid_(false),
-      all_filters_can_be_picked_out_(false) {}
+      all_filters_can_be_picked_out_(false),
+      use_rowkey_vid_tbl_(false) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
@@ -176,6 +177,7 @@ public:
   int64_t relevance_col_cnt_;
   bool is_hybrid_;
   bool all_filters_can_be_picked_out_;
+  bool use_rowkey_vid_tbl_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef

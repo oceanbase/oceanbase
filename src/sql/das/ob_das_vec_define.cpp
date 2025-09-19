@@ -50,7 +50,7 @@ OB_SERIALIZE_MEMBER((ObDASVecAuxScanCtDef, ObDASAttachCtDef),
                     extra_column_count_, spiv_scan_docid_col_, spiv_scan_value_col_,
                     vector_index_param_, vec_query_param_, adaptive_try_path_,
                     is_multi_value_index_, is_spatial_index_, can_extract_range_,
-                    block_max_spec_, relevance_col_cnt_, is_hybrid_, all_filters_can_be_picked_out_);
+                    block_max_spec_, relevance_col_cnt_, is_hybrid_, all_filters_can_be_picked_out_, use_rowkey_vid_tbl_);
 OB_SERIALIZE_MEMBER(ObDASVecAuxScanRtDef);
 
 } // sql
