@@ -266,6 +266,8 @@ public:
   { return running_state_.is_offline(); }
   bool is_stopped() const
   { return running_state_.is_stopped(); }
+  bool is_running() const
+  { return running_state_.is_running(); }
   int64_t get_state_seq() const
   { return ATOMIC_LOAD(&state_seq_); }
   int64_t get_switch_epoch() const { return ATOMIC_LOAD(&switch_epoch_); }
