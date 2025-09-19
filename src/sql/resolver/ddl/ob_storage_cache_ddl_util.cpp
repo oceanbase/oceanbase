@@ -612,6 +612,7 @@ int ObDDLResolver::check_storage_cache_policy(ObStorageCachePolicy &storage_cach
           column_id = column_schema->get_column_id();
           if (OB_FAIL(check_column_is_first_part_key(part_key_info, column_id))) {
             LOG_WARN("check column is first part key failed", K(ret), K(column_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using the non-first partition key column as the boundary column is");
           }
         }
       } else if (PARTITION_LEVEL_TWO == part_level) {
