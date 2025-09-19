@@ -765,7 +765,9 @@ int ObDASIterUtils::set_vec_pre_filter_related_ids(const ObDASVecAuxScanCtDef *v
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (ObDASIterType::DAS_ITER_LOCAL_LOOKUP == hnsw_scan_iter->get_inv_idx_scan_iter()->get_type()) {
+      } else if (hnsw_scan_iter->get_pre_filter_iter() != hnsw_scan_iter->get_inv_idx_scan_iter() &&
+                 ObDASIterType::DAS_ITER_LOCAL_LOOKUP == hnsw_scan_iter->get_inv_idx_scan_iter()->get_type()) {
+        // (pre filter iter) equals (inv idx scan iter) means no need pre lookup, so no need set tablet id here
         ObDASLocalLookupIter *lookup_iter = static_cast<ObDASLocalLookupIter *>(hnsw_scan_iter->get_inv_idx_scan_iter());
         lookup_iter->set_ls_id(ls_id);
         lookup_iter->set_tablet_id(related_tablet_ids.lookup_tablet_id_);
