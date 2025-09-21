@@ -350,9 +350,9 @@ public:
    * 
    * special serialize interface for lob to avoid lob locator too large
    */ 
-  int serialize_for_lob(const share::ObLSID &ls_id, SERIAL_PARAMS) const;
-  int deserialize_for_lob(DESERIAL_PARAMS);
-  int64_t get_serialize_size_for_lob(const share::ObLSID &ls_id) const;
+  int serialize_for_lob(const share::ObLSID &ls_id, const share::SCN &fb_snapshot, SERIAL_PARAMS) const;
+  int deserialize_for_lob(share::SCN &fb_snapshot, DESERIAL_PARAMS);
+  int64_t get_serialize_size_for_lob(const share::ObLSID &ls_id, const share::SCN &fb_snapshot) const;
   /**
    * deprecated interface, DONOT use !
    * 
