@@ -1513,8 +1513,16 @@ int ObTenantTransferService::try_clear_transfer_task(
     share::ObTransferPartList &finished_part_list)
 {
   int ret = OB_SUCCESS;
+  bool is_finished = false;
   DEBUG_SYNC(BEFORE_PROCESS_BALANCE_TASK_TRANSFER_END);
-  if (OB_FAIL(unlock_and_clear_task_(task_id, task))) {
+  if (OB_FAIL(check_if_task_is_finished_(task_id, is_finished))) {
+    LOG_WARN("check task is finished failed", KR(ret), K(task_id));
+  } else if (!is_finished) {
+    ret = OB_NEED_RETRY;
+    if (REACH_TIME_INTERVAL(10_s)) {
+      TTS_INFO("task is not finished, can't clear", KR(ret), K(task_id), K(is_finished));
+    }
+  } else if (OB_FAIL(unlock_and_clear_task_(task_id, task))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       int64_t create_time = OB_INVALID_TIMESTAMP;
       int64_t finish_time = OB_INVALID_TIMESTAMP;
@@ -2027,6 +2035,43 @@ int ObTenantTransferService::check_tablet_count_by_threshold_(
         "tablet_count_limit", OB_MAX_TRANSFER_BINDING_TABLET_CNT);
   } else {
     exceed_threshold = (tablet_ids.count() + new_tablet_cnt > get_tablet_count_threshold_());
+  }
+  return ret;
+}
+
+// check task is finished without for_update
+int ObTenantTransferService::check_if_task_is_finished_(
+    const ObTransferTaskID &task_id,
+    bool &is_finished)
+{
+  int ret = OB_SUCCESS;
+  ObTransferTask tmp_task;
+  is_finished = false;
+  if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid task_id", KR(ret), K(task_id));
+  } else if (OB_FAIL(ObTransferTaskOperator::get(
+      *sql_proxy_,
+      tenant_id_,
+      task_id,
+      false/*for_update*/,
+      tmp_task,
+      0/*group_id*/))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("task not exist", KR(ret), K(tenant_id_), K(task_id));
+      ret = OB_SUCCESS;
+      is_finished = true;
+    } else {
+      LOG_WARN("fail to get task", KR(ret), K(tenant_id_), K(task_id), K(tmp_task));
+    }
+  } else if (!tmp_task.get_status().is_finish_status()) {
+    is_finished = false;
+    LOG_TRACE("task is not in finish status", KR(ret), K(task_id), K(is_finished), K(tmp_task));
+  } else {
+    is_finished = true;
   }
   return ret;
 }
