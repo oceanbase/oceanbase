@@ -19263,6 +19263,12 @@ opt_set table_option_list_space_seperated
   malloc_non_terminal_node(rename_node, result->malloc_pool_, T_TABLE_RENAME, 1, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE_OPTION, 1, rename_node);
 }
+| RENAME AS relation_factor
+{
+  ParseNode *rename_node = NULL;
+  malloc_non_terminal_node(rename_node, result->malloc_pool_, T_TABLE_RENAME, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE_OPTION, 1, rename_node);
+}
 | alter_index_option
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_INDEX_OPTION, 1, $1);
