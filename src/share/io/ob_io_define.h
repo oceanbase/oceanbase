@@ -535,7 +535,7 @@ private:
   bool is_finished_;
   bool is_canceled_;
   bool has_estimated_;
-  bool is_object_device_req_;
+  bool is_limit_net_bandwidth_req_;
   volatile int32_t result_ref_cnt_; //for io_result and io_handle
   volatile int32_t out_ref_cnt_; //for io_handle
   int64_t complete_size_;
@@ -575,7 +575,7 @@ public:
   bool is_sys_module() const;
   oceanbase::share::ObFunctionType get_func_type() const;
   bool is_local_clog_not_isolated();
-  bool is_object_device_req() const;
+  bool is_limit_net_bandwidth_req() const;
   char *calc_io_buf();  // calc the aligned io_buf of raw_buf_, which interact with the operating system
   const ObIOFlag &get_flag() const;
   ObIOMode get_mode() const; // 2 mode
@@ -597,7 +597,7 @@ public:
 
   int64_t get_remained_io_timeout_us();
 
-  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_object_device_req()),
+  TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_limit_net_bandwidth_req()),
                K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
                KPC(io_result_), K_(part_id));
 private:

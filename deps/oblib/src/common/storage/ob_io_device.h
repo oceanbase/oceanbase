@@ -517,7 +517,12 @@ public:
     return (ObStorageType::OB_STORAGE_LOCAL == device_type_);
   }
 
-  int get_io_aligned_size(int64_t &aligned_size) const;
+  virtual bool should_limit_net_bandwidth() const
+  {
+    return false;
+  }
+
+  virtual int64_t get_io_aligned_size() const = 0;
   TO_STRING_KV(K_(device_type), K_(media_id), K_(ref_cnt));
 
 public:

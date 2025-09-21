@@ -306,12 +306,12 @@ bool ObIOFlag::is_sys_module() const
           && sys_module_id_ < SYS_MODULE_END_ID;
 }
 
-bool ObIORequest::is_object_device_req() const
+bool ObIORequest::is_limit_net_bandwidth_req() const
 {
   bool ret = false;
   if (io_result_ == nullptr) {
   } else {
-    ret = io_result_->is_object_device_req_;
+    ret = io_result_->is_limit_net_bandwidth_req_;
   }
   return ret;
 }
@@ -668,7 +668,7 @@ ObIOResult::ObIOResult()
     is_finished_(false),
     is_canceled_(false),
     has_estimated_(false),
-    is_object_device_req_(false),
+    is_limit_net_bandwidth_req_(false),
     result_ref_cnt_(0),
     out_ref_cnt_(0),
     complete_size_(0),
@@ -724,11 +724,10 @@ int ObIOResult::init(const ObIOInfo &info)
     LOG_WARN("thread_cond not init yet", K(ret));
   } else if (OB_ISNULL(info.fd_.device_handle_)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(info.fd_.device_handle_));
   } else {
     if (info.flag_.is_sync()) {
-      if (OB_FAIL(info.fd_.device_handle_->get_io_aligned_size(aligned_size_))) {
-        LOG_WARN("get io aligned size failed", K(ret));
-      }
+      aligned_size_ = info.fd_.device_handle_->get_io_aligned_size();
     } else {
       aligned_size_ = DIO_ALIGN_SIZE;
     }
@@ -750,7 +749,7 @@ int ObIOResult::init(const ObIOInfo &info)
     buf_ = info.buf_;
     user_data_buf_ = info.user_data_buf_;
     time_log_.begin_ts_ = ObTimeUtility::fast_current_time();
-    is_object_device_req_ = info.fd_.device_handle_->is_object_device();
+    is_limit_net_bandwidth_req_ = info.fd_.device_handle_->should_limit_net_bandwidth();
     if (OB_UNLIKELY(!is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(*this));
@@ -767,7 +766,7 @@ void ObIOResult::reset()
   is_finished_ = false;
   is_canceled_ = false;
   has_estimated_ = false;
-  is_object_device_req_ = false;
+  is_limit_net_bandwidth_req_ = false;
   complete_size_ = 0;
   offset_ = 0;
   size_ = 0;
@@ -790,7 +789,7 @@ void ObIOResult::destroy()
   is_finished_ = false;
   is_canceled_ = false;
   has_estimated_ = false;
-  is_object_device_req_ = false;
+  is_limit_net_bandwidth_req_ = false;
   complete_size_ = 0;
   offset_ = 0;
   size_ = 0;
@@ -823,7 +822,7 @@ ObIOMode ObIOResult::get_mode() const
 
 ObIOGroupKey ObIOResult::get_group_key() const
 {
-  return ObIOGroupKey(flag_.get_resource_group_id(), is_object_device_req_ ? get_mode() : ObIOMode::MAX_MODE);
+  return ObIOGroupKey(flag_.get_resource_group_id(), is_limit_net_bandwidth_req_ ? get_mode() : ObIOMode::MAX_MODE);
 }
 
 uint64_t ObIOResult::get_sys_module_id() const
@@ -942,7 +941,7 @@ void ObIOResult::finish(const ObIORetCode &ret_code, ObIORequest *req)
           tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*req);
         }
         time_log_.end_ts_ = ObTimeUtility::fast_current_time();
-        if (req->fd_.device_handle_->is_object_device()) {
+        if (req->is_limit_net_bandwidth_req()) {
           const ObStorageIdMod &storage_info = ((ObObjectDevice*)(req->fd_.device_handle_))->get_storage_id_mod();
           if (OB_UNLIKELY(!storage_info.is_valid())) {
             LOG_WARN("invalid storage id", K(storage_info));
@@ -1025,7 +1024,7 @@ int ObIOResult::transform_group_config_index_to_usage_index(const ObIOGroupKey &
   // REMOTE READ = 2,
   // REMOTE WRITE = 3
   if (is_sys_module()) {
-    offset = is_object_device_req_ ? 1 : 0;
+    offset = is_limit_net_bandwidth_req_ ? 1 : 0;
     offset = offset * 2 + static_cast<uint64_t>(get_mode());
     tmp_index = get_sys_module_id() - SYS_MODULE_START_ID;
     usage_index = tmp_index * GROUP_MODE_CNT + offset;
@@ -1359,7 +1358,7 @@ ObIOMode ObIORequest::get_mode() const
 ObIOGroupMode ObIORequest::get_group_mode() const
 {
   ObIOGroupMode group_mode = ObIOGroupMode::MODECNT; 
-  if (fd_.device_handle_->is_object_device()) {
+  if (is_limit_net_bandwidth_req()) {
     if (get_mode() == ObIOMode::READ) {
       group_mode = ObIOGroupMode::REMOTEREAD;
     } else if (get_mode() == ObIOMode::WRITE) {
@@ -1421,7 +1420,7 @@ int ObIORequest::alloc_aligned_io_buf(char *&io_buf)
       && OB_UNLIKELY(!is_io_aligned(io_result_->offset_, aligned_size)
                      || !is_io_aligned(io_result_->size_, aligned_size))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("write io info not aligned", K(ret), K(*this));
+    LOG_WARN("write io info not aligned", K(ret), K(*this), K(aligned_size));
   } else {
     align_offset_size(io_result_->offset_, io_result_->size_, aligned_size, io_offset, io_size);
     const int64_t io_buffer_size = ((1 == aligned_size) ? io_size : (io_size + aligned_size));
@@ -1926,7 +1925,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
                 : 0)) /
         1000L;
     ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(), timeout_ms);
-    const int64_t real_wait_timeout = (result_->is_object_device_req_
+    const int64_t real_wait_timeout = (result_->is_limit_net_bandwidth_req_
                                        ? timeout_ms
                                        : min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms));
 

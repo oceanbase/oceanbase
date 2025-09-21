@@ -1163,7 +1163,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
       if (OB_FAIL(tenant_groups_map_.get_refactored(req.tenant_id_, io_group_queues))) {
         LOG_WARN("get_refactored tenant_map failed", K(ret), K(req));
       } else {
-        const uint8_t default_group_index = (uint8_t)(req.fd_.device_handle_->is_object_device() ?
+        const uint8_t default_group_index = (uint8_t)(req.is_limit_net_bandwidth_req() ?
                                               req.get_mode() : ObIOMode::MAX_MODE);
         uint64_t index = 0;
         ObIOGroupKey key = req.get_group_key();
@@ -1452,7 +1452,7 @@ int64_t ObIOSender::get_queue_count() const
 int ObIOSender::inc_queue_count(const ObIORequest &req) {
   int ret = OB_SUCCESS;
   ATOMIC_INC(&sender_req_count_);
-  if (req.fd_.device_handle_->is_object_device()) {
+  if (req.is_limit_net_bandwidth_req()) {
     if (req.get_mode() == ObIOMode::READ) {
       ATOMIC_INC(&sender_req_remote_r_count_);
     } else if (req.get_mode() == ObIOMode::WRITE) {
@@ -1478,7 +1478,7 @@ int ObIOSender::dec_queue_count(const ObIORequest &req) {
   if (OB_ISNULL(req.fd_.device_handle_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("req is cleared", K(ret), K(req), K(req.fd_));
-  } else if (req.fd_.device_handle_->is_object_device()) {
+  } else if (req.is_limit_net_bandwidth_req()) {
     if (req.get_mode() == ObIOMode::READ) {
       ATOMIC_DEC(&sender_req_remote_r_count_);
     } else if (req.get_mode() == ObIOMode::WRITE) {
@@ -2207,8 +2207,7 @@ void ObAsyncIOChannel::get_events()
             if (OB_ISNULL(req->fd_.device_handle_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("device handle is null", K(ret), K(req));
-            } else if (OB_FAIL(req->fd_.device_handle_->get_io_aligned_size(aligned_size))) {
-              LOG_WARN("fail to get io aligned size", K(ret), K(*req));
+            } else if (FALSE_IT(aligned_size = req->fd_.device_handle_->get_io_aligned_size())) {
             } else if (0 == complete_size || !is_io_aligned(complete_size, aligned_size)) { // reach end of file
               if (OB_FAIL(on_partial_return(*req, complete_size))) {
                 LOG_WARN("process partial return io request failed", K(ret), K(complete_size), K(*req));
@@ -2324,7 +2323,7 @@ int ObAsyncIOChannel::on_partial_retry(ObIORequest &req, const int64_t complete_
   if (OB_ISNULL(req.fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device handle is null", K(ret), K(req));
-  } else if (OB_FAIL(req.fd_.device_handle_->get_io_aligned_size(aligned_size))) {
+  } else if (FALSE_IT(aligned_size = req.fd_.device_handle_->get_io_aligned_size())) {
     LOG_WARN("fail to get io aligned size", K(ret), K(req));
   } else if (OB_UNLIKELY(!is_io_aligned(complete_size, aligned_size))) {
     ret = OB_ERR_SYS;
@@ -3634,7 +3633,8 @@ void ObIOFaultDetector::record_io_timeout(const ObIOResult &result, const ObIORe
     //ignore, do not retry
   } else if (req.get_flag().is_sync()) {
     LOG_INFO("ignore fault detect for sync io", K(req));
-  } else if (result.flag_.is_read() && !result.is_object_device_req_) {
+  } else if (result.flag_.is_read() && !result.is_limit_net_bandwidth_req_ &&
+             is_supported_detect_read_(req.tenant_id_, req.fd_)) {
     RetryTask *retry_task = nullptr;
     if (OB_ISNULL(retry_task = op_alloc(RetryTask))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3670,7 +3670,8 @@ void ObIOFaultDetector::record_io_error(const ObIOResult &result, const ObIORequ
     //ignore, do not retry
   } else if (req.get_flag().is_sync()) {
     LOG_INFO("ignore fault detect for sync io", K(req));
-  } else if (result.flag_.is_read() && !result.is_object_device_req_) {
+  } else if (result.flag_.is_read() && !result.is_limit_net_bandwidth_req_ &&
+             is_supported_detect_read_(req.tenant_id_, req.fd_)) {
     if (OB_FAIL(record_read_failure_(result, req))) {
       LOG_WARN("record read failure failed", K(ret), K(result), K(req));
     }

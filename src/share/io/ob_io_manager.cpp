@@ -87,7 +87,7 @@ int64_t ObTrafficControl::IORecord::calc()
 int ObTrafficControl::ObSharedDeviceIORecord::calc_usage(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("io request is not object device", K(req), K(ret));
   } else {
@@ -118,7 +118,7 @@ ObTrafficControl::ObSharedDeviceControl::ObSharedDeviceControl()
 int ObTrafficControl::ObSharedDeviceControl::calc_clock(const int64_t current_ts, ObIORequest &req, int64_t &deadline_ts)
 {
   int ret = OB_SUCCESS;
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("io request is not object device", K(req), K(ret));
   } else {
@@ -306,7 +306,7 @@ int ObTrafficControl::calc_clock(const int64_t current_ts, ObIORequest &req, int
   uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
   ObStorageInfoType table = __storage_table_mapper[mod_id];
   ObStorageKey key(storage_id, req.tenant_id_, table);
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("io request is not object device", K(req), K(ret));
   } else if (((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().is_valid() != true) {
@@ -341,7 +341,7 @@ int ObTrafficControl::calc_usage(ObIORequest &req)
   const ObStorageIdMod &id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod();
   ObIORecordKey key(ObStorageKey(id.storage_id_, req.tenant_id_, id.get_category()), req.tenant_id_);
   ObSharedDeviceIORecord *record = nullptr;
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("io request is not object device", K(req), K(ret));
   } else {
@@ -602,7 +602,7 @@ void ObTrafficControl::inner_calc_()
 
 int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
   int ret = OB_SUCCESS;
-  if (req.fd_.device_handle_->is_object_device()) {
+  if (req.is_limit_net_bandwidth_req()) {
     uint64_t storage_id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_id_;
     uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
     ObStorageInfoType storage_type = __storage_table_mapper[mod_id];

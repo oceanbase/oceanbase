@@ -286,7 +286,7 @@ static void fill_qsched_req(ObIORequest& req, int qid)
 {
   req.qsched_req_.qid_ = qid;
   req.qsched_req_.bytes_ = req.get_align_size();
-  req.qsched_req_.norm_bytes_ = req.is_object_device_req() ? req.qsched_req_.bytes_ : get_norm_bw(req.qsched_req_.bytes_, req.get_mode());
+  req.qsched_req_.norm_bytes_ = req.is_limit_net_bandwidth_req() ? req.qsched_req_.bytes_ : get_norm_bw(req.qsched_req_.bytes_, req.get_mode());
 }
 int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
 {

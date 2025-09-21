@@ -272,7 +272,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
       double iops_scale = 0;
       bool is_io_ability_valid = true;
       ObAtomIOClock* unit_clock = &unit_clocks_[static_cast<int>(ObIOMode::MAX_MODE)];
-      if (req.fd_.device_handle_->is_object_device()) {
+      if (req.is_limit_net_bandwidth_req()) {
         iops_scale = 1.0 / req.get_align_size();
         unit_clock = &unit_clocks_[static_cast<int>(req.get_mode())];
       } else {
@@ -288,7 +288,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
         is_unlimited = true;
       } else {
         const ObStorageIdMod &storage_info = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod();
-        if (req.fd_.device_handle_->is_object_device()) {
+        if (req.is_limit_net_bandwidth_req()) {
           if (OB_UNLIKELY(!storage_info.is_valid())) {
             LOG_WARN("invalid storage id", K(storage_info));
           } else {
@@ -398,7 +398,7 @@ int ObTenantIOClock::adjust_reservation_clock(ObPhyQueue *phy_queue, ObIORequest
   } else {
     double iops_scale = 0;
     bool is_io_ability_valid = true;
-    if (req.fd_.device_handle_->is_object_device()) {
+    if (req.is_limit_net_bandwidth_req()) {
       // there is no reservation clock in shared device, do nothing
     } else if (FALSE_IT(ObIOCalibration::get_instance().get_iops_scale(req.get_mode(),
                                                                        req.get_align_size(),
