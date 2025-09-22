@@ -346,7 +346,9 @@ int ObHTableWildcardColumnTracker::check_versions(const ObHTableCell &cell, ObHT
 {
   int ret = OB_SUCCESS;
   int cmp_ret;
-  if (current_qualifier_.empty()) {
+  // cell.get_qualifier() may be empty, so current_qualifier_ also may be empty
+  // need to check whether current_count_ is 0 to determine whether it is the first iteration
+  if (current_qualifier_.empty() && current_count_ == 0) {
     // first iteration
     ret = reset_cell(cell);
     if (OB_SUCC(ret)) {
