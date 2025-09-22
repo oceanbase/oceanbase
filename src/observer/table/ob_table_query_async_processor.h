@@ -184,12 +184,6 @@ private:
                             const ObArray<ObString>& real_columns,
                             const std::pair<ObString, bool>& family_addfamily_flag);
 
-  static int check_family_existence_with_base_name(const ObString& table_name,
-                                                   const ObString& base_tablegroup_name,
-                                                   table::ObTableEntityType entity_type,
-                                                   const ObArray<std::pair<ObString, bool>>& family_clear_flags,
-                                                   std::pair<ObString, bool> &flag, bool &exist);
-
   static int process_table_info(table::ObTableSingleQueryInfo* table_info,
                       const ObArray<std::pair<ObString, bool>>& family_clear_flags,
                       const ObArray<ObString>& real_columns,

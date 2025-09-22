@@ -302,12 +302,12 @@ int ObTableQueryAsyncP::get_inner_htable_result_iterator(ObIAllocator *allocator
       LOG_WARN("table info is NULL", K(ret));
     } else if (!family_addfamily_flag_pairs.empty()) { // Only when there is a qualifier parameter
       std::pair<ObString, bool> is_add_family;
-      if (OB_FAIL(check_family_existence_with_base_name(table_info->schema_cache_guard_.get_table_name_str(),
-                                                      arg_table_name,
-                                                      entity_type,
-                                                      family_addfamily_flag_pairs,
-                                                      is_add_family,
-                                                      is_found))) {
+      if (OB_FAIL(ObHTableUtils::check_family_existence_with_base_name(table_info->schema_cache_guard_.get_table_name_str(),
+                                                                       arg_table_name,
+                                                                       entity_type,
+                                                                       family_addfamily_flag_pairs,
+                                                                       is_add_family,
+                                                                       is_found))) {
         LOG_WARN("fail to check family exist", K(ret));
       } else if (is_found && OB_FAIL(process_table_info(table_info,
                                                 family_addfamily_flag_pairs,
@@ -437,49 +437,6 @@ int ObTableQueryAsyncP::update_table_info_columns(ObTableSingleQueryInfo* table_
   }
   return ret;
 }  
-
-int ObTableQueryAsyncP::check_family_existence_with_base_name(const ObString& table_name,
-                        const ObString& base_tablegroup_name,
-                        table::ObTableEntityType entity_type,
-                        const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
-                        std::pair<ObString, bool>& flag,
-                        bool &exist)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString tmp_name;
-  bool is_found = false;
-  for (int i = 0; !is_found && i < family_addfamily_flag_pairs.count(); ++i) {
-    std::pair<ObString, bool> family_addfamily_flag = family_addfamily_flag_pairs.at(i);
-    if (!ObHTableUtils::is_tablegroup_req(base_tablegroup_name, entity_type)) {
-      // here is for ls batch hbase get
-      // ls batch hbsae get will carry family in its qualifier
-      // to determine whether this get is a tablegroup operation or not
-      // the base_tablegroup_name will be a real table name like: "test$family1"
-        if (OB_FAIL(tmp_name.append(base_tablegroup_name))) {
-          LOG_WARN("fail to append", K(ret), K(base_tablegroup_name));
-        }
-    } else {
-      if (OB_FAIL(tmp_name.append(base_tablegroup_name))) {
-      LOG_WARN("fail to append", K(ret), K(base_tablegroup_name));
-      } else if (OB_FAIL(tmp_name.append("$"))) {
-        LOG_WARN("fail to append", K(ret));
-      } else if (OB_FAIL(tmp_name.append(family_addfamily_flag.first))) {
-        LOG_WARN("fail to append", K(ret), K(family_addfamily_flag.first));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (table_name == tmp_name.string()) {
-        flag = family_addfamily_flag;
-        is_found = true;
-      }
-    }
-    tmp_name.reuse();
-    }
-  if (OB_SUCC(ret)) {
-    exist = is_found;
-  }
-  return ret;
-}
 
 int ObTableQueryAsyncP::process_table_info(ObTableSingleQueryInfo* table_info,
                                            const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,

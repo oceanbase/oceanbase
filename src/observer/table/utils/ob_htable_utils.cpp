@@ -1069,7 +1069,7 @@ int ObHTableUtils::check_family_existence_with_base_name(const ObString& table_n
       }
     }
     if (OB_SUCC(ret)) {
-      if (table_name == tmp_name.string()) {
+      if (table_name.case_compare(tmp_name.string()) == 0) {
         flag = family_addfamily_flag;
         is_found = true;
       }
