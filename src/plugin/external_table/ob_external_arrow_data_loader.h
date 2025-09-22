@@ -19,6 +19,7 @@ namespace oceanbase {
 
 namespace common {
 struct ObDatum;
+class ObIVector;
 }
 
 namespace sql {
@@ -115,7 +116,7 @@ public:
 };
 
 /**
- * Load string to MySQLDateTime
+ * Load string to MySQLDateTime or DateTime
  */
 template <typename ArrowType>
 class ObStringToDateTimeArrowDataLoader : public ObArrowDataLoader
@@ -123,6 +124,9 @@ class ObStringToDateTimeArrowDataLoader : public ObArrowDataLoader
 public:
   int init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type) override;
   int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
+private:
+  using DateTimeHandler = int (*)(const common::ObString &, ObIVector *, int64_t);
+  DateTimeHandler datetime_handler_ = nullptr;
 };
 
 /**
@@ -130,6 +134,17 @@ public:
  */
 template <typename ArrowType>
 class ObStringToMysqlDateArrowDataLoader : public ObArrowDataLoader
+{
+public:
+  int init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type) override;
+  int load(const Array &, sql::ObEvalCtx &, sql::ObExpr *) override;
+};
+
+/**
+ * Load string to Date
+ */
+template <typename ArrowType>
+class ObStringToDateArrowDataLoader : public ObArrowDataLoader
 {
 public:
   int init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type) override;

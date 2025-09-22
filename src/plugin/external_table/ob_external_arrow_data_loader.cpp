@@ -204,7 +204,7 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(sizeof(ObStringToTimeArrowDataLoader<StringType>)), K(ret));
         }
-      } else if (ObMySQLDateTimeType == out_type) {
+      } else if (ObMySQLDateTimeType == out_type || ObDateTimeType == out_type) {
         loader = OB_NEWx(ObStringToDateTimeArrowDataLoader<StringType>, &allocator);
         if (OB_ISNULL(loader)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -215,6 +215,12 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
         if (OB_ISNULL(loader)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(sizeof(ObStringToMysqlDateArrowDataLoader<StringType>)), K(ret));
+        }
+      } else if (ObDateType == out_type) {
+        loader = OB_NEWx(ObStringToDateArrowDataLoader<StringType>, &allocator);
+        if (OB_ISNULL(loader)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(sizeof(ObStringToDateArrowDataLoader<StringType>)), K(ret));
         }
       } else if (ObYearType == out_type) {
         loader = OB_NEWx(ObStringToYearArrowDataLoader<StringType>, &allocator);
@@ -246,7 +252,7 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(sizeof(ObStringToTimeArrowDataLoader<LargeStringType>)), K(ret));
         }
-      } else if (ObMySQLDateTimeType == out_type) {
+      } else if (ObMySQLDateTimeType == out_type || ObDateTimeType == out_type) {
         loader = OB_NEWx(ObStringToDateTimeArrowDataLoader<LargeStringType>, &allocator);
         if (OB_ISNULL(loader)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -257,6 +263,12 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
         if (OB_ISNULL(loader)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(sizeof(ObStringToMysqlDateArrowDataLoader<LargeStringType>)), K(ret));
+        }
+      } else if (ObDateType == out_type) {
+        loader = OB_NEWx(ObStringToDateArrowDataLoader<LargeStringType>, &allocator);
+        if (OB_ISNULL(loader)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(sizeof(ObStringToDateArrowDataLoader<LargeStringType>)), K(ret));
         }
       } else if (ObYearType == out_type) {
         loader = OB_NEWx(ObStringToYearArrowDataLoader<LargeStringType>, &allocator);
@@ -659,13 +671,47 @@ int ObStringToTimeArrowDataLoader<ArrowType>::load(const Array &arrow_array, sql
 
 ////////////////////////////////////////////////////////////////////////////////
 // ObStringToDateTimeArrowDataLoader
+static int string_mysql_datetime_handler(const ObString &str_value, ObIVector *out_vector, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  ObTimeConvertCtx time_convert_ctx(nullptr/*tz_info*/, false/*is_timestamp*/);
+  ObMySQLDateTime datetime_value = 0;
+  if (OB_FAIL(ObTimeConverter::str_to_mdatetime(str_value, time_convert_ctx, datetime_value))) {
+    LOG_WARN("failed to convert string to mysql datetime", K(ret), K(str_value));
+  } else {
+    LOG_TRACE("set item mysql date time value", K(str_value), K(datetime_value));
+    out_vector->set_mysql_datetime(index, datetime_value);
+  }
+  return ret;
+}
+static int string_datetime_handler(const ObString &str_value, ObIVector *out_vector, int64_t index)
+{
+  int ret = OB_SUCCESS;
+  ObTimeConvertCtx time_convert_ctx(nullptr/*tz_info*/, false/*is_timestamp*/);
+  int64_t datetime_value = 0;
+  if (OB_FAIL(ObTimeConverter::str_to_datetime(str_value, time_convert_ctx, datetime_value))) {
+    LOG_WARN("failed to convert string to datetime", K(ret), K(str_value));
+  } else {
+    LOG_TRACE("set item mysql date time value", K(str_value), K(datetime_value));
+    out_vector->set_datetime(index, datetime_value);
+  }
+  return ret;
+}
 template <typename ArrowType>
 int ObStringToDateTimeArrowDataLoader<ArrowType>::init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type)
 {
   int ret = OB_SUCCESS;
-  if (ob_type.get_type() != ObMySQLDateTimeType) {
+  if (OB_NOT_NULL(datetime_handler_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice");
+  } else if (ob_type.get_type() == ObMySQLDateTimeType) {
+    datetime_handler_ = string_mysql_datetime_handler;
+  } else if (ob_type.get_type() == ObDateTimeType) {
+    datetime_handler_ = string_datetime_handler;
+  } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("only mysql datetime type is supported by this loader", KCSTRING(arrow_type.ToString().c_str()), K(ob_type));
+    LOG_WARN("only ObMySQLDateTimeType and ObDateTimeType is supported by this loader",
+        KCSTRING(arrow_type.ToString().c_str()), K(ob_type));
   }
   return ret;
 }
@@ -678,9 +724,10 @@ int ObStringToDateTimeArrowDataLoader<ArrowType>::load(const Array &arrow_array,
   const BaseBinaryArray<ArrowType> &string_array = static_cast<const BaseBinaryArray<ArrowType> &>(arrow_array);
   typename ArrowType::offset_type item_length = 0;
   const uint8_t *item_bytes = nullptr;
-  ObTimeConvertCtx time_convert_ctx(nullptr/*tz_info*/, false/*is_timestamp*/);
-  ObMySQLDateTime datetime_value = 0;
   ObString str_value;
+  if (OB_ISNULL(datetime_handler_)) {
+    ret = OB_NOT_INIT;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < string_array.length(); i++) {
     if (string_array.IsNull(i)) {
       out_vector->set_null(i);
@@ -688,11 +735,8 @@ int ObStringToDateTimeArrowDataLoader<ArrowType>::load(const Array &arrow_array,
     } else if (OB_ISNULL(item_bytes) || 0 == item_length) {
       out_vector->set_null(i);
     } else if (FALSE_IT(str_value.assign_ptr((const char *)item_bytes, item_length))) {
-    } else if (OB_FAIL(ObTimeConverter::str_to_mdatetime(str_value, time_convert_ctx, datetime_value))) {
+    } else if (OB_FAIL(datetime_handler_(str_value, out_vector, i))) {
       LOG_WARN("failed to convert string to mysql datetime", K(ret), K(str_value));
-    } else {
-      LOG_TRACE("set item mysql date time value", K(str_value), K(datetime_value));
-      out_vector->set_mysql_datetime(i, datetime_value);
     }
   }
   return ret;
@@ -733,6 +777,46 @@ int ObStringToMysqlDateArrowDataLoader<ArrowType>::load(const Array &arrow_array
     } else {
       LOG_TRACE("set item mysql date value", K(str_value), K(date_value));
       out_vector->set_mysql_date(i, date_value);
+    }
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// ObStringToDateArrowDataLoader
+template <typename ArrowType>
+int ObStringToDateArrowDataLoader<ArrowType>::init(const DataType &arrow_type, const sql::ObDatumMeta &ob_type)
+{
+  int ret = OB_SUCCESS;
+  if (ob_type.get_type() != ObDateType) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only date type is supported by this loader", KCSTRING(arrow_type.ToString().c_str()), K(ob_type));
+  }
+  return ret;
+}
+
+template <typename ArrowType>
+int ObStringToDateArrowDataLoader<ArrowType>::load(const Array &arrow_array, sql::ObEvalCtx &eval_ctx, sql::ObExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *out_vector = expr->get_vector(eval_ctx);
+  const BaseBinaryArray<ArrowType> &string_array = static_cast<const BaseBinaryArray<ArrowType> &>(arrow_array);
+  typename ArrowType::offset_type item_length = 0;
+  const uint8_t *item_bytes = nullptr;
+  int32_t date_value = 0;
+  ObString str_value;
+  for (int64_t i = 0; OB_SUCC(ret) && i < string_array.length(); i++) {
+    if (string_array.IsNull(i)) {
+      out_vector->set_null(i);
+    } else if (FALSE_IT(item_bytes = string_array.GetValue(i, &item_length))) {
+    } else if (OB_ISNULL(item_bytes) || 0 == item_length) {
+      out_vector->set_null(i);
+    } else if (FALSE_IT(str_value.assign_ptr((const char *)item_bytes, item_length))) {
+    } else if (OB_FAIL(ObTimeConverter::str_to_date(str_value, date_value))) {
+      LOG_WARN("failed to convert string to mysql date", K(ret), K(str_value));
+    } else {
+      LOG_TRACE("set item mysql date value", K(str_value), K(date_value));
+      out_vector->set_date(i, date_value);
     }
   }
   return ret;
