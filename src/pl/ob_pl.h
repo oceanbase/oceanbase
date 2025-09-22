@@ -598,10 +598,9 @@ struct ObPLSqlCodeInfo
 {
 public:
   ObPLSqlCodeInfo() : sqlcode_(OB_SUCCESS), sqlmsg_buf_(NULL), sqlmsg_() {}
-  inline void set_sqlcode(int sqlcode, const ObString &sqlmsg = ObString(""))
+  inline void set_sqlcode(int sqlcode)
   {
     sqlcode_ = sqlcode;
-    set_sqlmsg(sqlmsg);
   }
   inline void reset()
   {

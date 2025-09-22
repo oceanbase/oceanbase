@@ -4612,6 +4612,7 @@ int ObSPIService::spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level)
   UNUSEDx(ctx, level);
 #else
   ObPLContext *pl_ctx = NULL;
+  ObPLSqlCodeInfo *sqlcode_info = NULL;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
@@ -4621,6 +4622,8 @@ int ObSPIService::spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level)
     LOG_WARN("failed to alloc memory for call stack trace", K(ret));
   }
   OZ (pl_ctx->get_call_stack_trace()->format_error_trace(pl_ctx->get_exec_stack().count(), level));
+  CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
+  OX (sqlcode_info->set_sqlcode(pl_ctx->get_call_stack_trace()->get_last_error_code()));
 #endif
   return ret;
 }
@@ -5078,6 +5081,7 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
                                               const int64_t errmsg_expr_idx)
 {
   int ret = OB_SUCCESS;
+  int error_code = OB_SUCCESS;
   ObObjParam errcode_result;
   ObObjParam errmsg_result;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
@@ -5108,7 +5112,7 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
 
    CALC(errcode_expr, int32, errcode_result);
    CALC(errmsg_expr, varchar, errmsg_result);
-   OX (sqlcode_info->set_sqlcode(errcode_result.get_int32()));
+   OX (error_code = errcode_result.get_int32());
    if (OB_SUCC(ret)) {
     ObPLContext *pl_ctx = NULL;
     ObPLExecState *frame = NULL;
@@ -5131,29 +5135,30 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
   }
   
   if (OB_SUCC(ret)) {
-    if (sqlcode_info->get_sqlcode() <= OB_MAX_RAISE_APPLICATION_ERROR
-        && sqlcode_info->get_sqlcode() >= OB_MIN_RAISE_APPLICATION_ERROR) {
+    if (error_code <= OB_MAX_RAISE_APPLICATION_ERROR
+        && error_code >= OB_MIN_RAISE_APPLICATION_ERROR) {
       ObString convert_sqlmsg;
-      OZ (ObCharset::charset_convert(*ctx->get_top_expr_allocator(),
+      ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      OZ (ObCharset::charset_convert(tmp_alloc,
                                      errmsg_result.get_string(),
                                      errmsg_result.get_collation_type(),
                                      session_info->get_local_collation_connection(),
                                      convert_sqlmsg));
       if (OB_SUCC(ret)) {
         LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR,
-                       static_cast<int64_t>(sqlcode_info->get_sqlcode()),
+                       static_cast<int64_t>(error_code),
                        convert_sqlmsg.length(),
                        convert_sqlmsg.ptr());
       }
     } else {
       ret = OB_SP_RAISE_APPLICATION_ERROR_NUM;
       LOG_WARN("error number argument to raise_application_error of stringstring is out of range",
-               K(ret), K(sqlcode_info->get_sqlcode()), K(sqlcode_info->get_sqlmsg()));
-      LOG_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR_NUM, sqlcode_info->get_sqlcode());
-      sqlcode_info->set_sqlcode(OB_SP_RAISE_APPLICATION_ERROR_NUM);
+               K(ret), K(error_code), K(sqlcode_info->get_sqlmsg()));
+      LOG_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR_NUM, error_code);
+      error_code = OB_SP_RAISE_APPLICATION_ERROR_NUM;
     }
   }
-  OX (ret = sqlcode_info->get_sqlcode());
+  OX (ret = error_code);
   return ret;
 }
 
