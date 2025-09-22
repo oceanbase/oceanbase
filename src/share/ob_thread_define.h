@@ -171,4 +171,5 @@ TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
 TG_DEF(LogFetcherBGWorker, LogFetcherBGW, TIMER)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
+TG_DEF(TLD_HTimer, TLD_HTimer, TIMER)
 #endif

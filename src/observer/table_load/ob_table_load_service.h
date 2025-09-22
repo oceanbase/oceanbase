@@ -159,11 +159,14 @@ private:
     ObTableLoadService &service_;
   };
 private:
+  static const int64_t INVALID_TG_ID = -1;
+private:
   const uint64_t tenant_id_;
   ObTableLoadManager manager_;
   ObTableLoadAssignedMemoryManager assigned_memory_manager_;
   ObTableLoadAssignedTaskManager assigned_task_manager_;
   common::ObTimer timer_;
+  int tg_id_;
   ObCheckTenantTask check_tenant_task_;
   ObHeartBeatTask heart_beat_task_;
   ObGCTask gc_task_;

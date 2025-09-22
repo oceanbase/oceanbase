@@ -368,6 +368,7 @@ void ObTableLoadService::mtl_destroy(ObTableLoadService *&service)
   if (OB_UNLIKELY(nullptr == service)) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "meta mem mgr is nullptr", KP(service));
   } else {
+    service->destroy();
     OB_DELETE(ObTableLoadService, ObModIds::OMT_TENANT, service);
     service = nullptr;
   }
@@ -634,6 +635,7 @@ void ObTableLoadService::put_ctx(ObTableLoadTableCtx *table_ctx)
 ObTableLoadService::ObTableLoadService(const uint64_t tenant_id)
   : tenant_id_(tenant_id),
     manager_(tenant_id),
+    tg_id_(INVALID_TG_ID),
     check_tenant_task_(*this),
     heart_beat_task_(*this),
     gc_task_(*this),
@@ -671,12 +673,16 @@ int ObTableLoadService::start()
     LOG_WARN("ObTableLoadService not init", KR(ret), KP(this));
   } else {
     timer_.set_run_wrapper(MTL_CTX());
-    if (OB_FAIL(timer_.init("TLD_Timer", ObMemAttr(MTL_ID(), "TLD_TIMER")))) {
+    if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TLD_HTimer, tg_id_))) {
+      LOG_WARN("fail to create tld heart beat timer", KR(ret));
+    } else if (OB_FAIL(TG_START(tg_id_))) {
+      LOG_WARN("fail to start tld heart beat timer", KR(ret));
+    } else if (OB_FAIL(TG_SCHEDULE(tg_id_, heart_beat_task_, HEART_BEEAT_INTERVAL, true))) {
+      LOG_WARN("fail to schedule heart beat task", KR(ret));
+    } else if (OB_FAIL(timer_.init("TLD_Timer", ObMemAttr(MTL_ID(), "TLD_TIMER")))) {
       LOG_WARN("fail to init gc timer", KR(ret));
     } else if (OB_FAIL(timer_.schedule(check_tenant_task_, CHECK_TENANT_INTERVAL, true))) {
       LOG_WARN("fail to schedule check tenant task", KR(ret));
-    } else if (OB_FAIL(timer_.schedule(heart_beat_task_, HEART_BEEAT_INTERVAL, true))) {
-      LOG_WARN("fail to schedule heart beat task", KR(ret));
     } else if (OB_FAIL(timer_.schedule(gc_task_, GC_INTERVAL, true))) {
       LOG_WARN("fail to schedule gc task", KR(ret));
     } else if (OB_FAIL(timer_.schedule(release_task_, RELEASE_INTERVAL, true))) {
@@ -697,12 +703,18 @@ int ObTableLoadService::stop()
   int ret = OB_SUCCESS;
   is_stop_ = true;
   timer_.stop();
+  if (INVALID_TG_ID != tg_id_) {
+    TG_STOP(tg_id_);
+  }
   return ret;
 }
 
 void ObTableLoadService::wait()
 {
   timer_.wait();
+  if (INVALID_TG_ID != tg_id_) {
+    TG_WAIT(tg_id_);
+  }
   release_all_ctx();
 }
 
@@ -710,6 +722,10 @@ void ObTableLoadService::destroy()
 {
   is_inited_ = false;
   timer_.destroy();
+  if (INVALID_TG_ID != tg_id_) {
+    TG_DESTROY(tg_id_);
+    tg_id_ = INVALID_TG_ID;
+  }
 }
 
 void ObTableLoadService::abort_all_client_task(int error_code)
