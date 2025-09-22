@@ -46,7 +46,8 @@ public:
   ~ObDDLIncRedoLogWriter();
   int init(
       const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id);
+      const ObTabletID &tablet_id,
+      const storage::ObDirectLoadType direct_load_type);
   void reset();
   static bool need_retry(int ret_code, bool allow_remote_write);
   int write_inc_start_log_with_retry(
@@ -109,6 +110,7 @@ private:
   ObAddr leader_addr_;
   share::ObLSID leader_ls_id_;
   char *buffer_;
+  ObDirectLoadType direct_load_type_;
 };
 
 class ObDDLIncRedoLogWriterCallback : public blocksstable::ObIMacroBlockFlushCallback

@@ -264,6 +264,12 @@ public:
   // WARNING: this will release all the ref of memtable, make sure you will not use it again.
   int release_memtables();
 
+  int64_t get_memtable_count() const
+  {
+    MemMgrRLockGuard lock_guard(lock_);
+    return get_memtable_count_();
+  }
+  
   bool has_memtable()
   {
     MemMgrRLockGuard lock_guard(lock_);

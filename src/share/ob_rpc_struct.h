@@ -11694,7 +11694,8 @@ public:
            const share::ObLSID &ls_id,
            const common::ObTabletID tablet_id,
            const common::ObTabletID lob_meta_tablet_id,
-           transaction::ObTxDesc *tx_desc);
+           transaction::ObTxDesc *tx_desc,
+           const ObDirectLoadType direct_load_type);
   int release();
   bool is_valid() const
   {
@@ -11709,6 +11710,7 @@ public:
   common::ObTabletID lob_meta_tablet_id_;
   transaction::ObTxDesc *tx_desc_;
   bool need_release_;
+  ObDirectLoadType direct_load_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
 };

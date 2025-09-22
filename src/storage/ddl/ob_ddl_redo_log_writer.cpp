@@ -39,14 +39,93 @@ using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::transaction;
 
-bool ObDDLFullNeedStopWriteChecker::check_need_stop_write()
+ObDDLNeedStopWriteChecker::ObDDLNeedStopWriteChecker()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    task_id_(0),
+    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
+    memtable_mgr_handle_(nullptr),
+    is_inited_(false)
 {
-  return ddl_kv_mgr_handle_.get_obj()->get_count() >= ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE - 1;
 }
 
-bool ObDDLIncNeedStopWriteChecker::check_need_stop_write()
+int ObDDLNeedStopWriteChecker::init(
+  const uint64_t tenant_id,
+  const int64_t task_id,
+  const ObDirectLoadType direct_load_type,
+  const ObTabletHandle &tablet_handle)
 {
-  return tablet_.get_memtable_count() >= common::MAX_MEMSTORE_CNT - 1;
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObDDLNeedStopWriteChecker init twice", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || task_id <= 0 || !is_valid_direct_load(direct_load_type) || !tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(task_id), K(direct_load_type), K(tablet_handle));
+  } else {
+    tablet_handle_ = tablet_handle;
+    if (is_incremental_direct_load(direct_load_type)) {
+      if (OB_FAIL(
+            tablet_handle.get_obj()->get_protected_memtable_mgr_handle(memtable_mgr_handle_))) {
+        LOG_WARN("fail to get memtable mgr", KR(ret), K(tablet_handle));
+      }
+    } else {
+      if (OB_FAIL(
+            tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle_, true /*try_create*/))) {
+        LOG_WARN("fail to get ddl kv mgr", KR(ret), K(tablet_handle));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      tenant_id_ = tenant_id;
+      task_id_ = task_id;
+      direct_load_type_ = direct_load_type;
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObDDLNeedStopWriteChecker::check_status(const int64_t loop_cnt, bool &is_need_stop_write)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLNeedStopWriteChecker not init", KR(ret), KP(this));
+  } else if (is_full_direct_load(direct_load_type_)) {
+    int tmp_ret = OB_SUCCESS;
+    uint64_t unused_data_format_version = 0;
+    int64_t unused_snapshot_version = 0;
+    share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
+    if (OB_TMP_FAIL(ObDDLUtil::get_data_information(tenant_id_, task_id_, unused_data_format_version,
+        unused_snapshot_version, task_status))) {
+      if (OB_ITER_END == tmp_ret) {
+        is_need_stop_write = false;
+        LOG_INFO("exit due to ddl task exit", K(tenant_id_), K(task_id_));
+      } else if (loop_cnt >= 100 * 1000) { // wait_time = 100 * 1000 * SLEEP_INTERVAL = 100s.
+        is_need_stop_write = false;
+        LOG_INFO("exit due to sql exceeds time limit", K(tmp_ret), K(tenant_id_), K(task_id_));
+      } else {
+        if (REACH_COUNT_INTERVAL(1000L)) {
+          LOG_WARN("get ddl task info failed", K(tmp_ret), K(tenant_id_), K(task_id_));
+        }
+      }
+    } else if (!is_replica_build_ddl_task_status(task_status)) {
+      is_need_stop_write = false;
+      LOG_INFO("exit due to mismatched status", K(tenant_id_), K(task_id_));
+    }
+  }
+  return ret;
+}
+
+bool ObDDLNeedStopWriteChecker::check_need_stop_write()
+{
+  bool need_stop_write = true;
+  if (IS_NOT_INIT) {
+  } else if (is_incremental_direct_load(direct_load_type_)) {
+    need_stop_write =  memtable_mgr_handle_->get_memtable_count() >= common::MAX_MEMSTORE_CNT - 1;
+  } else {
+    need_stop_write = ddl_kv_mgr_handle_.get_obj()->get_count() >= ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE - 1;
+  }
+  return need_stop_write;
 }
 
 int ObDDLCtrlSpeedItem::init(const share::ObLSID &ls_id)
@@ -208,25 +287,8 @@ int ObDDLCtrlSpeedItem::do_sleep(
     while (OB_SUCC(ret) && is_need_stop_write) {
       ob_usleep(SLEEP_INTERVAL);
       if (0 == loop_cnt % 100) {
-        uint64_t unused_data_format_version = 0;
-        int64_t unused_snapshot_version = 0;
-        share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
-        if (OB_TMP_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, unused_data_format_version,
-            unused_snapshot_version, task_status))) {
-          if (OB_ITER_END == tmp_ret) {
-            is_need_stop_write = false;
-            LOG_INFO("exit due to ddl task exit", K(tenant_id), K(task_id));
-          } else if (loop_cnt >= 100 * 1000) { // wait_time = 100 * 1000 * SLEEP_INTERVAL = 100s.
-            is_need_stop_write = false;
-            LOG_INFO("exit due to sql exceeds time limit", K(tmp_ret), K(tenant_id), K(task_id));
-          } else {
-            if (REACH_COUNT_INTERVAL(1000L)) {
-              LOG_WARN("get ddl task info failed", K(tmp_ret), K(tenant_id), K(task_id));
-            }
-          }
-        } else if (!is_replica_build_ddl_task_status(task_status)) {
-          is_need_stop_write = false;
-          LOG_INFO("exit due to mismatched status", K(tenant_id), K(task_id));
+        if (OB_FAIL(checker.check_status(loop_cnt, is_need_stop_write))) {
+          LOG_WARN("fail to check status", KR(ret));
         }
       }
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
@@ -751,8 +813,10 @@ int ObDDLRedoLogWriter::local_write_ddl_macro_redo(
                                                              ObDDLUtil::use_idempotent_mode(redo_info.data_format_version_)))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
   } else {
-    ObDDLFullNeedStopWriteChecker checker(ddl_kv_mgr_handle);
-    if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id, buffer_size, task_id, checker, real_sleep_us))) {
+    ObDDLNeedStopWriteChecker checker;
+    if (OB_FAIL(checker.init(tenant_id, task_id, DIRECT_LOAD_DDL, tablet_handle))) {
+      LOG_WARN("fail to init stop write checker", KR(ret));
+    } else if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id, buffer_size, task_id, checker, real_sleep_us))) {
       LOG_WARN("fail to limit and sleep", K(tmp_ret), K(tenant_id), K(task_id), K(ls_id), K(buffer_size), K(real_sleep_us));
     }
   }

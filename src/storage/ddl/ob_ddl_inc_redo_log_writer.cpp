@@ -91,7 +91,8 @@ ObDDLIncRedoLogWriter::~ObDDLIncRedoLogWriter()
   }
 }
 
-int ObDDLIncRedoLogWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_id)
+int ObDDLIncRedoLogWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_id,
+                                const storage::ObDirectLoadType direct_load_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -103,6 +104,7 @@ int ObDDLIncRedoLogWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_id
   } else {
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
+    direct_load_type_ = direct_load_type;
     is_inited_ = true;
   }
   return ret;
@@ -461,6 +463,7 @@ int ObDDLIncRedoLogWriter::local_write_inc_redo_log(
     ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
   ObDDLRedoLog log;
   ObStoreCtxGuard ctx_guard;
   ObLS *ls = nullptr;
@@ -484,17 +487,19 @@ int ObDDLIncRedoLogWriter::local_write_inc_redo_log(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
   } else {
-    ObDDLIncNeedStopWriteChecker checker(*tablet);
+    ObDDLNeedStopWriteChecker checker;
     int tmp_ret = OB_SUCCESS;
     int64_t real_sleep_us = 0;
     buffer_size = log.get_serialize_size();
-    if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(MTL_ID(), ls_id_, buffer_size, task_id, checker, real_sleep_us))) {
-      LOG_WARN("fail to limit and sleep", K(tmp_ret), K(MTL_ID()), K(task_id), K(ls_id_), K(buffer_size), K(real_sleep_us));
+    if (OB_FAIL(checker.init(tenant_id, task_id, direct_load_type_, tablet_handle))) {
+      LOG_WARN("fail to init stop write checker", KR(ret));
+    } else if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id_, buffer_size, task_id, checker, real_sleep_us))) {
+      LOG_WARN("fail to limit and sleep", K(tmp_ret), K(tenant_id), K(task_id), K(ls_id_), K(buffer_size), K(real_sleep_us));
     } 
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncRedoClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
+  } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncRedoClogCb, ObMemAttr(tenant_id, "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (FALSE_IT(buffer_size = redo_info.get_serialize_size())) {
@@ -633,7 +638,7 @@ int ObDDLIncRedoLogWriter::remote_write_inc_commit_log(
   } else {
     obrpc::ObRpcRemoteWriteDDLIncCommitLogArg arg;
     obrpc::ObRpcRemoteWriteDDLIncCommitLogRes res;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, tablet_id_, lob_meta_tablet_id, tx_desc))) {
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, tablet_id_, lob_meta_tablet_id, tx_desc, direct_load_type_))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLIncCommitLogArg", K(ret));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_inc_commit_log(arg, res))) {
       LOG_WARN("remote write inc commit log failed", K(ret), K_(leader_ls_id), K_(leader_addr));
@@ -693,7 +698,7 @@ int ObDDLIncRedoLogWriterCallback::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(block_type), K(table_key), K(task_id), K(data_format_version), 
         K(direct_load_type), KP(tx_desc), K(trans_id), K(seq_no));
-  } else if (OB_FAIL(ddl_inc_writer_.init(ls_id, tablet_id))) {
+  } else if (OB_FAIL(ddl_inc_writer_.init(ls_id, tablet_id, direct_load_type))) {
     LOG_WARN("fail to init ddl_inc_writer_", K(ret), K(ls_id), K(tablet_id));
   } else {
     block_type_ = block_type;

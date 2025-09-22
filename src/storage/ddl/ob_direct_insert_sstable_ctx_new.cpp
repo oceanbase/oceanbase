@@ -3660,7 +3660,7 @@ int ObTabletIncDirectLoadMgr::open(
   }
   if (OB_SUCC(ret)) {
     ObDDLIncRedoLogWriter redo_writer;
-    if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_))) {
+    if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_, ObDirectLoadType::DIRECT_LOAD_INCREMENTAL))) {
       LOG_WARN("init redo writer failed", K(ret), K(ls_id_), K(tablet_id_));
     } else if (OB_FAIL(redo_writer.write_inc_start_log_with_retry(
                  nullptr != lob_tablet_mgr ? lob_tablet_mgr->get_tablet_id() : ObTabletID(),
@@ -3716,7 +3716,7 @@ int ObTabletIncDirectLoadMgr::close(const int64_t current_execution_id, const sh
     LOG_WARN("unexpected err", K(ret), KPC(this));
   } else {
     ObDDLIncRedoLogWriter redo_writer;
-    if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_))) {
+    if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_, ObDirectLoadType::DIRECT_LOAD_INCREMENTAL))) {
       LOG_WARN("init redo writer failed", K(ret), K(ls_id_), K(tablet_id_));
     } else if (OB_FAIL(redo_writer.write_inc_commit_log_with_retry(
                  true /*allow_remote_write*/,
