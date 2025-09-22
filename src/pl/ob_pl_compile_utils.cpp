@@ -127,7 +127,8 @@ int ObPLCompilerUtils::compile_routine(ObExecContext &ctx,
 
   if (OB_SUCC(ret)
       && OB_NOT_NULL(routine_info)
-      && (OB_INVALID_VERSION == schema_version || schema_version == routine_info->get_schema_version())) {
+      && (OB_INVALID_VERSION == schema_version || schema_version == routine_info->get_schema_version())
+      && !routine_info->is_aggregate()) {
     ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
     ObPLFunction* routine = nullptr;
     ObPLCacheCtx pc_ctx;
