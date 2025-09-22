@@ -799,7 +799,7 @@ public:
   inline ParamStore &get_params() { return phy_plan_ctx_.get_param_store_for_update(); }
   ObPLFunction &get_function() { return func_; }
   int get_var(int64_t var_idx, ObObjParam& result);
-  int set_var(int64_t var_idx, const ObObjParam& value);
+  int set_var(int64_t var_idx, const ObObjParam& value, bool set_var_from_local = false);
   ObPLExecCtx& get_exec_ctx() { return ctx_; }
   int check_pl_execute_priv(ObSchemaGetterGuard &guard,
                                           const uint64_t tenant_id,
@@ -1012,6 +1012,11 @@ public:
                                     int64_t routine_id,
                                     int64_t var_idx,
                                     const ObObjParam &value);
+  static int set_subprogram_var(sql::ObSQLSessionInfo &session_info,
+                                      int64_t package_id,
+                                      int64_t routine_id,
+                                      int64_t var_idx,
+                                      const ObObjParam &value);
   static int check_debug_priv(ObSchemaGetterGuard *guard,
                               sql::ObSQLSessionInfo *sess_info,
                               ObPLFunction *func);

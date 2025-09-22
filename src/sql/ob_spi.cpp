@@ -3225,20 +3225,8 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
     // we should alloc it in open stmt
     ObPLCursorInfo *cursor_info = NULL;
     if (obj.is_ref_cursor_type()) {
-      if (!obj.is_null()) {
-        CK (obj.is_pl_extend());
-        CK (PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type());
-        if (OB_SUCC(ret)
-            && obj.get_ext() != 0
-            && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext()))) {
-          CK (!cursor_info->isopen());
-          CK (0 == cursor_info->get_ref_count());
-        }
-      } else {
-        // init as null
-        obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
-        obj.set_param_meta();
-      }
+      obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
+      obj.set_param_meta();
     } else {
       if (obj.is_null()) {
         OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
@@ -3377,7 +3365,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
         OX (obj.set_param_meta());
       } else {
         CK (OB_NOT_NULL(ctx->allocator_));
-        OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
+        OZ (spi_cursor_alloc(*ctx->allocator_, obj));
         OX (obj.set_extend(obj.get_ext(), PL_REF_CURSOR_TYPE));
         OX (cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext()));
       }
@@ -3716,7 +3704,7 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     } else if (DECL_PKG == loc) {
       OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
     } else {
-      OZ (ObPLContext::set_subprogram_var_from_local(
+      OZ (ObPLContext::set_subprogram_var(
         session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
     }
     if (convert) {
@@ -3725,6 +3713,30 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
         LOG_WARN("failed to destruct obj", K(tmp_ret));
       }
       ret = ret == OB_SUCCESS ? tmp_ret : ret;
+    }
+  }
+
+  return ret;
+}
+
+int ObSPIService::release_cursor_parameters(ObPLExecCtx *ctx,
+                                            ObSQLSessionInfo &session_info,
+                                            uint64_t package_id,
+                                            uint64_t routine_id,
+                                            const int64_t *formal_param_idxs,
+                                            int64_t cursor_param_count)
+{
+  int ret = OB_SUCCESS;
+  ObObjParam result;
+  CK (OB_NOT_NULL(ctx));
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < cursor_param_count; ++i) {
+    CK (OB_NOT_NULL(formal_param_idxs));
+    OX (result.reset());
+    OX (result.ObObj::reset());
+    OZ (ObPLContext::get_subprogram_var_from_local(session_info, package_id, routine_id, formal_param_idxs[i], result));
+    if (OB_SUCC(ret) && result.is_pl_extend() && result.get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+      OZ (spi_handle_ref_cursor_refcount(ctx, package_id, routine_id, formal_param_idxs[i], -1));
     }
   }
 
@@ -4087,10 +4099,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     if (OB_SUCC(ret)) {
       is_server_cursor = OB_INVALID_ID != cursor->get_id()
         || (package_id != OB_INVALID_ID && OB_INVALID_ID == routine_id);
-      if (is_server_cursor) {
-        OZ (ObPLCursorInfo::prepare_entity(*session_info, cursor->get_cursor_entity()));
-        OX (cursor->set_spi_cursor(NULL));
-      }
+      OZ (ObPLCursorInfo::prepare_entity(*session_info, cursor->get_cursor_entity()));
+      OX (cursor->set_spi_cursor(NULL));
     }
     OZ (session_info->ps_use_stream_result_set(use_stream));
 
@@ -4131,6 +4141,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     }
     if (OB_SUCC(ret) && DECL_PKG == loc) {
       OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
+    }
+    if (OB_SUCC(ret) && DECL_PKG != loc) {
+      OZ (release_cursor_parameters(ctx, *session_info, package_id, routine_id, formal_param_idxs, cursor_param_count));
     }
   }
   if (OB_FAIL(ret) && lib::is_mysql_mode()) {
@@ -4481,7 +4494,8 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::cursor_release(ObSQLSessionInfo *session,
+int ObSPIService::cursor_release(ObPLExecCtx *ctx,
+                                ObSQLSessionInfo *session,
                                 ObPLCursorInfo *cursor,
                                 bool is_refcursor,
                                 uint64_t package_id,
@@ -4499,6 +4513,10 @@ int ObSPIService::cursor_release(ObSQLSessionInfo *session,
     } else {
       if (OB_FAIL(cursor_close_impl(session, cursor, is_refcursor, package_id, routine_id, ignore))) {
         LOG_WARN("fail to close non session cursor", K(ret), K(cursor));
+      } else if (is_refcursor) {
+        CK (OB_NOT_NULL(ctx));
+        CK (OB_NOT_NULL(ctx->allocator_));
+        OX (ctx->allocator_->free(cursor));
       }
     }
   }
@@ -6108,13 +6126,13 @@ int ObSPIService::spi_add_ref_cursor_refcount(ObPLExecCtx *ctx, ObObj *cursor, i
     CK (0 <= cursor_info->get_ref_count());
     if (OB_SUCC(ret)) {
       (1 == addend) ? cursor_info->inc_ref_count() : cursor_info->dec_ref_count();
-      bool is_session_cursor = cursor_info->is_session_cursor();
+      bool is_ref_cursor = cursor_info->is_ref_by_refcursor();
       if (0 == cursor_info->get_ref_count()) {
         CK (OB_NOT_NULL(ctx));
         CK (OB_NOT_NULL(ctx->exec_ctx_));
-        OZ (cursor_release(ctx->exec_ctx_->get_my_session(), cursor_info, true, OB_INVALID_ID, OB_INVALID_ID, true));
-        OX (is_session_cursor ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL); //session cursorInfo is released, so set cursor obj null
+        OZ (cursor_release(ctx, ctx->exec_ctx_->get_my_session(), cursor_info, is_ref_cursor, OB_INVALID_ID, OB_INVALID_ID, true));
       }
+      OX (is_ref_cursor && -1 == addend ? cursor->set_extend(0, PL_REF_CURSOR_TYPE) : (void)NULL); //addend == -1 means cursor_obj is not ref to refcursor
     }
   } else {
     // do nothing; 例如，这种case，在return之前，会对cur进行操作，但cur是null
@@ -9967,8 +9985,9 @@ int ObSPICursor::release_complex_obj(ObObj &complex_obj)
     if (OB_NOT_NULL(cursor) && OB_NOT_NULL(session_info_)) {
       cursor->dec_ref_count();
       if (0 == cursor->get_ref_count()) {
-        if (OB_FAIL(ObSPIService::cursor_release(session_info_, cursor, true, OB_INVALID_ID, OB_INVALID_ID, true))) {
-          LOG_WARN("failed to release cursor", K(ret), K(complex_obj), K(session_info_));
+         CK (cursor->is_session_cursor()); //ref cursor == 0 must be session cursor
+        if (OB_FAIL(session_info_->close_cursor(cursor->get_id()))) {
+          LOG_WARN("fail to close session cursor source", K(ret), K(cursor));
         }
       }
     }
