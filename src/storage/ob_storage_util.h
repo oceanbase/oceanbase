@@ -346,7 +346,12 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
         is_oracle_mode,
         col_obj_type.has_lob_header() || param_obj_type.has_lob_header());
   } else {
-    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(col_obj_type.get_type(), col_obj_type.get_collation_type());
+    sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
+        col_obj_type.get_type(),
+        col_obj_type.get_collation_type(),
+        col_obj_type.get_scale(),
+        is_oracle_mode,
+        col_obj_type.is_lob_storage());
     cmp_func = is_oracle_mode ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
   }
   return cmp_func;
