@@ -79,10 +79,11 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
   while (NEED_RETRY == status && OB_SUCC(ret)) {
     new_tablet = nullptr;
     new_tablet_handle.reset();
-
+    allocator.reset();
     ObTabletHandle old_tablet_handle;
     ObTablet *old_tablet = nullptr;
     ObTabletHandle tmp_tablet_handle;
+    bool force_retry = false;
 
     if (OB_FAIL(t3m.get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, old_tablet_handle))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -90,6 +91,9 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
         STORAGE_LOG(INFO, "tablet may be deleted, just skip", K(ret), K(tablet_key));
         status = SKIPPED;
         ret = OB_SUCCESS;
+      } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        STORAGE_LOG(WARN, "failed to get tablet with allocator, try to retry", K(ret), K(tablet_key));
+        force_retry = true;
       } else {
         STORAGE_LOG(WARN, "failed to get tablet with allocator", K(ret), K(storage_param));
       }
@@ -103,6 +107,7 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
     } else {
       ObTablet *src_tablet = nullptr;
       const bool need_compat = old_tablet->get_version() < ObTablet::VERSION_V4;
+      force_retry = need_compat;
       int64_t ls_epoch = 0;
       int64_t tablet_meta_version = 0;
       if (!need_compat) {
@@ -153,14 +158,14 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
 
     if (NEED_RETRY == status) {
       OB_ASSERT(OB_SUCCESS != ret);
-      if (OB_SERVER_OUTOF_DISK_SPACE != ret) {
+      if (OB_SERVER_OUTOF_DISK_SPACE != ret && (!force_retry || OB_ALLOCATE_MEMORY_FAILED != ret)) {
         // only retry when server is out of disk space
         STORAGE_LOG(WARN, "some other errors occurred, abandoning the retry for processing the tablet",
           K(ret), K(tablet_key));
         break;
       }
-      if (retry < max_retry) {
-        STORAGE_LOG(WARN, "failed to process tablet, will retry after 50ms", K(ret), K(tablet_key), K(retry), K(max_retry));
+      if (retry < max_retry || force_retry) {
+        STORAGE_LOG(WARN, "failed to process tablet, will retry after 50ms", K(ret), K(tablet_key), K(retry), K(max_retry), K(force_retry));
         ret = OB_SUCCESS;
         ++retry;
         // sleep 1000us before retry
