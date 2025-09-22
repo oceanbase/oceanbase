@@ -2032,6 +2032,77 @@ TEST_F(TestDagScheduler, test_maybe_cycle_tasks)
   wait_scheduler();
 }
 
+/**
+  *  We schedule batch freeze tablets dag when do major merge, which usually contains batch of tablets (default 1000)
+  *  We regard batch freeze tablets dag is same when satify following conditions:
+  *     1. ls_id is same
+  *     2. compaction_scn is same
+  *     3. loop_cnt is different
+  *  This Test simply test dag deduplication logic of ObBatchFreezeTabletsDag
+ **/
+TEST_F(TestDagScheduler, test_batch_freeze_tablets_dag)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
+  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_LOW, 1));
+  EXPECT_EQ(1, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].limits_);
+
+  int ret = OB_SUCCESS;
+  // 1. create and add first dag, expect success
+  LoopWaitTask *wait_task1 = nullptr;
+  ObBatchFreezeTabletsDag *batch_freeze_dag1 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(batch_freeze_dag1));
+  ObBatchFreezeTabletsParam param1;
+  param1.ls_id_ = ObLSID(1);
+  param1.compaction_scn_ = 100;
+  param1.loop_cnt_ = 1;
+  ObTabletSchedulePair tablet_pair(ObTabletID(1001), 100, ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE);
+  EXPECT_EQ(OB_SUCCESS, param1.tablet_info_array_.push_back(tablet_pair));
+  EXPECT_EQ(OB_SUCCESS, batch_freeze_dag1->init_by_param(&param1));
+
+  bool finish_flag = false;
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*batch_freeze_dag1, wait_task1));
+  EXPECT_EQ(OB_SUCCESS, wait_task1->init(1, 2, finish_flag));
+  EXPECT_EQ(OB_SUCCESS, batch_freeze_dag1->add_task(*wait_task1));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(batch_freeze_dag1));
+
+  // 2. create and add second dag, expect success, because loop_cnt is the same while
+  LoopWaitTask *wait_task2 = nullptr;
+  ObBatchFreezeTabletsDag *batch_freeze_dag2 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(batch_freeze_dag2));
+  ObBatchFreezeTabletsParam param2;
+  param2.ls_id_ = ObLSID(1);
+  param2.compaction_scn_ = 100;
+  param2.loop_cnt_ = 1;
+  EXPECT_EQ(OB_SUCCESS, param2.tablet_info_array_.push_back(tablet_pair));
+  EXPECT_EQ(OB_SUCCESS, batch_freeze_dag2->init_by_param(&param2));
+
+  bool finish_flag2 = false;
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*batch_freeze_dag2, wait_task2));
+  EXPECT_EQ(OB_SUCCESS, wait_task2->init(1, 2, finish_flag2));
+  EXPECT_EQ(OB_SUCCESS, batch_freeze_dag2->add_task(*wait_task2));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(batch_freeze_dag2));
+
+
+  // 3. create and add third dag, expect OB_EAGAIN, because loop_cnt is the different though ls_id and compaction_scn is the same
+  LoopWaitTask *wait_task3 = nullptr;
+  ObBatchFreezeTabletsDag *batch_freeze_dag3 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(batch_freeze_dag3));
+  ObBatchFreezeTabletsParam param3;
+  param3.ls_id_ = ObLSID(1);
+  param3.compaction_scn_ = 100;
+  param3.loop_cnt_ = 2;
+  EXPECT_EQ(OB_SUCCESS, param3.tablet_info_array_.push_back(tablet_pair));
+  EXPECT_EQ(OB_SUCCESS, batch_freeze_dag3->init_by_param(&param3));
+
+  bool finish_flag3 = false;
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*batch_freeze_dag3, wait_task3));
+  EXPECT_EQ(OB_SUCCESS, wait_task3->init(1, 2, finish_flag3));
+  EXPECT_EQ(OB_SUCCESS, batch_freeze_dag3->add_task(*wait_task3));
+  EXPECT_EQ(OB_EAGAIN, scheduler->add_dag(batch_freeze_dag3));
+}
+
 TEST_F(TestDagScheduler, test_max_concurrent_task)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
