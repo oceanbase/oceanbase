@@ -701,6 +701,25 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(spatial_cellid_col_id_);
   OB_UNIS_DECODE(spatial_mbr_col_id_);
   OB_UNIS_DECODE(lob_inrow_threshold_);
+  if (OB_SUCC(ret) && pos == data_len) {
+    // Here is to solve the compatibility problem and correct the `index_type_` and `index_status_`.
+    //
+    // Before version 4.3.1.0, the default value of `index_type_` and `index_sattus_` was max. In
+    // version 4.3.1.0, the full-text search and json multi-value indexes were introduced. If the
+    // RPC request from older version observer is received, the `index_type_` will be mistaken for
+    // a valid json multi-valued index.
+    //
+    // Therefore, if there are still unresolved fields here, it means that it is a new version
+    // observer. It is necessary to re-assign the initial values to the `index_type_` and
+    // `index_status_` to avoid misjudgment as a valid index.
+
+
+    // ATTENTION!!!
+    // The front-end version is currently only 4.2.x, and its value of max index type is 13.
+    if (13 == index_type_) {
+      index_type_ = INDEX_TYPE_IS_NOT;
+    }
+  }
   OB_UNIS_DECODE(read_param_version_);
   if (OB_SUCC(ret) && pos < data_len) {
     int64_t cg_read_info_cnt = 0;
