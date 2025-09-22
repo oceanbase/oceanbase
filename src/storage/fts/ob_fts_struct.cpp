@@ -24,8 +24,7 @@ namespace storage
 int ObFTWord::hash(uint64_t &hash_val) const
 {
   int ret = OB_SUCCESS;
-  ObObjMeta meta;
-  sql::ObExprBasicFuncs *funcs = ObDatumFuncs::get_basic_func(meta.get_type(), meta.get_collation_type());
+  sql::ObExprBasicFuncs *funcs = ObDatumFuncs::get_basic_func(meta_.get_type(), meta_.get_collation_type());
   if (OB_ISNULL(funcs)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (funcs->default_hash_ == nullptr) {
