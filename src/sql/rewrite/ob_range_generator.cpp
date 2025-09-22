@@ -955,6 +955,8 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
         range->max_offset_ = node->max_offset_ > 0 ? node->max_offset_ : 0;
         if (!node->is_phy_rowid_ && OB_FAIL(cast_value_type(*range))) {
           LOG_WARN("cast value type failed", K(ret));
+        } else if (node->is_phy_rowid_ && OB_FAIL(range->formalize())) {
+          LOG_WARN("failed to formalize range", K(ret));
         } else if (need_cache) {
           all_tmp_ranges_.at(node->node_id_) = range;
         }
@@ -1058,6 +1060,8 @@ int ObRangeGenerator::final_in_range_node(const ObRangeNode *node,
         range->max_offset_ = node->max_offset_ > 0 ? node->max_offset_ : 0;
         if (!node->is_phy_rowid_ && OB_FAIL(cast_value_type(*range))) {
           LOG_WARN("cast value type failed", K(ret));
+        } else if (node->is_phy_rowid_ && OB_FAIL(range->formalize())) {
+          LOG_WARN("failed to formalize range", K(ret));
         } else {
           all_tmp_ranges_.at(node->node_id_) = range;
         }
@@ -1775,6 +1779,8 @@ int ObRangeGenerator::final_not_in_range_node(const ObRangeNode &node,
       }
       if (!node.is_phy_rowid_ && OB_FAIL(cast_value_type(*range))) {
         LOG_WARN("cast value type failed", K(ret));
+      } else if (node.is_phy_rowid_ && OB_FAIL(range->formalize())) {
+        LOG_WARN("failed to formalize range", K(ret));
       } else {
         all_tmp_ranges_.at(node.node_id_) = range;
       }
