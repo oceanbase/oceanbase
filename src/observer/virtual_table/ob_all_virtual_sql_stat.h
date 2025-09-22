@@ -122,7 +122,15 @@ private:
     ROUTE_MISS_DELTA,
     FIRST_LOAD_TIME,
     PLAN_CACHE_HIT_TOTAL,
-    PLAN_CACHE_HIT_DELTA
+    PLAN_CACHE_HIT_DELTA,
+    MUTI_QUERY_TOTAL,
+    MUTI_QUERY_DELTA,
+    MUTI_QUERY_BATCH_TOTAL,
+    MUTI_QUERY_BATCH_DELTA,
+    FULL_TABLE_SCAN_TOTAL,
+    FULL_TABLE_SCAN_DELTA,
+    ERROR_COUNT_TOTAL,
+    ERROR_COUNT_DELTA
   };
   int fill_row(const uint64_t tenant_id,
                const ObExecutedSqlStatRecord *sql_stat_record,

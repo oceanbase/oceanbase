@@ -5109,6 +5109,14 @@ ROUTE_MISS_DELTA	bigint(20)	NO		0
 FIRST_LOAD_TIME	timestamp(6)	YES		NULL	
 PLAN_CACHE_HIT_TOTAL	bigint(20)	NO		0	
 PLAN_CACHE_HIT_DELTA	bigint(20)	NO		0	
+MUTI_QUERY_TOTAL	bigint(20)	NO		0	
+MUTI_QUERY_DELTA	bigint(20)	NO		0	
+MUTI_QUERY_BATCH_TOTAL	bigint(20)	NO		0	
+MUTI_QUERY_BATCH_DELTA	bigint(20)	NO		0	
+FULL_TABLE_SCAN_TOTAL	bigint(20)	NO		0	
+FULL_TABLE_SCAN_DELTA	bigint(20)	NO		0	
+ERROR_COUNT_TOTAL	bigint(20)	NO		0	
+ERROR_COUNT_DELTA	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sqlstat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5177,6 +5185,14 @@ route_miss_delta	bigint(20)	NO		0
 first_load_time	timestamp(6)	YES		NULL	
 plan_cache_hit_total	bigint(20)	NO		0	
 plan_cache_hit_delta	bigint(20)	NO		0	
+muti_query_total	bigint(20)	NO		0	
+muti_query_delta	bigint(20)	NO		0	
+muti_query_batch_total	bigint(20)	NO		0	
+muti_query_batch_delta	bigint(20)	NO		0	
+full_table_scan_total	bigint(20)	NO		0	
+full_table_scan_delta	bigint(20)	NO		0	
+error_count_total	bigint(20)	NO		0	
+error_count_delta	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sqlstat;
 IF(count(*) >= 0, 1, 0)
 1
