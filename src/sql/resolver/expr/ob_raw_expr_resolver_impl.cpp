@@ -3349,6 +3349,13 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                 OX (const_cast<pl::ObPLVar*>(var)->set_is_referenced(true));
               }
             }
+#ifdef OB_BUILD_ORACLE_PL
+            CK (OB_NOT_NULL(ctx_.secondary_namespace_->get_type_table()));
+            if (OB_SUCC(ret) && c_expr->get_result_type().is_pl_extend_type() && pl::PL_REF_CURSOR_TYPE == c_expr->get_result_type().get_extend_type()) {
+              //update refcursor udt_id
+              OX (c_expr->set_udt_id(ctx_.secondary_namespace_->get_type_table()->get_sys_refcursor_type().get_user_type_id()));
+            }
+#endif
           }
 //execute阶段不需要统计prepare_param_count_的个数
 //          ctx_.prepare_param_count_++;

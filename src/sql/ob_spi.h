@@ -941,7 +941,8 @@ public:
                          int64_t new_query_start_time,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
-  static int cursor_release(ObSQLSessionInfo *session,
+  static int cursor_release(pl::ObPLExecCtx *ctx,
+                            ObSQLSessionInfo *session,
                             pl::ObPLCursorInfo *cursor,
                             bool is_refcursor,
                             uint64_t package_id,
@@ -1299,6 +1300,12 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static int release_cursor_parameters(pl::ObPLExecCtx *ctx,
+                                      ObSQLSessionInfo &session_info, 
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      const int64_t *formal_param_idxs,
+                                      int64_t cursor_param_count);
   static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
 
   static int streaming_cursor_open(pl::ObPLExecCtx *ctx,

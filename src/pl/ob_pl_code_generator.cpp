@@ -1820,24 +1820,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
             CK (OB_NOT_NULL(user_type));
             OX (final_type = *user_type);
           }
-          if (final_type.is_cursor_type()) {
-            OZ (out_param_guard.get_objparam_buffer(p_result_obj));
-            OZ (generator_.generate_expr(s.get_using_index(i),
-                                         s,
-                                         OB_INVALID_INDEX,
-                                         p_result_obj));
-            if (is_need_extract) {
-              OZ (generator_.extract_allocator_and_restore_obobjparam(p_result_obj, composite_allocator));
-            }
-          } else {
-            OZ (out_param_guard.get_objparam_buffer(address));
-            OZ (generator_.generate_expr(s.get_using_index(i),
-                                        s,
-                                        OB_INVALID_INDEX,
-                                        address));
-            if (is_need_extract) {
-              OZ (generator_.extract_allocator_and_restore_obobjparam(address, composite_allocator));
-            }
+          OZ (out_param_guard.get_objparam_buffer(address));
+          OZ (generator_.generate_expr(s.get_using_index(i),
+                                      s,
+                                      OB_INVALID_INDEX,
+                                      address));
+          if (is_need_extract) {
+            OZ (generator_.extract_allocator_and_restore_obobjparam(address, composite_allocator));
           }
           if (OB_FAIL(ret)) {
           } else if (final_type.is_obj_type()) {
@@ -1857,7 +1846,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
             OZ (generator_.get_helper().create_load(ObString("load obj value"), p_obj, src_obj));
             OZ (generator_.extract_datum_ptr_from_objparam(p_result_obj, ObNullType, p_dest_obj));
             OZ (generator_.get_helper().create_store(src_obj, p_dest_obj));
-          } else if (!final_type.is_cursor_type()) {
+          } else if (final_type.is_cursor_type()) {
+            ObLLVMValue src_datum;
+            ObLLVMValue p_dest_obj;
+            OZ (out_param_guard.get_objparam_buffer(p_result_obj));
+            OZ (generator_.add_out_params(p_result_obj));
+            OZ (generator_.extract_datum_ptr_from_objparam(p_result_obj, ObNullType, p_dest_obj));
+            OZ (generator_.extract_obobj_from_objparam(address, src_datum));
+            OZ (generator_.get_helper().create_store(src_datum, p_dest_obj));
+          } else {
             ObLLVMValue allocator;
             ObLLVMValue src_datum;
             ObLLVMValue dest_datum;
@@ -2762,15 +2759,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
             OB_INVALID_INDEX == s.get_out_index(i) ? NULL : s.get_variable(s.get_out_index(i));
           const ObPLDataType *pl_type = OB_ISNULL(var) ? NULL : &(var->get_type());
           ObPLDataType final_type;
-          if (lib::is_oracle_mode() && NULL != var && var->get_type().is_cursor_type()) {
-            OZ (generator_.extract_objparam_from_context(generator_.get_vars().at(
-                                                             generator_.CTX_IDX),
-                                                         s.get_out_index(i),
-                                                         p_result_obj));
-          } else {
-            OZ (out_param_guard.get_objparam_buffer(p_result_obj), K(i), KPC(var));
-            OZ (generator_.add_out_params(p_result_obj));
-          }
+          OZ (out_param_guard.get_objparam_buffer(p_result_obj), K(i), KPC(var));
+          OZ (generator_.add_out_params(p_result_obj));
           if (OB_SUCC(ret)
               && OB_ISNULL(pl_type)
               && OB_NOT_NULL(s.get_param_expr(i))
@@ -2856,15 +2846,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
             }
           }
         } else {
-          const ObPLVar *var = OB_INVALID_INDEX == s.get_out_index(i)
-                                                  ? NULL : s.get_variable(s.get_out_index(i));
-          if (lib::is_oracle_mode() && NULL != var && var->get_type().is_cursor_type()) {
-            OZ (generator_.extract_objparam_from_context(generator_.get_vars().at(
-                                                             generator_.CTX_IDX),
-                                                         s.get_out_index(i),
-                                                         p_result_obj));
-          } else if ((!s.get_param_expr(i)->is_obj_access_expr() && !(s.get_param_expr(i)->get_result_type().is_ext() && s.is_out(i)))
-                      || (s.get_param_expr(i)->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write())) {
+          if ((!s.get_param_expr(i)->is_obj_access_expr() && !(s.get_param_expr(i)->get_result_type().is_ext() && s.is_out(i)))
+               || (s.get_param_expr(i)->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write())) {
             OZ (out_param_guard.get_objparam_buffer(p_result_obj));
             OZ (generator_.generate_expr(s.get_param(i), s, OB_INVALID_INDEX, p_result_obj));
           } else {
@@ -2886,7 +2869,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               OX (final_type = *user_type);
             }
             if (OB_SUCC(ret)) {
-              if (final_type.is_obj_type() || (!is_no_copy_param && !final_type.is_cursor_type())) {
+              if (final_type.is_obj_type() || !is_no_copy_param || final_type.is_cursor_type()) {
                 OZ (out_param_guard.get_objparam_buffer(address));
                 OZ (generator_.generate_expr(s.get_param(i),
                                              s,
@@ -2934,7 +2917,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               } else {
                 OZ (generator_.get_helper().create_store(src_obj, p_dest_obj));
               }
-            } else if (!is_no_copy_param && !final_type.is_cursor_type()) {
+            } else if (final_type.is_cursor_type()) {
+              ObLLVMValue src_datum;
+              ObLLVMValue p_dest_obj;
+              OZ (out_param_guard.get_objparam_buffer(p_result_obj));
+              OZ (generator_.add_out_params(p_result_obj));
+              OZ (generator_.extract_datum_ptr_from_objparam(p_result_obj, ObNullType, p_dest_obj));
+              OZ (generator_.extract_obobj_from_objparam(address, src_datum));
+              OZ (generator_.get_helper().create_store(src_datum, p_dest_obj));
+            } else if (!is_no_copy_param) {
               ObLLVMValue allocator;
               ObLLVMValue src_datum;
               ObLLVMValue dest_datum;
@@ -8644,7 +8635,7 @@ int ObPLCodeGenerator::generate_out_param(
     ObLLVMValue result;
     ObLLVMValue p_param;
     ObPLDataType pl_type = s.get_variable(param_desc.at(i).out_idx_)->get_type();
-    if (pl_type.is_composite_type()) {
+    if (pl_type.is_composite_type() || pl_type.is_cursor_type()) {
       if (param_desc.at(i).is_out()) {
         uint64_t udt_id = pl_type.get_user_type_id();
         // 对于INOUT参数, execute immediate复杂类型传递的是指针, 什么都不需要做; inner call场景, inout参数会入参会深拷，这里需要重新拷回
@@ -8742,14 +8733,7 @@ int ObPLCodeGenerator::generate_out_param(
           OZ (set_current(after_copy_block));
         }
       }
-    } else if (pl_type.is_cursor_type()) {
-      ObLLVMValue src_datum, dest_datum;
-      ObLLVMValue into_address;
-      OZ (extract_objparam_from_context(get_vars().at(CTX_IDX), param_desc.at(i).out_idx_, into_address));
-      OZ (extract_obobj_ptr_from_objparam(into_address, dest_datum));
-      OZ (extract_obobj_from_objparam(p_arg, src_datum));
-      OZ (get_helper().create_store(src_datum, dest_datum));
-    } else { //处理基础类型和refcursor的出参
+    } else { //处理基础类型
       ObSEArray<ObLLVMValue, 4> args;
       ObLLVMValue result_idx;
       ObLLVMValue ret_err;
