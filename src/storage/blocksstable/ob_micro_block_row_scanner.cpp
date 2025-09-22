@@ -1860,6 +1860,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
               LOG_WARN("Unexpected trans info", K(ret), K(trans_idx), K(trans_version), KPC(row), KPC_(read_info));
             } else {
               LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
+              row->storage_datums_[trans_idx].reuse();
               row->storage_datums_[trans_idx].set_int(-trans_version);
             }
             if (OB_UNLIKELY(0 == version_range_.base_version_ &&
@@ -2667,6 +2668,7 @@ int ObMultiVersionDIMicroBlockRowScanner::set_row_trans_col(
         LOG_WARN("Unexpected trans info", K(ret), K(trans_version), K(row), KPC_(read_info));
       } else {
         LOG_DEBUG("success to set trans_version", K(ret), K(trans_version));
+        row.storage_datums_[trans_idx].reuse();
         row.storage_datums_[trans_idx].set_int(-trans_version);
       }
     }
