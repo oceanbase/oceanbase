@@ -132,29 +132,38 @@ int ObCreateWrappedResolver::check_object_name_match(const ParseNode *n1, const 
 
 int ObCreateWrappedResolver::check_plwrap_version_compatible()
 {
+#define NO_PLWRAP_VERSION(version)       \
+  ((version) < MOCK_DATA_VERSION_4_2_5_7 \
+   || ((version) >= DATA_VERSION_4_3_0_0 && (version) < DATA_VERSION_4_3_5_1))
+
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   uint64_t tenant_data_version = 0;
   CK (OB_NOT_NULL(params_.session_info_));
   OX (tenant_id = params_.session_info_->get_effective_tenant_id());
   OZ (GET_MIN_DATA_VERSION(tenant_id, tenant_data_version));
-  if (OB_SUCC(ret) && DATA_VERSION_4_3_5_1 > tenant_data_version) {
+  if (OB_SUCC(ret) && NO_PLWRAP_VERSION(tenant_data_version)) {
     // binary rollback is not allowed after target data version is settled, which allows wrapped
     // system package to be created after the target_data_version is increased.
     CK (OB_NOT_NULL(params_.sql_proxy_));
     share::ObGlobalStatProxy proxy(*params_.sql_proxy_, tenant_id);
     uint64_t target_data_version = 0;
     OZ (proxy.get_target_data_version(false, target_data_version));
-    if (OB_SUCC(ret) && DATA_VERSION_4_3_5_1 > target_data_version) {
+    if (OB_SUCC(ret) && NO_PLWRAP_VERSION(target_data_version)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("target data version is less than 4.3.5.1, wrapped PL/SQL unit is not supported",
-               K(ret), K(tenant_data_version));
-      LOG_USER_ERROR(
-          OB_NOT_SUPPORTED,
-          "target data version is less than 4.3.5.1, wrapped PL/SQL unit is not supported");
+      LOG_WARN(
+          "target data version is in the range of ( , 4.2.5.7) || [4.3.0.0, 4.3.5.1), "
+          "wrapped PL/SQL unit is not supported",
+          K(ret),
+          K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                     "target data version is in the range of ( , 4.2.5.7) || [4.3.0.0, 4.3.5.1), "
+                     "wrapped PL/SQL unit is not supported");
     }
   }
   return ret;
+
+#undef NO_PLWRAP_VERSION
 }
 
 int ObCreateWrappedPackageResolver::resolve(const ParseNode& cipher_parse_tree)
