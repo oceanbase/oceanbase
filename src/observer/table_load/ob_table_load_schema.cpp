@@ -139,8 +139,7 @@ int ObTableLoadSchema::get_user_column_schemas(const ObTableSchema *table_schema
         LOG_WARN("The column is null", KR(ret));
       } else if (column_schema->is_hidden()) {
         // 不显示隐藏主键列
-      // TODO : @suzhi.yt uncomment after unused column patched
-      // } else if (column_schema->is_unused()) {
+      } else if (column_schema->is_unused()) {
         // 不显示快速删除列
       } else if (column_schema->is_invisible_column() && !contain_invisible_column) {
         // 不显示invisible列
@@ -272,10 +271,9 @@ int ObTableLoadSchema::check_has_unused_column(const ObTableSchema *table_schema
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid column schema", K(column_schema));
-    // TODO : @suzhi.yt uncomment after unused column patched
-    // } else if (column_schema->is_unused()) {
-    //   bret = true;
-    //   break;
+    } else if (column_schema->is_unused()) {
+      bret = true;
+      break;
     }
   }
   return ret;
