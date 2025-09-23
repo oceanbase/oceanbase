@@ -2329,6 +2329,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
                       || OB_FAIL(prepare_get_child_at(project_node, 0))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));
+            } else if (T_FUN_SYS == project_node->children_[0]->type_ && project_node->children_[0]->num_child_ > 0) {
+              alias_node = project_node->children_[0]->children_[0];
+              if (ObSequenceNamespaceChecker::is_curr_or_next_val(alias_node->str_value_)) {
+                select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                   static_cast<int32_t>(alias_node->str_len_));
+              }
             } else {
               alias_node = project_node->children_[0];
               select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
@@ -2336,7 +2342,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
             }
           } else {
             // mysql mode
-            if (T_COLUMN_REF != project_node->type_ || project_node->num_child_ < 3) {
+            if (project_node->type_ == T_FUN_SYS && project_node->num_child_ > 0
+                && ObSequenceNamespaceChecker::is_curr_or_next_val(project_node->children_[0]->str_value_)) {
+              alias_node = project_node->children_[0];
+              select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                 static_cast<int32_t>(alias_node->str_len_));
+            } else if (T_COLUMN_REF != project_node->type_ || project_node->num_child_ < 3) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected select item type",
                        K(select_item), K(project_node->type_), K(project_node->num_child_), K(ret));

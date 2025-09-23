@@ -2993,6 +2993,34 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
     if (OB_FAIL(replace_col_ref_prefix(q_name))) {
       LOG_WARN("replace col udt qname failed", K(ret), K(q_name));
     } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+      // try to resolve nextval(seq) or currval(seq)
+      if (ret == OB_ERR_BAD_FIELD_ERROR) {
+        if (i + 1 < columns.count() && columns.at(i + 1).access_idents_.count() > 0
+            && columns.at(i + 1).access_idents_.at(0).params_.count() > 0) {
+          ObQualifiedName& q_name_next = columns.at(i + 1);
+          ObObjAccessIdent &access_ident = q_name_next.access_idents_.at(0);
+          ObString &access_name = access_ident.access_name_;
+          bool is_cloumn_ref = access_ident.params_.at(0).first->is_column_ref_expr();
+          if (is_cloumn_ref && ObSequenceNamespaceChecker::is_curr_or_next_val(access_name)) {
+            ret = OB_SUCCESS;
+            q_name.ref_expr_ = q_name_next.ref_expr_;
+            q_name.access_idents_.at(0).set_type(UNKNOWN);
+            q_name.tbl_name_.assign_ptr(
+              lib::is_mysql_mode() ? str_tolower(const_cast<char *>(q_name.col_name_.ptr()),
+                                                static_cast<int32_t>(q_name.col_name_.length())) :
+                                    const_cast<char *>(q_name.col_name_.ptr()),
+              static_cast<int32_t>(q_name.col_name_.length()));
+            q_name.col_name_.assign_ptr(const_cast<char *>(access_name.ptr()),
+                                        static_cast<int32_t>(access_name.length()));
+            if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+              LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
+            }
+            i++;
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
       report_user_error_msg(ret, expr, q_name);
     } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
