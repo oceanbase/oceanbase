@@ -47,7 +47,7 @@ ObTempBlockStore::ObTempBlockStore(common::ObIAllocator *alloc /* = NULL */)
     tenant_id_(0), label_(), ctx_id_(0), mem_limit_(0), mem_hold_(0), mem_used_(0),
     file_size_(0), block_cnt_(0), index_block_cnt_(0), block_cnt_on_disk_(0),
     alloced_mem_size_(0), max_block_size_(0), max_hold_mem_(0), idx_blk_(NULL), mem_stat_(NULL),
-    io_observer_(NULL), last_block_on_disk_(false), cur_file_offset_(0)
+    io_observer_(NULL), cur_file_offset_(0)
 {
   label_[0] = '\0';
   dir_id_ = -1;
@@ -356,7 +356,7 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
         LOG_WARN("fail to get next block", K(ret));
       } else if (blk_on_disk) {
         if (need_compress() && OB_FAIL(decompr_block(comp_size, reader, blk))) {
-          LOG_WARN("fail to decompress block", K(ret), K(last_block_on_disk_));
+          LOG_WARN("fail to decompress block", K(ret), K(reader.last_block_on_disk_));
         } else {
           Block *tmp_blk = const_cast<Block *>(blk);
           if (OB_FAIL(prepare_blk_for_read(tmp_blk))) {
@@ -371,9 +371,9 @@ int ObTempBlockStore::get_block(BlockReader &reader, const int64_t block_id, con
         if (OB_LIKELY(next_block_id >= 0) && OB_LIKELY(next_block_id < saved_block_id_cnt_)) {
           // if still have next block, prefetch next block
           reader.aio_buf_idx_ = (reader.aio_buf_idx_ + 1) % BlockReader::AIO_BUF_CNT;
-          last_block_on_disk_ = true;
+          reader.last_block_on_disk_ = true;
           if (OB_FAIL(load_block(reader, next_block_id, reader.get_aio_buf(), reader.aio_blk_,
-                                 last_block_on_disk_))) {
+                                 reader.last_block_on_disk_))) {
             LOG_WARN("fail to prefetch next block", K(ret));
           }
         }
@@ -523,7 +523,7 @@ int ObTempBlockStore::inner_get_block(BlockReader &reader, const int64_t block_i
       }
     }
     if (OB_SUCC(ret)) {
-      blk_on_disk = (need_sync_read && blk_on_disk) || (!need_sync_read && last_block_on_disk_);
+      blk_on_disk = (need_sync_read && blk_on_disk) || (!need_sync_read && reader.last_block_on_disk_);
     }
   } else if (OB_FAIL(load_block(reader, block_id, reader.buf_, blk, blk_on_disk))) {
     LOG_WARN("fail to load block", K(ret));
@@ -1563,6 +1563,7 @@ int ObTempBlockStore::BlockReader::init(ObTempBlockStore *store, const bool asyn
     if (store->is_segment_read()) {
       is_async_ = false;
     }
+    last_block_on_disk_ = false;
   }
   return ret;
 }
@@ -1616,6 +1617,9 @@ void ObTempBlockStore::BlockReader::reuse()
 
 void ObTempBlockStore::BlockReader::reset_cursor(const int64_t file_size, const bool need_release)
 {
+  if (need_release) {
+    last_block_on_disk_ = false;
+  }
   file_size_ = file_size;
   idx_blk_ = NULL;
   aio_blk_ = NULL;
