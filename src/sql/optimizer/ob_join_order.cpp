@@ -3320,6 +3320,11 @@ int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
                                                 index_merge_tree,
                                                 access_paths))) {
     LOG_WARN("failed to create index merge path", K(ret));
+    // temporarily prune index merge paths when involving shared expressions in multi-level match against score projection
+  } else if (OB_FAIL(prune_invalid_fts_merge_path(access_paths))) {
+    LOG_WARN("failed to prune invalid fts merge paths", K(ret));
+  } else if (access_paths.empty()) {
+    LOG_TRACE("all index merge paths are pruned due to invalid fulltext nodes", K(ref_table_id));
   } else if (OB_UNLIKELY(EN_FORCE_INDEX_MERGE_PLAN)) {
     ignore_normal_access_path = true;
     LOG_TRACE("[EN_FORCE_INDEX_MERGE_PLAN] finish create index merge path ", K(ref_table_id), K(is_match_hint), K(contain_fts), K(access_paths));
@@ -4316,6 +4321,72 @@ int ObJoinOrder::prune_index_merge_path(ObIArray<AccessPath*> &access_paths)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(access_paths.assign(tmp_paths))) {
     LOG_WARN("failed to assign access paths", K(ret));
+  }
+  return ret;
+}
+
+// We need to prune invalid index merge paths that contain full-text indexes.
+// The specific pruning conditions are as follows:
+// 1. The index merge tree contains leaf nodes with full-text indexes whose depth >= 2.
+// 2. The corresponding MATCH AGAINST expression in these nodes is shared reference.
+int ObJoinOrder::prune_invalid_fts_merge_path(ObIArray<AccessPath*> &access_paths)
+{
+  int ret = OB_SUCCESS;
+  int64_t access_path_count = access_paths.count();
+  ObSEArray<AccessPath*, 4> tmp_paths;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_path_count; ++i) {
+    ObIndexMergeNode *index_merge_node = NULL;
+    bool is_invalid_path = false;
+    if (OB_ISNULL(access_paths.at(i))
+        || OB_UNLIKELY(!access_paths.at(i)->is_index_merge_path())
+        || OB_ISNULL(index_merge_node = static_cast<IndexMergePath*>(access_paths.at(i))->root_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected index merge path", K(ret), K(i), KPC(access_paths.at(i)));
+    } else if (OB_FAIL(check_invalid_fts_merge_path(index_merge_node, 0, is_invalid_path))) {
+      LOG_WARN("failed to check invalid fts merge path", K(ret));
+    } else if (!is_invalid_path && OB_FAIL(tmp_paths.push_back(access_paths.at(i)))) {
+      LOG_WARN("failed to push back access path", K(ret));
+    } else if (is_invalid_path) {
+      OPT_TRACE("prune invalid index merge path:", access_paths.at(i))
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(access_paths.assign(tmp_paths))) {
+    LOG_WARN("failed to assign access paths", K(ret));
+  }
+  LOG_TRACE("prune invalid fts merge path", K(ret), K(access_path_count), K(tmp_paths.count()));
+  return ret;
+}
+
+int ObJoinOrder::check_invalid_fts_merge_path(ObIndexMergeNode *index_merge_node, int64_t depth, bool &is_invalid_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_merge_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (index_merge_node->is_scan_node()) {
+    if (depth >= 2 && index_merge_node->node_type_ == INDEX_MERGE_FTS_INDEX) {
+      ObRawExpr *filter = NULL;
+      ObRawExpr *match_expr = NULL;
+      if (OB_UNLIKELY(index_merge_node->filter_.count() != 1)
+          || OB_ISNULL(filter = index_merge_node->filter_.at(0))
+          || (filter->get_expr_type() != T_OP_BOOL || !filter->has_flag(CNT_MATCH_EXPR))
+          || (0 >= filter->get_param_count())
+          || OB_ISNULL(match_expr = filter->get_param_expr(0))
+          || !match_expr->has_flag(IS_MATCH_EXPR)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr for fulltext index", K(ret), KPC(filter));
+      } else if (match_expr->is_shared_reference()) {
+        is_invalid_path = true;
+        LOG_TRACE("invalid fts merge path", K(ret), K(match_expr));
+      }
+    }
+  } else {
+    for (int64_t i = 0; !is_invalid_path && OB_SUCC(ret) && i < index_merge_node->children_.count(); ++i) {
+      if (SMART_CALL(OB_FAIL(check_invalid_fts_merge_path(index_merge_node->children_.at(i), depth + 1, is_invalid_path)))) {
+        LOG_WARN("failed to check invalid fts merge path", K(ret));
+      }
+    }
   }
   return ret;
 }

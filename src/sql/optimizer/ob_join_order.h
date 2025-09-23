@@ -1941,6 +1941,8 @@ struct MergeKeyInfoHelper
                                     IndexMergePath* &index_merge_path);
 
     int prune_index_merge_path(ObIArray<AccessPath*> &access_paths);
+    int prune_invalid_fts_merge_path(ObIArray<AccessPath*> &access_paths);
+    int check_invalid_fts_merge_path(ObIndexMergeNode *node, int64_t depth, bool &is_invalid_path);
 
     int check_index_merge_paths_contain_fts(ObIArray<AccessPath*> &access_paths,
                                             bool &contain_fts);
