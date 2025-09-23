@@ -155,6 +155,7 @@ int ObRecoverRestoreTableTask::update_complete_sstable_job_status(const common::
                                                             ret_code,
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
+                                                            addition_info.cg_row_inserted_,
                                                             addition_info.physical_row_count_))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }

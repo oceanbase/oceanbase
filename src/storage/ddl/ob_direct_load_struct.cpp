@@ -3334,7 +3334,8 @@ int ObDirectLoadSliceWriter::check_null_and_length(
 
 int ObDirectLoadSliceWriter::fill_aggregated_column_group(
     const int64_t cg_idx,
-    ObCOSliceWriter *cur_writer)
+    ObCOSliceWriter *cur_writer,
+    ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3347,7 +3348,7 @@ int ObDirectLoadSliceWriter::fill_aggregated_column_group(
   } else if (ATOMIC_LOAD(&is_canceled_)) {
     ret = OB_CANCELED;
     LOG_WARN("fil cg task canceled", K(ret), K(is_canceled_));
-  } else if (OB_FAIL(slice_store_->fill_column_group(cg_idx, cur_writer, nullptr/*insert_monitor*/))) {
+  } else if (OB_FAIL(slice_store_->fill_column_group(cg_idx, cur_writer, insert_monitor))) {
     LOG_WARN("fail to fill column group", KR(ret), KPC(slice_store_), K(cg_idx));
   }
   return ret;

@@ -27,11 +27,13 @@ template <typename T>
 int add_dag_and_get_progress(
     T *dag,
     int64_t &row_inserted,
+    int64_t &cg_row_inserted,
     int64_t &physical_row_count)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   row_inserted = 0;
+  cg_row_inserted=0;
   physical_row_count = 0;
   if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
@@ -39,7 +41,7 @@ int add_dag_and_get_progress(
   } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->add_dag(dag))) {
     // caution ret = OB_EAGAIN or OB_SIZE_OVERFLOW
     if (OB_EAGAIN == ret
-        && OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_dag_progress<T>(dag, row_inserted, physical_row_count))) { 
+        && OB_TMP_FAIL(MTL(ObTenantDagScheduler*)->get_dag_progress<T>(dag, row_inserted, cg_row_inserted, physical_row_count))) {
       // tmp_ret is used to prevent the failure from affecting DDL_Task status
       LOG_WARN("get complement data progress failed", K(tmp_ret), K(ret));
     }

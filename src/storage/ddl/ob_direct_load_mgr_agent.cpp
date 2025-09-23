@@ -562,7 +562,8 @@ int ObDirectLoadMgrAgent::calc_range(const int64_t context_id, const int64_t thr
 
 int ObDirectLoadMgrAgent::fill_column_group(
     const int64_t thread_cnt,
-    const int64_t thread_id)
+    const int64_t thread_id,
+    ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -571,7 +572,7 @@ int ObDirectLoadMgrAgent::fill_column_group(
   } else if (OB_UNLIKELY(!mgr_handle_.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys", K(ret), KPC(this));
-  } else if (OB_FAIL(mgr_handle_.get_obj()->fill_column_group(thread_cnt, thread_id))) {
+  } else if (OB_FAIL(mgr_handle_.get_obj()->fill_column_group(thread_cnt, thread_id, insert_monitor))) {
     LOG_WARN("fill column group failed", K(ret), K(thread_cnt), K(thread_id));
   }
   return ret;

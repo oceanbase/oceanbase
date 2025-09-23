@@ -193,7 +193,7 @@ ObTabletSplitCtx::ObTabletSplitCtx()
     is_inited_(false), complement_data_ret_(OB_SUCCESS), ls_handle_(), tablet_handle_(),
     index_builder_map_(), clipped_schemas_map_(),
     allocator_("SplitCtx", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()),
-    skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
+    skipped_split_major_keys_(), row_inserted_(0), cg_row_inserted_(0), physical_row_count_(0),
     ls_rebuild_seq_(-1)
 {
 }

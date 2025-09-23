@@ -997,7 +997,7 @@ public:
     compaction::ObDiagnoseTabletCompProgress &progress);
 
   template <typename T>
-  int get_dag_progress(const T &dag, int64_t &row_inserted, int64_t &physical_row_count)
+  int get_dag_progress(const T &dag, int64_t &row_inserted, int64_t &cg_row_inserted, int64_t &physical_row_count)
   {
     int ret = OB_SUCCESS;
     lib::ObMutexGuard guard(prio_lock_);
@@ -1017,6 +1017,7 @@ public:
     } else {
       row_inserted = static_cast<T*>(stored_dag)->get_context().row_inserted_;
       physical_row_count = static_cast<T*>(stored_dag)->get_context().physical_row_count_;
+      cg_row_inserted = static_cast<T*>(stored_dag)->get_context().cg_row_inserted_;
     }
     return ret;
   }
@@ -1258,6 +1259,7 @@ public:
   template <typename T>
   int get_dag_progress(const T *dag,
                       int64_t &row_inserted,
+                      int64_t &cg_row_inserted,
                       int64_t &physical_row_count)
   {
     int ret = OB_SUCCESS;
@@ -1270,7 +1272,7 @@ public:
         && ObDagType::DAG_TYPE_LOB_SPLIT != dag->get_type())) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid arugment", K(ret), KPC(dag));
-    } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_dag_progress(*dag, row_inserted, physical_row_count))) {
+    } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_dag_progress(*dag, row_inserted, cg_row_inserted, physical_row_count))) {
       COMMON_LOG(WARN, "fail to get dag progress", K(ret), KPC(dag));
     }
     return ret;

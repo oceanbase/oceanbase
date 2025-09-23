@@ -559,6 +559,18 @@ int ObRpcCheckandCancelDDLComplementDagP::process()
   return ret;
 }
 
+int ObRpcFetchTabletPhysicalRowCntP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->fetch_tablet_physical_row_cnt(arg_, result_);
+  }
+  return ret;
+}
+
 int ObRpcCheckandCancelDeleteLobMetaRowDagP::process()
 {
   int ret = OB_SUCCESS;

@@ -140,6 +140,7 @@ public:
   int broadcast_consensus_version(
       const obrpc::ObBroadcastConsensusVersionArg &arg,
       obrpc::ObBroadcastConsensusVersionRes &result);
+  int fetch_tablet_physical_row_cnt(const obrpc::ObFetchTabletPhysicalRowCntArg &arg, obrpc::ObFetchTabletPhysicalRowCntRes &result);
   ////////////////////////////////////////////////////////////////
   // ObRpcFetchSysLSP @RS load balance
   int fetch_sys_ls(share::ObLSReplica &replica);

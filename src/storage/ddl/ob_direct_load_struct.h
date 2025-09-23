@@ -1286,7 +1286,8 @@ public:
       ObInsertMonitor *monitor_node = NULL);
   int fill_aggregated_column_group(
       const int64_t cg_idx,
-      ObCOSliceWriter *cur_writer);
+      ObCOSliceWriter *cur_writer,
+      ObInsertMonitor *insert_monitor=nullptr);
   int fill_vector_index_data(
     const int64_t snapshot_version,
     const ObStorageSchema *storage_schema,

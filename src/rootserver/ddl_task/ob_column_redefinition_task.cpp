@@ -172,6 +172,7 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
                                                             ret_code,
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
+                                                            addition_info.cg_row_inserted_,
                                                             addition_info.physical_row_count_))) {
     LOG_WARN("fail to set update replica build progress", K(ret), K(addr));
   }
@@ -739,8 +740,10 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
     }
     case ObDDLTaskStatus::REDEFINITION: {
       int64_t row_inserted = 0;
-      int64_t physical_row_count_ = 0;
-      double percent = 0.0;
+      int64_t unused_cg_row_inserted = 0;
+      int64_t physical_row_count = 0;
+      double row_percent = 0.0;
+      double unused_cg_row_percent = 0.0;
       bool initializing = false;
       {
         TCRLockGuard guard(lock_);
@@ -754,16 +757,16 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
                                     ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/)))) {
           LOG_WARN("failed to print", K(ret));
         }
-      } else if (OB_FAIL(replica_builder_.get_progress(row_inserted, physical_row_count_, percent))) {
+      } else if (OB_FAIL(replica_builder_.get_progress(physical_row_count, row_inserted, unused_cg_row_inserted, row_percent, unused_cg_row_percent))) {
         LOG_WARN("failed to gather redefinition stats", K(ret));
       } else if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
                                   "STATUS: REPLICA BUILD, PARALLELISM: %ld, ESTIMATED_TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, PROGRESS: %0.2lf%%",
                                   ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
-                                  physical_row_count_,
+                                  physical_row_count,
                                   row_inserted,
-                                  percent))) {
+                                  row_percent))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;

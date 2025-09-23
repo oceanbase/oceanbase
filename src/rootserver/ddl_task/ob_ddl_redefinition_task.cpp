@@ -721,6 +721,7 @@ int ObDDLRedefinitionTask::send_build_single_replica_request()
       param.data_format_version_ = data_format_version_;
       param.consumer_group_id_ = alter_table_arg_.consumer_group_id_;
       param.is_no_logging_ = is_no_logging_;
+      param.dest_cg_cnt_ = target_cg_cnt_; // only use for 4.3.x recover table
       if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
         LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
       } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, target_object_id_, param.dest_tablet_ids_))) {
@@ -742,6 +743,7 @@ int ObDDLRedefinitionTask::send_build_single_replica_request()
           LOG_WARN("failed to push back dest schema version", K(ret));
         }
       }
+
       if (OB_SUCC(ret)) {
         if (OB_FAIL(replica_builder_.build(param))) {
           LOG_WARN("fail to send build single replica", K(ret));
@@ -3010,3 +3012,4 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
   }
   return ret;
 }
+
