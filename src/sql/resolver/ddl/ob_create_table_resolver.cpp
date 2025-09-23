@@ -3730,6 +3730,9 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
           } else if (OB_UNLIKELY(0 == part_size)) {
             ret = OB_INVALID_ARGUMENT;
             SQL_RESV_LOG(WARN, "param, the param can't be zero", K(ret), K(buf));
+          } else if (ObPartitionOption::MIN_AUTO_PART_SIZE_BY_USER > part_size) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "auto part size must be greater than or equal to 128MB", K(ret), K(buf));
           }
         }
       } else if (T_AUTO == part_size_node->type_) {
