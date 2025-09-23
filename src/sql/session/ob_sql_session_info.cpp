@@ -3649,6 +3649,12 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
   return ret;
 }
 
+inline int64_t ObSQLSessionInfo::get_truncated_sql_len(const ObString &stmt)
+{
+  return enable_audit_log() ? static_cast<int64_t>(stmt.length()) :
+                              std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
+}
+
 void ObSQLSessionInfo::destory_mem_context()
 {
   if (OB_NOT_NULL(mem_context_)) {
