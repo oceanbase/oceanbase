@@ -170,6 +170,7 @@ private:
                                   const TableItem *table_item,
                                   const ObTableSchema *table_schema,
                                   bool &is_allow);
+  virtual int adjust_transform_types(uint64_t &transform_types) override;
 };
 
 }
