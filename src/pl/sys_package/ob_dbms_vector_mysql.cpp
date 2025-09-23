@@ -426,6 +426,9 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
     LOG_WARN("unexpected setting of vector index param, distance has not been set",
       K(ret), K(index_param.dist_algorithm_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance not set is");
+  } else if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
+             && ObCharset::locate(CS_TYPE_UTF8MB4_GENERAL_CI, param_str.ptr(), param_str.length(), "REFINE_TYPE", 11, 1) <= 0
+             && OB_FALSE_IT(index_param.refine_type_ = common::obvsag::QuantizationType::SQ8)) {
   } else if (OB_UNLIKELY(dim_count == 0 || dim_count > MAX_DIM_LIMITED)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("vector index dim equal to 0 or larger than 4096 is not supported", K(ret));
