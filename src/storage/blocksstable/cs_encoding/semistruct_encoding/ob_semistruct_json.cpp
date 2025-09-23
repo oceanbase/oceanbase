@@ -1014,7 +1014,8 @@ int ObSimpleSubSchema::build_freq_and_spare_cols(ObIAllocator &allocator, ObIArr
     ObList<ObSimpleSubColumn, ObIAllocator>::const_iterator iter = columns_.begin();
     while(OB_SUCC(ret) && iter != columns_.end()) {
       const ObSimpleSubColumn& sub_column = *iter;
-      const bool need_as_spare = need_store_as_spare_column(sub_column.cnt_, row_cnt, freq_col_threshold_);
+      const bool need_as_spare = need_store_as_spare_column(sub_column.cnt_, row_cnt, freq_col_threshold_)
+            || sub_column.col_->get_obj_type() == ObObjType::ObJsonType;
       if (OB_ISNULL(sub_column.col_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sub_column is null", K(ret), K(columns_));
@@ -1334,7 +1335,7 @@ int ObSemiStructObject::object_add(const common::ObString &key, ObIJsonBase *val
 
   if (OB_SUCC(ret) && child_cnt_ > 1) {
     ObJsonKeyCompare comparator(use_lexicographical_order_);
-    if (comparator.compare(childs_[child_cnt_ - 1].get_key(), childs_[child_cnt_ - 2].get_key()) <= 0) {
+    if (comparator.compare(childs_[child_cnt_ - 1].get_key(), childs_[child_cnt_ - 2].get_key()) < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("key is not order", K(ret), K(child_cnt_), K(childs_[child_cnt_ - 1].get_key()), K(childs_[child_cnt_ - 2].get_key()));
     }
@@ -1806,10 +1807,7 @@ int ObJsonReassembler::add_child(ObIJsonBase *parent, ObIJsonBase *child, const 
 {
   int ret = OB_SUCCESS;
   if (item.type_ == share::ObSubColumnPathItem::ARRAY) {
-    if (item.array_idx_ != parent->element_count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exist", K(ret), K(item), K(parent->element_count()));
-    } else if (OB_FAIL(parent->array_append(child))) {
+    if (OB_FAIL(parent->array_append(child))) {
       LOG_WARN("append fail", K(ret), K(item));
     }
   } else if (item.type_ == share::ObSubColumnPathItem::OBJECT) {
@@ -1830,16 +1828,30 @@ int ObJsonReassembler::add_child(ObIJsonBase *parent, ObIJsonBase *child, const 
   return ret;
 }
 
-int ObJsonReassembler::reassemble(const int start, const int end, const int depth, ObIJsonBase *&current)
+bool ObJsonReassembler::is_heterigeneous_column(const share::ObSubColumnPathItem &item, ObIJsonBase *&current) {
+  bool is_heterigeneous_column = false;
+  if (OB_NOT_NULL(current)) {
+    if ((current->json_type() == ObJsonNodeType::J_OBJECT && item.type_ == share::ObSubColumnPathItem::ARRAY) || 
+              (current->json_type() == ObJsonNodeType::J_ARRAY && item.type_ == share::ObSubColumnPathItem::OBJECT)) {
+      is_heterigeneous_column = true;
+    }
+  }
+  return is_heterigeneous_column;
+}
+
+int ObJsonReassembler::reassemble(const int start, const int end, const int depth, ObIJsonBase *&current, int &real_end)
 {
   int ret = OB_SUCCESS;
   int child_cnt = end - start;
-  for (int i = start; OB_SUCC(ret) && i < end;) {
+  int i = start;
+  for (; OB_SUCC(ret) && i < end;) {
     const ObSemiStructSubColumn& sub_column = *sub_cols_.at(i);
     const share::ObSubColumnPath& sub_cloumn_path = sub_column.get_path();
     const share::ObSubColumnPathItem &path_item = sub_cloumn_path.get_path_item(depth);
     ObIJsonBase *child = nullptr;
-    if (current == nullptr && OB_FAIL(alloc_container_node(path_item, child_cnt, current))) {
+    if (is_heterigeneous_column(path_item, current)) {
+      break;
+    } else if (current == nullptr && OB_FAIL(alloc_container_node(path_item, child_cnt, current))) {
       LOG_WARN("alloc node fail", K(ret), K(path_item));
     } else if (depth + 1 == sub_cloumn_path.get_path_item_count()) {
       if (OB_FAIL(alloc_scalar_json_node(sub_column, child))) {
@@ -1856,25 +1868,25 @@ int ObJsonReassembler::reassemble(const int start, const int end, const int dept
       }
     } else {
       int child_start = i;
-      int child_end = i;
+      int child_end = i + 1;
       for (; child_end < end; ++child_end) {
         const share::ObSubColumnPathItem &sibling_item = sub_cols_.at(child_end)->get_path().get_path_item(depth);
         if (sibling_item.compare(path_item, sub_schema_->use_lexicographical_order()) != 0) {
           break;
         }
       }
-      if (OB_FAIL(reassemble(child_start, child_end, depth + 1, child))) {
+      if (OB_FAIL(reassemble(child_start, child_end, depth + 1, child, real_end))) {
         LOG_WARN("reassembler child fail", K(ret), K(depth));
       } else {
-        i = child_end;
+        i = real_end;
       }
     }
-
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(add_child(current, child, path_item))) {
       LOG_WARN("add child fail", K(ret), K(i), K(depth));
     }
   }
+  real_end = i;
   return ret;
 }
 
@@ -1883,7 +1895,7 @@ int ObJsonReassembler::init()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard(__func__, 1_s);
-  int depth = 0;
+  int real_end = 0;
   if (OB_ISNULL(sub_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub schema is null", K(ret));
@@ -1895,7 +1907,8 @@ int ObJsonReassembler::init()
     LOG_WARN("reserve array fail", K(ret), K(sub_schema_->get_freq_column_count()));
   } else if (OB_FAIL(spare_leaves_.reserve(sub_schema_->get_spare_column_count()))) {
     LOG_WARN("reserve array fail", K(ret), K(sub_schema_->get_spare_column_count()));
-  } else if (OB_FAIL(reassemble(0, sub_cols_.count(), 0, json_))) {
+  } else if (FALSE_IT(real_end = sub_cols_.count())) {
+  } else if (OB_FAIL(reassemble(0, sub_cols_.count(), 0, json_, real_end))) {
     LOG_WARN("reassemble fail", K(ret), KPC(sub_schema_));
   }
   return ret;

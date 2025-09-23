@@ -618,7 +618,8 @@ private:
   int alloc_container_node(const share::ObSubColumnPathItem& item, const int child_cnt, ObIJsonBase *&node);
   int alloc_scalar_json_node(const ObSemiStructSubColumn& sub_column, ObIJsonBase *&node);
   int add_child(ObIJsonBase *parent, ObIJsonBase *child, const share::ObSubColumnPathItem &item);
-  int reassemble(const int start, const int end, const int depth, ObIJsonBase *&current);
+  bool is_heterigeneous_column(const share::ObSubColumnPathItem &item, ObIJsonBase *&current);
+  int reassemble(const int start, const int end, const int depth, ObIJsonBase *&current, int &real_end);
   int merge_sub_cols();
   int reshape(ObIJsonBase *node);
   bool has_value(ObIJsonBase *node) const;
