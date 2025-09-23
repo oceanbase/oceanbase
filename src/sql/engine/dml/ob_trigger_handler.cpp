@@ -596,7 +596,7 @@ int TriggerHandle::check_and_update_new_row(
     // so we need calculate normal column value firstly, then generate column value
     // Firstly calculate the basic columns
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.get_count(); i++) {
-      if (!columns.get_flags()[i].is_gen_col_) {
+      if (!columns.get_flags()[i].is_gen_col_ && (!check || (check && columns.get_flags()[i].is_update_))) {
         ObExpr *expr = new_row_exprs.at(i);
         if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
