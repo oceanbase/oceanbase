@@ -2636,6 +2636,8 @@ int ObLSTabletService::create_empty_shell_tablet(
   ObTabletHandle old_tablet_hdl;
   ObTimeGuard time_guard("ObLSTabletService::create_empty_shell_tablet", 10_ms);
   const bool is_transfer = false;
+  bool is_update = false;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls tablet svr hasn't been inited", K(ret));
@@ -2649,16 +2651,19 @@ int ObLSTabletService::create_empty_shell_tablet(
     } else {
       LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
     }
-  } else if (OB_FAIL(remove_tablet(old_tablet_hdl))) {
-    LOG_WARN("failed to remove tablet", K(ret), K(key));
   } else {
+    // tablet already exists, just do update
+    is_update = true;
     time_guard.click("RemoveOld");
   }
 
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash()); // must lock after prepare
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "MigEmptyT"));
   ObTabletHandle tmp_tablet_hdl;
-  if (FAILEDx(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
+  if (OB_FAIL(ret)) {
+  } else if (is_update && OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
+    LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
+  } else if (!is_update && OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
     LOG_WARN("fail to create temporary tablet", K(ret), K(key));
   } else {
     time_guard.click("CreateTablet");
@@ -2688,6 +2693,20 @@ int ObLSTabletService::create_empty_shell_tablet(
     } else if (OB_FAIL(ObTabletPersister::transform_empty_shell(persist_param, *tmp_tablet, tablet_handle))) {
       LOG_WARN("failed to transform empty shell", K(ret), KPC(tmp_tablet));
     } else if (FALSE_IT(time_guard.click("Transform"))) {
+    } else if (is_update) {
+      if (OB_UNLIKELY(!old_tablet_hdl.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid old tablet handle", K(ret), K(old_tablet_hdl));
+      } else if (GCTX.is_shared_storage_mode()) {
+        disk_addr = tablet_handle.get_obj()->tablet_addr_;
+        if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_hdl, tablet_handle, time_guard))) {
+          LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr), K(data_version));
+        }
+      } else {
+        if (OB_FAIL(safe_update_cas_empty_shell(data_version, key, old_tablet_hdl, tablet_handle, time_guard))) {
+          LOG_WARN("fail to cas empty shell", K(ret), K(key), K(old_tablet_hdl), K(tablet_handle), K(data_version));
+        }
+      }
     } else {
       if (GCTX.is_shared_storage_mode()) {
         disk_addr = tablet_handle.get_obj()->tablet_addr_;
@@ -2700,9 +2719,10 @@ int ObLSTabletService::create_empty_shell_tablet(
         }
       }
     }
+
     if (OB_SUCC(ret)) {
       ls_->get_tablet_gc_handler()->set_tablet_gc_trigger();
-      LOG_INFO("succeeded to create empty shell tablet", K(ret), K(key), K(param));
+      LOG_INFO("succeeded to create empty shell tablet", K(ret), K(key), K(param), K(is_update));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
@@ -2710,7 +2730,6 @@ int ObLSTabletService::create_empty_shell_tablet(
       }
     }
   }
-
   return ret;
 }
 
