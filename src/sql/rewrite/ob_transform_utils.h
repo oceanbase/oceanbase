@@ -1059,6 +1059,10 @@ public:
                                                  TableItem *item,
                                                  ObIArray<ObRawExpr *> &unique_keys,
                                                  int64_t *rowkey_count = NULL);
+  
+  static int generate_unique_key_from_group_exprs(ObTransformerCtx *ctx,
+                                                  ObSelectStmt *select_stmt,
+                                                  ObIArray<ObRawExpr *> &unique_keys);
 
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
