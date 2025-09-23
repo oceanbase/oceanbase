@@ -219,9 +219,11 @@ public:
 
   int64_t get_sstable_row_count() const { return sstable_row_count_; }
   void set_sstable_row_count(int64_t num) { sstable_row_count_ = num; }
+  void set_sstable_row_cnt(int64_t num) { sstable_row_count_ = num; }
 
   int64_t get_memtable_row_count() const { return memtable_row_count_; }
   void set_memtable_row_count(int64_t num) { memtable_row_count_ = num; }
+  void set_memtable_row_cnt(int64_t num) { memtable_row_count_ = num; }
 
   int64_t get_last_analyzed() const { return last_analyzed_; }
   void set_last_analyzed(int64_t last_analyzed) {  last_analyzed_ = last_analyzed; }

@@ -662,7 +662,9 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
              opt_stat.get_avg_row_size(),
              opt_stat.get_row_count() * opt_stat.get_avg_row_size() * scale_ratio,
              opt_stat.get_macro_block_num() * scale_ratio,
-             opt_stat.get_micro_block_num() * scale_ratio);
+             opt_stat.get_micro_block_num() * scale_ratio,
+             opt_stat.get_sstable_row_count() * scale_ratio,
+             opt_stat.get_memtable_row_count() * scale_ratio);
     stat.set_last_analyzed(opt_stat.get_last_analyzed());
     stat.set_stat_locked(opt_stat.is_locked());
     stat.set_stale_stats(opt_stat.is_stat_expired());

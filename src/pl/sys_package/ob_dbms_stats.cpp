@@ -3741,6 +3741,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       col_param.column_attribute_ = 0;
       col_param.column_usage_flag_ = 0;
       col_param.column_type_ = col->get_data_type();
+      col_param.ndv_scale_algo_ = NDV_SCALE_ALGO_DEFAULT;
       if ((lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary())) {
         // oracle don't have this type. but agent table will have this type, such as
         // "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
@@ -3767,6 +3768,9 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
         col_param.set_is_index_column();
         if (1 == table_schema.get_rowkey_column_num()) {
           col_param.set_is_unique_column();
+          col_param.ndv_scale_algo_ = NDV_SCALE_ALGO_UNIQUE;
+        } else if (col->get_rowkey_position() == 0) {
+          col_param.ndv_scale_algo_ = NDV_SCALE_ALGO_LINEAR;
         }
       }
       // TODO : for all hidden column means all function based index column
