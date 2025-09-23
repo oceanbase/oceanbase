@@ -185,7 +185,10 @@ DEF_TO_STRING(ObTxSavePoint)
   J_OBJ_END();
   return pos;
 }
-OB_SERIALIZE_MEMBER(ObTxExecResult, incomplete_, parts_, conflict_txs_, conflict_info_array_);
+OB_SERIALIZE_MEMBER(ObTxExecResult, incomplete_, parts_,
+                    conflict_txs_,// FARM COMPAT WHITELIST for cflict_txs_
+                    conflict_info_array_,
+                    touched_ls_list_);
 OB_SERIALIZE_MEMBER(ObTxSnapshot, tx_id_, version_, scn_, elr_);
 OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     valid_,

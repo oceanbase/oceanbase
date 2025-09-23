@@ -208,6 +208,7 @@ public:
               dfo_id_(common::OB_INVALID_ID),
               branch_id_base_(0),
               access_table_locations_(),
+              extra_access_table_locations_(),
               qc_ch_info_(),
               sqc_ch_info_(),
               qc_channel_(NULL),
@@ -263,6 +264,8 @@ public:
   ObIArray<share::ObExternalFileInfo> &get_access_external_table_files() { return access_external_table_files_; }
   DASTabletLocIArray &get_access_table_locations_for_update() { return access_table_locations_; }
   const DASTabletLocIArray &get_access_table_locations() const { return access_table_locations_; }
+  DASTabletLocIArray &get_extra_access_table_locations_for_update() { return extra_access_table_locations_; }
+  const DASTabletLocIArray &get_extra_access_table_locations() const { return extra_access_table_locations_; }
   void set_execution_id(uint64_t execution_id) { execution_id_ = execution_id; }
   void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
   void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
@@ -327,6 +330,7 @@ public:
   void reset()
   {
     access_table_locations_.reset();
+    extra_access_table_locations_.reset();
     transmit_channel_.reset();
     receive_channel_.reset();
     serial_receive_channels_.reset();
@@ -391,6 +395,9 @@ private:
   // used for px worker execution
   // no need serialize
   DASTabletLocSEArray access_table_locations_;
+  // Extra access table locations, not used for px worker execution, addr may be different from sqc's
+  // Mainly used for pdml merge into now, which may modify global indexes on other servers.
+  DASTabletLocSEArray extra_access_table_locations_;
 
   ObPxTransmitDataChannelMsg transmit_channel_; // 用于快速建立 QC-Task 通道模式
   ObPxReceiveDataChannelMsg receive_channel_; // 用于快速建立 QC-Task 通道模式
@@ -941,6 +948,7 @@ public:
       temp_table_id_(common::OB_INVALID_ID),
       interm_result_ids_(),
       tx_desc_(NULL),
+      tx_result_(),
       is_use_local_thread_(false),
       fb_info_(),
       err_msg_(),
@@ -951,6 +959,9 @@ public:
 
   }
   ~ObPxTask() = default;
+  ObPxTask (const ObPxTask &other) {
+    *this = other;
+  }
   ObPxTask &operator=(const ObPxTask &other)
   {
     qc_id_ = other.qc_id_;
@@ -973,6 +984,7 @@ public:
     temp_table_id_ = other.temp_table_id_;
     interm_result_ids_.assign(other.interm_result_ids_);
     tx_desc_ = other.tx_desc_;
+    tx_result_.assign(other.tx_result_);
     is_use_local_thread_ = other.is_use_local_thread_;
     fb_info_.assign(other.fb_info_);
     memstore_read_row_count_ = other.memstore_read_row_count_;
@@ -1046,6 +1058,7 @@ public:
   inline void set_affected_rows(int64_t v) { affected_rows_ = v; }
   int64_t get_affected_rows() { return affected_rows_; }
   transaction::ObTxDesc *&get_tx_desc() { return tx_desc_; }
+  transaction::ObTxExecResult &get_tx_result() { return tx_result_; }
   void set_use_local_thread(bool flag) { is_use_local_thread_ = flag; }
   bool is_use_local_thread() { return is_use_local_thread_; }
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
@@ -1084,6 +1097,7 @@ public:
   uint64_t temp_table_id_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;  //返回每个task生成的结果集
   transaction::ObTxDesc *tx_desc_; // transcation information
+  transaction::ObTxExecResult tx_result_;
   bool is_use_local_thread_;
   ObExecFeedbackInfo fb_info_; //for feedback info
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg

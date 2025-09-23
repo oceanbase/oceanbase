@@ -161,7 +161,6 @@ public:
   static int alloc_by_data_distribution_inner(
       const ObIArray<ObTableLocation> *table_locations,
       ObExecContext &ctx, ObDfo &dfo);
-
   static int alloc_by_child_distribution(const ObDfo &child,
                                          ObDfo &parent);
   static int alloc_by_random_distribution(ObExecContext &exec_ctx,
@@ -177,6 +176,9 @@ public:
                                                    ObExecContext &exec_ctx,
                                                    ObDfo &child,
                                                    ObDfo &parent);
+  static int add_pdml_merge_gindex_locations(const ObTableModifySpec &dml_op,
+                                             ObExecContext &ctx,
+                                             ObDfo &dfo);
   static int split_parallel_into_task(const int64_t parallelism,
                                       const common::ObIArray<int64_t> &sqc_partition_count,
                                       common::ObIArray<int64_t> &results);

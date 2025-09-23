@@ -21,6 +21,7 @@
 #include "storage/ob_locality_manager.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/engine/dml/ob_table_merge_op.h"
 
 
 using namespace oceanbase::common;
@@ -448,8 +449,54 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
       } else if (OB_NOT_NULL(table_locations) && !table_locations->empty() &&
             OB_FAIL(build_dynamic_partition_table_location(scan_ops, table_locations, dfo))) {
         LOG_WARN("fail to build dynamic partition pruning table", K(ret));
+      } else if (NULL != dml_op && OB_FAIL(add_pdml_merge_gindex_locations(*dml_op, ctx, dfo))) {
+        LOG_WARN("add pdml merge global index locations failed", K(ret));
       }
       LOG_TRACE("allocate sqc by data distribution", K(dfo), K(locations));
+    }
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_NOT_ADD_PDML_MERGE_GINDEX_LOCATION);
+int ObPXServerAddrUtil::add_pdml_merge_gindex_locations(const ObTableModifySpec &dml_op,
+                                                        ObExecContext &ctx,
+                                                        ObDfo &dfo)
+{
+  int ret = OB_SUCCESS;
+  if (dml_op.get_type() != PHY_MERGE) {
+    // do nothing
+  } else if (ERRSIM_NOT_ADD_PDML_MERGE_GINDEX_LOCATION) {
+    // do nothing
+  } else {
+    ObSEArray<const ObDMLBaseCtDef *, 8> dml_ctdefs;
+    if (OB_FAIL(static_cast<const ObTableMergeSpec &>(dml_op).get_global_index_ctdefs(dml_ctdefs))) {
+      LOG_WARN("get global index ctdefs failed", K(ret));
+    } else {
+      for (int64_t i = 0; i < dml_ctdefs.count() && OB_SUCC(ret); i++) {
+        uint64_t idx_table_location_key = dml_ctdefs.at(i)->das_base_ctdef_.table_id_;
+        uint64_t idx_ref_table_id = dml_ctdefs.at(i)->das_base_ctdef_.index_tid_;
+        ObDASTableLoc *idx_table_loc = NULL;
+        if (OB_FAIL(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                              ctx.get_allocator(),
+                                              ctx.get_my_session()->get_effective_tenant_id(),
+                                              idx_table_location_key,
+                                              idx_ref_table_id,
+                                              idx_table_loc))) {
+          LOG_WARN("get full leader table location failed", K(ret), K(idx_table_location_key), K(idx_ref_table_id));
+        } else {
+          ObIArray<ObPxSqcMeta> &sqcs = dfo.get_sqcs();
+          for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); i++) {
+            DASTabletLocIArray &sqc_locations = sqcs.at(i).get_extra_access_table_locations_for_update();
+            for (DASTabletLocListIter iter = idx_table_loc->tablet_locs_begin();
+                 iter != idx_table_loc->tablet_locs_end() && OB_SUCC(ret); ++iter) {
+              OZ (sqc_locations.push_back(*iter));
+            }
+          }
+          LOG_TRACE("add sqc extra access table locations", K(idx_table_location_key),
+                    K(idx_ref_table_id), KPC(idx_table_loc));
+        }
+      }
     }
   }
   return ret;

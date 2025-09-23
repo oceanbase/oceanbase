@@ -135,6 +135,35 @@ OB_INLINE int ObTableMergeSpec::get_single_dml_ctdef(const ObDMLBaseCtDef *&dml_
   return ret;
 }
 
+int ObTableMergeSpec::get_global_index_ctdefs(ObIArray<const ObDMLBaseCtDef *> &dml_ctdefs) const
+{
+  int ret = OB_SUCCESS;
+  dml_ctdefs.reuse();
+  const ObDMLBaseCtDef *ctdef = NULL;
+  const int64_t global_index_start_idx = 1;
+  if (OB_UNLIKELY(merge_ctdefs_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge into has no table reference", K(ret), K(merge_ctdefs_.count()));
+  } else if (has_insert_clause_) {
+    for (int64_t i = global_index_start_idx; i < merge_ctdefs_.count() && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(ctdef = merge_ctdefs_.at(i)->ins_ctdef_)) {
+        // do nothing
+      } else if (OB_FAIL(dml_ctdefs.push_back(ctdef))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  } else if (has_update_clause_) {
+    for (int64_t i = global_index_start_idx; i < merge_ctdefs_.count() && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(ctdef = merge_ctdefs_.at(i)->upd_ctdef_)) {
+        // do nothing
+      } else if (OB_FAIL(dml_ctdefs.push_back(ctdef))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 ObTableMergeOp::ObTableMergeOp(ObExecContext &ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObTableModifyOp(ctx, spec, input),
       affected_rows_(0)

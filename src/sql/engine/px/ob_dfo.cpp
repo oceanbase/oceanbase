@@ -129,6 +129,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("should only add a new sqc. you are adding an inited one", K(ret));
   } else if (OB_FAIL(access_table_locations_.assign(other.access_table_locations_))) {
     LOG_WARN("fail assign tscs locations", K(ret));
+  } else if (OB_FAIL(extra_access_table_locations_.assign(other.extra_access_table_locations_))) {
+    LOG_WARN("fail assign tscs locations", K(ret));
   } else if (OB_FAIL(transmit_channel_.assign(other.transmit_channel_))) {
     LOG_WARN("fail assign data channel", K(ret));
   } else if (OB_FAIL(receive_channel_.assign(other.receive_channel_))) {
