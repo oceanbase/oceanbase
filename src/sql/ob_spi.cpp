@@ -8837,6 +8837,15 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
                  K(ret));
       }
     }
+    if (OB_SUCC(ret)
+        && OB_NOT_NULL(result_set.get_physical_plan())) {
+      ObPhysicalPlan *plan = result_set.get_physical_plan();
+      cursor->plan_type_ = plan->get_plan_type();
+      cursor->plan_id_ = plan->get_plan_id();
+      cursor->plan_hash_ = plan->get_plan_hash_value();
+      MEMCPY(cursor->sql_id_, plan->get_sql_id(), OB_MAX_SQL_ID_LENGTH);
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < orc_max_ret_rows; i++) {
 #ifdef ERRSIM
       ret = OB_E(EventTable::EN_SPI_GET_NEXT_ROW) OB_SUCCESS;
