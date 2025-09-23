@@ -11752,6 +11752,7 @@ int ObDDLOperator::init_tenant_scheduled_job(
       sys_variable,
       tenant_id,
       true/*is_enabled*/,
+      false/*schedule_at_once*/,
       trans))) {
     LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id));
   }

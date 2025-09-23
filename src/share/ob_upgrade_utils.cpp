@@ -2211,6 +2211,7 @@ int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_dump_data_dict
         *sys_variable_schema,
         tenant_id_,
         true/*is_enabled*/,
+        true/*schedule_at_once*/,
         trans))) { // insert ignore
       LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id_));
     }
