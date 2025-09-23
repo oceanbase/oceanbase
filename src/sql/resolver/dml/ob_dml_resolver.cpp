@@ -20604,7 +20604,11 @@ int ObDMLResolver::try_update_column_expr_for_fts(
 int ObDMLResolver::check_match_against_expr(ObIArray<ObMatchFunRawExpr*> &match_exprs, const ObStmtScope scope, bool &is_es_match)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(match_exprs.count() == 0)) {
+  ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (OB_UNLIKELY(match_exprs.count() == 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_ISNULL(match_exprs.at(0))) {
@@ -20621,6 +20625,12 @@ int ObDMLResolver::check_match_against_expr(ObIArray<ObMatchFunRawExpr*> &match_
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "es match with match against together is");
         LOG_WARN("match with match against together is not supported", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && stmt->get_match_exprs().count() > 0
+        && stmt->get_match_exprs().at(0)->is_es_match() != is_es_match) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "es match with match against together is");
+      LOG_WARN("match with match against together is not supported", K(ret));
     }
     if (OB_SUCC(ret) && is_es_match) {
       if (!(scope == T_WHERE_SCOPE)) {

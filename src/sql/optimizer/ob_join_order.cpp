@@ -20748,7 +20748,7 @@ int ObJoinOrder::init_basic_text_retrieval_info(uint64_t table_id,
         LOG_WARN("unexpected null match expr", K(ret));
       } else if (OB_FALSE_IT(match_expr = static_cast<ObMatchFunRawExpr *>(match_exprs.at(i)))) {
       } else if (match_expr->is_es_match() && i > 0 && !is_es_match) {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_NOT_SUPPORTED; // TODO: likely redundant, should have been checked in resolver stage
         LOG_WARN("match with match against is not supported", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "match with match against is");
       } else if (match_expr->is_es_match()) {
@@ -20798,7 +20798,7 @@ int ObJoinOrder::init_basic_text_retrieval_info(uint64_t table_id,
           }
         }
       } else if (is_es_match) {
-        ret = OB_NOT_SUPPORTED;
+        ret = OB_NOT_SUPPORTED; // TODO: likely redundant, should have been checked in resolver stage
         LOG_WARN("match with match against is not supported", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "match with match against is");
       } else if (OB_FAIL(get_matched_inv_index_tid(match_expr, ref_table_id, index_id))) {
