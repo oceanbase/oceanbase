@@ -3689,8 +3689,17 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
         CK (OB_NOT_NULL(actual_composite));
         OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, need_cast));
         if (OB_SUCC(ret) && need_cast && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
+          bool can_not_convert_to_assoc_array = (formal_param_type.is_associative_array_type() || formal_param_type.is_varray_type())
+                                                && func_.get_out_args().has_member(param_idx);
           OX (get_params().at(param_idx) = actual_param);
-          OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
+          if (OB_FAIL(ret)) {
+          } else if (!can_not_convert_to_assoc_array) {
+            OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+          }
           OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
           OX (param_converted_.at(param_idx) = true);
         }

@@ -3227,7 +3227,6 @@ int ObCollectionType::convert_anonymous_array(ObPLResolveCtx &ctx,
   CK (src->is_ext() && dest->is_ext());
   CK (OB_NOT_NULL(src_collection = reinterpret_cast<ObPLCollection *>(src->get_ext())));
   CK (OB_NOT_NULL(dest_collection = reinterpret_cast<ObPLCollection *>(dest->get_ext())));
-  OX (src_collection->set_type(dest_collection->get_type()));
   OZ (ObCollectionType::convert(ctx, src, dest));
   return ret;
 }
@@ -3468,7 +3467,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
       }
     }
     if (OB_SUCC(ret)) {
-      dst_table->set_type(src_table->get_type());
+      dst_table->set_type(this->get_type());
       dst_table->set_allocator(collection_allocator);
       dst_table->set_count(valid_element_count);
       if (valid_element_count > 0) {
