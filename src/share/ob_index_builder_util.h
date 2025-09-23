@@ -87,6 +87,7 @@ private:
   static int generate_prefix_column(
       const obrpc::ObColumnSortItem &sort_item,
       const ObSQLMode sql_mode,
+      sql::ObSQLSessionInfo &session,
       share::schema::ObTableSchema &data_schema,
       share::schema::ObColumnSchemaV2 *&prefix_col);
   static int adjust_ordinary_index_column_args(
