@@ -21102,6 +21102,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.TENANT_ID,
@@ -43736,6 +43739,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.CG_IDX,
@@ -68397,6 +68403,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.LS_ID,
@@ -78257,6 +78266,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.CG_IDX,
