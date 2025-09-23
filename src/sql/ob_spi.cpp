@@ -8931,13 +8931,19 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret));
     }
-    if (OB_NOT_NULL(result_set.get_physical_plan()) && new_query_start_time > 0) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(result_set.get_physical_plan())) {
       // fill_dbms_cursor do not need check hint , so only new_query_start_time > 0 will check hint timeout
       ObPhysicalPlan *plan = result_set.get_physical_plan();
-      if (plan->get_phy_plan_hint().query_timeout_ > 0) {
-        old_time_out_ts = THIS_WORKER.get_timeout_ts();
-        THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
+      if (new_query_start_time > 0) {
+        if (plan->get_phy_plan_hint().query_timeout_ > 0) {
+          old_time_out_ts = THIS_WORKER.get_timeout_ts();
+          THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
+        }
       }
+      cursor->plan_type_ = plan->get_plan_type();
+      cursor->plan_id_ = plan->get_plan_id();
+      cursor->plan_hash_ = plan->get_plan_hash_value();
+      MEMCPY(cursor->sql_id_, plan->get_sql_id(), OB_MAX_SQL_ID_LENGTH);
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < fields->count(); ++i) {
       ObDataType type;
