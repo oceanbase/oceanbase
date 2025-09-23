@@ -579,20 +579,20 @@ int ObRebuildIndexTask::refresh_related_mviews(const ObDDLTaskStatus new_status)
   } else if (OB_FAIL(check_refresh_related_mviews_end(is_refresh_mviews_end))) {
     refresh_related_mviews_ret_code_ = INT64_MAX;
     update_refresh_related_mviews_job_time_ = 0;
-    LOG_WARN("failed to check purge mlog end", KR(ret));
+    LOG_WARN("failed to check refresh related mviews end", KR(ret));
   } else if (!is_refresh_mviews_end && update_refresh_related_mviews_job_time_ == 0) {
     ObRefreshRelatedMviewsTask task(tenant_id_, object_id_, old_mlog_tid, new_mlog_tid, schema_version_, trace_id_, task_id_);
     if (OB_FAIL(root_service_->submit_ddl_single_replica_build_task(task))) {
-      LOG_WARN("failed to submit purge mlog task", KR(ret));
+      LOG_WARN("failed to submit refresh related mviews task", KR(ret));
     } else {
       update_refresh_related_mviews_job_time_ = ObTimeUtility::current_time();
-      LOG_INFO("submit purge mlog task success", KR(ret));
+      LOG_INFO("succeeded to submit refresh related mviews task", KR(ret));
     }
   }
   if (is_refresh_mviews_end || OB_FAIL(ret)) {
     DEBUG_SYNC(REBUILD_INDEX_WAIT_REFRESH_RELATED_MVIEWS);
     (void)switch_status(new_status, true, ret);
-    LOG_INFO("refresh_related_mviews finished", KR(ret), K(*this));
+    LOG_INFO("refresh_related_mviews finished", KR(ret), K(is_refresh_mviews_end), K(*this));
   }
 
   return ret;
@@ -903,7 +903,7 @@ int ObRebuildIndexTask::process()
         break;
       case ObDDLTaskStatus::REFRESH_RELATED_MVIEWS:
         if (OB_FAIL(refresh_related_mviews(SWITCH_INDEX_NAME))) {
-          LOG_WARN("purge old mlog failed", KR(ret));
+          LOG_WARN("refresh related mviews failed", KR(ret));
         }
         break;
       case ObDDLTaskStatus::SWITCH_INDEX_NAME:
@@ -1129,18 +1129,23 @@ int ObRefreshRelatedMviewsTask::process() {
             LOG_WARN("mv db schema is null", K(ret), K(tenant_id_), K(mv_id));
           } else if (!mv_schema->is_materialized_view()) {
             // ignore non-mview tables
+            LOG_INFO("ignore non-mview schemas", KR(ret), K(tenant_id_), K(mv_id));
           } else if (!mv_schema->mv_available()) {
             // ignore mviews in creation
+            LOG_INFO("ignore mviews in creation", KR(ret), K(tenant_id_), K(mv_id));
           } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id, mview_info, false))) {
             LOG_WARN("failed to get mview info", KR(ret), K(tenant_id_), K(mv_id));
           } else if (!mview_info.is_valid()) {
             // ignore
+            LOG_INFO("ignore invalid mview info", KR(ret), K(tenant_id_), K(mview_info));
           } else if (ObMVRefreshMethod::FAST != mview_info.get_refresh_method() &&
                      ObMVRefreshMethod::FORCE != mview_info.get_refresh_method() &&
                      !mv_schema->mv_on_query_computation()) {
             // ignore
+            LOG_INFO("ignore mviews can not fast refresh", KR(ret), K(tenant_id_), K(mv_id));
           } else if (mview_info.get_last_refresh_scn() >= new_mlog_info.get_last_purge_scn()) {
             // already refreshed
+            LOG_INFO("already refreshed", KR(ret), K(tenant_id_), K(mv_id), K(mview_info), K(new_mlog_info));
           } else {
             ObSqlString sql;
             int64_t affected_rows = 0;
@@ -1155,16 +1160,21 @@ int ObRefreshRelatedMviewsTask::process() {
               } else {
                 LOG_WARN("failed to write sql", KR(ret), K(sql), K(mview_info));
               }
+            } else {
+              LOG_INFO("refresh mview finished", KR(ret), K(sql), K(mview_info));
             }
           }
         }
+        LOG_TRACE("iter dependency info", KR(ret), K(dependency_info));
       }
     }
   }
 
   if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::notify_refresh_related_mviews_task_end(task_key, ret))) {
-    LOG_WARN("failed to finish purge mlog task", KR(tmp_ret), KR(ret));
+    LOG_WARN("failed to notify refresh related mviews task end", KR(tmp_ret), KR(ret));
   }
+
+  LOG_TRACE("refresh related mviews task finished", KR(ret), K(old_mlog_tid_));
 
   return ret;
 }
