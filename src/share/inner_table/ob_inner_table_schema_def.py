@@ -8434,6 +8434,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 574: __all_tenant_macro_block_copy_task
 # 575: __all_tenant_macro_block_copy_task_progress
 # 576: __all_tenant_macro_block_copy_task_history
+# 577: __all_session_tablet_to_temporary_table
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -79541,6 +79542,8 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_ai_model_endpoint'])
+
+# 101122: __all_session_tablet_to_temporary_table
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
