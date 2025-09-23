@@ -13,6 +13,7 @@
 #define OCEANBASE_ROOTSERVER_OB_ALTER_TABLE_CONSTRAINT_CHECKER_H_
 #include "lib/ob_define.h"
 #include "share/ob_ddl_common.h"
+#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 namespace share
@@ -62,6 +63,11 @@ public:
       bool &need_modify);
   static int modify_not_null_constraint_validate(
       const obrpc::ObAlterTableArg &alter_table_arg,
+      AlterTableSchema &alter_table_schema);
+  static int fill_new_constraint_info(
+      const obrpc::ObAlterTableArg::AlterConstraintType op_type,
+      const AlterTableSchema &tmp_alter_table_schema,
+      const ObTableSchema &new_table_schema,
       AlterTableSchema &alter_table_schema);
 };
 

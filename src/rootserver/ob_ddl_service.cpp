@@ -17015,6 +17015,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                 ddl_operator,
                 trans))) {
               LOG_WARN("alter table constraints failed", K(ret));
+            } else if (OB_FAIL(ObAlterTableConstraintChecker::fill_new_constraint_info(alter_table_arg.alter_constraint_type_, tmp_alter_table_schema, new_table_schema, alter_table_schema))) {
+              LOG_WARN("failed to fill new constraint info", K(ret));
             }
           }
         }
