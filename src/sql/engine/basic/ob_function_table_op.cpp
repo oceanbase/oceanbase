@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_generator_func.h"
 
 
 namespace oceanbase
@@ -51,6 +52,8 @@ int ObFunctionTableOp::inner_rescan()
     LOG_WARN("failed to inner rescan", K(ret));
   } else if (OB_FAIL(reset_udtf_ctx())) {
     LOG_WARN("failed to reset udtf ctx", K(ret));
+  } else if (OB_FAIL(ObExprGeneratorFunc::reset_curr_value(*MY_SPEC.value_expr_, eval_ctx_))) {
+    LOG_WARN("failed to reset curr_value", K(ret));
   } else {
     node_idx_ = 0;
     if (MY_SPEC.has_correlated_expr_) {
