@@ -1283,7 +1283,8 @@ int ObSql::do_real_prepare(const ObString &sql,
     LOG_WARN("There are too many parameters in the prepared statement", K(ret));
     LOG_USER_ERROR(OB_ERR_PS_TOO_MANY_PARAM);
   } else {
-    ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0 ? true : false);
+    ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0
+                                             && !context.is_prepare_with_params_);
   }
 
   OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
