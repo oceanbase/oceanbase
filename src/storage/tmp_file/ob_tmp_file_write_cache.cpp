@@ -341,7 +341,6 @@ int ObTmpFileWriteCache::try_shrink_()
         if (OB_FAIL(begin_shrinking_(is_auto))) {
           LOG_WARN("fail to init shrink context", KR(ret), K(shrink_ctx_.shrink_state_));
         } else {
-          ATOMIC_SET(&is_flush_all_, true);
           idle_cond_.signal();
           advance_shrink_state_();
         }
@@ -359,7 +358,6 @@ int ObTmpFileWriteCache::try_shrink_()
           LOG_ERROR("fail to shrink wbp", KR(ret), K(shrink_ctx_.shrink_state_));
         } else if (pages_.size() == shrink_ctx_.lower_page_id_) {
           LOG_INFO("wbp shrink release blocks complete", K(shrink_ctx_), K(pages_.size()));
-          ATOMIC_SET(&is_flush_all_, false);
           advance_shrink_state_();
         } else {
           LOG_ERROR("wbp shrink not finish, could not advance shrinking state",
@@ -379,7 +377,7 @@ int ObTmpFileWriteCache::try_shrink_()
   // abort shrinking if wbp memory limit enlarge or flush fail with OB_SERVER_OUTOF_DISK_SPACE
   int ret_code = get_flush_ret_code_();
   if (shrink_ctx_.is_valid() && (!is_shrink_required_(is_auto) || OB_SERVER_OUTOF_DISK_SPACE == ret)) {
-    LOG_INFO("aborting write cache shrinking due to disk out of space", KR(ret), K(shrink_ctx_));
+    LOG_INFO("aborting write cache shrinking due to disk out of space or no need to shrink", KR(ret), K(shrink_ctx_));
     finish_shrinking_();
   }
   time_guard.click("wbp_shrink finish one step");
@@ -1231,8 +1229,9 @@ void ObTmpFileWriteCache::print_()
   int64_t free_page_cnt = free_page_list_.size();
   int64_t max_page_cnt = get_memory_limit() / ObTmpFileGlobal::PAGE_SIZE;
   int64_t used_page_cnt = ATOMIC_LOAD(&used_page_cnt_);
-  int64_t used_page_watermark = current_capacity > 0 ? used_page_cnt * 100 / max_page_cnt : 0;
+  int64_t used_page_watermark = current_capacity > 0 && max_page_cnt > 0 ? used_page_cnt * 100 / max_page_cnt : 0;
   int64_t disk_limit = ATOMIC_LOAD(&disk_usage_limit_);
+  bool is_flush_all = ATOMIC_LOAD(&is_flush_all_);
 
   int64_t io_queue_size = ATOMIC_LOAD(&io_waiting_queue_size_);
   int64_t swap_queue_size = ATOMIC_LOAD(&swap_queue_size_);
@@ -1240,7 +1239,8 @@ void ObTmpFileWriteCache::print_()
     K(used_page_watermark), K(cache_page_cnt),
     K(free_page_cnt), K(used_page_cnt),
     K(io_queue_size), K(swap_queue_size),
-    K(current_capacity), K(max_page_cnt), K(disk_limit));
+    K(current_capacity), K(max_page_cnt), K(disk_limit),
+    K(is_flush_all));
 }
 
 int64_t ObTmpFileWriteCache::get_current_capacity_()
@@ -1345,6 +1345,7 @@ int ObTmpFileWriteCache::begin_shrinking_(const bool is_auto)
   } else if (OB_FAIL(shrink_ctx_.init(lower_page_id, upper_page_id, is_auto))) {
     LOG_WARN("wbp fail to init shrink context", KR(ret), K(lower_page_id), K(upper_page_id));
   } else {
+    ATOMIC_SET(&is_flush_all_, true);
     LOG_INFO("init shrinking context", KR(ret), K(shrink_ctx_));
   }
   return ret;
@@ -1382,6 +1383,7 @@ int ObTmpFileWriteCache::finish_shrinking_()
     LOG_INFO("write cache shrinking finish gracefully", K(pages_.size()), K(max_page_num), K(shrink_ctx_));
     shrink_ctx_.reset();
   }
+  ATOMIC_SET(&is_flush_all_, false);
   return ret;
 }
 
