@@ -112,7 +112,8 @@ public:
 ObExecParamExtractor();
   ObExecParamExtractor(ObRawExprFactory &expr_factory)
                      : expr_factory_(expr_factory),
-                       current_exec_params_(NULL) {}
+                       current_exec_params_(NULL),
+                       fixed_exprs_() {}
   virtual ~ObExecParamExtractor() {}
 
   int extract(ObRawExpr *outer_val_expr);
@@ -120,13 +121,16 @@ ObExecParamExtractor();
   inline void set_current_exec_params(ObQueryRefRawExpr * query_ref)
   { current_exec_params_ = query_ref; }
 
+  int init(const ObDMLStmt *stmt);
   int is_existed(const ObRawExpr *target, bool &found);
 
+  int is_fixed_expr(const ObRawExpr *target, bool &is_fixed_expr);
   int create_new_exec_param(ObRawExpr *target);
   DISALLOW_COPY_AND_ASSIGN(ObExecParamExtractor);
 private:
   ObRawExprFactory &expr_factory_;
   ObQueryRefRawExpr *current_exec_params_;
+  ObSEArray<ObRawExpr *, 4> fixed_exprs_;
 };
 
 
@@ -665,7 +669,8 @@ public:
                                  ObQueryRefRawExpr *query_ref,
                                  ObRawExpr *correlated_expr,
                                  ObRawExpr *&exec_param);
-  static int extract_exec_param_exprs(ObRawExprFactory &expr_factory,
+  static int extract_exec_param_exprs(const ObDMLStmt *stmt,
+                                      ObRawExprFactory &expr_factory,
                                       ObQueryRefRawExpr *query_ref,
                                       ObRawExpr *correlated_expr,
                                       ObRawExpr *&param_expr);

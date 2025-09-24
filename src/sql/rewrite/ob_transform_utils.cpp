@@ -16830,7 +16830,8 @@ int ObTransformUtils::check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
+int ObTransformUtils::do_trans_any_all_as_exists(ObDMLStmt* stmt,
+                                                 ObTransformerCtx *ctx,
                                                  ObRawExpr *&expr,
                                                  ObNotNullContext *not_null_ctx,
                                                  bool &trans_happened)
@@ -16886,7 +16887,8 @@ int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
           OB_ISNULL(right_stmt->get_select_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(left_expr));
-      } else if (OB_FAIL(ObRawExprUtils::extract_exec_param_exprs(*expr_factory,
+      } else if (OB_FAIL(ObRawExprUtils::extract_exec_param_exprs(stmt,
+                                                                  *expr_factory,
                                                                   right_hand,
                                                                   left_expr,
                                                                   exec_param))) {

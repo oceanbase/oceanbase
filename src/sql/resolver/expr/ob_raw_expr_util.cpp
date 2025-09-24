@@ -5031,34 +5031,44 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
  */
  int ObExecParamExtractor::extract(ObRawExpr *outer_val_expr)
  {
-   int ret = OB_SUCCESS;
-   bool found = false;
-   if (OB_ISNULL(outer_val_expr)) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_WARN("invalid params", K(outer_val_expr));
-   } else if (OB_FAIL(is_existed(outer_val_expr, found))) {
-     LOG_WARN("failed to check expr exists");
-   } else if (!found) {
-     // todo use visitor
-     // if it is terminal
-     if (outer_val_expr->is_column_ref_expr()) {
-       if (OB_FAIL(create_new_exec_param(outer_val_expr))) {
-         LOG_WARN("failed to create new exec param", K(ret));
-       }
-     } else if (outer_val_expr->is_terminal_expr()) {
-     } else {
-       int64_t cnt = outer_val_expr->get_param_count();
-       for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
-         ObRawExpr *e = outer_val_expr->get_param_expr(i);
-         if (NULL == e) {
-           LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
-         } else if (OB_FAIL(SMART_CALL(extract(e)))) {
-           LOG_WARN("child visit failed", K(ret));
-         }
-       }
-     }
-   }
-   return ret;
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (OB_ISNULL(outer_val_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid params", K(outer_val_expr));
+  } else if (OB_FAIL(is_existed(outer_val_expr, found))) {
+    LOG_WARN("failed to check expr exists");
+  } else if (!found) {
+    // todo use visitor
+    // if it is terminal
+    // if it is fixed create new exec param
+    // stop if #relid <= 1
+    bool is_fixed = false;
+    bool is_cross_rel = false;
+    if (1 >= outer_val_expr->get_relation_ids().num_members()) {
+      if (outer_val_expr->is_static_const_expr()) {
+      } else if (OB_FAIL(create_new_exec_param(outer_val_expr))) {
+        LOG_WARN("failed to create new exec param", K(ret));
+      }
+    } else if (OB_FAIL(is_fixed_expr(outer_val_expr, is_fixed))) {
+      LOG_WARN("failed to check expr exists");
+    } else if (is_fixed) {
+      if (OB_FAIL(create_new_exec_param(outer_val_expr))) {
+        LOG_WARN("failed to create new exec param", K(ret));
+      }
+    } else {
+      int64_t cnt = outer_val_expr->get_param_count();
+      for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
+        ObRawExpr *e = outer_val_expr->get_param_expr(i);
+        if (NULL == e) {
+          LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
+        } else if (OB_FAIL(SMART_CALL(extract(e)))) {
+          LOG_WARN("child visit failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
  }
 
  int ObExecParamExtractor::create_new_exec_param(ObRawExpr *target)
@@ -5075,6 +5085,55 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
    }
    return ret;
  }
+
+
+ int ObExecParamExtractor::init(const ObDMLStmt *stmt)
+ {
+  int ret = OB_SUCCESS;
+  if (stmt->is_select_stmt() && OB_FAIL(append(fixed_exprs_, static_cast<const ObSelectStmt*>(stmt)->get_aggr_items()))) {
+    LOG_WARN("failed to append fixed exprs", K(ret));
+  } else if (stmt->is_select_stmt() && OB_FAIL(append(fixed_exprs_, static_cast<const ObSelectStmt*>(stmt)->get_window_func_exprs()))) {
+    LOG_WARN("failed to append window func exprs", K(ret));
+  } else if (OB_FAIL(append(fixed_exprs_, stmt->get_subquery_exprs()))) {
+    LOG_WARN("failed to append subquery exprs", K(ret));
+  } else if (OB_FAIL(append(fixed_exprs_, stmt->get_pseudo_column_like_exprs()))) {
+    LOG_WARN("failed to append pseudo column like exprs", K(ret));
+  }
+  return ret;
+ }
+ int ObExecParamExtractor::is_fixed_expr(const ObRawExpr *target, bool &is_fixed_expr)
+ {
+  int ret = OB_SUCCESS;
+  is_fixed_expr = false;
+  bool fast_skip = false;
+  bool is_specific_expr = target->has_flag(IS_LEVEL) ||
+                      target->has_flag(IS_CONNECT_BY_ISLEAF) ||
+                      target->has_flag(IS_CONNECT_BY_ISCYCLE) ||
+                      target->has_flag(IS_CONNECT_BY_ROOT) ||
+                      target->has_flag(IS_PRIOR) ||
+                      target->has_flag(IS_SYS_CONNECT_BY_PATH) ||
+                      target->has_flag(IS_ROWNUM) ||
+                      target->has_flag(IS_MATCH_EXPR);
+  if (!is_specific_expr && !target->has_flag(CNT_AGG) &&
+       !target->has_flag(CNT_WINDOW_FUNC) &&
+       !target->has_flag(CNT_SUB_QUERY) &&
+       !target->has_flag(CNT_PSEUDO_COLUMN) &&
+       !target->has_flag(CNT_ROWNUM) &&
+       !target->has_flag(CNT_SEQ_EXPR)) {
+    fast_skip = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_specific_expr && !fast_skip && !is_fixed_expr && i < fixed_exprs_.count(); ++i) {
+    ObRawExpr *expr = fixed_exprs_.at(i);
+    if (expr == target) {
+      is_fixed_expr = true;
+      break;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_fixed_expr = is_fixed_expr || is_specific_expr;
+  }
+  return ret;
+}
  int ObExecParamExtractor::is_existed(const ObRawExpr *target, bool &found)
  {
    int ret = OB_SUCCESS;
@@ -5090,6 +5149,7 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
  }
 
 int ObRawExprUtils::extract_exec_param_exprs(
+  const ObDMLStmt *stmt,
   ObRawExprFactory &expr_factory,
   ObQueryRefRawExpr *query_ref,
   ObRawExpr *correlated_expr,
@@ -5102,8 +5162,8 @@ int ObRawExprUtils::extract_exec_param_exprs(
   if (OB_ISNULL(query_ref) || OB_ISNULL(correlated_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid params", K(ret), K(query_ref), K(correlated_expr));
-  }
-  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(extractor.init(stmt))) {
+    LOG_WARN("failed to init exec param extractor", K(ret));
   } else if (OB_FALSE_IT(extractor.set_current_exec_params(query_ref))) {
   } else if (OB_FAIL(extractor.extract(correlated_expr))) {
     LOG_WARN("failed to extract exec params for expr", K(ret), KPC(correlated_expr));
