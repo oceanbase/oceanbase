@@ -270,6 +270,7 @@ constexpr int OB_IMPROPER_OS_PARAM = -4403;
 constexpr int OB_IO_TIMEOUT = -4404;
 constexpr int OB_LICENSE_EXPIRED = -4406;
 constexpr int OB_MIGRATE_TX_DATA_NOT_CONTINUES = -4408;
+constexpr int OB_INVALID_ZERO_DATE = -4409;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -2000,8 +2001,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -2373,6 +2374,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LICENSE_EXPIRED__USER_ERROR_MSG "license is expired"
 #define OB_LICENSE_SCOPE_EXCEEDED__USER_ERROR_MSG "The current license does not include this feature module: %s"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__USER_ERROR_MSG "migrate tx data not continues"
+#define OB_INVALID_ZERO_DATE__USER_ERROR_MSG "invalid zero date in no_zero_date mode"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -4439,8 +4441,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -5181,6 +5183,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LICENSE_SCOPE_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4407, The current license does not include this feature module: %s"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4408, migrate tx data not continues"
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4408, migrate tx data not continues"
+#define OB_INVALID_ZERO_DATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
+#define OB_INVALID_ZERO_DATE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -9313,12 +9317,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2435];
+extern int g_all_ob_errnos[2436];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

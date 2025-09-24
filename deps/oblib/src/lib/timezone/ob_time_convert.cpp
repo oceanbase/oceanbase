@@ -312,6 +312,9 @@ int ObTimeConverter::int_to_datetime(int64_t int_part, int64_t dec_part,
   dec_part = (dec_part + 500) / 1000;
   if (0 == int_part) {
     value = ZERO_DATETIME;
+    if (date_sql_mode.no_zero_date_) {
+      ret = OB_INVALID_ZERO_DATE;
+    }
   } else {
     ObTime ob_time(DT_TYPE_DATETIME);
     ObDateSqlMode local_date_sql_mode = date_sql_mode;
@@ -343,6 +346,9 @@ int ObTimeConverter::int_to_mdatetime(int64_t int_part, int64_t dec_part,
     if (0 != dec_part) {
       dec_part = 0;
     }
+    if (date_sql_mode.no_zero_date_) {
+      ret = OB_INVALID_ZERO_DATE;
+    }
   } else {
     ObTime ob_time(DT_TYPE_MYSQL_DATETIME);
     if (OB_FAIL(int_to_ob_time_with_date(int_part, ob_time, date_sql_mode))) {
@@ -366,6 +372,9 @@ int ObTimeConverter::int_to_date(int64_t int64, int32_t &value, const ObDateSqlM
   int ret = OB_SUCCESS;
   if (0 == int64) {
     value = ZERO_DATE;
+    if (date_sql_mode.no_zero_date_) {
+      ret = OB_INVALID_ZERO_DATE;
+    }
   } else {
     ObTime ob_time(DT_TYPE_DATE);
     if (OB_FAIL(int_to_ob_time_with_date(int64, ob_time, date_sql_mode))) {
@@ -383,6 +392,9 @@ int ObTimeConverter::int_to_mdate(int64_t int64, ObMySQLDate &value,
   int ret = OB_SUCCESS;
   if (0 == int64) {
     value = MYSQL_ZERO_DATE;
+    if (date_sql_mode.no_zero_date_) {
+      ret = OB_INVALID_ZERO_DATE;
+    }
   } else {
     ObTime ob_time(DT_TYPE_MYSQL_DATE);
     if (OB_FAIL(int_to_ob_time_with_date(int64, ob_time, date_sql_mode))) {
