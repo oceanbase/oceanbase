@@ -155,14 +155,20 @@ private:
 class ObExCachedReadPageIOCallback final : public common::ObIOCallback
 {
 public:
-  ObExCachedReadPageIOCallback(
-      const ObExternalDataPageCacheKey &key,
-      char *user_buffer,
-      void *self_buffer,
-      const int64_t user_buf_offset,
-      const int64_t user_data_len,
-      ObExternalDataPageCache *cache,
-      ObIAllocator *alloc);
+  /// @brief: safe construct interface.
+  /// @param self_buffer[out]: buffer of ObExternalReadInfo.
+  /// @param callback[out]: result callback
+  static int safe_construct(
+    const ObExternalDataPageCacheKey &page_key,
+    char *user_buffer,
+    const int64_t user_buf_offset,
+    const int64_t user_data_len,
+    const int64_t self_buffer_len,
+    ObExternalDataPageCache &cache,
+    ObIAllocator &allocator,
+    /*output*/void *&self_buffer,
+    /*output*/common::ObIOCallback *&callback);
+
   ~ObExCachedReadPageIOCallback();
   int64_t size() const override { return sizeof(*this); }
   int inner_process(const char *data_buffer, const int64_t size) override;
@@ -177,6 +183,15 @@ public:
   TO_STRING_KV(KP_(cache), KP_(allocator), KP_(data_buf), KP_(self_buf), K_(page_key));
   DISALLOW_COPY_AND_ASSIGN(ObExCachedReadPageIOCallback);
 private:
+  ObExCachedReadPageIOCallback(
+      ObExternalDataPageCacheKey *key,
+      char *user_buffer,
+      void *self_buffer,
+      const int64_t user_buf_offset,
+      const int64_t user_data_len,
+      ObExternalDataPageCache *cache,
+      ObIAllocator *alloc);
+  bool is_valid_() const;
   int inner_process_cache_pages_(
       const char *data_buffer,
       const int64_t size,
@@ -188,7 +203,7 @@ private:
       const ObExternalDataPageCacheKey &key,
       const ObExternalDataPageCacheValue &value);
 private:
-  ObExternalDataPageCacheKey page_key_;
+  ObExternalDataPageCacheKey *page_key_;
   ObExternalDataPageCache *cache_; // kv_cache
   common::ObIAllocator *allocator_; // self_allocator, not user_buf allocator
   void *self_buf_; // alloc for page_cache_read, useless in the whole process but notify io_manager how long the buffer should be allocate
