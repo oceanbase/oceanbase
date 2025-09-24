@@ -31255,8 +31255,13 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
           LOG_WARN("schema_service is null", K(ret));
         } else if (OB_FAIL(schema_service->inc_sequence_id())) {
           LOG_WARN("increase sequence_id failed", K(ret));
+        } else if (FALSE_IT(schema_info.set_sequence_id(schema_service->get_sequence_id()))) {
         } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
           LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
+        }
+        // notify refresh schema will skip rs, so update rs sequence id here
+        else if (OB_FAIL(schema_service_->set_last_refreshed_schema_info(schema_info))) {
+          LOG_WARN("fail to set last refreshed schema info", KR(ret));
         } else if (OB_NOT_NULL(publish_schema_version)) {
           *publish_schema_version = schema_version;
         }

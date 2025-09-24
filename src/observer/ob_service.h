@@ -289,7 +289,9 @@ public:
   int get_tenant_refreshed_schema_version(
       const obrpc::ObGetTenantSchemaVersionArg &arg,
       obrpc::ObGetTenantSchemaVersionResult &result);
-  int submit_async_refresh_schema_task(const uint64_t tenant_id, const int64_t schema_version);
+  int submit_async_refresh_schema_task(const uint64_t tenant_id,
+                                       const int64_t schema_version,
+                                       const share::schema::ObRefreshSchemaInfo *schema_info = nullptr);
   int renew_in_zone_hb(const share::ObInZoneHbRequest &arg,
                        share::ObInZoneHbResponse &result);
   int init_tenant_config(

@@ -355,7 +355,9 @@ public:
                              bool check_bootstrap = false);
   // Trigger an asynchronous refresh task and wait for the refresh result
   int async_refresh_schema(const uint64_t tenant_id,
-                           const int64_t schema_version);
+                           const int64_t schema_version,
+                           const share::schema::ObRefreshSchemaInfo *schema_info = nullptr);
+  int try_update_last_refreshed_schema_info(common::ObArray<share::schema::ObRefreshSchemaInfo> &refresh_schema_infos);
   int add_schema(const uint64_t tenant_id, const bool force_add = false);
 
   int try_eliminate_schema_mgr();
