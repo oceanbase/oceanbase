@@ -60,9 +60,10 @@ int ObPLDDLOperator::create_routine(share::schema::ObRoutineInfo &routine_info,
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service must not null", K(ret));
   } else if (OB_SYS_TENANT_ID == tenant_id
+          && is_inner_pl_object_id(routine_info.get_package_id())
           && OB_FAIL(schema_service->fetch_new_sys_pl_object_id(tenant_id, new_routine_id))) {
     LOG_WARN("failed to fetch new_routine_id", K(tenant_id), K(ret));
-  } else if (OB_SYS_TENANT_ID != tenant_id
+  } else if (!is_inner_pl_object_id(routine_info.get_package_id())
           && OB_FAIL(schema_service->fetch_new_routine_id(tenant_id, new_routine_id))) {
     LOG_WARN("failed to fetch new_routine_id", K(tenant_id), K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
