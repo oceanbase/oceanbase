@@ -385,6 +385,9 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
         index_schema->get_index_column_num() > 0) {
       unique_index_column_num_ = index_schema->get_index_column_num();
     }
+    if (OB_NOT_NULL(index_schema)) {
+      is_global_index_ = index_schema->is_global_index_table();
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);

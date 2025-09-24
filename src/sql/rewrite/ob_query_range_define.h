@@ -265,6 +265,7 @@ struct ObQueryRangeCtx
       can_range_get_(true),
       contail_geo_filters_(false),
       force_no_link_(false),
+      is_global_index_(false),
       unique_index_column_num_(-1),
       constraints_expr_factory_(nullptr) {}
   ~ObQueryRangeCtx() {}
@@ -311,6 +312,7 @@ struct ObQueryRangeCtx
   bool can_range_get_;
   bool contail_geo_filters_;
   bool force_no_link_;
+  bool is_global_index_;
   int64_t unique_index_column_num_;
   ObRawExprFactory *constraints_expr_factory_;
 };
