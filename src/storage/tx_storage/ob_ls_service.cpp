@@ -1122,7 +1122,7 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
   if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log stream is null, unexpected error");
-  } else if (OB_BREAK_FAIL(ls->offline())) {
+  } else if (OB_BREAK_FAIL(ls->offline(remove_from_disk))) {
     LOG_WARN("ls offline failed", K(ret), KP(ls));
   } else if (OB_BREAK_FAIL(ls->stop())) {
     LOG_WARN("stop ls failed", K(ret), KP(ls));

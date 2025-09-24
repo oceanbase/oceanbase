@@ -854,7 +854,7 @@ int ObLS::offline_compaction_()
   return ret;
 }
 
-int ObLS::offline_(const int64_t start_ts)
+int ObLS::offline_(const int64_t start_ts, const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   // only follower can do this.
@@ -915,7 +915,8 @@ int ObLS::offline_(const int64_t start_ts)
   } else if (OB_FAIL(reorg_info_table_.offline())) {
     LOG_WARN("failed to offline reorg info table", K(ret), K(ls_meta_));
   // force release memtables created by tablet_freeze_with_rewrite_meta called during major
-  } else if (OB_FAIL(ls_tablet_svr_.offline())) {
+  } else if (!remove_from_disk
+             && OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_empty_shell_handler_.offline())) {
     LOG_WARN("tablet_empty_shell_handler  failed", K(ret), K(ls_meta_));
@@ -938,7 +939,7 @@ int ObLS::offline_(const int64_t start_ts)
   return ret;
 }
 
-int ObLS::offline()
+int ObLS::offline(const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = 0;
@@ -951,7 +952,7 @@ int ObLS::offline()
     {
       ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
       // only follower can do this.
-      if (OB_FAIL(offline_(start_ts))) {
+      if (OB_FAIL(offline_(start_ts, remove_from_disk))) {
         LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
       }
     }
@@ -962,31 +963,7 @@ int ObLS::offline()
       }
     }
   } while (OB_EAGAIN == ret);
-  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id());
-  return ret;
-}
-
-int ObLS::offline_without_lock()
-{
-  int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
-  int64_t retry_times = 0;
-
-  do {
-    retry_times++;
-    {
-      if (OB_FAIL(offline_(start_ts))) {
-        LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
-      }
-    }
-    if (OB_EAGAIN == ret) {
-      ob_usleep(100 * 1000); // 100 ms
-      if (retry_times % 100 == 0) { // every 10 s
-        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "ls offline use too much time.", K(ls_meta_), K(start_ts));
-      }
-    }
-  } while (OB_EAGAIN == ret);
-  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id());
+  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id(), K(remove_from_disk));
   return ret;
 }
 
