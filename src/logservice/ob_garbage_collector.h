@@ -224,6 +224,11 @@ private:
                                         bool &is_creating);
   int delete_ls_status_(const share::ObLSID &id);
   void execute_gc_(ObGCCandidateArray &gc_candidates);
+#ifdef OB_BUILD_SHARED_STORAGE
+  int check_tablet_gc_(
+      ObLS &ls,
+      bool &wait_tablet_gc);
+#endif
 
 private:
   class InsertLSFunctor;
