@@ -910,7 +910,14 @@ int ObTableApiProcessorBase::check_local_execute(const ObTabletID &tablet_id)
     LOG_WARN("get leader failed", K(ret), K(ls_id));
   } else if (leader != GCTX.self_addr()) {
     // inform client and odp to refresh tabelt location
-    require_rerouting_ = true;
+    if (retry_policy_.allow_route_retry()) {
+      // if allow route retry, continue executing, odp and client will only refresh location cahce by require_rerouting_
+      require_rerouting_ = true;
+    } else {
+      // if not allow route retry, do not cotinue executing and return OB_NOT_MASTER to trigger cache refreshing
+      ret = OB_NOT_MASTER;
+      LOG_WARN("route to wrong server", K(ret), K(leader), K(GCTX.self_addr()));
+    }
   }
   return ret;
 }
