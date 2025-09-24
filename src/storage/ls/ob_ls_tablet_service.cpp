@@ -8836,7 +8836,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
         } else if (OB_FAIL(ObTableParam::convert_column_schema_to_param(*column_schema,
                                                                         *column_param))) {
           LOG_WARN("Fail to convert column schema to param", KR(ret));
-        } else if (OB_FAIL(table_schema->get_column_group_index(*column_param, true, cg_idx))) {
+        } else if (OB_FAIL(table_schema->get_column_group_index(*column_param, false, cg_idx))) {
           LOG_WARN("Fail to get column group idx", KR(ret), KPC(column_param));
         } else if (cg_idx >= cosstable->get_cs_meta().get_column_group_count() || cg_idx < 0) {
           // no cg sstable for this column, the sortedness is 0
