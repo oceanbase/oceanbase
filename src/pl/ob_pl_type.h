@@ -949,7 +949,8 @@ public:
     last_execute_time_(0),
     last_stream_cursor_(false),
     sql_text_(),
-    cursor_total_exec_time_(0)
+    cursor_total_exec_time_(0),
+    cursor_total_elapsed_time_(0)
   {
     reset();
   }
@@ -970,7 +971,8 @@ public:
     last_execute_time_(0),
     last_stream_cursor_(false),
     sql_text_(),
-    cursor_total_exec_time_(0)
+    cursor_total_exec_time_(0),
+    cursor_total_elapsed_time_(0)
   {
     reset();
   }
@@ -1026,6 +1028,7 @@ public:
     sql_id_[0] = '\0';
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
     cursor_total_exec_time_ = 0;
+    cursor_total_elapsed_time_ = 0;
   }
 
   void reset()
@@ -1193,6 +1196,8 @@ public:
   inline bool is_packed() { return is_packed_; }
   virtual inline bool is_async() { return false; }
 
+  inline int64_t get_cursor_total_elapsed_time() const { return cursor_total_elapsed_time_; }
+  inline void add_cursor_elapsed_time(int64_t time) { cursor_total_elapsed_time_ += time; }
   inline int64_t get_cursor_total_exec_time() const { return cursor_total_exec_time_; }
   inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
 
@@ -1263,6 +1268,7 @@ protected:
   ObString sql_text_;     //non seesion的非流式游标保存sql text
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
   int64_t cursor_total_exec_time_;
+  int64_t cursor_total_elapsed_time_;
 };
 
 class ObPsCursorInfo : public ObPLCursorInfo
