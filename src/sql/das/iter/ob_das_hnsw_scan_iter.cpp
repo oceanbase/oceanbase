@@ -2236,6 +2236,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   int ret = OB_SUCCESS;
   bool end_search = false;
   bool first_search = true;
+  int64_t iter_scan_total_num = 0;
   adaptive_ctx_.iter_times_ = 0;
   if (is_iter_filter()) {
     query_cond_.query_limit_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(std::ceil(query_cond_.query_limit_ * FIXED_MAGNIFICATION_RATIO)));
@@ -2260,7 +2261,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
     } else if (OB_ISNULL(tmp_adaptor_vid_iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("shouldn't be null.", K(ret), K(tmp_adaptor_vid_iter_));
-    } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, hnsw_max_iter_scan_nums, adaptive_ctx_.iter_times_, is_vectorized))) {
+    } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, hnsw_max_iter_scan_nums, iter_scan_total_num, is_vectorized))) {
       LOG_WARN("failed to query vid with filter.", K(ret), K(extra_column_count_), K(adaptive_ctx_.iter_times_));
     } else if (query_cond_.query_limit_ == 0) {
       end_search = true;
