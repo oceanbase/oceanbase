@@ -332,6 +332,68 @@ TEST_F(TestSSLogKVLogicalRow, gc_old_version_kv)
   ASSERT_EQ(after_gc_cnt + 1, before_gc_cnt);
 }
 
+TEST_F(TestSSLogKVLogicalRow, read_ulinked_version)
+{
+  INIT_AND_INSERT_ROW(1, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(2, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(3, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(4, OB_SUCCESS);
+  INIT_AND_INSERT_ROW(5, OB_SUCCESS);
+
+  std::string extra_info_for_check("ID_META_EXTRA_INFO_V2");
+  ObString EXTRA_INFO_FOR_CHECK;
+  EXTRA_INFO_FOR_CHECK.assign_ptr(extra_info_for_check.c_str(), extra_info_for_check.length());
+  ObSSLogWriteParam update_param(false, false, EXTRA_INFO_FOR_CHECK);
+  INIT_AND_UPDATE_ROW(1, 2, update_param);
+  INIT_AND_UPDATE_ROW(1, 3, update_param);
+  INIT_AND_UPDATE_ROW(1, 4, update_param);
+
+  PALF_KV.watch_key_errsim_ = true;
+  const int before_watch_kv_cnt = PALF_KV.map_.size();
+  // -- update 5
+  ObSSLogMetaType META_TYPE_1 = ObSSLogMetaType::SSLOG_LS_META;
+  std::string meta_key_str_1("ID_META_1");
+  ObString META_KEY_1;
+  META_KEY_1.assign_ptr(meta_key_str_1.c_str(), meta_key_str_1.size());
+
+  std::string meta_val_str_1("ID_META_TEST_VAL_5");
+  std::string extra_info_str_1("ID_META_EXTRA_INFO_5");
+  ObString META_VAL_1;
+  ObString EXTRA_INFO_1;
+  META_VAL_1.assign_ptr(meta_val_str_1.c_str(), meta_val_str_1.size());
+  EXTRA_INFO_1.assign_ptr(extra_info_str_1.c_str(), extra_info_str_1.size());
+
+  const bool IS_PREFIX_READ_1 = false;
+
+  ObSSLogTableLogicalRow logical_row_1;
+  ASSERT_EQ(logical_row_1.init(&PALF_KV, META_TYPE_1, META_KEY_1, IS_PREFIX_READ_1), OB_SUCCESS);
+  ASSERT_EQ(logical_row_1.update_row(update_param, META_VAL_1, EXTRA_INFO_1), OB_ENTRY_NOT_EXIST);
+  PALF_KV.watch_key_errsim_ = false;
+
+
+  const bool IS_PREFIX_READ = false;
+  ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
+  std::string meta_key_str("ID_META");
+  ObString META_KEY;
+  META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
+
+  {
+    ObSSLogTableLogicalRow logical_row;
+    ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
+    share::SCN row_scn_res;
+    ASSERT_EQ(logical_row.read_row(share::SCN::max_scn()), OB_EAGAIN);
+  }
+
+  {
+    ObSSLogTableLogicalRow logical_row;
+    ObArray<ObSSLogTableLogicalRow *> logical_rows;
+    ObSSLogMultiVersionReadParam param(share::SCN::max_scn(), share::SCN::min_scn(), false);
+
+    ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
+    ASSERT_EQ(logical_row.read_multi_version_row(param, logical_rows), OB_EAGAIN);
+  }
+}
+
 } // namespace unittest
 } // namespace oceanbase
 
