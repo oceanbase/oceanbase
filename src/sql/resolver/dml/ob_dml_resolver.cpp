@@ -20615,28 +20615,32 @@ int ObDMLResolver::check_match_against_expr(ObIArray<ObMatchFunRawExpr*> &match_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    is_es_match = match_exprs.at(0)->is_es_match();
-    for (int64_t i = 1; OB_SUCC(ret) && i < match_exprs.count(); i++) {
+    is_es_match = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_es_match && i < match_exprs.count(); i++) {
       if (OB_ISNULL(match_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (match_exprs.at(i)->is_es_match() != is_es_match) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "es match with match against together is");
-        LOG_WARN("match with match against together is not supported", K(ret));
+      } else if (match_exprs.at(i)->is_es_match()) {
+        is_es_match = true;
       }
     }
-    if (OB_SUCC(ret) && stmt->get_match_exprs().count() > 0
-        && stmt->get_match_exprs().at(0)->is_es_match() != is_es_match) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "es match with match against together is");
-      LOG_WARN("match with match against together is not supported", K(ret));
-    }
-    if (OB_SUCC(ret) && is_es_match) {
-      if (!(scope == T_WHERE_SCOPE)) {
+    if (OB_FAIL(ret)) {
+    } else if (is_es_match) {
+      if (OB_UNLIKELY(match_exprs.count() > 1 || stmt->get_match_exprs().count() > 0)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "es match not on where");
-        LOG_WARN("match fulltext search on where or having clause is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Multiple MATCHes or mixing MATCH with MATCH AGAINST is");
+        LOG_WARN("multiple MATCHes or mixing MATCH with MATCH AGAINST is not supported", K(ret));
+      } else if (OB_UNLIKELY(scope != T_WHERE_SCOPE)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "MATCH outside of WHERE clause is");
+        LOG_WARN("MATCH outside of WHERE clause is not supported", K(ret));
+      }
+    } else {
+      if (OB_UNLIKELY(stmt->get_match_exprs().count() > 0
+          && stmt->get_match_exprs().at(0)->is_es_match())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Multiple MATCHes or mixing MATCH with MATCH AGAINST is");
+        LOG_WARN("multiple MATCHes or mixing MATCH with MATCH AGAINST is not supported", K(ret));
       }
     }
   }
