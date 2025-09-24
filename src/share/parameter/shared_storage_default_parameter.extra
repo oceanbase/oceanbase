@@ -48,7 +48,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -103,7 +103,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -158,8 +158,13 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "ha_high_thread_score",
+          "value": 20,
+          "comment":"ha high thread number"
         }
       ]
     }
@@ -213,7 +218,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -268,7 +273,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -323,7 +328,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
