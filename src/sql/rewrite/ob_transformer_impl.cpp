@@ -609,8 +609,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_geometry_values_ ||
-        func.contain_fulltext_search_ || func.contain_vec_index_approx_) {
+    if (func.contain_geometry_values_ || func.contain_vec_index_approx_) {
       disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_unpivot_query_) {
@@ -620,6 +619,18 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(unpivot_enable_list, AGGR_SUBQUERY);
       ObTransformRule::add_trans_type(unpivot_enable_list, QUERY_PUSH_DOWN);
       disable_list |= (~unpivot_enable_list);
+    }
+    if (func.contain_fulltext_search_) {
+      ObTransformRule::add_trans_type(disable_list, WHERE_SQ_PULL_UP);
+      ObTransformRule::add_trans_type(disable_list, AGGR_SUBQUERY);
+      ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
+      ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
+      ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
+      ObTransformRule::add_trans_type(disable_list, GROUPBY_PULLUP);
+      ObTransformRule::add_trans_type(disable_list, SUBQUERY_COALESCE);
+      ObTransformRule::add_trans_type(disable_list, TEMP_TABLE_OPTIMIZATION);
+      ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
+      ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
     }
     if (func.contain_enum_set_values_) {
       uint64_t enum_set_enable_list = 0;

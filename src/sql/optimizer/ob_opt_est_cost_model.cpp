@@ -1961,6 +1961,7 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
   double project_cost = 0.0;
   const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
   bool is_index_back = index_meta_info.is_index_back_;
+  double functional_lookup_cost = 0.0;
   if (is_scan_index && is_index_back) {
     if (OB_FAIL(cost_project(row_count,
                             est_cost_info.index_access_column_items_,
@@ -1984,6 +1985,13 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
                                              project_cost))) {
       LOG_WARN("failed to cost project", K(ret));
     }
+  }
+  if (FAILEDx(cost_functional_lookup(est_cost_info.postfix_filters_,
+                                     est_cost_info.table_filters_,
+                                     est_cost_info.functional_lookup_exprs_,
+                                     row_count,
+                                     functional_lookup_cost))) {
+    LOG_WARN("failed to cost functional lookup", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else {
@@ -2014,7 +2022,7 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
     range_cost = range_count * cost_params_.get_range_cost(sys_stat_);
     cpu_cost = row_count * cost_params_.get_cpu_tuple_cost(sys_stat_);
     OPT_TRACE_COST_MODEL(KV(cpu_cost), "=", KV(row_count), "*", cost_params_.get_cpu_tuple_cost(sys_stat_));
-    cpu_cost += range_cost + qual_cost + project_cost;
+    cpu_cost += range_cost + qual_cost + project_cost + functional_lookup_cost;
     OPT_TRACE_COST_MODEL(KV(cpu_cost), "+=", KV(range_cost), "+", KV(qual_cost), "+", KV(project_cost));
     const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
     if (est_cost_info.index_id_ == est_cost_info.ref_table_id_ &&
@@ -2062,6 +2070,44 @@ int ObOptEstCostModel::get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprRe
     }
     if (OB_SUCC(ret)) {
       cost = cost_ret;
+    }
+  }
+  return ret;
+}
+
+int ObOptEstCostModel::cost_functional_lookup(const ObIArray<ObRawExpr*>& postfix_filters,
+                                              const ObIArray<ObRawExpr*>& table_filters,
+                                              const ObIArray<ObRawExpr*>& functional_lookup_exprs,
+                                              double row_count,
+                                              double &cost)
+{
+  int ret = OB_SUCCESS;
+  cost = 0.0;
+  ObSEArray<ObMatchFunRawExpr*, 4> match_exprs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < postfix_filters.count(); ++i) {
+    if (OB_ISNULL(postfix_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("functional lookup expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_match_exprs(postfix_filters.at(i), match_exprs))) {
+      LOG_WARN("failed to extract match exprs", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_filters.count(); ++i) {
+    if (OB_ISNULL(table_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("functional lookup expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_match_exprs(table_filters.at(i), match_exprs))) {
+      LOG_WARN("failed to extract match exprs", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < functional_lookup_exprs.count(); ++i) {
+    if (OB_ISNULL(functional_lookup_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("functional lookup expr is null", K(ret));
+    } else if (ObOptimizerUtil::find_item(match_exprs, functional_lookup_exprs.at(i))) {
+      // do nothing
+    } else {
+      cost += cost_params_.get_functional_lookup_per_row_cost(sys_stat_) * row_count;
     }
   }
   return ret;
