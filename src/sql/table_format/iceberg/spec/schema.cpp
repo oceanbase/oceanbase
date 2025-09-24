@@ -31,8 +31,8 @@ namespace iceberg
 
 Schema::Schema(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      identifier_field_ids(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      fields(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      identifier_field_ids(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      fields(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 

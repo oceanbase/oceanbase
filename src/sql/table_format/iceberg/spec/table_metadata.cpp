@@ -27,11 +27,11 @@ namespace iceberg
 
 TableMetadata::TableMetadata(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      schemas(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      partition_specs(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      properties(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      snapshots(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      statistics(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      schemas(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      partition_specs(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      properties(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      snapshots(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      statistics(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 
