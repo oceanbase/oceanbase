@@ -2101,6 +2101,7 @@ int ObMPStmtExecute::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
+    ObQueryRetryAshGuard::reset_info();
 
     if (!retry_ctrl_.need_retry()) {
       // if no retry would be performed any more, clear the piece cache
