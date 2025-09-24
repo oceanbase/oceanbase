@@ -128,7 +128,7 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
         "[4th=(trans_seq=%lu,sec_id=%lu)]}",
         (uint64_t) second_id_,
         (uint64_t) third_id_,
-        (int64_t) macro_transfer_seq_,
+        (int64_t) macro_transfer_epoch_,
         (uint64_t) tenant_seq_);
     } else if (is_shared_data_or_meta()) {
       databuff_printf(buf, buf_len, pos,
