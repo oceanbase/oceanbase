@@ -22,11 +22,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "_io_read_redundant_limit_percentage",
           "value": 50,
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
@@ -75,11 +70,6 @@
           "name": "inc_sstable_upload_thread_score",
           "value": 30,
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
         },
         {
           "name": "log_transport_compress_all",
@@ -137,11 +127,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "_io_read_redundant_limit_percentage",
           "value": 50,
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
@@ -185,11 +170,6 @@
           "name": "inc_sstable_upload_thread_score",
           "value": 30,
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
         },
         {
           "name": "log_transport_compress_all",
@@ -242,11 +222,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
@@ -295,11 +270,6 @@
           "name": "inc_sstable_upload_thread_score",
           "value": 30,
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
         },
         {
           "name": "_io_read_redundant_limit_percentage",
