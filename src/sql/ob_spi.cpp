@@ -882,7 +882,11 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
       CK (OB_LIKELY(STANDALONE_ANONYMOUS == ctx->func_->get_proc_type()));
       OX (value = *src);
       OX (value.set_int(0));
-      OZ (deep_copy_obj(*ctx->allocator_, *src, value));
+      if (OB_SUCC(ret) && src->is_pl_extend() && src->get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+        OZ (spi_copy_ref_cursor(ctx, NULL, src, &value));
+      } else {
+        OZ (deep_copy_obj(*ctx->allocator_, *src, value));
+      }
       OX (result_value = value);
       if (OB_SUCC(ret) && need_set) {
         void *ptr = ctx->params_->at(result_idx).get_deep_copy_obj_ptr();

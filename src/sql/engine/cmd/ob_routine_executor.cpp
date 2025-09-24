@@ -291,7 +291,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
           int64_t c_out_idx = -1;  // index for out params which would be returned to client
           for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
             if (call_proc_info->is_out_param(i)) {
-              ObObj out_value;
+              ObObjParam out_value;
+              out_value.reset();
               OX (out_idx++);
               if (ob_is_enum_or_set_type(params.at(i).get_type())) {
                 common::ObIArray<common::ObString> *type_info = nullptr;
