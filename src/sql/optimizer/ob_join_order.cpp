@@ -21220,8 +21220,8 @@ int ObJoinOrder::check_simple_prefix_cmp_expr(ObRawExpr *expr,
       if (param_expr1->get_result_type().is_string_type() //only for string and same collation
           && param_expr2->get_result_type().is_string_type()
           && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
-        column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-        value_expr = expr->get_param_expr(1);
+        column_expr = static_cast<ObColumnRefRawExpr*>(param_expr1);
+        value_expr = param_expr2;
       } else {
         is_valid = false;
       }
@@ -21229,8 +21229,8 @@ int ObJoinOrder::check_simple_prefix_cmp_expr(ObRawExpr *expr,
       if (param_expr1->get_result_type().is_string_type()
           && param_expr2->get_result_type().is_string_type()) {
         type = get_opposite_compare_type(expr->get_expr_type());
-        column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
-        value_expr = expr->get_param_expr(0);
+        column_expr = static_cast<ObColumnRefRawExpr*>(param_expr2);
+        value_expr = param_expr1;
       } else {
         is_valid = false;
       }
