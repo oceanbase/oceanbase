@@ -1680,12 +1680,12 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
                                                 tmp_allocator};
   Partitions partitions;
   const ObExternalTablePartitions *table_partitions = NULL;
+  ObKVCacheHandle handle;
   if (OB_ISNULL(metadata)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null metadata", K(ret), K(table_schema));
   } else if (refresh_interval_ms > 0) {
     // get partition info from cache
-    ObKVCacheHandle handle;
     ObExternalTablePartitionsKey key;
     key.tenant_id_ = table_schema.get_tenant_id();
     key.catalog_id_ = table_schema.get_catalog_id();
