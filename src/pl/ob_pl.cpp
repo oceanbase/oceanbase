@@ -1510,8 +1510,7 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
 
   // in mysql mode, only system packages with invoker's right do not need set db
   // in oracle mode, set db by if the routine is definer's right
-  if (lib::is_oracle_mode()
-      || get_tenant_id_by_object_id(routine.get_package_id()) == OB_SYS_TENANT_ID) {
+  if (lib::is_oracle_mode() || is_inner_pl_object_id(routine.get_package_id())) {
     need_set_db = !routine.is_invoker_right();
   }
 
