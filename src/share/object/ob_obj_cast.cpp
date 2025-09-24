@@ -10577,6 +10577,80 @@ static int json_geometry(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int json_array(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cast_mode);
+  if (OB_UNLIKELY(ObJsonType != in.get_type()) || OB_UNLIKELY(ObCollectionSQLTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_UNLIKELY(params.allocator_v2_ == NULL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator in json cast to array type", K(ret), K(params.allocator_v2_));
+  } else {
+    ObString j_bin_str = in.get_string();
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
+    } else {
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), params.allocator_v2_);
+      ObJsonNode *j_tree = NULL;
+      if (OB_FAIL(j_bin.reset_iter())) {
+        LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+      } else if (OB_FAIL(j_bin.to_tree(j_tree))) {
+        LOG_WARN("fail to change bin to tree", K(ret), K(j_bin_str));
+      } else if (j_tree->json_type() != ObJsonNodeType::J_ARRAY) {
+        ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+        LOG_WARN("JSON value is not an array", K(ret), K(j_tree->json_type()));
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+      }else {
+        const uint16_t dst_subschema_id = out.get_meta().get_subschema_id();
+        ObSubSchemaValue dst_meta;
+        if (OB_ISNULL(params.exec_ctx_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec ctx is null", K(ret), K(lbt()));
+        } else if (OB_FAIL(params.exec_ctx_->get_sqludt_meta_by_subschema_id(dst_subschema_id, dst_meta))) {
+          LOG_WARN("Failed to get subschema_meta_info", K(ret), K(dst_subschema_id));
+        } else {
+          const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
+          ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
+          ObIAllocator &temp_allocator = *params.allocator_v2_;
+          ObIArrayType *arr_dst = NULL;
+          
+          if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
+            LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+          } else {
+            ObJsonArray *json_arr = static_cast<ObJsonArray *>(j_tree);
+            ObJsonNode *node = NULL;
+            // 将 JSON 数组的每个元素添加到目标数组中
+            for (int i = 0; i < json_arr->element_count() && OB_SUCC(ret); i++) {
+              if (OB_ISNULL(node = json_arr->get_value(i))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get json node", K(ret), K(i));
+              } else if (OB_FAIL(ObArrayCastUtils::add_json_node_to_array(temp_allocator, *node, dst_arr_type->element_type_, arr_dst))) {
+                LOG_WARN("failed to add json node to array", K(ret), K(i));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(arr_dst->init())) {
+                LOG_WARN("array init failed", K(ret));
+              } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
+                LOG_WARN("check array validity failed", K(ret), K(dst_coll_info));
+                if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+                  LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
+                }
+              } else if (OB_FAIL(ObArrayExprUtils::set_array_obj_res(arr_dst, &params, &out))) {
+                LOG_WARN("get array binary string failed", K(ret), K(dst_coll_info));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // geometry -> XXX
 static int geometry_int(const ObObjType expect_type, ObObjCastParams &params,
@@ -13426,7 +13500,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     json_decimalint,/*decimalint*/
-    cast_not_support,/*collection*/
+    json_array,/*collection*/
     json_mdate,/*mysql date*/
     json_mdatetime,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/

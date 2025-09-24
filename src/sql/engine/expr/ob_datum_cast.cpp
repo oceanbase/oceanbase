@@ -10737,6 +10737,75 @@ CAST_FUNC_NAME(json, decimalint)
   return ret;
 }
 
+CAST_FUNC_NAME(json, array)
+{
+  EVAL_STRING_ARG()
+  {
+    const uint16_t dst_subschema_id = expr.datum_meta_.get_subschema_id();
+    ObSubSchemaValue dst_meta;
+    if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(dst_subschema_id, dst_meta))) {
+      LOG_WARN("failed to get subschema meta", K(ret), K(dst_subschema_id));
+    } else {
+      ObString j_bin_str = child_res->get_string();
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+      
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
+                  expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), j_bin_str,
+                  &ctx.exec_ctx_))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
+      } else {
+        ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), &temp_allocator);
+        ObJsonNode *j_tree = NULL;
+        if (OB_FAIL(j_bin.reset_iter())) {
+          LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+        } else if (OB_FAIL(j_bin.to_tree(j_tree))) {
+          LOG_WARN("fail to change bin to tree", K(ret), K(j_bin_str));
+        } else if (j_tree->json_type() != ObJsonNodeType::J_ARRAY) {
+          ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+          LOG_WARN("JSON value is not an array", K(ret), K(j_tree->json_type()));
+          LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+        } else {
+          const ObSqlCollectionInfo *dst_coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(dst_meta.value_);
+          ObCollectionArrayType *dst_arr_type = static_cast<ObCollectionArrayType *>(dst_coll_info->collection_meta_);
+          ObIArrayType *arr_dst = NULL;
+          if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
+            LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
+          } else {
+            // 将 JSON 数组的每个元素添加到目标数组中
+            ObJsonArray *json_arr = static_cast<ObJsonArray *>(j_tree);
+            ObJsonNode *node = NULL;
+            for (int i = 0; i < json_arr->element_count() && OB_SUCC(ret); i++) {
+              if (OB_ISNULL(node = json_arr->get_value(i))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get json node", K(ret), K(i));
+              } else if (OB_FAIL(ObArrayCastUtils::add_json_node_to_array(temp_allocator, *node, dst_arr_type->element_type_, arr_dst))) {
+                LOG_WARN("failed to add json node to array", K(ret), K(i));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              ObString res_str;
+              if (OB_FAIL(arr_dst->init())) {
+                LOG_WARN("array init failed", K(ret));
+              } else if (OB_FAIL(arr_dst->check_validity(*dst_arr_type, *arr_dst))) {
+                LOG_WARN("check array validity failed", K(ret), K(dst_coll_info));
+                if (ret == OB_ERR_INVALID_VECTOR_DIM) {
+                  LOG_USER_ERROR(OB_ERR_INVALID_VECTOR_DIM, static_cast<uint32_t>(dst_arr_type->dim_cnt_), arr_dst->size());
+                }
+              } else if (OB_FAIL(ObArrayExprUtils::set_array_res(arr_dst, arr_dst->get_raw_binary_len(), expr, ctx, res_str))) {
+                LOG_WARN("get array binary string failed", K(ret), K(dst_coll_info));
+              } else {
+                res_datum.set_string(res_str);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // geometry -> XXX
 CAST_FUNC_NAME(geometry, int)
@@ -17991,7 +18060,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     json_decimalint,/*decimalint*/
-    cast_not_support,/*collection, not implemented in mysql mode*/
+    json_array,/*collection, not implemented in mysql mode*/
     json_mdate,/*mysql date*/
     json_mdatetime,/*mysql datetime*/
     cast_not_support,/*roaringbitmap*/

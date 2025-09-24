@@ -4953,6 +4953,10 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         DATA_PRINTF("roaringbitmap");
         break;
       }
+      case T_COLLECTION: {
+        DATA_PRINTF("%.*s", expr->get_expr_name().length(), expr->get_expr_name().ptr());
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown cast type", K(ret), K(cast_type));
