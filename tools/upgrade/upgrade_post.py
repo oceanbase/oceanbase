@@ -985,7 +985,7 @@
 #  if upgrade_session_timeout_set:
 #    raise MyError('error in upgrade script, set_session_timeout_for_upgrade should only be called once')
 #  upgrade_session_timeout_set = True
-#  sql = "set @@session.ob_query_timeout = {0}".format(time)
+#  sql = "set @@session.ob_query_timeout = {0}".format(time * 1000 * 1000)
 #  logging.info(sql)
 #  cur.execute(sql)
 #
