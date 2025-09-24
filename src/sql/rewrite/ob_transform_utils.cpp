@@ -17991,7 +17991,7 @@ int ObTransformUtils::check_stmt_strict_deterministic(const ObSelectStmt *stmt,
         for (int64_t i = 0; OB_SUCC(ret) && order_exprs_fd_sel_items && i < stmt->get_select_item_size(); ++i) {
           bool expr_calculable = false;
           if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(stmt->get_select_item(i).expr_,
-                                                                order_exprs, true, false,
+                                                                order_exprs, true, true /*ignore string type binary equal*/,
                                                                 expr_calculable))) {
             LOG_WARN("failed to check expr calculable by exprs", K(ret));
           } else if (!expr_calculable) {
