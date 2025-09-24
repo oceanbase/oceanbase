@@ -103,7 +103,7 @@ public:
   virtual ~ObDtlChannel() {}
 
   DtlChannelType get_channel_type() const { return channel_type_; };
-  virtual int init() = 0;
+  virtual int init(ObDtlFlowControl *dfc = nullptr) = 0;
 
   // typical queue interfaces
   virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
@@ -258,7 +258,6 @@ public:
 
   virtual int push_buffer_batch_info() = 0;
 protected:
-  common::ObThreadCond cond_;
   int64_t pins_;
   uint64_t id_;
   bool done_;

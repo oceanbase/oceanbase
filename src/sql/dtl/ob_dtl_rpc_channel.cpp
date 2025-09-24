@@ -187,10 +187,10 @@ ObDtlRpcChannel::~ObDtlRpcChannel()
   LOG_TRACE("dtl use time", K(times_), K(write_buf_use_time_), K(send_use_time_), K(lbt()));
 }
 
-int ObDtlRpcChannel::init()
+int ObDtlRpcChannel::init(ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDtlBasicChannel::init())) {
+  if (OB_FAIL(ObDtlBasicChannel::init(dfc))) {
     LOG_WARN("Initialize fifo allocator fail", K(ret));
   }
   return ret;

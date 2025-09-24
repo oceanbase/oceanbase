@@ -1860,6 +1860,7 @@ int ObOperator::drain_exch()
   int ret = OB_SUCCESS;
   ObProfileSwitcher switcher(op_monitor_info_.profile_);
   begin_cpu_time_counting();
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   ret = do_drain_exch();
   end_cpu_time_counting();
   return ret;

@@ -805,7 +805,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
           ret = OB_TIMEOUT;
           LOG_WARN("get row from channel timeout", K(ret));
         } else {
-          ob_usleep<ObWaitEventIds::DTL_PROCESS_CHANNEL_SLEEP>(1 * 1000);
+          ob_usleep<ObWaitEventIds::WAIT_DTL_RECEIVE_RESPONSE>(1 * 1000, 0, 0, 0);
           int tmp_ret = ctx_.fast_check_status();
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("wait to receive row interrupted", K(tmp_ret), K(ret));
