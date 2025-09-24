@@ -15317,7 +15317,7 @@ public:
           }
         } else if (OB_UNLIKELY(ref_expr->get_relation_ids().overlap(*left_table_set_))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected nl params", K(ret), K(*ref_expr), K(*left_table_set_));
+          LOG_WARN("unexpected expr", K(ret), K(*ref_expr));
         } else if (OB_FAIL(new_query_ref->get_exec_params().push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
