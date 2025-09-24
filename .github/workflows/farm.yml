@@ -3,6 +3,7 @@ name: Farm
 on:
   pull_request:
     branches: [ master,develop ]
+    types: [opened, reopened, synchronize, ready_for_review] 
     paths-ignore:
       - 'docs/**'
       - '.github/ISSUE_TEMPLATE/**'
@@ -15,7 +16,7 @@ on:
 
 jobs:
   farm:
-    if: ${{ github.repository_owner == 'oceanbase' }}
+    if: ${{ github.repository_owner == 'oceanbase' && !github.event.pull_request.draft }}
     name: Farm
     runs-on: ubuntu-latest
     steps:
@@ -27,4 +28,3 @@ jobs:
         with:
           pipeline_id: ${{ github.run_id }}
           project: ${{ github.repository }}
-
