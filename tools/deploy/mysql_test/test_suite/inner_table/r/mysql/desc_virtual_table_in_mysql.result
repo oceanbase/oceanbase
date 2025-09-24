@@ -918,6 +918,7 @@ external_location_id	bigint(20)	NO		-1
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	NO		1	
 semistruct_properties	longtext	NO			
+skip_index_level	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1972,6 +1973,7 @@ external_location_id	bigint(20)	NO		-1
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	NO		1	
 semistruct_properties	longtext	NO			
+skip_index_level	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1

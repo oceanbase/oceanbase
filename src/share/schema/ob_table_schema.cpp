@@ -1876,6 +1876,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
+      skip_index_level_ = src_schema.skip_index_level_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3948,6 +3949,7 @@ void ObTableSchema::reset()
   aux_lob_piece_tid_ = OB_INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
   reset_string(tablegroup_name_);
   reset_string(comment_);
   reset_string(pk_comment_);
@@ -7491,7 +7493,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(semistruct_encoding_type),
     K_(dynamic_partition_policy),
     K_(semistruct_properties),
-    K_(micro_block_format_version));
+    K_(micro_block_format_version),
+    K_(skip_index_level));
   J_OBJ_END();
 
   return pos;
@@ -7697,6 +7700,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(micro_block_format_version_);
   OB_UNIS_ENCODE(tmp_mlog_tid_);
   OB_UNIS_ENCODE(semistruct_properties_);
+  OB_UNIS_ENCODE(skip_index_level_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7948,6 +7952,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(micro_block_format_version_);
   OB_UNIS_DECODE(tmp_mlog_tid_);
   OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
+  OB_UNIS_DECODE(skip_index_level_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8099,6 +8104,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(micro_block_format_version_);
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   OB_UNIS_ADD_LEN(semistruct_properties_);
+  OB_UNIS_ADD_LEN(skip_index_level_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
