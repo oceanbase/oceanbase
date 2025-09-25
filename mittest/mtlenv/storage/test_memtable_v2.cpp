@@ -59,7 +59,8 @@ void *ObMemtableCtx::alloc_mvcc_row_callback()
   if (OB_ISNULL(ret = std::malloc(sizeof(ObMvccRowCallback)))) {
     TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(*this));
   } else {
-    callback_alloc_count_.inc();
+    ATOMIC_FAA(&callback_mem_used_, sizeof(ObMvccRowCallback));
+    ATOMIC_INC(&callback_alloc_count_);
   }
   return ret;
 }
@@ -69,7 +70,7 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   if (OB_ISNULL(cb)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else {
-    callback_free_count_.inc();
+    ATOMIC_INC(&callback_free_count_);
     std::free(cb);
     cb = NULL;
   }

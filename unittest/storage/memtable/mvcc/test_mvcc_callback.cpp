@@ -1347,7 +1347,7 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   } else if (cb->is_table_lock_callback()) {
     free_table_lock_callback(cb);
   } else {
-    callback_free_count_.inc();
+    ATOMIC_INC(&callback_free_count_);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
     // delete cb;
     cb = NULL;
