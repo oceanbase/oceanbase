@@ -185,6 +185,8 @@ enum ObLogBaseType
   TABLE_SESS_ID_LOG_BASE_TYPE = 58,
     // for backup validate service
     BACKUP_VALIDATE_SERVICE_LOG_BASE_TYPE = 59,
+  // for vector index scheduler
+  VEC_INDEX_SERVICE_LOG_BASE_TYPE = 60,
 
   // pay attention!!!
   // add log type in log_base_type_to_string
@@ -330,6 +332,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "TABLE_SESS_ID", str_len);
   } else if (log_type == BACKUP_VALIDATE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str, "BACKUP_VALIDATE_SERVICE", str_len);
+  } else if (log_type == VEC_INDEX_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str, "VEC_INDEX_SERVICE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
