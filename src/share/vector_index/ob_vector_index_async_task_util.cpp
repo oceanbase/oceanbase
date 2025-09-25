@@ -573,9 +573,8 @@ int ObVecIndexAsyncTaskUtil::resume_task_from_inner_table(
                   LOG_WARN("async task ctx is null", K(ret));
                 } else if (OB_FALSE_IT(task_ctx = new(task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
                 } else if (OB_FALSE_IT(task_ctx->task_status_ = task_result)) {
+                } else if (OB_FALSE_IT(task_ctx->task_status_.tenant_id_ = tenant_id)) {
                 } else if (OB_FALSE_IT(task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE)) {
-                } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id, task_ctx->task_status_.task_id_))) {
-                  LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id));
                 } else if (OB_FAIL(async_task_opt.add_task_ctx(tablet_id, task_ctx, inc_new_task))) {  // add task to map
                   LOG_WARN("fail to push back task", K(ret), K(task_ctx));
                 } else if (inc_new_task) {

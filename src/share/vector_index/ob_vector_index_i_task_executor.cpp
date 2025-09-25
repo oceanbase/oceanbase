@@ -69,7 +69,7 @@ int ObVecITaskExecutor::resume_task()
     ObVecIndexFieldArray filters;
     ObVecIndexTaskStatusField field;
     field.field_name_ = "tenant_id";
-    field.data_.uint_ = tenant_id_;
+    field.data_.uint_ = ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_);
     
     if (OB_FAIL(filters.push_back(field))) {
       LOG_WARN("fail to push back field", K(ret));
