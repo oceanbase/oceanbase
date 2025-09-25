@@ -160,16 +160,19 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_access_ghost_persisted_meta)
       ASSERT_EQ(OB_SUCCESS, evicted_key_arr.push_back(micro_key));
     }
   }
+  ASSERT_EQ(0, cache_stat.task_stat().readd_persisted_cnt_);
 
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
   persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
   ASSERT_LT(0, cache_stat.task_stat().erase_persisted_cnt_);
+  ASSERT_LT(0, cache_stat.range_stat().fe_sub_range_cnt_);
   ASSERT_LT(1, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
 
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
   persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+  ASSERT_LT(0, cache_stat.task_stat().readd_persisted_cnt_);
 
   evict_key_arr.reset();
   for (int64_t i = WRITE_BLK_CNT; i < WRITE_BLK_CNT * 2; ++i) {
@@ -188,6 +191,7 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_access_ghost_persisted_meta)
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   }
 
+  ASSERT_LT(0, evicted_key_arr.count()); // NOTICE: evict_key_arr && evicted_key_arr
   for (int64_t i = 0; i < evicted_key_arr.count(); ++i) {
     const ObSSMicroBlockCacheKey &micro_key = evicted_key_arr.at(i);
     ObSSMicroBlockMetaHandle micro_meta_handle;
@@ -197,6 +201,7 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_access_ghost_persisted_meta)
     ASSERT_EQ(true, meta_info.is_in_l1());
     ASSERT_EQ(true, meta_info.is_in_ghost());
   }
+  ASSERT_LT(0, cache_stat.task_stat().readd_persisted_cnt_);
 
   ASSERT_EQ(OB_SUCCESS, micro_cache_->clear_micro_cache());
 }
