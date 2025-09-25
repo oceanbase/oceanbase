@@ -4137,6 +4137,19 @@ do {                                                                  \
         } else {
           // 纯OUT参数, 对于复杂类型需要重新初始化值; 如果传入的复杂类型值为NULL(PS协议), 则初始化一个新的复杂类型
           // 这里先copy入参的值, 由init_complex_obj函数判断是否重新分配内存
+          if (pl_type.is_associative_array_type() || pl_type.is_varray_type()) {
+            uint64_t id = 0;
+            ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
+            if (OB_NOT_NULL(composite)) {
+              id = composite->get_id();
+            }
+            if (is_mocked_anonymous_array_id(id)) {
+              // anonymous array can not convert to out assoc array param
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+            }
+          }
           OX (get_params().at(i) = params->at(i));
           OZ (init_complex_obj(*(get_allocator()),
                                pl_type,
