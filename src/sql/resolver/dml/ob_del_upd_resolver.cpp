@@ -1736,6 +1736,7 @@ int ObDelUpdResolver::gen_rowid_expr_for_returning(ObSysFunRawExpr *&rowid_expr)
                                                       rowkey_exprs,
                                                       part_expr,
                                                       subpart_expr,
+                                                      true,
                                                       rowid_expr))) {
     LOG_WARN("build rowid_expr failed", K(ret));
   } else { /*do nothing*/ }

@@ -8116,6 +8116,7 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
                                      const ObIArray<ObRawExpr *> &rowkey_exprs,
                                      ObRawExpr *part_expr,
                                      ObRawExpr *subpart_expr,
+                                     bool copy_part_expr,
                                      ObSysFunRawExpr *&rowid_expr)
 {
   int ret = OB_SUCCESS;
@@ -8145,6 +8146,16 @@ int ObRawExprUtils::build_rowid_expr(ObRawExprFactory &expr_factory,
     CK(OB_NOT_NULL(calc_urowid_expr));
     OX(calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID)));
     OZ(calc_urowid_expr->add_param_expr(version_expr));
+    // copy part expr if need (deshare part expr to avoid unexpected modification)
+    if (OB_SUCC(ret) && copy_part_expr) {
+      ObRawExprCopier copier(expr_factory);
+      ObSEArray<ObRawExpr*, 4> part_expr_cols;
+      OZ(OB_NOT_NULL(part_expr) && extract_column_exprs(part_expr, part_expr_cols));
+      OZ(OB_NOT_NULL(subpart_expr) && extract_column_exprs(subpart_expr, part_expr_cols));
+      OZ(copier.add_skipped_expr(part_expr_cols));
+      OZ(OB_NOT_NULL(part_expr) && copier.copy(part_expr, part_expr));
+      OZ(OB_NOT_NULL(subpart_expr) && copier.copy(subpart_expr, subpart_expr));
+    }
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
       ObRawExpr *calc_part_id_expr = nullptr;
       OZ(build_calc_part_id_expr(expr_factory,

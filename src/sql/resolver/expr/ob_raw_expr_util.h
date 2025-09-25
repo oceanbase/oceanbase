@@ -1026,6 +1026,7 @@ public:
                               const ObIArray<ObRawExpr *> &rowkey_exprs,
                               ObRawExpr *part_expr,
                               ObRawExpr *subpart_expr,
+                              bool copy_part_expr,
                               ObSysFunRawExpr *&rowid_expr);
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
                                     const TableItem &table_item,
