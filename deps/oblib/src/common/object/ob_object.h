@@ -136,15 +136,15 @@ public:
                || ObExtendType == type_) {
       set_collation_level(CS_LEVEL_INVALID);
       set_collation_type(CS_TYPE_INVALID);
-    } else if (ObHexStringType == type_) {
+    } else if (ObHexStringType == type_
+               || ob_is_geometry(static_cast<ObObjType>(type_))) {
       set_collation_type(CS_TYPE_BINARY);
     } else if (ObJsonType == type_) {
       set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (!ob_is_string_type(static_cast<ObObjType>(type_))
                && !ob_is_lob_locator(static_cast<ObObjType>(type_))
                && !ob_is_raw(static_cast<ObObjType>(type_))
-               && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))
-               && !ob_is_geometry(static_cast<ObObjType>(type_))) {
+               && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
     } else if (ObUserDefinedSQLType == type_ ||
