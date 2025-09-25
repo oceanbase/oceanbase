@@ -1444,6 +1444,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
   NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
   NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
+  NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1627,6 +1628,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
   ObExprUDF::eval_udf_batch,                                          /* 178 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter_batch,          /* 179 */
+  NULL, // ObExprArrayContains::eval_array_contains_batch_int32_t     /* 180 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1890,6 +1892,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_RIGHT_SHIFT>,          /* 257 */
   NULL, // ObExprCrc32::calc_crc32_expr_vector,                          /* 258 */
   NULL, // ObExprFromBase64::eval_from_base64_vector                     /* 259 */
+  NULL, // ObExprArrayContains::eval_array_contains_vector_int32_t,      /* 260 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
