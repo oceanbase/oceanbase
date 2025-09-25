@@ -2463,7 +2463,9 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               // copy lob header
               dst.assign_ptr(dst.ptr() - extra_len, dst.length() + extra_len);
               MEMCPY(dst.ptr(), str.ptr(), extra_len);
-              if (is_lob_v1) reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
+              if (OB_FAIL(ObLobLocatorV2::update_payload_size(dst, extra_len, is_lob_v1))) {
+                LOG_WARN("fail to update payload size", K(ret), K(dst), K(extra_len));
+              }
             } else {
               if (OB_FAIL(ob_write_string(allocator, str, dst))) {
                 LOG_WARN("Failed to write str", K(ret));

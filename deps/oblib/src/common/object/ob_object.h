@@ -1059,6 +1059,7 @@ public:
                                         uint32_t disk_lob_full_size,
                                         uint32_t read_snapshot_size,
                                         bool is_simple);
+  static int update_payload_size(ObString &dst, int64_t header_size, bool is_lob_v1);
 
   // interfaces for write
   // fill empty lob locator
