@@ -25,5 +25,6 @@ add_subdirectory(zstd)
 add_subdirectory(zstd_1_3_8)
 add_subdirectory(lz4)
 add_subdirectory(snappy)
+add_subdirectory(zlib_lite)
 
-target_link_libraries(compress PUBLIC lz4 snappy zstd zstd_1_3_8)
+target_link_libraries(compress PUBLIC lz4 snappy zstd zstd_1_3_8 zlib_lite)

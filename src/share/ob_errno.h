@@ -1858,6 +1858,8 @@ constexpr int OB_ERR_CANNOT_DEFINE_TRIGGER = -9802;
 constexpr int OB_ERR_CANNOT_RENAME_TRIGGER = -9803;
 constexpr int OB_ERR_LOGON_TRIGGER = -9804;
 constexpr int OB_ERR_LOGOFF_TRIGGER = -9805;
+constexpr int OB_ERR_MALFORMED_WRAPPED_UNIT = -9806;
+constexpr int OB_ERR_INVALID_PLSQL_UNIT = -9807;
 constexpr int OB_ERR_INVALID_NESTED_CURSOR = -9811;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
@@ -1904,8 +1906,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
+constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4147,6 +4149,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CANNOT_RENAME_TRIGGER__USER_ERROR_MSG "renaming system triggers is not allowed"
 #define OB_ERR_LOGON_TRIGGER__USER_ERROR_MSG "client logon triggers cannot have BEFORE type"
 #define OB_ERR_LOGOFF_TRIGGER__USER_ERROR_MSG "client logoff triggers cannot have AFTER type"
+#define OB_ERR_MALFORMED_WRAPPED_UNIT__USER_ERROR_MSG "malformed or corrupted wrapped unit"
+#define OB_ERR_INVALID_PLSQL_UNIT__USER_ERROR_MSG "input to DBMS_DDL.WRAP is not a legal PL/SQL unit"
 #define OB_ERR_INVALID_NESTED_CURSOR__USER_ERROR_MSG "Cursor Variable in record, object, or collection is not supported by this release"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
@@ -4193,8 +4197,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -6436,6 +6440,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CANNOT_RENAME_TRIGGER__ORA_USER_ERROR_MSG "ORA-25020: renaming system triggers is not allowed"
 #define OB_ERR_LOGON_TRIGGER__ORA_USER_ERROR_MSG "ORA-30508: client logon triggers cannot have BEFORE type"
 #define OB_ERR_LOGOFF_TRIGGER__ORA_USER_ERROR_MSG "ORA-30509: client logoff triggers cannot have AFTER type"
+#define OB_ERR_MALFORMED_WRAPPED_UNIT__ORA_USER_ERROR_MSG "PLS-00753: malformed or corrupted wrapped unit"
+#define OB_ERR_INVALID_PLSQL_UNIT__ORA_USER_ERROR_MSG "ORA-24230: input to DBMS_DDL.WRAP is not a legal PL/SQL unit"
 #define OB_ERR_INVALID_NESTED_CURSOR__ORA_USER_ERROR_MSG "PLS-00989: Cursor Variable in record, object, or collection is not supported by this release"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -6482,10 +6488,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__ORA_USER_ERROR_MSG "ORA-08187: snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__ORA_USER_ERROR_MSG "ORA-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
-#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2285];
+extern int g_all_ob_errnos[2287];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

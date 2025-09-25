@@ -1145,6 +1145,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_tenant_stmt.cpp
   resolver/ddl/ob_create_standby_tenant_resolver.cpp
   resolver/ddl/ob_create_view_resolver.cpp
+  resolver/ddl/ob_create_wrapped_resolver.cpp
   resolver/ddl/ob_ddl_resolver.cpp
   resolver/ddl/ob_ddl_stmt.cpp
   resolver/ddl/ob_drop_database_resolver.cpp

@@ -145,6 +145,7 @@
 #include "sql/resolver/ddl/ob_create_udt_resolver.h"
 #include "sql/resolver/ddl/ob_drop_udt_resolver.h"
 #include "sql/resolver/ddl/ob_audit_resolver.h"
+#include "sql/resolver/ddl/ob_create_wrapped_resolver.h"
 #endif
 #include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
 
@@ -1293,6 +1294,32 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(SysDispatchCall);
         break;
       }
+#ifdef OB_BUILD_ORACLE_PL
+      case T_CREATE_WRAPPED_PACKAGE: {
+        REGISTER_STMT_RESOLVER(CreateWrappedPackage);
+        break;
+      }
+      case T_CREATE_WRAPPED_PACKAGE_BODY: {
+        REGISTER_STMT_RESOLVER(CreateWrappedPackageBody);
+        break;
+      }
+      case T_CREATE_WRAPPED_TYPE: {
+        REGISTER_STMT_RESOLVER(CreateWrappedType);
+        break;
+      }
+      case T_CREATE_WRAPPED_TYPE_BODY: {
+        REGISTER_STMT_RESOLVER(CreateWrappedTypeBody);
+        break;
+      }
+      case T_CREATE_WRAPPED_FUNCTION: {
+        REGISTER_STMT_RESOLVER(CreateWrappedFunction);
+        break;
+      }
+      case T_CREATE_WRAPPED_PROCEDURE: {
+        REGISTER_STMT_RESOLVER(CreateWrappedProcedure);
+        break;
+      }
+#endif
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

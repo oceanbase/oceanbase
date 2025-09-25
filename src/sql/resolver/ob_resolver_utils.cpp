@@ -2416,7 +2416,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       }
       break;
       case T_SP_CREATE_TYPE:
-      case T_SP_CREATE_TYPE_BODY: {
+      case T_SP_CREATE_TYPE_BODY:
+      case T_CREATE_WRAPPED_TYPE:
+      case T_CREATE_WRAPPED_TYPE_BODY: {
         type = stmt::T_CREATE_TYPE;
       }
       break;
@@ -2426,7 +2428,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       break;
       // stored procedure
       case T_SP_CREATE:
-      case T_SF_CREATE: {
+      case T_SF_CREATE:
+      case T_CREATE_WRAPPED_PROCEDURE:
+      case T_CREATE_WRAPPED_FUNCTION: {
         type = stmt::T_CREATE_ROUTINE;
       }
       break;
@@ -2441,11 +2445,13 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       }
       break;
       // package
-      case T_PACKAGE_CREATE: {
+      case T_PACKAGE_CREATE:
+      case T_CREATE_WRAPPED_PACKAGE: {
         type = stmt::T_CREATE_PACKAGE;
       }
       break;
-      case T_PACKAGE_CREATE_BODY: {
+      case T_PACKAGE_CREATE_BODY:
+      case T_CREATE_WRAPPED_PACKAGE_BODY: {
         type = stmt::T_CREATE_PACKAGE_BODY;
       }
       break;

@@ -91,6 +91,16 @@ private:
                              uint64_t target_database_id,
                              const ObUDTTypeInfo *udt_info,
                              bool &has_mutual_dep);
+  static int splice_udt_ddl(ObSchemaGetterGuard &schema_guard,
+                            ObIAllocator &allocator,
+                            const uint64_t tenant_id,
+                            const uint64_t udt_id,
+                            const ObUDTTypeCode typecode,
+                            ObString &udt_ddl);
+  static int parse_ddl_by_plain_text(ObIAllocator &allocator,
+                                     const ObSQLSessionInfo &session_info,
+                                     const ObString &udt_ddl,
+                                     const ParseNode *&plain_parse_tree);
 public:
   static int check_udt_validation(const ObSQLSessionInfo& session_info,
                                   ObSchemaGetterGuard& schema_guard,

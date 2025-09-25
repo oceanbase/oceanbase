@@ -2618,6 +2618,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_DEFINE_TRIGGER, -9802, -1, "HY000", "system tr
 DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_RENAME_TRIGGER, -9803, -1, "HY000", "renaming system triggers is not allowed", 25020, "renaming system triggers is not allowed");
 DEFINE_ORACLE_ERROR(OB_ERR_LOGON_TRIGGER, -9804, -1, "HY000", "client logon triggers cannot have BEFORE type", 30508, "client logon triggers cannot have BEFORE type");
 DEFINE_ORACLE_ERROR(OB_ERR_LOGOFF_TRIGGER, -9805, -1, "HY000", "client logoff triggers cannot have AFTER type", 30509, "client logoff triggers cannot have AFTER type");
+DEFINE_PLS_ERROR(OB_ERR_MALFORMED_WRAPPED_UNIT, -9806, -1, "HY000", "malformed or corrupted wrapped unit", 753, "malformed or corrupted wrapped unit");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_PLSQL_UNIT, -9807, -1, "HY000", "input to DBMS_DDL.WRAP is not a legal PL/SQL unit", 24230, "input to DBMS_DDL.WRAP is not a legal PL/SQL unit");
 DEFINE_PLS_ERROR(OB_ERR_INVALID_NESTED_CURSOR, -9811, -1, "HY000", "Cursor Variable in record, object, or collection is not supported by this release", 989, "Cursor Variable in record, object, or collection is not supported by this release");
 // 余留位置
 ////////////////////////////////////////////////////////////////

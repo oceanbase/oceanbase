@@ -14,6 +14,7 @@
 #define OCEANBASE_SRC_PL_SYS_PACKAGE_OB_DBMS_SQL_H_
 
 #include "pl/ob_pl_type.h"
+#include "pl/ob_pl_user_type.h"
 
 namespace oceanbase
 {
@@ -256,6 +257,13 @@ public:
   static int open_cursor(sql::ObExecContext &exec_ctx,
                          ParamStore &params,
                          common::ObObj &result);
+  static int assemble_assoc_arr(ObIAllocator &allocator,
+                                ObPLAssocArray &assoc_arr,
+                                const int64_t lb,
+                                const int64_t ub,
+                                const bool linefeed,
+                                ObString &sql_stmt,
+                                ObCollationType &coll_type);
   static int parse(sql::ObExecContext &exec_ctx,
                    ParamStore &params,
                    common::ObObj &result);

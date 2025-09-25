@@ -703,6 +703,56 @@ int ObPLDbmsSql::open_cursor(ObExecContext &exec_ctx, ParamStore &params, ObObj 
   return ret;
 }
 
+int ObPLDbmsSql::assemble_assoc_arr(ObIAllocator &allocator,
+                                    ObPLAssocArray &assoc_arr,
+                                    const int64_t lb,
+                                    const int64_t ub,
+                                    const bool linefeed,
+                                    ObString &sql_stmt,
+                                    ObCollationType &coll_type)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_txt;
+  coll_type = CS_TYPE_INVALID;
+
+  if (OB_SUCC(ret) && lb > ub) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("wrong parameter with lower bound and upper bound", K(ret), K(lb), K(ub));
+  }
+  for (int64_t i = lb; OB_SUCC(ret) && i <= ub; ++i) {
+    ObObj key, exists;
+    int64_t index = OB_INVALID_INDEX;
+    int64_t search_end = OB_INVALID_INDEX;
+    key.set_int32(i);
+    OZ (assoc_arr.search_key(key, index, search_end, assoc_arr.get_count()));
+    if (OB_SUCC(ret) && OB_INVALID_INDEX == index) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("can not found key in assoc array", K(ret), K(key));
+    }
+    CK (search_end != OB_INVALID_INDEX);
+    OV (index >= 0 && index < assoc_arr.get_count(), OB_ERR_UNEXPECTED, K(index));
+    OZ (assoc_arr.exist(index + 1, exists)); // Notice: first argument is start with 1, index is start with 0.
+    if (OB_SUCC(ret) && !exists.get_tinyint()) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("can not found key in assoc array", K(ret), K(key));
+    }
+    if (OB_SUCC(ret)) {
+      ObObj &elem = reinterpret_cast<ObObj *>(assoc_arr.get_data())[index];
+      OX (coll_type = elem.get_collation_type(););
+      if (!elem.is_null()) {
+        ObString elem_txt;
+        OZ (elem.get_varchar(elem_txt), K(elem));
+        OZ (sql_txt.append(elem_txt));
+        if (linefeed) {
+          OZ (sql_txt.append("\n"));
+        }
+      }
+    }
+  }
+  OZ (ob_write_string(allocator, sql_txt.string(), sql_stmt));
+  return ret;
+}
+
 int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
 {
   UNUSED(result);
@@ -712,9 +762,7 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   bool linefeed = false;
   int8_t flag = 0;
   ObPLCollection *sql_arr = NULL;
-  ObSqlString sql_txt;
   ObPLAssocArray *assoc_arr = NULL;
-  ObCollationType coll_type = CS_TYPE_INVALID;
 
   OV (param_count == 6, OB_INVALID_ARGUMENT, params);
   OV (params.at(1).is_ext(), OB_INVALID_ARGUMENT, params);
@@ -731,47 +779,19 @@ int ObPLDbmsSql::parse_6p(ObExecContext &exec_ctx, ParamStore &params, ObObj &re
   OZ (params.at(4).get_tinyint(flag), params.at(4));
   OX (linefeed = static_cast<bool>(flag));
   CK (OB_NOT_NULL(assoc_arr = static_cast<ObPLAssocArray *>(sql_arr)));
-  if (OB_SUCC(ret) && low_bound > upper_bound) {
-    ret = OB_ERR_PARSE_SQL;
-    LOG_WARN("wrong parameter with lower bound and upper bound", K(ret), K(low_bound), K(upper_bound));
-  }
-
-  for (int64_t i = low_bound; OB_SUCC(ret) && i <= upper_bound; ++i) {
-    ObObj key, exists;
-    int64_t index = OB_INVALID_INDEX;
-    int64_t search_end = OB_INVALID_INDEX;
-    key.set_int32(i);
-    OZ (assoc_arr->search_key(key, index, search_end, assoc_arr->get_count()));
-    if (OB_SUCC(ret) && OB_INVALID_INDEX == index) {
-      ret = OB_READ_NOTHING;
-      LOG_WARN("can not found key in assoc array", K(ret), K(key), KPC(assoc_arr));
-    }
-    CK (search_end != OB_INVALID_INDEX);
-    OV (index >= 0 && index < assoc_arr->get_count(), OB_ERR_UNEXPECTED, K(index));
-    OZ (assoc_arr->exist(index + 1, exists)); // Notice: first argument is start with 1, index is start with 0.
-    if (OB_SUCC(ret) && !exists.get_tinyint()) {
-      ret = OB_READ_NOTHING;
-      LOG_WARN("can not found key in assoc array", K(ret), K(key), KPC(assoc_arr));
-    }
-    if (OB_SUCC(ret)) {
-      ObObj &elem = reinterpret_cast<ObObj *>(assoc_arr->get_data())[index];
-      OX (coll_type = elem.get_collation_type(););
-      if (!elem.is_null()) {
-        ObString elem_txt;
-        OZ (elem.get_varchar(elem_txt), K(elem));
-        OZ (sql_txt.append(elem_txt));
-        if (linefeed) {
-          OZ (sql_txt.append("\n"));
-        }
-      }
-    }
-  }
 
   ObDbmsCursorInfo *cursor = NULL;
   ObString sql_stmt;
+  ObCollationType coll_type = CS_TYPE_INVALID;
+  OZ (assemble_assoc_arr(exec_ctx.get_allocator(),
+                         *assoc_arr,
+                         low_bound,
+                         upper_bound,
+                         linefeed,
+                         sql_stmt,
+                         coll_type));
   OZ (get_cursor(exec_ctx, params, cursor));// 这儿只用了params的第一个参数，cursor id
-  OZ (ob_write_string(exec_ctx.get_allocator(), sql_txt.string(), sql_stmt));
-  LOG_DEBUG("parse 6p, concated sql stmt", K(sql_stmt), K(sql_txt.string()));
+  LOG_DEBUG("parse 6p, concated sql stmt", K(sql_stmt));
   OZ (do_parse(exec_ctx, cursor, sql_stmt, coll_type));
   return ret;
 }

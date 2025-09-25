@@ -3818,12 +3818,40 @@ int ObSchemaPrinter::print_udt_body_definition(const uint64_t tenant_id,
                       udt_info->get_type_name().length(),
                       udt_info->get_type_name().ptr()));
     OZ (print_object_definition(udt_body_info, buf, buf_len, pos));
-    OZ (databuff_printf(buf, buf_len, pos, "\n"));
     body_exist = true;
   }
   SHARE_SCHEMA_LOG(DEBUG, "print user define type schema", K(ret), K(*udt_info));
   return ret;
 }
+
+#ifdef OB_BUILD_ORACLE_PL
+int ObSchemaPrinter::print_base64_cipher(ObIAllocator &allocator,
+                                         const ObString &cipher,
+                                         ObString &formatted_cipher) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t cipher_wrap_len = 76;
+  char *buf = nullptr;
+  int64_t buf_size = 64 + cipher.length() + cipher.length() / cipher_wrap_len;
+  int64_t buf_pos = 0;
+  OV (OB_NOT_NULL(buf = static_cast<char *>(allocator.alloc(buf_size))),
+      OB_ALLOCATE_MEMORY_FAILED, buf_size);
+  OZ (databuff_printf(buf, buf_size, buf_pos, "WRAPPED\n%d\n", cipher.length()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < cipher.length(); i += cipher_wrap_len) {
+    OZ (databuff_printf(buf,
+                        buf_size,
+                        buf_pos,
+                        "%.*s\n",
+                        static_cast<int>(MIN(cipher_wrap_len, cipher.length() - i)),
+                        cipher.ptr() + i));
+  }
+  CK (buf_pos + 2 < buf_size);
+  OX (buf[buf_pos++] = ';');
+  OX (buf[buf_pos++] = '\0');
+  OX (formatted_cipher.assign(buf, buf_pos));
+  return ret;
+}
+#endif  // OB_BUILD_ORACLE_PL
 
 int ObSchemaPrinter::print_object_definition(const ObUDTObjectType *object,
                                              char *buf,
@@ -3837,28 +3865,40 @@ int ObSchemaPrinter::print_object_definition(const ObUDTObjectType *object,
   const ParseNode *src_node = NULL;
   ObString object_src;
   CK (!object->get_source().empty());
-  OZ (parser.parse_package(object->get_source(), object_stmt, ObDataTypeCastParams(), NULL, false));
+  OZ (parser.parse_package(object->get_source(), object_stmt, ObDataTypeCastParams(),
+                           NULL, false, NULL, false));
   CK (OB_NOT_NULL(object_stmt));
   CK (T_STMT_LIST == object_stmt->type_);
   OX (src_node = object_stmt->children_[0]);
-  if (OB_SUCC(ret) && T_SP_PRE_STMTS == src_node->type_) {
-    OZ (pl::ObPLResolver::resolve_condition_compile(
-     allocator,
-     NULL,
-     &schema_guard_,
-     NULL,
-     NULL,
-     &(object->get_exec_env()),
-     src_node,
-     src_node,
-     true /*inner_parse*/));
+  if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (T_CREATE_WRAPPED_TYPE == src_node->type_
+             || T_CREATE_WRAPPED_TYPE_BODY == src_node->type_) {
+    const ParseNode *cipher_node = nullptr;
+    OZ (pl::ObPLParser::check_wrapped_parse_tree_legal(*src_node));
+    OX (cipher_node = src_node->children_[1]);
+    OZ (print_base64_cipher(
+            allocator, ObString(cipher_node->str_len_, cipher_node->str_value_), object_src));
+    CK (!object_src.empty());
+    OZ (databuff_printf(buf, buf_len, pos, "%.*s", object_src.length(), object_src.ptr()));
+#endif  // OB_BUILD_ORACLE_PL
+  } else {
+    if (T_SP_PRE_STMTS == src_node->type_) {
+      OZ (pl::ObPLResolver::resolve_condition_compile(allocator,
+                                                      NULL,
+                                                      &schema_guard_,
+                                                      NULL,
+                                                      NULL,
+                                                      &(object->get_exec_env()),
+                                                      src_node,
+                                                      src_node,
+                                                      true /*inner_parse*/));
+    }
+    CK (OB_NOT_NULL(src_node));
+    OX (object_src = ObString(src_node->str_len_, src_node->str_value_));
+    CK (!object_src.empty());
+    OZ (databuff_printf(buf, buf_len, pos, "%.*s", object_src.length(), object_src.ptr()));
   }
-  CK (OB_NOT_NULL(src_node));
-  OX (object_src = ObString(src_node->str_len_, src_node->str_value_));
-  CK (!object_src.empty());
-  OZ (databuff_printf(buf, buf_len, pos, "%.*s",
-                      object_src.length(),
-                      object_src.ptr()));
   SHARE_SCHEMA_LOG(DEBUG, "print object schema", K(ret), K(*object));
   return ret;
 }
@@ -3876,7 +3916,6 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
   ObArenaAllocator allocator;
   pl::ObPLParser parser(allocator, ObCharsets4Parser());
   ObStmtNodeTree *package_stmt = NULL;
-  const ObStmtNodeTree *real_package_stmt = NULL;
   OZ (schema_guard_.get_package_info(tenant_id, package_id, package_info));
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -3896,27 +3935,47 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
                       package_info->get_package_name().length(),
                       package_info->get_package_name().ptr()));
   CK (!package_info->get_source().empty());
-  OZ (parser.parse_package(package_info->get_source(), package_stmt, ObDataTypeCastParams(), NULL, false));
+  OZ (parser.parse_package(package_info->get_source(),
+                           package_stmt,
+                           ObDataTypeCastParams(),
+                           NULL,
+                           false,
+                           nullptr,
+                           false));
   CK (OB_NOT_NULL(package_stmt));
   CK (T_STMT_LIST == package_stmt->type_);
   CK (1 == package_stmt->num_child_);
   CK (OB_NOT_NULL(package_stmt->children_[0]));
-  OX (real_package_stmt = package_stmt->children_[0]);
-  if (OB_SUCC(ret) && T_SP_PRE_STMTS == real_package_stmt->type_) {
-    OZ (pl::ObPLResolver::resolve_condition_compile(
-     allocator,
-     NULL,
-     &schema_guard_,
-     NULL,
-     NULL,
-     &(package_info->get_exec_env()),
-     real_package_stmt,
-     real_package_stmt,
-     true /*inner_parse*/));
+  OX (package_stmt = package_stmt->children_[0]);
+  if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (T_CREATE_WRAPPED_PACKAGE == package_stmt->type_
+             || T_CREATE_WRAPPED_PACKAGE_BODY == package_stmt->type_) {
+    const ParseNode *cipher_node = nullptr;
+    OZ (pl::ObPLParser::check_wrapped_parse_tree_legal(*package_stmt));
+    OX (cipher_node = package_stmt->children_[1]);
+    OZ (print_base64_cipher(allocator,
+                            ObString(cipher_node->str_len_, cipher_node->str_value_),
+                            actully_package_body));
+#endif  // OB_BUILD_ORACLE_PL
+  } else {
+    const ObStmtNodeTree *const_package_stmt = package_stmt;  // bypass some weird interface design
+    if (T_SP_PRE_STMTS == package_stmt->type_) {
+      OZ (pl::ObPLResolver::resolve_condition_compile(allocator,
+                                                      NULL,
+                                                      &schema_guard_,
+                                                      NULL,
+                                                      NULL,
+                                                      &(package_info->get_exec_env()),
+                                                      package_stmt,
+                                                      const_package_stmt,
+                                                      true /* inner parse */));
+    }
+    CK (package_info->is_package() ? T_PACKAGE_BLOCK == const_package_stmt->type_
+                                   : T_PACKAGE_BODY_BLOCK == const_package_stmt->type_);
+    OX (actully_package_body =
+            ObString(const_package_stmt->str_len_, const_package_stmt->str_value_));
   }
-  CK (package_info->is_package() ? T_PACKAGE_BLOCK == real_package_stmt->type_
-                                 : T_PACKAGE_BODY_BLOCK == real_package_stmt->type_);
-  OX (actully_package_body = ObString(real_package_stmt->str_len_, real_package_stmt->str_value_));
   CK (!actully_package_body.empty());
   OZ (databuff_printf(buf, buf_len, pos, "%.*s",
                       actully_package_body.length(),
@@ -4300,6 +4359,7 @@ int ObSchemaPrinter::print_routine_definition(
     ObString routine_body = routine_info->get_routine_body();
     ObString actully_body;
     ObString routine_clause;
+    ObStmtNodeTree *wrapped_parse_tree = NULL;
     ObStmtNodeTree *parse_tree = NULL;
     const ObStmtNodeTree *routine_tree = NULL;
     ObArenaAllocator allocator;
@@ -4307,8 +4367,19 @@ int ObSchemaPrinter::print_routine_definition(
     ObStmtNodeTree *param_list = NULL;
     ObStmtNodeTree *return_type = NULL;
     ObStmtNodeTree *clause_list = NULL;
+    bool is_wrapped_routine = false;
     CK (!routine_body.empty());
+#ifdef OB_BUILD_ORACLE_PL
+    OZ (parser.parse_routine_body(routine_body, wrapped_parse_tree, false, false));
+    OX (is_wrapped_routine = pl::ObPLParser::is_wrapped_parse_tree(*wrapped_parse_tree));
+    if (is_wrapped_routine) {
+      OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+    } else {
+      OX (parse_tree = wrapped_parse_tree);
+    }
+#else
     OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+#endif  // OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(parse_tree));
     CK (T_STMT_LIST == parse_tree->type_);
     CK (1 == parse_tree->num_child_);
@@ -4341,9 +4412,12 @@ int ObSchemaPrinter::print_routine_definition(
                                     : 4 == routine_tree->num_child_);
     CK (routine_info->is_function() ? OB_NOT_NULL(routine_tree->children_[5])
                                     : OB_NOT_NULL(routine_tree->children_[3]));
-    OX (actully_body = routine_info->is_function() ?
-          ObString(routine_tree->children_[5]->str_len_, routine_tree->children_[5]->str_value_)
-        : ObString(routine_tree->children_[3]->str_len_, routine_tree->children_[3]->str_value_));
+    OX (actully_body =
+            is_wrapped_routine ? ObString("BEGIN /* HIDDEN WRAPPED ROUTINE BODY */ NULL; END")
+            : routine_info->is_function() ? ObString(routine_tree->children_[5]->str_len_,
+                                                     routine_tree->children_[5]->str_value_)
+                                          : ObString(routine_tree->children_[3]->str_len_,
+                                                     routine_tree->children_[3]->str_value_));
     OX (clause_list = routine_info->is_function() ? routine_tree->children_[3] : routine_tree->children_[2]);
     if (OB_SUCC(ret) && OB_NOT_NULL(clause_list)) {
       OX (routine_clause = ObString(clause_list->str_len_, clause_list->str_value_));

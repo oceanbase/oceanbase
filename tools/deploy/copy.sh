@@ -34,7 +34,7 @@ then
 
   libtool --mode=install cp $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/
   libtool --mode=install cp $BUILD_DIR/src/observer/observer $BIN_DIR/observer
-  libtool --mode=install cp $SOURCE_DIR/src/share/inner_table/sys_package/*.sql $ADMIN_DIR
+  libtool --mode=install cp $BUILD_DIR/syspack_release/* $ADMIN_DIR
   libtool --mode=install cp $SOURCE_DIR/tools/spatial_reference_systems.data $ETC_DIR
 
   libtool --mode=install cp $SOURCE_DIR/tools/timezone*.data $ETC_DIR

@@ -507,6 +507,11 @@ private:
     ObPartitionFuncType sub_type = sub_part_opt.get_part_func_type();
     return is_hash_like_part(sub_type) && !is_hash_like_part(type);
   }
+#ifdef OB_BUILD_ORACLE_PL
+  int print_base64_cipher(ObIAllocator &allocator,
+                          const ObString &cipher,
+                          ObString &formatted_cipher) const;
+#endif  // OB_BUILD_ORACLE_PL
 
   ObSchemaGetterGuard &schema_guard_;
   bool strict_compat_;
