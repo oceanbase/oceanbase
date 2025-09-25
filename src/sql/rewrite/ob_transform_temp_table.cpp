@@ -2605,6 +2605,7 @@ int ObTransformTempTable::evaluate_cte_cost(ObDMLStmt &root_stmt,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -2822,6 +2823,7 @@ int ObTransformTempTable::evaluate_cte_cost_partially(ObDMLStmt *root_stmt,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -2907,6 +2909,7 @@ int ObTransformTempTable::evaluate_cte_cost_globally(ObDMLStmt *origin_root,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
