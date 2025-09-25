@@ -727,6 +727,23 @@ bool ObLobLocatorV2::is_empty_lob() const
   return (ret == OB_SUCCESS ? bret : false);
 }
 
+int ObLobLocatorV2::update_payload_size(ObString &dst, int64_t header_size, bool is_lob_v1)
+{
+  int ret = OB_SUCCESS;
+  if (is_lob_v1) {
+    reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - header_size;
+  } else {
+    ObLobLocatorV2 lob(dst);
+    if (OB_UNLIKELY(!lob.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got invalid ps lob param", K(dst));
+    } else if (lob.has_inrow_data() && !lob.is_lob_disk_locator() && lob.has_extern()) {
+      reinterpret_cast<ObMemLobExternHeader *>(dst.ptr() + sizeof(ObMemLobCommon))->payload_size_ = dst.length() - header_size;
+    }
+  }
+  return ret;
+}
+
 int ObLobLocatorV2::get_lob_data_byte_len(int64_t &len) const
 {
   int ret =  OB_SUCCESS;
