@@ -466,6 +466,7 @@ public:
       force_dist_hash_(false),
       force_pull_to_local_(false),
       force_hash_local_(false),
+      force_pushdown_group_by_(false),
       is_scalar_group_by_(false),
       distinct_exprs_(),
       aggr_code_expr_(NULL),
@@ -504,6 +505,8 @@ public:
 
     inline bool force_basic() const { return ignore_hint_ ? false : force_basic_; }
 
+    inline bool force_pushdown_group_by() const { return ignore_hint_ ? false : force_pushdown_group_by_; }
+
     inline bool allow_hash_local() const { return ignore_hint_ || (!force_basic_ &&
                                                                    !force_dist_hash_ &&
                                                                    !force_partition_wise_ &&
@@ -529,6 +532,7 @@ public:
     bool force_dist_hash_;      // pq hint force use hash distributed method plan
     bool force_pull_to_local_;
     bool force_hash_local_;
+    bool force_pushdown_group_by_;
     bool is_scalar_group_by_;
     bool is_from_povit_;
     bool ignore_hint_;
@@ -569,6 +573,7 @@ public:
                  K_(force_dist_hash),
                  K_(force_pull_to_local),
                  K_(force_hash_local),
+                 K_(force_pushdown_group_by),
                  K_(is_scalar_group_by),
                  K_(is_from_povit),
                  K_(ignore_hint),
@@ -752,9 +757,10 @@ public:
                                           ObIArray<CandidatePlan> &groupby_plans);
 
   int get_distribute_group_by_method(ObLogicalOperator *top,
-                                    GroupingOpHelper &groupby_helper,
-                                    const ObIArray<ObRawExpr*> &reduce_exprs,
-                                    uint64_t &group_dist_methods);
+                                     GroupingOpHelper &groupby_helper,
+                                     const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     uint64_t &group_dist_methods,
+                                     bool is_for_three_stage = false);
   int prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_exprs,
                                GroupingOpHelper &helper);
 

@@ -491,7 +491,8 @@ struct ObLogPlanHint
                            bool &force_partition_wise,
                            bool &force_dist_hash,
                            bool &force_pull_to_local,
-                           bool &force_hash_local) const;
+                           bool &force_hash_local,
+                           bool &force_pushdown_group_by) const;
   int get_aggregation_dop(int64_t &dop) const;
   int get_distinct_info(bool &force_use_hash,
                         bool &force_use_merge,

@@ -920,7 +920,8 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
       if (OB_FAIL(get_distribute_group_by_method(candidate_plan.plan_tree_, 
                                                 groupby_helper, 
                                                 reduce_exprs,
-                                                group_dist_methods))) {
+                                                group_dist_methods,
+                                                true))) {
         LOG_WARN("failed to get distribute method", K(ret));
       } else if (!(DistAlgo::DIST_HASH_HASH & group_dist_methods)) {
         OPT_TRACE("basic or partition wise can not use three stage group by");
