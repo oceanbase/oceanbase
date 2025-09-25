@@ -14991,6 +14991,7 @@ int ObLogPlan::set_use_batch_for_table_scan(ObLogicalOperator *op, bool check_gi
     scan_op->set_use_batch(in_batch_rescan);
     if (in_batch_rescan) {
       scan_op->get_pushdown_aggr_exprs().reuse();
+      scan_op->get_pushdown_groupby_columns().reuse();
     }
   } else if (check_gi && OB_FAIL(reset_use_batch_due_to_gi_allocated_below(op))) {
     LOG_WARN("failed to reset use batch due to gi allocated below", K(ret));
