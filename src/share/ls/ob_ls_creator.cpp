@@ -1136,9 +1136,9 @@ int ObLSCreator::construct_units_for_duplicate_ls_(
   valid_unit_array.reset();
   common::ObArray<share::ObUnit> all_unit_array;
   common::ObArray<uint64_t> gts_unit_ids;
-  common::ObArray<uint64_t> unit_list_ids;
   uint64_t tenant_id = status_info.tenant_id_;
   ObUnitTableOperator unit_operator;
+  share::ObLSStatusOperator ls_status_operator;
   if (OB_UNLIKELY(!status_info.is_valid()
                   || !is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -1152,21 +1152,15 @@ int ObLSCreator::construct_units_for_duplicate_ls_(
     LOG_WARN("fail to get unit info array", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObUnitManager::get_tenant_gts_unit_ids(tenant_id, gts_unit_ids))) {
     LOG_WARN("fail to get tenant gts unit ids", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(status_info.get_unit_list(unit_list_ids))) {
-    LOG_WARN("fail to get unit_list in status info", KR(ret), K(status_info));
+  } else if (OB_FAIL(ls_status_operator.get_ls_unit_array(
+                         status_info, *proxy_, unit_list_array))) {
+    LOG_WARN("fail to get unit array", KR(ret), K(status_info));
   } else {
     for (int64_t index = 0; index < all_unit_array.count() && OB_SUCC(ret); ++index) {
       const share::ObUnit &unit = all_unit_array.at(index);
-      if (has_exist_in_array(unit_list_ids, unit.unit_id_)) {
-        if (OB_FAIL(unit_list_array.push_back(unit))) {
-          LOG_WARN("fail to push back unit into unit list array", KR(ret), K(unit));
-        } else if (OB_FAIL(valid_unit_array.push_back(unit))) {
-          // this unit in unit_list, it is always valid even it's a gts unit
-          LOG_WARN("fail to push back unit into valid unit array", KR(ret), K(unit));
-        }
-      } else if (has_exist_in_array(gts_unit_ids, unit.unit_id_)) {
+      if (has_exist_in_array(gts_unit_ids, unit.unit_id_)) {
         LOG_INFO("unit is gts unit and not in unit_list, just skip",
-                 K(status_info), K(unit), K(unit_list_ids), K(gts_unit_ids));
+                 K(status_info), K(unit), K(gts_unit_ids));
       } else if (OB_FAIL(valid_unit_array.push_back(unit))) {
         LOG_WARN("fail to push back unit into valid unit array", KR(ret), K(unit));
       }
@@ -1174,7 +1168,7 @@ int ObLSCreator::construct_units_for_duplicate_ls_(
   }
   LOG_INFO("finish allocate units for duplicate log stream", KR(ret), K(tenant_id),
            K(unit_list_array), K(valid_unit_array), K(status_info), K(all_unit_array),
-           K(unit_list_ids), K(gts_unit_ids));
+           K(gts_unit_ids));
   return ret;
 }
 
