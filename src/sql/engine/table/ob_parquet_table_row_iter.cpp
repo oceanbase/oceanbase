@@ -1601,11 +1601,18 @@ int ObParquetTableRowIterator::prefetch_parquet_row_group(
   int64_t select_col_cnt = column_exprs_.count();
   const double MIN_SELECTION_RATE_THRESHOLD = 0.8;
   file_prefetch_buffer_.clear();
-  if (select_col_cnt / row_group_meta->num_columns() >= MIN_SELECTION_RATE_THRESHOLD) {
-    if (OB_FAIL(file_prefetch_buffer_.prefetch(row_group_meta->file_offset(),
-                                               row_group_meta->total_compressed_size()))) {
-      LOG_WARN("failed to prefetch from parquet file", K(row_group_meta->file_offset()),
-               K(row_group_meta->total_compressed_size()));
+  int64_t compressed_size = row_group_meta->total_compressed_size();
+  bool is_prefetch
+      = compressed_size > 0
+        && select_col_cnt >= MIN_SELECTION_RATE_THRESHOLD * row_group_meta->num_columns();
+  if (is_prefetch) {
+    if (OB_FAIL(file_prefetch_buffer_.prefetch(row_group_meta->file_offset(), compressed_size))) {
+      LOG_WARN("failed to prefetch from parquet file",
+               K(ret),
+               K(select_col_cnt),
+               K(row_group_meta->num_columns()),
+               K(row_group_meta->file_offset()),
+               K(compressed_size));
     }
   }
   return ret;
