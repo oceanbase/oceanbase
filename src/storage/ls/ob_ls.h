@@ -14,6 +14,7 @@
 #define OCEABASE_STORAGE_OB_LS_
 
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_iarray.h"
 #include "common/ob_member_list.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_delegate.h"
@@ -264,7 +265,7 @@ public:
   int save_base_schema_version();
 
   // get ls info
-  int get_ls_info(ObLSVTInfo &ls_info);
+  int get_ls_info(const ObIArray<uint64_t> &output_column_ids, ObLSVTInfo &ls_info);
   int get_ls_role(ObRole &role);
   // report the ls replica info to RS.
   int report_replica_info();

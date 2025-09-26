@@ -71,12 +71,16 @@
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "share/wr/ob_wr_service.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
+#include "observer/virtual_table/ob_all_virtual_ls_info.h"
 
 namespace oceanbase
 {
 using namespace share;
-using namespace logservice;
 using namespace transaction;
+using namespace rootserver;
+using namespace observer;
+using namespace oceanbase::observer;
 
 namespace storage
 {
@@ -257,7 +261,7 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObArchiveSchedulerService *));
       }
       if (OB_SUCC(ret) && ls_id.is_sys_ls()) {
-        REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+        REGISTER_TO_LOGSERVICE(logservice::DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
         if (is_user_tenant(tenant_id)) {
           //user
           REGISTER_TO_LOGSERVICE(logservice::PRIMARY_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObPrimaryLSService *));
@@ -816,7 +820,7 @@ void ObLS::destroy()
     MTL(share::ObGlobalAutoIncService *)->set_cache_ls(nullptr);
   }
   if (ls_meta_.ls_id_.is_sys_ls()) {
-    UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
+    UNREGISTER_FROM_LOGSERVICE(logservice::DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     if (is_user_tenant(MTL_ID())) {
       rootserver::ObPrimaryLSService* ls_service = MTL(rootserver::ObPrimaryLSService*);
       UNREGISTER_FROM_LOGSERVICE(logservice::PRIMARY_LS_SERVICE_LOG_BASE_TYPE, ls_service);
@@ -1333,7 +1337,7 @@ int ObLS::try_sync_reserved_snapshot(
   return ret;
 }
 
-int ObLS::get_ls_info(ObLSVTInfo &ls_info)
+int ObLS::get_ls_info(const ObIArray<uint64_t> &output_column_ids, ObLSVTInfo &ls_info)
 {
   int ret = OB_SUCCESS;
   ObRole role;
@@ -1343,47 +1347,122 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   ObMigrationStatus migrate_status;
   bool tx_blocked = false;
   int64_t required_data_disk_size = 0;
+  const int64_t col_count = output_column_ids.count();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
-    LOG_WARN("get ls role failed", K(ret), KPC(this));
-  } else if (OB_FAIL(log_handler_.is_in_sync(is_log_sync,
-                                             is_need_rebuild))) {
-    LOG_WARN("get ls need rebuild info failed", K(ret), KPC(this));
-  } else if (OB_FAIL(ls_meta_.get_migration_status(migrate_status))) {
-    LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
-  } else if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
-    LOG_WARN("check tx ls state error", K(ret),KPC(this));
-  } else if (OB_ISNULL(get_tablet_svr())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(get_tablet_svr()->get_ls_migration_required_size(required_data_disk_size))) {
-    LOG_WARN("fail to get required data disk size for migration", KR(ret));
+  } else if (col_count <= 0) {
+    // do nothing
   } else {
-    // The readable point of the primary tenant is weak read ts,
-    // and the readable point of the standby tenant is readable scn
-    if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-      ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
-    } else if (OB_FAIL(get_ls_replica_readable_scn(ls_info.weak_read_scn_))) {
-      TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), KPC(this));
-    }
-    if (OB_SUCC(ret)) {
-      ls_info.ls_id_ = ls_meta_.ls_id_;
-      ls_info.replica_type_ = ls_meta_.get_replica_type();
-      ls_info.ls_state_ = role;
-      ls_info.migrate_status_ = migrate_status;
-      ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
-      ls_info.need_rebuild_ = is_need_rebuild;
-      ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
-      ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
-      ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
-      ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
-      ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
-      ls_info.tx_blocked_ = tx_blocked;
-      ls_info.required_data_disk_size_ = required_data_disk_size;
-      if (tx_blocked) {
-        TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
+    ls_info.ls_id_ = ls_meta_.ls_id_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
+      uint64_t col_id = output_column_ids.at(i);
+      switch (col_id) {
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::SVR_IP):
+          // svr_ip
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::SVR_PORT):
+          // svr_port
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TENANT_ID):
+          // tenant_id
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::LS_ID):
+          // ls_id
+          break;
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REPLICA_TYPE): {
+          // replica_type
+          ls_info.replica_type_ = ls_meta_.get_replica_type();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::LS_STATE): {
+          // ls_state
+          if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+            LOG_WARN("get ls role failed", K(ret), KPC(this));
+          } else {
+            ls_info.ls_state_ = role;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TABLET_COUNT): {
+          // tablet_count
+          ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::WEAK_READ_TIMESTAMP): {
+          // weak_read_timestamp
+          if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+            ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
+          } else if (OB_FAIL(get_ls_replica_readable_scn(ls_info.weak_read_scn_))) {
+            TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), KPC(this));
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::NEED_REBUILD): {
+          // need_rebuild
+          if (OB_FAIL(log_handler_.is_in_sync(is_log_sync, is_need_rebuild))) {
+            LOG_WARN("get ls need rebuild info failed", K(ret), KPC(this));
+          } else {
+            ls_info.need_rebuild_ = is_need_rebuild;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::CLOG_CHECKPOINT_TS): {
+          // clog_checkpoint_ts
+          ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::CLOG_CHECKPOINT_LSN): {
+          // clog_checkpoint_lsn
+          ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MIGRATE_STATUS): {
+          // migrate_status
+          if (OB_FAIL(ls_meta_.get_migration_status(migrate_status))) {
+            LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
+          } else {
+            ls_info.migrate_status_ = migrate_status;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REBUILD_SEQ): {
+          // rebuild_seq
+          ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TABLET_CHANGE_CHECKPOINT_SCN): {
+          // tablet_change_checkpoint_scn
+          ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TRANSFER_SCN): {
+          // transfer_scn
+          ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TX_BLOCKED): {
+          // tx blocked
+          if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
+            LOG_WARN("check tx ls state error", K(ret),KPC(this));
+          } else {
+            ls_info.tx_blocked_ = tx_blocked;
+            if (tx_blocked) {
+              TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
+            }
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REQUIRED_DATA_DISK_SIZE): {
+          // required_data_disk_size
+          if (OB_FAIL(ls_tablet_svr_.get_ls_migration_required_size(required_data_disk_size))) {
+            LOG_WARN("fail to get required data disk size for migration", KR(ret));
+          } else {
+            ls_info.required_data_disk_size_ = required_data_disk_size;
+          }
+          break;
+        }
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));
+          break;
       }
     }
   }
@@ -1680,7 +1759,7 @@ int ObLS::replay_get_tablet_no_check(
     } else if (scn <= tablet_change_checkpoint_scn) {
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_WARN("tablet already gc", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
-    } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(ls_meta_.ls_id_, max_scn))) {
+    } else if (OB_FAIL(MTL(logservice::ObLogService*)->get_log_replay_service()->get_max_replayed_scn(ls_meta_.ls_id_, max_scn))) {
       LOG_WARN("failed to get_max_replayed_scn", KR(ret), K_(ls_meta), K(scn), K(tablet_id));
     }
     // double check for this scenario:

@@ -13,6 +13,7 @@
 #ifndef OB_ALL_VIRTUAL_OB_LS_INFO_H_
 #define OB_ALL_VIRTUAL_OB_LS_INFO_H_
 
+#include "storage/ls/ob_ls.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
@@ -21,6 +22,28 @@ namespace oceanbase
 {
 namespace observer
 {
+
+// 虚拟表列ID枚举
+enum class ObAllVirtualLSInfoColumnId : uint64_t
+{
+  SVR_IP = OB_APP_MIN_COLUMN_ID,
+  SVR_PORT = OB_APP_MIN_COLUMN_ID + 1,
+  TENANT_ID = OB_APP_MIN_COLUMN_ID + 2,
+  LS_ID = OB_APP_MIN_COLUMN_ID + 3,
+  REPLICA_TYPE = OB_APP_MIN_COLUMN_ID + 4,
+  LS_STATE = OB_APP_MIN_COLUMN_ID + 5,
+  TABLET_COUNT = OB_APP_MIN_COLUMN_ID + 6,
+  WEAK_READ_TIMESTAMP = OB_APP_MIN_COLUMN_ID + 7,
+  NEED_REBUILD = OB_APP_MIN_COLUMN_ID + 8,
+  CLOG_CHECKPOINT_TS = OB_APP_MIN_COLUMN_ID + 9,
+  CLOG_CHECKPOINT_LSN = OB_APP_MIN_COLUMN_ID + 10,
+  MIGRATE_STATUS = OB_APP_MIN_COLUMN_ID + 11,
+  REBUILD_SEQ = OB_APP_MIN_COLUMN_ID + 12,
+  TABLET_CHANGE_CHECKPOINT_SCN = OB_APP_MIN_COLUMN_ID + 13,
+  TRANSFER_SCN = OB_APP_MIN_COLUMN_ID + 14,
+  TX_BLOCKED = OB_APP_MIN_COLUMN_ID + 15,
+  REQUIRED_DATA_DISK_SIZE = OB_APP_MIN_COLUMN_ID + 16,
+};
 
 class ObAllVirtualLSInfo : public common::ObVirtualTableScannerIterator,
                            public omt::ObMultiTenantOperator
