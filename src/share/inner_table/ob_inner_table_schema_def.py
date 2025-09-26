@@ -6685,6 +6685,14 @@ def_table_schema(
         ('first_load_time', 'timestamp', 'true'),
         ('plan_cache_hit_total', 'bigint', 'false', '0'),
         ('plan_cache_hit_delta', 'bigint', 'false', '0'),
+        ('muti_query_total', 'bigint', 'false', '0'),
+        ('muti_query_delta', 'bigint', 'false', '0'),
+        ('muti_query_batch_total', 'bigint', 'false', '0'),
+        ('muti_query_batch_delta', 'bigint', 'false', '0'),
+        ('full_table_scan_total', 'bigint', 'false', '0'),
+        ('full_table_scan_delta', 'bigint', 'false', '0'),
+        ('error_count_total', 'bigint', 'false', '0'),
+        ('error_count_delta', 'bigint', 'false', '0'),
     ],
 )
 
@@ -7435,6 +7443,69 @@ def_table_schema(
     ('primary_zone_num', 'int', 'false'),
     ('zone_unit_num_list', 'varchar:MAX_LOCALITY_LENGTH', 'false'),
     ('parameter_list', 'longtext', 'false'),
+  ],
+)
+
+def_table_schema(
+  owner = 'zhangyiqiang.zyq',
+  table_id      = '573',
+  table_name    = '__wr_active_session_history_v2',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [
+    ('sample_time', 'timestamp'),
+    ('tenant_id', 'int'),
+    ('cluster_id', 'int'),
+    ('snap_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('sample_id', 'int'),
+    ('session_id', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('user_id', 'int', 'true'),
+    ('session_type', 'bool', 'true'),
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('event_no', 'int', 'true'),
+    ('time_waited', 'int', 'true'),
+    ('p1', 'int', 'true'),
+    ('p2', 'int', 'true'),
+    ('p3', 'int', 'true'),
+    ('sql_plan_line_id', 'int', 'true'),
+    ('time_model', 'uint', 'true'),
+    ('module', 'varchar:64', 'true'),
+    ('action', 'varchar:64', 'true'),
+    ('client_id', 'varchar:64', 'true'),
+    ('backtrace', 'varchar:512', 'true'),
+    ('plan_id', 'int', 'true'),
+    ('program', 'varchar:64', 'true'),
+    ('tm_delta_time', 'int', 'true'),
+    ('tm_delta_cpu_time', 'int', 'true'),
+    ('tm_delta_db_time', 'int', 'true'),
+    ('top_level_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('plsql_entry_object_id', 'int', 'true'),
+    ('plsql_entry_subprogram_id', 'int', 'true'),
+    ('plsql_entry_subprogram_name', 'varchar:32', 'true'),
+    ('plsql_object_id', 'int', 'true'),
+    ('plsql_subprogram_id', 'int', 'true'),
+    ('plsql_subprogram_name', 'varchar:32', 'true'),
+    ('event_id', 'int', 'true'),
+    ('group_id', 'int', 'true'),
+    ('tx_id', 'int', 'true'),
+    ('blocking_session_id', 'int', 'true'),
+    ('plan_hash', 'uint', 'true'),
+    ('thread_id', 'int', 'true'),
+    ('stmt_type', 'int', 'true'),
+    ('tablet_id', 'int', 'true'),
+    ('proxy_sid', 'int', 'true'),
+    ('delta_read_io_requests', 'int', 'true', '0'),
+    ('delta_read_io_bytes', 'int', 'true', '0'),
+    ('delta_write_io_requests', 'int', 'true', '0'),
+    ('delta_write_io_bytes', 'int', 'true', '0')
   ],
 )
 
@@ -14389,6 +14460,14 @@ def_table_schema(
     ('FIRST_LOAD_TIME', 'timestamp', 'true'),
     ('PLAN_CACHE_HIT_TOTAL', 'bigint', 'false', '0'),
     ('PLAN_CACHE_HIT_DELTA', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_TOTAL', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_DELTA', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_BATCH_TOTAL', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_BATCH_DELTA', 'bigint', 'false', '0'),
+    ('FULL_TABLE_SCAN_TOTAL', 'bigint', 'false', '0'),
+    ('FULL_TABLE_SCAN_DELTA', 'bigint', 'false', '0'),
+    ('ERROR_COUNT_TOTAL', 'bigint', 'false', '0'),
+    ('ERROR_COUNT_DELTA', 'bigint', 'false', '0'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -14916,6 +14995,12 @@ def_table_schema(
   in_tenant_space = True,
 )
 
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12576',
+  table_name = '__all_virtual_wr_active_session_history_v2',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_active_session_history_v2']))
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15399,6 +15484,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15502'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15510', all_def_keywords['__all_virtual_balance_job_description'])))
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15524', all_def_keywords['__all_unit'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -31549,15 +31635,10 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES
   FROM
     (
-      oceanbase.__all_virtual_wr_active_session_history ASH
-      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
-      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND ASH.TENANT_ID = SNAP.TENANT_ID
-      AND ASH.SNAP_ID = SNAP.SNAP_ID
+      oceanbase.__all_virtual_wr_active_session_history_v2 ASH
     )
   WHERE
-    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND SNAP.STATUS = 0;
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
 # 21390: CDB_WR_ACTIVE_SESSION_HISTORY
@@ -31640,14 +31721,8 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES
   FROM
     (
-      oceanbase.__all_virtual_wr_active_session_history ASH
-      JOIN oceanbase.__all_virtual_wr_snapshot SNAP
-      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND ASH.TENANT_ID = SNAP.TENANT_ID
-      AND ASH.SNAP_ID = SNAP.SNAP_ID
-    )
-  WHERE
-    SNAP.STATUS = 0;
+      oceanbase.__all_virtual_wr_active_session_history_v2 ASH
+    );
   """.replace("\n", " ")
 )
 # 21391: DBA_WR_SNAPSHOT
@@ -34158,7 +34233,15 @@ def_table_schema(
       ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
   FROM oceanbase.__all_virtual_sqlstat
 """.replace("\n", " "),
   normal_columns  = [],
@@ -34232,7 +34315,16 @@ ROUTE_MISS_TOTAL,
 ROUTE_MISS_DELTA,
 FIRST_LOAD_TIME,
 PLAN_CACHE_HIT_TOTAL,
-PLAN_CACHE_HIT_DELTA FROM oceanbase.gv$ob_sqlstat WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLAN_CACHE_HIT_DELTA,
+MUTI_QUERY_TOTAL,
+MUTI_QUERY_DELTA,
+MUTI_QUERY_BATCH_TOTAL,
+MUTI_QUERY_BATCH_DELTA,
+FULL_TABLE_SCAN_TOTAL,
+FULL_TABLE_SCAN_DELTA,
+ERROR_COUNT_TOTAL,
+ERROR_COUNT_DELTA
+FROM oceanbase.gv$ob_sqlstat WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -34305,7 +34397,15 @@ def_table_schema(
       STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       STAT.FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       STAT.PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      STAT.MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      STAT.MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      STAT.MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      STAT.MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
@@ -34390,7 +34490,15 @@ def_table_schema(
       STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       STAT.FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       STAT.PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      STAT.MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      STAT.MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      STAT.MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      STAT.MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
@@ -55951,14 +56059,9 @@ def_table_schema(
       ASH.DELTA_WRITE_IO_REQUESTS AS DELTA_WRITE_IO_REQUESTS,
       ASH.DELTA_WRITE_IO_BYTES AS DELTA_WRITE_IO_BYTES
   FROM
-    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
-    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2 ASH
   WHERE
-    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-    AND ASH.TENANT_ID = SNAP.TENANT_ID
-    AND ASH.SNAP_ID = SNAP.SNAP_ID
-    AND SNAP.STATUS = 0;
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
 # 25230: DBA_WR_SNAPSHOT
@@ -57284,7 +57387,15 @@ def_table_schema(
       STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       STAT.FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       STAT.PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      STAT.MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      STAT.MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      STAT.MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      STAT.MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
   FROM
     SYS.ALL_VIRTUAL_WR_SQLSTAT STAT,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
@@ -65210,7 +65321,15 @@ def_table_schema(
       CAST(ROUTE_MISS_DELTA AS NUMBER) AS ROUTE_MISS_DELTA,
       CAST(FIRST_LOAD_TIME AS TIMESTAMP(6)) AS FIRST_LOAD_TIME,
       CAST(PLAN_CACHE_HIT_TOTAL AS NUMBER) AS PLAN_CACHE_HIT_TOTAL,
-      CAST(PLAN_CACHE_HIT_DELTA AS NUMBER) AS PLAN_CACHE_HIT_DELTA
+      CAST(PLAN_CACHE_HIT_DELTA AS NUMBER) AS PLAN_CACHE_HIT_DELTA,
+      CAST(MUTI_QUERY_TOTAL AS NUMBER) AS MUTI_QUERY_TOTAL,
+      CAST(MUTI_QUERY_DELTA AS NUMBER) AS MUTI_QUERY_DELTA,
+      CAST(MUTI_QUERY_BATCH_TOTAL AS NUMBER) AS MUTI_QUERY_BATCH_TOTAL,
+      CAST(MUTI_QUERY_BATCH_DELTA AS NUMBER) AS MUTI_QUERY_BATCH_DELTA,
+      CAST(FULL_TABLE_SCAN_TOTAL AS NUMBER) AS FULL_TABLE_SCAN_TOTAL,
+      CAST(FULL_TABLE_SCAN_DELTA AS NUMBER) AS FULL_TABLE_SCAN_DELTA,
+      CAST(ERROR_COUNT_TOTAL AS NUMBER) AS ERROR_COUNT_TOTAL,
+      CAST(ERROR_COUNT_DELTA AS NUMBER) AS ERROR_COUNT_DELTA
     FROM SYS.ALL_VIRTUAL_SQLSTAT
 """.replace("\n", " "),
 )
@@ -65284,7 +65403,16 @@ ROUTE_MISS_TOTAL,
 ROUTE_MISS_DELTA,
 FIRST_LOAD_TIME,
 PLAN_CACHE_HIT_TOTAL,
-PLAN_CACHE_HIT_DELTA FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLAN_CACHE_HIT_DELTA,
+MUTI_QUERY_TOTAL,
+MUTI_QUERY_DELTA,
+MUTI_QUERY_BATCH_TOTAL,
+MUTI_QUERY_BATCH_DELTA,
+FULL_TABLE_SCAN_TOTAL,
+FULL_TABLE_SCAN_DELTA,
+ERROR_COUNT_TOTAL,
+ERROR_COUNT_DELTA
+FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 

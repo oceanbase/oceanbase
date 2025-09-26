@@ -592,6 +592,7 @@ case OB_ALL_VIRTUAL_TENANT_INFO_TID:
 case OB_ALL_VIRTUAL_TENANT_PARAMETER_TID:
 case OB_ALL_VIRTUAL_TENANT_USER_FAILED_LOGIN_STAT_TID:
 case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_TID:
+case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID:
 case OB_ALL_VIRTUAL_WR_CONTROL_TID:
 case OB_ALL_VIRTUAL_WR_EVENT_NAME_TID:
 case OB_ALL_VIRTUAL_WR_RES_MGR_SYSSTAT_TID:
@@ -1737,6 +1738,22 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_WR_ACTIVE_SESSION_HISTORY_V2_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_WR_CONTROL_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1880,7 +1897,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_SYSSTAT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1896,9 +1915,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -4980,6 +4997,9 @@ case OB_TENANT_PARAMETER_AUX_LOB_PIECE_TID:
 case OB_WR_ACTIVE_SESSION_HISTORY_TID:
 case OB_WR_ACTIVE_SESSION_HISTORY_AUX_LOB_META_TID:
 case OB_WR_ACTIVE_SESSION_HISTORY_AUX_LOB_PIECE_TID:
+case OB_WR_ACTIVE_SESSION_HISTORY_V2_TID:
+case OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_META_TID:
+case OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_PIECE_TID:
 case OB_WR_CONTROL_TID:
 case OB_WR_CONTROL_AUX_LOB_META_TID:
 case OB_WR_CONTROL_AUX_LOB_PIECE_TID:

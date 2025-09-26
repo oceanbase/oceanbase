@@ -33,9 +33,10 @@ constexpr int64_t ASH_REFESH_TIME = 10 * 1000L * 1000L;  // 10s
 // every ASH_REFRESH_INTERVAL
 constexpr int64_t ASH_REFRESH_INTERVAL = 120 * 1000L * 1000L;  // 120s
 // we should snapshot ahead if current speed is SPEED_THRESHOLD times larger than expect speed
-constexpr int SPEED_THRESHOLD = 10;
+constexpr int SPEED_THRESHOLD = 5;
 // ahead snapshot will be triggered only if the time remaining until the next scheduled snapshot is greater than SNAPSHOT_THRESHOLD
 constexpr int SNAPSHOT_THRESHOLD = 180 * 1000L * 1000L;  // 180s
+constexpr double FREE_SLOTS_THRESHOLD = 0.5;
 
 ObAshRefreshTask &ObAshRefreshTask::get_instance()
 {
@@ -206,7 +207,13 @@ bool ObAshRefreshTask::require_snapshot_ahead()
     // last scheduled snapshot time update may lose or no last scheduled snapshot or this machine's clock is behind
     // cluster pressure may be heavy
     LOG_WARN_RET(OB_INVALID_TIMESTAMP, "unexpected next scheduled snapshot interval");
-    bret = false;
+    //可能由于重启或者切主导致无法实现第一次定时落盘，此时当ash buffer使用率超过FREE_SLOTS_THRESHOLD时，强制启用快照提前
+    if (free_slots_num < ObActiveSessHistList::get_instance().size() * FREE_SLOTS_THRESHOLD) {
+      bret = true;
+      LOG_INFO("force enable snapshot ahead because of free slots num is too small");
+    } else {
+      bret = false;
+    }
   } else {
     double cur_speed = 1.0 * (write_pos - prev_write_pos_) / ((ObTimeUtility::current_time() - prev_sched_time_) / 1000 / 1000);
     double expect_speed = 1.0 * free_slots_num / (next_scheduled_snapshot_interval / 1000 / 1000);

@@ -135,7 +135,7 @@ private:
 
   int deliver_mysql_request(rpc::ObRequest &req);
   int acquire_diagnostic_info_object(int64_t tenant_id, int64_t group_id, int64_t session_id,
-      ObDiagnosticInfo *&di, bool using_cache = false);
+      ObDiagnosticInfo *&di, bool using_cache = false, bool check_throttle = false, omt::ObTenant *tenant = NULL);
 
 private:
   bool is_inited_;

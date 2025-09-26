@@ -300,6 +300,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 541	__all_tenant_flashback_log_scn	0	201001	1
 543	__all_license	0	201001	1
 549	__all_balance_job_description	0	201001	1
+573	__wr_active_session_history_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -761,6 +762,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12540	__all_virtual_balance_job_description	2	201001	1
 12554	__all_virtual_unit_mysql_sys_agent	2	201001	1
 12571	__all_virtual_source	2	201001	1
+12576	__all_virtual_wr_active_session_history_v2	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

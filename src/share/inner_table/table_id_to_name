@@ -355,6 +355,7 @@
 # 541: __all_tenant_flashback_log_scn
 # 543: __all_license
 # 549: __all_balance_job_description
+# 573: __wr_active_session_history_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1129,6 +1130,8 @@
 # 12554: __all_virtual_unit_mysql_sys_agent
 # 12554: __all_unit  # BASE_TABLE_NAME
 # 12571: __all_virtual_source
+# 12576: __all_virtual_wr_active_session_history_v2
+# 12576: __wr_active_session_history_v2  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1784,6 +1787,9 @@
 # 15524: __all_unit  # BASE_TABLE_NAME
 # 15533: ALL_VIRTUAL_SOURCE
 # 15533: __all_virtual_source  # BASE_TABLE_NAME
+# 15535: ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2
+# 15535: __wr_active_session_history_v2  # BASE_TABLE_NAME
+# 15535: __all_virtual_wr_active_session_history_v2  # BASE_TABLE_NAME1
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

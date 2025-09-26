@@ -470,6 +470,7 @@ public:
   ~ObWrDeleter() = default;
   DISABLE_COPY_ASSIGN(ObWrDeleter);
   int do_delete();
+  int get_sample_time_by_snap_id(int64_t &min_sample_time, int64_t &max_sample_time, const int64_t snap_id, const int64_t cluster_id, const int64_t query_timeout);
   TO_STRING_KV(K_(purge_arg));
 
 private:
