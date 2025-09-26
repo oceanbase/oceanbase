@@ -274,8 +274,84 @@ int ObExCachedReadPageIOCallback::process_kv_(
   return ret;
 }
 
+/*static*/int ObExCachedReadPageIOCallback::safe_construct(
+    const ObExternalDataPageCacheKey &page_key,
+    char *user_buffer,
+    const int64_t user_buf_offset,
+    const int64_t user_data_len,
+    const int64_t self_buffer_len,
+    ObExternalDataPageCache &cache,
+    ObIAllocator &allocator,
+    /*output*/void *&self_buffer,
+    /*output*/common::ObIOCallback *&callback)
+{
+  int ret = OB_SUCCESS;
+  self_buffer = nullptr;
+  callback = nullptr;
+
+  void *callback_buf = nullptr;
+  void *page_key_buf = nullptr;
+  common::ObIKVCacheKey *copied_key = nullptr;
+  const int64_t page_key_size = page_key.size();
+
+  if (OB_UNLIKELY(!page_key.is_valid()
+                  || nullptr == user_buffer
+                  || user_buf_offset < 0
+                  || user_data_len <= 0
+                  || self_buffer_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KP(user_buffer), K(page_key), K(user_buf_offset), K(user_data_len), K(self_buffer_len));
+  } else if (OB_ISNULL(self_buffer = allocator.alloc(self_buffer_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloca self buffer", K(ret), K(self_buffer_len), KP(self_buffer));
+  } else if (OB_ISNULL(callback_buf = allocator.alloc(sizeof(ObExCachedReadPageIOCallback)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate callback buf", K(ret), K(sizeof(ObExCachedReadPageIOCallback)), KP(callback_buf));
+  } else if (OB_ISNULL(page_key_buf = allocator.alloc(page_key_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate page key buf", K(ret), K(page_key_size), KP(page_key_buf));
+  } else if (OB_FAIL(page_key.deep_copy(static_cast<char *>(page_key_buf), page_key_size, copied_key))) {
+    LOG_WARN("failed to deep copy page key", K(ret), K(page_key_size), KP(page_key_buf), K(page_key), KP(copied_key));
+  } else if (OB_ISNULL(copied_key)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null copied_key", K(ret), K(page_key), KP(page_key_buf), K(page_key_size), KP(copied_key));
+  } else {
+    callback = new (callback_buf) ObExCachedReadPageIOCallback(
+          static_cast<ObExternalDataPageCacheKey *>(copied_key),
+          user_buffer, self_buffer, user_buf_offset,
+          user_data_len, &cache, &allocator);
+  }
+
+  // reclaim memory if err happens.
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(callback)) {
+      callback->~ObIOCallback();
+      // in callback deconstruct, self_buffer and page_key will be free;
+      self_buffer = nullptr;
+      copied_key = nullptr;
+      page_key_buf = nullptr;
+    }
+    if (OB_NOT_NULL(callback_buf)) {
+      allocator.free(callback_buf);
+    }
+    if (OB_NOT_NULL(self_buffer)) {
+      allocator.free(self_buffer);
+      self_buffer = nullptr;
+    }
+    if (OB_NOT_NULL(copied_key)) {
+      copied_key->~ObIKVCacheKey();
+    }
+    if (OB_NOT_NULL(page_key_buf)) {
+      allocator.free(page_key_buf);
+    }
+    self_buffer = nullptr;
+    callback = nullptr;
+  }
+  return ret;
+}
+
 ObExCachedReadPageIOCallback::ObExCachedReadPageIOCallback(
-    const ObExternalDataPageCacheKey &key,
+    ObExternalDataPageCacheKey *key,
     char *user_buffer,
     void *self_buffer,
     const int64_t user_buf_offset,
@@ -293,6 +369,11 @@ ObExCachedReadPageIOCallback::~ObExCachedReadPageIOCallback()
     allocator_->free(self_buf_);
     self_buf_ = nullptr;
   }
+  if (nullptr != allocator_ && nullptr != page_key_) {
+    page_key_->~ObExternalDataPageCacheKey();
+    allocator_->free(page_key_);
+    page_key_ = nullptr;
+  }
   allocator_ = nullptr;
   self_buf_ = nullptr;
   data_buf_ = nullptr;
@@ -305,7 +386,7 @@ int ObExCachedReadPageIOCallback::inner_process(
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("ObExCachedReadPageIOCallback", 100000); //100ms
-  if (OB_ISNULL(cache_) || OB_ISNULL(allocator_) || OB_ISNULL(data_buf_) || data_offset_ < 0 || data_length_ <= 0) {
+  if (OB_UNLIKELY(!is_valid_())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid external page cache callback allocator", KR(ret), KP(cache_), KP(allocator_));
   } else if (OB_UNLIKELY(size <= 0 || OB_ISNULL(data_buffer) || data_length_ + data_offset_ > size)) {
@@ -314,12 +395,22 @@ int ObExCachedReadPageIOCallback::inner_process(
   } else if (OB_FAIL(inner_process_user_bufer_(data_buffer, size))) {
     LOG_WARN("failed to process kv", K(ret), KP(data_buffer), K(size));
   } else if (FALSE_IT(time_guard.click("process_user_buf_"))) {
-  } else if (OB_FAIL(inner_process_cache_pages_(data_buffer, size, page_key_.get_page_size()))) {
+  } else if (OB_FAIL(inner_process_cache_pages_(data_buffer, size, page_key_->get_page_size()))) {
     LOG_WARN("failed to process kv", K(ret), KP(data_buffer), K(size));
   } else if (FALSE_IT(time_guard.click("process_kv_"))) {
   }
 
   return ret;
+}
+
+bool ObExCachedReadPageIOCallback::is_valid_() const
+{
+  return nullptr != page_key_
+         && nullptr != cache_
+         && nullptr != allocator_
+         && nullptr != data_buf_
+         && data_offset_ >= 0
+         && data_length_ > 0;
 }
 
 int ObExCachedReadPageIOCallback::inner_process_cache_pages_(
@@ -342,9 +433,9 @@ int ObExCachedReadPageIOCallback::inner_process_cache_pages_(
                                     (valid_size % page_size == 0 ? page_size : valid_size % page_size) :
                                     (page_size);
       if (FALSE_IT(value.set_buffer(const_cast<char*>(data_buffer + (i * page_size)), cur_valid_size))) {
-      } else if (OB_FAIL(process_kv_(page_key_, value))) {
+      } else if (OB_FAIL(process_kv_(*page_key_, value))) {
         STORAGE_LOG(WARN, "fail to process external page cache in callback", KR(ret));
-      } else if (FALSE_IT(page_key_.advance_offset(page_size))) {
+      } else if (FALSE_IT(page_key_->advance_offset(page_size))) {
       }
     }
   }
