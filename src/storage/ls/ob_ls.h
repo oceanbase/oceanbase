@@ -264,10 +264,9 @@ public:
   int prepare_for_safe_destroy();
   bool safe_to_destroy();
   void destroy();
-  int offline();
+  int offline(const bool remove_from_disk=false);
   int online();
   int online_without_lock();
-  int offline_without_lock();
   int enable_for_restore();
   bool is_offline() const
   { return running_state_.is_offline(); }
@@ -442,7 +441,7 @@ private:
   int stop_();
   void wait_();
   int prepare_for_safe_destroy_();
-  int offline_(const int64_t start_ts);
+  int offline_(const int64_t start_ts, const bool remove_from_disk=false);
   int offline_compaction_();
   int online_compaction_();
   int offline_tx_(const int64_t start_ts);
