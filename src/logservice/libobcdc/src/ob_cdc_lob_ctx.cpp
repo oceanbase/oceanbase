@@ -284,12 +284,25 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
       (void)common::databuff_printf(buf, buf_len, pos, new_lob_data_->id_);
       (void)common::databuff_printf(buf, buf_len, pos, " ");
 
-      const ObLobDataOutRowCtx *lob_data_out_row_ctx =
+      const ObLobDataOutRowCtx *new_lob_out_row =
         reinterpret_cast<const ObLobDataOutRowCtx *>(new_lob_data_->buffer_);
 
-      if (nullptr != lob_data_out_row_ctx) {
-        (void)common::databuff_printf(buf, buf_len, pos, "lob_out_row=");
-        (void)common::databuff_printf(buf, buf_len, pos, *lob_data_out_row_ctx);
+      if (nullptr != new_lob_out_row) {
+        (void)common::databuff_printf(buf, buf_len, pos, "new_lob_out_row=");
+        (void)common::databuff_printf(buf, buf_len, pos, *new_lob_out_row);
+      }
+    }
+    if (nullptr != old_lob_data_) {
+      (void)common::databuff_printf(buf, buf_len, pos, "byte_size=%ld, lob_id=", old_lob_data_->byte_size_);
+      (void)common::databuff_printf(buf, buf_len, pos, old_lob_data_->id_);
+      (void)common::databuff_printf(buf, buf_len, pos, " ");
+
+      const ObLobDataOutRowCtx *old_lob_out_row =
+        reinterpret_cast<const ObLobDataOutRowCtx *>(old_lob_data_->buffer_);
+
+      if (nullptr != old_lob_out_row) {
+        (void)common::databuff_printf(buf, buf_len, pos, "old_lob_out_row=");
+        (void)common::databuff_printf(buf, buf_len, pos, *old_lob_out_row);
       }
     }
   }
