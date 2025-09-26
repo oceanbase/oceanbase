@@ -263,7 +263,7 @@ int ObCDCLobDataMerger::push_lob_column_(
   } else {
     LOG_DEBUG("push_lob_column_", K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
     const bool is_empty_sql = (ObLobDataOutRowCtx::OpType::EMPTY_SQL == lob_data_out_row_ctx->op_);
-    bool is_update_outrow_lob_from_empty_to_empty = false;
+    bool is_empty_outrow_lob = false;
     const transaction::ObTxSEQ seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;
     const uint32_t del_seq_no_cnt = lob_data_out_row_ctx->del_seq_no_cnt_;
@@ -274,8 +274,8 @@ int ObCDCLobDataMerger::push_lob_column_(
     if (is_empty_sql) {
       // do nothing
     } else if (lob_data_get_ctx.is_insert()) {
-      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
-        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_update_outrow_lob_from_empty_to_empty));
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_empty_outrow_lob))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_empty_outrow_lob));
       } else if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(insert_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx new_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt),
             K(lob_data_get_ctx));
@@ -285,8 +285,8 @@ int ObCDCLobDataMerger::push_lob_column_(
             K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_update()) {
-      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_update_outrow_lob_from_empty_to_empty))) {
-        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_update_outrow_lob_from_empty_to_empty));
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_empty_outrow_lob))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_empty_outrow_lob));
       } else if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(del_seq_no_cnt),
             K(lob_data_get_ctx));
@@ -303,7 +303,9 @@ int ObCDCLobDataMerger::push_lob_column_(
             K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_delete()) {
-      if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(seq_no_cnt, allocator))) {
+      if (OB_FAIL(check_empty_outrow_lob_col_(lob_data_get_ctx, seq_no_cnt, del_seq_no_cnt, is_empty_outrow_lob))) {
+        LOG_ERROR("check_empty_outrow_lob_col_ failed", K(lob_data_get_ctx), K(seq_no_cnt), K(del_seq_no_cnt), K(is_empty_outrow_lob));
+      } else if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(seq_no_cnt, allocator))) {
         LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt), K(lob_data_get_ctx));
       } else if (OB_FAIL(get_lob_col_fra_ctx_list_(false/*is_new_col*/, seq_no_st, del_seq_no_cnt, allocator, lob_data_get_ctx, old_lob_col_fra_ctx_list))) {
         LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(old_lob_col_fra_ctx_list));
@@ -311,7 +313,7 @@ int ObCDCLobDataMerger::push_lob_column_(
     }
 
     if (OB_SUCC(ret)) {
-      const bool try_push_formatter_directly = is_empty_sql || is_update_outrow_lob_from_empty_to_empty;
+      const bool try_push_formatter_directly = is_empty_sql || is_empty_outrow_lob;
       bool is_all_lob_col_handle_done = false;
 
       if (try_push_formatter_directly) {
@@ -320,7 +322,7 @@ int ObCDCLobDataMerger::push_lob_column_(
         if (is_all_lob_col_handle_done) {
           if (OB_FAIL(try_to_push_task_into_formatter_(lob_data_out_row_ctx_list, stop_flag))) {
             if (OB_IN_STOP_STATE != ret) {
-              LOG_ERROR("try_to_push_task_into_formatter_ failed", KR(ret), K(is_empty_sql), K(is_update_outrow_lob_from_empty_to_empty));
+              LOG_ERROR("try_to_push_task_into_formatter_ failed", KR(ret), K(is_empty_sql), K(is_empty_outrow_lob));
             }
           }
         }
@@ -335,6 +337,9 @@ int ObCDCLobDataMerger::push_lob_column_(
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push_lob_col_fra_ctx_list_ failed", KR(ret));
           }
+        } else if (OB_UNLIKELY(old_lob_col_fra_ctx_list.num_ == 0 && new_lob_col_fra_ctx_list.num_ == 0)) {
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "old_lob_col_fra_ctx_list and new_lob_col_fra_ctx_list are both empty, unexpected",
+              KR(ret), K(lob_data_get_ctx), K(old_lob_col_fra_ctx_list), K(new_lob_col_fra_ctx_list), KPC(lob_data_out_row_ctx));
         }
       }
     }
@@ -347,7 +352,7 @@ int ObCDCLobDataMerger::check_empty_outrow_lob_col_(
     ObLobDataGetCtx &lob_data_get_ctx,
     uint32_t seq_no_cnt,
     uint32_t del_seq_no_cnt,
-    bool &is_update_outrow_lob_from_empty_to_empty)
+    bool &is_empty_outrow_lob)
 {
   int ret = OB_SUCCESS;
   const int64_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
@@ -369,14 +374,17 @@ int ObCDCLobDataMerger::check_empty_outrow_lob_col_(
     const bool skip_ob_version_exist_known_issues = (cluster_version == 0) // can't get cluster_version, may in direct mode
         || (cluster_version < CLUSTER_VERSION_4_2_1_2) // ob version less than 4213 and 4102 has known issues will result in this scenario.
         || (cluster_version <= CLUSTER_VERSION_4_1_0_2);
-    const bool can_ignore_empty_outrow_update = (1 == TCONF.skip_empty_outrow_lob_update) || skip_ob_version_exist_known_issues;
 
-    if (can_ignore_empty_outrow_update) {
-      is_update_outrow_lob_from_empty_to_empty = true;
+    const bool is_delete_op = lob_data_get_ctx.is_delete();
+    const bool can_ignore_empty_outrow_lob = (1 == TCONF.skip_empty_outrow_lob_update) || skip_ob_version_exist_known_issues || is_delete_op;
+
+    if (can_ignore_empty_outrow_lob) {
+      is_empty_outrow_lob = true;
+      LOG_TRACE("empty_outrow_lob", K(lob_data_get_ctx));
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_ERROR("[FATAL] [OUTROW_LOB] unexpected update outrow lob from empty to empty, config skip_empty_outrow_lob_update = 1 if necessary",
-          KR(ret), K(can_ignore_empty_outrow_update), K(cluster_version));
+          KR(ret), K(can_ignore_empty_outrow_lob), K(cluster_version), K(lob_data_get_ctx));
     }
   }
 
