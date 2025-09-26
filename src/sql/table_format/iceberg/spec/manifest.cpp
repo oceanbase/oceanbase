@@ -153,15 +153,15 @@ int ManifestMetadata::init_partition_fields_from_metadata(const ObString &metada
 
 DataFile::DataFile(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      partition(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      column_sizes(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      value_counts(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      null_value_counts(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      nan_value_counts(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      lower_bounds(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      upper_bounds(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      split_offsets(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      equality_ids(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_))
+      partition(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      column_sizes(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      value_counts(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      null_value_counts(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      nan_value_counts(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      lower_bounds(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      upper_bounds(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      split_offsets(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      equality_ids(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_))
 {
 }
 

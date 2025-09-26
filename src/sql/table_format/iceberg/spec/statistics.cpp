@@ -28,8 +28,8 @@ namespace iceberg
 
 BlobMetadata::BlobMetadata(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      fields(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      properties(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      fields(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      properties(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 
@@ -101,7 +101,7 @@ int BlobMetadata::init_from_json(const ObJsonObject &json_object)
 
 StatisticsFile::StatisticsFile(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      blob_metadata(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      blob_metadata(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 

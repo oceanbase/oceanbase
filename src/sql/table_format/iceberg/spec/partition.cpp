@@ -312,7 +312,7 @@ int PartitionField::assign(const PartitionField &other)
 
 PartitionSpec::PartitionSpec(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      fields(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      fields(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 
