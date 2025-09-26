@@ -123,7 +123,7 @@ int ObMemtableSingleRowReader::init_a_new_range(const ObDatumRange &new_range_to
                                  memtable_->get_ls_id(),
                                  row_iter_))) {
       TRANS_LOG(WARN, "mvcc engine scan fail", K(ret), K(mvcc_scan_range));
-    } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_schema_rowkey_count()))) {
+    } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_schema_rowkey_count() + read_info_->get_extra_rowkey_count()))) {
       TRANS_LOG(WARN, "Failed to init bitmap ", K(ret));
     } else {
       TRANS_LOG(DEBUG, "mvcc engine scan success",
