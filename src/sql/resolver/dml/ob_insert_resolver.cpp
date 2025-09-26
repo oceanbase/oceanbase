@@ -1221,11 +1221,16 @@ int ObInsertResolver::resolve_insert_constraint()
       LOG_WARN("failed to resolve check constraints", K(ret));
     } else {
       // TODO @yibo remove view check exprs in log_del_upd
-      for (uint64_t i = 0; OB_SUCC(ret) && i < table_info.view_check_exprs_.count(); ++i) {
-        if (OB_FAIL(replace_column_ref_for_check_constraint(
-                      table_info, table_info.view_check_exprs_.at(i)))) {
-          LOG_WARN("fail to replace column ref for check constraint", K(ret),
-                    K(i), K(table_info.view_check_exprs_.at(i)));
+      ObRawExprReplacer replacer;
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_info.column_exprs_.count(); ++i) {
+        if (OB_FAIL(replacer.add_replace_expr(table_info.column_exprs_.at(i),
+                                                table_info.column_conv_exprs_.at(i)))) {
+          LOG_WARN("failed to add replace expr", K(ret));
+        }
+      }
+      for (uint64_t j = 0; OB_SUCC(ret) && j < table_info.view_check_exprs_.count(); ++j) {
+        if (OB_FAIL(replacer.replace(table_info.view_check_exprs_.at(j)))) {
+          LOG_WARN("expand generated column expr failed", K(ret));
         }
       }
       const ObIArray<ObColumnRefRawExpr *> &table_columns = table_info.column_exprs_;

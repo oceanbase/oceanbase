@@ -771,11 +771,22 @@ int ObUpdateResolver::resolve_update_constraints()
         LOG_WARN("failed to prune check constraints", K(ret));
       } else {
         // TODO @yibo remove view check exprs in log_del_upd
+        ObRawExprReplacer replacer;
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_info->assignments_.count(); ++i) {
+          if (OB_FAIL(replacer.add_replace_expr(table_info->assignments_.at(i).column_expr_,
+                                                 table_info->assignments_.at(i).expr_))) {
+            LOG_WARN("failed to add replace expr", K(ret));
+          }
+        }
         for (uint64_t j = 0; OB_SUCC(ret) && j < table_info->view_check_exprs_.count(); ++j) {
-          if (OB_FAIL(ObTableAssignment::expand_expr(*params_.expr_factory_,
-                                                     table_info->assignments_,
-                                                     table_info->view_check_exprs_.at(j)))) {
+          if (OB_FAIL(replacer.replace(table_info->view_check_exprs_.at(j)))) {
             LOG_WARN("expand generated column expr failed", K(ret));
+          }
+        }
+        if (!table_info->view_check_exprs_.empty()) {
+          ObRawExpr *child = NULL;
+          if (table_info->view_check_exprs_.at(0)->is_op_expr()) {
+            child = static_cast<ObOpRawExpr *>(table_info->view_check_exprs_.at(0))->get_param_expr(0);
           }
         }
       }

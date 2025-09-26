@@ -632,26 +632,69 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
                                              ObColumnRefRawExpr *&new_expr)
 {
   int ret = OB_SUCCESS;
-  ObColumnRefRawExpr *new_column_ref = NULL;
   bool is_not_null = true;
   uint64_t base_table_id = OB_INVALID_ID;
   uint64_t base_column_id = OB_INVALID_ID;
-  ObPhysicalPlanCtx *plan_ctx = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_) ||
-      OB_ISNULL(ctx->exec_ctx_) || OB_ISNULL(plan_ctx = ctx->exec_ctx_->get_physical_plan_ctx())) {
+  if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
-  } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_REF_COLUMN, new_column_ref))) {
-    LOG_WARN("failed to create a new column ref expr", K(ret));
-  } else if (OB_ISNULL(new_column_ref)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("new_column_ref should not be null", K(ret));
   } else if (OB_FAIL(is_expr_not_null(ctx,
                                       table_item.ref_query_,
                                       select_item.expr_,
                                       NULLABLE_SCOPE::NS_TOP,
                                       is_not_null))) {
     LOG_WARN("failed to check stmt output nullable", K(ret));
+  } else if (OB_FAIL(create_new_column_expr(ctx->expr_factory_, ctx->session_info_, table_item,
+                                column_id, is_not_null, select_item, stmt, new_expr ))) {
+    LOG_WARN("create new column expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::create_new_column_expr(ObNotNullContext *ctx,
+                                             ObRawExprFactory *expr_factory,
+                                             ObSQLSessionInfo *session_info,
+                                             const TableItem &table_item,
+                                             const int64_t column_id,
+                                             const SelectItem &select_item,
+                                             ObDMLStmt *stmt,
+                                             ObColumnRefRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_not_null = true;
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(ctx));
+  } else if (OB_FAIL(is_expr_not_null(*ctx, select_item.expr_, is_not_null, NULL /* constraints*/))) {
+    LOG_WARN("failed to check stmt output nullable", K(ret));
+  } else if (OB_FAIL(create_new_column_expr(expr_factory, session_info, table_item,
+                                column_id, is_not_null, select_item, stmt, new_expr ))) {
+    LOG_WARN("create new column expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::create_new_column_expr(ObRawExprFactory *expr_factory,
+                                             ObSQLSessionInfo *session_info,
+                                             const TableItem &table_item,
+                                             const int64_t column_id,
+                                             const bool is_not_null,
+                                             const SelectItem &select_item,
+                                             ObDMLStmt *stmt,
+                                             ObColumnRefRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  uint64_t base_table_id = OB_INVALID_ID;
+  uint64_t base_column_id = OB_INVALID_ID;
+  ObColumnRefRawExpr *new_column_ref = NULL;
+  if (OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param is null", K(ret), K(expr_factory), K(session_info), K(stmt));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(T_REF_COLUMN, new_column_ref))) {
+    LOG_WARN("failed to create a new column ref expr", K(ret));
+  } else if (OB_ISNULL(new_column_ref)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_column_ref should not be null", K(ret));
   } else {
     ObRawExpr *select_expr = select_item.expr_;
     new_column_ref->set_table_name(table_item.alias_name_);
@@ -674,7 +717,7 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is invalid", K(ret));
       } else if (OB_ISNULL(old_col_item = table_item.ref_query_->get_column_item_by_id(
-                             old_col->get_table_id(), old_col->get_column_id()))) {
+                              old_col->get_table_id(), old_col->get_column_id()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get column item", K(ret));
       } else {
@@ -692,7 +735,7 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
       column_item.base_cid_ = base_column_id;
       if (OB_FAIL(stmt->add_column_item(column_item))) {
         LOG_WARN("failed to add column item", K(column_item), K(ret));
-      } else if (OB_FAIL(new_column_ref->formalize(ctx->session_info_))) {
+      } else if (OB_FAIL(new_column_ref->formalize(session_info))) {
         LOG_WARN("failed to formalize a new expr", K(ret));
       } else {
         new_expr = new_column_ref;
@@ -701,7 +744,6 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
   }
   return ret;
 }
-
 /*
  *  这里默认调用此函数是为了生成一个新的joined table。
  *  由于当前stmt的joined_tables_中保存的是最顶层的joined table, 因此在生成一个整体的inner join
@@ -908,6 +950,65 @@ int ObTransformUtils::create_columns_for_view(ObTransformerCtx *ctx,
           LOG_WARN("failed to create select item", K(ret));
         } else if (OB_FAIL(create_new_column_expr(
                              ctx, view_table_item, column_id,
+                             view_stmt->get_select_item(idx), stmt, col))) {
+          LOG_WARN("failed to create new column expr", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(new_column_list.push_back(col))) {
+        LOG_WARN("failed to push back column expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::create_columns_for_view(ObNotNullContext *ctx,
+                                              ObRawExprFactory *expr_factory,
+                                              ObSQLSessionInfo *session_info,
+                                              TableItem &view_table_item,
+                                              ObDMLStmt *stmt,
+                                              ObIArray<ObRawExpr *> &new_select_list,
+                                              ObIArray<ObRawExpr *> &new_column_list,
+                                              bool ignore_dup_select_expr,
+                                              bool repeated_select)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(view_stmt = view_table_item.ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(stmt), K(ctx), K(view_table_item.ref_query_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < new_select_list.count(); ++i) {
+    ObRawExpr *expr = NULL;
+    ObColumnRefRawExpr *col = NULL;
+    int64_t idx = -1;
+    if (OB_ISNULL(expr = new_select_list.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret), K(expr));
+    }
+    for (idx = (repeated_select ? view_stmt->get_select_item_size() : 0);
+         OB_SUCC(ret) && idx < view_stmt->get_select_item_size() &&
+         (expr != view_stmt->get_select_item(idx).expr_ || !ignore_dup_select_expr);
+         ++idx);
+
+    if (OB_SUCC(ret)) {
+      uint64_t column_id = OB_APP_MIN_COLUMN_ID + idx;
+      if (idx >= 0 && idx < view_stmt->get_select_item_size()) {
+        if (OB_NOT_NULL(col = stmt->get_column_expr_by_id(view_table_item.table_id_, column_id))) {
+          //do nothing
+        } else if (OB_FAIL(create_new_column_expr(
+                             ctx, expr_factory, session_info, view_table_item, column_id,
+                             view_stmt->get_select_item(idx), stmt, col))) {
+          LOG_WARN("failed to create new column expr", K(ret));
+        }
+      } else {
+
+        if (OB_FAIL(create_select_item(*ctx->allocator_, expr, view_stmt))) {
+          LOG_WARN("failed to create select item", K(ret));
+        } else if (OB_FAIL(create_new_column_expr(
+                             ctx, expr_factory, session_info, view_table_item, column_id,
                              view_stmt->get_select_item(idx), stmt, col))) {
           LOG_WARN("failed to create new column expr", K(ret));
         }
@@ -7991,38 +8092,43 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
 }
 
 int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
-                                           ObIArray<ObRawExpr *> &relation_exprs,
+                                           const ObIArray<ObRawExpr *> &relation_exprs,
+                                           ObIArray<ObRawExpr *> &common_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> searched_exprs;
+  if (OB_ISNULL(parent)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(parent));
+  } else if (OB_FAIL(parent->get_relation_exprs(searched_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(extract_shared_exprs(relation_exprs, searched_exprs, common_exprs))) {
+    LOG_WARN("failed to extract shared exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_shared_exprs(const ObIArray<ObRawExpr *> &source_exprs,
+                                           const ObIArray<ObRawExpr *> &searched_exprs,
                                            ObIArray<ObRawExpr *> &common_exprs)
 {
   int ret = OB_SUCCESS;
   int64_t set_size = 32;
   hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> expr_set;
-  if (OB_ISNULL(parent)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(parent));
-  } else if (relation_exprs.count() > set_size) {
-    set_size = relation_exprs.count();
+  if (source_exprs.count() > set_size) {
+    set_size = source_exprs.count();
   }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(expr_set.create(set_size,
-                                "TransExprSet", "TransExprSet"))) {
-      LOG_WARN("failed to create expr set", K(ret));
-    }
+  if (OB_FAIL(expr_set.create(set_size, "TransExprSet", "TransExprSet"))) {
+    LOG_WARN("failed to create expr set", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
-    if (OB_FAIL(append_hashset(relation_exprs.at(i), expr_set))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < source_exprs.count(); ++i) {
+    if (OB_FAIL(append_hashset(source_exprs.at(i), expr_set))) {
       LOG_WARN("failed to append hashset", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    relation_exprs.reuse();
-    if (OB_FAIL(parent->get_relation_exprs(relation_exprs))) {
-      LOG_WARN("failed to get relation exprs", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
-    if (OB_FAIL(find_hashset(relation_exprs.at(i), expr_set, common_exprs))) {
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < searched_exprs.count(); ++i) {
+    if (OB_FAIL(find_hashset(searched_exprs.at(i), expr_set, common_exprs))) {
       LOG_WARN("failed to find expr in hashset", K(ret));
     }
   }
@@ -8031,6 +8137,42 @@ int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
     if (OB_SUCCESS != (tmp_ret = expr_set.destroy())) {
       LOG_WARN("failed to destroy expr set", K(ret));
       ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_view_check_shared_exprs(const ObIArray<ObRawExpr *> &condition_exprs,
+                                                      ObDMLStmt *parent_stmt,
+                                                      TableItem &table,
+                                                      ObSelectStmt *view_stmt,
+                                                      ObNotNullContext &ctx,
+                                                      ObRawExprFactory *expr_factory,
+                                                      ObSQLSessionInfo *session_info,
+                                                      ObIArray<ObRawExpr *> &view_check_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> shared_exprs;
+  ObArray<ObRawExpr *> column_exprs;
+  if (OB_FAIL(ObTransformUtils::extract_shared_exprs(condition_exprs, view_check_exprs, shared_exprs))) {
+    LOG_WARN("failed to extract shared expr", K(ret));
+  } else if (OB_FAIL(remove_const_exprs(shared_exprs, shared_exprs))) {
+    LOG_WARN("failed to remove const exprs", K(ret));
+  } else if (shared_exprs.empty()) {
+    // do nothing.
+  } else if (OB_FAIL(create_columns_for_view(&ctx, expr_factory, session_info, table,
+                                             parent_stmt, shared_exprs, column_exprs))) {
+    LOG_WARN("failed to create columns for view", K(ret));
+  } else {
+    ObRawExprReplacer replacer;
+    if (OB_FAIL(replacer.add_replace_exprs(shared_exprs, column_exprs))) {
+      LOG_WARN("failed to add replace exprs", K(ret));
+    } else {
+      for (uint64_t j = 0; OB_SUCC(ret) && j < view_check_exprs.count(); ++j) {
+        if (OB_FAIL(replacer.replace(view_check_exprs.at(j)))) {
+          LOG_WARN("failed to replace exprs", K(ret));
+        }
+      }
     }
   }
   return ret;

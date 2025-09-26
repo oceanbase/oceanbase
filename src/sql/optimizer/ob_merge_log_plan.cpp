@@ -315,6 +315,7 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
   ObSEArray<ObRawExpr*, 8> condition_subquery_exprs;
   ObSEArray<ObRawExpr*, 8> target_subquery_exprs;
   ObSEArray<ObRawExpr*, 8> delete_subquery_exprs;
+  ObSEArray<ObRawExpr *, 8> view_check_exprs;
   const ObMergeStmt *merge_stmt = get_stmt();
   if (OB_ISNULL(merge_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -352,6 +353,10 @@ int ObMergeLogPlan::candi_allocate_subplan_filter_for_merge()
   } else if (!delete_subquery_exprs.empty() &&
              OB_FAIL(candi_allocate_subplan_filter(delete_subquery_exprs))) {
     LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else if (OB_FAIL(merge_stmt->get_view_check_exprs(view_check_exprs))) {
+    LOG_WARN("get view check exprs", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter(view_check_exprs))) {
+    LOG_WARN("failed to allocate subplan filter for view check exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }

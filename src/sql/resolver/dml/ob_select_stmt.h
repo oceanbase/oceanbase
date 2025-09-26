@@ -374,7 +374,7 @@ public:
                           ObStmtExprVisitor &visitor);
   int iterate_rollup_items(ObIArray<ObRollupItem> &rollup_items, ObStmtExprVisitor &visitor);
   int iterate_cube_items(ObIArray<ObCubeItem> &cube_items, ObStmtExprVisitor &visitor);
-  int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other);
+  int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other, bool need_update_qb_name = true);
   int64_t get_select_item_size() const { return select_items_.count(); }
   int64_t get_group_expr_size() const { return group_exprs_.count(); }
   int64_t get_rollup_expr_size() const { return rollup_exprs_.count(); }
