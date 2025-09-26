@@ -57,7 +57,7 @@ public:
         K_(row_count_delta), K_(max_merged_trans_version), K_(is_encrypted),
         K_(is_deleted), K_(contain_uncommitted_row), K_(compressor_type),
         K_(master_key_id), K_(encrypt_id), K_(encrypt_key), K_(row_store_type),
-        K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag),
+        K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag), K_(is_first_row_first_flag),
         K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row),
         K_(agg_row_len), KP_(agg_row_buf), K_(ddl_end_row_offset), K_(macro_block_bf_size), KP_(macro_block_bf_buf));
 
@@ -84,7 +84,15 @@ public:
   bool is_encrypted_;
   bool is_deleted_;
   bool contain_uncommitted_row_;
-  bool is_last_row_last_flag_;
+  union {
+    uint8_t data_flag_pack_;
+    struct
+    {
+      uint8_t is_last_row_last_flag_:    1;       // Whether the last row in macro is with last flag
+      uint8_t is_first_row_first_flag_:  1;       // Whether the first row in macro is with first flag
+      uint8_t reserved_ : 6;
+    };
+  };
   ObCompressorType compressor_type_;
   int64_t master_key_id_;
   int64_t encrypt_id_;
@@ -136,6 +144,10 @@ public:
   OB_INLINE bool is_last_row_last_flag() const
   {
     return val_.is_last_row_last_flag_;
+  }
+  OB_INLINE bool is_first_row_first_flag() const
+  {
+    return val_.is_first_row_first_flag_;
   }
   OB_INLINE bool is_valid() const
   {

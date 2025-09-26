@@ -1849,7 +1849,8 @@ int ObSkipIndexDataAggregator::do_col_agg(const int64_t agg_idx, const IterParam
 ObAggregateInfo::ObAggregateInfo()
   : row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), macro_block_count_(0),
     micro_block_count_(0), can_mark_deletion_(true), contain_uncommitted_row_(false),
-    has_string_out_row_(false), has_lob_out_row_(false), is_last_row_last_flag_(false)
+    has_string_out_row_(false), has_lob_out_row_(false), is_last_row_last_flag_(false),
+    is_first_row_first_flag_(false)
 {
 }
 
@@ -1870,10 +1871,14 @@ void ObAggregateInfo::reset()
   has_string_out_row_ = false;
   has_lob_out_row_ = false;
   is_last_row_last_flag_ = false;
+  is_first_row_first_flag_ = false;
 }
 
 void ObAggregateInfo::eval(const ObIndexBlockRowDesc &row_desc)
 {
+  if (0 == row_count_) {
+    is_first_row_first_flag_ = row_desc.is_first_row_first_flag_;
+  }
   row_count_ += row_desc.row_count_;
   row_count_delta_ += row_desc.row_count_delta_;
   can_mark_deletion_ = can_mark_deletion_ && row_desc.is_deleted_;
@@ -1902,6 +1907,7 @@ void ObAggregateInfo::get_agg_result(ObIndexBlockRowDesc &row_desc) const
   row_desc.has_string_out_row_ = has_string_out_row_;
   row_desc.has_lob_out_row_ = has_lob_out_row_;
   row_desc.is_last_row_last_flag_ = is_last_row_last_flag_;
+  row_desc.is_first_row_first_flag_ = is_first_row_first_flag_;
 }
 
 /* ------------------------------------ObAggregateInfo-------------------------------------*/

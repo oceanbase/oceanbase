@@ -108,6 +108,7 @@ public:
   bool has_string_out_row_;
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
+  bool is_first_row_first_flag_;
   bool is_serialized_agg_row_;
   bool is_clustered_index_;
   bool has_macro_block_bloom_filter_;
@@ -142,6 +143,7 @@ public:
                K_(has_string_out_row),
                K_(has_lob_out_row),
                K_(is_last_row_last_flag),
+               K_(is_first_row_first_flag),
                K_(is_serialized_agg_row),
                K_(is_clustered_index),
                K_(has_macro_block_bloom_filter));
@@ -311,8 +313,7 @@ struct ObIndexBlockRowHeader
 
   int fill_micro_des_meta(const bool need_deep_copy_key, ObMicroBlockDesMeta &des_meta) const;
 
-  union
-  {
+  union { //FARM COMPAT WHITELIST
     uint64_t pack_;
     struct
     {
@@ -332,7 +333,9 @@ struct ObIndexBlockRowHeader
       uint64_t has_logic_micro_id_ : 1;           // Whether this row has logic micro id
       uint64_t has_shared_data_macro_id_ : 1;     // Whether this row has shared storage macro data id
       uint64_t has_macro_block_bloom_filter_ : 1; // Whether this macro block has bloom filter (only in macro level)
-      uint64_t reserved_ : 27;
+      uint64_t is_last_row_last_flag_: 1;         // Whether the last row is with last flag
+      uint64_t is_first_row_first_flag_: 1;       // Whether the first row is with first flag
+      uint64_t reserved_ : 25;
     };
   };
   int64_t macro_id_first_id_; // Physical macro block id, set to default in leaf node
@@ -365,6 +368,8 @@ struct ObIndexBlockRowHeader
                K_(has_logic_micro_id),
                K_(has_shared_data_macro_id),
                K_(has_macro_block_bloom_filter),
+               K_(is_last_row_last_flag),
+               K_(is_first_row_first_flag),
                K(get_macro_id()),
                K_(block_offset),
                K_(block_size),

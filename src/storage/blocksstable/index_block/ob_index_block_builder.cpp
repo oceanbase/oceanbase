@@ -2365,6 +2365,7 @@ void ObBaseIndexBlockBuilder::block_to_row_desc(
   row_desc.has_string_out_row_ = micro_block_desc.has_string_out_row_;
   row_desc.has_lob_out_row_ = micro_block_desc.has_lob_out_row_;
   row_desc.is_last_row_last_flag_ = micro_block_desc.is_last_row_last_flag_;
+  row_desc.is_first_row_first_flag_ = micro_block_desc.is_first_row_first_flag_;
   row_desc.aggregated_row_ = micro_block_desc.aggregated_row_;
   row_desc.is_serialized_agg_row_ = false;
   // This flag only valid in macro level.
@@ -2441,6 +2442,8 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
     row_desc.macro_block_count_ = 1;
     row_desc.has_string_out_row_ = macro_meta.val_.has_string_out_row_;
     row_desc.has_lob_out_row_ = !macro_meta.val_.all_lob_in_row_;
+    row_desc.is_last_row_last_flag_ = macro_meta.is_last_row_last_flag();
+    row_desc.is_first_row_first_flag_ = macro_meta.is_first_row_first_flag();
     // We have validate macro meta in caller, so we do not validate agg_row_buf and agg_row_len here.
     if (nullptr != macro_meta.val_.agg_row_buf_) {
       row_desc.serialized_agg_row_buf_ = macro_meta.val_.agg_row_buf_;
@@ -2449,7 +2452,6 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
       row_desc.serialized_agg_row_buf_ = nullptr;
       row_desc.is_serialized_agg_row_ = false;
     }
-    // is_last_row_last_flag_ only used in data macro block
   }
   return ret;
 }
@@ -2475,6 +2477,8 @@ int ObBaseIndexBlockBuilder::row_desc_to_meta(
   macro_meta.val_.all_lob_in_row_ = !macro_row_desc.has_lob_out_row_;
   macro_meta.val_.is_last_row_last_flag_ =
       macro_row_desc.is_last_row_last_flag_;
+  macro_meta.val_.is_first_row_first_flag_ =
+      macro_row_desc.is_first_row_first_flag_;
   if (nullptr != macro_row_desc.aggregated_row_) {
     agg_row_writer_.reset();
     char *agg_row_buf = nullptr;

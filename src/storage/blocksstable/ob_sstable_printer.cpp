@@ -438,6 +438,7 @@ void ObSSTablePrinter::print_macro_meta(const ObDataMacroBlockMeta *macro_meta)
   print_line("is_deleted", macro_meta->val_.is_deleted_);
   print_line("contain_uncommitted_row", macro_meta->val_.contain_uncommitted_row_);
   print_line("is_last_row_last_flag", macro_meta->val_.is_last_row_last_flag_);
+  print_line("is_first_row_first_flag_", macro_meta->val_.is_first_row_first_flag_);
   print_line("compressor_type", macro_meta->val_.compressor_type_);
   print_line("master_key_id", macro_meta->val_.master_key_id_);
   print_line("encrypt_id", macro_meta->val_.encrypt_id_);

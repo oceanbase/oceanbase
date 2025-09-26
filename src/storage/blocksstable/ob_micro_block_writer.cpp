@@ -313,6 +313,7 @@ int ObMicroBlockWriter<EnableNewFlatFormat>::build_block(char *&buf, int64_t &si
     header->has_string_out_row_ = has_string_out_row_;
     header->all_lob_in_row_ = !has_lob_out_row_;
     header->is_last_row_last_flag_ = is_last_row_last_flag_;
+    header->is_first_row_first_flag_ = is_first_row_first_flag_;
 
     if (data_buffer_.remain() < get_index_size()) {
       ret = OB_SIZE_OVERFLOW;
