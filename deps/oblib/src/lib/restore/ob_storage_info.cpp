@@ -36,6 +36,26 @@ const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
   return str;
 }
 
+int get_storage_checksum_type(const char *checksum_type_str, ObStorageChecksumType &checksum_type)
+{
+  int ret = OB_SUCCESS;
+  checksum_type = OB_STORAGE_CHECKSUM_MAX_TYPE;
+  if (OB_ISNULL(checksum_type_str)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(checksum_type_str));
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_NO_CHECKSUM)) {
+    checksum_type = OB_NO_CHECKSUM_ALGO;
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_MD5)) {
+    checksum_type = OB_MD5_ALGO;
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_CRC32)) {
+    checksum_type = OB_CRC32_ALGO;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), K(checksum_type_str));
+  }
+  return ret;
+}
+
 bool is_use_obdal()
 {
   if (OB_NOT_NULL(cluster_enable_obdal_config)) {

@@ -118,6 +118,7 @@ bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
+int get_storage_checksum_type(const char *checksum_type_str, ObStorageChecksumType &checksum_type);
 bool is_use_obdal();
 // [Extensions]
 //   load_data_* : sql/engine/cmd/ob_load_data_storage_info.h

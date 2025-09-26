@@ -193,6 +193,7 @@ public:
   void reset();
   ObStorageDestAttr &operator=(const ObStorageDestAttr &dest_attr);
   bool is_valid() const;
+  int change_checksum_type(const ObStorageChecksumType &checksum_type);
 
   TO_STRING_KV(K_(path), K_(endpoint), K_(authorization), K_(extension));
   char path_[OB_MAX_BACKUP_PATH_LENGTH];
