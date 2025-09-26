@@ -239,11 +239,12 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
       sqlstat_record.move_to_sqlstat_cache(session, sql);
     }
     if (enable_sql_audit) {
+      audit_record.status_ = (0 == fetch_ret || OB_ITER_END == fetch_ret) ? REQUEST_SUCC : (fetch_ret);
       audit_record.affected_rows_ = fetch_limit;
       audit_record.return_rows_ = true_row_num;
       audit_record.ps_stmt_id_ = cursor_id_;
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
-      audit_record.status_ = fetch_ret;
+      audit_record.is_inner_sql_ = true;
       if (OB_NOT_NULL(cursor)
           && cursor->is_ps_cursor()) {
         ObPsStmtInfoGuard guard;
@@ -256,6 +257,14 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
           audit_record.ps_inner_stmt_id_ = inner_stmt_id;
           audit_record.sql_ = const_cast<char *>(ps_info->get_ps_sql().ptr());
           audit_record.sql_len_ = min(ps_info->get_ps_sql().length(), OB_MAX_SQL_LENGTH);
+          if (OB_NOT_NULL(cursor->get_spi_cursor())) {
+            audit_record.plan_id_ = cursor->get_spi_cursor()->plan_id_;
+            audit_record.plan_hash_ = cursor->get_spi_cursor()->plan_hash_;
+            audit_record.plan_type_ = cursor->get_spi_cursor()->plan_type_;
+            audit_record.is_hit_plan_cache_ = true;
+            MEMCPY(audit_record.sql_id_,
+              cursor->get_spi_cursor()->sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+          }
         } else {
           LOG_WARN("get sql fail in fetch", K(ret), K(aret), K(cursor_id_), K(cursor->get_id()));
         }
