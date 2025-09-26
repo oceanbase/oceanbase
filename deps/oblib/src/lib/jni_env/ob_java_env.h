@@ -48,12 +48,16 @@ public:
   int set_version_valid(bool valid);
 
 private:
+  int setup_extra_runtime_lib_path();
+
+private:
   bool is_inited_;
   bool version_valid_;
   const char *java_home_;
   const char *java_opts_;
   const char *class_path_;
   const char *connector_path_;
+  const char *ld_library_path_;
 
   bool is_inited_java_home_ = false;
   bool is_inited_java_opts_ = false;
@@ -68,6 +72,7 @@ private:
   const char *JAVA_HOME = "JAVA_HOME";
   const char *JAVA_OPTS = "JAVA_OPTS";
   const char *CLASSPATH = "CLASSPATH";
+  const char *LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
   const char *LIBHDFS_OPTS = "LIBHDFS_OPTS";
   const char *CONNECTOR_PATH = "CONNECTOR_PATH";
 

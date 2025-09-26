@@ -209,16 +209,40 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
 {
   int ret = OB_SUCCESS;
   const char *env_var_name = "LD_LIBRARY_PATH";
-  char *env_str = getenv(env_var_name);
+  const char *env_str = std::getenv(env_var_name);
   LOG_INFO("LD_LIBRARY_PATH: ", K(ObString(env_str)), KCSTRING(lib_name));
   bool found = false;
+  ObSqlString lib_paths;
   if (OB_ISNULL(env_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cann't find lib in LD_LIBRARY_PATH", K(ret));
   } else {
-    const char *ptr = env_str;
+    if (OB_FAIL(lib_paths.append_fmt("%s:", env_str))) {
+      LOG_WARN("failed to append env str", K(ret));
+    } else if (0 == STRCMP(lib_name, "libjvm.so")) {
+      const char *java_home = std::getenv("JAVA_HOME");
+      // libjvm.so relative path options and higher jdk version options are "/lib/server/".
+      const char *jdk8_opt = "/jre/lib/amd64/server/";
+      const char *jdk_higher_version_opt = "/lib/server/";
+
+      if (OB_ISNULL(java_home)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cann't find java home", K(ret));
+      } else if (OB_FAIL(lib_paths.append_fmt("%s%s:", java_home, jdk8_opt))) {
+        LOG_WARN("failed to append java 8 path", K(ret));
+      } else if (OB_FAIL(lib_paths.append_fmt("%s%s:", java_home, jdk_higher_version_opt))) {
+        LOG_WARN("failed to append java higher version path", K(ret));
+      }
+    }
+  }
+
+  LOG_INFO("get final search lib paths: ", K(lib_paths.string()));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    const char *ptr = lib_paths.ptr();
     while (' ' == *ptr || ':' == *ptr) { ++ptr; }
-    int64_t env_str_len = STRLEN(ptr);
+    int64_t env_str_len = lib_paths.length();
     int64_t idx = 0;
     while (OB_SUCC(ret) && idx < env_str_len) {
       const char *dir_ptr = ptr + idx;
@@ -261,45 +285,16 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
         idx += inner_idx + 1; // skip ':'
       }
     }
-    if (!found) {
-      const char *default_path = "/home/admin/oceanbase/lib";
-      const char *default_lib_path = "";
-      if (0 == STRCMP(lib_name, "libjvm.so")) {
-        default_lib_path = "/home/admin/oceanbase/lib/libjvm.so";
-      } else if (0 == STRCMP(lib_name, "libhdfs.so")) {
-        default_lib_path = "/home/admin/oceanbase/lib/libhdfs.so";
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("unsupport library to load", K(ret), K(lib_name));
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(search_dir_file(default_path, lib_name, found))) {
-          LOG_WARN("failed to searche dir file, continue to fine next dir", K(ret));
-          ret = OB_SUCCESS;
-      } else if (found) {
-        const int64_t default_oci_path_len = STRLEN(default_lib_path);
-        if (default_oci_path_len >= length) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to path length large than expected", K(ret));
-        } else {
-          strncpy(path, default_lib_path, default_oci_path_len);
-          path[default_oci_path_len] = 0;
-        }
-      }
-    }
   }
   if (OB_FAIL(ret)) {
-    LOG_WARN("failed to find path of libjvm.so", K(ret), K(found), K(ObString(env_str)));
+    LOG_WARN("failed to find path of lib", K(ret), K(found), K(lib_paths.string()), K(lib_name));
   } else if (!found) {
     ret = OB_JNI_ENV_ERROR;
     const char *user_error_str = "cant not find lib path";
     int user_error_len = STRLEN(user_error_str);
-    // LOG_USER_ERROR(OB_JNI_ENV_ERROR, user_error_len, user_error_str);
-    LOG_WARN("failed to find path", K(ret), K(ObString(env_str)), K(lib_name));
+    LOG_WARN("failed to find path", K(ret), K(lib_paths.string()), K(lib_name));
   } else {
-    LOG_INFO("succ to find path", K(ret), K(ObString(env_str)), K(path), K(lib_name));
+    LOG_INFO("succ to find path", K(ret), K(lib_paths.string()), K(path), K(lib_name));
   }
   return ret;
 }
