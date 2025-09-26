@@ -15,6 +15,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
+using namespace oceanbase::observer;
 namespace oceanbase
 {
 namespace observer
@@ -80,7 +81,7 @@ int ObAllVirtualLSInfo::next_ls_info_(ObLSVTInfo &ls_info)
       // try another ls
       ret = OB_EAGAIN;
     } else if (FALSE_IT(ls_id_ = ls->get_ls_id().id())) {
-    } else if (OB_FAIL(ls->get_ls_info(ls_info))) {
+    } else if (OB_FAIL(ls->get_ls_info(output_column_ids_, ls_info))) {
       SERVER_LOG(WARN, "get ls info failed", K(ret), KPC(ls));
       // try another ls
       ret = OB_EAGAIN;
@@ -108,7 +109,7 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
-        case OB_APP_MIN_COLUMN_ID:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::SVR_IP):
           // svr_ip
           if (addr_.ip_to_string(ip_buf_, sizeof(ip_buf_))) {
             cur_row_.cells_[i].set_varchar(ip_buf_);
@@ -118,25 +119,25 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
             SERVER_LOG(WARN, "fail to execute ip_to_string", K(ret));
           }
           break;
-        case OB_APP_MIN_COLUMN_ID + 1:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::SVR_PORT):
           // svr_port
           cur_row_.cells_[i].set_int(addr_.get_port());
           break;
-        case OB_APP_MIN_COLUMN_ID + 2:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TENANT_ID):
           // tenant_id
           cur_row_.cells_[i].set_int(MTL_ID());
           break;
-        case OB_APP_MIN_COLUMN_ID + 3:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::LS_ID):
           // ls_id
           cur_row_.cells_[i].set_int(ls_id_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 4: {
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REPLICA_TYPE): {
           // replica_type
           cur_row_.cells_[i].set_varchar(ObShareUtil::replica_type_to_string(ls_info.replica_type_));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
-        case OB_APP_MIN_COLUMN_ID + 5: {
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::LS_STATE): {
           // ls_state
           ObRole role;
           int64_t unused_proposal_id = 0;
@@ -151,61 +152,61 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           }
           break;
         }
-        case OB_APP_MIN_COLUMN_ID + 6:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TABLET_COUNT):
           // tablet_count
           cur_row_.cells_[i].set_int(ls_info.tablet_count_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 7:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::WEAK_READ_TIMESTAMP):
           // weak_read_timestamp
           cur_row_.cells_[i].set_uint64(ls_info.weak_read_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 8:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::NEED_REBUILD):
           // need_rebuild
           cur_row_.cells_[i].set_varchar(ls_info.need_rebuild_ ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
-        case OB_APP_MIN_COLUMN_ID + 9:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::CLOG_CHECKPOINT_TS):
           // clog_checkpoint_ts
           cur_row_.cells_[i].set_uint64(!ls_info.checkpoint_scn_.is_valid() ? 0 : ls_info.checkpoint_scn_.get_val_for_tx());
           break;
-        case OB_APP_MIN_COLUMN_ID + 10:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::CLOG_CHECKPOINT_LSN):
           // clog_checkpoint_lsn
           cur_row_.cells_[i].set_uint64(ls_info.checkpoint_lsn_ < 0 ? 0 : ls_info.checkpoint_lsn_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 11:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MIGRATE_STATUS):
           // migrate_status
           cur_row_.cells_[i].set_int(ls_info.migrate_status_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 12:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REBUILD_SEQ):
           // rebuild_seq
           cur_row_.cells_[i].set_int(ls_info.rebuild_seq_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 13:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TABLET_CHANGE_CHECKPOINT_SCN):
           // tablet_change_checkpoint_scn
           cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 14:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TRANSFER_SCN):
           // transfer_scn
           cur_row_.cells_[i].set_uint64(!ls_info.transfer_scn_.is_valid() ? 0 : ls_info.transfer_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 15:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TX_BLOCKED):
           // tx blocked
           cur_row_.cells_[i].set_int(ls_info.tx_blocked_);
           break;
-        case  OB_APP_MIN_COLUMN_ID + 16:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REQUIRED_DATA_DISK_SIZE):
           // required_data_disk_size
           cur_row_.cells_[i].set_int(ls_info.required_data_disk_size_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 17:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MV_MAJOR_MERGE_SCN):
           // mv_major_merge_scn
           cur_row_.cells_[i].set_uint64(!ls_info.mv_major_merge_scn_.is_valid() ? 0 : ls_info.mv_major_merge_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 18:
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MV_PUBLISH_SCN):
           // mv_publish_scn
           cur_row_.cells_[i].set_uint64(!ls_info.mv_publish_scn_.is_valid() ? 0 : ls_info.mv_publish_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 19:
-          // mv_publish_scn
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MV_SAFE_SCN):
+          // mv_safe_scn
           cur_row_.cells_[i].set_uint64(!ls_info.mv_safe_scn_.is_valid() ? 0 : ls_info.mv_safe_scn_.get_val_for_inner_table_field());
           break;
         default:
