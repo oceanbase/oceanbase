@@ -518,7 +518,7 @@ int ObTransformRule::prepare_root_stmt_with_temp_table_filter(ObDMLStmt &root_st
     } else if (OB_FAIL(sel_stmt_with_filter->add_from_item(new_table_item->table_id_, false))) {
       LOG_WARN("failed to add from item", K(ret));
     } else if (OB_FAIL(sel_stmt_with_filter->rebuild_tables_hash())) {
-      LOG_WARN("failed to rebuid table hash", K(ret));
+      LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
                                                           *new_table_item,
                                                           sel_stmt_with_filter,
@@ -588,7 +588,7 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   } else if (OB_FAIL(stmt.get_qb_name(cur_qb_name))) {
     LOG_WARN("failed to get qb name", K(ret));
   } else if (OB_FAIL(ObTransformRule::construct_transform_hint(stmt, NULL))) {
-    // To get happended transform rule by outline_trans_hints_ during evaluating cost,
+    // To get happened transform rule by outline_trans_hints_ during evaluating cost,
     // here construct and add hint for cost based transform rule.
     // Added hint only filled qb name parameter.
     LOG_WARN("failed to construct transform hint", K(ret), K(stmt.get_stmt_id()),
@@ -689,15 +689,15 @@ int ObTransformRule::deep_copy_temp_table(ObDMLStmt &stmt,
   return ret;
 }
 
-// replace orgin_stmt by stmt, get root_stmt
+// replace origin_stmt by stmt, get root_stmt
 int ObTransformRule::adjust_transformed_stmt(ObIArray<ObParentDMLStmt> &parent_stmts,
                                              ObDMLStmt *stmt,
-                                             ObDMLStmt *&orgin_stmt,
+                                             ObDMLStmt *&origin_stmt,
                                              ObDMLStmt *&root_stmt)
 {
   int ret = OB_SUCCESS;
   root_stmt = NULL;
-  orgin_stmt = NULL;
+  origin_stmt = NULL;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null stmt", K(ret));
@@ -718,7 +718,7 @@ int ObTransformRule::adjust_transformed_stmt(ObIArray<ObParentDMLStmt> &parent_s
     } else if (OB_FAIL(parent_stmt->set_child_stmt(parent.pos_, static_cast<ObSelectStmt*>(stmt)))) {
       LOG_WARN("failed to set child stmt", K(ret));
     } else {
-      orgin_stmt = child_stmts.at(parent.pos_);
+      origin_stmt = child_stmts.at(parent.pos_);
       root_stmt = parent_stmts.at(0).stmt_;
     }
   }
@@ -1141,7 +1141,6 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
   const ObHint *myhint = get_hint(stmt.get_stmt_hint());
   bool is_enable = (NULL != myhint && myhint->is_enable_hint());
   bool is_disable = (NULL != myhint && myhint->is_disable_hint());
-  bool enable_cost_rule = true;
   need_trans = false;
   if (OB_ISNULL(ctx_) ||
       OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
@@ -1158,10 +1157,9 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
         LOG_WARN("failed to add used transform hint", K(ret));
       }
       OPT_TRACE("hint reject current transform");
-    } else if (OB_FAIL(ObTransformUtils::is_cost_based_trans_enable(ctx_, query_hint->global_hint_,
-                                                                    enable_cost_rule))) {
-      LOG_WARN("failed to check cost based transform enable", K(ret));
-    } else if ((ALL_COST_BASED_RULES & (1L << get_transformer_type())) && !enable_cost_rule) {
+    } else if (!ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_)
+               && (ALL_COST_BASED_RULES & (1L << get_transformer_type()))
+               && !(BOTH_HEURISTIC_AND_COST_BASED_RULES & (1L << get_transformer_type()))) {
       /* disable transform by NO_COST_BASED_QUERY_TRANSFORMATION hint */
     } else {
       need_trans = true;

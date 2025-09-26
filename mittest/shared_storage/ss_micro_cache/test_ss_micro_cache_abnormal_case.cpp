@@ -259,15 +259,24 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
   ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 0);
 
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free());
+  ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.has_free_ckpt_blk());
+  bool exist_reusable_ckpt_blks = false;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free(exist_reusable_ckpt_blks));
+  ASSERT_EQ(false, exist_reusable_ckpt_blks);
+  ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.has_free_ckpt_blk());
   ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
 
-  // 3. third execute phy_blk checkpoint task
+  // 3. third execute phy_blk checkpoint task, but no available block, cuz reusable_blocks can't be reused now.
+  //    Thus, won't execute blk_ckpt.
+  int64_t ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
-  ASSERT_EQ(OB_EAGAIN, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(ori_blk_ckpt_cnt, cache_stat.task_stat().blk_ckpt_cnt_);
   ASSERT_EQ(blk_ckpt_block_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
 
+  // 3.1 update reusable_blocks' alloc_time_s, make them can be reused now.
   ObHashSet<int64_t>::iterator iter = phy_blk_mgr.reusable_blks_.begin();
   for (; OB_SUCC(ret) && iter != phy_blk_mgr.reusable_blks_.end(); iter++) {
     const int64_t blk_idx = iter->first;
@@ -278,26 +287,13 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
     }
   }
 
-  // some background thread might be using reusable_blk
-  const int64_t start_s = ObTimeUtility::current_time_s();
-  const int64_t max_retry_time_s = 200L;
-  bool is_passed = false;
-  while (ObTimeUtility::current_time_s() < (start_s + max_retry_time_s)) {
-    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free());
-    const int64_t cur_reusable_blk_cnts = phy_blk_mgr.get_reusable_blocks_cnt();
-    if (0 == cur_reusable_blk_cnts) {
-      ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
-      is_passed = true;
-      break;
-    }
-  }
-  ASSERT_EQ(true, is_passed);
-
   // 4. fourth execute phy_blk checkpoint task
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
   ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
+  ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_MICRO_DATA_BLK));
 
   LOG_INFO("TEST_CASE: finish test_phy_ckpt_timeout");
 }

@@ -385,7 +385,7 @@ int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
     if ((fd = ::open(stat_path, O_RDONLY)) < 0) {
       ret = OB_IO_ERROR;
       LOG_WARN("open file error", K((const char *)stat_path), K(errno), KERRMSG, K(ret));
-    } else if ((read_size = read(fd, stat_content, MAX_LINE_LENGTH)) < 0) {
+    } else if ((read_size = read(fd, stat_content, MAX_LINE_LENGTH - 1)) < 0) {
       ret = OB_IO_ERROR;
       LOG_WARN("read file error",
           K((const char *)stat_path),
@@ -395,7 +395,8 @@ int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
           KERRMSG,
           K(ret));
     } else {
-      // do nothing
+      // make sure stat_content is null terminated
+      stat_content[read_size] = '\0';
     }
     if (fd >= 0) {
       close(fd);

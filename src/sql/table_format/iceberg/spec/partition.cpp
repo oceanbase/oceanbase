@@ -103,6 +103,7 @@ int Transform::get_result_type(TransformType transform_type, const ObObjType sou
         case ObDateTimeType:
         case ObTimestampType:
         case ObVarcharType:
+        case ObMediumTextType:
           result_type = ObInt32Type;
           break;
         default:
@@ -116,6 +117,7 @@ int Transform::get_result_type(TransformType transform_type, const ObObjType sou
         case ObIntType:
         case ObDecimalIntType:
         case ObVarcharType:
+        case ObMediumTextType:
           result_type = source_type;
           break;
         default:

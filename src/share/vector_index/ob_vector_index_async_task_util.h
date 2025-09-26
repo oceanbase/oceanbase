@@ -57,12 +57,14 @@ enum ObVecIndexAsyncTaskTriggerType
   OB_VEC_TRIGGER_INVALID
 };
 
-enum ObVecIndexAsyncTaskStatus
+enum ObVecIndexAsyncTaskStatus //FARM COMPAT WHITELIST
 {
   OB_VECTOR_ASYNC_TASK_PREPARE = 0,
   OB_VECTOR_ASYNC_TASK_RUNNING = 1,
   OB_VECTOR_ASYNC_TASK_PENDING = 2, // reserved
   OB_VECTOR_ASYNC_TASK_FINISH = 3,
+  OB_VECTOR_ASYNC_TASK_EXCHANGE = 4,
+  OB_VECTOR_ASYNC_TASK_CLEAN = 5,
   OB_VECTOR_ASYNC_TASK_INVALID
 };
 
@@ -372,7 +374,8 @@ private:
       int64_t vector_col_idx,
       ObSEArray<int64_t, 4> &extra_column_idxs,
       storage::ObTableScanIterator *table_scan_iter,
-      storage::ObValueRowIterator &delete_row_iter);
+      storage::ObValueRowIterator &delete_row_iter,
+      transaction::ObTxReadSnapshot &snapshot);
   int delete_tablet_data(
       ObPluginVectorIndexAdaptor &adaptor,
       ObTabletID& tablet_id,

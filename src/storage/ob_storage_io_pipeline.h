@@ -53,6 +53,8 @@ public:
   int set_state(const TaskState target_state);
   static int set_macro_block_id(
       blocksstable::ObStorageObjectHandle &handle, const blocksstable::MacroBlockId &macro_id);
+  static int set_macro_block_id(
+      blocksstable::ObMacroBlockHandle &handle, const blocksstable::MacroBlockId &macro_id);
 
   VIRTUAL_TO_STRING_KV(K(state_), "state", get_state_str(state_), K(buf_size_));
 

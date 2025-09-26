@@ -948,7 +948,8 @@ public:
     is_scrollable_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
-    sql_text_()
+    sql_text_(),
+    cursor_total_exec_time_(0)
   {
     reset();
   }
@@ -968,7 +969,8 @@ public:
     is_need_check_snapshot_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
-    sql_text_()
+    sql_text_(),
+    cursor_total_exec_time_(0)
   {
     reset();
   }
@@ -1023,6 +1025,7 @@ public:
     sql_text_.reset();
     sql_id_[0] = '\0';
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+    cursor_total_exec_time_ = 0;
   }
 
   void reset()
@@ -1190,6 +1193,9 @@ public:
   inline bool is_packed() { return is_packed_; }
   virtual inline bool is_async() { return false; }
 
+  inline int64_t get_cursor_total_exec_time() const { return cursor_total_exec_time_; }
+  inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
+
   TO_STRING_KV(K_(id),
                K_(is_explicit),
                K_(for_update),
@@ -1216,7 +1222,8 @@ public:
                K_(is_need_check_snapshot),
                K_(last_execute_time),
                K_(sql_trace_id),
-               K_(is_packed));
+               K_(is_packed),
+               K_(cursor_total_exec_time));
 
 protected:
   int64_t id_;            // Cursor ID
@@ -1255,6 +1262,7 @@ protected:
   bool is_packed_;
   ObString sql_text_;     //non seesion的非流式游标保存sql text
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
+  int64_t cursor_total_exec_time_;
 };
 
 class ObPsCursorInfo : public ObPLCursorInfo

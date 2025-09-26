@@ -21,6 +21,9 @@ class ObJniConnector {
 public:
   static int java_env_init();
   static int get_jni_env(JNIEnv *&env);
+  static int is_valid_loaded_jars_();
+  static int check_jni_exception_(JNIEnv *env);
+  static const char* JAR_VERSION_CLASS;
 };
 }
 }

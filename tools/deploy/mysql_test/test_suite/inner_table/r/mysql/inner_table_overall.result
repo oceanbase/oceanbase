@@ -882,10 +882,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12553	__all_virtual_ss_gc_detect_info	2	201001	1
 12569	__all_virtual_tenant_ss_storage_stat	2	201001	1
 12570	__all_virtual_hms_client_pool_stat	2	201001	1
-12571	__all_virtual_dba_source_v1	2	201001	1
+12571	__all_virtual_source	2	201001	1
 12572	__all_virtual_ai_model	2	201001	1
 12573	__all_virtual_ai_model_history	2	201001	1
 12574	__all_virtual_ai_model_endpoint	2	201001	1
+12575	__all_virtual_ss_object_type_io_stat	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1453,6 +1454,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21690	DBA_OB_AI_MODEL_ENDPOINTS	1	201001	1
 21691	CDB_OB_AI_MODELS	1	201001	1
 21692	CDB_OB_AI_MODEL_ENDPOINTS	1	201001	1
+21693	GV$OB_SS_OBJECT_TYPE_IO_STAT	1	201001	1
+21694	V$OB_SS_OBJECT_TYPE_IO_STAT	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

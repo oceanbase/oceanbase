@@ -105,7 +105,8 @@ public:
   int prune_manifest_files(ObIArray<iceberg::ManifestFile*> &manifest_list,
                            ObIArray<iceberg::ManifestFile*> &valid_manifest_list);
   int prune_data_files(ObExecContext &exec_ctx,
-                       ObIArray<iceberg::ManifestEntry*> &manifest_entries,
+                       const ObIArray<iceberg::ManifestEntry*> &manifest_entries,
+                       const bool is_hash_aggregate,
                        hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
                        ObIArray<ObIcebergFileDesc*> &file_descs);
 

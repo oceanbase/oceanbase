@@ -288,20 +288,28 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
   // allocate operator spec
   ObPhyOperatorType type = PHY_INVALID;
   ObSqlSchemaGuard *schema_guard = nullptr;
+  bool op_disable_vectorize = false;
+  bool plan_use_rich_format =
+    (phy_plan_ == NULL ? false : phy_plan_->is_vectorized() && phy_plan_->get_use_rich_format());
+  EnableOpRichFormat tmp_enable_rich_format(0, false);
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(op.get_plan())
              || OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguments", K(ret), K(op.get_plan()), K(schema_guard));
-  } else if (OB_FAIL(
-               get_phy_op_type(op, type, in_root_job, enable_rich_format))) {
+  } else if (OB_FAIL(check_op_vectorization(&op, schema_guard, plan_use_rich_format, op_disable_vectorize))) {
+    LOG_WARN("check op vectorization failed", K(ret));
+  } else if (op_disable_vectorize && OB_FAIL(get_phy_op_type(op, type, in_root_job, tmp_enable_rich_format))) {
+    LOG_WARN("failed to get phy op type", K(ret));
+  } else if (!op_disable_vectorize && OB_FAIL(get_phy_op_type(op, type, in_root_job, enable_rich_format))) {
     LOG_WARN("get phy op type failed", K(ret));
   } else if (type == PHY_INVALID || type >= PHY_END) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid phy operator type", K(ret), K(type));
   } else if (NULL == phy_plan_
-             || OB_FAIL(phy_plan_->alloc_op_spec_for_cg(&op, schema_guard, type,
-                                                       children.count(), spec, op.get_op_id(), enable_rich_format))) {
+             || OB_FAIL(phy_plan_->alloc_op_spec_for_cg(&op, schema_guard, plan_use_rich_format,
+                                                        type, children.count(), spec,
+                                                        op.get_op_id(), enable_rich_format))) {
     ret = NULL == phy_plan_ ? OB_INVALID_ARGUMENT : ret;
     LOG_WARN("allocate operator spec failed",
              K(ret), KP(phy_plan_), K(ob_phy_operator_type_str(type)));
@@ -643,22 +651,25 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
   if (NULL != op) {
     ObLogPlan *log_plan = NULL;
     ObSqlSchemaGuard *schema_guard = NULL;
+    ObSQLSessionInfo *session = nullptr;
     const ObTableSchema *table_schema = nullptr;
     if (OB_ISNULL(log_plan = op->get_plan()) ||
-        OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
+        OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard()) ||
+        OB_ISNULL(session = log_plan->get_optimizer_context().get_session_info())) {
       support = false;
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid argument", K(op), K(log_plan), K(schema_guard));
+      LOG_WARN("invalid argument", K(op), K(log_plan), K(schema_guard), K(session));
     } else {
       bool disable_vectorize = false;
       ObPhyOperatorType type = PHY_INVALID;
-      if (OB_FAIL(get_phy_op_type(*op, type, is_root_job))) {
+      if (OB_FAIL(get_phy_op_type(*op, type, is_root_job, session->use_rich_format()))) {
         LOG_WARN("failed to get_phy_op_type", K(op), K(type));
       } else {
       if (ObOperatorFactory::is_vectorized(type)) {
         support = true;
       }
-      ret = check_op_vectorization(op, schema_guard, type, disable_vectorize);
+
+      ret = check_op_vectorization(op, schema_guard, session->use_rich_format(), disable_vectorize);
       if (OB_FAIL(ret)) {
       } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
          LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
@@ -5778,6 +5789,13 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tsc_cg_service_.generate_tsc_ctdef(op, spec.tsc_ctdef_))) {
       LOG_WARN("generate tsc ctdef failed", K(ret));
+    } else if (OB_FAIL(set_das_ctdef_false_range_flag(spec.tsc_ctdef_.scan_ctdef_,
+                                                      spec.tsc_ctdef_.enable_new_false_range_))) {
+      LOG_WARN("failed to set das ctdef false range flag", K(ret));
+    } else if (spec.tsc_ctdef_.lookup_ctdef_ != nullptr &&
+               OB_FAIL(set_das_ctdef_false_range_flag(*spec.tsc_ctdef_.lookup_ctdef_,
+                                                      spec.tsc_ctdef_.enable_new_false_range_))) {
+      LOG_WARN("failed to set das ctdef false range flag", K(ret));
     } else if (FALSE_IT(spec.tsc_ctdef_.scan_flags_.enable_rich_format_
                         = spec.use_rich_format_)) {
       // do nothing
@@ -9987,9 +10005,9 @@ int ObStaticEngineCG::check_refreshing_mview_session_var(ObSchemaGetterGuard &sc
 
 int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
                                          ObPhyOperatorType &type,
-                                         const bool in_root_job)
+                                         const bool in_root_job, const bool plan_use_rich_format)
 {
-  EnableOpRichFormat enable_rich_format(0, false);
+  EnableOpRichFormat enable_rich_format(0, plan_use_rich_format);
   return get_phy_op_type(log_op, type, in_root_job, enable_rich_format);
 }
 
@@ -10976,7 +10994,7 @@ int ObStaticEngineCG::check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_id
 }
 
 int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
-                                            const ObPhyOperatorType phy_type, bool &disable_vectorize)
+                                             const bool plan_use_rich_format, bool &disable_vectorize)
 {
   int ret = OB_SUCCESS;
   disable_vectorize = false;
@@ -11063,7 +11081,10 @@ int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaG
       disable_vectorize = true;
     }
   } else if (log_op_def::LOG_JOIN == op->get_type()) {
-    if (phy_type == PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX) {
+    ObPhyOperatorType phy_type = PHY_INVALID;
+    if (OB_FAIL(get_phy_op_type(*op, phy_type, false, plan_use_rich_format))) {
+      LOG_WARN("get physical op type failed", K(ret));
+    } else if (phy_type == PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX) {
       disable_vectorize = true;
     }
   } else if (log_op_def::LOG_GROUP_BY == op->get_type()) {
@@ -11289,6 +11310,27 @@ int ObStaticEngineCG::generate_disable_rich_format_flags(int64_t &disable_rich_f
     disable_rich_format_flags = global_hint.disable_op_rich_format_hint_.get_op_flags();
   }
   LOG_TRACE("disable rich format flags", K(disable_rich_format_flags));
+  return ret;
+}
+
+int ObStaticEngineCG::set_das_ctdef_false_range_flag(ObDASBaseCtDef &ctdef,
+                                                     bool enable_new_false_range)
+{
+  int ret = OB_SUCCESS;
+  if (ctdef.op_type_ == ObDASOpType::DAS_OP_TABLE_SCAN) {
+    ObDASScanCtDef *scan_ctdef = static_cast<ObDASScanCtDef *>(&ctdef);
+    scan_ctdef->enable_new_false_range_ = enable_new_false_range;
+  }
+  for (int i = 0; i < ctdef.children_cnt_; i++) {
+    ObDASBaseCtDef *child_ctdef = ctdef.children_[i];
+    if (OB_ISNULL(child_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null child ctdef", K(ret), K(i), KPC(child_ctdef));
+    } else if (OB_FAIL(SMART_CALL(set_das_ctdef_false_range_flag(*child_ctdef,
+                                                                 enable_new_false_range)))) {
+      LOG_WARN("failed to set das ctdef false range flag", K(ret));
+    }
+  }
   return ret;
 }
 

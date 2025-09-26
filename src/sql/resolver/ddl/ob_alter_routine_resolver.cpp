@@ -103,6 +103,7 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
       OX (alter_routine_stmt->get_routine_arg().is_need_alter_ = true);
     } else {
       CK (OB_NOT_NULL(parse_tree.children_[1]));
+      OX (alter_routine_stmt->get_routine_arg().db_name_ = db_name);
       OZ (resolve_impl(
         alter_routine_stmt->get_routine_arg(), *routine_info, *(parse_tree.children_[1])));
       OX (alter_routine_stmt->get_routine_arg()

@@ -392,7 +392,7 @@ int ObJsonBinVisitor::flat_datum(const ObDatum &datum)
     if (lob_common.is_mem_loc_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("found a mem locator", K(ret), K(lob_common));
-    } else if (! lob_common.in_row_) {
+    } else if (OB_UNLIKELY(!lob_common.in_row_)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("semstruct encoding do not support outrow", K(ret), K(lob_common));
     } else {
@@ -426,7 +426,7 @@ void ObJsonBinVisitor::reset()
 int ObJsonBinVisitor::read_type()
 {
   int ret = OB_SUCCESS;
-  if (pos_ + sizeof(uint8_t) > len_) {
+  if (OB_UNLIKELY(pos_ + sizeof(uint8_t) > len_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("pos overflow len", K(ret), K(pos_), K(len_), KP(ptr_));
   } else {
@@ -514,7 +514,7 @@ int ObJsonBinVisitor::deserialize_string()
   int64_t offset = pos_ + sizeof(uint8_t);
   if (OB_FAIL(serialization::decode_vi64(ptr_, len_, offset, &str_len))) {
     LOG_WARN("decode string length fail", K(ret), KP(ptr_), K(len_), K(pos_), K(offset));
-  } else if (offset + str_len > len_) {
+  } else if (OB_UNLIKELY(offset + str_len > len_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data buffer is not enough", K(ret),  K(ret), KP(ptr_), K(len_), K(pos_), K(offset), K(str_len));
   } else {
@@ -534,7 +534,7 @@ int ObJsonBinVisitor::deserialize_opaque()
   int64_t offset = pos_ + sizeof(uint8_t);
   ObString data;
   // [vertype(uint8_t)][ObObjType(uint16_t)][length(uint64_t)][data]
-  if (pos_ + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint64_t) > len_) {
+  if (OB_UNLIKELY(pos_ + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint64_t) > len_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data length is not enough for opaque len", K(ret), KP(ptr_), K(len_), K(pos_), K(offset));
   } else {
@@ -573,16 +573,16 @@ int ObJsonBinVisitor::deserialize_doc_header()
 {
   int ret = OB_SUCCESS;
   const ObJsonBinDocHeader *header = nullptr;
-  if (pos_ != 0) {
+  if (OB_UNLIKELY(pos_ != 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("doc header should be at the begining", K(ret), K(pos_), K(len_), KP(ptr_));
-  } else if (pos_ + sizeof(ObJsonBinDocHeader) > len_) {
+  } else if (OB_UNLIKELY(pos_ + sizeof(ObJsonBinDocHeader) > len_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("data length is not enough for json bin doc header", K(ret), K(pos_), K(len_));
   } else if (OB_ISNULL(header = reinterpret_cast<const ObJsonBinDocHeader*>(ptr_ + pos_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("header is null", K(ret), K(pos_), K(len_), KP(ptr_));
-  } else if (header->extend_seg_offset_ != len_) {
+  } else if (OB_UNLIKELY(header->extend_seg_offset_ != len_)) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("may be partial update", K(ret), KPC(header));
   } else {
@@ -601,7 +601,7 @@ int ObJsonBinVisitor::deserialize_bin_header()
   uint64_t obj_size = 0;
   uint64_t element_count = 0;
   int offset = pos_;
-  if (pos_ + sizeof(ObJsonBinHeader) > len_) {
+  if (OB_UNLIKELY(pos_ + sizeof(ObJsonBinHeader) > len_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("data length is not enough for json bin doc header", K(ret), K(pos_), K(len_));
   } else if (OB_ISNULL(header = reinterpret_cast<const ObJsonBinHeader*>(ptr_ + pos_))) {
@@ -724,7 +724,7 @@ int ObJsonBinVisitor::deserialize()
     case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_MYSQL_DATE:
     case ObJsonNodeType::J_ORACLEDATE: {
-      if (pos_ + sizeof(int32_t) > len_) {
+      if (OB_UNLIKELY(pos_ + sizeof(int32_t) > len_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data length is not enough for date.", K(ret), KP(ptr_), K(len_), K(pos_));
       } else {
@@ -736,7 +736,7 @@ int ObJsonBinVisitor::deserialize()
       break;
     }
     case ObJsonNodeType::J_TIME: {
-      if (pos_ + sizeof(int64_t) > len_) {
+      if (OB_UNLIKELY(pos_ + sizeof(int64_t) > len_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data length is not enough for time.", K(ret), KP(ptr_), K(len_), K(pos_));
       } else {
@@ -752,7 +752,7 @@ int ObJsonBinVisitor::deserialize()
     case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_OTIMESTAMP:
     case ObJsonNodeType::J_OTIMESTAMPTZ: {
-      if (pos_ + sizeof(int64_t) > len_) {
+      if (OB_UNLIKELY(pos_ + sizeof(int64_t) > len_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data length is not enough for datetime.", K(ret), KP(ptr_), K(len_), K(pos_));
       } else {
@@ -764,7 +764,7 @@ int ObJsonBinVisitor::deserialize()
       break;
     }
     case ObJsonNodeType::J_TIMESTAMP: {
-      if (pos_ + sizeof(int64_t) > len_) {
+      if (OB_UNLIKELY(pos_ + sizeof(int64_t) > len_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data length is not enough for timestamp.", K(ret), KP(ptr_), K(len_), K(pos_));
       } else {
@@ -810,6 +810,7 @@ int ObJsonDataFlatter::init(const ObSemiSchemaAbstract *sub_schema, ObArray<ObCo
   sub_schema_ = sub_schema;
   reset();
   sub_col_datums_ = &sub_col_datums;
+  freq_column_count_ = sub_schema_->get_freq_column_cnt();
   return ret;
 }
 
@@ -827,7 +828,7 @@ int ObJsonDataFlatter::visit(const ObString& data)
     LOG_WARN("alloc spare col fail", K(ret), "size", sizeof(ObJsonObject));
   } else if (OB_FAIL(do_visit(data))) {
     LOG_WARN("flat fail", K(ret));
-  } else if (use_lexicographical_order_ != sub_schema_->use_lexicographical_order()) {
+  } else if (OB_UNLIKELY(use_lexicographical_order_ != sub_schema_->use_lexicographical_order())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lexicographical_order is different", K(ret), K(use_lexicographical_order_), K(sub_schema_->use_lexicographical_order()));
   } else if (OB_NOT_NULL(spare_col_)) {
@@ -856,7 +857,7 @@ int ObJsonDataFlatter::visit(const ObString& data)
       if (OB_FAIL(sub_col_datums_->at(i)->push_back(NOP_DATUM))) {
         LOG_WARN("push back datum to sub_col_datums fail", K(ret), K(i), KPC(sub_schema_));
       }
-    } else if (sub_col_datums_->at(i)->count() != row_index_) {
+    } else if (OB_UNLIKELY(sub_col_datums_->at(i)->count() != row_index_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sub_col_datums count is not match", K(ret), K(i), KPC(sub_schema_));
     }
@@ -924,19 +925,19 @@ int ObJsonDataFlatter::do_visit(const ObString& data)
   visited_bytes_ = 0;
   if (OB_FAIL(read_type())) {
     LOG_WARN("read type fail", K(ret));
-  } else if (! ObJsonBin::is_doc_header(meta_.type_)) {
+  } else if (!ObJsonBin::is_doc_header(meta_.type_)) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("there is no json doc header", K(ret), K(meta_), K(pos_));
   } else if (OB_FAIL(deserialize_doc_header())) {
     LOG_WARN("deserialize_doc_header fail", K(ret));
   } else if (OB_FAIL(read_type())) {
     LOG_WARN("read type fail", K(ret));
-  } else if (json_type_ != ObJsonNodeType::J_OBJECT && json_type_ != ObJsonNodeType::J_ARRAY) {
+  } else if (OB_UNLIKELY(json_type_ != ObJsonNodeType::J_OBJECT && json_type_ != ObJsonNodeType::J_ARRAY)) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("scalar json is not support encoding", K(ret), K(meta_), K(pos_));
   } else if (OB_FAIL(visit_value(base_node_))) {
     LOG_WARN("deserialize fail", K(ret));
-  } else if (visited_bytes_ != data.length()) {
+  } else if (OB_UNLIKELY(visited_bytes_ != data.length())) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("visited_bytes is not equal to data length, may be partial update, so do not trigger semistruct encoding",
       K(ret), K(visited_bytes_), K(data.length()));
@@ -947,7 +948,7 @@ int ObJsonDataFlatter::do_visit(const ObString& data)
 int ObJsonDataFlatter::gen_spare_key(const uint16_t col_id, ObString &key)
 {
   int ret = OB_SUCCESS;
-  if (min_data_version_ < DATA_VERSION_4_4_1_0) {
+  if (OB_UNLIKELY(min_data_version_ < DATA_VERSION_4_4_1_0)) {
     uint32_t *key_id = nullptr;
     if (OB_ISNULL(key_id = reinterpret_cast<uint32_t*>(spare_data_allocator_.alloc(sizeof(uint32_t))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -977,7 +978,10 @@ int ObJsonDataFlatter::handle_stop_container(uint16_t col_id, ObJsonNodeType jso
   visited_bytes_ -= meta_.get_value_entry_offset(meta_.element_count());
   visited_bytes_ += meta_.obj_size();
   ObString key;
-  if (OB_FAIL(ObJsonBaseFactory::alloc_node(spare_data_allocator_, ObJsonNodeType::J_SEMI_BIN, node))) {
+  if (OB_UNLIKELY(col_id < freq_column_count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("col_id is less than freq_column_count_", K(ret), K(col_id), K(freq_column_count_));
+  } else if (OB_FAIL(ObJsonBaseFactory::alloc_node(spare_data_allocator_, ObJsonNodeType::J_SEMI_BIN, node))) {
     LOG_WARN("alloc node fail", K(ret), K(json_type_));
   } else {
     ObJsonSemiBin *semi_node = dynamic_cast<ObJsonSemiBin*>(node);
@@ -1000,7 +1004,10 @@ int ObJsonDataFlatter::visit_object(ObSemiSchemaObject *&json_object)
   if (OB_FAIL(deserialize_bin_header())) {
     LOG_WARN("init meta fail", K(ret));
   } else if (meta_.element_count() == 0 || json_object->get_need_stop_visit()) {
-    if (OB_FAIL(handle_stop_container(json_object->get_col_id(), ObJsonNodeType::J_OBJECT))) {
+    if (!json_object->get_need_stop_visit() && !json_object->has_nop()) {
+      ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
+      LOG_WARN("schema not match", K(ret), KPC(json_object), K(meta_));
+    } else if (OB_FAIL(handle_stop_container(json_object->get_col_id(), ObJsonNodeType::J_OBJECT))) {
       LOG_WARN("handle object stop container fail", K(ret), K(json_object->get_col_id()));
     }
   } else {
@@ -1059,7 +1066,10 @@ int ObJsonDataFlatter::visit_array(ObSemiSchemaArray *&json_array)
   if (OB_FAIL(deserialize_bin_header())) {
     LOG_WARN("init meta fail", K(ret));
   } else if (meta_.element_count() == 0 || json_array->get_need_stop_visit()) {
-    if (OB_FAIL(handle_stop_container(json_array->get_col_id(), ObJsonNodeType::J_ARRAY))) {
+    if (!json_array->get_need_stop_visit() && !json_array->has_nop()) {
+      ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
+      LOG_WARN("schema not match", K(ret), KPC(json_array), K(meta_));
+    } else if (OB_FAIL(handle_stop_container(json_array->get_col_id(), ObJsonNodeType::J_ARRAY))) {
       LOG_WARN("handle array stop container fail", K(ret), K(json_array->get_col_id()));
     }
   } else {
@@ -1110,7 +1120,10 @@ int ObJsonDataFlatter::add_spare_col(ObSemiSchemaScalar *&scalar_node)
   int ret = OB_SUCCESS;
   ObString key;
   ObJsonNode *node = nullptr;
-  if (OB_FAIL(gen_spare_key(scalar_node->get_col_id(), key))) {
+  if (OB_UNLIKELY(scalar_node->get_col_id() < freq_column_count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("col_id is less than freq_column_count_", K(ret), K(scalar_node->get_col_id()), K(freq_column_count_));
+  } else if (OB_FAIL(gen_spare_key(scalar_node->get_col_id(), key))) {
     LOG_WARN("gen spare key fail", K(ret), K(scalar_node->get_col_id()));
   } else if (json_type_ == ObJsonNodeType::J_NULL) {
     node = &ObSemiStructScalar::null_;
@@ -1193,8 +1206,8 @@ int ObJsonSchemaFlatter::add_schema_info(ObSemiSchemaNode &schema_node, ObSemiNe
   if (info.is_freq_column_) {
     ObSemiSchemaScalar &scalar_node = dynamic_cast<ObSemiSchemaScalar&>(schema_node);
     if (schema_node.obj_type() == ObNullType) {
-      if (schema_node.json_type() != ObJsonNodeType::J_NULL) {
-        ret = OB_ERR_UNEXPECTED;
+      if (OB_UNLIKELY(schema_node.json_type() != ObJsonNodeType::J_NULL)) {
+        ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
         LOG_WARN("schema_node is not json null type", K(ret), K(schema_node));
       } else {
         info.obj_type_ = ObTinyIntType;
@@ -1341,10 +1354,10 @@ int ObJsonSchemaFlatter::build_sub_schema(ObSemiNewSchema &new_schema)
       LOG_WARN("serialize json binary fail", K(ret));
     } else if (OB_FAIL(schema_buf.get_result_string(schema_str_buf))) {
       LOG_WARN("get result string fail", K(ret));
-    } else if (freq_column_count_ != freq_col_idx_) {
+    } else if (OB_UNLIKELY(freq_column_count_ != freq_col_idx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("freq column count not match", K(ret), K(freq_column_count_), K(freq_col_idx_));
-    } else if (spare_col_idx_ == 0) {
+    } else if (OB_UNLIKELY(spare_col_idx_ == 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("element count is 0", K(ret), K(freq_column_count_), KPC(base_node_));
     } else {
@@ -1383,7 +1396,7 @@ int ObJsonSchemaFlatter::build_schema_child_node(ObSemiNewSchema &new_schema, Ob
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       }
-    } else if (json_node->object_node_->get_object_list().size() <= 0) {
+    } else if (OB_UNLIKELY(json_node->object_node_->get_object_list().size() <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("object list is empty", K(ret));
     } else if (OB_ISNULL(child_node = OB_NEWx(ObJsonObject, allocator_, allocator_))) {
@@ -1400,7 +1413,7 @@ int ObJsonSchemaFlatter::build_schema_child_node(ObSemiNewSchema &new_schema, Ob
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       }
-    } else if (json_node->array_node_->get_array_list().size() <= 0) {
+    } else if (OB_UNLIKELY(json_node->array_node_->get_array_list().size() <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("object list is empty", K(ret));
     } else if (OB_ISNULL(child_node = OB_NEWx(ObJsonArray, allocator_, allocator_))) {
@@ -1474,7 +1487,7 @@ int ObJsonSchemaFlatter::build_sub_schema(ObSemiSchemaScalar *scalar_node, ObSem
 int ObJsonSchemaFlatter::build_sub_schema(ObSemiJsonNode *json_node, ObSemiStructSubSchema &result)
 {
   int ret = OB_SUCCESS;
-  if (min_data_version_ < DATA_VERSION_4_4_1_0 && json_node->is_heterogeneous_column()) {
+  if (OB_UNLIKELY(min_data_version_ < DATA_VERSION_4_4_1_0 && json_node->is_heterogeneous_column())) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("not support semistruct encoding json", K(ret), KPC(json_node));
   } else {
@@ -1535,7 +1548,7 @@ int ObJsonSchemaFlatter::do_visit(const ObString& data)
   ObSemiSchemaNode *json_node = nullptr;
   if (OB_FAIL(read_type())) {
     LOG_WARN("read type fail", K(ret));
-  } else if (! ObJsonBin::is_doc_header(meta_.type_)) {
+  } else if (!ObJsonBin::is_doc_header(meta_.type_)) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("there is no json doc header", K(ret), K(meta_), K(pos_));
   } else if (OB_FAIL(deserialize_doc_header())) {
@@ -1552,7 +1565,7 @@ int ObJsonSchemaFlatter::do_visit(const ObString& data)
     LOG_WARN("inc path cnt fail", K(ret));
   } else if (OB_FAIL(visit_value(base_node_))) {
     LOG_WARN("deserialize fail", K(ret));
-  } else if (visited_bytes_ != data.length()) {
+  } else if (OB_UNLIKELY(visited_bytes_ != data.length())) {
     ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
     LOG_WARN("visited_bytes is not equal to data length, may be partial update, so do not trigger semistruct encoding",
       K(ret), K(visited_bytes_), K(data.length()));
@@ -1957,7 +1970,7 @@ int ObSemiSchemaAbstract::check_can_pushdown(const sql::ObSemiStructWhiteFilterN
     } else {
       ret = OB_SUCCESS; // override ret
     }
-  } else if (sub_col_idx < 0 || sub_col_idx >= get_store_column_cnt()) {
+  } else if (OB_UNLIKELY(sub_col_idx < 0 || sub_col_idx >= get_store_column_cnt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub column id is invalid", K(ret), K(sub_col_idx));
   } else if (!is_freq_column(sub_col_idx)) {
@@ -2009,7 +2022,7 @@ int ObSemiNewSchema::set_schema_infos_ptr(ObSEArray<ObSemiSchemaInfo, 16> &schem
 {
   int ret = OB_SUCCESS;
   ObSemiSchemaInfo *tmp_schema_infos_ptr = nullptr;
-  if (element_cnt_ != schema_info_arr.count()) {
+  if (OB_UNLIKELY(element_cnt_ != schema_info_arr.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid element cnt", K(ret), K(element_cnt_), K(schema_info_arr.count()));
   } else if (OB_ISNULL(tmp_schema_infos_ptr =
@@ -2031,7 +2044,7 @@ int ObSemiNewSchema::get_sub_column_type(const uint16_t column_idx, ObObjType &t
   if (OB_ISNULL(semi_schema_infos_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("semi_schema_infos_ is null", K(ret));
-  } else if (column_idx > freq_column_cnt_) {
+  } else if (OB_UNLIKELY(column_idx > freq_column_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid idx", K(ret), K(column_idx));
   } else if (column_idx == freq_column_cnt_) {
@@ -2048,7 +2061,7 @@ int ObSemiNewSchema::get_sub_column_json_type(const uint16_t sub_col_id, ObJsonN
   if (OB_ISNULL(semi_schema_infos_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("semi_schema_infos_ is null", K(ret));
-  } else if (sub_col_id >= element_cnt_) {
+  } else if (OB_UNLIKELY(sub_col_id >= element_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid idx", K(ret), K(sub_col_id));
   } else {
@@ -2072,7 +2085,7 @@ int ObSemiNewSchema::get_column_id(const share::ObSubColumnPath& path, uint16_t 
     ObIJsonBase *child_node = nullptr;
     if (parent_node->json_type() == ObJsonNodeType::J_OBJECT) {
       ObIJsonBase *value = nullptr;
-      if (path.get_path_item(now_depth).type_ != share::ObSubColumnPathItem::OBJECT) {
+      if (OB_UNLIKELY(path.get_path_item(now_depth).type_ != share::ObSubColumnPathItem::OBJECT)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column path type is not object", K(ret), K(parent_node->json_type()));
       } else if (OB_FAIL(parent_node->get_object_value(path.get_path_item(now_depth).key_, child_node))) {
@@ -2085,7 +2098,7 @@ int ObSemiNewSchema::get_column_id(const share::ObSubColumnPath& path, uint16_t 
         now_depth++;
       }
     } else if (parent_node->json_type() == ObJsonNodeType::J_ARRAY) {
-      if (path.get_path_item(now_depth).type_ != share::ObSubColumnPathItem::ARRAY) {
+      if (OB_UNLIKELY(path.get_path_item(now_depth).type_ != share::ObSubColumnPathItem::ARRAY)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column path type is not array", K(ret), K(parent_node->json_type()));
       } else if (OB_FAIL(parent_node->get_array_element(path.get_path_item(now_depth).array_idx_, child_node))) {
@@ -2354,10 +2367,10 @@ int ObSemiStructSubSchema::find_column(const ObIArray<ObSemiStructSubColumn>& co
 int ObSemiStructSubSchema::handle_string_to_uint(const int32_t len, ObSemiStructSubColumn& sub_column) const
 {
   int ret = OB_SUCCESS;
-  if (sub_column.get_obj_type() != ObVarcharType) {
+  if (OB_UNLIKELY(sub_column.get_obj_type() != ObVarcharType)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub column is not obj varchar type", K(ret), K(sub_column));
-  } else if (sub_column.get_json_type() != ObJsonNodeType::J_STRING) {
+  } else if (OB_UNLIKELY(sub_column.get_json_type() != ObJsonNodeType::J_STRING)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub column is not json null type", K(ret), K(sub_column));
   } else {
@@ -2377,10 +2390,10 @@ int ObSemiStructSubSchema::handle_string_to_uint(const int32_t len, ObSemiStruct
 int ObSemiStructSubSchema::handle_null_type(ObSemiStructSubColumn& sub_column) const
 {
   int ret = OB_SUCCESS;
-  if (sub_column.get_obj_type() != ObNullType) {
+  if (OB_UNLIKELY(sub_column.get_obj_type() != ObNullType)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub column is not obj null type", K(ret), K(sub_column));
-  } else if (sub_column.get_json_type() != ObJsonNodeType::J_NULL) {
+  } else if (OB_UNLIKELY(sub_column.get_json_type() != ObJsonNodeType::J_NULL)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sub column is not json null type", K(ret), K(sub_column));
   } else {
@@ -2495,7 +2508,7 @@ int ObSemiStructObject::init(const int cap)
 int ObSemiStructObject::get_key(uint64_t idx, ObString &key_out) const
 {
   int ret = OB_SUCCESS;
-  if (idx >= child_cnt_) {
+  if (OB_UNLIKELY(idx >= child_cnt_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("over bound", K(ret), K(child_cnt_), K(idx));
   } else {
@@ -2517,7 +2530,7 @@ int ObSemiStructObject::object_add(const common::ObString &key, ObIJsonBase *val
 {
   int ret = OB_SUCCESS;
   ObJsonNode *node = nullptr;
-  if (child_cnt_ >= cap_) {
+  if (OB_UNLIKELY(child_cnt_ >= cap_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("over bound", K(ret), K(child_cnt_), K(cap_));
   } else if (OB_ISNULL(node = dynamic_cast<ObJsonNode*>(value))) {
@@ -2621,7 +2634,7 @@ int ObSemiStructArray::array_append(ObIJsonBase *value)
 {
   int ret = OB_SUCCESS;
   ObJsonNode *node = nullptr;
-  if (child_cnt_ >= cap_) {
+  if (OB_UNLIKELY(child_cnt_ >= cap_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("over bound", K(ret), K(child_cnt_), K(cap_));
   } else if (OB_ISNULL(node = dynamic_cast<ObJsonNode*>(value))) {
@@ -2701,7 +2714,7 @@ int ObSemiStructScalar::handle_int_to_string(ObJsonNode &base_node, const ObDatu
 {
   int ret = OB_SUCCESS;
   ObJsonString& node = static_cast<ObJsonString&>(base_node);
-  if (base_node.json_type() != ObJsonNodeType::J_STRING) {
+  if (OB_UNLIKELY(base_node.json_type() != ObJsonNodeType::J_STRING)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid node type.", K(ret), K(obj_type_), K(base_node.json_type()));
   } else if (obj_type_ == ObUTinyIntType) {
@@ -2726,7 +2739,7 @@ int ObSemiStructScalar::handle_int_to_string(ObJsonNode &base_node, const ObDatu
 int ObSemiStructScalar::set_value(const ObDatum &datum)
 {
   int ret = OB_SUCCESS;
-  if (obj_type_ == ObJsonType) {
+  if (OB_UNLIKELY(obj_type_ == ObJsonType)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should not reach here for json type", K(ret));
   } else if (datum.is_null()) {
@@ -2793,11 +2806,11 @@ int ObJsonReassembler::serialize(const ObDatumRow &row, ObString &result)
   if (OB_ISNULL(json_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("json is null", K(ret));
-  } else if (sub_schema_->get_version() == ObSemiStructSubSchema::SCHEMA_VERSION &&
-                    (sub_cols_.count() != leaves_.count() + spare_leaves_.count())) {
+  } else if (OB_UNLIKELY(sub_schema_->get_version() == ObSemiStructSubSchema::SCHEMA_VERSION &&
+                    (sub_cols_.count() != leaves_.count() + spare_leaves_.count()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column count not match", K(ret), K(sub_cols_.count()), K(leaves_.count()), K(spare_leaves_.count()));
-  } else if (row.count_ != sub_schema_->get_store_column_cnt()) {
+  } else if (OB_UNLIKELY(row.count_ != sub_schema_->get_store_column_cnt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column count not match", K(ret), K(sub_schema_->get_store_column_cnt()), K(row.count_));
   } else {
@@ -2807,7 +2820,7 @@ int ObJsonReassembler::serialize(const ObDatumRow &row, ObString &result)
     if (OB_FAIL(fill_freq_column(row))) {
       LOG_WARN("fill freq column fail", K(ret), K(row));
     } else if (sub_schema_->has_spare_column() && OB_FAIL(fill_spare_column(row))) {
-      LOG_WARN("fill spare column fail", K(ret), K(row));
+      LOG_WARN("fill spare column fail", K(ret), K(row), KPC(sub_schema_));
     } else if (OB_FAIL(reshape(json_))) {
       LOG_WARN("reshape fail", K(ret));
     } else if (OB_FAIL(prepare_lob_common(j_bin_buf))) {
@@ -2856,7 +2869,7 @@ int ObJsonReassembler::fill_spare_column(const ObDatumRow &row)
     }
   } else if (OB_FAIL(bin.reset_iter())) {
     LOG_WARN("reset bin fail", K(ret), K(datum));
-  } else if (bin.json_type() != ObJsonNodeType::J_OBJECT) {
+  } else if (OB_UNLIKELY(bin.json_type() != ObJsonNodeType::J_OBJECT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("spare column data is not json object", K(ret), K(bin));
   } else {
@@ -2877,7 +2890,7 @@ int ObJsonReassembler::fill_spare_column(const ObDatumRow &row)
           col_id = *reinterpret_cast<uint16_t*>(key.ptr());
         }
         uint16_t idx = col_id - sub_schema_->get_freq_column_cnt();
-        if (idx < 0 || idx >= spare_leaves_.count()) {
+        if (OB_UNLIKELY(idx < 0 || idx >= spare_leaves_.count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid spare col id", K(ret), K(col_id), K(idx), K(sub_schema_->get_freq_column_cnt()), K(spare_leaves_.count()));
         } else if (OB_FAIL(spare_leaves_.at(idx)->set_value(*static_cast<ObJsonBin*>(child_ptr)))) {
@@ -3275,7 +3288,7 @@ int ObJsonReassembler::json_to_schema(ObIJsonBase &json_base, ObSemiNewSchema &s
     }
   } else if (json_base.json_type() == ObJsonNodeType::J_UINT) {
     uint16_t col_id = json_base.get_uint();
-    if (!semi_schema.col_id_valid(col_id)) {
+    if (OB_UNLIKELY(!semi_schema.col_id_valid(col_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col id is invalid", K(ret), K(col_id));
     } else if (OB_ISNULL(current = reinterpret_cast<ObJsonNode**>(allocator_.alloc(sizeof(ObJsonNode*))))) {
@@ -3346,14 +3359,14 @@ int ObJsonReassembler::init()
     LOG_WARN("sub schema is null", K(ret));
   } else if (OB_FAIL(leaves_.reserve(sub_schema_->get_freq_column_cnt()))) {
     LOG_WARN("reserve array fail", K(ret), K(sub_schema_->get_freq_column_cnt()));
-  } else if (sub_schema_->get_version() == ObSemiStructSubSchema::SCHEMA_VERSION) {
+  } else if (OB_UNLIKELY(sub_schema_->get_version() == ObSemiStructSubSchema::SCHEMA_VERSION)) {
     if (OB_FAIL(merge_sub_cols())) {
       LOG_WARN("merge_sub_cols fail", K(ret), KPC(sub_schema_));
     } else if (FALSE_IT(real_end = sub_cols_.count())) {
     } else if (OB_FAIL(reassemble(0, sub_cols_.count(), 0, json_, real_end))) {
       LOG_WARN("reassemble fail", K(ret), KPC(sub_schema_));
     }
-  } else if (sub_schema_->get_version() == ObSemiNewSchema::NEW_SCHEMA_VERSION) {
+  } else if (OB_LIKELY(sub_schema_->get_version() == ObSemiNewSchema::NEW_SCHEMA_VERSION)) {
     if (OB_FAIL(deserialize_new_schema())) {
       LOG_WARN("deserialize new schema fail", K(ret), KPC(sub_schema_));
     }

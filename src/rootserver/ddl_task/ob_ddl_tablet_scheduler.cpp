@@ -45,7 +45,8 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
                                const int64_t  parallelism,
                                const int64_t  snapshot_version,
                                const common::ObCurTraceId::TraceId &trace_id,
-                               const ObIArray<ObTabletID> &tablets)
+                               const ObIArray<ObTabletID> &tablets,
+                               const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("tblt_sched_init");
@@ -131,9 +132,21 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
       tablet_data_row_cnt = 0;
       part_tablets.reuse();
       partition_names.reuse();
-      if (OB_FAIL(ObDDLUtil::get_tablet_data_size(tenant_id, ref_data_table_tablets.at(i), ls_ids.at(i), tablet_data_size))) {
+      common::ObAddr leader_addr;
+      share::ObLocationService *location_service = nullptr;
+      int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+      const int64_t retry_interval_us = 200 * 1000; // 200ms
+      if (OB_ISNULL(location_service = GCTX.location_service_)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("location_cache is null", K(ret), KP(location_service));
+      } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+        tenant_id, ls_ids.at(i), leader_addr, rpc_timeout, retry_interval_us))) {
+        LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id), K(ls_ids.at(i)));
+      } else if (OB_FAIL(ls_location_map_.set_refactored(ls_ids.at(i), leader_addr, true /* overwrite */))) {
+        LOG_WARN("ls location map set fail", K(ret), K(ls_ids.at(i)), K(leader_addr));
+      } else if (OB_FAIL(ObDDLUtil::get_tablet_data_size(tenant_id, ref_data_table_tablets.at(i), ls_ids.at(i), tablet_data_size))) {
         LOG_WARN("fail to get tablet data size", K(ret), K(tenant_id), K(ref_data_table_tablets.at(i)), K(ls_ids.at(i)), K(tablet_data_size));
-      } else if (OB_FAIL(ObDDLUtil::get_tablet_data_row_cnt(tenant_id, ref_data_table_tablets.at(i), ls_ids.at(i), tablet_data_row_cnt))) {
+      } else if (OB_FAIL(ObDDLUtil::get_tablet_data_row_cnt(tenant_id, ref_data_table_tablets.at(i), ls_ids.at(i), data_version, leader_addr, tablet_data_row_cnt))) {
         LOG_WARN("fail to get tablet data size", K(ret), K(tenant_id), K(ref_data_table_tablets.at(i)), K(ls_ids.at(i)), K(tablet_data_row_cnt));
       } else if (OB_FAIL(tablet_id_to_data_size_.set_refactored(ref_data_table_tablets.at(i).id(), tablet_data_size, true /* overwrite */))) {
         LOG_WARN("table id to data size map set fail", K(ret), K(ref_data_table_tablets.at(i).id()), K(tablet_data_size));
@@ -161,19 +174,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
           if (!is_running_status && is_finished_status) {
             LOG_INFO("tablet has complemented data", K(ret), K(tenant_id), K(table_id), K(ref_data_table_id), K(tablets.at(i)));
           } else {
-            common::ObAddr leader_addr;
-            share::ObLocationService *location_service = nullptr;
-            int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
-            const int64_t retry_interval_us = 200 * 1000; // 200ms
-            if (OB_ISNULL(location_service = GCTX.location_service_)) {
-              ret = OB_ERR_SYS;
-              LOG_WARN("location_cache is null", K(ret), KP(location_service));
-            } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
-              tenant_id, ls_ids.at(i), leader_addr, rpc_timeout, retry_interval_us))) {
-              LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id), K(ls_ids.at(i)));
-            } else if (OB_FAIL(ls_location_map_.set_refactored(ls_ids.at(i), leader_addr, true /* overwrite */))) {
-              LOG_WARN("ls location map set fail", K(ret), K(ls_ids.at(i)), K(leader_addr));
-            } else if (is_running_status) {
+            if (is_running_status) {
               if (OB_FAIL(ObDDLUtil::construct_ls_tablet_id_map(tenant_id, ls_ids.at(i), tablets.at(i), running_ls_to_tablets_map_))) {
                 LOG_WARN("fail to create running lsid to tablet id map", K(ret), K(tenant_id), K(ls_ids.at(i)), K(tablets.at(i)), K(table_id), K(ref_data_table_id), K(running_ls_to_tablets_map_.size()));
               } else if (common::is_contain(running_task_ls_ids_before_, ls_ids.at(i))) {
@@ -543,6 +544,8 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
           if (OB_SUCC(ret)) {
             bool satisfied_built_vec_index_if_need = true;
             if (index_schema->is_vec_hnsw_index() && !ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, tenant_id_, tablet_data_row_cnt + pre_data_row_cnt)) {
+              satisfied_built_vec_index_if_need = false;
+            } else if (index_schema->is_vec_ivf_index() && !ObVectorIndexUtil::check_ivf_vector_index_memory(schema_guard, tenant_id_, *index_schema, tablet_data_row_cnt + pre_data_row_cnt)) {
               satisfied_built_vec_index_if_need = false;
             }
             if (pre_data_size == 0 || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {

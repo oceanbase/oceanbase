@@ -26,15 +26,65 @@ namespace common
 {
 enum FETCH_COLUMN
 {
-  OP_ID = 0,      // int
-  PLAN_DEPTH,     // int
-  PLAN_OPERATION, // varchar
-  SVR_IP,         // varchar
-  SVR_PORT,       // int
-  THREAD_ID,      // int
-  DB_TIME,        // int
-  RAW_PROFILE     // varchar
+  SVR_IP = 0,           // varchar
+  SVR_PORT,             // int
+  THREAD_ID,            // int
+  OP_ID,                // int
+  PLAN_DEPTH,           // int
+  PLAN_OPERATION,       // varchar
+  OPEN_TIME,            // timestamp
+  CLOSE_TIME,           // timestamp
+  FIRST_ROW_TIME,       // timestamp
+  LAST_ROW_TIME,        // timestamp
+  OUTPUT_BATCHES,       // int
+  SKIPPED_ROWS,         // int
+  RESCAN_TIMES,         // int
+  OUTPUT_ROWS,          // int
+  DB_TIME,              // int
+  IO_TIME,              // int
+  WORKAREA_MEM,         // int
+  WORKAREA_MAX_MEM,     // int
+  WORKAREA_TEMPSEG,     // int
+  WORKAREA_MAX_TEMPSEG, // int
+  SQL_ID,               // varchar
+  PLAN_HASH_VALUE,      // uint
+  OTHERSTAT_1_ID,       // int
+  OTHERSTAT_1_VALUE,    // int
+  OTHERSTAT_2_ID,       // int
+  OTHERSTAT_2_VALUE,    // int
+  OTHERSTAT_3_ID,       // int
+  OTHERSTAT_3_VALUE,    // int
+  OTHERSTAT_4_ID,       // int
+  OTHERSTAT_4_VALUE,    // int
+  OTHERSTAT_5_ID,       // int
+  OTHERSTAT_5_VALUE,    // int
+  OTHERSTAT_6_ID,       // int
+  OTHERSTAT_6_VALUE,    // int
+  OTHERSTAT_7_ID,       // int
+  OTHERSTAT_7_VALUE,    // int
+  OTHERSTAT_8_ID,       // int
+  OTHERSTAT_8_VALUE,    // int
+  OTHERSTAT_9_ID,       // int
+  OTHERSTAT_9_VALUE,    // int
+  OTHERSTAT_10_ID,      // int
+  OTHERSTAT_10_VALUE,   // int
+  RAW_PROFILE           // varchar
 };
+
+int ObMergedProfileItem::init_from(ObIAllocator *alloc, const ObProfileItem &profile_item)
+{
+  int ret = OB_SUCCESS;
+  op_id_ = profile_item.op_id_;
+  plan_depth_ = profile_item.plan_depth_;
+  max_db_time_ = 0;
+  profile_ = OB_NEWx(ObMergedProfile, alloc, profile_item.profile_->get_id(),
+                                  alloc, profile_item.profile_->enable_rich_format());
+  if (OB_ISNULL(profile_)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate new profile");
+  }
+  return ret;
+}
 
 int ObProfileUtil::get_profile_by_id(ObIAllocator *alloc, int64_t session_tenant_id,
                                      const ObString &trace_id, const ObString &svr_ip,
@@ -44,14 +94,49 @@ int ObProfileUtil::get_profile_by_id(ObIAllocator *alloc, int64_t session_tenant
   int ret = OB_SUCCESS;
   ObSqlString sql;
   if (OB_FAIL(sql.assign_fmt("SELECT \
-                  PLAN_LINE_ID OP_ID,\
-                  PLAN_DEPTH,\
-                  PLAN_OPERATION, \
                   SVR_IP, \
                   SVR_PORT, \
                   THREAD_ID, \
+                  PLAN_LINE_ID OP_ID, \
+                  PLAN_DEPTH, \
+                  PLAN_OPERATION, \
+                  FIRST_REFRESH_TIME OPEN_TIME, \
+                  LAST_REFRESH_TIME CLOSE_TIME, \
+                  FIRST_CHANGE_TIME FIRST_ROW_TIME, \
+                  LAST_CHANGE_TIME LAST_ROW_TIME, \
+                  OUTPUT_BATCHES, \
+                  SKIPPED_ROWS_COUNT, \
+                  STARTS RESCAN_TIMES, \
+                  OUTPUT_ROWS, \
                   DB_TIME, \
-                  raw_profile \
+                  USER_IO_WAIT_TIME IO_TIME, \
+                  WORKAREA_MEM, \
+                  WORKAREA_MAX_MEM, \
+                  WORKAREA_TEMPSEG, \
+                  WORKAREA_MAX_TEMPSEG, \
+                  SQL_ID, \
+                  PLAN_HASH_VALUE, \
+                  OTHERSTAT_1_ID, \
+                  OTHERSTAT_1_VALUE, \
+                  OTHERSTAT_2_ID, \
+                  OTHERSTAT_2_VALUE, \
+                  OTHERSTAT_3_ID, \
+                  OTHERSTAT_3_VALUE,\
+                  OTHERSTAT_4_ID,\
+                  OTHERSTAT_4_VALUE, \
+                  OTHERSTAT_5_ID, \
+                  OTHERSTAT_5_VALUE, \
+                  OTHERSTAT_6_ID, \
+                  OTHERSTAT_6_VALUE, \
+                  OTHERSTAT_7_ID, \
+                  OTHERSTAT_7_VALUE, \
+                  OTHERSTAT_8_ID, \
+                  OTHERSTAT_8_VALUE, \
+                  OTHERSTAT_9_ID, \
+                  OTHERSTAT_9_VALUE, \
+                  OTHERSTAT_10_ID, \
+                  OTHERSTAT_10_VALUE, \
+                  RAW_PROFILE \
                   FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN_MONITOR \
                   WHERE TENANT_ID=%ld \
                   AND TRACE_ID='%.*s' ",
@@ -70,6 +155,94 @@ int ObProfileUtil::get_profile_by_id(ObIAllocator *alloc, int64_t session_tenant
     LOG_WARN("failed to get profile info");
   }
   LOG_INFO("print sql plan monitor sql", K(sql));
+  return ret;
+}
+
+int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
+                                       const ObIArray<ObProfileItem> &profile_items,
+                                       ObIArray<ObMergedProfileItem> &merged_profile_items)
+{
+  int ret = OB_SUCCESS;
+  if (profile_items.empty()) {
+  } else {
+    int64_t idx = 0;
+    ObMergedProfileItem merged_item;
+    if (OB_FAIL(merged_item.init_from(alloc, profile_items.at(idx)))) {
+      LOG_WARN("failed to init merge profile item");
+    }
+    while (idx < profile_items.count() && OB_SUCC(ret)) {
+      const ObProfileItem &cur_item = profile_items.at(idx);
+      if (cur_item.op_id_ == merged_item.op_id_) {
+        // same op_id, merge
+        if (OB_FAIL(merge_profile(*merged_item.profile_, cur_item.profile_, alloc))) {
+          LOG_WARN("failed to merge profile");
+        }
+      } else {
+        // different op_id, save and new one
+        const ObMergeMetric *metric = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
+        if (OB_NOT_NULL(metric)) {
+          merged_item.max_db_time_ = metric->get_max_value();
+        }
+        if (OB_FAIL(merged_profile_items.push_back(merged_item))) {
+          LOG_WARN("failed to pushback");
+        } else if (OB_FAIL(merged_item.init_from(alloc, cur_item))) {
+          LOG_WARN("failed to init merge profile item");
+        } else if (OB_FAIL(merge_profile(*merged_item.profile_, cur_item.profile_, alloc))) {
+          LOG_WARN("failed to merge profile");
+        }
+      }
+      idx++;
+    }
+    // push back last merged profile
+    if (OB_SUCC(ret)) {
+      const ObMergeMetric *metric = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
+      if (OB_NOT_NULL(metric)) {
+        merged_item.max_db_time_ = metric->get_max_value();
+      }
+      if (OB_FAIL(merged_profile_items.push_back(merged_item))) {
+        LOG_WARN("failed to pushback");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObProfileUtil::merge_profile(ObMergedProfile &merged_profile, const ObProfile *piece_profile,
+                                 ObIAllocator *alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(piece_profile)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("other profile is null");
+  } else if (merged_profile.get_id() != piece_profile->get_id()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("profile name is not the same", K(merged_profile.get_id()), K(piece_profile->get_id()));
+  } else {
+    ObOpProfile<ObMetric>::MetricWrap *cur_metric_wrap = piece_profile->get_metric_head();
+    while (OB_SUCC(ret) && nullptr != cur_metric_wrap) {
+      ObMergeMetric *new_metric = nullptr;
+      if (OB_FAIL(merged_profile.get_or_register_metric(
+              static_cast<ObMetricId>(cur_metric_wrap->elem_.get_metric_id()), new_metric))) {
+        LOG_WARN("failed to get or register metric", K(cur_metric_wrap->elem_.get_metric_id()));
+      } else {
+        new_metric->update(cur_metric_wrap->elem_.value());
+      }
+      cur_metric_wrap = cur_metric_wrap->next_;
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      ObOpProfile<ObMetric>::ProfileWrap *cur_child_wrap = piece_profile->get_child_head();
+      while (OB_SUCC(ret) && nullptr != cur_child_wrap) {
+        ObOpProfile<ObMergeMetric> *new_child = nullptr;
+        if (OB_FAIL(merged_profile.get_or_register_child(cur_child_wrap->elem_->get_id(), new_child))) {
+          LOG_WARN("failed to get or register child", K(cur_child_wrap->elem_->get_id()));
+        } else if(OB_FAIL(merge_profile(*new_child, cur_child_wrap->elem_, alloc))) {
+          LOG_WARN("failed to merge profile", K(cur_child_wrap->elem_->get_id()));
+        }
+        cur_child_wrap = cur_child_wrap->next_;
+      }
+    }
+  }
   return ret;
 }
 
@@ -176,29 +349,132 @@ int ObProfileUtil::read_profile_from_result(ObIAllocator *alloc, const ObMySQLRe
     }                                                                                              \
   } while (0);
 
-  ObString raw_profile;
+
+  GET_VARCHAR_VALUE(FETCH_COLUMN::SVR_IP, varchar_val);
+  GET_INT_VALUE(FETCH_COLUMN::SVR_PORT, int_value);
+  if (OB_SUCC(ret)) {
+    profile_item.addr_.set_ip_addr(varchar_val, int_value);
+  }
+  GET_INT_VALUE(FETCH_COLUMN::THREAD_ID, profile_item.thread_id_);
   GET_INT_VALUE(FETCH_COLUMN::OP_ID, profile_item.op_id_);
   GET_INT_VALUE(FETCH_COLUMN::PLAN_DEPTH, profile_item.plan_depth_);
+  GET_VARCHAR_VALUE(FETCH_COLUMN::PLAN_OPERATION, profile_item.op_name_);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(mysql_result, FETCH_COLUMN::OPEN_TIME, profile_item.open_time_);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(mysql_result, FETCH_COLUMN::CLOSE_TIME, profile_item.close_time_);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(mysql_result, FETCH_COLUMN::FIRST_ROW_TIME, profile_item.first_row_time_);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(mysql_result, FETCH_COLUMN::LAST_ROW_TIME, profile_item.last_row_time_);
+  GET_INT_VALUE(FETCH_COLUMN::OUTPUT_BATCHES, profile_item.output_batches_);
+  GET_INT_VALUE(FETCH_COLUMN::SKIPPED_ROWS, profile_item.skipped_rows_);
+  GET_INT_VALUE(FETCH_COLUMN::RESCAN_TIMES, profile_item.rescan_times_);
+  GET_INT_VALUE(FETCH_COLUMN::OUTPUT_ROWS, profile_item.output_rows_);
   GET_INT_VALUE(FETCH_COLUMN::DB_TIME, profile_item.db_time_);
   if (OB_SUCC(ret)) {
     profile_item.db_time_ = profile_item.db_time_ * 1000UL;
   }
-  GET_VARCHAR_VALUE(FETCH_COLUMN::RAW_PROFILE, raw_profile);
-  profile_item.raw_profile_ = raw_profile.ptr();
-  profile_item.raw_profile_len_ = raw_profile.length();
+  GET_INT_VALUE(FETCH_COLUMN::IO_TIME, profile_item.io_time_);
+  GET_INT_VALUE(FETCH_COLUMN::WORKAREA_MEM, profile_item.workarea_mem_);
+  GET_INT_VALUE(FETCH_COLUMN::WORKAREA_MAX_MEM, profile_item.workarea_max_mem_);
+  GET_INT_VALUE(FETCH_COLUMN::WORKAREA_TEMPSEG, profile_item.workarea_tempseg_);
+  GET_INT_VALUE(FETCH_COLUMN::WORKAREA_MAX_TEMPSEG, profile_item.workarea_max_tempseg_);
+  GET_VARCHAR_VALUE(FETCH_COLUMN::SQL_ID, profile_item.sql_id_);
+  EXTRACT_UINT_FIELD_MYSQL_SKIP_RET(mysql_result, FETCH_COLUMN::PLAN_HASH_VALUE, profile_item.plan_hash_value_, uint64_t);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_1_ID, profile_item.other_1_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_1_VALUE, profile_item.other_1_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_2_ID, profile_item.other_2_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_2_VALUE, profile_item.other_2_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_3_ID, profile_item.other_3_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_3_VALUE, profile_item.other_3_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_4_ID, profile_item.other_4_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_4_VALUE, profile_item.other_4_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_5_ID, profile_item.other_5_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_5_VALUE, profile_item.other_5_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_6_ID, profile_item.other_6_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_6_VALUE, profile_item.other_6_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_7_ID, profile_item.other_7_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_7_VALUE, profile_item.other_7_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_8_ID, profile_item.other_8_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_8_VALUE, profile_item.other_8_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_9_ID, profile_item.other_9_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_9_VALUE, profile_item.other_9_value_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_10_ID, profile_item.other_10_id_);
+  GET_INT_VALUE(FETCH_COLUMN::OTHERSTAT_10_VALUE, profile_item.other_10_value_);
 
+  GET_VARCHAR_VALUE(FETCH_COLUMN::RAW_PROFILE, varchar_val);
+  char *raw_profile = nullptr;
+  int64_t raw_profile_len = 0;
   ObProfile *profile = nullptr;
+  if (OB_SUCC(ret)) {
+    raw_profile = varchar_val.ptr();
+    raw_profile_len = varchar_val.length();
+  }
+
   if (OB_FAIL(ret)) {
-  } else if (profile_item.raw_profile_len_ == 0) {
+  } else if (raw_profile_len == 0) {
+    // if profile is not collect, allocate a profile do display the common metrics and other stat
+    bool enable_rich_format = false;
+    ObProfileId profile_id = static_cast<ObProfileId>(sql::get_phy_type_from_name(
+        profile_item.op_name_.ptr(), profile_item.op_name_.length(), enable_rich_format));
+    profile_item.profile_ = OB_NEWx(ObProfile, alloc, profile_id, alloc, enable_rich_format);
+    if (OB_ISNULL(profile_item.profile_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate new profile");
+    }
   } else if (OB_FAIL(convert_persist_profile_to_realtime(
-                 profile_item.raw_profile_, profile_item.raw_profile_len_, profile, alloc))) {
+                 raw_profile, raw_profile_len, profile_item.profile_, alloc))) {
     LOG_WARN("failed to convert persist profile to realtime");
-  } else {
-    profile_item.profile_ = profile;
+  }
+
+  // fill common metrics and other stats into profile
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(fill_metrics_into_profile(profile_item))) {
+    LOG_WARN("failed to fill metrics");
   }
 #undef GET_NUM_VALUE
 #undef GET_INT_VALUE
 #undef GET_VARCHAR_VALUE
+  return ret;
+}
+
+int ObProfileUtil::fill_metrics_into_profile(ObProfileItem &profile_item)
+{
+  int ret = OB_SUCCESS;
+  ObProfileSwitcher switcher(profile_item.profile_);
+  SET_METRIC_VAL(ObMetricId::OPEN_TIME, profile_item.open_time_);
+  SET_METRIC_VAL(ObMetricId::CLOSE_TIME, profile_item.close_time_);
+  // first row time and last row time may not filled by operator, skip it
+  if (OB_SUCC(ret) && profile_item.first_row_time_ != 0) {
+    SET_METRIC_VAL(ObMetricId::FIRST_ROW_TIME, profile_item.first_row_time_);
+  }
+  if (OB_SUCC(ret) && profile_item.last_row_time_ != 0) {
+    SET_METRIC_VAL(ObMetricId::LAST_ROW_TIME, profile_item.last_row_time_);
+  }
+  SET_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, profile_item.output_batches_);
+  SET_METRIC_VAL(ObMetricId::SKIPPED_ROWS, profile_item.skipped_rows_);
+  SET_METRIC_VAL(ObMetricId::RESCAN_TIMES, profile_item.rescan_times_);
+  SET_METRIC_VAL(ObMetricId::OUTPUT_ROWS, profile_item.output_rows_);
+  SET_METRIC_VAL(ObMetricId::DB_TIME, profile_item.db_time_);
+  SET_METRIC_VAL(ObMetricId::TOTAL_IO_TIME, profile_item.io_time_);
+  SET_METRIC_VAL(ObMetricId::WORKAREA_MEM, profile_item.workarea_mem_);
+  SET_METRIC_VAL(ObMetricId::WORKAREA_MAX_MEM, profile_item.workarea_max_mem_);
+  SET_METRIC_VAL(ObMetricId::WORKAREA_TEMPSEG, profile_item.workarea_tempseg_);
+  SET_METRIC_VAL(ObMetricId::WORKAREA_MAX_TEMPSEG, profile_item.workarea_max_tempseg_);
+
+#define FILL_OTHER_STAT(N)                                                                         \
+  if (OB_SUCC(ret) && profile_item.other_##N##_id_ != 0) {                                         \
+    SET_METRIC_VAL(static_cast<ObMetricId>(profile_item.other_##N##_id_),                          \
+                   profile_item.other_##N##_value_);                                               \
+  }
+  FILL_OTHER_STAT(1);
+  FILL_OTHER_STAT(2);
+  FILL_OTHER_STAT(3);
+  FILL_OTHER_STAT(4);
+  FILL_OTHER_STAT(5);
+  FILL_OTHER_STAT(6);
+  FILL_OTHER_STAT(7);
+  FILL_OTHER_STAT(8);
+  FILL_OTHER_STAT(9);
+  FILL_OTHER_STAT(10);
+#undef FILL_OTHER_STAT
   return ret;
 }
 

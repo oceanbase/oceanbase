@@ -34,6 +34,11 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
 
 private:
+
+  int resolve_impl(const ParseNode *alter_clause,
+                   const ObString &db_name,
+                   const ObString &udt_name,
+                   ObAlterUDTStmt &alter_udt_stmt);
   int resolve_alter_clause(const ParseNode *alter_clause,
                            const ObString &db_name,
                            const ObString &udt_name,

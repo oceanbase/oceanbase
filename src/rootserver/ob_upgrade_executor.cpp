@@ -955,6 +955,8 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
       } else if (OB_TMP_FAIL(ObUpgradeUtils::upgrade_sys_variable(*common_rpc_proxy_, *sql_proxy_, tenant_id))) {
         LOG_WARN("fail to upgrade sys variable", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       DEBUG_SYNC(AFTER_UPGRADE_SYS_VARIABLE);
       cost = ObTimeUtility::current_time() - start_ts;
@@ -992,6 +994,8 @@ int ObUpgradeExecutor::run_upgrade_system_table_job_(
       } else if (OB_TMP_FAIL(upgrade_system_table_(tenant_id))) {
         LOG_WARN("fail to upgrade system table", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       DEBUG_SYNC(AFTER_UPGRADE_SYSTEM_TABLE);
       cost = ObTimeUtility::current_time() - start_ts;
@@ -1103,7 +1107,7 @@ int ObUpgradeExecutor::check_table_schema_(const uint64_t tenant_id, const ObTab
     LOG_WARN("table should not be null", KR(ret), K(tenant_id),
              "table_id", hard_code_table.get_table_id(),
              "table_name", hard_code_table.get_table_name());
-  } else if (OB_FAIL(ObRootInspection::check_table_schema(hard_code_table, *table))) {
+  } else if (OB_FAIL(ObSysTableInspection::check_table_schema(hard_code_table, *table))) {
     LOG_WARN("fail to check table schema", KR(ret), K(tenant_id), K(hard_code_table), KPC(table));
   }
   return ret;
@@ -1144,6 +1148,8 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
       } else if (OB_TMP_FAIL(common_rpc_proxy_->timeout(timeout).upgrade_table_schema(arg))) {
         LOG_WARN("fail to upgrade virtual schema", KR(tmp_ret), K(arg));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       DEBUG_SYNC(AFTER_UPGRADE_VIRTUAL_SCHEMA);
       cost = ObTimeUtility::current_time() - start_ts;
@@ -1175,6 +1181,8 @@ int ObUpgradeExecutor::run_upgrade_system_package_job_()
     LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
   } else if (OB_FAIL(upgrade_oracle_system_package_job_())) {
     LOG_WARN("fail to upgrade mysql system package", KR(ret));
+  } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+    LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
 #endif
   }
   cost = ObTimeUtility::current_time() - start_ts;
@@ -1379,6 +1387,8 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(const uint64_t tenant_id)
     LOG_WARN("failed to init executor", KR(ret), K(tenant_id), K_(sql_proxy));
   } else if (OB_FAIL(run_upgrade_all_processors_(executor))) {
     LOG_WARN("failed to run upgrade all processors", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+    LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -1452,21 +1462,34 @@ int ObUpgradeExecutor::run_upgrade_inspection_job_(
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
       int64_t cost = 0;
-      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_inspectino", K(tenant_id));
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_inspection", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade inspection job", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
         LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
-      } else if (OB_TMP_FAIL(root_inspection_->check_tenant(tenant_id))) {
+      } else if (OB_TMP_FAIL(root_inspection_->check_tenant_in_upgrade(tenant_id))) {
         LOG_WARN("fail to do upgrade inspection", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
       cost = ObTimeUtility::current_time() - start_ts;
-      FLOG_INFO("[UPGRADE] finish run upgrade inspection job", KR(tmp_ret), KR(ret), K(tenant_id), K(cost));
-      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_inspectino", K(tenant_id), K(ret), K(tmp_ret), K(cost));
+      FLOG_INFO("[UPGRADE] finish run upgrade inspection job without sys table schema", KR(tmp_ret),
+          KR(ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_inspection", K(tenant_id), K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
+    // to speed up upgrade inspection, we split check sys table schemas from check_tenant
+    if (OB_SUCC(ret)) {
+      int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_check_sys_table_schemas", K(tenant_ids));
+      if (OB_FAIL(root_inspection_->check_sys_table_schemas(tenant_ids))) {
+        LOG_WARN("failed to check sys table schemas", KR(ret), K(tenant_ids));
+      }
+      cost = ObTimeUtility::current_time() - start_ts;
+      FLOG_INFO("[UPGRADE] finish run check sys table schemas", KR(tmp_ret), KR(ret), K(tenant_ids), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_check_sys_table_schemas", K(tenant_ids), K(ret), K(tmp_ret), K(cost));
+    }
   }
   return ret;
 }
@@ -1663,6 +1686,8 @@ int ObUpgradeExecutor::run_upgrade_finish_action_(
       } else if (OB_TMP_FAIL(run_upgrade_finish_action_(tenant_id))) {
         LOG_WARN("fail to upgrade finish action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
       }
       cost = ObTimeUtility::current_time() - start_ts;
       FLOG_INFO("[UPGRADE] finish run upgrade finish action", KR(ret), K(tenant_id), K(cost));

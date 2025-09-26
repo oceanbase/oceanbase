@@ -143,6 +143,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 8> input_index_columns_name;
+  bool is_prefix_index = false;
   if (OB_ISNULL(index_column_node) || OB_ISNULL(crt_idx_stmt) || OB_ISNULL(tbl_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(index_column_node), KP(crt_idx_stmt), KP(tbl_schema));
@@ -241,6 +242,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
           LOG_WARN("index prefix len invalid", K(ret), "prefix_len", sort_item.prefix_len_);
           LOG_USER_ERROR(OB_KEY_PART_0, sort_item.column_name_.length(), sort_item.column_name_.ptr());
         }
+        is_prefix_index = true;
       } else {
         sort_item.prefix_len_ = 0;
       }
@@ -326,7 +328,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
         bool is_explicit_order = (NULL != col_node->children_[2]
             && 1 != col_node->children_[2]->is_empty_);
         if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
-            index_column_node->num_child_, index_keyname_value, is_explicit_order, sort_item.is_func_index_))) {
+            index_column_node->num_child_, index_keyname_value, is_explicit_order, sort_item.is_func_index_, NULL, is_prefix_index))) {
           LOG_WARN("fail to resolve spatial index constraint", K(ret), K(sort_item.column_name_));
         }
       }
@@ -534,18 +536,6 @@ int ObCreateIndexResolver::resolve_index_option_node(
             break;
           }
         }
-      }
-    }
-  }
-  // Set default storage cache policy for index, cause the index_scope_ only be set after resolve_table_options
-  if (OB_FAIL(ret)) {
-  } else if (GCTX.is_shared_storage_mode() && is_mysql_mode() && storage_cache_policy_.empty()) {
-    uint64_t tenant_data_version = 0;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-      LOG_WARN("get data version failed", KR(ret), K(MTL_ID()));
-    } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
-      if (OB_FAIL(set_default_storage_cache_policy(true/*is_create_index*/))) {
-        SQL_RESV_LOG(WARN, "failed to check and set default storage cache policy", K(ret));
       }
     }
   }
@@ -854,9 +844,10 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   if (OB_FAIL(ret)) {
   } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
+    ObString storage_cache_policy = crt_idx_stmt->get_create_index_arg().index_option_.storage_cache_policy_;
     // Version validation is included in check_and_set_default_storage_cache_policy
-    if (OB_FAIL(check_create_stmt_storage_cache_policy(storage_cache_policy_, &index_schema))) {
-      LOG_WARN("fail to check storage cache policy", K(ret), K(storage_cache_policy_));;
+    if (OB_FAIL(check_create_stmt_storage_cache_policy(storage_cache_policy, &index_schema))) {
+      LOG_WARN("fail to check storage cache policy", K(ret), K(storage_cache_policy));;
     }
   }
 
@@ -1050,7 +1041,8 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
     index_arg.is_index_scope_specified_ = !(NOT_SPECIFIED == index_scope_);
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
-    create_index_stmt->set_storage_cache_policy(storage_cache_policy_);
+    create_index_stmt->set_storage_cache_policy(index_storage_cache_policy_);
+    index_storage_cache_policy_.reset();
     if (OB_FAIL(ret)) {
     } else if (INDEX_KEYNAME::VEC_KEY == index_keyname_ &&
                OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_name(allocator_, index_arg.index_type_, index_arg.index_name_, index_arg.index_name_))) {

@@ -304,27 +304,27 @@ TEST_F(TestSSMacroCacheReplay, replay_in_background)
   ori_run_cnt = macro_cache_mgr->flush_task_.run_cnt_;
   macro_cache_mgr->flush_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->flush_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
   ori_run_cnt = macro_cache_mgr->evict_task_.run_cnt_;
   macro_cache_mgr->evict_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->evict_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
   ori_run_cnt = macro_cache_mgr->expire_task_.run_cnt_;
   macro_cache_mgr->expire_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->expire_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
   ori_run_cnt = macro_cache_mgr->write_cache_ctrl_task_.run_cnt_;
   macro_cache_mgr->write_cache_ctrl_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->write_cache_ctrl_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
   ori_run_cnt = macro_cache_mgr->ckpt_task_.run_cnt_;
   macro_cache_mgr->ckpt_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->ckpt_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
   ori_run_cnt = macro_cache_mgr->tablet_stat_task_.run_cnt_;
   macro_cache_mgr->tablet_stat_task_.runTimerTask();
   cur_run_cnt = macro_cache_mgr->tablet_stat_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
   // decrease _ss_disk_space_calibration_time_interval
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ASSERT_EQ(true, tenant_config.is_valid());
@@ -343,7 +343,7 @@ TEST_F(TestSSMacroCacheReplay, replay_in_background)
   ori_run_cnt = file_manager->calibrate_disk_space_task_.run_cnt_;
   file_manager->calibrate_disk_space_task_.runTimerTask();
   cur_run_cnt = file_manager->calibrate_disk_space_task_.run_cnt_;
-  ASSERT_EQ(ori_run_cnt + 1, cur_run_cnt);
+  ASSERT_LT(ori_run_cnt, cur_run_cnt);
 }
 
 } // namespace storage

@@ -890,6 +890,7 @@ uint64_t ObIOResult::get_tenant_id() const
 {
   return this->tenant_id_;
 }
+
 void ObIOResult::cancel()
 {
   int ret = OB_SUCCESS;
@@ -901,6 +902,13 @@ void ObIOResult::cancel()
       } else if (is_finished_) {
         // do nothing
       } else {
+        if (REACH_TIME_INTERVAL(1000000)) {
+          LOG_WARN("io cancelled", K(lbt()), K(*this));
+        }
+        ObRefHolder<ObTenantIOManager> tenant_holder(tenant_io_mgr_.get_ptr());
+        if (OB_NOT_NULL(tenant_holder.get_ptr())) {
+          tenant_holder.get_ptr()->inc_io_cancel_count();
+        }
         is_canceled_ = true;
         //note: not support channel cancel now
       }

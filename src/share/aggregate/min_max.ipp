@@ -463,7 +463,7 @@ public:
     arg_vector->get_payload(row_idx, data, data_len);
     if (data_len > output_cap_) {
       int32_t new_cap =
-          output_len_ == 0 ? data_len : 2 * ((output_len_ + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
+          output_len_ == 0 ? data_len : 2 * ((data_len + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
       void *new_buf = nullptr;
       if (OB_ISNULL(new_buf = agg_ctx.allocator_.alloc(new_cap))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -473,8 +473,10 @@ public:
         output_cap_ = new_cap;
       }
     }
-    output_len_ = data_len;
-    MEMCPY(output_ptr_, data, data_len);
+    if (OB_SUCC(ret)) {
+      output_len_ = data_len;
+      MEMCPY(output_ptr_, data, data_len);
+    }
     return ret;
   }
 
@@ -546,7 +548,7 @@ public:
     arg_vector->get_payload(row_idx, data, data_len);
     if (data_len > output_cap_) {
       int32_t new_cap =
-          output_len_ == 0 ? data_len : 2 * ((output_len_ + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
+          output_len_ == 0 ? data_len : 2 * ((data_len + BUF_BLOCK_SIZE - 1) / BUF_BLOCK_SIZE) * BUF_BLOCK_SIZE;
       void *new_buf = nullptr;
       if (OB_ISNULL(new_buf = agg_ctx.allocator_.alloc(new_cap))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -556,8 +558,10 @@ public:
         output_cap_ = new_cap;
       }
     }
-    output_len_ = data_len;
-    MEMCPY(output_ptr_, data, data_len);
+    if (OB_SUCC(ret)) {
+      output_len_ = data_len;
+      MEMCPY(output_ptr_, data, data_len);
+    }
     return ret;
   }
 

@@ -873,6 +873,7 @@ ObDASLocationRouter::~ObDASLocationRouter()
 int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
                                                        const ObTabletID &tablet_id,
                                                        ObDASTabletLoc &tablet_loc,
+                                                       const bool is_weak_read,
                                                        const ObRoutePolicyType route_policy)
 {
   int ret = OB_SUCCESS;
@@ -922,7 +923,7 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
     } else if (!in_black_list) {
       if ((route_policy == COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
           (route_policy != COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
-          (route_policy == FORCE_READONLY_ZONE && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
+          (is_weak_read && route_policy == FORCE_READONLY_ZONE && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
         // skip the tmp_replica_loc
         LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(tmp_replica_loc.get_replica_type()), K(tmp_replica_loc));
       } else if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
@@ -1124,7 +1125,7 @@ int ObDASLocationRouter::get_tablet_loc(const ObDASTableLocMeta &loc_meta,
       //if this statement is retried because of OB_NOT_MASTER, we will choose the leader directly
       ret = nonblock_get_leader(tenant_id, tablet_id, tablet_loc);
     } else {
-      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc,
+      ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc, loc_meta.is_weak_read_,
                                           static_cast<ObRoutePolicyType>(loc_meta.route_policy_));
     }
   }

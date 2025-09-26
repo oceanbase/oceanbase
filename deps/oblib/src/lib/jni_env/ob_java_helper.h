@@ -90,7 +90,6 @@
 // define function
 typedef JNIEnv* (*GETJNIENV)(void);
 typedef jint (*DETACHCURRENTTHREAD)(void);
-typedef jint (*DESTROYJNIENV)(void);
 
 // hdfs related symbols
 typedef hdfsFileInfo* (*HdfsGetPathInfoFunc)(hdfsFS, const char*);
@@ -124,7 +123,6 @@ typedef void (*HdfsBuilderSetKerbTicketCachePathFunc)(struct hdfsBuilder *, cons
 // desclare function
 extern "C" GETJNIENV getJNIEnv;
 extern "C" DETACHCURRENTTHREAD detachCurrentThread;
-extern "C" DESTROYJNIENV destroyJNIEnv;
 
 // declare hdfs functions
 extern "C" HdfsGetPathInfoFunc obHdfsGetPathInfo;
@@ -264,32 +262,11 @@ public:
   int get_env(JNIEnv *&env);
   ObString to_ob_string(jstring str);
   jmethodID getToStringMethod(jclass clazz);
-  int inc_ref();
-  int cur_ref();
-  int dec_ref();
-  int reset_ref();
 
-  // detach_current_thread will detach current thread from vm to collect resources and
-  // prepare for destory vm.
-  // And this method should be called in close function after every jni execution.
-  int detach_current_thread();
-  int destroy_env();
+
   bool is_inited() { return is_inited_; }
 private:
-  JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK) {
-    int ret = OB_SUCCESS;
-    if (is_inited_) {
-      // do nothing
-    } else if (OB_FAIL(do_init_())) {
-      is_inited_ = false;
-    } else {
-      is_inited_ = true;
-    }
-  }
-  // Only simplify checking jni exception and clear it to avoid jni excution failed.
-  int check_jni_exception_(JNIEnv *env);
-  // Check loaded jars are valid
-  bool is_valid_loaded_jars_();
+  JVMFunctionHelper();
 
   int init_classes();
   int do_init_();
@@ -308,11 +285,9 @@ private:
 
   int load_lib(ObJavaEnvContext &java_env_ctx, ObHdfsEnvContext &hdfs_env_ctx);
 
-private:
-  const char* JAR_VERSION_CLASS = "com/oceanbase/utils/version/JarVersion";
 
 private:
-  bool is_inited_;
+  bool is_inited_ = false;
   static thread_local JNIEnv *jni_env_;
 
   common::ObArenaAllocator allocator_;

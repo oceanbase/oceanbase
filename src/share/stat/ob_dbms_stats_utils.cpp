@@ -363,7 +363,10 @@ bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SYSTEM_EVENT_ORA_ALL_VIRTUAL_SYSTEM_EVENT_I1_TID ||
          table_id == share::OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_ORA_ALL_VIRTUAL_SQL_PLAN_MONITOR_I1_TID ||
          table_id == share::OB_ALL_VIRTUAL_ASH_ALL_VIRTUAL_ASH_I1_TID ||
-         table_id == share::OB_ALL_VIRTUAL_ASH_ORA_ALL_VIRTUAL_ASH_I1_TID;
+         table_id == share::OB_ALL_VIRTUAL_ASH_ORA_ALL_VIRTUAL_ASH_I1_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TABLE_MGR_ALL_VIRTUAL_TABLE_MGR_I1_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TABLE_MGR_ORA_ALL_VIRTUAL_TABLE_MGR_I1_TID ||
+         table_id == share::OB_ALL_VIRTUAL_TABLET_SSTABLE_MACRO_INFO_ALL_VIRTUAL_TABLET_SSTABLE_MACRO_INFO_I1_TID;
 }
 
 int ObDbmsStatsUtils::parse_granularity(const ObString &granularity, ObGranularityType &granu_type)
@@ -2120,6 +2123,36 @@ int ObDbmsStatsUtils::get_table_index_infos(share::schema::ObSchemaGetterGuard *
                                                             true, /*with_global_index*/
                                                             false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::dbms_stat_set_names(ObSQLSessionInfo *session_info,
+                                          ObCharsetType client_charset_type,
+                                          ObCharsetType connection_charset_type,
+                                          ObCharsetType result_charset_type,
+                                          ObCollationType collation_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(session_info));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_CHARACTER_SET_CLIENT,
+                                   static_cast<int64_t>(ObCharset::get_default_collation(client_charset_type))))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_CHARACTER_SET_RESULTS,
+                                   static_cast<int64_t>(ObCharset::get_default_collation(result_charset_type))))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_CHARACTER_SET_CONNECTION,
+                                   static_cast<int64_t>(ObCharset::get_default_collation(connection_charset_type))))) {
+    LOG_WARN("failed to update sys var", K(ret));
+  } else if (OB_FAIL(session_info->update_sys_variable(
+                                   SYS_VAR_COLLATION_CONNECTION,
+                                   static_cast<int64_t>(collation_type)))) {
+    LOG_WARN("failed to update sys var", K(ret));
   }
   return ret;
 }

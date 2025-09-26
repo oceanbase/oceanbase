@@ -50,10 +50,10 @@ TEST_F(TestFdSimulator, test_fd)
   int device_flag = 0;
   oceanbase::common::ObArenaAllocator allocator;
   void* ctx = NULL;
-  int test_total_num = 200;
-  int test_1_num = 90; //<100
-  int test_2_num = 30; //90-110
-  int test_3_num = 80; //200
+  int test_total_num = 600; // 2 * DEFAULT_ARRAY_SIZE
+  int test_1_num = 270; //(0, DEFAULT_ARRAY_SIZE)
+  int test_2_num = 60; //(DEFAULT_ARRAY_SIZE, 2 * DEFAULT_ARRAY_SIZE)
+  int test_3_num = 270; //let total num is (2 * DEFAULT_ARRAY_SIZE)
   int used_fd_cnt = 0;
   int free_fd_cnt = 0;
   int expect_used_fd_cnt = 0;

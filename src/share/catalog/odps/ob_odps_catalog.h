@@ -1,4 +1,3 @@
-#ifdef OB_BUILD_CPP_ODPS
 /**
  * Copyright (c) 2023 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -17,8 +16,11 @@
 #include "share/catalog/ob_external_catalog.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "sql/engine/connector/ob_odps_catalog_jni_agent.h"
+#include "sql/optimizer/ob_table_partition_info.h"
+#include "sql/table_format/odps/ob_odps_table_metadata.h"
+#ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_api.h>
-
+#endif
 namespace oceanbase
 {
 namespace share
@@ -49,19 +51,23 @@ public:
                                 const ObNameCaseMode case_mode,
                                 ObILakeTableMetadata *&table_metadata) override;
   int fetch_table_statistics(ObIAllocator &allocator,
+                             sql::ObSqlSchemaGuard &sql_schema_guard,
                              const ObILakeTableMetadata *table_metadata,
                              const ObIArray<ObString> &partition_values,
                              const ObIArray<ObString> &column_names,
                              ObOptExternalTableStat *&external_table_stat,
                              ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) override;
 
+  static int get_odps_format_str_from_catalog_properties(common::ObIAllocator &allocator,
+    const ObODPSCatalogProperties &properties, const common::ObString &ns_name, const common::ObString &tbl_name,
+    const sql::ObODPSGeneralFormat::ApiMode api_mode, ObString &odps_format_str, sql::ObExternalFileFormat &external_format);
+
 private:
   virtual int do_init(const common::ObString &properties) override;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOdpsCatalog);
   int convert_odps_format_to_str_properties_(const sql::ObODPSGeneralFormat &odps_format, ObString &str);
-
+  int get_session_and_ctx(sql::ObSQLSessionInfo *&session, sql::ObExecContext *&exec_ctx);
   common::ObIAllocator &allocator_;
   ObODPSCatalogProperties properties_;
 #ifdef OB_BUILD_CPP_ODPS
@@ -74,8 +80,20 @@ private:
 #endif
 };
 
+class ObOdpsCatalogUtils
+{
+public:
+  static int get_partition_odps_str_from_table_schema(ObIAllocator &allocator_for_partition_values,
+                              const sql::ObTablePartitionInfo *table_partition_info,
+                              const schema::ObTableSchema *table_schema,
+                              ObIArray<ObString> &partition_values);
+  static int construct_partition_values(common::ObIAllocator &allocator_for_partition_value,
+    const common::ObIArray<common::ObString> &partition_column_names,
+    const common::ObIArray<common::ObNewRow> &partition_row_values, common::ObString &partition_value);
+
+};
+
 } // namespace share
 } // namespace oceanbase
 
 #endif // _SHARE_OB_ODPS_CATALOG_H
-#endif

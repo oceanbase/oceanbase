@@ -123,6 +123,8 @@ int ObBackupCleanTaskMgr::mark_backup_set_files_deleting_()
   } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(backup_set_info_.file_status_, file_status))) {
     LOG_WARN("failed to check can change status", K(ret));
   } else if (FALSE_IT(backup_set_info_.file_status_ = file_status)) {
+  } else if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupSetFileOperator::update_backup_set_file_status(*sql_proxy_, backup_set_info_))) {
     LOG_WARN("failed to update backup set file_status", K(ret), K(file_status));
   }
@@ -139,6 +141,8 @@ int ObBackupCleanTaskMgr::mark_backup_set_files_deleted_()
   } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(backup_set_info_.file_status_, file_status))) {
     LOG_WARN("failed to check can change status", K(ret));
   } else if (FALSE_IT(backup_set_info_.file_status_ = file_status)) {
+  } else if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupSetFileOperator::update_backup_set_file_status(*sql_proxy_, backup_set_info_))) {
     LOG_WARN("failed to update backup set file", K(ret));
   } 
@@ -159,6 +163,8 @@ int ObBackupCleanTaskMgr::mark_backup_piece_files_deleting_()
     LOG_WARN("failed to init archive piece attr", K(ret));
   } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(backup_piece_info_.file_status_, file_status))) {
     LOG_WARN("failed to check can change status", K(ret));
+  } else if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(archive_table_op.mark_new_piece_file_status(*sql_proxy_, backup_piece_info_.key_.dest_id_,
     backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, file_status))) {
     LOG_WARN("failed to update backup piece file status", K(ret));
@@ -179,6 +185,8 @@ int ObBackupCleanTaskMgr::mark_backup_piece_files_deleted_()
   } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(backup_piece_info_.file_status_, file_status))) {
     LOG_WARN("failed to check can change status", K(ret));
   } else if (FALSE_IT(backup_piece_info_.file_status_ = file_status)) {
+  } else if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(archive_table_op.mark_new_piece_file_status(*sql_proxy_, backup_piece_info_.key_.dest_id_,
     backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, file_status))) {
     LOG_WARN("failed to update backup piece file status", K(ret));
@@ -189,6 +197,11 @@ int ObBackupCleanTaskMgr::mark_backup_piece_files_deleted_()
 int ObBackupCleanTaskMgr::mark_backup_files_deleted_() 
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  ROOTSERVICE_EVENT_ADD("backup_delete", "before_mark_files_deleted_", "tenant_id", tenant_id_);
+  DEBUG_SYNC(BACKUP_DELETE_BEFORE_MARK_DELETED_IN_NEW_LEADER);
+  DEBUG_SYNC(BACKUP_DELETE_BEFORE_MARK_DELETED_IN_OLD_LEADER);
+#endif
   if (task_attr_.is_delete_backup_set_task()) {
     if (OB_FAIL(mark_backup_set_files_deleted_())) {
       LOG_WARN("failed to mark backup set files deleted", K(ret));

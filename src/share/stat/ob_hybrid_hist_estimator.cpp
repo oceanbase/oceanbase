@@ -55,10 +55,13 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
   ObSqlString raw_sql;
   int64_t duration_time = -1;
   ObSEArray<ObOptStat, 1> tmp_opt_stats;
-  if (OB_FAIL(extract_hybrid_hist_col_info(param, opt_stat,
-                                           hybrid_col_params,
-                                           hybrid_col_stats,
-                                           max_num_buckets))) {
+  if (OB_FAIL(init_escape_char_names(allocator, param))) {
+    LOG_WARN("failed to add init escape char names", K(ret));
+  } else if (OB_FALSE_IT(set_from_table(tab_name_))) {
+  } else if (OB_FAIL(extract_hybrid_hist_col_info(param, opt_stat,
+                                                  hybrid_col_params,
+                                                  hybrid_col_stats,
+                                                  max_num_buckets))) {
     LOG_WARN("failed to extract hybrid hist col info", K(ret));
   } else if (hybrid_col_params.empty() || hybrid_col_stats.empty()) {
     //do nothing
@@ -86,13 +89,11 @@ int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                                 no_sample_idx))) {
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
   } else if (OB_FAIL(fill_hints(allocator,
-                                param.tab_name_,
+                                from_table_,
                                 param.gather_vectorize_,
                                 false,
                                 !need_sample))) {
     LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
-    LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to fill parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
@@ -227,7 +228,7 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
                                                           hybrid_col_stats,
                                                           no_sample_idx))) {
     LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_, false, false))) {
+  } else if (OB_FAIL(fill_hints(allocator, from_table_, param.gather_vectorize_, false, false))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to fill parallel info", K(ret));

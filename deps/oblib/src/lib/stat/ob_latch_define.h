@@ -412,8 +412,9 @@ LATCH_DEF(TENANT_MUTIL_ALLOCATOR_LOCK, 376, "tenant mutil allocator lock", LATCH
 LATCH_DEF(DEFAULT_RWLOCK, 377, "default latch", LATCH_FIFO, 2000, 0, true)// only use in  ObRWLockWR
 
 LATCH_DEF(EXT_DISK_CACHE_LOCK, 378, "external table disk cache lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(FD_SIMULATOR_LOCK, 379, "fd simulator lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 379, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 380, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

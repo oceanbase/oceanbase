@@ -3832,54 +3832,22 @@ int ObRawExprUtils::extract_col_aggr_exprs(ObRawExpr* expr,
   return ret;
 }
 
-int ObRawExprUtils::contain_virtual_generated_column(ObRawExpr *&expr, bool &is_contain_vir_gen_column)
+int ObRawExprUtils::extract_virtual_generated_columns(ObRawExpr *&expr, ObIArray<ObRawExpr *> &vir_gen_columns)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (expr->is_column_ref_expr() &&
-      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
-      !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
-    is_contain_vir_gen_column = true;
+             static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
+             !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
+    if (OB_FAIL(add_var_to_array_no_dup(vir_gen_columns, expr))) {
+      LOG_WARN("failed to add virtual generated column", K(ret));
+    }
   }
-  for (int64_t j = 0; OB_SUCC(ret) && is_contain_vir_gen_column == false && j < expr->get_param_count(); j++) {
-    if (OB_ISNULL(expr->get_param_expr(j))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param_expr is NULL", K(j), K(ret));
-    } else if (OB_FAIL(SMART_CALL(contain_virtual_generated_column(expr->get_param_expr(j), is_contain_vir_gen_column)))) {
+  for (int64_t j = 0; OB_SUCC(ret) && j < expr->get_param_count(); j++) {
+    if (OB_FAIL(SMART_CALL(extract_virtual_generated_columns(expr->get_param_expr(j), vir_gen_columns)))) {
       LOG_WARN("fail to contain virtual gen column", K(j), K(ret));
-    } else {
-      LOG_TRACE("conclude virtual generated column", K(is_contain_vir_gen_column));
-    }
-  }
-  return ret;
-}
-
-// Extract the parent node of the generated column for
-// deep copying to avoid bugs in shared expression scenarios
-int ObRawExprUtils::extract_virtual_generated_column_parents(
-  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(par_expr) || OB_ISNULL(child_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (child_expr->is_column_ref_expr() &&
-      static_cast<ObColumnRefRawExpr *>(child_expr)->is_virtual_generated_column() &&
-      !static_cast<ObColumnRefRawExpr *>(child_expr)->is_xml_column()) {
-    if (OB_FAIL(add_var_to_array_no_dup(vir_gen_par_exprs, par_expr))) {
-      LOG_WARN("failed to add winfunc exprs", K(ret));
-    }
-  }
-  for (int64_t j = 0; OB_SUCC(ret) && j < child_expr->get_param_count(); j++) {
-    if (OB_ISNULL(child_expr->get_param_expr(j))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param_expr is NULL", K(j), K(ret));
-    } else if (OB_FAIL(SMART_CALL(extract_virtual_generated_column_parents(
-        child_expr, child_expr->get_param_expr(j), vir_gen_par_exprs)))) {
-      LOG_WARN("fail to extract virtual gen column", K(j), K(ret));
-    } else {
     }
   }
   return ret;
@@ -5045,6 +5013,112 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
       exec_param->set_result_type(outer_val_expr->get_result_type());
       param_expr = exec_param;
     }
+  }
+  return ret;
+}
+
+/*
+ * traverse the tree to see whether there is shared exec params
+ * if there exists one, reuse old exec param
+ * otherwise, use column refs
+ *
+ * so we will traverse the input tree, and check at every inner node,
+ * if it is in current exec params, use current exec param and stop traversing this subtree
+ * otherwise, we will reach leaf node and create new exec params there.
+ *
+ * note that once a new exec param is found, it will be added to current exec params
+ * todo use rawexprvisitor
+ */
+ int ObExecParamExtractor::extract(ObRawExpr *outer_val_expr)
+ {
+   int ret = OB_SUCCESS;
+   bool found = false;
+   if (OB_ISNULL(outer_val_expr)) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("invalid params", K(outer_val_expr));
+   } else if (OB_FAIL(is_existed(outer_val_expr, found))) {
+     LOG_WARN("failed to check expr exists");
+   } else if (!found) {
+     // todo use visitor
+     // if it is terminal
+     if (outer_val_expr->is_column_ref_expr()) {
+       if (OB_FAIL(create_new_exec_param(outer_val_expr))) {
+         LOG_WARN("failed to create new exec param", K(ret));
+       }
+     } else if (outer_val_expr->is_terminal_expr()) {
+     } else {
+       int64_t cnt = outer_val_expr->get_param_count();
+       for (int64_t i = 0; i < cnt && OB_SUCC(ret); i++) {
+         ObRawExpr *e = outer_val_expr->get_param_expr(i);
+         if (NULL == e) {
+           LOG_WARN("null param expr returned", K(ret), K(i), K(cnt));
+         } else if (OB_FAIL(SMART_CALL(extract(e)))) {
+           LOG_WARN("child visit failed", K(ret));
+         }
+       }
+     }
+   }
+   return ret;
+ }
+
+ int ObExecParamExtractor::create_new_exec_param(ObRawExpr *target)
+ {
+   int ret = OB_SUCCESS;
+   ObExecParamRawExpr *exec_param = NULL;
+   if (OB_FAIL(ObRawExprUtils::create_new_exec_param(expr_factory_,
+                                                     target,
+                                                     exec_param,
+                                                     false))) {
+     LOG_WARN("failed to create new exec param", K(ret));
+   } else if (OB_FAIL(current_exec_params_->add_exec_param_expr(exec_param))) {
+     LOG_WARN("failed to add exec param expr", K(ret));
+   }
+   return ret;
+ }
+ int ObExecParamExtractor::is_existed(const ObRawExpr *target, bool &found)
+ {
+   int ret = OB_SUCCESS;
+   found = false;
+   for (int64_t i = 0; OB_SUCC(ret) && !found && i < current_exec_params_->get_param_count(); ++i) {
+     ObRawExpr *expr = current_exec_params_->get_exec_param(i)->get_ref_expr();
+     if (expr == target) {
+       found = true;
+       break;
+     }
+   }
+   return ret;
+ }
+
+int ObRawExprUtils::extract_exec_param_exprs(
+  ObRawExprFactory &expr_factory,
+  ObQueryRefRawExpr *query_ref,
+  ObRawExpr *correlated_expr,
+  ObRawExpr *&param_expr)
+{
+  int ret = OB_SUCCESS;
+  // new a extractor
+  ObExecParamExtractor extractor(expr_factory);
+  ObRawExprCopier copier(expr_factory);
+  if (OB_ISNULL(query_ref) || OB_ISNULL(correlated_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid params", K(ret), K(query_ref), K(correlated_expr));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(extractor.set_current_exec_params(query_ref))) {
+  } else if (OB_FAIL(extractor.extract(correlated_expr))) {
+    LOG_WARN("failed to extract exec params for expr", K(ret), KPC(correlated_expr));
+  }
+  // after extract exec params. do a replacement for correlated_expr
+  for (int64_t i = 0; OB_SUCC(ret) && i < query_ref->get_param_count(); ++i) {
+    ObRawExpr *param = query_ref->get_exec_param(i);
+    ObRawExpr *expr = query_ref->get_exec_param(i)->get_ref_expr();
+    if (OB_FAIL(copier.add_replaced_expr(expr, param))) {
+      LOG_WARN("failed to add replace expr", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(copier.copy_on_replace(correlated_expr, param_expr))) {
+    LOG_WARN("copy on replace failed", K(ret));
   }
   return ret;
 }

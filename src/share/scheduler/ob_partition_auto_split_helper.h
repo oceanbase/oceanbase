@@ -375,6 +375,7 @@ private:
                        const ObTabletID split_source_tablet_id,
                        const ObRowkey &high_bound_val,
                        const ObTimeZoneInfo *tz_info,
+                       const ObBasePartition *src_part,
                        share::schema::ObPartition &new_part);
   int check_and_cast_high_bound(const ObRowkey &origin_high_bound_val,
                                 const ObTimeZoneInfo *tz_info,

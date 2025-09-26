@@ -453,6 +453,7 @@ public:
 
   int add_task_to_waiting_map(ObVectorIndexSyncLog &ls_log);
   int add_task_to_waiting_map(VectorIndexAdaptorMap &adapter_map);
+  int add_task_to_waiting_map(ObTabletID &tablet_id, int64_t table_id);
   int count_processing_finished(bool &is_finished,
                                 uint32_t &total_count,
                                 uint32_t &finished_count);

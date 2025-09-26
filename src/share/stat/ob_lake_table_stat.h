@@ -19,6 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObIcebergFileDesc;
+class ObColumnRefRawExpr;
 }
 namespace common {
 
@@ -81,6 +82,7 @@ class ObLakeTableStatUtils
 public:
   static int construct_stat_from_iceberg(const uint64_t tenant_id,
                                          const ObIArray<uint64_t> &column_ids,
+                                         const ObIArray<sql::ObColumnRefRawExpr*> &column_exprs,
                                          ObIArray<sql::ObIcebergFileDesc*> &file_descs,
                                          ObLakeTableStat &table_stat,
                                          ObIArray<ObLakeColumnStat*> &column_stats,

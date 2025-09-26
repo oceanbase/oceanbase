@@ -963,7 +963,11 @@ int ObRangeGraphGenerator::get_max_precise_pos(ObRangeNode *range_node,
 {
   int ret = OB_SUCCESS;
   max_precise_pos = ctx_.column_cnt_;
-  if (!pre_range_graph_->is_precise_get()) {
+  if (range_node != NULL &&
+      range_node->always_true_ &&
+      range_node->and_next_ == NULL) {
+    max_precise_pos = 0;
+  } else if (!pre_range_graph_->is_precise_get()) {
     bool equals[ctx_.column_cnt_];
     MEMSET(equals, 0, sizeof(bool) * ctx_.column_cnt_);
     ret = inner_get_max_precise_pos(range_node, equals, max_precise_pos, start_pos);
@@ -2105,7 +2109,8 @@ int ObRangeGraphGenerator::check_can_general_nlj_range_extraction(
   if (OB_ISNULL(range_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (ctx_.optimizer_features_enable_version_ < COMPAT_VERSION_4_3_5_BP3) {
+  } else if (ctx_.optimizer_features_enable_version_ < COMPAT_VERSION_4_3_5_BP3 ||
+             ctx_.optimizer_features_enable_version_ == COMPAT_VERSION_4_4_0) {
     // do nothing
   } else if (OB_FAIL(range_checker.init(range_node->column_cnt_, max_precise_offset_))) {
     LOG_WARN("failed to prepare allocate array", K(ret));

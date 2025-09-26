@@ -689,7 +689,19 @@ int ObJoinFilterOp::do_create_filter_rescan()
   return ret;
 }
 
-int ObJoinFilterOp::do_use_filter_rescan()
+int ObJoinFilterOp::do_use_filter_rescan_pre()
+{
+  // for partition wise hash join, skip evaluate join filter before rescan table scan
+  return do_use_filter_rescan(true);
+}
+
+int ObJoinFilterOp::do_use_filter_rescan_post()
+{
+  // for partition wise hash join, enable evaluate join filter after table scan rescan
+  return do_use_filter_rescan(false);
+}
+
+int ObJoinFilterOp::do_use_filter_rescan(bool skip_during_rescan)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; i < MY_SPEC.rf_infos_.count() && OB_SUCC(ret); ++i) {
@@ -698,6 +710,9 @@ int ObJoinFilterOp::do_use_filter_rescan()
       if (OB_NOT_NULL(join_filter_ctx = static_cast<ObExprJoinFilter::ObExprJoinFilterContext *>(
                           ctx_.get_expr_op_ctx(MY_SPEC.rf_infos_.at(i).filter_expr_id_)))) {
         join_filter_ctx->rescan();
+        if (!MY_SPEC.is_shared_join_filter()) {
+          join_filter_ctx->skip_during_rescan_ = skip_during_rescan;
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("join filter ctx is unexpected", K(ret));
@@ -707,15 +722,17 @@ int ObJoinFilterOp::do_use_filter_rescan()
   return ret;
 }
 
-int ObJoinFilterOp::inner_rescan()
+int ObJoinFilterOp::rescan()
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.is_create_mode() && OB_FAIL(do_create_filter_rescan())) {
     LOG_WARN("fail to do create filter rescan", K(ret));
-  } else if (MY_SPEC.is_use_mode() && OB_FAIL(do_use_filter_rescan())) {
-    LOG_WARN("fail to do use filter rescan", K(ret));
-  } else if (OB_FAIL(ObOperator::inner_rescan())) {
+  } else if (MY_SPEC.is_use_mode() && OB_FAIL(do_use_filter_rescan_pre())) {
+    LOG_WARN("fail to do use filter rescan pre", K(ret));
+  } else if (OB_FAIL(ObOperator::rescan())) {
     LOG_WARN("operator rescan failed", K(ret));
+  } else if (MY_SPEC.is_use_mode() && OB_FAIL(do_use_filter_rescan_post())) {
+    LOG_WARN("fail to do use filter rescan post", K(ret));
   }
   return ret;
 }

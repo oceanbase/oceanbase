@@ -242,6 +242,18 @@ int TableMetadata::get_current_snapshot(const Snapshot *&snapshot) const
   return ret;
 }
 
+int TableMetadata::get_current_snapshot(Snapshot *&snapshot)
+{
+  int ret = OB_SUCCESS;
+  const Snapshot *current_snapshot = NULL;
+  if (OB_FAIL(get_current_snapshot(current_snapshot))) {
+    LOG_WARN("failed to get current snapshot", K(ret));
+  } else {
+    snapshot = const_cast<Snapshot *>(current_snapshot);
+  }
+  return ret;
+}
+
 int TableMetadata::get_schema(int32_t schema_id, const Schema *&schema) const
 {
   int ret = OB_SUCCESS;
@@ -299,7 +311,7 @@ int TableMetadata::get_table_property(const char *table_property_key, ObString &
   if (OB_SUCC(ret)) {
     if (value.empty()) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("specific table property key not found", K(ret), K(table_property_key));
+      LOG_DEBUG("specific table property key not found", K(ret), K(table_property_key));
     }
   }
   return ret;

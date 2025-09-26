@@ -5771,7 +5771,12 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                        DistAlgo::DIST_PARTITION_WISE |
                        DistAlgo::DIST_HASH_HASH |
                        DistAlgo::DIST_PULL_TO_LOCAL;
-  if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)) {
+  if (groupby_helper.is_trans_distinct_agg_) {
+    group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
+    group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
+  }
+  if (OB_SUCCESS != (OB_E(EventTable::EN_FORCE_SLAVE_MAPPING) OB_SUCCESS)
+      && !groupby_helper.is_trans_distinct_agg_) {
     force_slave_mapping = true;
   }
   if (OB_ISNULL(top) || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
@@ -5852,6 +5857,7 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                                                                        is_partition_wise))) {
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
     } else if (is_partition_wise &&
+              !groupby_helper.is_trans_distinct_agg_ &&
                (top->is_parallel_more_than_part_cnt(2) || force_slave_mapping ||
                 DistAlgo::DIST_HASH_HASH_LOCAL == group_dist_methods)) {
       group_dist_methods = DistAlgo::DIST_HASH_HASH_LOCAL;
@@ -8409,9 +8415,11 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
 {
   int ret = OB_SUCCESS;
   is_pushed = false;
-  if (OB_ISNULL(top) || OB_ISNULL(limit_expr) || OB_ISNULL(pushed_expr) || OB_ISNULL(get_stmt())) {
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  if (OB_ISNULL(top) || OB_ISNULL(limit_expr) || OB_ISNULL(pushed_expr) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(ret));
+    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(schema_guard), K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN == top->get_type()) {
     ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(top);
     ObRawExpr *new_limit_expr = NULL;
@@ -8430,11 +8438,14 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr())) &&
          table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL) {
+      // we need to determine whether a table is partitioned based on its schema rather than relying
+      // on the current partition pruning result, which is essential to address issues caused by query plan reuse.
       bool das_multi_partition = false;
-      if (table_scan->use_das() && NULL != table_scan->get_table_partition_info()) {
-        int64_t partition_count = table_scan->get_table_partition_info()->
-                                  get_phy_tbl_location_info().get_phy_part_loc_info_list().count();
-        if (1 != partition_count) {
+      if (table_scan->use_das()) {
+        const ObTableSchema *index_schema = nullptr;
+        if (OB_FAIL(schema_guard->get_table_schema(table_scan->get_index_table_id(), index_schema))) {
+          LOG_WARN("failed to get index schema", K(ret));
+        } else if (index_schema->is_partitioned_table()) {
           das_multi_partition = true;
         }
       }
@@ -18284,6 +18295,8 @@ int ObLogPlan::check_aggr_param_match_pushdown_rule(const uint64_t table_id,
                       true/*need_pseudo_column*/, true/*can_extract_pseudo_column_ref*/))) {
     LOG_WARN("fail to extract column expr", K(ret));
   } else if (column_exprs.count() != 1) {
+    can_push = false;
+  } else if (!column_exprs.at(0)->is_column_ref_expr()) {
     can_push = false;
   } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0)))) {
   } else if (table_id != col_expr->get_table_id() || col_expr->is_pseudo_column_ref()) {

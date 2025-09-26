@@ -316,7 +316,7 @@ void ObMergeMetric::update(uint64_t value)
   }
 }
 
-uint64_t ObMergeMetric::value()
+uint64_t ObMergeMetric::value() const
 {
   int agg_type = get_metric_agg_type(id_);
   uint64_t value = 0;

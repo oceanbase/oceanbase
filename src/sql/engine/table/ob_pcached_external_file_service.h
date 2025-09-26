@@ -424,7 +424,7 @@ private:
     DISALLOW_COPY_AND_ASSIGN(ObPCachedExtLRUSetCB);
   };
 
-  class ObPCachedExtLRUDeletePred final : public ObPCachedExtLRUBaseCB
+  class ObPCachedExtLRUDeletePred : public ObPCachedExtLRUBaseCB
   {
   public:
     explicit ObPCachedExtLRUDeletePred(ObPCachedExtLRU &lru);

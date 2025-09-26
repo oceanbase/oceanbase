@@ -115,51 +115,18 @@ int ObIcebergFileIOUtils::read_table_metadata(ObIAllocator &allocator,
     LOG_WARN("invalid table metadata file", K(ret), K(filename));
   }
 
-  int64_t file_size = -1;
   if (OB_SUCC(ret)) {
-    ObArenaAllocator tmp_allocator;
-    SMART_VAR(ObExternalFileInfoCollector, collector, tmp_allocator)
-    {
-      if (OB_FAIL(collector.init(filename, access_info))) {
-        LOG_WARN("failed to init collector", K(ret));
-      } else if (OB_FAIL(collector.collect_file_size(filename, file_size))) {
-        LOG_WARN("failed to get file size", K(ret));
-      }
+    if (OB_FAIL(
+            ObIcebergFileIOUtils::read(allocator, filename, access_info, buf, read_size, true))) {
+      LOG_WARN("fail to read file", K(ret), K(filename));
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObExternalFileAccess file_reader;
-    ObExternalFileUrlInfo file_info(filename,
-                                    access_info,
-                                    filename,
-                                    ObString::make_empty_string(),
-                                    file_size,
-                                    INT64_MAX);
-    ObExternalTableAccessOptions options = ObExternalTableAccessOptions::lazy_defaults();
-    ObExternalFileCacheOptions cache_options(options.enable_page_cache_,
-                                             options.enable_disk_cache_);
-
-    if (OB_FAIL(file_reader.open(file_info, cache_options))) {
-      LOG_WARN("fail to open file reader", K(ret), K(filename));
-    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(file_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory for file reader", K(ret), K(file_size));
-    } else {
-      const int64_t io_timeout_ms = THIS_WORKER.get_timeout_ts() / 1000;
-      ObExternalReadInfo read_info(0, buf, file_size, io_timeout_ms);
-      if (OB_FAIL(file_reader.pread(read_info, read_size))) {
-        LOG_WARN("failed to read file", K(ret), K(filename), K(file_size), K(read_size));
-      }
-    }
-    file_reader.close();
   }
 
   if (OB_SUCC(ret)) {
     // need to decompress
     if (sql::ObCSVGeneralFormat::ObCSVCompression::GZIP == compression) {
       ObArenaAllocator tmp_allocator;
-      int64_t next_buf_size = file_size * 10;
+      int64_t next_buf_size = read_size * 10;
       bool is_finished = false; // 对于 uncompressed，一轮读取就完成了，对于 compressed，我们需要
                                 // guess 解压后的 buff 大小，所以可能需要多次重试
       while (OB_SUCC(ret) && !is_finished) {
@@ -179,14 +146,14 @@ int ObIcebergFileIOUtils::read_table_metadata(ObIAllocator &allocator,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret));
         } else if (OB_FAIL(decompressor->decompress(buf,
-                                                    file_size,
+                                                    read_size,
                                                     consumed_size,
                                                     decompressed_buf,
                                                     next_buf_size,
                                                     decompressed_size))) {
           LOG_WARN("failed to decompress data", K(ret));
         } else {
-          if (consumed_size >= file_size) {
+          if (consumed_size >= read_size) {
             is_finished = true;
             buf = decompressed_buf;
             read_size = decompressed_size;
@@ -218,7 +185,7 @@ int ObIcebergFileIOUtils::read(ObIAllocator &allocator,
   {
     if (OB_FAIL(collector.init(filename, access_info))) {
       LOG_WARN("failed to init collector", K(ret));
-    } else if (OB_FAIL(collector.collect_file_size(filename, file_size))) {
+    } else if (OB_FAIL(collector.collect_file_size(filename, file_size, enable_cache))) {
       LOG_WARN("failed to get file size", K(ret));
     } else {
       ObExternalFileAccess file_reader;
@@ -604,11 +571,11 @@ ObCatalogAvroUtils::get_primitive_map(const avro::GenericRecord &avro_record,
                                       ObIArray<std::pair<K, V>> &value)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum avro_datum;
+  const avro::GenericDatum *avro_datum = NULL;
   if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
     LOG_WARN("failed to get avro array", K(ret), K(key));
-  } else if (avro::Type::AVRO_ARRAY == avro_datum.type()) {
-    const avro::GenericArray &avro_array = avro_datum.value<avro::GenericArray>();
+  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
+    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
     for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
       const avro::GenericDatum &element = avro_array.value()[i];
       if (avro::Type::AVRO_RECORD != element.type()) {
@@ -634,11 +601,11 @@ ObCatalogAvroUtils::get_binary_map(ObIAllocator &allocator,
                                    ObIArray<std::pair<K, V>> &value)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum avro_datum;
+  const avro::GenericDatum *avro_datum = NULL;
   if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
     LOG_WARN("failed to get avro array", K(ret), K(key));
-  } else if (avro::Type::AVRO_ARRAY == avro_datum.type()) {
-    const avro::GenericArray &avro_array = avro_datum.value<avro::GenericArray>();
+  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
+    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
     for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
       const avro::GenericDatum &element = avro_array.value()[i];
       if (avro::Type::AVRO_RECORD != element.type()) {
@@ -679,13 +646,11 @@ ObCatalogAvroUtils::get_primitive_array(const avro::GenericRecord &avro_record,
                                         ObIArray<V> &value)
 {
   int ret = OB_SUCCESS;
-  avro::GenericDatum avro_datum;
+  const avro::GenericDatum *avro_datum = NULL;
   if (OB_FAIL(get_value<avro::Type::AVRO_ARRAY>(avro_record, key, avro_datum))) {
     LOG_WARN("failed to get avro map", K(ret), K(key));
-  } else if (avro::Type::AVRO_NULL == avro_datum.type()) {
-    value.reset();
-  } else if (avro::Type::AVRO_ARRAY == avro_datum.type()) {
-    const avro::GenericArray &avro_array = avro_datum.value<avro::GenericArray>();
+  } else if (OB_NOT_NULL(avro_datum) && avro::Type::AVRO_ARRAY == avro_datum->type()) {
+    const avro::GenericArray &avro_array = avro_datum->value<avro::GenericArray>();
     for (int64_t i = 0; OB_SUCC(ret) && i < avro_array.value().size(); i++) {
       const avro::GenericDatum &avro_element = avro_array.value()[i];
       OZ(value.push_back(avro_element.value<V>()));
@@ -697,18 +662,18 @@ ObCatalogAvroUtils::get_primitive_array(const avro::GenericRecord &avro_record,
 template <avro::Type T>
 int ObCatalogAvroUtils::get_value(const avro::GenericRecord &avro_record,
                                   const ObString &key,
-                                  avro::GenericDatum &value)
+                                  const avro::GenericDatum *&value) // 使用指针，避免 GenericDatum 昂贵的深拷贝
 {
   int ret = OB_SUCCESS;
   std::string key_str(key.ptr(), key.length());
   if (!avro_record.hasField(key_str)) {
-    value = avro::GenericDatum(); // assign a null GenericDatum
+    value = NULL;
   } else {
     const avro::GenericDatum &field_datum = avro_record.field(key_str);
     if (avro::Type::AVRO_NULL == field_datum.type()) {
-      value = avro::GenericDatum(); // assign a null GenericDatum
+      value = &field_datum; // assign a null GenericDatum
     } else if (T == field_datum.type()) {
-      value = field_datum;
+      value = &field_datum;
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid avro type", K(ret), K(key), K(T), K(field_datum.type()));

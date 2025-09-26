@@ -29,7 +29,7 @@ public:
       MAX_MODE
   };
 
-  static const uint8_t DEFAULT_SEMISTRUCT_FREQ_THRESHOLD = 100;
+  static const uint8_t DEFAULT_SEMISTRUCT_FREQ_THRESHOLD = 90;
 
 public:
   static bool is_mode_valid(int64_t mode) { return mode >= NONE && mode < MAX_MODE; }

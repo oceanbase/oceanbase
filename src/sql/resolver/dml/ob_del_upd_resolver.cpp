@@ -96,7 +96,8 @@ ObDelUpdResolver::~ObDelUpdResolver()
 
 int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
                                           ObIArray<ObTableAssignment> &table_assigns,
-                                          ObStmtScope scope)
+                                          ObStmtScope scope,
+                                          const bool is_insert_into_set)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = get_stmt();
@@ -199,7 +200,9 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(add_additional_function_according_to_type(column, expr, scope, true))) {
+          // for insert into set statements, we treat the assigned values as VALUES clause,
+          // keep assigned expr as QUESTIONMARK type and do not build column convert expr.
+          if (OB_FAIL(add_additional_function_according_to_type(column, expr, scope, true, is_insert_into_set))) {
             LOG_WARN("fail to add additional function", K(ret), K(column));
           } else if (OB_FAIL(recursive_values_expr(expr))) {
             LOG_WARN("fail to resolve values expr", K(ret));
@@ -347,8 +350,7 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             CK (OB_NOT_NULL(c_expr));
             if (OB_FAIL(ret)) {
             } else if (col_expr->get_result_type().get_obj_meta().is_enum_or_set()
-              || col_expr->get_result_type().get_obj_meta().is_urowid()
-              || params_.is_batch_stmt_) {
+              || col_expr->get_result_type().get_obj_meta().is_urowid()) {
               // enum, set, rowid do not support cast
               int64_t param_idx = 0;
               OZ (c_expr->get_value().get_unknown(param_idx));
@@ -356,6 +358,11 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
               CK (param_idx < params_.param_list_->count());
               OX (const_cast<ObObjParam &>(
               params_.param_list_->at(param_idx)).set_need_to_check_type(true));
+            } else if (params_.is_batch_stmt_) {
+              OX (c_expr->set_result_type(col_expr->get_result_type()));
+              if (col_expr->get_result_type().get_obj_meta().is_collection_sql_type()) {
+                c_expr->set_subschema_id(col_expr->get_subschema_id());
+              }
             } else {
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
               OX (c_expr->set_result_type(col_expr->get_result_type()));
@@ -3855,6 +3862,37 @@ int ObDelUpdResolver::build_row_for_empty_brackets(ObArray<ObRawExpr*> &value_ro
   return ret;
 }
 
+int ObDelUpdResolver::check_vec_hnsw_index_vid_opt(const ObTableAssignment &ta,
+                                                   const ObTableSchema *table_schema,
+                                                   bool &is_vec_hnsw_index_vid_opt)
+{
+  int ret = OB_SUCCESS;
+  is_vec_hnsw_index_vid_opt = false;
+  ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null table schema or schema guard", K(ret), K(table_schema), K(schema_guard));
+  } else if (table_schema->is_table_with_hidden_pk_column()) {
+    ObDocIDType vid_type = ObDocIDType::INVALID;
+    if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(*table_schema, vid_type))) {
+      LOG_WARN("failed to determine vid type", K(ret), K(vid_type));
+    } else if (vid_type == ObDocIDType::HIDDEN_INC_PK) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ta.assignments_.count() && !is_vec_hnsw_index_vid_opt; ++i) {
+        ObColumnRefRawExpr *column_expr = ta.assignments_.at(i).column_expr_;
+        ObIndexType index_type = INDEX_TYPE_MAX;
+        bool is_col_has_vec_idx = false;
+        if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema, *schema_guard, column_expr->get_column_id(),
+                                                                     is_col_has_vec_idx, index_type))) {
+          LOG_WARN("failed to check column has vector index", K(ret));
+        } else if (is_col_has_vec_idx && index_type == ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
+          is_vec_hnsw_index_vid_opt = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDelUpdResolver::check_update_part_key(const ObTableAssignment &ta,
                                          uint64_t ref_table_id,
                                          bool &is_updated,
@@ -3987,6 +4025,7 @@ int ObDelUpdResolver::check_heap_table_update(ObTableAssignment &tas)
   const TableItem *table = NULL;
   const ObTableSchema *table_schema = NULL;
   bool is_update_part_key = false;
+  bool is_vec_hnsw_index_vid_opt = false;
 
   ObDMLStmt *stmt = get_stmt();
   if (OB_ISNULL(stmt)) {
@@ -4011,7 +4050,9 @@ int ObDelUpdResolver::check_heap_table_update(ObTableAssignment &tas)
                                            table->get_base_table_item().is_link_table()))) {
     LOG_WARN("fail to check whether update part key", K(ret), K(tas),
              "base_table_id", table->get_base_table_item().ref_id_);
-  } else if (!is_update_part_key) {
+  } else if (OB_FAIL(check_vec_hnsw_index_vid_opt(tas, table_schema, is_vec_hnsw_index_vid_opt))) {
+    LOG_WARN("failed to check vec hnsw index vid opt", K(ret));
+  } else if (!is_update_part_key && !is_vec_hnsw_index_vid_opt) {
     // 不更新分区建，do nothing
   } else if (OB_FAIL(build_hidden_pk_assignment(tas, table, table_schema))) {
     LOG_WARN("fail to build hidden_pk assignment", K(ret), K(tas), KPC(table));

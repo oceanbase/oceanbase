@@ -203,6 +203,7 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
        storage::ObPrivateBlockGCThread::MAX_BLOCK_GC_TASK_NUM)
 TG_DEF(SSWriterWorker, SSWSrv, THREAD_POOL, 1)
 TG_DEF(SS_SSTableGCTimer, SS_TableGCTimer, TIMER)
+TG_DEF(SSScheduleUpload, ScheUpload, QUEUE_THREAD, ThreadCountPair(8, 4), 100)
 #endif
 
 TG_DEF(ExtDiskCacheServerTimer, ExtDiskCacheServerTimer, TIMER)

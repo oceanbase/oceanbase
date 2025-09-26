@@ -613,6 +613,18 @@ int ObRpcCheckandCancelDDLComplementDagP::process()
   return ret;
 }
 
+int ObRpcFetchTabletPhysicalRowCntP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->fetch_tablet_physical_row_cnt(arg_, result_);
+  }
+  return ret;
+}
+
 int ObRpcCheckandCancelDeleteLobMetaRowDagP::process()
 {
   int ret = OB_SUCCESS;
@@ -3653,6 +3665,9 @@ int ObRpcNotifyTenantThreadP::process()
         rootserver::ObArbitrationService *service = MTL(rootserver::ObArbitrationService*);
         WAKE_UP_TENANT_SERVICE
 #endif
+      } else if (obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE == arg_.get_thread_type()) {
+        rootserver::ObRestoreService *service = MTL(rootserver::ObRestoreService*);
+        WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected thread type", KR(ret), K(arg_));
@@ -4297,8 +4312,9 @@ int ObRpcClearSSMicroCacheP::process()
       if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("micro_cache is nullptr", KR(ret));
+      } else if (OB_FAIL(micro_cache->clear_micro_cache())) {
+        LOG_WARN("fail to clear ss_micro_cache", KR(ret));
       } else {
-        micro_cache->clear_micro_cache();
         LOG_INFO("success clear ss_micro_cache");
       }
     }
@@ -4320,17 +4336,35 @@ int ObRpcFlushSSLocalCacheP::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("local_cache is nullptr", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_ALL_TYPE) {
-        local_cache->clear_ss_all_cache();
-        LOG_INFO("success clear ss_local_cache");
+        FLOG_INFO("start to clear ss_local_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_all_cache(arg_.rpc_abs_timeout_us_))) {
+          LOG_WARN("fail to clear ss_local_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_local_cache", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MACRO_TYPE) {
-        local_cache->clear_ss_macro_cache();
-        LOG_INFO("success clear ss_macro_cache");
+        FLOG_INFO("start to clear ss_macro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_macro_cache(arg_.rpc_abs_timeout_us_))) {
+          LOG_WARN("fail to clear ss_macro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_macro_cache", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_MICRO_TYPE) {
-        local_cache->clear_ss_micro_cache();
-        LOG_INFO("success clear ss_micro_cache");
+        FLOG_INFO("start to clear ss_micro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_micro_cache())) {
+          LOG_WARN("fail to clear ss_micro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_micro_cache", KR(ret));
       } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_MEM_MACRO_TYPE) {
-        local_cache->clear_ss_mem_macro_cache();
-        LOG_INFO("success clear ss_mem_macro_cache");
+        FLOG_INFO("start to clear ss_mem_macro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_mem_macro_cache())) {
+          LOG_WARN("fail to clear ss_mem_macro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_mem_macro_cache", KR(ret));
+      } else if (arg_.flush_type_ == obrpc::ObFlushSSLocalCacheType::FLUSH_LOCAL_HOT_MACRO_TYPE) {
+        FLOG_INFO("start to clear ss_hot_macro_cache", K_(arg));
+        if (OB_FAIL(local_cache->clear_ss_hot_macro_cache(arg_.rpc_abs_timeout_us_))) {
+          LOG_WARN("fail to clear ss_hot_macro_cache", KR(ret));
+        }
+        FLOG_INFO("finish to clear ss_hot_macro_cache", KR(ret));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid flush_type", K(ret), K_(arg_.flush_type));
@@ -4793,6 +4827,42 @@ int ObRPcTriggerDumpDataDictP::process()
   LOG_INFO("trigger dump data dict processor", KR(ret), K_(arg));
   return ret;
 }
+
+int ObCheckSysTableSchemaP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else if (OB_FAIL(rootserver::ObSysTableInspection::check_sys_table_schema(arg_, result_))) {
+    LOG_WARN("failed to check_sys_table_schema", KR(ret), K_(arg), K_(result));
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObRpcUploadRootKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_;
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected tenant id", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!GCTX.is_shared_storage_mode())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("should not upload root key for sn", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObMasterKeyUtil::ss_dump_root_key_if_need_and_not_exist(tenant_id))) {
+    LOG_WARN("fail to dump root key", K(ret), K(tenant_id));
+  }
+
+  return ret;
+}
+#endif
+#endif
 
 } // end of namespace observer
 } // end of namespace oceanbase

@@ -61,6 +61,7 @@ int ObLakeTablePartitionInfo::assign(const ObTablePartitionInfo &other)
       } else {
         is_hash_aggregate_ = info.is_hash_aggregate_;
         hash_count_ = info.hash_count_;
+        first_bucket_partition_value_offset_ = info.first_bucket_partition_value_offset_;
       }
     }
   }
@@ -68,8 +69,7 @@ int ObLakeTablePartitionInfo::assign(const ObTablePartitionInfo &other)
   return ret;
 }
 
-int get_manifest_entries(ObIAllocator &allocator,
-                         const ObString &access_info,
+int get_manifest_entries(const ObString &access_info,
                          ObIArray<iceberg::ManifestFile*> &manifest_files,
                          ObIArray<iceberg::ManifestEntry*> &manifest_entries)
 {
@@ -78,7 +78,7 @@ int get_manifest_entries(ObIAllocator &allocator,
     if (OB_ISNULL(manifest_files.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null");
-    } else if (OB_FAIL(manifest_files.at(i)->get_manifest_entries(allocator, access_info, manifest_entries))) {
+    } else if (OB_FAIL(manifest_files.at(i)->get_manifest_entries(access_info, manifest_entries))) {
       LOG_WARN("failed to get manifest entries");
     }
   }
@@ -93,22 +93,21 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
                                                              const ObIArray<ObRawExpr*> &filter_exprs)
 {
   int ret = OB_SUCCESS;
-  const ObILakeTableMetadata *lake_table_metadata = nullptr;
+  ObILakeTableMetadata *lake_table_metadata = nullptr;
   if (OB_FAIL(sql_schema_guard.get_lake_table_metadata(ref_table_id, lake_table_metadata))) {
     LOG_WARN("failed to get lake table metadata", K(ref_table_id));
   } else if (OB_ISNULL(lake_table_metadata)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null lake table metadata", KP(lake_table_metadata));
   } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
-    const ObIcebergTableMetadata *iceberg_table_metadata
-        = down_cast<const ObIcebergTableMetadata *>(lake_table_metadata);
+    ObIcebergTableMetadata *iceberg_table_metadata
+        = down_cast<ObIcebergTableMetadata *>(lake_table_metadata);
     const ObString &access_info = iceberg_table_metadata->access_info_;
     ObSEArray<iceberg::ManifestFile*, 16> all_manifest_files;
     ObSEArray<iceberg::ManifestFile*, 16> manifest_files;
     ObSEArray<iceberg::ManifestEntry*, 16> manifest_entries;
     hash::ObHashMap<ObLakeTablePartKey, uint64_t> part_key_map;
-    ObArenaAllocator tmp_allocator("ManifestFileTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
-    const iceberg::Snapshot *current_snapshot = NULL;
+    iceberg::Snapshot *current_snapshot = NULL;
     if (OB_FAIL(iceberg_table_metadata->table_metadata_.get_current_snapshot(current_snapshot))) {
       if (ret == OB_ENTRY_NOT_EXIST) {
         // do nothing
@@ -139,8 +138,7 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     } else if (NULL == current_snapshot) {
       // do nothing
       // 空表
-      // 解析出的 ManifestFile 仅用于裁剪后进一步解析 ManifestEntry，后面就不用了，可以使用一个临时的 allocator 生成。
-    } else if (OB_FAIL(current_snapshot->get_manifest_files(tmp_allocator, access_info, all_manifest_files))) {
+    } else if (OB_FAIL(current_snapshot->get_manifest_files(access_info, all_manifest_files))) {
       LOG_WARN("failed to get manifest files");
     } else if (all_manifest_files.empty()) {
       // do nothing
@@ -149,19 +147,25 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     // 解析出的 ManifestEntry 裁剪之后还要用来获取统计信息，因此使用类的成员 allocator 生成。
     } else if (manifest_files.empty()) {
       // do nothing
-    } else if (OB_FAIL(get_manifest_entries(allocator_, access_info, manifest_files, manifest_entries))) {
+    } else if (OB_FAIL(get_manifest_entries(access_info,
+                                            manifest_files,
+                                            manifest_entries))) {
       LOG_WARN("failed to get manifest entries");
-    } else if (OB_FAIL(part_key_map.create(manifest_entries.count(), "PartKetMap", "LakeTableLoc"))) {
-      LOG_WARN("create range set bucket failed", K(ret));
-    } else if (OB_FAIL(iceberg_file_pruner->prune_data_files(*exec_ctx, manifest_entries, part_key_map, iceberg_file_descs_))) {
+    } else if (OB_FAIL(check_iceberg_use_hash_part(
+                   iceberg_table_metadata->table_metadata_.partition_specs,
+                   first_bucket_partition_value_offset_))) {
+      LOG_WARN("failed to check iceberg use hash part");
+    } else if (OB_FAIL(iceberg_file_pruner->prune_data_files(*exec_ctx,
+                                                             manifest_entries,
+                                                             is_hash_aggregate(),
+                                                             part_key_map,
+                                                             iceberg_file_descs_))) {
       LOG_WARN("failed to prune data files");
     }
+
+    // 这里不能接上面的 else if, 否则 manifest_files 为空的情况会出 bug
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(select_location_for_iceberg(
-                   exec_ctx,
-                   iceberg_table_metadata->table_metadata_.partition_specs,
-                   part_key_map,
-                   iceberg_file_descs_))) {
+    } else if (OB_FAIL(select_location_for_iceberg(exec_ctx, part_key_map, iceberg_file_descs_))) {
       LOG_WARN("failed to select location for iceberg");
     } else {
       candi_table_loc_.set_table_location_key(iceberg_file_pruner->get_table_id(), iceberg_file_pruner->get_ref_table_id());
@@ -242,7 +246,6 @@ int ObLakeTablePartitionInfo::check_iceberg_use_hash_part(const ObIArray<iceberg
 
 
 int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ctx,
-                                                          const ObIArray<iceberg::PartitionSpec*> &partition_specs,
                                                           hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
                                                           ObIArray<ObIcebergFileDesc*> &file_descs)
 {
@@ -251,7 +254,6 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
   ObIArray<ObCandiTabletLoc> &candi_tablet_locs = candi_table_loc_.get_phy_part_loc_info_list_for_update();
   candi_tablet_locs.reset();
   ObDefaultLoadBalancer load_balancer;
-  int64_t offset = -1;
   ObAddr addr;
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -272,8 +274,6 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
     LOG_WARN("fail to get external table location");
   } else if (OB_FAIL(load_balancer.add_server_list(all_servers))) {
     LOG_WARN("failed to add server list");
-  } else if (OB_FAIL(check_iceberg_use_hash_part(partition_specs, offset))) {
-    LOG_WARN("failed to check iceberg use hash part");
   } else if (is_hash_aggregate()) {
     /* 将分区按照bucket分区定义划分
      * 考虑到存在partition by (c1, bucket(c2), 4) 的场景，需要把bucket_idx相同，但是c1值不同的分区居合道一起，
@@ -293,7 +293,7 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
     for (; OB_SUCC(ret) && iter != part_key_map.end(); ++iter) {
       int32_t bucket_idx = -1;
       int64_t tablet_loc_idx = -1;
-      if (OB_FAIL(get_bucket_idx(iter->first, offset, bucket_idx))) {
+      if (OB_FAIL(get_bucket_idx(iter->first, first_bucket_partition_value_offset_, bucket_idx))) {
         LOG_WARN("failed to get hash part idx");
       } else if (OB_FAIL(bucket_idx_map.get_refactored(bucket_idx, tablet_loc_idx))) {
         if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {

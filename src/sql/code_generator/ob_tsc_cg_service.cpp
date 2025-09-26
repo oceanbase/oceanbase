@@ -2444,6 +2444,7 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->can_extract_range_ = vc_info.can_extract_range_;
         vec_scan_ctdef->is_spatial_index_ = vc_info.is_spatial_index_;
         vec_scan_ctdef->is_multi_value_index_ = vc_info.is_multi_value_index_;
+        vec_scan_ctdef->all_filters_can_be_picked_out_ = vc_info.all_filters_can_be_picked_out_;
         cg_.phy_plan_->stat_.vec_index_exec_ctx_.cur_path_ = vc_info.adaptive_try_path_;
       }
     }
@@ -2818,6 +2819,7 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
                 } else if (!op.is_skip_scan()) {
                   scan_ctdef->pre_range_graph_.reset_skip_scan_range();
                 }
+                scan_ctdef->enable_new_false_range_ = child->ap_->pre_range_graph_->enable_new_false_range();
               } else {
                 scan_ctdef->is_new_query_range_ = false;
                 if (OB_FAIL(scan_ctdef->pre_query_range_.deep_copy(*child->ap_->pre_query_range_))) {
@@ -3829,7 +3831,19 @@ int ObTscCgService::generate_vec_relavence_exprs(const ObLogTableScan &op,
   const ObVecIndexInfo &vec_info = op.get_vector_index_info();
   vec_ir_scan_ctdef.relevance_col_cnt_ = 0;
   ObDASBaseCtDef * idx_ctdef = vec_ir_scan_ctdef.children_[0];
-  if (OB_FAIL(collect_all_relavence_exprs(idx_ctdef, output_exprs, vec_ir_scan_ctdef.relevance_col_cnt_))) {
+  if (op.has_es_match()) {
+    ObDASBaseCtDef * found_ctdef = nullptr;
+    const ObDASIREsMatchCtDef *es_match_ctdef = nullptr;
+    if (OB_FAIL(ObDASUtils::find_target_ctdef(idx_ctdef, DAS_OP_IR_ES_MATCH, es_match_ctdef))) {
+      LOG_WARN("fail to vec scan define", K(ret));
+    } else if (es_match_ctdef->relevance_proj_col_ != nullptr) {
+      output_exprs.push_back(es_match_ctdef->relevance_proj_col_);
+      ++vec_ir_scan_ctdef.relevance_col_cnt_;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null relevance proj col", K(ret));
+    }
+  } else if (OB_FAIL(collect_all_relavence_exprs(idx_ctdef, output_exprs, vec_ir_scan_ctdef.relevance_col_cnt_))) {
     LOG_WARN("fail to collect_all_relavence_exprs.", K(ret), K(vec_ir_scan_ctdef.relevance_col_cnt_));
   }
   return ret;
@@ -3883,7 +3897,7 @@ int ObTscCgService::generate_vec_ir_spec_exprs(const ObLogTableScan &op,
         LOG_WARN("failed to append output exprs", K(ret));
       } else if (vec_ir_scan_ctdef.extra_column_count_ > 0 && OB_FAIL(generate_vec_extra_info_exprs(op, vec_ir_scan_ctdef, result_output))) {
         LOG_WARN("failed to append extra info exprs", K(ret));
-      } else if (has_tr_info) {
+      } else if (has_tr_info || op.has_es_match()) {
         // add relavence col if need
         if (OB_FAIL(generate_vec_relavence_exprs(op, vec_ir_scan_ctdef, result_output))) {
           LOG_WARN("failed to append relavence exprs", K(ret));

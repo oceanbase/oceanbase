@@ -102,7 +102,7 @@ TEST_F(TestHybridSearch, basic_term)
       }
     }
   })";
-  common::ObString result("SELECT *, ((book_name = 'c ++ programming') + match(content) against('Elasticsearch' in boolean mode)) as _score FROM doc_table WHERE book_name = 'c ++ programming' AND match(content) against('Elasticsearch' in boolean mode) ORDER BY _score DESC");
+  common::ObString result("SELECT *, ((book_name = 'c ++ programming') + match(content) against('Elasticsearch' in boolean mode)) as _score FROM doc_table WHERE (book_name = 'c ++ programming') AND match(content) against('Elasticsearch' in boolean mode) ORDER BY _score DESC");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 }
@@ -136,7 +136,7 @@ TEST_F(TestHybridSearch, basic_must_not)
       }
     }
   })";
-  common::ObString result("SELECT *, 0.0 as _score FROM doc_table WHERE NOT match(query) against('database or oceanBase' in boolean mode) AND NOT match(content) against('Elasticsearch' in boolean mode) AND NOT price >= 100");
+  common::ObString result("SELECT *, 0.0 as _score FROM doc_table WHERE (NOT match(query) against('database or oceanBase' in boolean mode)) AND (NOT match(content) against('Elasticsearch' in boolean mode)) AND (NOT price >= 100)");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 
   /// case 3: must_not + must
@@ -154,7 +154,7 @@ TEST_F(TestHybridSearch, basic_must_not)
       }
     }
   })";
-  common::ObString result2("SELECT *, match(book_name) against('c ++ programming' in boolean mode) as _score FROM doc_table WHERE match(book_name) against('c ++ programming' in boolean mode) AND NOT match(query) against('database or oceanBase' in boolean mode) AND NOT match(content) against('Elasticsearch' in boolean mode) AND NOT price >= 100 ORDER BY _score DESC");
+  common::ObString result2("SELECT *, match(book_name) against('c ++ programming' in boolean mode) as _score FROM doc_table WHERE match(book_name) against('c ++ programming' in boolean mode) AND ((NOT match(query) against('database or oceanBase' in boolean mode)) AND (NOT match(content) against('Elasticsearch' in boolean mode)) AND (NOT price >= 100)) ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
 
 
@@ -183,9 +183,9 @@ TEST_F(TestHybridSearch, basic_must_not)
   common::ObString result3(
     "SELECT *, match(book_name) against('c ++ programming' in boolean mode) as _score "
     "FROM doc_table WHERE match(book_name) against('c ++ programming' in boolean mode) AND "
-    "NOT match(query) against('database or oceanBase' in boolean mode) AND "
-    "NOT match(content) against('Elasticsearch' in boolean mode) AND "
-    "NOT (book_id = '1' > 0) + (age = '2' > 0) >= 1 ORDER BY _score DESC");
+    "((NOT match(query) against('database or oceanBase' in boolean mode)) AND "
+    "(NOT match(content) against('Elasticsearch' in boolean mode)) AND "
+    "(NOT (((book_id = '1') > 0) + ((age = '2') > 0)) >= 1)) ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
 }
 
@@ -228,7 +228,7 @@ TEST_F(TestHybridSearch, basic_filter)
         }
       }
     })";
-  common::ObString result2("SELECT *, (match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode)) as _score FROM doc_table WHERE match(query) against('database or oceanBase' in boolean mode) AND match(content) against('Elasticsearch' in boolean mode) AND match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode) AND book_name = 'c ++ programming' ORDER BY _score DESC");
+  common::ObString result2("SELECT *, (match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode)) as _score FROM doc_table WHERE (match(query) against('database or oceanBase' in boolean mode) AND match(content) against('Elasticsearch' in boolean mode)) AND ((match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode)) AND (book_name = 'c ++ programming')) ORDER BY _score DESC");
 
   common::ObString req_str3 = R"({
     "query": {
@@ -241,7 +241,7 @@ TEST_F(TestHybridSearch, basic_filter)
       }
     }
   })";
-  common::ObString result3("SELECT *, 0.0 as _score FROM doc_table WHERE book_name = 'c ++ programming' AND book_id = 1 AND price = 2.35");
+  common::ObString result3("SELECT *, 0.0 as _score FROM doc_table WHERE (book_name = 'c ++ programming') AND (book_id = 1) AND (price = 2.35)");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
@@ -264,13 +264,7 @@ TEST_F(TestHybridSearch, basic_should)
     }
   })";
 
-  common::ObString result1(
-    "SELECT *, (match(query) against('database or oceanBase' in boolean mode) + "
-    "match(content) against('Elasticsearch' in boolean mode) + (book_id = '1') + (age = '2')) as _score "
-    "FROM doc_table WHERE "
-    "(match(query) against('database or oceanBase' in boolean mode) > 0) + "
-    "(match(content) against('Elasticsearch' in boolean mode) > 0) + "
-    "(book_id = '1' > 0) + (age = '2' > 0) >= 3 ORDER BY _score DESC");
+  common::ObString result1("SELECT *, (match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode) + (book_id = '1') + (age = '2')) as _score FROM doc_table WHERE ((match(query) against('database or oceanBase' in boolean mode) > 0) + (match(content) against('Elasticsearch' in boolean mode) > 0) + ((book_id = '1') > 0) + ((age = '2') > 0)) >= 3 ORDER BY _score DESC");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
@@ -291,7 +285,7 @@ TEST_F(TestHybridSearch, basic_should)
       }
     }
   })";
-  common::ObString result2("SELECT *, (match(book_id) against('1' in boolean mode) + match(age) against('2' in boolean mode) + match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode)) as _score FROM doc_table WHERE match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode) AND match(query) against('database or oceanBase' in boolean mode) AND match(content) against('Elasticsearch' in boolean mode) ORDER BY _score DESC");
+  common::ObString result2("SELECT *, (match(book_id) against('1' in boolean mode) + match(age) against('2' in boolean mode) + match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode)) as _score FROM doc_table WHERE (match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode)) AND (match(query) against('database or oceanBase' in boolean mode) AND match(content) against('Elasticsearch' in boolean mode)) ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
 
   // case 3: minimum_should_match is 1
@@ -310,14 +304,7 @@ TEST_F(TestHybridSearch, basic_should)
       }
     }
   })";
-  common::ObString result3(
-    "SELECT *, (match(book_name) against('c ++ programming' in boolean mode) + "
-    "match(query) against('database or oceanBase' in boolean mode) + "
-    "match(content) against('Elasticsearch' in boolean mode) + (book_id = '1')) as _score "
-    "FROM doc_table WHERE match(book_name) against('c ++ programming' in boolean mode) AND "
-    "(match(query) against('database or oceanBase' in boolean mode) > 0) + "
-    "(match(content) against('Elasticsearch' in boolean mode) > 0) + (book_id = '1' > 0) >= 1"
-    " ORDER BY _score DESC");
+  common::ObString result3("SELECT *, (match(book_name) against('c ++ programming' in boolean mode) + match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode) + (book_id = '1')) as _score FROM doc_table WHERE match(book_name) against('c ++ programming' in boolean mode) AND ((match(query) against('database or oceanBase' in boolean mode) > 0) + (match(content) against('Elasticsearch' in boolean mode) > 0) + ((book_id = '1') > 0)) >= 1 ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
 
   // case 4: should + must (without minimum_should_match, minimum_should_match is 0)
@@ -360,11 +347,11 @@ TEST_F(TestHybridSearch, basic_should)
   common::ObString result5(
     "SELECT *, (match(query) against('database or oceanBase' in boolean mode) + "
     "match(content) against('Elasticsearch' in boolean mode) + "
-    "match(book_id) against('1' in boolean mode) + match(age) against('2' in boolean mode)) as _score "
+    "(match(book_id) against('1' in boolean mode) + match(age) against('2' in boolean mode))) as _score "
     "FROM doc_table WHERE "
-    "(match(query) against('database or oceanBase' in boolean mode) > 0) + "
+    "((match(query) against('database or oceanBase' in boolean mode) > 0) + "
     "(match(content) against('Elasticsearch' in boolean mode) > 0) + "
-    "((match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode)) > 0) >= 1 "
+    "((match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode)) > 0)) >= 1 "
     "ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str5, result5);
 
@@ -388,15 +375,7 @@ TEST_F(TestHybridSearch, basic_should)
       }
     }
   })";
-  common::ObString result6(
-    "SELECT *, (match(query) against('database or oceanBase' in boolean mode) + "
-    "match(content) against('Elasticsearch' in boolean mode) + "
-    "match(book_id) against('1' in boolean mode) + match(age) against('2' in boolean mode)) as _score "
-    "FROM doc_table WHERE "
-    "(match(query) against('database or oceanBase' in boolean mode) > 0) + "
-    "(match(content) against('Elasticsearch' in boolean mode) > 0) + "
-    "((match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode)) > 0) >= 2 "
-    "ORDER BY _score DESC");
+  common::ObString result6("SELECT *, (match(query) against('database or oceanBase' in boolean mode) + match(content) against('Elasticsearch' in boolean mode) + (match(book_id) against('1' in boolean mode) + match(age) against('2' in boolean mode))) as _score FROM doc_table WHERE ((match(query) against('database or oceanBase' in boolean mode) > 0) + (match(content) against('Elasticsearch' in boolean mode) > 0) + ((match(book_id) against('1' in boolean mode) AND match(age) against('2' in boolean mode)) > 0)) >= 2 ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str6, result6);
 }
 
@@ -571,7 +550,7 @@ TEST_F(TestHybridSearch, rank_feature)
         }
       }
     })";
-  common::ObString result("SELECT *, (pow(pagerank, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result("SELECT *, (pow(pagerank, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);
 
@@ -583,7 +562,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result1("SELECT *, (40 / (pagerank + 40)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result1("SELECT *, (40 / (pagerank + 40)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str1, result1);
 
     common::ObString req_str2 = R"({
@@ -594,7 +573,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result2("SELECT *, (pagerank / (pagerank + 40)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result2("SELECT *, (pagerank / (pagerank + 40)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str2, result2);
 
   common::ObString req_str3 = R"({
@@ -605,7 +584,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result3("SELECT *, pagerank as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result3("SELECT *, pagerank as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str3, result3);
 
   common::ObString req_str4 = R"({
@@ -616,7 +595,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result4("SELECT *, (1 / pagerank) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result4("SELECT *, (1 / pagerank) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str4, result4);
 
   common::ObString req_str5 = R"({
@@ -627,7 +606,7 @@ TEST_F(TestHybridSearch, rank_feature)
         }
       }
     })";
-  common::ObString result5("SELECT *, (pow(40, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result5("SELECT *, (pow(40, 0.6) / (pow(pagerank, 0.6) + pow(40, 0.6))) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str5, result5);
 
   common::ObString req_str6 = R"({
@@ -638,7 +617,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result6("SELECT *, ln((pagerank + 4)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result6("SELECT *, ln((pagerank + 4)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str6, result6);
 
   // only positive score impact supported
@@ -650,7 +629,7 @@ TEST_F(TestHybridSearch, rank_feature)
       }
     }
   })";
-  common::ObString result7("SELECT *, ln((pagerank + 4)) as _score FROM doc_table ORDER BY _score DESC");
+  common::ObString result7("SELECT *, ln((pagerank + 4)) as _score FROM doc_table WHERE pagerank IS NOT NULL ORDER BY _score DESC");
   TestHybridSearchHelp::runtest(table_name, req_str7, result7);
 
 }
@@ -854,7 +833,7 @@ TEST_F(TestHybridSearch, query_string_best_fields_with_minimum_should_match)
     "match(content) against('tutorial' in boolean mode) * 2.5, "
     "match(tags) against('tutorial' in boolean mode) * 1.5) * 1.2) * 1.5) as _score "
     "FROM doc_table WHERE "
-    "((match(title) against('elasticsearch' in boolean mode) OR "
+    "(((match(title) against('elasticsearch' in boolean mode) OR "
     "match(content) against('elasticsearch' in boolean mode) OR "
     "match(tags) against('elasticsearch' in boolean mode)) > 0) + "
     "((match(title) against('database' in boolean mode) OR "
@@ -862,7 +841,7 @@ TEST_F(TestHybridSearch, query_string_best_fields_with_minimum_should_match)
     "match(tags) against('database' in boolean mode)) > 0) + "
     "((match(title) against('tutorial' in boolean mode) OR "
     "match(content) against('tutorial' in boolean mode) OR "
-    "match(tags) against('tutorial' in boolean mode)) > 0) >= 2 "
+    "match(tags) against('tutorial' in boolean mode)) > 0)) >= 2 "
     "ORDER BY _score DESC");
 
   ObArenaAllocator tmp_allocator;
@@ -988,7 +967,7 @@ TEST_F(TestHybridSearch, query_string_most_fields_with_minimum_should_match)
     "match(content) against('tutorial' in boolean mode) * 2.5 + "
     "match(tags) against('tutorial' in boolean mode) * 1.5) * 1.2) * 0.8) as _score "
     "FROM doc_table WHERE "
-    "((match(title) against('elasticsearch' in boolean mode) OR "
+    "(((match(title) against('elasticsearch' in boolean mode) OR "
     "match(content) against('elasticsearch' in boolean mode) OR "
     "match(tags) against('elasticsearch' in boolean mode)) > 0) + "
     "((match(title) against('database' in boolean mode) OR "
@@ -996,7 +975,7 @@ TEST_F(TestHybridSearch, query_string_most_fields_with_minimum_should_match)
     "match(tags) against('database' in boolean mode)) > 0) + "
     "((match(title) against('tutorial' in boolean mode) OR "
     "match(content) against('tutorial' in boolean mode) OR "
-    "match(tags) against('tutorial' in boolean mode)) > 0) >= 2 "
+    "match(tags) against('tutorial' in boolean mode)) > 0)) >= 2 "
     "ORDER BY _score DESC");
 
   ObArenaAllocator tmp_allocator;
@@ -1372,10 +1351,10 @@ TEST_F(TestHybridSearch, hybrid_search_with_minimum_should_match)
     "FROM ((SELECT /*+ opt_param('hidden_column_visible', 'true') */__pk_increment, "
     "(match(product_name) against('Aura' in boolean mode) + match(description) against('sound' in boolean mode) + "
     "match(product_name) against('System' in boolean mode) + match(description) against('Electronics' in boolean mode)) as _keyword_score "
-    "FROM products WHERE match(product_name) against('Aura' in boolean mode) AND "
-    "match(description) against('sound' in boolean mode) AND brand = 'AudioPhile' AND "
-    "match(product_name) against('System' in boolean mode) AND match(description) against('Electronics' in boolean mode) AND "
-    "NOT match(tags) against('premium' in boolean mode) ORDER BY _keyword_score DESC) _fts right join "
+    "FROM products WHERE (match(product_name) against('Aura' in boolean mode) AND "
+    "match(description) against('sound' in boolean mode)) AND (brand = 'AudioPhile') AND "
+    "(match(product_name) against('System' in boolean mode) AND match(description) against('Electronics' in boolean mode)) AND "
+    "(NOT match(tags) against('premium' in boolean mode)) ORDER BY _keyword_score DESC) _fts right join "
     "(SELECT *, _vs0._score as _semantic_score FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */*, l2_distance(vec, '[0.8, 0.1, 0.8, 0.2]') as _distance, "
     "__pk_increment, round((1 / (1 + l2_distance(vec, '[0.8, 0.1, 0.8, 0.2]'))), 8) as _score "
     "FROM products ORDER BY _distance APPROXIMATE LIMIT 5) _vs0 WHERE _vs0._distance <= 0.5) _vs on (_fts.__pk_increment = _vs.__pk_increment)) "

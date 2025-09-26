@@ -124,7 +124,8 @@ public:
       domain_types_(alloc),
       domain_tids_(alloc),
       pre_range_graph_(alloc),
-      aggregate_param_props_(alloc)
+      aggregate_param_props_(alloc),
+      push_down_topn_()
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -185,7 +186,8 @@ public:
                        K_(index_merge_idx),
                        K_(pre_query_range),
                        K_(is_index_merge),
-                       K_(pre_range_graph));
+                       K_(pre_range_graph),
+                       K_(push_down_topn));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -234,6 +236,8 @@ public:
   ObFixedArray<uint64_t, common::ObIAllocator> domain_tids_;
   ObPreRangeGraph pre_range_graph_;
   ObFixedArray<share::ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
+  // top-n pushdown
+  ObDASPushDownTopN push_down_topn_;
 };
 
 enum class ObDASScanTaskType
@@ -283,7 +287,9 @@ public:
       task_type_(ObDASScanTaskType::SCAN),
       das_execute_local_info_(nullptr),
       das_execute_remote_info_(nullptr),
-      local_dynamic_filter_params_()
+      do_local_dynamic_filter_(false),
+      local_dynamic_filter_params_(),
+      topn_param_()
   { }
 
   virtual ~ObDASScanRtDef();
@@ -309,7 +315,9 @@ public:
                        K_(scan_rows_size),
                        K_(das_tasks_key),
                        K_(in_row_cache_threshold),
-                       K_(local_dynamic_filter_params));
+                       K_(do_local_dynamic_filter),
+                       K_(local_dynamic_filter_params),
+                       K_(topn_param));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -347,7 +355,9 @@ public:
   ObDASScanTaskType task_type_;
   ObDasExecuteLocalInfo *das_execute_local_info_;
   ObDasExecuteRemoteInfo *das_execute_remote_info_;
+  bool do_local_dynamic_filter_;
   common::ObSEArray<common::ObDatum, 1> local_dynamic_filter_params_;
+  common::ObLimitParam topn_param_;
 
 private:
   union {

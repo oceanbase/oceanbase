@@ -110,7 +110,7 @@ int ObOdpsJniReader::init_jni_method_(JNIEnv *env) {
   int ret = OB_SUCCESS;
   // init jmethod
   jni_scanner_open_ = env->GetMethodID(jni_scanner_cls_, "open", "()V");
-  if (OB_FAIL(check_jni_exception_(env))) {
+  if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
     ret = OB_INVALID_ERROR;
     LOG_WARN("failed to get `open` jni method", K(ret));
   } else { /* do nothing */
@@ -119,7 +119,7 @@ int ObOdpsJniReader::init_jni_method_(JNIEnv *env) {
   if (OB_SUCC(ret)) {
     jni_scanner_get_next_offheap_batch_ =
         env->GetMethodID(jni_scanner_cls_, "getNextOffHeapTable", "(IJ)J");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else { /* do nothing */
@@ -130,7 +130,7 @@ int ObOdpsJniReader::init_jni_method_(JNIEnv *env) {
   if (OB_SUCC(ret)) {
     jni_scanner_get_next_arrow_ = env->GetMethodID(
         jni_scanner_cls_, "getNextArrowTable", "(JJ)J");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else { /* do nothing */
@@ -140,7 +140,7 @@ int ObOdpsJniReader::init_jni_method_(JNIEnv *env) {
 
   if (OB_SUCC(ret)) {
     jni_scanner_close_ = env->GetMethodID(jni_scanner_cls_, "close", "()V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else { /* do nothing */
@@ -151,7 +151,7 @@ int ObOdpsJniReader::init_jni_method_(JNIEnv *env) {
   if (OB_SUCC(ret)) {
     jni_scanner_release_table_ =
         env->GetMethodID(jni_scanner_cls_, "releaseOffHeapTable", "()V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `releaseOffHeapTable` jni method", K(ret));
     } else { /* do nothing */ }
@@ -169,7 +169,7 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
     LOG_WARN("failed to find class: scanner", K(ret), K(jni_scanner_factory_class_));
     // Because the scanner factory class may be initialized failed too which
     // should log
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("jni is with exception", K(ret));
     }
   }
@@ -197,7 +197,7 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
           jstring scanner_type = env->NewStringUTF(scanner_type_.ptr());
           jni_scanner_cls_ = (jclass)env->CallObjectMethod(
               scanner_factory_obj, get_scanner_method, scanner_type);
-          if (OB_FAIL(check_jni_exception_(env))) {
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
             ret = OB_JNI_ERROR;
             LOG_WARN("failed to init the scanner class.", K(ret));
           }
@@ -212,14 +212,14 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
 
   if (OB_SUCC(ret)) {
     jclass jclazz = env->FindClass("java/util/List");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to find `List` class", K(ret));
     } else if (nullptr == jclazz) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("List class could not be found", K(ret));
     } else {
       size_mid_ = env->GetMethodID(jclazz, "size", "()I");
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to find `size` method in `List` class", K(ret));
       } else if (OB_ISNULL(size_mid_)) {
         ret = OB_INVALID_ARGUMENT;
@@ -228,7 +228,7 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
 
       if (OB_SUCC(ret)) {
         get_mid_ = env->GetMethodID(jclazz, "get", "(I)Ljava/lang/Object;");
-        if (OB_FAIL(check_jni_exception_(env))) {
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           LOG_WARN("failed to find `get` method in `List` class", K(ret));
         } else if (nullptr == get_mid_) {
           ret = OB_INVALID_ARGUMENT;
@@ -244,7 +244,7 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
     // Note: schema scanner can only transfer the needed params.
     // example: com.oceanbase.odps.reader.OdpsTunnelScanner
     jmethodID scanner_constructor = env->GetMethodID(jni_scanner_cls_, "<init>", "(Ljava/util/Map;)V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to get a scanner class constructor.", K(ret));
     } else {
@@ -256,7 +256,7 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
       jmethodID hashmap_put = env->GetMethodID(
           hashmap_class, "put",
           "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("failed to get the HashMap methods.", K(ret));
       } else {
@@ -287,8 +287,9 @@ int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
 
         env->DeleteLocalRef(hashmap_class);
         env->DeleteLocalRef(hashmap_object);
-        if (OB_FAIL(check_jni_exception_(env))) {
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           LOG_WARN("failed to initialize a scanner instance.", K(ret));
+          // here do open is false
         } else if (nullptr == jni_scanner_obj_) {
           ret = OB_JNI_ERROR;
           LOG_WARN("jni scanner obj is null", K(ret));
@@ -315,7 +316,7 @@ int ObOdpsJniReader::do_open() {
 
   if (OB_SUCC(ret) && !is_opened_ &&
       env->EnsureLocalCapacity(scanner_params_.size() * 2 + 6) < 0) {
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to ensure the local capacity", K(ret));
     }
   }
@@ -332,7 +333,7 @@ int ObOdpsJniReader::do_open() {
       LOG_WARN("scanner obj is null", K(ret));
     } else {
       env->CallVoidMethod(jni_scanner_obj_, jni_scanner_open_);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to open off-heap table scanner", K(ret));
       }
     }
@@ -349,6 +350,21 @@ int ObOdpsJniReader::do_close() {
   if (!is_inited()) {
     LOG_WARN("jni scanner is not inited, skip to close", K(ret));
   } else if (!is_opened()) {
+    JNIEnv *env = nullptr;
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
+      LOG_WARN("failed to get jni env", K(ret));
+    } else if (nullptr == env) {
+      ret = OB_JNI_ENV_ERROR;
+      LOG_WARN("unexpected null jni env", K(ret));
+    } else { /* do nothing */
+    }
+    if (OB_SUCC(ret) && nullptr != jni_scanner_cls_) {
+      env->DeleteLocalRef(jni_scanner_cls_);
+      jni_scanner_cls_ = nullptr;
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+        LOG_WARN("close with jni execption", K(ret));
+      }
+    }
     LOG_WARN("jni_scanner is not opened, but inited", K(ret));
     scanner_params_.reuse();
     skipped_log_params_.reuse();
@@ -379,13 +395,13 @@ int ObOdpsJniReader::do_close() {
       if (nullptr != jni_scanner_release_table_) {
         env->CallVoidMethod(jni_scanner_obj_, jni_scanner_release_table_);
       }
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("close with jni execption", K(ret));
       }
       if (nullptr != jni_scanner_close_) {
         env->CallVoidMethod(jni_scanner_obj_, jni_scanner_close_);
       }
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("close with jni execption", K(ret));
       }
     }
@@ -393,14 +409,14 @@ int ObOdpsJniReader::do_close() {
     if (OB_SUCC(ret) && nullptr != jni_scanner_obj_) {
       env->DeleteLocalRef(jni_scanner_obj_);
       jni_scanner_obj_ = nullptr;
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("close with jni execption", K(ret));
       }
     }
     if (OB_SUCC(ret) && nullptr != jni_scanner_cls_) {
       env->DeleteLocalRef(jni_scanner_cls_);
       jni_scanner_cls_ = nullptr;
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("close with jni execption", K(ret));
       }
     }
@@ -447,7 +463,7 @@ int ObOdpsJniReader::do_get_next_split_by_ob(int64_t *read_rows, bool *eof, int 
     num_rows = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_next_offheap_batch_,
                                     static_cast<jint>(capacity),
                                     static_cast<jlong>(reinterpret_cast<uintptr_t>(&meta_address)));
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to get next batch data", K(ret));
     }
   }
@@ -515,7 +531,7 @@ int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, in
           jni_scanner_get_next_arrow_,
           static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
           static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         ret = OB_JNI_ERROR;
         LOG_WARN("failed to get next batch data", K(ret));
       }
@@ -617,14 +633,14 @@ int ObOdpsJniReader::release_table(const int64_t num_rows) {
         }
       }
       env->CallVoidMethod(jni_scanner_obj_, jni_scanner_release_table_);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
       } else {
         LOG_TRACE("release table with num rows", K(ret), K(num_rows));
       }
     } else {
       env->CallVoidMethod(jni_scanner_obj_, jni_scanner_release_table_);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
       } else {
         LOG_TRACE("release table with num rows", K(ret), K(num_rows));
@@ -635,7 +651,7 @@ int ObOdpsJniReader::release_table(const int64_t num_rows) {
 }
 
 // --------------- public method for odps ---------------
-int ObOdpsJniReader::get_odps_partition_specs(
+int ObOdpsJniReader::get_odps_partition_row_count_specs(
     ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs) {
   int ret = OB_SUCCESS;
   partition_specs.reset();
@@ -657,9 +673,9 @@ int ObOdpsJniReader::get_odps_partition_specs(
 
   // Get the partition specs
   if (OB_SUCC(ret)) {
-    jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionSpecs",
+    jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionRowCountSpecs",
                                      "()Ljava/util/List;");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
@@ -667,7 +683,7 @@ int ObOdpsJniReader::get_odps_partition_specs(
     } else {
       jobject partition_specs_list =
           env->CallObjectMethod(jni_scanner_obj_, mid);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to get partition specs list", K(ret));
       } else if (nullptr == partition_specs_list) {
         ret = OB_INVALID_ARGUMENT;
@@ -727,9 +743,9 @@ int ObOdpsJniReader::get_odps_partition_phy_specs(
 
   // Get the partition specs
   if (OB_SUCC(ret)) {
-    jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionPhysicalSizeSpec",
+    jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionPhysicalSizeSpecs",
                                      "()Ljava/util/List;");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
@@ -737,7 +753,7 @@ int ObOdpsJniReader::get_odps_partition_phy_specs(
     } else {
       jobject partition_specs_list =
           env->CallObjectMethod(jni_scanner_obj_, mid);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to get partition specs list", K(ret));
       } else if (nullptr == partition_specs_list) {
         ret = OB_INVALID_ARGUMENT;
@@ -789,19 +805,83 @@ int ObOdpsJniReader::get_file_total_row_count(int64_t& count) {
   } else {
     jmethodID jni_scanner_get_total_row_count = env->GetMethodID(jni_scanner_cls_, "getTotalRowCount",
                                      "()J");
-     if (OB_FAIL(check_jni_exception_(env))) {
+     if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == jni_scanner_get_total_row_count) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
     } else {
       jlong size = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_total_row_count);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
       } else {
         LOG_TRACE("get file total row count", K(ret));
       }
       count = size;
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniReader::get_odps_partition_phy_size(
+  ObIAllocator &allocator, const ObString &partition_spec, int64_t &row_count) {
+  int ret = OB_SUCCESS;
+  JNIEnv *env = nullptr;
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
+    LOG_WARN("failed to get jni env", K(ret));
+  } else if (nullptr == env) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to init jni env", K(ret));
+  } else if (OB_ISNULL(jni_scanner_cls_)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to get jni scanner class", K(ret));
+  } else if (OB_ISNULL(jni_scanner_obj_)) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to get jni scanner obj", K(ret));
+  } else {
+    /* do nothing */
+  }
+
+  // Get the partition specs
+  if (OB_FAIL(ret)) {
+    /* do nothing */
+  } else {
+    jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionPhySize",
+                                    "(Ljava/lang/String;)J");
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+      LOG_WARN("find method with exception", K(ret));
+    } else if (nullptr == mid) {
+      ret = OB_JNI_ERROR;
+      LOG_WARN("faild to get the partition row count method", K(ret));
+    } else {
+      ObString temp_str;
+      jstring j_partition_spec;
+      // Note: should transfer ObString to c_style
+      if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
+        // Means current table is with empty
+        const char *non_partition = "__NaN__";
+        j_partition_spec = env->NewStringUTF(non_partition);
+      } else if (OB_FAIL(ob_write_string(allocator, partition_spec, temp_str, true))) {
+        LOG_WARN("failed to transfer partition_spec to be c_style", K(ret));
+      } else {
+        j_partition_spec = env->NewStringUTF(temp_str.ptr());
+      }
+      if (OB_FAIL(ret)) {
+        /* do nothing */
+      } else if (nullptr == j_partition_spec) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get partition spec in jstring", K(ret), K(partition_spec));
+      } else {
+        jlong result = env->CallLongMethod(
+            jni_scanner_obj_, mid, j_partition_spec);
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
+          LOG_WARN("failed to get partition row count", K(ret));
+        } else {
+          row_count = static_cast<int64_t>(result);
+        }
+        // Note: release resource
+        env->DeleteLocalRef(j_partition_spec);
+      }
     }
   }
   return ret;
@@ -821,14 +901,14 @@ int ObOdpsJniReader::get_file_total_size(int64_t& size) {
   } else {
     jmethodID jni_scanner_get_file_total_size = env->GetMethodID(jni_scanner_cls_, "getFileTotalSize",
                                      "()J");
-     if (OB_FAIL(check_jni_exception_(env))) {
+     if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == jni_scanner_get_file_total_size) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
     } else {
       jlong jsize = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_file_total_size);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
       } else {
         LOG_TRACE("get file total row count", K(ret));
@@ -853,14 +933,14 @@ int ObOdpsJniReader::get_split_count(int64_t& size) {
   } else {
     jmethodID jni_scanner_get_split_count = env->GetMethodID(jni_scanner_cls_, "getSplitsCount",
                                      "()J");
-     if (OB_FAIL(check_jni_exception_(env))) {
+     if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == jni_scanner_get_split_count) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the row count method", K(ret));
     } else {
       jlong count = env->CallLongMethod(jni_scanner_obj_, jni_scanner_get_split_count);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("check jni with exception", K(ret));
       } else {
         LOG_TRACE("get file total row count", K(ret));
@@ -886,7 +966,7 @@ int ObOdpsJniReader::get_session_id(ObIAllocator& alloc, ObString& id) {
   } else {
     jmethodID jni_scanner_get_session_id = env->GetMethodID(jni_scanner_cls_, "sessionId",
                                      "()Ljava/lang/String;");
-     if (OB_FAIL(check_jni_exception_(env))) {
+     if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == jni_scanner_get_session_id) {
       ret = OB_JNI_ERROR;
@@ -925,7 +1005,7 @@ int ObOdpsJniReader::get_serilize_session(ObIAllocator& alloc, ObString& sstr) {
   } else {
     jmethodID jni_scanner_get_session = env->GetMethodID(jni_scanner_cls_, "serializedSession",
                                      "()Ljava/lang/String;");
-     if (OB_FAIL(check_jni_exception_(env))) {
+     if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == jni_scanner_get_session) {
       ret = OB_JNI_ERROR;
@@ -964,7 +1044,7 @@ int ObOdpsJniReader::get_project_timezone_info(ObIAllocator& alloc, ObString& ss
   } else {
     jmethodID jni_project_timezone = env->GetMethodID(jni_scanner_cls_, "getProjectTimezone",
                                      "()Ljava/lang/String;");
-     if (OB_FAIL(check_jni_exception_(env))) {
+     if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == jni_project_timezone) {
       ret = OB_JNI_ERROR;
@@ -1018,8 +1098,8 @@ int ObOdpsJniReader::get_odps_partition_row_count(
     /* do nothing */
   } else {
     jmethodID mid = env->GetMethodID(jni_scanner_cls_, "getPartitionRowCount",
-                                     "(Ljava/lang/String;)J");
-    if (OB_FAIL(check_jni_exception_(env))) {
+                                     "(Ljava/lang/String;Ljava/lang/String;)J");
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
@@ -1027,6 +1107,7 @@ int ObOdpsJniReader::get_odps_partition_row_count(
     } else {
       ObString temp_str;
       jstring j_partition_spec;
+      jstring j_session_id;
       // Note: should transfer ObString to c_style
       if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
         // Means current table is with empty
@@ -1037,21 +1118,27 @@ int ObOdpsJniReader::get_odps_partition_row_count(
       } else {
         j_partition_spec = env->NewStringUTF(temp_str.ptr());
       }
+
+      OX(j_session_id = env->NewStringUTF(""));
       if (OB_FAIL(ret)) {
         /* do nothing */
       } else if (nullptr == j_partition_spec) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get partition spec in jstring", K(ret), K(partition_spec));
+      } else if (nullptr == j_session_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get session id in jstring", K(ret));
       } else {
         jlong result = env->CallLongMethod(
-            jni_scanner_obj_, mid, j_partition_spec);
-        if (OB_FAIL(check_jni_exception_(env))) {
+            jni_scanner_obj_, mid, j_partition_spec, j_session_id);
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           LOG_WARN("failed to get partition row count", K(ret));
         } else {
           row_count = static_cast<int64_t>(result);
         }
         // Note: release resource
         env->DeleteLocalRef(j_partition_spec);
+        env->DeleteLocalRef(j_session_id);
       }
     }
   }
@@ -1087,14 +1174,14 @@ int ObOdpsJniReader::get_odps_mirror_data_columns(ObIAllocator &allocator,
   if (OB_SUCC(ret)) {
     jmethodID mid = env->GetMethodID(jni_scanner_cls_, mode.ptr(),
                                      "()Ljava/util/List;");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("find method with exception", K(ret));
     } else if (nullptr == mid) {
       ret = OB_JNI_ERROR;
       LOG_WARN("faild to get the column names method", K(ret));
     } else {
       jobject mirror_column_list = env->CallObjectMethod(jni_scanner_obj_, mid);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to get partition specs list", K(ret));
       } else if (nullptr == mirror_column_list) {
         ret = OB_INVALID_ARGUMENT;

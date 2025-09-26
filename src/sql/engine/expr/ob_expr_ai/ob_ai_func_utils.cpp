@@ -1257,6 +1257,10 @@ int ObAIFuncUtils::get_complete_provider(ObIAllocator &allocator, ObString &prov
     LOG_WARN("this provider current not support", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this provider current not support");
   }
+  if (OB_SUCC(ret) && OB_ISNULL(complete_provider)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to allocate memory for complete_provider", K(ret));
+  }
   return ret;
 }
 
@@ -1279,6 +1283,10 @@ int ObAIFuncUtils::get_embed_provider(ObIAllocator &allocator, ObString &provide
     LOG_WARN("this provider current not support", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this provider current not support");
   }
+  if (OB_SUCC(ret) && OB_ISNULL(embed_provider)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to allocate memory for embed_provider", K(ret));
+  }
   return ret;
 }
 
@@ -1297,6 +1305,10 @@ int ObAIFuncUtils::get_rerank_provider(ObIAllocator &allocator, ObString &provid
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("this provider current not support", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this provider current not support");
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(rerank_provider)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to allocate memory for rerank_provider", K(ret));
   }
   return ret;
 }

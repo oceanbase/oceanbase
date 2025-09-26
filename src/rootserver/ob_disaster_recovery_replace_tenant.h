@@ -26,7 +26,7 @@ class ObDRReplaceTenant
 {
 public:
   const static int64_t REPLACE_TENANT_TIMEOUT = 10L * 60L * 1000L * 1000L; // 10 minutes
-  const static int64_t RETRY_INTERVAL_US = 100L * 1000L; // 100ms
+  const static int64_t RETRY_INTERVAL_MS = 100L * 1000L; // 100ms
 
   ObDRReplaceTenant() : inited_(false),
                         ctx_(),
@@ -54,6 +54,7 @@ private:
   int set_finish_replace_sys_();
   int check_cluster_id_();
   int check_and_init_ss_info_();
+  int check_ss_cluster_info_();
   int create_unit_();
   int replace_sys_tenant_();
   int replace_sys_tenant_ls_(const share::ObLSID &ls_id);
@@ -79,6 +80,8 @@ private:
   int correct_max_resource_id_(common::ObMySQLTransaction &trans);
   int record_history_table_(common::ObMySQLTransaction &trans);
   int clean_up_on_failure_();
+public:
+  static int get_logservice_cluster_id(uint64_t &logservice_cluster_id);
 private:
   bool inited_;
   ObTimeoutCtx ctx_;

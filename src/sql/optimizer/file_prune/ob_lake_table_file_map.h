@@ -58,6 +58,22 @@ public:
   ObSEArray<sql::ObILakeTableFile*, 8> values_;
 };
 
+struct ObOdpsPartitionKey
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObOdpsPartitionKey();
+  ObOdpsPartitionKey(uint64_t table_ref_id, const ObString &partition_str);
+  int assign(const ObOdpsPartitionKey &other);
+  void reset();
+  int hash(uint64_t &hash_val) const;
+  bool operator== (const ObOdpsPartitionKey &other) const;
+  TO_STRING_KV(K_(table_ref_id), K_(partition_str));
+
+  uint64_t table_ref_id_;
+  ObString partition_str_;
+};
+
 }
 }
 #endif

@@ -49,19 +49,35 @@ int ObJavaUtils::load_routine_jar(const ObString &jar, jobject &class_loader)
     } else if (OB_ISNULL(loader_clazz) || OB_ISNULL(loader_constructor)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL loader_clazz or loader_constructor", K(ret), K(loader_clazz), K(loader_constructor));
-    } else if (OB_ISNULL(loader = env->NewObject(loader_clazz,
-                                                  loader_constructor))) {
-      ret = OB_ERR_UNEXPECTED;
+    } else if (FALSE_IT(loader = env->NewObject(loader_clazz,
+                                                loader_constructor))) {
+      // unreachable
+    } else if (OB_FAIL(ObJavaUtils::exception_check(env))) {
       LOG_WARN("failed to construct ObPLJavaUDFClassLoader object", K(ret));
-    } else if (OB_ISNULL(load_jar = env->GetMethodID(loader_clazz, "loadJar", "([B)V"))) {
+    } else if (OB_ISNULL(loader)) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unepxected NULL ObPLJavaUDFClassLoader object", K(ret));
+    } else if (FALSE_IT(load_jar = env->GetMethodID(loader_clazz, "loadJar", "([B)V"))) {
+      // unreachable
+    } else if (OB_FAIL(ObJavaUtils::exception_check(env))) {
       LOG_WARN("failed to find loadJar method in ObPLJavaUDFClassLoader object", K(ret));
-    } else if (OB_ISNULL(jar_content = env->NewByteArray(jar.length()))) {
+    } else if (OB_ISNULL(load_jar)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to construct byte array", K(ret));
-    } else if (OB_ISNULL(jar_content_ptr = env->GetByteArrayElements(jar_content, nullptr))) {
+      LOG_WARN("unexpected NULL loadJar method in ObPLJavaUDFClassLoader object", K(ret));
+    } else if (FALSE_IT(jar_content = env->NewByteArray(jar.length()))) {
+      // unreachable
+    } else if (OB_FAIL(ObJavaUtils::exception_check(env))) {
+      LOG_WARN("failed to NewByteArray", K(ret));
+    } else if (OB_ISNULL(jar_content)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get jar_content ptr", K(ret));
+      LOG_WARN("unexpected NULL jar_content", K(ret));
+    } else if (FALSE_IT(jar_content_ptr = env->GetByteArrayElements(jar_content, nullptr))) {
+      // unreachable
+    } else if (OB_FAIL(ObJavaUtils::exception_check(env))) {
+      LOG_WARN("failed to construct ObPLJavaUDFClassLoader object", K(ret));
+    } else if (OB_ISNULL(jar_content_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL jar_content_ptr", K(ret));
     } else {
       MEMCPY(jar_content_ptr, jar.ptr(), jar.length());
       env->ReleaseByteArrayElements(jar_content, jar_content_ptr, 0);
@@ -69,8 +85,9 @@ int ObJavaUtils::load_routine_jar(const ObString &jar, jobject &class_loader)
 
       if (OB_FAIL(exception_check(env))) {
         LOG_WARN("failed to load jar", K(ret), K(jar));
-      } else {
-        class_loader = env->NewGlobalRef(loader);
+      } else if (OB_ISNULL(class_loader = env->NewGlobalRef(loader))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to NewGlobalRef", K(ret));
       }
     }
 

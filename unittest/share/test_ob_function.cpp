@@ -216,7 +216,7 @@ TEST_F(TestObFunction, construct_path) {
 }
 
 struct BigObj {
-  unsigned char val[41];
+  unsigned char val[241];
 } ;
 
 struct SmallObj {

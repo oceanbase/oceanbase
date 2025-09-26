@@ -637,7 +637,8 @@ public:
       grouping_dop_(ObGlobalHint::UNSET_PARALLEL),
       grouping_set_info_(NULL),
       ignore_stmt_distinct_or_rollup_(false),
-      real_groupingset_agg_items_()
+      real_groupingset_agg_items_(),
+      is_trans_distinct_agg_(false)
     {
     }
     virtual ~GroupingOpHelper() {}
@@ -719,6 +720,7 @@ public:
     bool ignore_stmt_distinct_or_rollup_;
 
     ObSEArray<ObAggFunRawExpr *, 4> real_groupingset_agg_items_;
+    bool is_trans_distinct_agg_;
 
     TO_STRING_KV(K_(can_storage_pushdown),
                  K_(can_basic_pushdown),
@@ -748,7 +750,8 @@ public:
                  K_(non_distinct_aggr_items),
                  K_(grouping_dop),
                  K_(ignore_stmt_distinct_or_rollup),
-                 K_(real_groupingset_agg_items));
+                 K_(real_groupingset_agg_items),
+                 K_(is_trans_distinct_agg));
   };
 
   /**

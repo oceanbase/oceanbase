@@ -191,12 +191,13 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(tablet_id), K_(max_major_sstable_snapshot), K_(minor_sstable_scn_range),
-      K_(ddl_sstable_scn_range));
+      K_(ddl_sstable_scn_range), K_(inc_major_ddl_sstable_end_scn));
 
   common::ObTabletID tablet_id_;
   int64_t max_major_sstable_snapshot_;
   share::ObScnRange minor_sstable_scn_range_;
   share::ObScnRange ddl_sstable_scn_range_;
+  share::SCN inc_major_ddl_sstable_end_scn_;
 };
 
 struct ObCopyTabletsSSTableInfoArg final

@@ -416,7 +416,7 @@ int ObIndexBlockTreeTraverser::PathNodeCaches::get(const int64_t level,
     } else if (OB_FAIL(prefetch(*micro_index_info, cache_node->micro_handle_))) {
       LOG_WARN("Fail to prefetch next level micro block data", KR(ret), K(micro_index_info));
     } else if (OB_FAIL(cache_node->micro_handle_.get_micro_block_data(
-                   nullptr, cache_node->micro_data_, micro_index_info->is_data_block()))) {
+                  &cache_node->macro_block_reader_, cache_node->micro_data_, micro_index_info->is_data_block()))) {
       LOG_WARN("Fail to get index block data", KR(ret), K(cache_node->micro_data_));
     } else if (!micro_index_info->is_data_block()
                && OB_FAIL(

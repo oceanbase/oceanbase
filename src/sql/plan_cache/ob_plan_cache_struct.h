@@ -413,7 +413,6 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       exist_local_plan_(false),
       compare_plan_(nullptr),
       flag_(0),
-      parameterized_ps_sql_(),
       regenerating_expired_plan_(false),
       params_constraint_(allocator)
   {
@@ -493,7 +492,6 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_arraybinding_),
     K(exist_local_plan_),
     K(flag_),
-    K(parameterized_ps_sql_),
     K(regenerating_expired_plan_),
     K(params_constraint_)
     );
@@ -576,7 +574,6 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     };
     uint16_t flag_;
   };
-  common::ObString parameterized_ps_sql_;
   bool regenerating_expired_plan_;
   common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
 };

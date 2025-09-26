@@ -832,7 +832,7 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
                                                ObHTableUtils::is_tablegroup_req(table_name,
                                                query_session_->get_session_type()),
                                                arg_ctx.get_credential()))) {
-      LOG_WARN("fail to init query ctx", K(ret), K(tablet_id), K(tablet_id), K(table_name));
+      LOG_WARN("fail to init query ctx", K(ret), K(tablet_id), K(table_name));
     }
   }
 

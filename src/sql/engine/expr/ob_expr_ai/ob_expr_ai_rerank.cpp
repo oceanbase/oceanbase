@@ -45,25 +45,50 @@ int ObExprAIRerank::calc_result_typeN(ObExprResType &type,
   UNUSED(type_ctx);
   UNUSED(types_stack);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(param_num != 3)) {
+  if (OB_UNLIKELY(param_num < 3 || param_num > 4)) {
     ObString func_name_(get_name());
     ret = OB_ERR_PARAM_SIZE;
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
   } else {
-    types_stack[MODEL_IDX].set_calc_type(ObVarcharType);
-    types_stack[MODEL_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-    types_stack[QUERY_IDX].set_calc_type(ObVarcharType);
-    types_stack[QUERY_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    if (!ob_is_string_tc(types_stack[MODEL_IDX].get_type())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid param type", K(ret), K(types_stack[MODEL_IDX]));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "model key must be string type");
+    } else if (!ob_is_string_tc(types_stack[QUERY_IDX].get_type())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid param type", K(ret), K(types_stack[QUERY_IDX]));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "query must be string type");
+    } else {
+      types_stack[MODEL_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      types_stack[QUERY_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    }
     ObObjType in_type = types_stack[DOCUMENTS_IDX].get_type();
-    if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, DOCUMENTS_IDX, N_AI_RERANK))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, DOCUMENTS_IDX, N_AI_RERANK))) {
       LOG_WARN("wrong type for json config.", K(ret), K(types_stack[DOCUMENTS_IDX].get_type()));
     } else if (ob_is_string_type(in_type) && types_stack[DOCUMENTS_IDX].get_collation_type() != CS_TYPE_BINARY) {
       if (types_stack[DOCUMENTS_IDX].get_charset_type() != CHARSET_UTF8MB4) {
         types_stack[DOCUMENTS_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
       }
     }
-    type.set_json();
-    type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+    if (OB_FAIL(ret)) {
+    } else if (param_num == 4) {
+      ObObjType doc_key_type = types_stack[DOC_KEY_IDX].get_type();
+      if (doc_key_type == ObNullType) {
+      } else if (doc_key_type == ObJsonType) {
+      } else if (ob_is_string_type(doc_key_type)) {
+        types_stack[DOC_KEY_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid param type", K(ret), K(types_stack[DOC_KEY_IDX]));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "doc key must be string type");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      type.set_json();
+      type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+    }
   }
   return ret;
 }
@@ -74,7 +99,8 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   ObDatum *arg_model_id = nullptr;
   ObDatum *arg_query = nullptr;
   ObDatum *arg_documents = nullptr;
-  if (OB_FAIL(expr.eval_param_value(ctx, arg_model_id, arg_query, arg_documents))) {
+  ObDatum *arg_doc_key = nullptr;
+  if (OB_FAIL(expr.eval_param_value(ctx, arg_model_id, arg_query, arg_documents, arg_doc_key))) {
     LOG_WARN("evaluate parameters failed", K(ret));
   } else if (arg_model_id->is_null() || arg_query->is_null() || arg_documents->is_null()) {
     ret = OB_INVALID_ARGUMENT;
@@ -94,10 +120,10 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ObJsonArray *result_array = nullptr;
     ObIJsonBase *j_base = nullptr;
     int64_t batch_size = 20; // max batch size for rerank
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(
-                   &temp_allocator, arg_documents->get_string(),
-                   ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base))) {
-      LOG_WARN("fail to get json base", K(ret), K(arg_documents->get_string()));
+    bool is_null_result = false;
+    if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, DOCUMENTS_IDX,
+          j_base, is_null_result))) {
+      LOG_WARN("get_json_doc failed", K(ret));
     } else if (OB_ISNULL(j_base)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("j_base is null", K(ret));
@@ -107,6 +133,12 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (OB_ISNULL(document_array = static_cast<ObJsonArray *>(j_base))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("document_array is null", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(arg_doc_key)) {
+      ObString doc_key = arg_doc_key->get_string();
+      return eval_ai_rerank_with_doc_key(expr, ctx, temp_allocator, model_id, query, document_array, doc_key, res);
     }
 
     if (OB_SUCC(ret)) {
@@ -155,6 +187,137 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         LOG_WARN("fail to pack json result", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObExprAIRerank::eval_ai_rerank_with_doc_key(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
+                                          ObString& model_id, ObString& query, ObJsonArray *document_array, ObString& doc_key, ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ObAIFuncExprInfo *info = static_cast<ObAIFuncExprInfo *>(expr.extra_info_);
+  ObJsonArray *doc_array = nullptr;
+  ObJsonArray *result_array = nullptr;
+  ObJsonArray *sorted_document_array = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("info is null", K(ret));
+  } else if (OB_FAIL(info->init(ctx.exec_ctx_, model_id))) {
+    LOG_WARN("fail to get model info", K(ret));
+  } else if (OB_FAIL(get_doc_array_from_documents_array_with_key(allocator, document_array, doc_key, doc_array))) {
+    LOG_WARN("fail to get doc array", K(ret));
+  } else {
+    ObAIFuncModel model(allocator, *info);
+    if (OB_FAIL(model.call_rerank(query, doc_array, result_array))) {
+      LOG_WARN("fail to call rerank", K(ret));
+    } else if (OB_FAIL(sort_document_array_by_model_result(allocator, document_array, result_array, sorted_document_array))) {
+      LOG_WARN("fail to sort document array", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObString raw_str;
+    if (OB_FAIL(sorted_document_array->get_raw_binary(raw_str, &allocator))) {
+      LOG_WARN("json extarct get result binary failed", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
+      LOG_WARN("fail to pack json result", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprAIRerank::get_doc_array_from_documents_array_with_key(ObIAllocator &allocator, ObJsonArray *document_object_array, ObString &doc_key, ObJsonArray *&doc_array)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(document_object_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("document_object_array is null", K(ret));
+  } else if (doc_key.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("doc_key is empty", K(ret));
+  } else {
+    ObJsonArray *doc_array_obj = nullptr;
+    if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(allocator, doc_array_obj))) {
+      LOG_WARN("fail to get json array", K(ret));
+    } else {
+      int64_t count = document_object_array->element_count();
+      ObJsonNode *doc_node = nullptr;
+      ObJsonNode *doc_value_node = nullptr;
+      ObJsonObject *doc_obj = nullptr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+        doc_node = document_object_array->get_value(i);
+        if (OB_ISNULL(doc_node)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("doc_node is null", K(ret));
+          LOG_USER_ERROR (OB_INVALID_ARGUMENT, "ai_rerank, document_array element is null");
+        } else if (doc_node->json_type() != ObJsonNodeType::J_OBJECT) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("doc_node is not object", K(ret));
+          LOG_USER_ERROR (OB_INVALID_ARGUMENT, "ai_rerank, document_array element is not object");
+        } else {
+          doc_obj = static_cast<ObJsonObject *>(doc_node);
+          doc_value_node = doc_obj->get_value(doc_key);
+          if (OB_ISNULL(doc_value_node)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("doc_value_node is null", K(ret));
+            LOG_USER_ERROR (OB_INVALID_ARGUMENT, "ai_rerank, the value for given doc key is null");
+          } else if (doc_value_node->json_type() != ObJsonNodeType::J_STRING) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("doc_value_node is not string", K(ret));
+            LOG_USER_ERROR (OB_INVALID_ARGUMENT, "ai_rerank, the value for given doc key is not string");
+          } else if (OB_FAIL(doc_array_obj->append(doc_value_node))) {
+            LOG_WARN("fail to append", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      doc_array = doc_array_obj;
+    }
+  }
+  return ret;
+}
+
+int ObExprAIRerank::sort_document_array_by_model_result(ObIAllocator &allocator, ObJsonArray *document_array, ObJsonArray *model_result_array, ObJsonArray *&sorted_document_array)
+{
+  INIT_SUCC(ret);
+  ObJsonArray *sorted_document_array_obj = nullptr;
+  if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(allocator, sorted_document_array_obj))) {
+    LOG_WARN("fail to get json array", K(ret));
+  } else {
+    int64_t count = model_result_array->element_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
+      ObJsonObject *model_result_obj = static_cast<ObJsonObject *>(model_result_array->get_value(i));
+      if (OB_ISNULL(model_result_obj)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("model_result_obj is null", K(ret));
+      } else {
+        ObJsonInt *index_value = static_cast<ObJsonInt *>(model_result_obj->get_value(INDEX_KEY));
+        ObJsonDouble *score_value = static_cast<ObJsonDouble *>(model_result_obj->get_value(SCORE_KEY));
+        if (OB_ISNULL(index_value) || OB_ISNULL(score_value)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index_value or score_value is null", K(ret));
+        } else {
+          int64_t index = index_value->value();
+          ObJsonObject *origin_obj = static_cast<ObJsonObject *>(document_array->get_value(index));
+          ObJsonObject *new_obj = nullptr;
+          if (OB_ISNULL(origin_obj)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("origin_obj is null", K(ret));
+          } else if (OB_ISNULL(new_obj = static_cast<ObJsonObject *>(origin_obj->clone(&allocator, true)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new_obj is null", K(ret));
+          } else if (OB_FAIL(new_obj->add(MODEL_SCORE_KEY, score_value))) {
+            LOG_WARN("fail to add model_score", K(ret));
+          } else if (OB_FAIL(sorted_document_array_obj->append(new_obj))) {
+            LOG_WARN("fail to append", K(ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    sorted_document_array = sorted_document_array_obj;
   }
   return ret;
 }

@@ -916,6 +916,10 @@ typedef enum ObItemType
   T_FUN_SYS_L2_SQUARED = 1786,
   T_FUN_SYS_SEMANTIC_DISTANCE = 1787,
   T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE = 1788,
+  T_FUN_SYS_VECTOR_SIMILARITY = 1789,
+  T_FUN_SYS_VECTOR_L2_SIMILARITY = 1790,
+  T_FUN_SYS_VECTOR_IP_SIMILARITY = 1791,
+  T_FUN_SYS_VECTOR_COS_SIMILARITY = 1792,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -970,6 +974,7 @@ typedef enum ObItemType
   T_FUN_SYS_FORMAT_PROFILE = 1927, // format query profile
   T_FUN_SYS_EMBEDDED_VEC = 1928,
   T_FUN_SYS_AI_PROMPT = 1929,
+  T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -2939,6 +2944,7 @@ typedef enum ObItemType
   T_TRANSITION = 4912,
   T_FUN_ES_SCORE = 4913, // fulltext index for ES SQL
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
+  T_HYBRID_SEARCH_EXPRESSION = 4915,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -1473,3 +1473,95 @@ int ObArchivePersistHelper::clean_round_comment(common::ObISQLClient &proxy, con
 
   return ret;
 }
+
+// Get the first piece which start scn is not greater than start_scn
+// and the next piece which checkpoint scn is not less than end_scn
+// Note: the two pieces are continuous if they has same round_id, otherwise not continuous.
+int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
+    common::ObISQLClient &proxy, const int64_t dest_id,
+    const share::SCN &start_scn, const share::SCN &end_scn, bool &is_continuous) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArray<ObTenantArchivePieceAttr> piece_list;
+  ObTenantArchivePieceAttr floor_piece;
+  ObTenantArchivePieceAttr ceil_piece;
+  bool floor_piece_found = false;
+  bool ceil_piece_found = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0 || !start_scn.is_valid() || !end_scn.is_valid() || start_scn >= end_scn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_id), K(start_scn), K(end_scn));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt( // Get the latest piece whose start_scn <= start_scn
+        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s<=%ld order by %s desc limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
+        OB_STR_TENANT_ID, tenant_id_,
+        OB_STR_DEST_ID, dest_id,
+        OB_STR_FILE_STATUS, OB_STR_DELETED,
+        OB_STR_START_SCN, start_scn.get_val_for_inner_table_field(),
+        OB_STR_PIECE_ID))) {
+      LOG_WARN("failed to assign sql format for floor piece", K(ret));
+    } else {
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+          LOG_WARN("failed to execute sql for floor piece", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null for floor piece", K(ret), K(sql));
+        } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+          LOG_WARN("failed to parse floor piece result", K(ret));
+        } else if (piece_list.count() == 1) {
+          floor_piece = piece_list.at(0);
+          floor_piece_found = true;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    piece_list.reset();
+    sql.reset();
+    if (OB_FAIL(sql.assign_fmt( // Get the first piece whose checkpoint_scn >= end_scn
+        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld order by %s limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
+        OB_STR_TENANT_ID, tenant_id_,
+        OB_STR_DEST_ID, dest_id,
+        OB_STR_FILE_STATUS, OB_STR_DELETED,
+        OB_STR_CHECKPOINT_SCN, end_scn.get_val_for_inner_table_field(),
+        OB_STR_PIECE_ID))) {
+      LOG_WARN("failed to assign sql format for ceil piece", K(ret));
+    } else {
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+          LOG_WARN("failed to execute sql for ceil piece", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null for ceil piece", K(ret), K(sql));
+        } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+          LOG_WARN("failed to parse ceil piece result", K(ret));
+        } else if (piece_list.count() == 1) {
+          ceil_piece = piece_list.at(0);
+          ceil_piece_found = true;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (floor_piece_found && ceil_piece_found && floor_piece.key_.round_id_ == ceil_piece.key_.round_id_) {
+      is_continuous = true;
+      LOG_INFO("success to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
+    } else {
+      is_continuous = false;
+      LOG_INFO("fail to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
+    }
+  }
+  return ret;
+}

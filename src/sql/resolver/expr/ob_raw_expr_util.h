@@ -106,6 +106,30 @@ private:
   ObIAllocator *allocator_;
 };
 
+class ObExecParamExtractor
+{
+public:
+ObExecParamExtractor();
+  ObExecParamExtractor(ObRawExprFactory &expr_factory)
+                     : expr_factory_(expr_factory),
+                       current_exec_params_(NULL) {}
+  virtual ~ObExecParamExtractor() {}
+
+  int extract(ObRawExpr *outer_val_expr);
+
+  inline void set_current_exec_params(ObQueryRefRawExpr * query_ref)
+  { current_exec_params_ = query_ref; }
+
+  int is_existed(const ObRawExpr *target, bool &found);
+
+  int create_new_exec_param(ObRawExpr *target);
+  DISALLOW_COPY_AND_ASSIGN(ObExecParamExtractor);
+private:
+  ObRawExprFactory &expr_factory_;
+  ObQueryRefRawExpr *current_exec_params_;
+};
+
+
 class ObRawExprUniqueSet
 {
 public:
@@ -433,10 +457,8 @@ public:
                                 ObIArray<ObRawExpr *> &from,
                                 ObIArray<ObRawExpr *> &to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
-  static int contain_virtual_generated_column(ObRawExpr *&expr,
-                                  bool &is_contain_vir_gen_column);
-  static int extract_virtual_generated_column_parents(
-  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs);
+  static int extract_virtual_generated_columns(ObRawExpr *&expr,
+                                               ObIArray<ObRawExpr *> &vir_gen_columns);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
@@ -636,14 +658,17 @@ public:
                                                const ObSQLSessionInfo *session_info,
                                                ObIArray<common::ObString> &type_info_value);
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
-                                 ObQueryRefRawExpr *query_ref,
-                                 ObRawExpr *correlated_expr,
-                                 ObRawExpr *&exec_param);
-
-  static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params,
                                  ObRawExpr *correlated_expr,
                                  ObRawExpr *&exec_param);
+  static int get_exec_param_expr(ObRawExprFactory &expr_factory,
+                                 ObQueryRefRawExpr *query_ref,
+                                 ObRawExpr *correlated_expr,
+                                 ObRawExpr *&exec_param);
+  static int extract_exec_param_exprs(ObRawExprFactory &expr_factory,
+                                      ObQueryRefRawExpr *query_ref,
+                                      ObRawExpr *correlated_expr,
+                                      ObRawExpr *&param_expr);
   static int create_new_exec_param(ObQueryCtx *query_ctx,
                                    ObRawExprFactory &expr_factory,
                                    ObRawExpr *&expr,

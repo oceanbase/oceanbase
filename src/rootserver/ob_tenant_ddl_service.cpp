@@ -2289,6 +2289,10 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_ddl_thread_isolution("true");
   ObString config_name_spill_compression_codec("spill_compression_codec");
   ObString config_value_spill_compression_codec("LZ4");
+  ObString config_name_spf_batch_rescan("_enable_spf_batch_rescan");
+  ObString config_value_spf_batch_rescan("true");
+  ObString config_name_batch_rescan_flag("_enable_das_batch_rescan_flag");
+  ObString config_value_batch_rescan_flag("15");
 
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
@@ -2315,6 +2319,10 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_ddl_thread_isolution), K(config_value_ddl_thread_isolution));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_spill_compression_codec, config_value_spill_compression_codec))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_spill_compression_codec), K(config_value_spill_compression_codec));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_spf_batch_rescan, config_value_spf_batch_rescan))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_spf_batch_rescan), K(config_value_spf_batch_rescan));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_batch_rescan_flag, config_value_batch_rescan_flag))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_batch_rescan_flag), K(config_value_batch_rescan_flag));
       }
       // ---- Add new tenant init config above this line -----
       // At the same time, to verify modification, you need modify test case tenant_init_config(_oracle).test

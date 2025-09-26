@@ -1083,13 +1083,6 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
   } else {
     (void)inc_mem_used(plan->get_mem_size());
   }
-  #ifndef NDEBUG
-     ObCacheObjGuard guard(PC_DIAG_HANDLE);
-    if (OB_FAIL(get_plan_cache(pc_ctx, guard) || guard.cache_obj_ != plan)) {
-      LOG_WARN("There are some bugs in plan cache", K(ret), KP(plan));
-      ret = OB_ERR_UNEXPECTED;
-    }
-  #endif
 
   return ret;
 }

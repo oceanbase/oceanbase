@@ -19,6 +19,8 @@
 #include "share/ob_max_id_fetcher.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/restore/ob_restore_progress_display_mode.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
+#include "share/location_cache/ob_location_service.h" // for ObLocationService
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -45,10 +47,7 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.set_tenant_name(arg.tenant_name_);
     job.set_initiator_job_id(arg.initiator_job_id_);
     job.set_initiator_tenant_id(arg.initiator_tenant_id_);
-    /* set default restore type
-     * 1.physical restore: full.
-     * 2.recover table restore aux teannt: quick */
-    job.set_restore_type(is_recover_table ? QUICK_RESTORE_TYPE : FULL_RESTORE_TYPE);
+    job.set_recover_table(is_recover_table);
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }
@@ -1611,6 +1610,53 @@ int ObRestoreUtil::do_fill_backup_path_with_full_pieces_(
   return ret;
 }
 
+int ObRestoreUtil::fill_restore_type_(share::ObPhysicalRestoreJob &job, const share::ObBackupSetFileDesc &backup_file_desc)
+{
+  int ret = OB_SUCCESS;
+  /*
+   * Background:
+   *  4.3.3 share noting mode support quick restore.
+   *  4.3.5 support mds table standby tenant read.
+   *
+   * Normal physical restore:
+   * 1.Restore type not specified: full
+   * 2.Restore type specified: quick/full
+   *
+   * Recover table restore aux tenant:
+   * 1. Restore type not specified(invalid restore tyep):
+   *   Use quick restore if the backup set supports it;
+   *   otherwise, use full restore.
+   * 2. Restore type specified(valid restore type):
+   *     If specified as full, use full restore.
+   *     If specified as quick, use quick restore if supported by the backup set; otherwise, fall back to full restore.
+   */
+  const bool is_allow_quick_restore = backup_file_desc.is_allow_quick_restore();
+  const bool is_allow_mds_standby_read =
+    ObTransferUtils::enable_transfer_dml_ctrl(backup_file_desc.tenant_compatible_);
+  const bool is_allow_quick_restore_aux_tenant = is_allow_quick_restore && is_allow_mds_standby_read;
+  const share::ObRestoreType restore_type = job.get_restore_type();
+  const bool is_restore_aux_tenant = job.get_recover_table();
+  const bool restore_type_not_specified = !restore_type.is_valid();
+
+  if (!is_restore_aux_tenant) {
+    if (restore_type_not_specified) {
+      // normal physical restore and restore type not specified
+      job.set_restore_type(FULL_RESTORE_TYPE);
+    }
+  } else {
+    if (restore_type_not_specified) {
+      // recover aux tenant and restore type not specified
+      job.set_restore_type(is_allow_quick_restore_aux_tenant ? QUICK_RESTORE_TYPE : FULL_RESTORE_TYPE);
+    } else if (job.get_restore_type().is_quick_restore() && !is_allow_quick_restore_aux_tenant) {
+      // recover aux tenant and using quick restore but backupset not support
+      job.set_restore_type(FULL_RESTORE_TYPE);
+    }
+  }
+
+  LOG_INFO("set restore type", "restore_type", job.get_restore_type());
+  return ret;
+}
+
 int ObRestoreUtil::do_fill_backup_info_(
     const share::ObBackupSetPath & backup_set_path,
     share::ObPhysicalRestoreJob &job)
@@ -1618,6 +1664,7 @@ int ObRestoreUtil::do_fill_backup_info_(
   int ret = OB_SUCCESS;
   storage::ObBackupDataStore store;
   ObBackupDataLSAttrDesc ls_info;
+  const bool is_restore_aux_tenant = job.get_recover_table();
   HEAP_VARS_2((ObExternBackupSetInfoDesc, backup_set_info),
     (ObExternTenantLocalityInfoDesc, locality_info)) {
     if (backup_set_path.is_empty()) {
@@ -1636,8 +1683,10 @@ int ObRestoreUtil::do_fill_backup_info_(
       LOG_WARN("failed to read ls attr info", K(ret), K(backup_set_info));
     } else if (OB_FAIL(check_backup_set_version_match_(backup_set_info.backup_set_file_))) {
       LOG_WARN("failed to check backup set version match", K(ret));
-    } else if (OB_FAIL(check_backup_set_compatible_(job.get_restore_type(), backup_set_info.backup_set_file_))) {
-      LOG_WARN("failed to check backup compatible", K(ret));
+    } else if (OB_FAIL(fill_restore_type_(job, backup_set_info.backup_set_file_))) {
+      LOG_WARN("failed to fill restore type", K(ret));
+    } else if (!is_restore_aux_tenant && OB_FAIL(check_backup_set_compatible_(job.get_restore_type(), backup_set_info.backup_set_file_))) {
+      LOG_WARN("failed to check physical restore backup compatible", K(ret));
     } else if (OB_FAIL(job.set_backup_tenant_name(locality_info.tenant_name_.ptr()))) {
       LOG_WARN("fail to set backup tenant name", K(ret), "tenant name", locality_info.tenant_name_);
     } else if (OB_FAIL(job.set_backup_cluster_name(locality_info.cluster_name_.ptr()))) {
@@ -2065,6 +2114,34 @@ int ObRestoreUtil::get_multi_path_backup_sys_time_zone_(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::notify_restore_service(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObNotifyTenantThreadArg arg;
+  int tmp_ret = OB_SUCCESS;
+  ObAddr leader;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+      || OB_UNLIKELY(!(is_user_tenant(tenant_id) || is_sys_tenant(tenant_id)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(meta_tenant_id, obrpc::ObNotifyTenantThreadArg::RESTORE_SERVICE))) {
+    LOG_WARN("fail to init notify tenant thread arg", KR(ret), K(meta_tenant_id));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is NULL", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                     meta_tenant_id, SYS_LS, false/*force_renew*/, leader))) {
+    LOG_WARN("failed to get ls leader", KR(ret), K(meta_tenant_id));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader).by(tenant_id)
+                        .timeout(GCONF.rpc_timeout).notify_tenant_thread(arg))) {
+    LOG_WARN("fail to send rpc", KR(ret), K(arg));
+  } else {
+    LOG_INFO("success to wakeup tenant restore service", KR(ret), K(meta_tenant_id));
   }
   return ret;
 }

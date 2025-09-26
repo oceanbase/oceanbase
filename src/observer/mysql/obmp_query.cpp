@@ -1030,7 +1030,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   SQL_INFO_GUARD(sql, session.get_cur_sql_id());
   ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator();
   SMART_VAR(ObMySQLResultSet, result, session, allocator) {
-    if (OB_FAIL(get_tenant_schema_info_(session.get_effective_tenant_id(),
+    ObString audit_sql;
+    ObString truncate_sql(min(sql.length(), session.get_tenant_query_record_size_limit()), sql.ptr());
+    if (enable_sql_audit && OB_FAIL(ob_write_string(allocator, truncate_sql, audit_sql))) {
+      LOG_WARN("fail to write sql to audit_sql", K(ret));
+    } else if (OB_FAIL(get_tenant_schema_info_(session.get_effective_tenant_id(),
                                         &cached_schema_info,
                                         schema_guard,
                                         tenant_version,
@@ -1272,8 +1276,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
       audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
       if (audit_record.sql_ == nullptr) {
-        audit_record.sql_ = const_cast<char *>(sql.ptr());
-        audit_record.sql_len_ = min(sql.length(), session.get_tenant_query_record_size_limit());
+        audit_record.sql_ = const_cast<char *>(audit_sql.ptr());
+        audit_record.sql_len_ = audit_sql.length();
         audit_record.sql_cs_type_ = session.get_local_collation_connection();
       }
       audit_record.ccl_rule_id_ = ctx_.ccl_rule_id_;
@@ -1680,8 +1684,8 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
       if (OB_SUCCESS != ret) {                  \
         EVENT_INC(SQL_FAIL_COUNT);              \
       }                                         \
+      EVENT_ADD(SQL_##type##_TIME, time_cost);  \
     }                                           \
-    EVENT_ADD(SQL_##type##_TIME, time_cost);    \
     break
   int64_t start_ts = 0;
   if (session.get_raw_audit_record().exec_timestamp_.multistmt_start_ts_ > 0) {

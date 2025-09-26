@@ -2524,6 +2524,13 @@ int ObTableSqlService::create_table(ObTableSchema &table,
     LOG_INFO("add_sequence for autoinc cost: ", K(cost_usec));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (table.get_storage_cache_policy().empty()) {
+    if (OB_FAIL(set_default_storage_cache_policy_for_table(tenant_id, table))) {
+      LOG_WARN("failed to set default storage cache policy for table", K(ret));
+    }
+  }
+
   bool only_history = false;
   uint64_t data_version = 0;
   const bool update_object_status_ignore_version = false;
@@ -3353,7 +3360,7 @@ int ObTableSqlService::gen_table_dml(
         "when tenant's data version is below 4.3.5.1", KP(ret), K(table));
   } else if (data_version < DATA_VERSION_4_3_4_0 &&
       (table.get_part_option().get_auto_part() == true ||
-       table.get_part_option().get_auto_part_size() >= ObPartitionOption::MIN_AUTO_PART_SIZE)) {
+       table.get_part_option().get_auto_part_size() >= ObPartitionOption::get_min_auto_part_size())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("auto partition is not supported "
         "when tenant's data version is below 4.4.0.0", KR(ret), K(table));
@@ -3478,7 +3485,7 @@ int ObTableSqlService::gen_partition_option_dml(const ObTableSchema &table, ObDM
              K(table));
   } else if (data_version < DATA_VERSION_4_3_4_0 &&
                (table.get_part_option().get_auto_part() == true ||
-                table.get_part_option().get_auto_part_size() >= ObPartitionOption::MIN_AUTO_PART_SIZE)) {
+                table.get_part_option().get_auto_part_size() >= ObPartitionOption::get_min_auto_part_size())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("auto partition is not supported "
              "when tenant's data version is below 4.4.0.0", KR(ret), K(table));

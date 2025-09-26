@@ -32,9 +32,8 @@ public:
   int init_from_json(const ObJsonObject &json_object);
   int assign(const Snapshot &other);
   int64_t get_convert_size() const;
-  int get_manifest_files(ObIAllocator &allocator,
-                         const ObString &access_info,
-                         ObIArray<ManifestFile *> &manifest_files) const;
+  int get_manifest_files(const ObString &access_info,
+                         ObIArray<ManifestFile *> &manifest_files);
   // int plan_files(ObIAllocator &allocator,
   //                const ObString &access_info,
   //                ObIArray<FileScanTask *> &file_scan_tasks) const;
@@ -56,6 +55,15 @@ public:
   static constexpr const char *MANIFESTS = "manifests";
   static constexpr const char *SUMMARY = "summary";
   static constexpr const char *SCHEMA_ID = "schema-id";
+
+private:
+  int get_manifest_files_(const ObString &access_info,
+                          ObIArray<ManifestFile *> &manifest_files) const;
+
+  // snapshot 一旦加载完成过一个 manifest file，这个字段就会被填充
+  // 后续该 snapshot 读取 manifest_file 直接从这个字段返回
+  // 有效减少内存开销
+  ObArray<ManifestFile *> cached_manifest_file_;
 };
 
 struct SnapshotLog

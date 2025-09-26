@@ -423,6 +423,7 @@ private:
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
                                     ObDASTabletLoc &tablet_loc,
+                                    const bool is_weak_read,
                                     const ObRoutePolicyType route_policy);
   int nonblock_get_candi_tablet_location(const ObDASTableLocMeta &loc_meta,
                                          const common::ObTabletID &tablet_id,

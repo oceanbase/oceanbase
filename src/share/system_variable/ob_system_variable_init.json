@@ -11811,5 +11811,37 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "sql_transpiler" : {
+    "id": 10754,
+    "name": "sql_transpiler",
+    "default_value": 0,
+    "base_value": 0,
+    "data_type": "enum",
+    "info": "control whether the sql transpiler is enabled. When enabled, PL/SQL functions are automatically transpiled into SQL expressions whenever possible, without user intervention.",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "enum_names": [
+      "OFF",
+      "ON",
+      "BASIC"
+    ],
+    "publish_version": "4.3.5.5",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "plsql_can_transform_sql_to_assign": {
+    "id": 10755,
+    "name": "plsql_can_transform_sql_to_assign",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "4.4.2.0",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

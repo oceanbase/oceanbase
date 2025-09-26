@@ -289,7 +289,7 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
           // this column has no stream, column_first_stream_idx is same with next column's first_stream_idx
           // or the stream count if this column is the last column.
           original_desc_.column_first_stream_idx_arr_[i] = stream_idx + 1;
-          pre_streams_len += sizeof(ObDictEncodingMeta);
+          pre_streams_len += original_desc_.column_meta_pos_arr_[i].len_;
         } else {
           // integer dict stream + dict ref stream
           stream_idx = stream_idx + 1;
@@ -313,7 +313,7 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
           // this column has no stream, column_first_stream_idx is same with next column's first_stream_idx
           // or the stream count if this column is the last column.
           original_desc_.column_first_stream_idx_arr_[i] = stream_idx + 1;
-          pre_streams_len += sizeof(ObDictEncodingMeta);
+          pre_streams_len += original_desc_.column_meta_pos_arr_[i].len_;
         } else {
           // is string dict, bytes stream has nothing to set, keep default value
           stream_idx = stream_idx + 1;

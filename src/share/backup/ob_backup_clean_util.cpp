@@ -255,7 +255,7 @@ int ObBackupCleanUtil::delete_backup_dir(
 }
 
 int ObBackupCleanUtil::lock_policy_table_then_check(
-      common::ObMySQLTransaction &trans, const uint64_t tenant_id, bool &policy_exists, bool log_only) {
+      common::ObMySQLTransaction &trans, const uint64_t tenant_id, const bool log_only, bool &policy_exists) {
   int ret = OB_SUCCESS;
   ObSqlString check_sql;
   if (OB_FAIL(oceanbase::transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(

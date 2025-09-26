@@ -56,7 +56,8 @@ protected:
 
   int resolve_assignments(const ParseNode &parse_node,
                           common::ObIArray<ObTableAssignment> &table_assigns,
-                          ObStmtScope scope);
+                          ObStmtScope scope,
+                          const bool is_insert_into_set = false);
 
   int resolve_column_and_values(const ParseNode &assign_list,
                                 ObIArray<ObColumnRefRawExpr *> &target_list,
@@ -211,7 +212,9 @@ protected:
                               bool& is_all_default);
   int build_row_for_empty_brackets(common::ObArray<ObRawExpr*> &value_row,
                                    ObInsertTableInfo& table_info);
-
+  int check_vec_hnsw_index_vid_opt(const ObTableAssignment &ta,
+                                   const ObTableSchema *table_schema,
+                                   bool &is_vec_hnsw_index_vid_opt);
   int check_update_part_key(const ObTableAssignment &ta,
                             uint64_t ref_table_id,
                             bool &is_updated,

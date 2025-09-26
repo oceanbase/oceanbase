@@ -204,7 +204,7 @@ ObTabletSplitCtx::ObTabletSplitCtx() :
     lock_(ObLatchIds::TABLET_SPLIT_CONTEXT_LOCK),
     is_inited_(false), complement_data_ret_(OB_SUCCESS), ls_handle_(), tablet_handle_(),
     index_builder_map_(), clipped_schemas_map_(),
-    skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
+    skipped_split_major_keys_(), row_inserted_(0), cg_row_inserted_(0), physical_row_count_(0),
     split_point_major_macros_(), split_point_minor_macros_(), parallel_cnt_of_each_sstable_(-1),
     split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1),
     split_majors_count_(-1), max_major_snapshot_(-1)

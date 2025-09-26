@@ -161,6 +161,8 @@ DROP TABLE t1;
 CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, INDEX (g));
 DROP TABLE t1;
 CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL);
+CREATE INDEX g_idx ON t1(g(25));
+ERROR 0A000: Not supported feature or function
 CREATE INDEX g_idx ON t1(g);
 DROP TABLE t1;
 CREATE TABLE t1 (g GEOMETRY SRID 0 NOT NULL, SPATIAL INDEX (g));
@@ -175,7 +177,7 @@ g POINT GENERATED ALWAYS AS (POINT(x, y)) NOT NULL SRID 0);
 CREATE INDEX g_idx ON t1(g);
 ERROR HY000: 'g' is not supported for generated columns.
 CREATE INDEX g_idx ON t1(g(25));
-ERROR HY000: 'g' is not supported for generated columns.
+ERROR 0A000: Not supported feature or function
 CREATE INDEX g_idx ON t1(g) USING BTREE;
 ERROR HY000: 'g' is not supported for generated columns.
 DROP TABLE t1;
@@ -185,6 +187,8 @@ CREATE TABLE t1 (x INTEGER,
 y INTEGER,
 g POINT AS (POINT(x, y)) STORED SRID 0 NOT NULL);
 CREATE INDEX g_idx ON t1(g(25));
+ERROR 0A000: Not supported feature or function
+CREATE INDEX g_idx ON t1(g);
 DROP TABLE t1;
 # Check error code order
 CREATE TABLE t1 (g GEOMETRY SRID 0, g1 point srid 0, x int, y int,g2 POINT GENERATED ALWAYS AS (POINT(x, y)) SRID 0);

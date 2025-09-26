@@ -2775,7 +2775,7 @@ int ObCreateTableResolver::set_index_option_to_arg()
     } else if (OB_FAIL(ob_write_string(*allocator_, comment_,
                                        index_arg_.index_option_.comment_))) {
       SQL_RESV_LOG(WARN, "set comment str failed", K(ret));
-    } else if (OB_FAIL(ob_write_string(*allocator_, storage_cache_policy_,
+    } else if (OB_FAIL(ob_write_string(*allocator_, index_storage_cache_policy_,
                    index_arg_.index_option_.storage_cache_policy_))) {
       SQL_RESV_LOG(WARN, "set storage cache policy failed", K(ret));
     } else {
@@ -3763,6 +3763,8 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
                                     part_info.part_func_exprs_,
                                     part_info.part_keys_))) {
         SQL_RESV_LOG(WARN, "resolve part func failed", KR(ret));
+      } else if (OB_FAIL(formalize_part_str(part_info.part_func_exprs_, func_expr_name))) {
+        LOG_WARN("failed to formalize part str");
       } else if (OB_FAIL(partition_option->set_part_expr(func_expr_name))) {
         SQL_RESV_LOG(WARN, "set partition express string failed", KR(ret));
       } else if (OB_FAIL(set_partition_keys(table_schema, part_info.part_keys_,

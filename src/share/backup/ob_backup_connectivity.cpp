@@ -1319,6 +1319,95 @@ int ObBackupStorageInfoOperator::update_last_check_time(
   return ret;
 }
 
+int ObBackupStorageInfoOperator::set_backup_dest_status(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupDest &backup_dest,
+    const bool is_deleting)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObDMLSqlSplicer dml;
+  int64_t affected_rows = 0;
+  bool is_deleting_already = false;
+  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(get_backup_dest_status(proxy, gen_user_tenant_id(tenant_id), backup_dest, is_deleting_already))) {
+    LOG_WARN("failed to get backup dest status", K(ret), K(tenant_id), K(backup_dest));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup dest not exist", K(tenant_id), K(backup_dest));
+      is_deleting_already = false;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_deleting_already == is_deleting) {
+    LOG_INFO("backup dest status have no change, skip update", K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, gen_user_tenant_id(tenant_id)))
+      || OB_FAIL(dml.add_pk_column(OB_STR_PATH, backup_dest.get_root_path().ptr()))
+      || OB_FAIL(dml.add_pk_column(OB_STR_BACKUP_DEST_ENDPOINT, backup_dest.get_storage_info()->endpoint_))
+      || OB_FAIL(dml.add_column(OB_STR_BACKUP_DEST_STATUS,
+          is_deleting ? OB_STR_BACKUP_DEST_STATUS_DELETING : OB_STR_BACKUP_DEST_STATUS_NORMAL))) {
+    LOG_WARN("failed to fill on item", K(ret), K(backup_dest));
+  } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
+    LOG_WARN("failed to splice update sql", K(ret));
+  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to execute sql", K(ret), K(sql));
+  } else if (1 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, invalid affected rows", K(ret), K(affected_rows));
+  } else {
+    LOG_INFO("change backup dest status", K(sql), K(tenant_id), K(backup_dest), K(is_deleting));
+  }
+  return ret;
+}
+
+int ObBackupStorageInfoOperator::get_backup_dest_status(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupDest &backup_dest,
+    bool &is_deleting)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  is_deleting = false;
+
+  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT %s FROM %s WHERE tenant_id = %lu AND path = '%s' AND endpoint = '%s'",
+      OB_STR_BACKUP_DEST_STATUS, OB_ALL_BACKUP_STORAGE_INFO_TNAME,
+      tenant_id, backup_dest.get_root_path().ptr(), backup_dest.get_storage_info()->endpoint_))) {
+    LOG_WARN("fail to assign sql", K(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        int64_t tmp_real_str_len = 0;
+        char status[OB_DEFAULT_STATUS_LENTH] = { 0 };
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_STATUS,
+          status, OB_DEFAULT_STATUS_LENTH, tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+        is_deleting = strcmp(status, OB_STR_BACKUP_DEST_STATUS_DELETING) == 0;
+      } else if (OB_ITER_END == ret) {
+        ret = OB_ENTRY_NOT_EXIST;
+        is_deleting = false;
+        LOG_INFO("path is not exist, it's not cleaning", K(ret), K(tenant_id));
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupStorageInfoOperator::get_check_file_name(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
@@ -1636,9 +1725,50 @@ int ObBackupStorageInfoOperator::get_backup_dest_extensions(
 }
 
 int ObBackupStorageInfoOperator::get_backup_dest_extension(
+    const uint64_t tenant_id,
+    const int64_t dest_id,
+    char *extension,
+    const int64_t buffer_len)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  common::ObISQLClient *proxy = GCTX.sql_proxy_;
+  if (OB_INVALID_ID == tenant_id || dest_id < OB_START_DEST_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(dest_id));
+  } else if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is NULL", K(ret), KP(proxy));
+  } else if (OB_FAIL(sql.assign_fmt("select %s FROM %s WHERE tenant_id = %lu AND %s = %ld",
+        OB_STR_BACKUP_DEST_EXTENSION, OB_ALL_BACKUP_STORAGE_INFO_TNAME, tenant_id, OB_STR_BACKUP_DEST_ID, dest_id))) {
+    LOG_WARN("fail to assign sql", K(ret), K(tenant_id), K(dest_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        int64_t tmp_real_str_len = 0;
+
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_EXTENSION,
+          extension, buffer_len, tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+int ObBackupStorageInfoOperator::get_backup_dest_extension(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const share::ObBackupDest &backup_dest,
+    const bool need_lock,
     char *extension,
     const int64_t buffer_len)
 {
@@ -1653,6 +1783,8 @@ int ObBackupStorageInfoOperator::get_backup_dest_extension(
       OB_STR_BACKUP_DEST_EXTENSION, OB_ALL_BACKUP_STORAGE_INFO_TNAME,
       tenant_id, backup_dest.get_root_path().ptr(), backup_dest.get_storage_info()->endpoint_))) {
     LOG_WARN("fail to assign sql", K(ret), K(tenant_id));
+  } else if (need_lock && OB_FAIL(sql.append_fmt(" for update"))) {
+    LOG_WARN("fail to append fmt", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
@@ -1668,7 +1800,7 @@ int ObBackupStorageInfoOperator::get_backup_dest_extension(
           extension, buffer_len, tmp_real_str_len);
         UNUSED(tmp_real_str_len);
       } else {
-        LOG_WARN("fail to get next row", K(ret));
+        LOG_WARN("fail to get next row", K(ret), K(sql));
       }
     }
   }
@@ -1947,7 +2079,6 @@ int ObBackupDestIOPermissionMgr::get_server_locality_info_(
   }
   return ret;
 }
-
 
 // extension_ may has contain multiple pieces of information, such as 'appid=xxx&zone=z1,z2;z3&s3_region=xxx'
 // src info can have various types
@@ -2382,7 +2513,7 @@ int ObBackupDestIOPermissionMgr::get_backup_path_src_info(
       LOG_WARN("fail to get backup path str", K(ret), K(tenant_id));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(sql_proxy,
                                                       gen_user_tenant_id(tenant_id_),
-                                                      dest, extension, sizeof(extension)))) {
+                                                      dest, false/*need_lock*/, extension, sizeof(extension)))) {
       LOG_WARN("failed to get backup dest extension", K(ret), K(tenant_id));
     } else if (OB_FAIL(get_src_info_from_extension(ObString(extension), src_locality, src_locality_length, src_type))) {
       LOG_WARN("failed to get src info from extension", K(ret));
@@ -2400,8 +2531,7 @@ int ObBackupDestIOPermissionMgr::check_zone_valid(const char *src_info)
   int ret = OB_SUCCESS;
   ObArray<share::ObBackupZone> backup_zone_array;
   ObArray<ObZone> zone_array;
-  const int64_t ERROR_MSG_LENGTH = 1024;
-  char error_msg[ERROR_MSG_LENGTH] = "";
+  char error_msg[OB_BACKUP_ZONE_ERROR_MSG_LENGTH] = "";
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
 
@@ -2412,7 +2542,13 @@ int ObBackupDestIOPermissionMgr::check_zone_valid(const char *src_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", K(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(share::ObBackupUtils::parse_backup_format_input(ObString(src_info), backup_zone_array))) {
-    LOG_WARN("failed to parse backup format input", K(ret), K(src_info));
+    if (OB_TMP_FAIL(databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
+                                        pos, "failed to parse zone: zone=%s.", src_info))) {
+      LOG_WARN("failed to set error msg", KR(ret), KR(tmp_ret), K(error_msg), K(pos), K(src_info));
+    } else {
+      LOG_USER_ERROR(OB_BACKUP_ZONE_IDC_REGION_INVALID, error_msg);
+    }
+    LOG_WARN("failed to parse backup format input", KR(ret), K(src_info));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_zone_list(*GCTX.sql_proxy_, zone_array))) {
     LOG_WARN("failed to get region list", K(ret));
   } else {
@@ -2429,7 +2565,7 @@ int ObBackupDestIOPermissionMgr::check_zone_valid(const char *src_info)
       if (!found) {
         ret = OB_BACKUP_ZONE_IDC_REGION_INVALID;
         LOG_WARN("src info input is not exist in zone array", K(ret), K(src_info), K(zone_array));
-        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
             pos, "zone do not exist in zone list. can not set zone : %s.", src_info))) {
           LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
         } else {
@@ -2446,8 +2582,7 @@ int ObBackupDestIOPermissionMgr::check_region_valid(const char *src_info)
   int ret = OB_SUCCESS;
   ObArray<share::ObBackupRegion> backup_region_array;
   ObArray<ObRegion> region_array;
-  const int64_t ERROR_MSG_LENGTH = 1024;
-  char error_msg[ERROR_MSG_LENGTH] = "";
+  char error_msg[OB_BACKUP_ZONE_ERROR_MSG_LENGTH] = "";
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
 
@@ -2458,7 +2593,13 @@ int ObBackupDestIOPermissionMgr::check_region_valid(const char *src_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", K(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(share::ObBackupUtils::parse_backup_format_input(ObString(src_info), backup_region_array))) {
-    LOG_WARN("failed to parse backup format input", K(ret), K(src_info));
+    if (OB_TMP_FAIL(databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
+                                        pos, "failed to parse region: region=%s.", src_info))) {
+      LOG_WARN("failed to set error msg", KR(ret), KR(tmp_ret), K(error_msg), K(pos), K(src_info));
+    } else {
+      LOG_USER_ERROR(OB_BACKUP_ZONE_IDC_REGION_INVALID, error_msg);
+    }
+    LOG_WARN("failed to parse backup format input", KR(ret), K(src_info));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_region_list(*GCTX.sql_proxy_, region_array))) {
     LOG_WARN("failed to get region list", K(ret));
   } else {
@@ -2475,7 +2616,7 @@ int ObBackupDestIOPermissionMgr::check_region_valid(const char *src_info)
       if (!found) {
         ret = OB_BACKUP_ZONE_IDC_REGION_INVALID;
         LOG_WARN("src info input is not exist in region array", K(ret), K(src_info), K(region_array));
-        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
             pos, "region do not exist in region list. can not set region : %s.", src_info))) {
           LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
         } else {
@@ -2492,19 +2633,23 @@ int ObBackupDestIOPermissionMgr::check_idc_valid(const char *src_info)
   int ret = OB_SUCCESS;
   ObArray<share::ObBackupIdc> backup_idc_array;
   ObArray<ObIDC> idc_array;
-  const int64_t ERROR_MSG_LENGTH = 1024;
-  char error_msg[ERROR_MSG_LENGTH] = "";
+  char error_msg[OB_BACKUP_ZONE_ERROR_MSG_LENGTH] = "";
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
-
   if (OB_ISNULL(src_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(src_info));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", K(ret), KP(GCTX.sql_proxy_));
+    LOG_WARN("ptr is  null", K(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(share::ObBackupUtils::parse_backup_format_input(ObString(src_info), backup_idc_array))) {
-    LOG_WARN("failed to parse backup format input", K(ret), K(src_info));
+    if (OB_TMP_FAIL(databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
+                                        pos, "failed to parse idc: idc=%s.", src_info))) {
+      LOG_WARN("failed to set error msg", KR(ret), KR(tmp_ret), K(error_msg), K(pos), K(src_info));
+    } else {
+      LOG_USER_ERROR(OB_BACKUP_ZONE_IDC_REGION_INVALID, error_msg);
+    }
+    LOG_WARN("failed to parse backup format input", KR(ret), K(src_info));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_idc_list(*GCTX.sql_proxy_, idc_array))) {
     LOG_WARN("failed to get idc list", K(ret));
   } else {
@@ -2521,7 +2666,7 @@ int ObBackupDestIOPermissionMgr::check_idc_valid(const char *src_info)
       if (!found) {
         ret = OB_BACKUP_ZONE_IDC_REGION_INVALID;
         LOG_WARN("idc is not exist in idc list", K(ret), K(src_info), K(idc_array));
-        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, OB_BACKUP_ZONE_ERROR_MSG_LENGTH,
             pos, "idc do not exist in idc list. can not set idc : %s.", src_info))) {
           LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
         } else {
@@ -2549,7 +2694,7 @@ int ObBackupChangeExternalStorageDestUtil::change_src_info(
     char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
     const char *src_info = option.src_info_;
     if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(
-              proxy, tenant_id, backup_dest, extension, sizeof(extension)))) {
+              proxy, tenant_id, backup_dest, true/*need_lock*/, extension, sizeof(extension)))) {
       if (OB_ITER_END == ret) {
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("path is not exist, please check the path", K(ret), K(tenant_id));
@@ -2746,6 +2891,7 @@ int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
     common::ObIDC idc;
     common::ObZone zone;
     bool locality_valid = false;
+    int64_t priority = 0;
     if (OB_FAIL(get_src_info_from_extension(extension, src_info))) {
       LOG_WARN("failed to get src info from extension", K(ret), K(extension));
     }
@@ -2757,7 +2903,7 @@ int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
       locality_valid = false;
       if (OB_FAIL(get_server_locality_info_(server, region, idc, zone))) {
         LOG_WARN("failed to get server locality info", K(ret), K(server));
-      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid))) {
+      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid, priority))) {
         LOG_WARN("failed to check locality info valid", K(ret), K(server), K(region), K(idc), K(zone));
       } else if (locality_valid) {
         if (OB_FAIL(filtered_server_list.push_back(server))) {
@@ -2784,6 +2930,50 @@ int ObBackupDestIOPermissionMgr::get_src_info_from_extension(const char *extensi
     } else if ('\0' !=  locality_info_str[0]) {
       if (OB_FAIL(ObBackupUtils::parse_backup_format_input(ObString(locality_info_str), src_info.locality_list_))) {
         LOG_WARN("failed to parse backup format input", K(ret), K(locality_info_str));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(
+    const common::ObIArray<ObBackupServer> &server_list,
+    const char *extension,
+    common::ObIArray<ObBackupServer> &filtered_server_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(extension)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(extension));
+  } else {
+    ObBackupSrcInfo src_info;
+    common::ObRegion region;
+    common::ObIDC idc;
+    common::ObZone zone;
+    bool locality_valid = false;
+    int64_t priority = OB_INVALID_ID;
+    ObBackupServer tmp_server;
+    if (OB_FAIL(get_src_info_from_extension(extension, src_info))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
+      const ObAddr &server = server_list.at(i).server_;
+      zone.reset();
+      idc.reset();
+      region.reset();
+      priority = OB_INVALID_ID;
+      locality_valid = false;
+      if (OB_FAIL(get_server_locality_info_(server, region, idc, zone))) {
+        LOG_WARN("failed to get server locality info", K(ret), K(server));
+      } else if (OB_FAIL(src_info.check_locality_info_valid(region, idc, zone, locality_valid, priority))) {
+        LOG_WARN("failed to check locality info valid", K(ret), K(server), K(region), K(idc), K(zone));
+      } else if (locality_valid) {
+        tmp_server.reset();
+        tmp_server.server_ = server;
+        tmp_server.priority_ = priority;
+        if (OB_FAIL(filtered_server_list.push_back(tmp_server))) {
+          LOG_WARN("failed to push back server", K(ret), K(server_list), K(i), K(tmp_server));
+        }
       }
     }
   }

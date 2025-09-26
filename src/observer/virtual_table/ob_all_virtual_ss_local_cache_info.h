@@ -92,10 +92,13 @@ private:
   };
 
   int add_micro_cache_inst_();
+  int add_macro_cache_inst_();
   int add_tmpfile_cache_inst_();
   int add_shared_macro_cache_inst_();
   int add_private_macro_cache_inst_();
-  int set_local_cache_insts_();
+  int add_external_table_cache_inst_();
+  int add_local_cache_inst_();
+  int set_all_cache_insts_();
 
 private:
   char ip_buf_[common::MAX_IP_ADDR_LENGTH];

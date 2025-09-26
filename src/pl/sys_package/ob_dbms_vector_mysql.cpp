@@ -449,10 +449,13 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
     case ObVectorIndexAlgorithmType::VIAT_HNSW_SQ:
     case ObVectorIndexAlgorithmType::VIAT_HGRAPH: {
       uint64_t estimate_mem = 0;
+      uint64_t max_tablet_estimate_mem = 0;
       if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(num_vectors, index_param, estimate_mem))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
-      } else if (OB_FALSE_IT(estimate_mem = ceil(estimate_mem * VEC_MEMORY_HOLD_FACTOR * 2))) { // multiple 2 for rebuild memory
-      } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), 0))) {
+      } else if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(tablet_max_num_vectors, index_param, max_tablet_estimate_mem))) {
+        LOG_WARN("failed to estimate hnsw vector index memory", K(tablet_max_num_vectors), K(index_param));
+      } else if (OB_FALSE_IT(estimate_mem = ceil((estimate_mem + max_tablet_estimate_mem) * VEC_MEMORY_HOLD_FACTOR))) { // multiple 1.2
+      } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), estimate_mem))) {
         LOG_WARN("failed to append to buffer", K(ret));
       } else if (OB_FAIL(print_mem_size(estimate_mem, res_buf))) {
         LOG_WARN("failed to append memory size", K(ret));

@@ -101,7 +101,8 @@ enum ObVecIdxAdaTryPath : uint8_t
   VEC_INDEX_PRE_FILTER = 1,
   VEC_INDEX_ITERATIVE_FILTER = 2,
   VEC_INDEX_IN_FILTER = 3,
-  VEC_PATH_MAX = 4
+  VEC_INDEX_POST_FILTER=4,
+  VEC_PATH_MAX = 5
 };
 const static double VEC_ESTIMATE_MEMORY_FACTOR = 2.0;
 constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
@@ -164,8 +165,9 @@ struct ObVectorIndexParam
     type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
     nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
     refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
-    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0), nbits_(0), prune_(false), refine_(false), ob_sparse_drop_ratio_build_(0), window_size_(DEFAULT_WINDOW_SIZE),
-    ob_sparse_drop_ratio_search_(0)
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0),
+    nbits_(0), prune_(false), refine_(false), ob_sparse_drop_ratio_build_(0), window_size_(DEFAULT_WINDOW_SIZE),
+    ob_sparse_drop_ratio_search_(0), similarity_threshold_(0)
   {
     MEMSET(endpoint_, 0, sizeof(endpoint_));
   }
@@ -194,6 +196,7 @@ struct ObVectorIndexParam
     ob_sparse_drop_ratio_search_ = 0;
     MEMSET(endpoint_, 0, sizeof(endpoint_));
     nbits_ = 0;
+    similarity_threshold_ = 0;
   };
   int assign(const ObVectorIndexParam &other) {
     int ret = OB_SUCCESS;
@@ -220,6 +223,7 @@ struct ObVectorIndexParam
     ob_sparse_drop_ratio_build_ = 0;
     window_size_ = DEFAULT_WINDOW_SIZE;
     ob_sparse_drop_ratio_search_ = 0;
+    similarity_threshold_ = 0;
     MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
     return ret;
   };
@@ -250,11 +254,14 @@ struct ObVectorIndexParam
   float ob_sparse_drop_ratio_build_;
   int window_size_;
   float ob_sparse_drop_ratio_search_;
+  float similarity_threshold_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
-    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits), K_(prune), K_(refine), K_(ob_sparse_drop_ratio_build),K_(window_size), K_(ob_sparse_drop_ratio_search));
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value),
+    K_(endpoint), K_(nbits), K_(prune), K_(refine), K_(ob_sparse_drop_ratio_build),K_(window_size), K_(ob_sparse_drop_ratio_search),
+    K_(similarity_threshold));
   int print_to_string(char *buf, int64_t buf_len, int64_t &pos) const;
 
 public:
@@ -661,6 +668,11 @@ public:
       int64_t &cid_vector_ith, int64_t &rowkey_cid_ith,
       int64_t &sq_meta_ith, int64_t &pq_centroid_ith,
       int64_t &pq_code_ith);
+  static int get_rowkey_vid_tablets(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_table_schema,
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObTabletID> &tablet_ids);
 
   static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                   const uint64_t vidx_table_id,
@@ -756,12 +768,17 @@ public:
       const ObTableSchema &index_schema,
       const uint64_t tenant_id,
       const int64_t row_count);
+  static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const ObTableSchema &index_schema, const int64_t row_count);
   static int estimate_vector_memory_used(
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &index_schema,
       const uint64_t tenant_id,
       const int64_t tablet_row_count,
       int64_t &estimate_memory);
+  static bool check_index_is_all_ready(
+      ObSchemaGetterGuard &schema_guard,
+      const schema::ObTableSchema &table_schema,
+      const schema::ObTableSchema &index_schema);
   static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
                                          const ObColumnSchemaV2 &new_column_schema,
                                          ObColumnSchemaV2 &new_aux_column_schema);

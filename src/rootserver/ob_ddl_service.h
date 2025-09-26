@@ -626,6 +626,15 @@ public:
    */
   int rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                           common::ObSArray<uint64_t> &index_ids);
+
+   /**
+   * This function is used to retrieve the tablet for a specific table_id on the RS side.
+   *
+   * @param [in] alter_table_arg
+   * @param [out] tablet_ids: tablet ids
+   */
+  int get_specific_table_tablet_ids(obrpc::ObAlterTableArg &alter_table_arg,
+                                    common::ObSArray<uint64_t> &tablet_ids);
   /**
    * This function is called by the storage layer in the fourth stage of offline ddl
    * If successful, the original table and dependent objects related to the original table need to be cleaned up

@@ -52,9 +52,15 @@ int ObAllVirtualTenantSnapshotLSReplicaHistory::try_convert_row(const ObNewRow *
                                                 ObCharset::get_default_charset()));
         }
       }
-    } else if (col_id - OB_APP_MIN_COLUMN_ID >= 0 && col_id - OB_APP_MIN_COLUMN_ID < input_row->count_) {
+    } else if (col_id >= OB_APP_MIN_COLUMN_ID) {
       // direct copy other columns
-      cur_row_.cells_[i] = input_row->get_cell(col_id - OB_APP_MIN_COLUMN_ID);
+      const int64_t index = static_cast<int64_t>(col_id - OB_APP_MIN_COLUMN_ID);
+      if (index >= 0 && index < input_row->count_) {
+        cur_row_.cells_[i] = input_row->get_cell(index);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid column index", KR(ret), K(col_id), K(index), "input_row_count", input_row->count_);
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "unexpected column id", KR(ret), K(col_id), K(output_column_ids_));

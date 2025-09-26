@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 #define CHECK_EXCPETION_AND_POINTER_NOT_NULL(env, ptr)          \
-  if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env))) { \
+  if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) { \
     LOG_WARN("failed to check jni exception", K(ret));          \
   } else if (OB_ISNULL(ptr)) {                                  \
     ret = OB_ERR_UNEXPECTED;                                    \
@@ -98,7 +98,7 @@ int ObOdpsJniCatalogAgent::get_java_catalog_service_obj(ObIAllocator &allocator,
         hashmap_class, hashmap_constructor, share::ObODPSCatalogProperties::ObOdpsCatalogOptions::MAX_OPTIONS);
     jmethodID hashmap_put =
         env_->GetMethodID(hashmap_class, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-    if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
       LOG_WARN("failed to check jni exception", K(ret));
     } else {
       jstring access_id = nullptr;
@@ -256,26 +256,26 @@ int ObOdpsJniCatalogAgent::do_query_table_list(ObIAllocator &allocator, ObIArray
       LOG_WARN("failed to get get tables method", K(ret));
     } else {
       jobject jstr_array_list = env_->CallObjectMethod(jni_catalog_service_obj_, get_tables_method);
-      if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
         LOG_WARN("failed to check jni exception", K(ret));
       } else if (OB_ISNULL(jstr_array_list)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("jstr_array_list is null", K(ret));
       } else {
         jint size = env_->CallIntMethod(jstr_array_list, size_method);
-        if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
           LOG_WARN("failed to check jni exception", K(ret));
         }
         for (jint i = 0; OB_SUCC(ret) && i < size; i++) {
           jstring j_table_name = (jstring)env_->CallObjectMethod(jstr_array_list, get_method, i);
-          if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
             LOG_WARN("failed to check jni exception", K(ret));
           } else if (OB_ISNULL(j_table_name)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("j_table_name is null", K(ret));
           } else {
             const char *table_name = env_->GetStringUTFChars(j_table_name, nullptr);
-            if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+            if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
               LOG_WARN("failed to check jni exception", K(ret));
             } else {
               ObString tbl_name;
@@ -297,7 +297,7 @@ int ObOdpsJniCatalogAgent::do_query_table_list(ObIAllocator &allocator, ObIArray
   return ret;
 }
 
-int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const ObString &tbl_name, int64_t &last_modification_time_s) {
+int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const ObString &tbl_name, int64_t &last_ddl_time_s, int64_t &last_modification_time_s) {
   int ret = OB_SUCCESS;
   jmethodID get_table_info_method = nullptr;
   if (OB_ISNULL(env_)) {
@@ -317,24 +317,25 @@ int ObOdpsJniCatalogAgent::do_query_table_info(ObIAllocator &allocator, const Ob
       LOG_WARN("failed to gen jni string", K(ret));
     } else {
       jlongArray jlong_array = (jlongArray)env_->CallObjectMethod(jni_catalog_service_obj_, get_table_info_method, jstr_table_name);
-      if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
         LOG_WARN("failed to check jni exception", K(ret));
       } else if (OB_ISNULL(jlong_array)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("jlong_array is null", K(ret));
       } else {
         jsize array_length = env_->GetArrayLength(jlong_array);
-        if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
           LOG_WARN("failed to check jni exception", K(ret));
         } else if (array_length == 3) {
           jlong* long_elements = env_->GetLongArrayElements(jlong_array, nullptr);
-          if (OB_FAIL(ObOdpsJniConnector::check_jni_exception_(env_))) {
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env_))) {
             LOG_WARN("failed to check jni exception", K(ret));
           } else {
             // 假设返回的long数组包含: [create_time, last_ddl_time, last_modification_time]
             // table_info.create_time_s = long_elements[0];
             // table_info.last_ddl_time_s = long_elements[1];
             // table_info.last_modification_time_s = long_elements[2];
+            last_ddl_time_s = long_elements[1];
             last_modification_time_s = long_elements[2];
             env_->ReleaseLongArrayElements(jlong_array, long_elements, JNI_ABORT);
           }

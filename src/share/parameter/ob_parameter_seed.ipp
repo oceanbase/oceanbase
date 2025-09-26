@@ -2472,7 +2472,7 @@ DEF_TIME(_ss_local_cache_expiration_time, OB_TENANT_PARAMETER, "0s", "[0s,)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "20", "[1, 99]",
-        "The expiration time of local cache data in shared storage mode,"
+        "The percentage of tenant disk size used by ss_micro_cache in shared_storage mode,"
         "Range: [1, 99]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -2592,11 +2592,16 @@ DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)."
         "The system will adjust automatically if ob_vector_memory_limit_percentage set to 0(by default).",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(vector_index_memory_saving_mode, OB_TENANT_PARAMETER, "True",
+        "Specifies whether to enable the vector index memory saving mode. This can reduce the memory used by the partition table vector index rebuild.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(load_vector_index_on_follower, OB_TENANT_PARAMETER, "True",
+        "Specifies whether the follower automatically loads the memory vector index.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(enable_ps_parameterize, OB_TENANT_PARAMETER, "True",
          "Used to control enable or disable parameterization in PS statement parsing",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "default",
                      common::ObConfigS3URLEncodeTypeChecker,
                      "Determines the URL encoding method for S3 requests."
@@ -3039,3 +3044,6 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
+         "Enable or disable defensive checks for garbage collection on shared storage.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

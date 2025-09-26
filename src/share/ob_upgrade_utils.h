@@ -193,7 +193,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 38;
+  static const int64_t DATA_VERSION_NUM = 39;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -376,6 +376,8 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 3)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 4)
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 5)
+
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 0, 0)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 0, 1)
@@ -392,6 +394,7 @@ private:
   int post_upgrade_for_replace_tenant_();
   int post_upgrade_for_scheduled_trigger_partition_balance();
   int post_upgrade_for_scheduled_trigger_dump_data_dict();
+  int post_upgrade_for_upload_cluster_info_();
 };
 
 /* =========== special upgrade processor end   ============= */

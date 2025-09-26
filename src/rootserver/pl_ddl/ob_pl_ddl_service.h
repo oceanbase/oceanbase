@@ -187,6 +187,11 @@ private:
                               ObIArray<ObDependencyInfo> &dep_infos,
                               const ObString *ddl_stmt_str,
                               rootserver::ObDDLService &ddl_service);
+
+  static int alter_udt_remove_body_dep(ObArray<CriticalDepInfo> &objs,
+                                        uint64_t type_id,
+                                        uint64_t object_type,
+                                        int16_t compile_unit);
   //----End of functions for managing udt----
 
   //----Functions for managing package----

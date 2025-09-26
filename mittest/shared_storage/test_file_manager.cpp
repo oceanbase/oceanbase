@@ -17,11 +17,14 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "share/ob_ss_file_util.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_cluster_info.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/shared_storage/ob_file_helper.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "storage/shared_storage/ob_ss_local_cache_service.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 
 #undef private
 #undef protected
@@ -465,7 +468,7 @@ TEST_F(TestFileManager, test_path_convert)
   // 17.PRIVATE_TABLET_META
   // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/tablet_meta_version_transfer_seq
   CHECK_MACRO_ID_TO_PATH(PRIVATE_TABLET_META, true/*is_in_local*/, OB_SUCCESS, "1_0/ls/3_4/tablet_meta/02/2/0/ver5.T10");
-  CHECK_MACRO_ID_TO_PATH(PRIVATE_TABLET_META, false/*is_in_local*/, OB_SUCCESS, "cluster_1/server_1/1_0/ls/3/tablet_meta/2/0/ver5.T10");
+  CHECK_MACRO_ID_TO_PATH(PRIVATE_TABLET_META, false/*is_in_local*/, OB_SUCCESS, "cluster_1/server_1/1_0/ls/3_4/tablet_meta/2/0/ver5.T10");
 
   // 27. MAJOR_PREWARM_DATA
   // cluster_id/tenant_id/tablet/tablet_id/major/compaction_scn
@@ -603,6 +606,13 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   CHECK_MACRO_ID_PARENT_DIR(IS_SHARED_TENANT_DELETED, OB_NOT_SUPPORTED, "");
 }
 
+void check_object_type_stat(const MacroBlockId &macro_id, const uint64_t delete_cnt)
+{
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ObSSObjectTypeStat type_stat;
+  ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), true, type_stat));
+  ASSERT_EQ(delete_cnt, type_stat.delete_cnt_);
+}
 TEST_F(TestFileManager, test_private_macro_file_operator)
 {
   int ret = OB_SUCCESS;
@@ -943,7 +953,6 @@ TEST_F(TestFileManager, test_meta_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(file_id));
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(file_id, ls_epoch_id, is_exist));
   ASSERT_FALSE(is_exist);
-
   // step 10: test delete dir
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_seq));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
@@ -1171,6 +1180,31 @@ TEST_F(TestFileManager, test_ss_format)
   ASSERT_EQ(OB_SUCCESS, ObSSFormatUtil::read_ss_format(storage_dest, ss_format));
   ASSERT_EQ(cur_cluster_version, ss_format.body_.cluster_version_);
   ASSERT_EQ(cur_us, ss_format.body_.create_timestamp_);
+}
+
+TEST_F(TestFileManager, test_ss_cluster_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  ObBackupDest storage_dest;
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.get_storage_dest(storage_dest));
+  // step 1: is exist ss_cluster_info
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, is_exist));
+  ASSERT_EQ(false, is_exist);
+  // step 2: write ss_cluster_info
+  ObSSClusterInfo ss_cluster_info;
+  const uint64_t cluster_id = 12345;
+  const common::ObRegion cluster_region("test_region");
+  ASSERT_EQ(OB_SUCCESS, ss_cluster_info.init(cluster_id, cluster_region));
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::write_ss_cluster_info(storage_dest, ss_cluster_info));
+  // step 3: is exist ss_cluster_info
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::is_exist_ss_cluster_info(storage_dest, is_exist));
+  ASSERT_EQ(true, is_exist);
+  // step 4: read ss_cluster_info
+  ObSSClusterInfo read_ss_cluster_info;
+  ASSERT_EQ(OB_SUCCESS, ObSSClusterInfoUtil::read_ss_cluster_info(storage_dest, read_ss_cluster_info));
+  ASSERT_EQ(cluster_id, read_ss_cluster_info.body_.logservice_cluster_id_);
+  ASSERT_EQ(1, cluster_region == read_ss_cluster_info.body_.cluster_region_);
 }
 
 TEST_F(TestFileManager, test_list_and_delete_dir_operator)
@@ -1556,6 +1590,24 @@ TEST_F(TestFileManager, test_deleted_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->logical_delete_local_tmp_file(tmp_file, true/*is_del_seg_meta*/));
 }
 
+void check_object_type_stat(const MacroBlockId &macro_id,
+                          const uint64_t read_cnt,
+                          const uint64_t read_size,
+                          const uint64_t write_cnt,
+                          const uint64_t write_size,
+                          ObStorageObjectHandle &object_handle)
+{
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ObSSObjectTypeStat type_stat;
+  ObIOFlag flag;
+  object_handle.get_io_handle().get_io_flag(flag);
+  bool is_remote = flag.is_sync();
+  ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
+  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
+  ASSERT_EQ(read_size, type_stat.read_size_);
+  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
+  ASSERT_EQ(write_size, type_stat.write_size_);
+}
 TEST_F(TestFileManager, test_user_tenant_slog_io_operator)
 {
   int ret = OB_SUCCESS;
@@ -1587,8 +1639,10 @@ TEST_F(TestFileManager, test_user_tenant_slog_io_operator)
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
   write_info.offset_ = write_io_size;
   write_object_handle.reset();
+  check_object_type_stat(slog_file, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_io_size, write_object_handle);
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(slog_file));
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  check_object_type_stat(slog_file, 0/*read_cnt*/, 0/*read_size*/, 2/*write_cnt*/, write_io_size * 2, write_object_handle);
   int64_t slog_min_id = -1;
   int64_t slog_max_id = -1;
   int64_t used_size = 0;
@@ -1633,6 +1687,7 @@ TEST_F(TestFileManager, test_user_tenant_slog_io_operator)
   read_info.size_ = write_io_size;
   read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   read_info.mtl_tenant_id_ = MTL_ID();
+
   ASSERT_EQ(OB_SUCCESS, ObObjectManager::read_object(read_info, read_object_handle));
   ASSERT_NE(nullptr, read_object_handle.get_buffer());
   ASSERT_EQ(read_info.size_, read_object_handle.get_data_size());
@@ -1997,6 +2052,7 @@ TEST_F(TestFileManager, test_user_tenant_ckpt_io_operator)
   // step 3: delete ckpt_file
   bool is_exist = true;
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_file(ckpt_file));
+  check_object_type_stat(ckpt_file, 1/*delete_cnt*/);
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(ckpt_file,0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
 }
@@ -2071,6 +2127,8 @@ int main(int argc, char **argv)
   system("rm -f ./test_file_manager.log*");
   OB_LOGGER.set_file_name("test_file_manager.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

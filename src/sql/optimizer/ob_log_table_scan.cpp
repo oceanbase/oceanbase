@@ -163,10 +163,7 @@ int ObLogTableScan::check_is_delete_insert_scan(bool &is_delete_insert_scan) con
     // may be fake table, skip
     LOG_DEBUG("get nullptr table schema", K(ret), K_(table_id), K_(ref_table_id), K(get_stmt()));
   } else if (table_schema->is_delete_insert_merge_engine()) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (OB_LIKELY(tenant_config.is_valid())) {
-      is_delete_insert_scan = tenant_config->_enable_delete_insert_scan;
-    }
+    is_delete_insert_scan = get_plan()->get_optimizer_context().enable_delete_insert_scan();
   }
   return ret;
 }
@@ -536,49 +533,8 @@ int ObLogTableScan::copy_filter_before_index_back()
       } else if (flags.at(i)) {
         if (get_index_back() && get_is_index_global() && filters.at(i)->has_flag(CNT_SUB_QUERY)) {
           // do nothing.
-        } else {
-          bool is_contain_vir_gen_column = false;
-          // ObArray<ObRawExpr *> column_exprs;
-          // scan_pushdown before index back conclude virtual generated column
-          // need copy for avoiding shared expression.
-          if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(filters.at(i), is_contain_vir_gen_column))) {
-            LOG_WARN("fail to contain virtual gen column", K(ret));
-          } else if (is_contain_vir_gen_column) {
-            ObArray<ObRawExpr *> vir_gen_par_exprs;
-            if (OB_FAIL(ObRawExprUtils::extract_virtual_generated_column_parents(filters.at(i), filters.at(i), vir_gen_par_exprs))) {
-              LOG_WARN("failed to extract virtual generated column parents", K(ret), K(i));
-            } else {
-              ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
-              for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_par_exprs.count(); ++j) {
-                ObRawExpr *copied_expr = NULL;
-                ObRawExpr *old_expr = filters.at(i);
-                if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
-                                                  vir_gen_par_exprs.at(j)->get_expr_class(),
-                                                  vir_gen_par_exprs.at(j)->get_expr_type(),
-                                                  copied_expr))) {
-                  LOG_WARN("failed to create raw expr", K(ret));
-                } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_par_exprs.at(j)))) {
-                  LOG_WARN("failed to assign old expr", K(ret));
-                } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_par_exprs.at(j), copied_expr))) {
-                  LOG_WARN("failed to add replaced expr", K(ret));
-                } else if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
-                  LOG_WARN("failed to copy exprs", K(ret));
-                } else if (filters.at(i)->get_expr_type() == T_OP_RUNTIME_FILTER
-                           || filters.at(i)->get_expr_type() == T_OP_PUSHDOWN_TOPN_FILTER) {
-                  // record runtime filter, also replace it in join filter use operator
-                  if (OB_FAIL(get_plan()->gen_col_replacer().add_replace_expr(old_expr,
-                                                                              filters.at(i)))) {
-                    LOG_WARN("failed to add replace expr");
-                  }
-                }
-              }
-              if (OB_SUCC(ret)) {
-                if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
-                  LOG_WARN("failed to copy exprs", K(ret));
-                }
-              }
-            }
-          }
+        } else if (OB_FAIL(copy_filter_with_virtual_gen_columns(filters.at(i)))) {
+          LOG_WARN("failed to copy filter with virtual gen columns", K(ret), KPC(filters.at(i)));
         }
       }
     }
@@ -593,49 +549,58 @@ int ObLogTableScan::copy_filter_for_index_merge()
   // each index scan only involves range conds for now in index merge
   for (int64_t i = 0; OB_SUCC(ret) && i < index_range_conds_.count(); i++) {
     common::ObIArray<ObRawExpr*> &range_conds = index_range_conds_.at(i);
-    for (int64_t i = 0; OB_SUCC(ret) && i < range_conds.count(); ++i) {
-      if (range_conds.at(i)->has_flag(CNT_PL_UDF)) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < range_conds.count(); ++j) {
+      if (range_conds.at(j)->has_flag(CNT_PL_UDF)) {
         // do nothing.
-      } else {
-        bool contain_vir_gen_column = false;
-        if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(range_conds.at(i), contain_vir_gen_column))) {
-          LOG_WARN("fail to check contain virtual gen column", K(ret));
-        } else if (contain_vir_gen_column) {
-          ObArray<ObRawExpr *> vir_gen_par_exprs;
-          if (OB_FAIL(ObRawExprUtils::extract_virtual_generated_column_parents(range_conds.at(i), range_conds.at(i), vir_gen_par_exprs))) {
-            LOG_WARN("failed to extract virtual generated column parents", K(ret), K(i));
-          } else {
-            ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
-            for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_par_exprs.count(); ++j) {
-              ObRawExpr *copied_expr = NULL;
-              ObRawExpr *old_expr = range_conds.at(i);
-              if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
-                                                vir_gen_par_exprs.at(j)->get_expr_class(),
-                                                vir_gen_par_exprs.at(j)->get_expr_type(),
-                                                copied_expr))) {
-                LOG_WARN("failed to create raw expr", K(ret));
-              } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_par_exprs.at(j)))) {
-                LOG_WARN("failed to assign old expr", K(ret));
-              } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_par_exprs.at(j), copied_expr))) {
-                LOG_WARN("failed to add replaced expr", K(ret));
-              } else if (OB_FAIL(copier.copy_on_replace(range_conds.at(i), range_conds.at(i)))) {
-                LOG_WARN("failed to copy exprs", K(ret));
-              } else if (range_conds.at(i)->get_expr_type() == T_OP_RUNTIME_FILTER
-                         || range_conds.at(i)->get_expr_type() == T_OP_PUSHDOWN_TOPN_FILTER) {
-                // record runtime filter, also replace it in join filter use operator
-                if (OB_FAIL(get_plan()->gen_col_replacer().add_replace_expr(old_expr,
-                                                                            range_conds.at(i)))) {
-                  LOG_WARN("failed to add replace expr");
-                }
-              }
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(copier.copy_on_replace(range_conds.at(i), range_conds.at(i)))) {
-                LOG_WARN("failed to copy exprs", K(ret));
-              }
-            }
-          }
-        }
+      } else if (OB_FAIL(copy_filter_with_virtual_gen_columns(range_conds.at(j)))) {
+        LOG_WARN("failed to copy filter with virtual gen columns", K(ret), KPC(range_conds.at(j)));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::copy_filter_with_virtual_gen_columns(ObRawExpr *&filter)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> vir_gen_columns;
+  if (OB_FAIL(ObRawExprUtils::extract_virtual_generated_columns(filter, vir_gen_columns))) {
+    LOG_WARN("fail to extract virtual gen columns", K(ret));
+  } else if (!vir_gen_columns.empty()) {
+    ObRawExpr *old_expr = filter;
+    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+    ObRawExprReplacer replacer;
+    for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_columns.count(); ++j) {
+      ObRawExpr *copied_expr = NULL;
+      if (OB_ISNULL(vir_gen_columns.at(j)) || !vir_gen_columns.at(j)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extract null or non column expr", K(ret), KPC(vir_gen_columns.at(j)));
+      } else if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
+                                                                              vir_gen_columns.at(j)->get_expr_class(),
+                                                                              vir_gen_columns.at(j)->get_expr_type(),
+                                                                              copied_expr))) {
+        LOG_WARN("failed to create raw expr", K(ret));
+      } else if (OB_FAIL(copier.add_skipped_expr(static_cast<ObColumnRefRawExpr*>(vir_gen_columns.at(j))->get_dependant_expr()))) {
+        LOG_WARN("failed to add skipped dependant expr", K(ret));
+      } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_columns.at(j)))) {
+        LOG_WARN("failed to assign old expr", K(ret));
+      } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_columns.at(j), copied_expr))) {
+        LOG_WARN("failed to add replaced expr", K(ret));
+      } else if (OB_FAIL(replacer.add_replace_expr(copied_expr, vir_gen_columns.at(j)))) {
+        LOG_WARN("failed to add replace expr to tmp replacer", K(ret), KPC(copied_expr), KPC(vir_gen_columns.at(j)));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(copier.copy_on_replace(filter, filter))) {
+      LOG_WARN("failed to copy exprs", K(ret), KPC(filter));
+    } else if (OB_FAIL(replacer.replace(filter))) {
+      LOG_WARN("failed to copy exprs", K(ret), KPC(filter));
+    } else if (filter->get_expr_type() == T_OP_RUNTIME_FILTER ||
+               filter->get_expr_type() == T_OP_PUSHDOWN_TOPN_FILTER) {
+      // record runtime filter, also replace it in join filter use operator
+      if (OB_FAIL(get_plan()->gen_col_replacer().add_replace_expr(old_expr, filter))) {
+        LOG_WARN("failed to add replace expr", K(ret), KPC(old_expr), KPC(filter));
       }
     }
   }
@@ -1910,8 +1875,6 @@ int ObLogTableScan::pick_out_query_range_exprs()
       LOG_WARN("NULL pointer error", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
   } else if (get_contains_fake_cte()) {
     // do nothing
-  } else if (get_vector_index_info().is_vec_adaptive_scan()) {
-    // do nothing
   } else if (OB_FAIL(schema_guard->get_table_schema(table_id_, ref_table_id_, get_stmt(), index_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(index_schema)) {
@@ -1921,32 +1884,48 @@ int ObLogTableScan::pick_out_query_range_exprs()
     LOG_WARN("failed to check is table get", K(ret));
   } else if ((index_schema->is_ordered() || is_get) && NULL != pre_range) {
     const ObIArray<ObRawExpr *> &range_exprs = pre_range->get_range_exprs();
-    ObArray<ObRawExpr *> filter_exprs;
-    if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
-      LOG_WARN("assign filter exprs failed", K(ret));
+    ObVecIndexInfo &vec_index_info = get_vector_index_info();
+    if (vec_index_info.is_vec_adaptive_scan()) {
+      // just check whether all filters can be picked out
+      bool all_picked_out = true;
+      for (int64_t i = 0; i < filter_exprs_.count() && all_picked_out; ++i) {
+        bool found_expr = false;
+        for (int64_t j = 0; !found_expr && j < range_exprs.count(); ++j) {
+          found_expr = (filter_exprs_.at(i) == range_exprs.at(j));
+        }
+        if (!found_expr) {
+          all_picked_out = false;
+        }
+      }
+      vec_index_info.set_all_filters_can_be_picked_out(all_picked_out);
     } else {
-      filter_exprs_.reset();
+      ObArray<ObRawExpr *> filter_exprs;
+      if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+        LOG_WARN("assign filter exprs failed", K(ret));
+      } else {
+        filter_exprs_.reset();
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+        bool found_expr = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !found_expr && j < range_exprs.count(); ++j) {
+          if (filter_exprs.at(i) == range_exprs.at(j)) {
+            //有重复表达式，忽略掉
+            found_expr = true;
+          } else { /* Do nothing */ }
+        }
+        // for virtual table, even if we extract query range, we need to maintain the condition into the filter
+        if (OB_SUCC(ret) && (!found_expr || (is_virtual_table(ref_table_id_)))) {
+          if (OB_FAIL(filter_exprs_.push_back(filter_exprs.at(i)))) {
+            LOG_WARN("add filter expr failed", K(i), K(ret));
+          } else { /* Do nothing */ }
+        }
+        if (OB_SUCC(ret) && found_expr) {
+          if (OB_FAIL(range_conds_.push_back(filter_exprs.at(i)))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else { /*do nothing*/}
+        }
+      } //end for
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
-      bool found_expr = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !found_expr && j < range_exprs.count(); ++j) {
-        if (filter_exprs.at(i) == range_exprs.at(j)) {
-          //有重复表达式，忽略掉
-          found_expr = true;
-        } else { /* Do nothing */ }
-      }
-      // for virtual table, even if we extract query range, we need to maintain the condition into the filter
-      if (OB_SUCC(ret) && (!found_expr || (is_virtual_table(ref_table_id_)))) {
-        if (OB_FAIL(filter_exprs_.push_back(filter_exprs.at(i)))) {
-          LOG_WARN("add filter expr failed", K(i), K(ret));
-        } else { /* Do nothing */ }
-      }
-      if (OB_SUCC(ret) && found_expr) {
-        if (OB_FAIL(range_conds_.push_back(filter_exprs.at(i)))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        } else { /*do nothing*/}
-      }
-    } //end for
   } else { /*do nothing*/ }
   return ret;
 }
@@ -2131,8 +2110,8 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
         LOG_WARN("BUG_PRINTF fails", K(ret));
       } else {
-        ObIArray<ObRawExpr*> &column_values = get_ext_column_dependent_exprs();
-        EXPLAIN_PRINT_EXPRS(column_values, type);
+        ObIArray<ObRawExpr*> &dependent_exprs = get_ext_column_dependent_exprs();
+        EXPLAIN_PRINT_EXPRS(dependent_exprs, type);
       }
     }
     END_BUF_PRINT(plan_item.access_predicates_,

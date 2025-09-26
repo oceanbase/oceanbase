@@ -1207,6 +1207,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "performance_schema_show_processlist",
   "performance_schema_users_size",
   "pid_file",
+  "plsql_can_transform_sql_to_assign",
   "plsql_ccflags",
   "plsql_optimize_level",
   "plsql_warnings",
@@ -2048,6 +2049,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PERFORMANCE_SCHEMA_SHOW_PROCESSLIST,
   SYS_VAR_PERFORMANCE_SCHEMA_USERS_SIZE,
   SYS_VAR_PID_FILE,
+  SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
   SYS_VAR_PLSQL_CCFLAGS,
   SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
   SYS_VAR_PLSQL_WARNINGS,
@@ -3078,7 +3080,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_enable_ps_parameter_anonymous_block",
   "ob_hnsw_extra_info_max_size",
   "_push_join_predicate",
-  "ob_sparse_drop_ratio_search"
+  "ob_sparse_drop_ratio_search",
+  "plsql_can_transform_sql_to_assign"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4121,6 +4124,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObHnswExtraInfoMaxSize)
         + sizeof(ObSysVarPushJoinPredicate)
         + sizeof(ObSysVarObSparseDropRatioSearch)
+        + sizeof(ObSysVarPlsqlCanTransformSqlToAssign)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11669,6 +11673,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObSparseDropRatioSearch));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlCanTransformSqlToAssign())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlCanTransformSqlToAssign", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlCanTransformSqlToAssign));
       }
     }
 
@@ -20896,6 +20909,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSparseDropRatioSearch())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObSparseDropRatioSearch", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlCanTransformSqlToAssign)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPlsqlCanTransformSqlToAssign)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlCanTransformSqlToAssign())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlCanTransformSqlToAssign", K(ret));
       }
       break;
     }

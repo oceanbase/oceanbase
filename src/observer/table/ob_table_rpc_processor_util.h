@@ -86,7 +86,7 @@ public:
           || err == OB_TABLE_NOT_EXIST
           || err == OB_TABLET_NOT_EXIST
           || err == OB_LS_NOT_EXIST
-          || err == OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST
+          || err == OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST // cannot retry in server because tablet_id will be used to get ls_id, get ls_id is easy to timeout, let client retry
           || err == OB_SNAPSHOT_DISCARDED
           || err == OB_SCHEMA_EAGAIN
           || err == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
@@ -115,7 +115,6 @@ public:
     return is_need_refresh_route_location_error(err)
         || err == OB_TABLET_NOT_EXIST
         || err == OB_LS_NOT_EXIST
-        || err == OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST
         || err == OB_SNAPSHOT_DISCARDED
         || err == OB_SCHEMA_EAGAIN
         || err == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH

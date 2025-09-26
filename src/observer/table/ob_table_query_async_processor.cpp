@@ -74,6 +74,7 @@ void ObTableQueryAsyncP::reset_ctx()
   result_row_count_ = 0;
   query_session_ = nullptr;
   ObTableApiProcessorBase::reset_ctx();
+  result_.reset();
 }
 
 int ObTableQueryAsyncP::get_old_session(uint64_t sessid, ObTableQueryAsyncSession *&query_session)
@@ -1155,6 +1156,10 @@ int ObTableQueryAsyncP::new_try_process()
         LOG_WARN("fail to init trans param", K(ret));
       } else if (OB_FAIL(ObTableTransUtils::init_read_trans(ctx->get_trans_param()))) {
         LOG_WARN("fail to start trans", K(ret), K(ctx->get_trans_param()));
+      } else if (!ctx->get_trans_param().tx_snapshot_.is_ls_snapshot()
+                 && tablet_id_.is_valid()
+                 && OB_FAIL(check_local_execute(tablet_id_))) {
+        LOG_WARN("fail to check local execute", K(ret));
       }
     }
 
@@ -1196,6 +1201,7 @@ int ObTableQueryAsyncP::new_try_process()
 bool ObTableQueryAsyncP::is_new_try_process()
 {
   return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
-         !arg_.tablet_id_.is_valid() &&
+         (!arg_.tablet_id_.is_valid() ||
+         (arg_.tablet_id_.is_valid() && arg_.distribute_need_tablet_id())) &&
          TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute();
 }

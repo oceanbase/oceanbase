@@ -1413,7 +1413,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCheckLocationAccess::eval_check_location_access,               /* 849 */
   ObExprUDF::eval_external_udf,                                        /* 850 */
   ObExprStartUpMode::eval_startup_mode,                                /* 851 */
-  NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
+  ObExprVectorL2Squared::calc_l2_squared,                              /* 852 */
 #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   ObExprTmpFileOpen::eval_tmp_file_open,                              /* 853 */
   ObExprTmpFileClose::eval_tmp_file_close,                            /* 854 */
@@ -1439,6 +1439,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprBucket::calc_bucket_expr,                                     /* 868 */
   NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
   NULL, // ObExprAIPrompt::eval_ai_prompt,                             /* 870 */
+  NULL, // ObExprVectorL2Similarity::calc_l2_similarity               /* 871 */
+  NULL, // ObExprVectorCosineSimilarity::calc_cosine_similarity       /* 872 */
+  NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
+  NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
+  NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1874,6 +1879,17 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprMul::mul_decint128_int32_decint128_vector,                       /* 246 */
   ObExprMul::mul_decint256_decint256_int32_vector,                       /* 247 */
   ObExprMul::mul_decint256_int32_decint256_vector,                       /* 248 */
+  NULL, // ObExprReplace::eval_replace_vector,                           /* 249 */
+  NULL, // ObExprBitCount::calc_bitcount_expr_vector,                    /* 250 */
+  NULL, // ObExprBitNeg::calc_bitneg_expr_vector,                        /* 251 */
+  NULL, // ObExprBitLength::calc_bit_length_vector,                      /* 252 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_AND>,          /* 253 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_OR>,           /* 254 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_XOR>,          /* 255 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_LEFT_SHIFT>,          /* 256 */
+  NULL, // ObBitwiseExprOperator::calc_bitwise_result2_mysql_vector<ObBitwiseExprOperator::BIT_RIGHT_SHIFT>,          /* 257 */
+  NULL, // ObExprCrc32::calc_crc32_expr_vector,                          /* 258 */
+  NULL, // ObExprFromBase64::eval_from_base64_vector                     /* 259 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

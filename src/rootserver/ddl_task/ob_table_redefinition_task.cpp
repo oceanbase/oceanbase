@@ -113,6 +113,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
       LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_));
     } else {
       is_inited_ = true;
+      ObDDLTask::target_cg_cnt_ = target_cg_cnt_; // only use for 4.3.x recover table
       ddl_tracing_.open();
     }
   }
@@ -1291,6 +1292,84 @@ int ObTableRedefinitionTask::assign(const ObTableRedefinitionTask *table_redef_t
   return ret;
 }
 
+int ObTableRedefinitionTask::collect_longops_stat_redefinition(int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  SMART_VARS_3((share::ObSqlMonitorStatsCollector, sql_monitor_stats_collector),
+              (share::ObDDLDiagnoseInfo, diagnose_info),
+              (share::ObSqlMonitorStats, sql_monitor_stats)) {
+    if (OB_FAIL(sql_monitor_stats_collector.scan_task_id_.push_back(task_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(sql_monitor_stats_collector.scan_tenant_id_.push_back(tenant_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(sql_monitor_stats_collector.init(GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init ObSqlMonitorStatsCollector", K(ret));
+    } else if (OB_FAIL(diagnose_info.init(tenant_id_, task_id_, task_type_, execution_id_))) {
+      LOG_WARN("failed to init ObDDLDiagnoseInfo", K(ret), K(tenant_id_), K(task_id_), K(task_type_));
+    } else if (OB_FAIL(sql_monitor_stats.init(tenant_id_, task_id_, task_type_))) {
+      LOG_WARN("failed to init ObSqlMonitorStats", K(ret), K(tenant_id_), K(task_id_), K(task_type_));
+    } else if (OB_FAIL(sql_monitor_stats_collector.get_next_sql_plan_monitor_stat(sql_monitor_stats))) {
+      LOG_WARN("failed to get next sql plan monitor stats", K(ret));
+    } else if (OB_FAIL(diagnose_info.process_sql_monitor_and_generate_longops_message(sql_monitor_stats, target_cg_cnt_, stat_info_, pos))) {
+      LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos));
+    }
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::collect_longops_stat_redefinition_recv_tbl(int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_inserted = 0;
+  int64_t cg_row_inserted = 0;
+  int64_t physical_row_count = 0;
+  double row_percent = 0.0;
+  double cg_row_percent = 0.0;
+  bool initializing = false;
+  {
+    TCRLockGuard guard(lock_);
+    initializing = !is_sstable_complete_task_submitted_;
+  }
+  if (initializing) {
+    if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                MAX_LONG_OPS_MESSAGE_LENGTH,
+                                pos,
+                                "STATUS: REPLICA BUILD, PARALLELISM: %ld, INITIALIZING",
+                                ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/)))) {
+      LOG_WARN("failed to print", K(ret));
+    }
+  } else if (OB_FAIL(replica_builder_.get_progress(physical_row_count, row_inserted, cg_row_inserted, row_percent, cg_row_percent))) {
+    LOG_WARN("failed to gather redefinition stats", K(ret));
+  } else if (target_cg_cnt_ > 1) {
+    if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                MAX_LONG_OPS_MESSAGE_LENGTH,
+                                pos,
+                                "STATUS: REPLICA BUILD, PARALLELISM: %ld, ESTIMATED_TOTAL_ROWS: %ld, ROW_INSERTED_INTO_TMP_FILE: %ld, TMP_FILE_PROGRESS: %0.2lf%%, "
+                                "CG_ROW_INSERTED: %ld/%ld column group rows, CG_ROW_PROGRESS: %0.2lf%%",
+                                ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
+                                physical_row_count,
+                                row_inserted, /*tmp_row_insert*/
+                                row_percent,  /*tmp_row_percent*/
+                                cg_row_inserted,
+                                physical_row_count * target_cg_cnt_,
+                                cg_row_percent))) {
+      LOG_WARN("failed to print", K(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(stat_info_.message_,
+                                MAX_LONG_OPS_MESSAGE_LENGTH,
+                                pos,
+                                "STATUS: REPLICA BUILD, PARALLELISM: %ld, ESTIMATED_TOTAL_ROWS: %ld, ROW_INSERTED: %ld, ROW_PROGRESS: %0.2lf%%",
+                                ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
+                                physical_row_count,
+                                row_inserted,
+                                row_percent))) {
+      LOG_WARN("failed to print", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
 {
   int ret = OB_SUCCESS;
@@ -1346,23 +1425,13 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
       break;
     }
     case ObDDLTaskStatus::REDEFINITION: {
-      SMART_VARS_3((share::ObSqlMonitorStatsCollector, sql_monitor_stats_collector),
-                   (share::ObDDLDiagnoseInfo, diagnose_info),
-                   (share::ObSqlMonitorStats, sql_monitor_stats)) {
-        if (OB_FAIL(sql_monitor_stats_collector.scan_task_id_.push_back(task_id_))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else if (OB_FAIL(sql_monitor_stats_collector.scan_tenant_id_.push_back(tenant_id_))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else if (OB_FAIL(sql_monitor_stats_collector.init(GCTX.sql_proxy_))) {
-          LOG_WARN("failed to init ObSqlMonitorStatsCollector", K(ret));
-        } else if (OB_FAIL(diagnose_info.init(tenant_id_, task_id_, task_type_, execution_id_))) {
-          LOG_WARN("failed to init ObDDLDiagnoseInfo", K(ret), K(tenant_id_), K(task_id_), K(task_type_));
-        } else if (OB_FAIL(sql_monitor_stats.init(tenant_id_, task_id_, task_type_))) {
-          LOG_WARN("failed to init ObSqlMonitorStats", K(ret), K(tenant_id_), K(task_id_), K(task_type_));
-        } else if (OB_FAIL(sql_monitor_stats_collector.get_next_sql_plan_monitor_stat(sql_monitor_stats))) {
-          LOG_WARN("failed to get next sql plan monitor stats", K(ret));
-        } else if (OB_FAIL(diagnose_info.process_sql_monitor_and_generate_longops_message(sql_monitor_stats, target_cg_cnt_, stat_info_, pos))) {
-          LOG_WARN("failed to process sql monitor and generate longops message", K(ret), K(sql_monitor_stats), K(target_cg_cnt_), K(stat_info_), K(pos));
+      if (is_recover_table_task(task_type_)) {
+        if (OB_FAIL(collect_longops_stat_redefinition_recv_tbl(pos))) {
+          LOG_WARN("failed to collect longops stat", K(ret));
+        }
+      } else {
+        if (OB_FAIL(collect_longops_stat_redefinition(pos))) {
+          LOG_WARN("failed to collect longops stat", K(ret));
         }
       }
       break;

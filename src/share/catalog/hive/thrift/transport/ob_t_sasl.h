@@ -50,7 +50,7 @@ static const char *const KERBEROS_MECHANISM = "GSSAPI";
 static const char *const GENERAL_CALLBACKS_CONTEXT_NAME = "General";
 static const char *const KERBEROS_CALLBACKS_CONTEXT_NAME = "KerBeros";
 
-// typedef oceanbase::lib::ObLockGuard<oceanbase::lib::ObMutex> LockGuard;
+typedef oceanbase::lib::ObLockGuard<oceanbase::lib::ObMutex> LockGuard;
 
 class SaslContext
 {
@@ -256,6 +256,7 @@ private:
   ObString mech_list_;
   ObString authorization_id_;
   ObArenaAllocator allocator_;
+  static oceanbase::lib::ObMutex static_mutex_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(TSaslClient);

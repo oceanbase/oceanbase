@@ -18,6 +18,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/blocksstable/ob_ss_obj_util.h"
+#include "storage/shared_storage/ob_ss_local_cache_service.h"
 #endif
 
 namespace oceanbase
@@ -343,6 +344,36 @@ int ObStorageObjectHandle::ss_async_write(const ObStorageObjectWriteInfo &write_
   }
   return ret;
 }
+
+int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObStorageObjectType &object_type,
+    const int result, const int64_t delta_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (macro_id_.is_id_mode_share()) {
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("local cache service is null", KR(ret));
+    } else {
+      ObIOFlag io_flag;
+      if (OB_FAIL(io_handle_.get_io_flag(io_flag))) {
+        LOG_WARN("fail to get io flag", KR(ret));
+      } else {
+        ObIOMode mode = io_flag.get_mode();
+        if (mode == ObIOMode::READ) {
+          IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::READ,
+            io_flag.is_sync(), result, delta_cnt, get_data_size());
+        } else if (mode == ObIOMode::WRITE) {
+          IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::WRITE,
+            io_flag.is_sync(), result, delta_cnt, get_data_size());
+        } else {
+          LOG_WARN("unexpected io mode", KR(ret), K(mode));
+        }
+      }
+    }
+  }
+  return ret;
+}
 #endif
 
 int ObStorageObjectHandle::wait()
@@ -370,6 +401,9 @@ int ObStorageObjectHandle::wait()
     LOG_WARN("real read size is smaller than expected read size", KR(ret), "real_read_size",
              get_data_size(), "expected_read_size", get_user_io_size());
   }
+#ifdef OB_BUILD_SHARED_STORAGE
+  IGNORE_RETURN ss_update_object_type_rw_stat(macro_id_.storage_object_type(), ret, 1/*delta_cnt*/);
+#endif
   return ret;
 }
 

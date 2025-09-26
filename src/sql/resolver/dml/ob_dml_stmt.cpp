@@ -4289,6 +4289,24 @@ int ObDMLStmt::update_column_item_rel_id()
       }
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_pseudo_column_like_exprs().count(); i ++) {
+    ObRawExpr *expr = get_pseudo_column_like_exprs().at(i);
+    uint64_t table_id = OB_INVALID_ID;
+    if (OB_ISNULL(expr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(expr));
+    } else if (expr->is_pseudo_column_expr() &&
+               OB_INVALID_ID != (table_id = static_cast<ObPseudoColumnRawExpr *>(expr)->get_table_id())) {
+      expr->get_relation_ids().reuse();
+      int64_t rel_id = get_table_bit_index(table_id);
+      if (rel_id <= 0 || rel_id > table_items_.count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(rel_id), K(table_items_.count()));
+      } else if (OB_FAIL(expr->add_relation_id(rel_id))) {
+        LOG_WARN("fail to add relation id", K(rel_id), K(ret));
+      }
+    }
+  }
 
   return ret;
 }
@@ -5819,18 +5837,13 @@ bool ObDMLStmt::is_contain_vector_origin_distance_calc() const
     int ret = OB_SUCCESS;
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(this);
     ObRawExpr* vector_expr = get_first_vector_expr();
-    for (int64_t i = 0; OB_NOT_NULL(vector_expr) && OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
+    for (int64_t i = 0; OB_NOT_NULL(vector_expr) && !bool_ret && OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
       const SelectItem &si = select_stmt->get_select_items().at(i);
-      ObExprEqualCheckContext equal_ctx;
-      equal_ctx.override_const_compare_ = true;
       if (OB_ISNULL(si.expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select item expr is null", K(ret));
-      } else if (si.expr_->is_vector_sort_expr()) {
-        if (si.expr_->same_as(*vector_expr, &equal_ctx)) {
-          bool_ret = true;
-          break;
-        }
+      } else if (OB_FAIL(ObRawExprUtils::find_expr(si.expr_, vector_expr, bool_ret))) {
+        LOG_WARN("failed to find expr", K(ret));
       }
     }
   }

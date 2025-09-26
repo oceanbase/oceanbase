@@ -10,6 +10,7 @@ sql_unittest(test_expr_relation_map)
 ob_unittest(test_ob_openai_utils)
 ob_unittest(test_ob_dashscope_utils)
 ob_unittest(test_ob_siliconflow_utils)
+sql_unittest(test_expr_serialize_compat)
 
 # engine_expr_test_lrpad_SOURCES=engine/expr/ob_expr_lrpad_test.cpp
 #ob_postfix_expression_test_SOURCES = ob_postfix_expression_test.cpp

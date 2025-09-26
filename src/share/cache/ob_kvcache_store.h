@@ -124,6 +124,7 @@ private:
   void purge_mb_handle_retire_station();
 
   static const int64_t SYNC_WASH_MB_TIMEOUT_US = 100 * 1000; // 100ms
+  static const int64_t FLUSH_MB_TIMEOUT_US = 1000 * 1000; // 1000ms
   static const int64_t RETIRE_LIMIT = 16;
   static const int64_t WASH_THREAD_RETIRE_LIMIT = 2048;
   static const int64_t SUPPLY_MB_NUM_ONCE = 128;

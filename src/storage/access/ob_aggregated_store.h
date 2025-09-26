@@ -50,8 +50,7 @@ public:
       const ObTableAccessContext *context,
       const int32_t col_idx,
       blocksstable::ObIMicroBlockReader *reader,
-      const ObPushdownRowIdCtx &pd_row_id_ctx,
-      const bool reserve_memory) override;
+      const ObPushdownRowIdCtx &pd_row_id_ctx) override;
   int eval(blocksstable::ObStorageDatum &datum, const int64_t row_count) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
   OB_INLINE bool is_vec() const override { return false; }

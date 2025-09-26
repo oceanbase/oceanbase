@@ -222,7 +222,7 @@ int ObSelectIntoOp::init_odps_tunnel()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input is unexpected null", K(ret));
   } else if (is_in_px) {
-    ObOdpsPartitionDownloaderMgr &odps_mgr = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_mgr();
+    ObOdpsPartitionUploaderMgr &odps_mgr = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_uploader_mgr();
     if (OB_FAIL(odps_mgr.get_odps_uploader(input->task_id_, upload_, record_writer_))) {
       LOG_WARN("failed to get odps uploader", K(ret));
     }
@@ -231,7 +231,7 @@ int ObSelectIntoOp::init_odps_tunnel()
   } else {
     ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOdps"));
     try {
-      if (OB_FAIL(ObOdpsPartitionDownloaderMgr::create_upload_session(external_properties_.odps_format_,
+      if (OB_FAIL(ObOdpsPartitionUploaderMgr::create_upload_session(external_properties_.odps_format_,
                                                                       MY_SPEC.external_partition_.str_,
                                                                       MY_SPEC.is_overwrite_,
                                                                       upload_))) {
@@ -301,7 +301,7 @@ int ObSelectIntoOp::init_odps_jni_tunnel()
   } else if (is_in_px) {
     int task_id = input->task_id_;
     block_id_ = task_id;
-    ObOdpsJniUploaderMgr &odps_jni_mgr
+    ObOdpsPartitionJNIUploaderMgr &odps_jni_mgr
       = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
     if (OB_FAIL(odps_jni_mgr.get_odps_uploader_in_px(task_id, MY_SPEC.select_exprs_, uploader_))) {
       LOG_WARN("failed to get odps writer from global config", K(ret));
@@ -315,7 +315,7 @@ int ObSelectIntoOp::init_odps_jni_tunnel()
 
     if (OB_FAIL(external_properties_.odps_format_.decrypt())) {
       LOG_WARN("failed to decrypt odps format", K(ret));
-    } else if (OB_FAIL(ObOdpsJniUploaderMgr::create_writer_params_map(ctx_.get_allocator(),
+    } else if (OB_FAIL(ObOdpsPartitionJNIUploaderMgr::create_writer_params_map(ctx_.get_allocator(),
                                                                       external_properties_.odps_format_,
                                                                       MY_SPEC.external_partition_.str_,
                                                                       MY_SPEC.is_overwrite_,
@@ -4380,7 +4380,7 @@ int ObSelectIntoOp::into_odps_jni_batch(const ObBatchRows &brs)
         } else {
           bool is_in_px = (NULL != ctx_.get_sqc_handler());
           if (is_in_px) {
-            ObOdpsJniUploaderMgr &odps_jni_mgr
+            ObOdpsPartitionJNIUploaderMgr &odps_jni_mgr
               = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
             if (OB_FAIL(odps_jni_mgr.append_block_id(block_id_))) {
               LOG_WARN("failed to append block id", K(ret));
@@ -5871,7 +5871,7 @@ int ObSelectIntoOp::odps_commit_upload()
   int ret = OB_SUCCESS;
   bool is_in_px = (NULL != ctx_.get_sqc_handler());
   if (is_in_px) {
-    ObOdpsPartitionDownloaderMgr &odps_mgr = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_mgr();
+    ObOdpsPartitionUploaderMgr &odps_mgr = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_uploader_mgr();
     if (!need_commit_) {
       odps_mgr.set_fail();
     }
@@ -5925,7 +5925,7 @@ int ObSelectIntoOp::odps_jni_commit_upload()
   int ret = OB_SUCCESS;
   bool is_in_px = (NULL != ctx_.get_sqc_handler());
   if (is_in_px) {
-    ObOdpsJniUploaderMgr &odps_jni_mgr
+    ObOdpsPartitionJNIUploaderMgr &odps_jni_mgr
               = ctx_.get_sqc_handler()->get_sqc_ctx().gi_pump_.get_odps_jni_uploader_mgr();
     if (!need_commit_) {
       odps_jni_mgr.set_fail();

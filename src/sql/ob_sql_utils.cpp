@@ -4632,6 +4632,35 @@ int ObSQLUtils::convert_sql_text_from_schema_for_resolve(ObIAllocator &allocator
   return ret;
 }
 
+int ObSQLUtils::convert_gen_col_def_text_from_schema_for_resolve(ObIAllocator &allocator,
+                                                                 const ObDataTypeCastParams &dtc_params,
+                                                                 const ObColumnSchemaV2 *column_schema,
+                                                                 ObString &gen_col_def_text,
+                                                                 int64_t convert_flag,
+                                                                 int64_t *action_flag)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType cs_type = dtc_params.connection_collation_;
+  if (OB_NOT_NULL(column_schema)) {
+    //prefer using the solidified vars
+    if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_collation(
+                            column_schema->get_local_session_var(), cs_type))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCharset::charset_convert(allocator,
+                                                gen_col_def_text,
+                                                CS_TYPE_UTF8MB4_BIN,
+                                                cs_type,
+                                                gen_col_def_text,
+                                                convert_flag,
+                                                action_flag))) {
+    LOG_WARN("fail to convert gen col def text", K(ret));
+  }
+  return ret;
+}
+
 int ObSQLUtils::convert_escape_char(ObIAllocator &allocator, const ObString &in, ObString &out)
 {
   int ret = OB_SUCCESS;
@@ -6606,13 +6635,19 @@ int ObSQLUtils::match_ccl_rule(ObIAllocator &alloc, ObSQLSessionInfo &session, O
           }
         }
       }
+      ObSqlString reconstruct_sql;
+      if (OB_SUCC(ret) && need_do_match && is_ps_mode) {
+        if (OB_FAIL(ObSQLUtils::reconstruct_ps_sql(reconstruct_sql, sql, param_store))) {
+          LOG_WARN("fail to reconstruct ps sql", K(ret));
+        }
+      }
       // 4. do the match
       uint64_t limited_by_ccl_rule_id = 0;
       if (OB_SUCC(ret) && need_do_match &&
           OB_FAIL(sql_ccl_rule_mgr->match_ccl_rule_with_sql(
               alloc, session.get_user_name(), context, sql, is_ps_mode,
               param_store, format_sqlid, contians_info, ccl_affect_dml_type,
-              sql_relate_databases, sql_relate_tables, limited_by_ccl_rule_id))) {
+              sql_relate_databases, sql_relate_tables, limited_by_ccl_rule_id, reconstruct_sql))) {
         if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
           // record into sql_ctx then write into sql audit
           context.ccl_rule_id_ = limited_by_ccl_rule_id;
@@ -6736,6 +6771,13 @@ int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &s
           }
         }
 
+        ObSqlString reconstruct_sql;
+        if (OB_SUCC(ret) && need_do_match && is_ps_mode) {
+          if (OB_FAIL(ObSQLUtils::reconstruct_ps_sql(reconstruct_sql, sql, param_store))) {
+            LOG_WARN("fail to reconstruct ps sql", K(ret));
+          }
+        }
+
         // 4. do the match
         // ccl match in plan cache should check 2 situation
         uint64_t limited_by_ccl_rule_id = 0;
@@ -6744,7 +6786,7 @@ int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &s
                 alloc, session.get_user_name(), context, sql, is_ps_mode,
                 param_store, format_sqlid, CclRuleContainsInfo::DML,
                 ccl_affect_dml_type, sql_relate_databases, sql_relate_tables,
-                limited_by_ccl_rule_id))) {
+                limited_by_ccl_rule_id, reconstruct_sql))) {
           if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
             // record into sql_ctx then write into sql audit
             context.ccl_rule_id_ = limited_by_ccl_rule_id;
@@ -6759,7 +6801,7 @@ int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &s
                 param_store, format_sqlid,
                 CclRuleContainsInfo::DATABASE_AND_TABLE, ccl_affect_dml_type,
                 sql_relate_databases, sql_relate_tables,
-                limited_by_ccl_rule_id))) {
+                limited_by_ccl_rule_id, reconstruct_sql))) {
           if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
             // record into sql_ctx then write into sql audit
             context.ccl_rule_id_ = limited_by_ccl_rule_id;

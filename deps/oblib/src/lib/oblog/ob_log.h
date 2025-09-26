@@ -62,6 +62,7 @@ namespace common
 {
 class ObPLogItem;
 class ObLogCompressor;
+template<int ARENA_NUM> class ObVSliceAllocT;
 
 extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
@@ -897,6 +898,7 @@ private:
   int64_t dropped_count_[MAX_TASK_LOG_TYPE + 1];//last one is force allow count
   int64_t written_count_[MAX_TASK_LOG_TYPE + 1];
   int64_t current_written_count_[MAX_TASK_LOG_TYPE + 1];
+  ObVSliceAllocT<32> *log_allocator_;
   ObLogCompressor* log_compressor_;
   // juse use it for test promise log print
   bool enable_log_limit_;

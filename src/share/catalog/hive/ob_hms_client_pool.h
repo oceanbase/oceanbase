@@ -19,6 +19,8 @@
 #include "lib/lock/ob_mutex.h"
 #include "lib/rc/context.h"
 #include "lib/task/ob_timer.h"
+#include "lib/lock/ob_thread_cond.h"
+#include "lib/atomic/ob_atomic.h"
 
 namespace oceanbase
 {
@@ -31,6 +33,9 @@ namespace share
 
 // Forward declaration to avoid header dependency
 class ObHiveMetastoreClient;
+
+// Using common namespace for ObThreadCond
+using common::ObThreadCond;
 
 static constexpr int64_t MAX_HMS_CATALOG_CONNECTIONS = 100;
 static constexpr int64_t DEFAULT_HMS_CLIENT_POOL_SIZE = 20;
@@ -92,6 +97,8 @@ public:
   void get_pool_stats(int64_t &total_clients, int64_t &in_use_clients, int64_t &idle_clients) const;
 
   int cleanup();
+  int64_t get_waiting_threads() const;
+  void refresh_last_access_ts();
 
   bool is_inited() const { return is_inited_; }
 
@@ -130,9 +137,9 @@ private:
   int64_t socket_timeout_;
   int64_t total_clients_;
   int64_t in_use_clients_;
+  volatile int64_t waiting_threads_;     // Number of threads waiting for clients (atomic access)
 
-  mutable SpinRWLock pool_lock_;
-  mutable ObCond pool_cond_;    // Only for waiting in get_client
+  mutable ObThreadCond pool_cond_;    // Thread condition for synchronization
 
   bool is_inited_;
   int64_t last_access_ts_;

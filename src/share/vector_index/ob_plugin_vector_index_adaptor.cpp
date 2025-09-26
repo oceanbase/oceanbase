@@ -740,10 +740,10 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
 
   STAT_PRINT("{");
   STAT_PRINT("\"is_complete\":%d", is_complete());
-  STAT_PRINT(",\"incr_mem_used\":%ld", get_incr_vsag_mem_used());
-  STAT_PRINT(",\"incr_mem_hold\":%ld", get_incr_vsag_mem_hold());
-  STAT_PRINT(",\"snap_mem_used\":%ld", get_snap_vsag_mem_used());
-  STAT_PRINT(",\"snap_mem_hold\":%ld", get_snap_vsag_mem_hold());
+  STAT_PRINT(",\"incr_mem_used\":%lld", get_incr_vsag_mem_used());
+  STAT_PRINT(",\"incr_mem_hold\":%lld", get_incr_vsag_mem_hold());
+  STAT_PRINT(",\"snap_mem_used\":%lld", get_snap_vsag_mem_used());
+  STAT_PRINT(",\"snap_mem_hold\":%lld", get_snap_vsag_mem_hold());
 
   if (type_ != VIAT_MAX && OB_SUCC(ret)) {
     if (OB_FAIL(get_hnsw_param(param))) {
@@ -760,23 +760,33 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
     }
   }
   STAT_PRINT(",\"snap_index_type\":%d", int(get_snap_index_type()));
-  STAT_PRINT(",\"ref_cnt\":%ld", ATOMIC_LOAD(&ref_cnt_) - 1);
-  STAT_PRINT(",\"idle_cnt\":%ld", idle_cnt_);
+  STAT_PRINT(",\"ref_cnt\":%lld", ATOMIC_LOAD(&ref_cnt_) - 1);
+  STAT_PRINT(",\"idle_cnt\":%lld", idle_cnt_);
 
-  if (!index_identity_.empty()) {
+  if (OB_SUCC(ret) && !index_identity_.empty()) {
     STAT_PRINT(",\"index\":\"%s\"", helper.convert(index_identity_));
   }
-  if (nullptr != incr_data_) {
-    STAT_PRINT(",\"incr_data_scn\":%lu", incr_data_->scn_.get_val_for_inner_table_field());
+  if (OB_SUCC(ret) && nullptr != incr_data_) {
+    int64_t incr_cnt = 0;
+    if (OB_NOT_NULL(get_incr_index()) && OB_FAIL(obvectorutil::get_index_number(get_incr_index(), incr_cnt))) {
+      LOG_WARN("failed to get inc index number.", K(ret));
+    }
+    STAT_PRINT(",\"incr_data_scn\":%llu", incr_data_->scn_.get_val_for_inner_table_field());
+    STAT_PRINT(",\"incr_index_cnt\":%lld", incr_cnt);
   }
   if (nullptr != vbitmap_data_) {
-    STAT_PRINT(",\"vbitmap_data_scn\":%lu", vbitmap_data_->scn_.get_val_for_inner_table_field());
+    STAT_PRINT(",\"vbitmap_data_scn\":%llu", vbitmap_data_->scn_.get_val_for_inner_table_field());
   }
-  if (nullptr != snap_data_) {
-    STAT_PRINT(",\"snap_data_scn\":%lu", snap_data_->scn_.get_val_for_inner_table_field());
+  if (OB_SUCC(ret) && nullptr != snap_data_) {
+    int64_t snap_cnt = 0;
+    if (OB_NOT_NULL(get_snap_index()) && OB_FAIL(obvectorutil::get_index_number(get_snap_index(), snap_cnt))) {
+      LOG_WARN("failed to get snap index number.", K(ret));
+    }
+    STAT_PRINT(",\"snap_data_scn\":%llu", snap_data_->scn_.get_val_for_inner_table_field());
+    STAT_PRINT(",\"snap_index_cnt\":%lld", snap_cnt);
   }
   if (nullptr != all_vsag_use_mem_) {
-    STAT_PRINT(",\"all_index_mem_used\":%lu", ATOMIC_LOAD(all_vsag_use_mem_));
+    STAT_PRINT(",\"all_index_mem_used\":%llu", ATOMIC_LOAD(all_vsag_use_mem_));
   }
   if (OB_SUCC(ret)) {
     ObRbMemMgr *mem_mgr = nullptr;
@@ -785,7 +795,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mem_mgr is null", K(tenant_id));
     } else {
-      STAT_PRINT(",\"all_index_bitmap_used\":%lu", mem_mgr->get_vec_idx_used());
+      STAT_PRINT(",\"all_index_bitmap_used\":%lld", mem_mgr->get_vec_idx_used());
     }
   }
   STAT_PRINT("}");
@@ -798,13 +808,13 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
     } \
   }
   pos = 0;
-  SYNC_INFO_PRINT("{\"incr_cnt\":%lu", follower_sync_statistics_.incr_count_);
-  SYNC_INFO_PRINT(",\"vbitmap_cnt\":%lu", follower_sync_statistics_.vbitmap_count_);
-  SYNC_INFO_PRINT(",\"snap_cnt\":%lu", follower_sync_statistics_.snap_count_);
-  SYNC_INFO_PRINT(",\"sync_total_cnt\":%lu", follower_sync_statistics_.sync_count_);
-  SYNC_INFO_PRINT(",\"sync_fail_cnt\":%lu", follower_sync_statistics_.sync_fail_);
-  SYNC_INFO_PRINT(",\"last_succ_time\":%ld", follower_sync_statistics_.last_succ_time_);
-  SYNC_INFO_PRINT(",\"last_fail_time\":%ld", follower_sync_statistics_.last_fail_time_);
+  SYNC_INFO_PRINT("{\"incr_cnt\":%lld", follower_sync_statistics_.incr_count_);
+  SYNC_INFO_PRINT(",\"vbitmap_cnt\":%lld", follower_sync_statistics_.vbitmap_count_);
+  SYNC_INFO_PRINT(",\"snap_cnt\":%lld", follower_sync_statistics_.snap_count_);
+  SYNC_INFO_PRINT(",\"sync_total_cnt\":%lld", follower_sync_statistics_.sync_count_);
+  SYNC_INFO_PRINT(",\"sync_fail_cnt\":%lld", follower_sync_statistics_.sync_fail_);
+  SYNC_INFO_PRINT(",\"last_succ_time\":%lld", follower_sync_statistics_.last_succ_time_);
+  SYNC_INFO_PRINT(",\"last_fail_time\":%lld", follower_sync_statistics_.last_fail_time_);
   SYNC_INFO_PRINT(",\"last_fail_code\":%d", follower_sync_statistics_.last_fail_code_);
   SYNC_INFO_PRINT("}");
 
@@ -2335,23 +2345,19 @@ int ObPluginVectorIndexAdaptor::serialize(ObIAllocator *allocator, ObOStreamBuf:
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::renew_single_snap_index()
+int ObPluginVectorIndexAdaptor::renew_single_snap_index(bool mem_saving_mode)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexAlgorithmType index_type = get_snap_index_type();
-  if (index_type == VIAT_HNSW_BQ) {
+  if (mem_saving_mode) {
     ObString invalid_prefix("renew");
     if (OB_ISNULL(snap_data_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr snap_data_", K(ret), KP(snap_data_));
     } else {
       TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-      if (OB_FAIL(try_free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_))) {
+      if (OB_FAIL(renew_snapdata_in_lock())) {
         LOG_WARN("failed to free snap memdata", K(ret), KPC(this));
-      } else if (OB_FAIL(init_mem(snap_data_))) {
-        LOG_WARN("fail to init snap_data_ mem", K(ret));
-      } else if (OB_FAIL(try_init_snap_data(index_type))) {
-        LOG_WARN("failed to init snap data", K(ret), K(index_type));
       } else if (OB_FAIL(set_snapshot_key_prefix(invalid_prefix))) {
         LOG_WARN("fail to set snapshot key prefix", K(ret));
       }
@@ -2361,6 +2367,24 @@ int ObPluginVectorIndexAdaptor::renew_single_snap_index()
     LOG_WARN("fail to index immutable_optimize", K(ret), K(index_type));
   } else {
     // do nothing
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::renew_snapdata_in_lock()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(snap_data_)) {
+    // do nothing
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("allocator is null", K(ret), KPC(snap_data_), K(allocator_));
+  } else {
+    ObVectorIndexAlgorithmType index_type = get_snap_index_type();
+    free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_);
+    if (OB_FAIL(try_init_snap_data(index_type))) {
+      LOG_WARN("failed to init snap data", K(ret), K(index_type));
+    }
   }
   return ret;
 }
@@ -3006,6 +3030,15 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
       if (OB_FAIL(table_scan_iter->get_next_row(row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
+          // when snap table is empty and adaptor mem data for snap is not empty, need to refresh adaptor
+          int64_t current_snapshot_count = 0;
+          if (OB_FAIL(get_snap_index_row_cnt(current_snapshot_count))) {
+            LOG_WARN("fail to get snap index number", K(ret));
+          } else if (current_snapshot_count > 0) {
+            ctx->status_ = PVQ_REFRESH;
+            LOG_INFO("query result need refresh adapter, ls leader",
+                     K(ret), K(ls_id), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()));
+          }
         } else {
           LOG_WARN("failed to get next row", K(ret));
         }
@@ -3438,7 +3471,7 @@ bool ObPluginVectorIndexAdaptor::dec_ref_and_check_release()
   return (ref_count <= 0);
 }
 
-int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool &need_sync)
+int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPluginVectorIndexMgr *mgr, bool is_leader, bool &need_sync)
 {
   int ret = OB_SUCCESS;
   need_sync = false;
@@ -3490,6 +3523,10 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool 
         K(follower_sync_statistics_), K(current_incr_count), K(current_bitmap_count),
         K(current_snapshot_count), KPC(this));
     }
+    if (is_leader && OB_FAIL(check_can_sync_to_follower(mgr, current_snapshot_count, need_sync))) {
+      LOG_WARN("fail to check can sync to follower", K(ret));
+      ret = OB_SUCCESS;
+    }
 
     if (need_sync) { // if need sync, update statistics, otherwise use current statistics and check next loop
       follower_sync_statistics_.incr_count_ = current_incr_count;
@@ -3500,6 +3537,36 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(bool 
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(check_if_need_optimize())) {
       LOG_WARN("failed to check if vector index need optimize", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMgr *mgr, int64_t current_snapshot_count, bool &need_sync)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *snapshot_table_schema;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, get_snapshot_table_id(), snapshot_table_schema))) {
+    LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(get_snapshot_table_id()));
+  } else if (OB_ISNULL(snapshot_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("snapshot table not exist", K(ret), K(snapshot_table_schema));
+  } else {
+    if (need_sync && !snapshot_table_schema->can_read_index()) {
+      need_sync = false;
+      LOG_INFO("snapshot table not ready, not need sync to follower", KPC(this));
+    }
+    if (current_snapshot_count == 0 && snapshot_table_schema->can_read_index()) {
+      if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(get_inc_tablet_id(), get_inc_table_id()))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(WARN, "fail to add complete adaptor to waiting map",KR(ret), K(tenant_id_));
+        }
+      }
     }
   }
   return ret;

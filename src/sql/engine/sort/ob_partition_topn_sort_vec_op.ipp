@@ -18,9 +18,11 @@ template <typename Compare, typename Store_Row, bool has_addon>
 void ObPartitionTopNSort<Compare, Store_Row, has_addon>::reset()
 {
   reuse();
-  pt_buckets_->reset();
-  allocator_.free(pt_buckets_);
-  pt_buckets_ = nullptr;
+  if (OB_NOT_NULL(pt_buckets_)) {
+    pt_buckets_->reset();
+    allocator_.free(pt_buckets_);
+    pt_buckets_ = nullptr;
+  }
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
@@ -45,8 +47,10 @@ void ObPartitionTopNSort<Compare, Store_Row, has_addon>::reuse_part_topn_node() 
       PartTopnNode *hash_node = pt_buckets_->at(i);
       while (hash_node != NULL) {
         TopnNode *topn_node = &hash_node->topn_node_;
-        topn_node->ties_array_.reset();
-        topn_node->rows_array_.reset();
+        if (OB_NOT_NULL(topn_node)) {
+          topn_node->ties_array_.reset();
+          topn_node->rows_array_.reset();
+        }
         PartTopnNode *cur_node = hash_node;
         hash_node = hash_node->hash_node_next_;
         cur_node->~PartTopnNode();

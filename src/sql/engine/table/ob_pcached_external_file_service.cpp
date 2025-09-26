@@ -1405,16 +1405,19 @@ int ObExternalFileDiskSpaceMgr::check_disk_usage_and_evict_if_needed()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObExternalFileDiskSpaceMgr is not inited", KR(ret));
+  } else if (cached_macro_count() <= 0) {
+    LOG_INFO("ObExternalFileDiskSpaceMgr has no cached macro", KR(ret));
   } else {
     const int64_t start_time_us = ObTimeUtility::fast_current_time();
     const int64_t total_macro_count = OB_STORAGE_OBJECT_MGR.get_total_macro_block_count();
     const int64_t used_macro_count = OB_STORAGE_OBJECT_MGR.get_used_macro_block_count();
+    const int64_t pending_free_macro_count = OB_SERVER_BLOCK_MGR.get_pending_free_macro_block_count();
     int64_t expect_total_evict_num = 0;
     int64_t actual_evict_num = 0;
     const bool need_evict =
-        ((used_macro_count >= total_macro_count * EVICT_TRIGGER_PERCENT / 100)
+        ((used_macro_count - pending_free_macro_count >= total_macro_count * EVICT_TRIGGER_PERCENT / 100)
         || is_external_file_disk_space_full_());
-    const bool force_evict = is_total_disk_usage_exceed_limit_();
+    const bool force_evict = (need_evict && is_total_disk_usage_exceed_limit_());
 
     if (need_evict) {
       expect_total_evict_num =
@@ -1447,7 +1450,8 @@ int ObExternalFileDiskSpaceMgr::check_disk_usage_and_evict_if_needed()
     const int64_t used_time_us = ObTimeUtility::fast_current_time() - start_time_us;
     LOG_INFO("ObExternalFileDiskSpaceMgr: check disk usage", KR(ret), K(used_time_us),
         K(total_macro_count), K(used_macro_count), K(cached_macro_count()),
-        K(expect_total_evict_num), K(actual_evict_num), K(need_evict), K(force_evict));
+        K(pending_free_macro_count), K(expect_total_evict_num), K(actual_evict_num),
+        K(need_evict), K(force_evict));
   }
   return ret;
 }

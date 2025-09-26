@@ -47,20 +47,21 @@ int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
   if (OB_UNLIKELY(dst_opt_stats.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected empty", K(ret), K(dst_opt_stats.empty()));
+  } else if (OB_FAIL(init_escape_char_names(ctx_.get_allocator(), param))) {
+    LOG_WARN("failed to add init escape char names", K(ret));
+  } else if (OB_FALSE_IT(set_from_table(data_table_name_))) {
   } else if (OB_FAIL(ObDbmsStatsUtils::init_col_stats(allocator,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
   } else if (OB_FAIL(add_hint(no_rewrite, ctx_.get_allocator()))) {
     LOG_WARN("failed to add no_rewrite", K(ret));
-  } else if (OB_FAIL(add_no_use_das_hint(ctx_.get_allocator(), param.data_table_name_))) {
+  } else if (OB_FAIL(add_no_use_das_hint(ctx_.get_allocator(), from_table_))) {
     LOG_WARN("failed to no use das hint", K(ret));
-  } else if (OB_FAIL(add_from_table(ctx_.get_allocator(), param.db_name_, param.data_table_name_))) {
-    LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_index_info(ctx_.get_allocator(),
-                                     param.data_table_name_,
-                                     param.tab_name_))) {
-    LOG_WARN("failed to add from table", K(ret));
+                                     data_table_name_,
+                                     tab_name_))) {
+    LOG_WARN("failed to fill index info", K(ret));
   } else if (OB_FAIL(fill_parallel_info(ctx_.get_allocator(), param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
@@ -171,16 +172,16 @@ int ObIndexStatsEstimator::fill_index_group_by_info(ObIAllocator &allocator,
   }
   if (OB_SUCC(ret)) {
     const int64_t len = strlen(fmt_str) +
-                        param.data_table_name_.length() +
-                        param.tab_name_.length() +
+                        data_table_name_.length() +
+                        tab_name_.length() +
                         type_str.length() ;
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, param.data_table_name_.length(),param.data_table_name_.ptr(),
-                                       param.tab_name_.length(), param.tab_name_.ptr(),
+      real_len = sprintf(buf, fmt_str, data_table_name_.length(),data_table_name_.ptr(),
+                                       tab_name_.length(), tab_name_.ptr(),
                                        type_str.length(), type_str.ptr());
       if (OB_UNLIKELY(real_len < 0 || real_len > len)) {
         ret = OB_ERR_UNEXPECTED;
@@ -215,16 +216,16 @@ int ObIndexStatsEstimator::fill_partition_condition(ObIAllocator &allocator,
       type_str = ObString(7, "SUBPART");
     }
     const int64_t len = strlen(fmt_str) +
-                        param.data_table_name_.length() +
-                        param.tab_name_.length() +
+                        data_table_name_.length() +
+                        tab_name_.length() +
                         type_str.length() + 30;
     int32_t real_len = -1;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(len));
     } else {
-      real_len = sprintf(buf, fmt_str, param.data_table_name_.length(),param.data_table_name_.ptr(),
-                                       param.tab_name_.length(), param.tab_name_.ptr(),
+      real_len = sprintf(buf, fmt_str, data_table_name_.length(),data_table_name_.ptr(),
+                                       tab_name_.length(), tab_name_.ptr(),
                                        type_str.length(), type_str.ptr(),
                                        dst_partition_id);
       if (OB_UNLIKELY(real_len < 0 || real_len > len)) {

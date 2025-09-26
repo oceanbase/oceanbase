@@ -572,6 +572,7 @@ int ObDASIndexMergeIter::init_scan_param(const share::ObLSID &ls_id,
     scan_param.fb_read_tx_uncommitted_ = rtdef->fb_read_tx_uncommitted_;
     scan_param.ls_id_ = ls_id;
     scan_param.tablet_id_ = tablet_id;
+    scan_param.enable_new_false_range_ = ctdef->enable_new_false_range_;
     if (!ctdef->pd_expr_spec_.pushdown_filters_.empty()) {
       scan_param.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }

@@ -8264,6 +8264,14 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split a partition of column store table", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store table is");
+  } else if (is_user_hidden_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to split a partition of the hidden table", KR(ret), KPC(this));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "the hidden table is");
+  } else if (is_auto_partitioning && is_offline_ddl_original_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to split a partition of the table doing offline ddl", KR(ret), KPC(this));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "the table doing offline ddl is");
   } else if (is_user_table()) {
     // check indexes of auto-partitioned data table
     ObArray<ObAuxTableMetaInfo> simple_index_infos;

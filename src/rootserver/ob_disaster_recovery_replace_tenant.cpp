@@ -25,6 +25,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/shared_storage/ob_file_op.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
+#include "storage/shared_storage/ob_ss_cluster_info.h"
 #include "storage/shared_storage/ob_dir_manager.h"
 #include "share/ob_version.h"
 #include "share/ob_rpc_struct.h"
@@ -190,14 +191,16 @@ int ObDRReplaceTenant::check_and_init_for_replace_tenant_()
   } else if (OB_FAIL(check_and_init_ss_info_())) {
   // 6. check and init ss info
     LOG_WARN("fail to check cluster region", KR(ret));
+  } else if (OB_FAIL(check_ss_cluster_info_())) {
+  // 7. check ss cluster info
+    LOG_WARN("fail to check logservice cluster id", KR(ret));
   } else if (OB_FAIL(check_cluster_id_())) {
-  // 7. check same cluster_id
+  // 8. check same cluster_id
     LOG_WARN("fail to get cluster id", KR(ret));
   } else if (OB_FAIL(share::ObMasterKeyGetter::instance().init_master_key_for_replace_tenant())) {
-  // 8. get master key from palf kv
+  // 9. get master key from palf kv
     LOG_WARN("fail to get master key", KR(ret));
   }
-  // TODO: jinqian check region, check logservice cluster_id.
   if (OB_SUCC(ret)) {
     LOG_DBA_INFO_V2(OB_REPLACE_SYS_INIT_SUCCESS, DBA_STEP_INC_INFO(replace_sys),
       "[DR_REPLACE_TENANT] replace sys success to do check and init");
@@ -282,6 +285,7 @@ int ObDRReplaceTenant::init_and_check_logservice_access_point_()
                       stmt_.get_logservice_access_point().ptr()))) {
     LOG_WARN("set logservice_access_point to LibPalfEnvFFIInstance failed", KR(ret));
   } else if (OB_FAIL(libpalf::LibPalfEnvFFIInstance::get_instance().get_ffi(ffi))) {
+    // only check object storage path valid
     LOG_WARN("fail to get ffi", KR(ret));
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "logservice access point which is not accessible");
@@ -319,6 +323,39 @@ int ObDRReplaceTenant::check_and_init_ss_info_()
   } else if (OB_FAIL(share::ObDeviceConfigMgr::get_instance().set_storage_dest(shared_storage_info_.use_for_, storage_dest_))) {
     LOG_WARN("fail to set storage dest", KR(ret), K_(storage_dest));
   }
+  return ret;
+}
+
+int ObDRReplaceTenant::check_ss_cluster_info_()
+{
+  int ret = OB_SUCCESS;
+  uint64_t logservice_cluster_id = OB_INVALID_ID;
+  ObSSClusterInfo ss_cluster_info;
+  // 1. check logservice cluster id.
+  if (OB_FAIL(get_logservice_cluster_id(logservice_cluster_id))) {
+    LOG_WARN("fail to get logservice cluster id", KR(ret));
+  } else if (OB_FAIL(ObSSClusterInfoUtil::read_ss_cluster_info(storage_dest_, ss_cluster_info))) {
+    LOG_WARN("fail to read ss cluster info", KR(ret), K(storage_dest_));
+  } else if (logservice_cluster_id != ss_cluster_info.get_body().logservice_cluster_id_) {
+    char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+    snprintf(err_msg, sizeof(err_msg), "Input logservice cluster(%lu) is not match with ss_info's logservice cluster(%lu) which is",
+              logservice_cluster_id, ss_cluster_info.get_body().logservice_cluster_id_);
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+    LOG_WARN("logservice cluster id not match", KR(ret), K(logservice_cluster_id), K(ss_cluster_info.get_body().logservice_cluster_id_));
+  }
+  // 2. check region.
+  if (OB_FAIL(ret)) {
+  } else if (ss_cluster_info.get_body().cluster_region_ != stmt_.get_region()) {
+    char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+    snprintf(err_msg, sizeof(err_msg), "Input region(%s) is not same as original cluster region(%s) which is",
+                                      stmt_.get_region().ptr(), ss_cluster_info.get_body().cluster_region_.ptr());
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+    LOG_WARN("cluster region is not same as input cluster region", KR(ret),
+              K(ss_cluster_info.get_body().cluster_region_), K(stmt_.get_region()));
+  }
+  DRRT_LOG_INFO("check ss cluster info over", KR(ret), K(ss_cluster_info), K(logservice_cluster_id));
   return ret;
 }
 
@@ -555,7 +592,7 @@ int ObDRReplaceTenant::wait_ls_has_leader_(const share::ObLSID &ls_id)
         break;
       }
       if (OB_SUCC(ret)) {
-        ob_usleep(RETRY_INTERVAL_US);
+        ob_usleep(RETRY_INTERVAL_MS);
       }
       DRRT_LOG_INFO("check ls has leader one round", KR(ret), K(ls_id), K(leader_addr));
     } // end while
@@ -590,7 +627,7 @@ int ObDRReplaceTenant::wait_sslog_ls_ready_()
           break;
         }
         if (OB_SUCC(ret)) {
-          ob_usleep(RETRY_INTERVAL_US);
+          ob_usleep(RETRY_INTERVAL_MS);
           DRRT_LOG_INFO("wait to replace sys ls");
         }
       } // end while
@@ -618,7 +655,7 @@ int ObDRReplaceTenant::wait_sys_tenant_ready_()
       } else {
         sys_ready = GCTX.schema_service_->is_sys_full_schema() && GCTX.root_service_->is_full_service();
         if (!sys_ready) {
-          ob_usleep(RETRY_INTERVAL_US);
+          ob_usleep(RETRY_INTERVAL_MS);
         }
       }
       DRRT_LOG_INFO("wait sys tenant ready one round", KR(ret), K(sys_ready));
@@ -1104,6 +1141,62 @@ int ObDRReplaceTenant::clean_up_on_failure_()
     }
   }
   DRRT_LOG_INFO("finish cleanup on failure", KR(ret), K_(new_server_id));
+  return ret;
+}
+
+int ObDRReplaceTenant::get_logservice_cluster_id(uint64_t &logservice_cluster_id)
+{
+  // only check object storage path valid, and get cluster id from object storage path.
+  // if the log service process hangs, but the ss path is valid, it will return OB_SUCCESS
+  // and the corresponding logservice cluster_id.
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  logservice_cluster_id = OB_INVALID_ID;
+  char cluster_version[common::OB_IP_PORT_STR_BUFF] = {'\0'};
+  char lm_rpc_addr[common::OB_IP_PORT_STR_BUFF] = {'\0'};
+  char lm_http_addr[common::OB_IP_PORT_STR_BUFF] = {'\0'};
+  ObTimeoutCtx ctx;
+  const libpalf::LibPalfEnvFFI *ffi = nullptr;
+  const int64_t default_timeout = 15L * 1000L * 1000L; // 15s
+  if (OB_FAIL(ctx.set_timeout(default_timeout))) {
+    LOG_WARN("fail to set timeout", KR(ret));
+  } else if (OB_FAIL(libpalf::LibPalfEnvFFIInstance::get_instance().get_ffi(ffi))) {
+    LOG_WARN("fail to get ffi", KR(ret));
+  } else if (OB_ISNULL(ffi)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ffi is nullptr", KR(ret));
+  } else {
+    bool check_success = false;
+    while (OB_SUCC(ret) && !check_success) {
+      MEMSET(cluster_version, 0, sizeof(cluster_version)); // reset buffer
+      MEMSET(lm_rpc_addr, 0, sizeof(lm_rpc_addr));
+      MEMSET(lm_http_addr, 0, sizeof(lm_http_addr));
+      if (ctx.is_timeouted()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("check log service cluster info timeout", KR(ret), K(ctx));
+      } else if (OB_TMP_FAIL(LIBPALF_ERRNO_CAST(libpalf::libpalf_get_lm_info(ffi,
+                                                                             common::OB_IP_PORT_STR_BUFF,
+                                                                             &logservice_cluster_id,
+                                                                             cluster_version,
+                                                                             lm_rpc_addr,
+                                                                             lm_http_addr)))) {
+        ob_usleep(RETRY_INTERVAL_MS); // 100ms
+        LOG_WARN("fail to get logservice cluster info", KR(tmp_ret));
+      } else {
+        check_success = true;
+      }
+      DRRT_LOG_INFO("check logservice one round", KR(ret), KR(tmp_ret), "timeout", ctx.get_timeout());
+    } // end while
+    if (OB_FAIL(ret)) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Invalid logservice access point, which is");
+      LOG_ERROR("invalid logservice access point", KR(ret));
+    } else if (OB_INVALID_ID == logservice_cluster_id) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("logservice cluster id is invalid", KR(ret));
+    }
+    DRRT_LOG_INFO("get logservice cluster id", KR(ret), K(check_success), K(logservice_cluster_id));
+  }
   return ret;
 }
 

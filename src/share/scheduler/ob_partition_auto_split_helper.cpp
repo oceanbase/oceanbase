@@ -19,7 +19,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
-
+#include "rootserver/ob_split_partition_helper.h"
 
 namespace oceanbase
 {
@@ -979,7 +979,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
     can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet->get_tablet_id()
         && common::ObRole::LEADER == role && !num_sstables_exceed_limit && MTL_ID() != OB_SYS_TENANT_ID;
     // TODO gaishun.gs resident_info
-    const int64_t used_disk_space = tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_;
+    const int64_t used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
     can_split &= (used_disk_space > real_auto_split_size);
     if (OB_SUCC(ret) && can_split) {
       ObTabletCreateDeleteMdsUserData user_data;
@@ -1174,10 +1174,12 @@ int ObServerAutoSplitScheduler::cal_real_auto_split_size(const double base_ratio
   int ret = OB_SUCCESS;
   int64_t tablet_limit_penalty = 1;
   real_split_size = 0;
+  const int64_t skip_tablet_num_limit_check = std::abs(OB_E(EventTable::EN_SKIP_TABLET_NUM_LIMIT_CHECK) 0);
+  const bool skip_check = skip_tablet_num_limit_check > 0;
   if (OB_UNLIKELY(base_ratio < 0 || base_ratio > 1.0 || cur_ratio < 0 || cur_ratio > 1.0 || split_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(base_ratio), K(cur_ratio), K(split_size));
-  } else if (cur_ratio > base_ratio) {
+  } else if (cur_ratio > base_ratio && !skip_check) {
     // the tablet_limit_penalty is designed to fit large table(10pb)
     // if we consider the base_ratio to be 0.5
     // than cur_ratio | tablet_limit_penalty
@@ -2046,6 +2048,8 @@ int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_schema->check_validity_for_auto_partition())) {
     LOG_WARN("table is invalid for auto partition", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
+  } else if (OB_FAIL(rootserver::ObSplitPartitionHelper::check_allow_split(guard, *table_schema))) {
+    LOG_WARN("failed to check allow split", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
   } else if (OB_FAIL(sampler.query_ranges(tenant_id,
                                           db_schema->get_database_name_str(),
                                           *table_schema,
@@ -2418,7 +2422,21 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
   const ObString& part_func_expr = table_schema.get_part_option().get_part_func_expr_str();
   const ObPartitionFuncType part_func_type = table_schema.get_part_option().get_part_func_type();
   ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
-  if (OB_FAIL(table_schema.get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+  ObBasePartition *src_part = nullptr;
+  int64_t src_part_idx = OB_INVALID_INDEX;
+  int64_t src_subpart_idx = OB_INVALID_INDEX;
+  if (PARTITION_LEVEL_ZERO != table_schema.get_part_level()) {
+    if (OB_FAIL(table_schema.get_part_idx_by_tablet(split_source_tablet_id, src_part_idx, src_subpart_idx))) {
+      LOG_WARN("failed to get src part idx", K(ret), K(src_part_idx), K(src_subpart_idx), K(table_schema));
+    } else if (OB_FAIL(table_schema.get_part_by_idx(src_part_idx, src_subpart_idx, src_part))) {
+      LOG_WARN("failed to get src part", K(ret), K(src_part_idx), K(src_subpart_idx), K(table_schema));
+    } else if (OB_ISNULL(src_part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid src part", K(ret), K(src_part_idx), K(src_subpart_idx), K(split_source_tablet_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_schema.get_target_part_level_for_auto_partitioned_table(target_part_level))) {
     LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), K(table_schema));
   } else if (OB_FAIL(alter_table_schema.set_origin_database_name(db_name))) {
     LOG_WARN("fail to set origin database name", KR(ret), K(db_name));
@@ -2441,7 +2459,7 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
       const ObRowkey& high_bound_val = ranges[i].get_end_key();
 
       if (OB_FAIL(build_partition_(tenant_id, table_id,
-                                   split_source_tablet_id, high_bound_val, tz_info,
+                                   split_source_tablet_id, high_bound_val, tz_info, src_part,
                                    new_part))) {
         LOG_WARN("fail to build partition", KR(ret), K(tenant_id), K(table_id), K(split_source_tablet_id),
                                             K(high_bound_val), K(table_schema));
@@ -2495,6 +2513,7 @@ int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint
                                             const ObTabletID split_source_tablet_id,
                                             const ObRowkey &high_bound_val,
                                             const ObTimeZoneInfo *tz_info,
+                                            const ObBasePartition *src_part,
                                             share::schema::ObPartition &new_part)
 {
   int ret = OB_SUCCESS;
@@ -2510,6 +2529,9 @@ int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint
   } else if (OB_FAIL(new_part.set_high_bound_val(*target_high_bound_val))) {
     LOG_WARN("failed to set high_bound_val", KR(ret));
   } else {
+    if (nullptr != src_part) {
+      new_part.set_part_storage_cache_policy_type(src_part->get_part_storage_cache_policy_type());
+    }
     new_part.set_is_empty_partition_name(true);
     new_part.set_tenant_id(tenant_id);
     new_part.set_table_id(table_id);

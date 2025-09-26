@@ -132,7 +132,8 @@ ObBlockManager::ObBlockManager()
       marker_status_(), marker_lock_(), is_mark_sweep_enabled_(false),
       sweep_lock_(), mark_block_task_(*this), inspect_bad_block_task_(*this),
       timer_(), bad_block_lock_(), io_device_(NULL), blk_seq_generator_(),
-      alloc_num_(0), group_id_(0), is_inited_(false), is_started_(false) {}
+      alloc_num_(0), group_id_(0), is_inited_(false), is_started_(false),
+      pending_free_count_(0) {}
 
 ObBlockManager::~ObBlockManager() { destroy(); }
 
@@ -247,6 +248,7 @@ void ObBlockManager::destroy() {
   ATOMIC_STORE(&alloc_num_, 0);
   group_id_ = 0;
   is_inited_ = false;
+  pending_free_count_ = 0;
 }
 int ObBlockManager::alloc_object(ObStorageObjectHandle &object_handle) {
   int ret = OB_SUCCESS;
@@ -467,6 +469,11 @@ int64_t ObBlockManager::get_max_macro_block_count(int64_t reserved_size) const {
   return io_device_->get_max_block_count(reserved_size);
 }
 
+int64_t ObBlockManager::get_pending_free_macro_block_count() const
+{
+  return MAX(0, ATOMIC_LOAD(&pending_free_count_));
+}
+
 int64_t ObBlockManager::get_free_macro_block_count() const {
   return io_device_->get_free_block_count();
 }
@@ -561,6 +568,28 @@ int ObBlockManager::check_macro_block_free(const MacroBlockId &macro_id,
   } else {
     is_free = 0 == block_info.ref_cnt_;
   }
+  return ret;
+}
+
+int ObBlockManager::get_macro_block_ref_cnt(
+    const MacroBlockId &macro_id, int64_t &ref_cnt) const
+{
+  int ret = OB_SUCCESS;
+  ref_cnt = -1;
+  BlockInfo block_info;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, ", KR(ret), K(macro_id));
+  } else if (OB_FAIL(block_map_.get(macro_id, block_info))) {
+    LOG_WARN("fail to get macro id, ", KR(ret), K(macro_id));
+  } else {
+    ref_cnt = block_info.ref_cnt_;
+  }
+
   return ret;
 }
 
@@ -743,6 +772,10 @@ int ObBlockManager::dec_ref(const MacroBlockId &macro_id) {
       } else {
         LOG_DEBUG("debug ref_cnt: dec_ref in memory", K(ret), K(macro_id),
                   K(block_info), K(lbt()));
+
+        if (block_info.ref_cnt_ == 0) {
+          ATOMIC_INC(&pending_free_count_);
+        }
       }
     }
   }
@@ -969,6 +1002,7 @@ int ObBlockManager::sweep_one_block(const MacroBlockId &macro_id) {
     LOG_WARN("fail to erase block info from block map", K(ret), K(macro_id));
   } else {
     io_device_->free_block(io_fd);
+    ATOMIC_DEC(&pending_free_count_);
     FLOG_INFO("block manager free block", K(macro_id), K(io_fd));
   }
   return ret;

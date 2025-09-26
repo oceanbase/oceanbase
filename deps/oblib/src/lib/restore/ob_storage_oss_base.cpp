@@ -3097,14 +3097,13 @@ int ObStorageOssWriter::write_obj_(const char *obj_name, const char *buf, const 
     if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && enable_worm_) {
       ObStorageObjectMetaBase meta;
       // validate md5
-      int tmp_ret = OB_SUCCESS;
       const char *current_md5 = static_cast<const char *>(apr_table_get(headers, OSS_CONTENT_MD5));
-      if (OB_TMP_FAIL(get_oss_file_meta(bucket_, obj_name, meta, remote_md5))) {
-        OB_LOG(WARN, "fail to get oss file meta", K(ret), K(tmp_ret), K(bucket_), K(obj_name));
+      if (OB_FAIL(get_oss_file_meta(bucket_, obj_name, meta, remote_md5))) {
+        OB_LOG(WARN, "fail to get oss file meta", K(ret), K(bucket_), K(obj_name));
       } else if (OB_UNLIKELY(!meta.is_exist_ || OB_ISNULL(current_md5) || OB_ISNULL(remote_md5))) {
-        tmp_ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_UNEXPECTED;
         OB_LOG(WARN, "object does not exist, or current_md5/remote_md5 is null",
-            K(ret), K(tmp_ret), K(bucket_), K(obj_name), KP(current_md5), KP(remote_md5), K(meta));
+            K(ret), K(bucket_), K(obj_name), KP(current_md5), KP(remote_md5), K(meta));
       } else if (size == meta.length_ && 0 == strcmp(current_md5, remote_md5)) {
         ret = OB_SUCCESS;
       } else {

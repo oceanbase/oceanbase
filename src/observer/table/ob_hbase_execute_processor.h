@@ -46,7 +46,7 @@
  private:
    int init_tb_ctx(table::ObHCfRows &cf_rows, table::ObTableCtx &tb_ctx);
    int lock_rows();
-   int init_schema_and_calc_part(ObLSID &ls_id);
+   int init_schema_and_calc_part(share::ObLSID &ls_id);
    int decide_use_which_table_operation(table::ObTableCtx &tb_ctx);
    ObTableProccessType get_stat_process_type();
  private:

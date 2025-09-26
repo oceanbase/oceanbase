@@ -475,7 +475,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
       LOG_WARN("failed to freeze src tablet", KR(ret), K(leader_addr));
     } else if (OB_FAIL(create_commit_versions.assign(res.create_commit_versions_))) {
       LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FALSE_IT(data_tablet_size = res.tablet_sizes_.at(0))) {
+    } else if (OB_FALSE_IT(data_tablet_size = std::max(static_cast<int64_t>(2), res.tablet_sizes_.at(0)))) {
     } else if (data_tablet_size < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid data tablet size", K(ret), K(data_tablet_size));
@@ -1043,7 +1043,8 @@ int ObSplitPartitionHelper::check_mem_usage_for_split_(
   common::ObSEArray<share::ObResourcePool, 2> pools;
   common::ObSEArray<uint64_t, 2> unit_config_ids;
   common::ObSEArray<ObUnitConfig, 2> unit_configs;
-
+  const int64_t skip_tablet_num_limit_check = std::abs(OB_E(EventTable::EN_SKIP_TABLET_NUM_LIMIT_CHECK) 0);
+  const bool skip_check = skip_tablet_num_limit_check > 0;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || dst_tablets_number < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(dst_tablets_number));
@@ -1051,40 +1052,45 @@ int ObSplitPartitionHelper::check_mem_usage_for_split_(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("the number of destined split tablets greater than 8192 is not supported", K(ret));
     LOG_USER_WARN(OB_NOT_SUPPORTED, "the number of destined split tablets greater than 8192 is");
-  } else if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
-    LOG_WARN("failed to init proxy", K(ret));
-  } else if (OB_FAIL(unit_op.get_resource_pools(tenant_id, pools))) {
-    LOG_WARN("failed to get resource pool", K(ret), K(tenant_id));
-  } else if (pools.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected empty pool", K(ret), K(pools), K(tenant_id));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-    const share::ObResourcePool &pool = pools.at(i);
-    if OB_FAIL(unit_config_ids.push_back(pool.unit_config_id_)) {
-      LOG_WARN("failed to push back into unit_config_ids");
+  } else if (skip_check) {
+    //skip check
+  } else {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(unit_op.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init proxy", K(ret));
+    } else if (OB_FAIL(unit_op.get_resource_pools(tenant_id, pools))) {
+      LOG_WARN("failed to get resource pool", K(ret), K(tenant_id));
+    } else if (pools.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected empty pool", K(ret), K(pools), K(tenant_id));
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(unit_op.get_unit_configs(unit_config_ids, unit_configs))) {
-    LOG_WARN("failed to get unit configs");
-  } else if (unit_configs.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_configs should not be empty", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < unit_configs.count(); ++i) {
-    ObUnitConfig & u_config = unit_configs.at(i);
-    const double percent_mem_for_split = 0.2;
-    /*
-       tenant memory | maximum num of dst tablets
-            2GB                    51
-            4GB                    102
-                     ......
-    */
-    if (u_config.memory_size() * percent_mem_for_split < (dst_tablets_number * MEMORY_USAGE_SPLIT_PER_DST)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("the memory usage of split greater than the memory limit for split", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the memory usage of split greater than memory limit for split is");
+    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+      const share::ObResourcePool &pool = pools.at(i);
+      if OB_FAIL(unit_config_ids.push_back(pool.unit_config_id_)) {
+        LOG_WARN("failed to push back into unit_config_ids");
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(unit_op.get_unit_configs(unit_config_ids, unit_configs))) {
+      LOG_WARN("failed to get unit configs");
+    } else if (unit_configs.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unit_configs should not be empty", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unit_configs.count(); ++i) {
+      ObUnitConfig & u_config = unit_configs.at(i);
+      const double percent_mem_for_split = 0.2;
+      /*
+         tenant memory | maximum num of dst tablets
+              2GB                    51
+              4GB                    102
+                       ......
+      */
+      if (u_config.memory_size() * percent_mem_for_split < (dst_tablets_number * MEMORY_USAGE_SPLIT_PER_DST)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("the memory usage of split greater than the memory limit for split", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the memory usage of split greater than memory limit for split is");
+      }
     }
   }
   return ret;

@@ -106,6 +106,7 @@ TEST_F(TestSSMemMacroCacheStruct, test_mem_block)
     ASSERT_EQ(nullptr, buckets[0]->first_blk_);
   }
 
+  int64_t cur_alloc_blk_cnt = mem_blk_pool.alloc_blk_cnt_;
   ObArray<ObSSMacroCacheMemBlock *> mem_blks;
   for (int64_t i = 0; i < total_blk_cnt; ++i) {
     ObSSMacroCacheMemBlock *mem_blk = nullptr;
@@ -122,6 +123,8 @@ TEST_F(TestSSMemMacroCacheStruct, test_mem_block)
     buckets[bucket_idx]->inner_add_mem_blk_into_list(mem_blk);
     ASSERT_EQ(1, mem_blk->ref_cnt_);
   }
+  LOG_INFO("TEST_CHECK: ", K(cur_alloc_blk_cnt), K(total_blk_cnt), K(mem_blk_pool.alloc_blk_cnt_));
+  ASSERT_EQ(cur_alloc_blk_cnt + total_blk_cnt, mem_blk_pool.alloc_blk_cnt_);
 
   {
     ObSSMacroCacheMemBlock *mem_blk = nullptr;

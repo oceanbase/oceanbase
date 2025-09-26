@@ -71,6 +71,7 @@ public:
   int64_t write_pos() const { return ash_buffer_->write_pos(); }
   inline int64_t size() const { return ash_buffer_->size(); }
   inline int64_t free_slots_num() const { return ash_buffer_->free_slots_num(); }
+  inline int64_t read_pos() const { return ash_buffer_->read_pos(); }
   const ObActiveSessionStatItem &get(int64_t pos) const {
     return ash_buffer_->get(pos);
   }

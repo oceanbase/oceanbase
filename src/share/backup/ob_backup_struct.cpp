@@ -19,6 +19,7 @@
 #include "storage/ob_locality_manager.h"
 #include "lib/string/ob_sensitive_string.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/backup/ob_backup_helper.h"
 
 
 using namespace oceanbase;
@@ -2557,6 +2558,31 @@ int ObBackupUtils::check_is_tmp_file(const common::ObString &file_name, bool &is
         is_tmp_file = false;
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupUtils::get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupHelper backup_helper;
+  ObBackupPathString backup_dest_str;
+  char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
+  char backup_path[OB_MAX_BACKUP_DEST_LENGTH] = {0};
+  ObBackupDest dest;
+  uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is NULL", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(backup_helper.init(user_tenant_id, *sql_proxy))) {
+    LOG_WARN("fail to init backup help", K(ret));
+  } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
+    LOG_WARN("fail to get backup dest", K(ret), K(user_tenant_id));
+  } else if (OB_FAIL(dest.set(backup_dest_str.ptr()))) {
+    LOG_WARN("fail to set backup dest", K(ret), K(user_tenant_id));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, user_tenant_id, dest, dest_id))) {
+    LOG_WARN("failed to get backup dest id", K(ret), K(user_tenant_id), K(dest), K(user_tenant_id));
   }
   return ret;
 }
@@ -5406,26 +5432,31 @@ ObBackupSrcInfo::~ObBackupSrcInfo()
 }
 
 int ObBackupSrcInfo::check_locality_info_valid(const ObRegion &region, const ObIDC &idc,
-    const ObZone &zone, bool &locality_valid) const
+    const ObZone &zone, bool &locality_valid, int64_t &priority) const
 {
   int ret = OB_SUCCESS;
   locality_valid = false;
+  priority = 0;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(region), K(idc), K(zone), K_(src_type), K_(locality_list));
   } else if (is_empty()) {
     locality_valid = true;
+    priority = 0;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < locality_list_.count(); ++i) {
       const ObBackupZone &locality = locality_list_.at(i);
       if (is_zone() && locality.locality_equal(zone)) {
         locality_valid = true;
+        priority = locality.priority_;
         break;
       } else if (is_region() && locality.locality_equal(region)) {
         locality_valid = true;
+        priority = locality.priority_;
         break;
       } else if (is_idc() && locality.locality_equal(idc)) {
         locality_valid = true;
+        priority = locality.priority_;
         break;
       }
     }

@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/rc/ob_tenant_base.h"
+#include "lib/jni_env/ob_jni_connector.h"
 
 
 namespace oceanbase {
@@ -72,7 +73,7 @@ int ObOdpsJniWriter::do_open() {
     }
     if (OB_SUCC(ret) &&
       env->EnsureLocalCapacity(writer_params_.size() * 2 + 6) < 0) {
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to ensure the local capacity", K(ret));
       }
     }
@@ -94,7 +95,7 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
 {
   int ret = OB_SUCCESS;
   jclass writer_factory_class = env->FindClass(jni_writer_factory_class_.ptr());
-  if (OB_FAIL(check_jni_exception_(env))) {
+  if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
     LOG_WARN("jni is with exception", K(ret));
   } else if (OB_ISNULL(writer_factory_class)) {
     ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
@@ -114,7 +115,7 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
         LOG_WARN("failed to get writer method", K(ret));
       } else {
         jni_writer_cls_ = (jclass)env->CallObjectMethod(writer_factory_obj, get_writer_method);
-        if (OB_FAIL(check_jni_exception_(env))) {
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           ret = OB_JNI_ERROR;
           LOG_WARN("failed to init writer class.", K(ret));
         }
@@ -134,7 +135,7 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
     jmethodID writer_constructor = is_get_session
                                        ? env->GetMethodID(jni_writer_cls_, "<init>", "(Ljava/util/Map;)V")
                                        : env->GetMethodID(jni_writer_cls_, "<init>", "(ILjava/util/Map;)V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to get a writer class constructor.", K(ret));
     } else {
@@ -143,7 +144,7 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
       jobject hashmap_object = env->NewObject(hashmap_class, hashmap_constructor, writer_params_.size());
       jmethodID hashmap_put =
           env->GetMethodID(hashmap_class, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("failed to get the HashMap methods.", K(ret));
       } else {
@@ -171,13 +172,13 @@ int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
         } else {
           jni_writer_obj_ = env->NewObject(jni_writer_cls_, writer_constructor, 1, hashmap_object);
         }
-        if (OB_FAIL(check_jni_exception_(env))) {
+        if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
           ret = OB_JNI_ERROR;
           LOG_WARN("failed to initialize a writer instance.", K(ret));
         }
         if (OB_SUCC(ret)) {
           env->DeleteLocalRef(hashmap_object);
-          if (OB_FAIL(check_jni_exception_(env))) {
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
             ret = OB_JNI_ERROR;
             LOG_WARN("failed to initialize a writer instance.", K(ret));
           } else if (nullptr == jni_writer_obj_) {
@@ -197,7 +198,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   // init jmethod
   if (OB_SUCC(ret)) {
     jni_writer_open_ = env->GetMethodID(jni_writer_cls_, "open", "(I)V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_writer_open_)) {
@@ -208,7 +209,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   if (OB_SUCC(ret)) {
     jni_writer_get_session_id_ =
       env->GetMethodID(jni_writer_cls_, "getSessionId", "()Ljava/lang/String;");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `get_session id` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_writer_get_session_id_)) {
@@ -219,7 +220,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   if (OB_SUCC(ret)) {
     jni_writer_write_next_brs_ =
       env->GetMethodID(jni_writer_cls_, "writeNextBrs", "(JI)V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `writeNextBrs` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_writer_write_next_brs_)) {
@@ -229,7 +230,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_commit_session_ = env->GetMethodID(jni_writer_cls_, "commitSession", "(J)V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `commitSession`", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_commit_session_)) {
@@ -239,7 +240,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_append_block_id_ = env->GetMethodID(jni_writer_cls_, "appendBlockId", "(J)V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to `appendBlockId`", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_append_block_id_)) {
@@ -249,7 +250,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_get_scheam_address_ = env->GetMethodID(jni_writer_cls_, "getSchemaAddress", "()J");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_get_scheam_address_)) {
@@ -259,7 +260,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_get_array_address_ = env->GetMethodID(jni_writer_cls_, "getArrayAddress", "()J");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_get_array_address_)) {
@@ -269,7 +270,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_get_export_schema_address_ = env->GetMethodID(jni_writer_cls_, "getExportToObSchemaAddress", "()J");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_get_export_schema_address_)) {
@@ -279,7 +280,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_writer_get_odps_schema_ = env->GetMethodID(jni_writer_cls_, "getSchemaFromOdps", "()Ljava/util/List;");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_writer_get_odps_schema_)) {
@@ -289,7 +290,7 @@ int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   }
   if (OB_SUCC(ret)) {
     jni_writer_close_ = env->GetMethodID(jni_writer_cls_, "close", "()V");
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
       LOG_WARN("failed to get `open` jni method", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_writer_close_)) {
@@ -319,7 +320,7 @@ int ObOdpsJniWriter::get_current_block_addr() {
       LOG_WARN("jni writer is not initialized", K(ret));
     } else {
       jlong value = env->CallLongMethod(jni_writer_obj_, jni_get_scheam_address_);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to get schema address", K(ret));
       }
       schema_ptr_ = value;
@@ -331,7 +332,7 @@ int ObOdpsJniWriter::get_current_block_addr() {
       LOG_WARN("jni writer is not initialized", K(ret));
     } else {
       jlong value = env->CallLongMethod(jni_writer_obj_, jni_get_array_address_);
-      if (OB_FAIL(check_jni_exception_(env))) {
+      if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
         LOG_WARN("failed to open off-heap table writer", K(ret));
       }
       array_ptr_ = value;
@@ -353,14 +354,14 @@ int ObOdpsJniWriter::do_open_record(int block_id) {
   if (OB_SUCC(ret)) {
 
     env->CallVoidMethod(jni_writer_obj_, jni_writer_open_, block_id);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to open record writer", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     jlong value = env->CallLongMethod(jni_writer_obj_, jni_get_export_schema_address_);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to open off-heap table writer", K(ret));
     }
     export_schema_ptr_ = value;
@@ -378,29 +379,29 @@ int ObOdpsJniWriter::do_open_record(int block_id) {
     if (OB_ISNULL(listObject = env->CallObjectMethod(jni_writer_obj_, jni_writer_get_odps_schema_))) {
       ret = OB_JNI_ENV_ERROR;
       LOG_WARN("failed to get odps schema", K(ret));
-    } else if (OB_FAIL(check_jni_exception_(env))) {
+    } else if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to get odps schema", K(ret));
     } else if (OB_ISNULL(listClass = env->FindClass("java/util/List"))) {
       ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
       LOG_WARN("failed to find class", K(ret));
-    } else if (OB_FAIL(check_jni_exception_(env))) {
+    } else if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to get odps schema", K(ret));
     } else if (OB_ISNULL(sizeMethod = env->GetMethodID(listClass, "size", "()I"))) {
       ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
       LOG_WARN("failed to find method", K(ret));
-    } else if (OB_FAIL(check_jni_exception_(env))) {
+    } else if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to get odps schema", K(ret));
     } else if (OB_ISNULL(getMethod = env->GetMethodID(listClass, "get", "(I)Ljava/lang/Object;"))) {
       ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
       LOG_WARN("failed to find method", K(ret));
-    } else if (OB_FAIL(check_jni_exception_(env))) {
+    } else if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to get odps schema", K(ret));
     } else if (sizeMethod == nullptr || getMethod == nullptr) {
       ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
       LOG_WARN("failed to find method", K(ret));
     } else if (FALSE_IT(size  = env->CallIntMethod(listObject, sizeMethod))) {
       /* do nothing */
-    } else if (OB_FAIL(check_jni_exception_(env))) {
+    } else if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to get odps schema", K(ret));
     } else if (OB_ISNULL(integerClass = env->FindClass("java/lang/Integer"))) {
       ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
@@ -414,7 +415,7 @@ int ObOdpsJniWriter::do_open_record(int block_id) {
         jobject integerObject = env->CallObjectMethod(listObject, getMethod, i);
         if (integerObject != nullptr) {
           jint value = env->CallIntMethod(integerObject, intValueMethod);
-          if (OB_FAIL(check_jni_exception_(env))) {
+          if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
             LOG_WARN("failed to get odps schema", K(ret));
           } else if (OB_FAIL(column_types_.push_back(static_cast<OdpsType>(value)))) {
             LOG_WARN("failed to push back schema ptr", K(ret));
@@ -449,7 +450,7 @@ int ObOdpsJniWriter::do_write_next_brs(void *brs, int batch_size) {
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_) && OB_NOT_NULL(jni_writer_write_next_brs_)) {
     env->CallVoidMethod(jni_writer_obj_, jni_writer_write_next_brs_, brs, batch_size);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to write heap", K(ret));
     }
   }
@@ -474,7 +475,7 @@ int ObOdpsJniWriter::get_session_id(ObIAllocator& outstring_alloc_, ObString& si
     LOG_WARN("failed to find method", K(ret));
   } else {
     jstring sid_str = (jstring)env->CallObjectMethod(jni_writer_obj_, jni_writer_get_session_id_);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to open off-heap table writer", K(ret));
     } else {
       const char *cstr = env->GetStringUTFChars(sid_str, NULL);
@@ -505,7 +506,7 @@ int ObOdpsJniWriter::finish_write()
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_) && OB_NOT_NULL(jni_writer_close_)) {
     env->CallVoidMethod(jni_writer_obj_, jni_writer_close_);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to finish write", K(ret));
     }
   }
@@ -526,7 +527,7 @@ int ObOdpsJniWriter::append_block_id(int64_t block_id)
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_) && OB_NOT_NULL(jni_append_block_id_)) {
     env->CallVoidMethod(jni_writer_obj_, jni_append_block_id_, block_id);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to open off-heap table writer", K(ret));
     }
   }
@@ -546,7 +547,7 @@ int ObOdpsJniWriter::commit_session(int64_t num_block)
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_) && OB_NOT_NULL(jni_commit_session_)) {
     env->CallVoidMethod(jni_writer_obj_, jni_commit_session_, num_block);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to open off-heap table writer", K(ret));
     }
   }
@@ -583,7 +584,7 @@ int ObOdpsJniWriter::do_close()
     writer_params_.reuse();
     params_created_ = false;
     is_opened_ = false;
-    if (OB_SUCC(ret) && OB_FAIL(check_jni_exception_(env))) {
+    if (OB_SUCC(ret) && OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("failed to close the jni env", K(ret));
     }
   }

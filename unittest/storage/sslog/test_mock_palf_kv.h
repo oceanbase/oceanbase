@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "storage/incremental/sslog/ob_sslog_kv_define.h"
 #include "src/rootserver/ob_server_zone_op_service.h"
+#include "src/rootserver/ob_disaster_recovery_replace_tenant.h"
 #include "share/ob_master_key_getter.h"
 #include <cstring>
 #include <unordered_map>
@@ -33,6 +34,7 @@ namespace rootserver {                                                          
   int ObServerZoneOpService::generate_new_server_id_from_palf_kv(uint64_t &new_server_id) { int ret = OB_SUCCESS; new_server_id = 1; return ret; }                                          \
   int ObServerZoneOpService::insert_zone_in_palf_kv(const ObZone &zone) { int ret = OB_SUCCESS; return ret; }                                                                               \
   int ObServerZoneOpService::store_all_zone_in_palf_kv(const ZoneNameArray &zone_list) { int ret = OB_SUCCESS; return ret; }                                                                \
+  int ObDRReplaceTenant::get_logservice_cluster_id(uint64_t &logservice_cluster_id) { int ret = OB_SUCCESS; logservice_cluster_id = 1; return ret; }                                        \
 }                                                                                                                                                                                           \
 namespace share {                                                                                                                                                                           \
   int ObMasterKeyUtil::store_sys_root_key_in_palf_kv() { int ret = OB_SUCCESS; return ret; }                                                                                                \

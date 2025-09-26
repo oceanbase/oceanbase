@@ -1299,6 +1299,72 @@ bool ObParallelCreateNormalTenantArg::is_valid() const
   return valid;
 }
 
+OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaArg, tenant_id_, data_current_version_, rs_addr_);
+
+ObCheckSysTableSchemaArg::ObCheckSysTableSchemaArg() :
+  tenant_id_(OB_INVALID_TENANT_ID),
+  data_current_version_(OB_INVALID_VERSION),
+  rs_addr_() {}
+
+int ObCheckSysTableSchemaArg::init(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+    data_current_version_ = DATA_CURRENT_VERSION;
+    rs_addr_ = GCONF.self_addr_;
+  }
+  return ret;
+}
+
+int ObCheckSysTableSchemaArg::assign(const ObCheckSysTableSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    data_current_version_ = other.data_current_version_;
+    rs_addr_ = other.rs_addr_;
+  }
+  return ret;
+}
+
+bool ObCheckSysTableSchemaArg::is_valid() const
+{
+  bool valid = true;
+  if (!is_valid_tenant_id(tenant_id_)) {
+    valid = false;
+  } else if (data_current_version_ != DATA_CURRENT_VERSION) {
+    valid = false;
+  } else if (!rs_addr_.is_valid()) {
+    valid = false;
+  }
+  return valid;
+}
+
+OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaResult, error_table_ids_);
+
+int ObCheckSysTableSchemaResult::init(ObIArray<uint64_t> &error_table_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(error_table_ids_.assign(error_table_ids))) {
+    LOG_WARN("failed to assign", KR(ret), K(error_table_ids));
+  }
+  return ret;
+}
+
+int ObCheckSysTableSchemaResult::assign(const ObCheckSysTableSchemaResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(error_table_ids_.assign(other.error_table_ids_))) {
+    LOG_WARN("failed to assign", KR(ret));
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObCreateTenantArg)
 {
   int64_t pos = 0;
@@ -8138,6 +8204,7 @@ OB_SERIALIZE_MEMBER(ObPrepareServerForAddingServerArg, mode_, sys_tenant_data_ve
 #ifdef OB_BUILD_TDE_SECURITY
     , root_key_type_, root_key_
 #endif
+    , cluster_version_
 );
 int ObPrepareServerForAddingServerArg::init(
     const Mode &mode,
@@ -8148,12 +8215,16 @@ int ObPrepareServerForAddingServerArg::init(
     , const RootKeyType &root_key_type,
     const ObString &root_key
 #endif
+    , const uint64_t cluster_version
     )
 {
   int ret = OB_SUCCESS;
-  if (0 == sys_tenant_data_version || !is_valid_server_id(server_id)) {
+  if (0 == sys_tenant_data_version
+   || !is_valid_server_id(server_id)
+   || INVALID_CLUSTER_VERSION == cluster_version) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(mode), K(sys_tenant_data_version), K(server_id));
+    LOG_WARN("invalid arg", KR(ret), K(mode), K(sys_tenant_data_version),
+      K(server_id), K(cluster_version));
   } else {
     mode_ = mode;
     sys_tenant_data_version_ = sys_tenant_data_version;
@@ -8162,6 +8233,7 @@ int ObPrepareServerForAddingServerArg::init(
     root_key_type_ = root_key_type;
     root_key_ = root_key;
 #endif
+    cluster_version_ = cluster_version;
     if (OB_FAIL(zone_storage_infos_.assign(zone_storage_infos))) {
       LOG_WARN("failed to assign zone_storage_infos_.assign", KR(ret), K(zone_storage_infos),
                K(zone_storage_infos_));
@@ -8179,6 +8251,7 @@ int ObPrepareServerForAddingServerArg::assign(const ObPrepareServerForAddingServ
     root_key_type_ = other.root_key_type_;
     root_key_= other.root_key_;
 #endif
+    cluster_version_ = other.cluster_version_;
     if (OB_FAIL(zone_storage_infos_.assign(other.zone_storage_infos_))) {
       LOG_WARN("failed to assign zone_storage_infos_.assign", KR(ret), K(other.zone_storage_infos_),
           K(zone_storage_infos_));
@@ -8199,6 +8272,7 @@ void ObPrepareServerForAddingServerArg::reset()
   root_key_type_ = INVALID;
   root_key_.reset();
 #endif
+  cluster_version_ = INVALID_CLUSTER_VERSION;
 }
 OB_SERIALIZE_MEMBER(
     ObPrepareServerForAddingServerResult,
@@ -9264,13 +9338,15 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_, physical_row_count_, is_data_split_finished_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_, physical_row_count_, is_data_split_finished_,
+  cg_row_inserted_);
 
 int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRequestResult &other)
 {
   int ret = OB_SUCCESS;
   ret_code_ = other.ret_code_;
   row_inserted_ = other.row_inserted_;
+  cg_row_inserted_ = other.cg_row_inserted_;
   row_scanned_ = other.row_scanned_;
   physical_row_count_ = other.physical_row_count_;
   is_data_split_finished_ = other.is_data_split_finished_;
@@ -9280,7 +9356,7 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_,
                     source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_,
                     task_id_, execution_id_, row_scanned_, row_inserted_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
-                    server_addr_, physical_row_count_);
+                    server_addr_, physical_row_count_, cg_row_inserted_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -9302,6 +9378,7 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   row_inserted_ = other.row_inserted_;
   server_addr_ = other.server_addr_;
   physical_row_count_ = other.physical_row_count_;
+  cg_row_inserted_ = other.cg_row_inserted_;
   return ret;
 }
 
@@ -9649,6 +9726,38 @@ int ObFetchSplitTabletInfoRes::assign(const ObFetchSplitTabletInfoRes &other)
 OB_SERIALIZE_MEMBER(ObFetchSplitTabletInfoRes, tablet_sizes_, create_commit_versions_);
 
 // === Functions for tablet split end. ===
+
+int ObFetchTabletPhysicalRowCntArg::assign(const ObFetchTabletPhysicalRowCntArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    tablet_id_ = other.tablet_id_;
+    calc_sstable_ = other.calc_sstable_;
+    calc_memtable_ = other.calc_memtable_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchTabletPhysicalRowCntArg, tenant_id_, ls_id_, tablet_id_, calc_sstable_, calc_memtable_);
+
+int ObFetchTabletPhysicalRowCntRes::assign(const ObFetchTabletPhysicalRowCntRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else {
+    physical_row_cnt_ = other.physical_row_cnt_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchTabletPhysicalRowCntRes, physical_row_cnt_);
 
 int ObCreateDirectoryArg::assign(const ObCreateDirectoryArg &other)
 {
@@ -11804,7 +11913,7 @@ OB_SERIALIZE_MEMBER(ObEnableSSMicroCacheArg, tenant_id_, is_enabled_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetSSMicroCacheAllInfoResult, micro_cache_stat_, super_blk_, arc_info_);
 OB_SERIALIZE_MEMBER(ObClearSSMicroCacheArg, tenant_id_);
-OB_SERIALIZE_MEMBER(ObFlushSSLocalCacheArg, tenant_id_, flush_type_);
+OB_SERIALIZE_MEMBER(ObFlushSSLocalCacheArg, tenant_id_, flush_type_, rpc_abs_timeout_us_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalTmpFileArg, tenant_id_, macro_id_);
 OB_SERIALIZE_MEMBER(ObDelSSLocalMajorArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObCalibrateSSDiskSpaceArg, tenant_id_);

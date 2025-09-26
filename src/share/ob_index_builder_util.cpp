@@ -1128,6 +1128,9 @@ int ObIndexBuilderUtil::generate_prefix_column(
           prefix_column.set_data_type(ObVarcharType);
           prefix_column.set_data_scale(0);
         }
+        // data_schema 为 not null时，会拦截掉null写入。 所以不需要设置前缀列的not null属性。
+        prefix_column.set_nullable(true);
+        prefix_column.drop_not_null_cst();
         prefix_column.set_rowkey_position(0); //非主键列
         prefix_column.set_index_position(0); //非索引列
         prefix_column.set_tbl_part_key_pos(0); //非partition key
@@ -1135,6 +1138,8 @@ int ObIndexBuilderUtil::generate_prefix_column(
         int32_t data_len = static_cast<int32_t>(min(sort_item.prefix_len_, old_column->get_data_length()));
         prefix_column.set_data_length(data_len);
         prefix_column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        // Clear skip index attribute for virtual generated columns to avoid validation errors
+        prefix_column.set_skip_index_attr(0);
         if (is_pad_char_to_full_length(sql_mode)) {
           prefix_column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
         }

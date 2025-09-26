@@ -5287,9 +5287,15 @@ bool ObResolverUtils::check_external_pseudo_column_is_valid(
     is_valid = ObExternalFileFormat::CSV_FORMAT == format_type;
   } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)) {
     is_valid = ObExternalFileFormat::ODPS_FORMAT == format_type;
-  } else if (0 == column_name.case_compare(N_EXTERNAL_FILE_ROW)
-             || column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)
-             || column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
+  } else if (0 == column_name.case_compare(N_EXTERNAL_FILE_ROW)) {
+    is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
+               || ObExternalFileFormat::ORC_FORMAT == format_type
+               || ObExternalFileFormat::PLUGIN_FORMAT == format_type;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
+    is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
+               || ObExternalFileFormat::ORC_FORMAT == format_type
+               || ObExternalFileFormat::CSV_FORMAT == format_type;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
                || ObExternalFileFormat::ORC_FORMAT == format_type;
   }
@@ -5309,6 +5315,47 @@ ObResolverUtils::deduce_external_file_format_from_pseudo_column_name(const commo
     type = ObExternalFileFormat::PARQUET_FORMAT;
   }
   return type;
+}
+
+
+int refine_external_column_expr_name(ObRawExprFactory &expr_factory,
+                                     ObPseudoColumnRawExpr &file_column_expr,
+                                     ColumnIndexType column_index_type)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString temp_str;
+  ObString refined_column_name;
+  OZ (temp_str.append("externalrow$col"));
+
+  if (OB_SUCC(ret)) {
+    switch (column_index_type) {
+      case ColumnIndexType::NAME: {
+        ret = temp_str.append_fmt("_by_name('%.*s')",
+                                  file_column_expr.get_data_access_path().length(),
+                                  file_column_expr.get_data_access_path().ptr());
+        break;
+      }
+      case ColumnIndexType::ID: {
+        ret = temp_str.append_fmt("_by_id(%lu)", file_column_expr.get_column_idx());
+        break;
+      }
+      case ColumnIndexType::POSITION: {
+        ret = temp_str.append_fmt("_by_position(%lu)", file_column_expr.get_column_idx());
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column index type", K(ret), K(column_index_type));
+        break;
+      }
+    }
+  }
+
+  OZ (ob_write_string(expr_factory.get_allocator(), temp_str.string(), refined_column_name));
+  if (OB_SUCC(ret)) {
+    file_column_expr.set_expr_name(refined_column_name);
+  }
+  return ret;
 }
 
 int ObResolverUtils::build_file_column_expr_for_parquet(
@@ -5369,6 +5416,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             if (dst_type.is_string_or_lob_locator_type() || dst_type.is_enum_or_set()) {
               // string data stored in parquet file as UTF8 format
               dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+              dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
             }
             file_column_expr->set_result_type(dst_type);
           }
@@ -5389,16 +5437,13 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             // string data stored in parquet file as UTF8 format
             file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
-          if (ob_is_enum_or_set_type(column_expr->get_data_type())
-              || ob_is_text_tc(column_expr->get_data_type())) {
-            if (is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
-              file_column_expr->set_data_type(ObRawType);
-            } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
-              file_column_expr->set_data_type(ObCharType);
-              file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
-            } else {
-              file_column_expr->set_data_type(ObVarcharType);
-            }
+          if (ob_is_text_tc(column_expr->get_data_type())
+              && is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
+            file_column_expr->set_data_type(ObRawType);
+          }
+          if (ob_is_enum_or_set_type(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObCharType);
+            file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
           }
         }
       } else {
@@ -5442,6 +5487,11 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected column index type", K(ret), K(column_index_type));
           break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(refine_external_column_expr_name(expr_factory, *file_column_expr, column_index_type))) {
+          LOG_WARN("fail to refine external column expr name");
         }
       }
     }
@@ -6900,7 +6950,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        uint64_t tenant_id,
                                        const bool enable_decimal_int_type,
                                        const bool enable_mysql_compatible_dates,
-                                       const bool convert_real_type_to_decimal /*false*/)
+                                       const bool convert_real_type_to_decimal /*false*/,
+                                       const bool is_external_table /*false*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ob_is_valid_obj_type(static_cast<ObObjType>(type_node.type_)))) {
@@ -7130,7 +7181,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_scale(scale);
         // the datetime and timestamp type share the same type class, so we need to distinguish the
         // datetime and check need convert mysql_datetime type here.
-        if (ObDateTimeType == data_type.get_obj_type() && enable_mysql_compatible_dates) {
+        if (ObDateTimeType == data_type.get_obj_type() && enable_mysql_compatible_dates && !is_external_table) {
           data_type.set_obj_type(ObMySQLDateTimeType);
         }
       }
@@ -7139,7 +7190,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       // nothing to do.
       data_type.set_precision(default_accuracy.get_precision());
       data_type.set_scale(default_accuracy.get_scale());
-      if (enable_mysql_compatible_dates) {
+      if (enable_mysql_compatible_dates && !is_external_table) {
         data_type.set_obj_type(ObMySQLDateType);
       }
       break;

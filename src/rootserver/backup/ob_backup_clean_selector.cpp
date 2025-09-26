@@ -385,8 +385,8 @@ int ObBackupDeleteSelector::apply_current_path_retention_policy_(
         failure_info.failure_reason = "cannot_delete_backup_set_in_current_path_when_delete_policy_is_set";
       } else {
         // get the latest full backup set for the current path
-        if (OB_FAIL(data_provider_->get_latest_full_backup_set(
-                                        job_attr_->tenant_id_, current_backup_path_str, clean_point))) {
+        if (OB_FAIL(data_provider_->get_latest_valid_full_backup_set(
+                      job_attr_->tenant_id_, *archive_helper_, current_backup_path_str, clean_point))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
             ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
             LOG_WARN("No full backup exists in this dest. No sets will be deleted", K(ret), K(candidate_path));
@@ -683,19 +683,54 @@ int ObBackupDataProvider::get_oldest_full_backup_set(
   return ret;
 }
 
-int ObBackupDataProvider::get_latest_full_backup_set(
+int ObBackupDataProvider::get_latest_valid_full_backup_set(
     const uint64_t tenant_id,
+    ObArchivePersistHelper &archive_helper,
     const ObBackupPathString &backup_path,
     ObBackupSetFileDesc &latest_backup_desc)
 {
   int ret = OB_SUCCESS;
+  int64_t backup_set_id_limit = INT64_MAX;
+  bool can_used_to_restore = false;
+  common::ObArray<std::pair<int64_t, int64_t>> dest_array;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDataProvider not inited", K(ret));
-  } else if (OB_FAIL(ObBackupSetFileOperator::get_latest_full_backup_set(
-      *sql_proxy_, tenant_id, backup_path.ptr(), latest_backup_desc))) {
-    LOG_WARN("failed to get latest full backup set", K(ret), K(tenant_id), K(backup_path));
+  } else if (OB_FAIL(archive_helper.get_valid_dest_pairs(*sql_proxy_, dest_array))) {
+    LOG_WARN("failed to get valid dest pairs", K(ret));
+  } else if (0 == dest_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, no valid dest found", K(ret));
+  } else if (1 != dest_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, more than one valid dest found", K(ret), K(dest_array));
+  } else {
+    while (OB_SUCC(ret) && !can_used_to_restore) {
+      if (OB_FAIL(ObBackupSetFileOperator::get_latest_full_backup_set_with_limit(
+          *sql_proxy_, tenant_id, backup_path.ptr(), backup_set_id_limit, latest_backup_desc))) {
+        LOG_WARN("failed to get latest full backup set with limit",
+                    K(ret), K(tenant_id), K(backup_path), K(backup_set_id_limit));
+      } else {
+        if (latest_backup_desc.plus_archivelog_) {
+          can_used_to_restore = true;
+          LOG_INFO("get latest valid full backup set with plus archivelog",
+                    K(ret), K(tenant_id), K(backup_path), K(latest_backup_desc));
+        } else {
+          if (OB_FAIL(archive_helper.check_piece_continuity_between_two_scn(
+                        *sql_proxy_, dest_array.at(0).second, latest_backup_desc.start_replay_scn_,
+                        latest_backup_desc.min_restore_scn_, can_used_to_restore))) {
+            LOG_WARN("failed to check piece continuity between two scn",
+                      K(ret), K(tenant_id), K(backup_path), K(latest_backup_desc));
+          } else if (!can_used_to_restore) {
+            backup_set_id_limit = latest_backup_desc.backup_set_id_;
+            LOG_INFO("get latest valid full backup set", K(ret), K(tenant_id),
+                      K(backup_path), K(latest_backup_desc));
+          }
+        }
+      }
+    }
   }
+
   return ret;
 }
 
@@ -757,7 +792,7 @@ int ObBackupDataProvider::get_candidate_obsolete_backup_sets(
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDataProvider not inited", K(ret));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_candidate_obsolete_backup_sets(
-      *sql_proxy_, tenant_id, expired_time, backup_path_str, backup_set_infos))) {
+        *sql_proxy_, tenant_id, expired_time, backup_path_str, backup_set_infos))) {
     LOG_WARN("failed to get candidate obsolete backup sets", K(ret), K(tenant_id), K(expired_time));
   }
   return ret;
@@ -1262,7 +1297,7 @@ int ObBackupDeleteSelector::get_obsolete_backup_set_infos_helper_(ObBackupSetFil
   ObArray<ObBackupSetFileDesc> backup_set_infos;
   CompareBackupSetInfo backup_set_info_cmp;
   ObArray<ObBackupSetFileDesc> final_deletable_set_list;
-
+  common::ObArray<std::pair<int64_t, int64_t>> dest_array;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
@@ -1270,6 +1305,15 @@ int ObBackupDeleteSelector::get_obsolete_backup_set_infos_helper_(ObBackupSetFil
   } else if (OB_FAIL(get_errsim_expired_parameter_(job_attr_->expired_time_))) {
     LOG_WARN("errsim failed to override expired time", K(ret));
 #endif
+  // get the archive dest, for check piece continuity with backup set below
+  } else if (OB_FAIL(archive_helper_->get_valid_dest_pairs(*sql_proxy_, dest_array))) {
+    LOG_WARN("failed to get valid dest pairs", K(ret));
+  } else if (0 == dest_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, no valid dest found", K(ret));
+  } else if (1 != dest_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, more than one valid dest found", K(ret), K(dest_array));
   } else if (OB_FAIL(data_provider_->get_candidate_obsolete_backup_sets(job_attr_->tenant_id_,
                                   job_attr_->expired_time_, backup_path_str, backup_set_infos))) {
     LOG_WARN("failed to get candidate obsolete backup sets", K(ret));
@@ -1277,6 +1321,7 @@ int ObBackupDeleteSelector::get_obsolete_backup_set_infos_helper_(ObBackupSetFil
   } else {
     for (int64_t i = backup_set_infos.count() - 1 ; OB_SUCC(ret) && i >= 0; i--) {
       bool need_deleted = false;
+      bool can_used_to_restore = false;
       const ObBackupSetFileDesc &backup_set_info = backup_set_infos.at(i);
       if (!backup_set_info.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
@@ -1288,9 +1333,21 @@ int ObBackupDeleteSelector::get_obsolete_backup_set_infos_helper_(ObBackupSetFil
         need_deleted = true;
         LOG_INFO("[BACKUP_CLEAN] allow delete", K(backup_set_info));
       } else if (backup_set_info.backup_type_.is_full_backup() && !first_full_backup_set.is_valid()) {
-        if (OB_FAIL(first_full_backup_set.assign(backup_set_info))) {
-          LOG_WARN("backup set info is invalid", K(ret));
+        if (backup_set_info.plus_archivelog_) {
+          can_used_to_restore = true;
+          LOG_INFO("get latest valid full backup set with plus archivelog", K(ret), K(backup_set_info));
+        } else if (OB_FAIL(archive_helper_->check_piece_continuity_between_two_scn(*sql_proxy_, dest_array.at(0).second,
+                              backup_set_info.start_replay_scn_, backup_set_info.min_restore_scn_, can_used_to_restore))) {
+          LOG_WARN("failed to check piece continuity between two scn", K(ret), K(backup_set_info));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!can_used_to_restore) {
+          LOG_INFO("backup set can not be used to restore", K(backup_set_info));
+        } else if (OB_FAIL(first_full_backup_set.assign(backup_set_info))) {
+          LOG_WARN("failed to assign first full backup set", K(ret));
         } else {
+          // Here we get a full backup set, which is the latest one that has expired and can be used for restore.
+          // We will use its start_replay_scn as the limit to delete sets and pieces.
           need_deleted = false;
         }
       } else if (!backup_set_info.backup_type_.is_full_backup()

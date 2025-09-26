@@ -78,7 +78,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_object_ctx_,
                     external_pushdown_filters_,
                     aggregate_param_props_,
-                    lake_table_format_);
+                    lake_table_format_,
+                    push_down_topn_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -107,7 +108,9 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     das_tasks_key_,
     row_scan_cnt_,
     task_type_,
-    local_dynamic_filter_params_);
+    local_dynamic_filter_params_,
+    topn_param_,
+    do_local_dynamic_filter_);
   return ret;
 }
 
@@ -138,7 +141,9 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     das_tasks_key_,
     row_scan_cnt_,
     task_type_,
-    local_dynamic_filter_params_);
+    local_dynamic_filter_params_,
+    topn_param_,
+    do_local_dynamic_filter_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -172,7 +177,9 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     das_tasks_key_,
     row_scan_cnt_,
     task_type_,
-    local_dynamic_filter_params_);
+    local_dynamic_filter_params_,
+    topn_param_,
+    do_local_dynamic_filter_);
   return len;
 }
 

@@ -3791,6 +3791,7 @@ def_table_schema(
     ('last_check_time', 'int', 'true', '0'),
     ('max_iops', 'int', 'false', '0'),
     ('max_bandwidth', 'int', 'false', '0'),
+    ('status', 'varchar:64', 'true', 'NORMAL')
   ],
 )
 
@@ -8421,6 +8422,11 @@ all_ai_model_endpoint_def = dict(
 )
 def_table_schema(**all_ai_model_endpoint_def)
 
+# 573 : __wr_active_session_history_v2
+# 574: __all_tenant_macro_block_copy_task
+# 575: __all_tenant_macro_block_copy_task_progress
+# 576: __all_tenant_macro_block_copy_task_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -8963,7 +8969,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_plan_cache_stat_i1' :  { 'index_columns' : ['tenant_id'],
-                     'index_using_type' : 'USING_HASH'}},
+                     'index_using_type' : 'USING_HASH','index_table_id' : '14999','index_table_id_ora' : '19998'}},
 )
 
 def_table_schema(
@@ -9212,7 +9218,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
   partition_columns = ['svr_ip', 'svr_port'],
   index = {'all_virtual_session_event_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14998'}},
 )
 
 def_table_schema(
@@ -9250,7 +9256,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_session_wait_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14997','index_table_id_ora' : '19997'}},
 )
 
 
@@ -9286,7 +9292,7 @@ normal_columns = [
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_session_wait_history_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14996','index_table_id_ora' : '19996'}},
 )
 
 def_table_schema(
@@ -9319,7 +9325,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_system_event_i1' : { 'index_columns' : ['tenant_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14995', 'index_table_id_ora' : '19993'}},
 )
 
 
@@ -9393,7 +9399,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sesstat_i1' : { 'index_columns' : ['session_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14994', 'index_table_id_ora' : '19995'}},
 )
 
 
@@ -9424,7 +9430,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sysstat_i1' : { 'index_columns' : ['tenant_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14993', 'index_table_id_ora' : '19994'}},
 )
 
 ##11022:__all_virtual_storage_stat obsolated in 4.0
@@ -9763,7 +9769,7 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sql_audit_i1' :  { 'index_columns' : ['tenant_id', 'request_id'],
-                     'index_using_type' : 'USING_BTREE'}},
+                     'index_using_type' : 'USING_BTREE','index_table_id' : '14992','index_table_id_ora' : '19999'}},
 )
 
 # 11033: __all_virtual_partition_sstable_image_info # abandoned in 4.0
@@ -10123,6 +10129,9 @@ def_table_schema(
    ],
     partition_columns = ['svr_ip', 'svr_port'],
     vtable_route_policy = 'distributed',
+    index = {'all_virtual_tablet_sstable_macro_info_i1' :  { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id', 'end_log_scn'],
+                     'index_using_type' : 'USING_HASH','index_table_id' : '14988'},
+    }
 )
 
 def_table_schema(
@@ -11702,6 +11711,8 @@ def_table_schema(
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
+  index = {'all_virtual_table_mgr_i1' :  { 'index_columns' : ['tenant_id', 'ls_id', 'tablet_id'],
+                     'index_using_type' : 'USING_HASH','index_table_id' : '14987', 'index_table_id_ora' : '19990'}},
 )
 
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -12699,7 +12710,7 @@ def_table_schema(
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_sql_plan_monitor_i1' :  { 'index_columns' : ['TENANT_ID', 'REQUEST_ID'],
-                     'index_using_type' : 'USING_BTREE'}},
+                     'index_using_type' : 'USING_BTREE','index_table_id' : '14991', 'index_table_id_ora' : '19992'}},
 )
 
 
@@ -13982,7 +13993,7 @@ def_table_schema(
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
   index = {'all_virtual_ash_i1' : { 'index_columns' : ['SAMPLE_TIME'],
-                    'index_using_type' : 'USING_BTREE'}},
+                    'index_using_type' : 'USING_BTREE','index_table_id' : '14990', 'index_table_id_ora' : '19991'}},
 )
 
 def_table_schema(
@@ -16509,7 +16520,7 @@ def_table_schema(
   ],
   vtable_route_policy = 'only_rs',
   index = {'all_virtual_ddl_diagnose_info_i1' : { 'index_columns' : ['ddl_task_id'],
-                    'index_using_type' : 'USING_HASH'}},
+                    'index_using_type' : 'USING_HASH','index_table_id' : '14989'}},
 )
 
 # 12515: __all_virtual_plugin_info
@@ -17095,14 +17106,15 @@ def_table_schema(
 
 def_table_schema(
   owner = 'wangbai.wx',
-  table_name      = '__all_virtual_dba_source_v1',
+  table_name      = '__all_virtual_source',
   table_id        = '12571',
   table_type      = 'VIRTUAL_TABLE',
-  rowkey_columns  = [],
-  normal_columns  = [
+  rowkey_columns  = [
    ('owner', 'varchar:128'),
    ('name', 'varchar:128'),
    ('type', 'varchar:12'),
+  ],
+  normal_columns  = [
    ('line', 'number:38:0'),
    ('text', 'varchar:4000'),
    ('origin_con_id', 'number:38:0'),
@@ -17129,7 +17141,42 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_ai_model_endpoint'],
   in_tenant_space=True))
 
-# 12575: __all_virtual_ss_object_type_io_stat
+def_table_schema(
+  owner = 'zhaomiao.xxx',
+  table_name = '__all_virtual_ss_object_type_io_stat',
+  table_id = '12575',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('svr_ip',    'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',  'int'),
+    ('tenant_id', 'int'),
+    ('object_type', 'varchar:128'),
+    ('mode', 'varchar:32'),
+  ],
+  normal_columns    = [
+    ('read_cnt', 'int'),  # read stat not include head
+    ('read_size', 'int'),
+    ('read_fail_cnt', 'int'),
+    ('read_iops', 'int'),
+    ('write_cnt', 'int'),
+    ('write_size', 'int'),
+    ('write_fail_cnt', 'int'),
+    ('write_iops', 'int'),
+    ('delete_cnt', 'int'),
+    ('delete_fail_cnt', 'int'),
+    ('delete_iops', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+# 12576: __all_virtual_wr_active_session_history_v2
+# 12577: __all_virtual_macro_block_copy_task
+# 12578: __all_virtual_macro_block_copy_task_progress
+# 12579: __all_virtual_macro_block_copy_task_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17701,8 +17748,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531', all_def_keywords['__all_virtual_tenant_ss_storage_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_source_v1']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 # 15534: __all_virtual_ss_diagnose_info
+# 15535: __all_virtual_wr_active_session_history_v2
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -22319,7 +22367,7 @@ SELECT A.TENANT_ID,
             WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
             ELSE E.LATEST_FLASHBACK_LOG_SCN
         END) AS FLASHBACK_LOG_SCN,
-        A.INFO
+        A.INFO AS COMMENT
 FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
 LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
     ON A.TENANT_ID = B.TENANT_ID
@@ -28091,11 +28139,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -28134,11 +28188,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -28280,7 +28340,8 @@ def_table_schema(
         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
       ELSE
         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
-    END AS MAX_BANDWIDTH_DISPLAY
+    END AS MAX_BANDWIDTH_DISPLAY,
+    STATUS
     FROM oceanbase.__all_virtual_backup_storage_info
 """.replace("\n", " ")
 )
@@ -29830,7 +29891,8 @@ def_table_schema(
         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
       ELSE
         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
-    END AS MAX_BANDWIDTH_DISPLAY
+    END AS MAX_BANDWIDTH_DISPLAY,
+    STATUS
     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_STORAGE_INFO
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -29917,11 +29979,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -29961,11 +30029,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', USEC_TO_TIME(PARAMETER))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', USEC_TO_TIME(PARAMETER))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
@@ -43699,8 +43773,8 @@ def_table_schema(
       JSON_VALUE(A.STATISTICS, '$.incr_mem_hold' RETURNING SIGNED) + JSON_VALUE(A.STATISTICS, '$.snap_mem_hold' RETURNING SIGNED) AS MEMORY_HOLD,
       JSON_VALUE(A.STATISTICS, '$.incr_mem_hold' RETURNING SIGNED) AS INCR_MEM_HOLD,
       JSON_VALUE(A.STATISTICS, '$.snap_mem_hold' RETURNING SIGNED) AS SNAP_MEM_HOLD,
-      JSON_VALUE(A.SYNC_INFO, '$.incr_cnt' RETURNING SIGNED) AS INCR_INDEX_CNT,
-      JSON_VALUE(A.SYNC_INFO, '$.snap_cnt' RETURNING SIGNED) AS SNAP_INDEX_CNT,
+      JSON_VALUE(A.STATISTICS, '$.incr_index_cnt' RETURNING SIGNED) AS INCR_INDEX_CNT,
+      JSON_VALUE(A.STATISTICS, '$.snap_index_cnt' RETURNING SIGNED) AS SNAP_INDEX_CNT,
       JSON_VALUE(A.STATISTICS, '$.incr_data_scn' RETURNING UNSIGNED) AS INCR_DATA_SCN,
       JSON_VALUE(A.STATISTICS, '$.snap_data_scn' RETURNING UNSIGNED) AS SNAP_DATA_SCN,
       (CASE JSON_VALUE(A.SYNC_INFO, '$.last_succ_time' RETURNING SIGNED) WHEN 0 THEN NULL ELSE usec_to_time(JSON_VALUE(A.SYNC_INFO, '$.last_succ_time' RETURNING SIGNED)) END) as LAST_SUCC_SYNC_TIME,
@@ -44057,8 +44131,70 @@ def_table_schema(
     WHERE ENDPOINT_ID != -1;
   """.replace("\n", " ")
 )
-# 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
-# 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
+
+def_table_schema(
+  owner           = 'zhaomiao.xxx',
+  table_name      = 'GV$OB_SS_OBJECT_TYPE_IO_STAT',
+  table_id        = '21693',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    OBJECT_TYPE,
+    MODE,
+    READ_CNT,
+    READ_SIZE,
+    READ_FAIL_CNT,
+    READ_IOPS,
+    WRITE_CNT,
+    WRITE_SIZE,
+    WRITE_FAIL_CNT,
+    WRITE_IOPS,
+    DELETE_CNT,
+    DELETE_FAIL_CNT,
+    DELETE_IOPS
+  FROM oceanbase.__all_virtual_ss_object_type_io_stat
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaomiao.xxx',
+  table_name      = 'V$OB_SS_OBJECT_TYPE_IO_STAT',
+  table_id        = '21694',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    OBJECT_TYPE,
+    MODE,
+    READ_CNT,
+    READ_SIZE,
+    READ_FAIL_CNT,
+    READ_IOPS,
+    WRITE_CNT,
+    WRITE_SIZE,
+    WRITE_FAIL_CNT,
+    WRITE_IOPS,
+    DELETE_CNT,
+    DELETE_FAIL_CNT,
+    DELETE_IOPS
+  FROM oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT
+  WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
+  """.replace("\n", " ")
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -61122,7 +61258,8 @@ def_table_schema(
         THEN CONCAT(ROUND(MAX_BANDWIDTH/1024,2), 'KB/s')
       ELSE
         CONCAT(ROUND(MAX_BANDWIDTH,2), 'B/s')
-    END AS MAX_BANDWIDTH_DISPLAY
+    END AS MAX_BANDWIDTH_DISPLAY,
+    STATUS
     FROM SYS.ALL_VIRTUAL_BACKUP_STORAGE_INFO
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -61215,11 +61352,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
@@ -61261,11 +61404,17 @@ def_table_schema(
       CASE
         WHEN TYPE = 'DELETE OBSOLETE BACKUP' THEN
           CASE
-            WHEN TENANT_ID = 1 THEN CONCAT('init_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
+            WHEN TENANT_ID = 1 THEN ''
             ELSE CONCAT('expired_time:', TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss'))
           END
-        WHEN TYPE = 'DELETE BACKUP ALL' THEN 'request_delete_path:' || data_backup_path_list || log_archive_path_list
-        ELSE CONCAT('request_delete_id:', PARAMETER)
+        WHEN TYPE = 'DELETE BACKUP ALL' THEN
+          CASE
+            WHEN data_backup_path_list IS NOT NULL AND data_backup_path_list != '' THEN CONCAT('data_backup_dest:', data_backup_path_list)
+            ELSE CONCAT('log_archive_dest:', log_archive_path_list)
+          END
+        WHEN TYPE = 'DELETE BACKUPSET' THEN CONCAT('backup_set_id:', PARAMETER)
+        WHEN TYPE = 'DELETE ARCHIVELOG_PIECE' THEN CONCAT('archivelog_piece_id:', PARAMETER)
+        ELSE 'invalid_clean_type'
       END AS PARAMETER,
       JOB_LEVEL,
       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
@@ -62241,7 +62390,7 @@ SELECT A.TENANT_ID,
           WHEN A.TENANT_ID = 1 THEN NULL
           WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN NULL
           ELSE E.LATEST_FLASHBACK_LOG_SCN END) AS FLASHBACK_LOG_SCN,
-        A.INFO
+        A.INFO AS "COMMENT"
 FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
 LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
     ON A.TENANT_ID = B.TENANT_ID
@@ -66393,7 +66542,7 @@ def_table_schema(
 
 def_table_schema(
     owner           = 'wangbai.wx',
-    table_name      = 'DBA_SOURCE_V1',
+    table_name      = 'DBA_OB_SOURCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '25316',
     table_type      = 'SYSTEM_VIEW',
@@ -66402,13 +66551,13 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1;
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE;
 """.replace("\n", " ")
 )
 
 def_table_schema(
     owner           = 'wangbai.wx',
-    table_name      = 'ALL_SOURCE_V1',
+    table_name      = 'ALL_OB_SOURCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '25317',
     table_type      = 'SYSTEM_VIEW',
@@ -66417,7 +66566,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE
     WHERE origin_con_id != 1 AND
       (owner = USER OR
        USER_CAN_ACCESS_OBJ(CASE type
@@ -66430,13 +66579,13 @@ def_table_schema(
          WHEN 'TYPE BODY' THEN 4
          END, object_id, database_id) = 1)
     UNION ALL
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1 WHERE origin_con_id = 1;
+    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE origin_con_id = 1;
 """.replace("\n", " ")
 )
 
 def_table_schema(
     owner           = 'wangbai.wx',
-    table_name      = 'USER_SOURCE_V1',
+    table_name      = 'USER_OB_SOURCE',
     database_id     = 'OB_ORA_SYS_DATABASE_ID',
     table_id        = '25318',
     table_type      = 'SYSTEM_VIEW',
@@ -66445,7 +66594,7 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_DBA_SOURCE_V1 WHERE owner = USER AND origin_con_id != 1;
+    SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE owner = USER AND origin_con_id != 1;
 """.replace("\n", " ")
 )
 #

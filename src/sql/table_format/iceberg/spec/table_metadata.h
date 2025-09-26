@@ -142,6 +142,7 @@ public:
 
   int init_from_json(const ObJsonObject &json_object);
   int get_current_snapshot(const Snapshot *&snapshot) const;
+  int get_current_snapshot(Snapshot *&snapshot);
   int get_schema(int32_t schema_id, const Schema *&schema) const;
   int get_partition_spec(int32_t partition_spec_id, const PartitionSpec *&partition_spec) const;
   int get_table_property(const char *table_property_key, ObString &value) const;

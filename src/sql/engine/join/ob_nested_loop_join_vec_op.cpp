@@ -464,6 +464,7 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     clear_evaluated_flag();
     if (JS_GET_LEFT_ROW == batch_state_) {
       LOG_DEBUG("start get left row", K(spec_.id_));
+      reset_batchrows();
       if (OB_FAIL(get_next_left_row())) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;

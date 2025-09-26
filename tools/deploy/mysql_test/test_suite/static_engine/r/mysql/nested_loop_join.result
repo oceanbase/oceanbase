@@ -785,20 +785,20 @@ Query Plan
 ======================================================
 |ID|OPERATOR              |NAME|EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |    |1       |96          |
+|0 |NESTED-LOOP ANTI JOIN |    |1       |83          |
 |1 |├─TABLE FULL SCAN     |t1  |5       |3           |
-|2 |└─TABLE GET           |t2  |1       |18          |
+|2 |└─TABLE GET           |t2  |1       |16          |
 ======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.c1(:0)]), use_batch=false
+      conds(nil), nl_params_([t1.c1(:0)]), use_batch=true
   1 - output([t1.c2], [t1.c1]), filter(nil), rowset=16
       access([t1.c2], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c2]), range(MIN ; MAX)always true
   2 - output(nil), filter(nil), rowset=16
-      access(nil), partitions(p0)
+      access([GROUP_ID]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.c1]), range(MIN ; MAX), 
       range_cond([:0 = t2.c1])

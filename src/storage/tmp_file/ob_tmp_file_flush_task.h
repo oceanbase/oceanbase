@@ -66,7 +66,7 @@ public:
   ObTmpFileWriteBlockTimerTask &get_write_block_task() { return write_block_task_; }
   OB_INLINE bool check_buf_range_valid(const char* buffer, const int64_t length) const
   {
-    return buffer != nullptr && buffer >= buf_ && buffer + length <= buf_ + size_;
+    return length > 0 && buffer != nullptr && buffer >= buf_ && buffer + length <= buf_ + size_;
   }
   TO_STRING_KV(KP(this), K(is_written_), K(is_finished_), K(ret_code_),
                K(size_), K(page_idx_), K(page_cnt_),

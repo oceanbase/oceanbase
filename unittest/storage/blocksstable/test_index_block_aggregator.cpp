@@ -1028,6 +1028,14 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
       ASSERT_TRUE(cmp_ret > 0);
       ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
       ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, false, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, true, false, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
     };
 
     const char *str_s = "abc";
@@ -1042,6 +1050,39 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
     str_datum_to_lob_data(l_datum, lt_datum, allocator_);
     str_datum_to_lob_data(r_datum, rt_datum, allocator_);
     verify(lt_datum, rt_datum, min_text_aggregator, max_text_aggregator);
+  }
+
+  {
+    // different length with same prefix for max
+    auto verify = [] (const ObDatum &l_datum, const ObDatum &r_datum, ObColMaxAggregator &max_agg)
+    {
+      ASSERT_EQ(DATA_CURRENT_VERSION, max_agg.major_working_cluster_version_);
+      int cmp_ret = 0;
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret < 0);
+
+      max_agg.major_working_cluster_version_ = DATA_VERSION_4_3_5_2;
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+      ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, true, true, cmp_ret));
+      ASSERT_TRUE(cmp_ret > 0);
+
+      max_agg.major_working_cluster_version_ = DATA_CURRENT_VERSION;
+    };
+    const char *str_l = "abcd";
+    const char *str_r = "abc";
+    ObDatum l_datum(str_l, strlen(str_l), false);
+    ObDatum r_datum(str_r, strlen(str_r), false);
+    verify(l_datum, r_datum, max_varchar_aggregator);
+
+    //text
+    ObDatum lt_datum;
+    ObDatum rt_datum;
+    str_datum_to_lob_data(l_datum, lt_datum, allocator_);
+    str_datum_to_lob_data(r_datum, rt_datum, allocator_);
+    verify(lt_datum, rt_datum, max_text_aggregator);
   }
 }
 

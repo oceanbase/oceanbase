@@ -165,6 +165,9 @@ void TSasl::dispose_sasl_context()
 }
 /*---------------------end of TSasl----------------------------*/
 /*---------------------start of TSaslClient----------------------------*/
+
+// Define static mutex for TSaslClient
+oceanbase::lib::ObMutex TSaslClient::static_mutex_;
 TSaslClient::TSaslClient(const ObString &service, const ObString &server_FQDN,
                          const sasl_callback_t *callbacks, const ObString &mechanisms,
                          const ObString &authentication_id)
@@ -192,7 +195,13 @@ TSaslClient::~TSaslClient()
 void TSaslClient::setup_sasl_context() {
   if (OB_NOT_NULL(conn_)) {
     throw SaslClientImplException("Connection should be null");
+  } else if (OB_ISNULL(service_.ptr()) || 0 == service_.length()) {
+    throw SaslClientImplException("Service should not be null");
+  } else if (OB_ISNULL(server_FQDN_.ptr()) || 0 == server_FQDN_.length()) {
+    throw SaslClientImplException("Server FQDN should not be null");
   } else {
+    LOG_TRACE("TSaslClient calling sasl_client_new",
+             "service", service_, "server_FQDN", server_FQDN_);
     int result = sasl_client_new(service_.ptr(), server_FQDN_.ptr(), nullptr,
                                  nullptr, callbacks_, 0, &conn_);
     if (OB_UNLIKELY(SASL_OK != result)) {
@@ -294,6 +303,8 @@ void TSaslClient::sasl_init(const sasl_callback_t *callbacks) {
 
 void TSaslClient::setup_client_with_kerberos()
 {
+  LockGuard lock(static_mutex_);
+
   SaslContext::instance().refresh_kerberos_context();
 
   sasl_init(SaslContext::instance().get_general_callbacks());

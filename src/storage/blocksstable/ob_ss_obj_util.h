@@ -78,15 +78,15 @@ public:
   static int get_open_flag_for_read(const MacroBlockId &macro_id);
   static void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &block_type);
   static int to_local_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                                  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id);
+                                  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
   static int to_remote_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                                   const char *object_storage_root_dir, const uint64_t cluster_id,
-                                   const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id);
+                                   const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id);
   static int local_path_to_macro_id(const MacroBlockId &macro_id, const char *path);
   static int get_parent_dir(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                            const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id);
+                            const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
   static int create_parent_dir(const MacroBlockId &macro_id, const uint64_t tenant_id,
-                               const uint64_t tenant_epoch_id, const uint64_t ls_epoch_id);
+                               const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
 #endif
 };
 }

@@ -311,10 +311,10 @@ int ObApplyStatus::init(const share::ObLSID &id,
       try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
       IGNORE_RETURN new (&fs_cb_) ObApplyFsCb(this);
       is_in_stop_state_ = false;
+      is_inited_ = true;
       if (OB_FAIL(palf_handle_->register_file_size_cb(&fs_cb_))) {
         CLOG_LOG(ERROR, "failed to register cb", K(ret), K(id));
       } else {
-        is_inited_ = true;
         CLOG_LOG(INFO, "apply status init success", K(ret), KPC(this), KP(&cb_append_stat_),
                  KP(&cb_wait_thread_stat_), KP(&cb_wait_commit_stat_), KP(&cb_execute_stat_));
       }

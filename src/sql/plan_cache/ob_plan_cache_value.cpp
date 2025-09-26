@@ -59,14 +59,15 @@ int PCVSchemaObj::init(const ObTableSchema *schema)
   return ret;
 }
 
-int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema)
+int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema, const ObSchemaObjVersion &table_version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema) || OB_ISNULL(inner_alloc_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
   } else {
-    database_id_ = schema->get_database_id();
+    is_explicit_db_name_ = table_version.is_db_explicit_;
+    database_id_ = table_version.is_db_explicit_ ? table_version.invoker_db_id_ : schema->get_database_id();
     // copy table name
     char *buf = nullptr;
     const ObString &tname = schema->get_synonym_name_str();
@@ -1901,7 +1902,7 @@ int ObPlanCacheValue::set_stored_schema_objs(const DependenyTableStore &dep_tabl
           // do nothing
         } else if (OB_FAIL(pcv_schema_obj->init_with_version_obj(table_version))) {
           LOG_WARN("failed to init pcv schema obj", K(ret), K(table_version));
-        } else if (is_synonym && OB_FAIL(pcv_schema_obj->init_with_synonym(synonym_schema))) {
+        } else if (is_synonym && OB_FAIL(pcv_schema_obj->init_with_synonym(synonym_schema, table_version))) {
           LOG_WARN("failed to init table name", K(ret));
         } else if (OB_FAIL(stored_schema_objs_.push_back(pcv_schema_obj))) {
           LOG_WARN("failed to push back array", K(ret));
@@ -2052,7 +2053,9 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           }
           if (OB_FAIL(ret)) {
           } else if (OB_NOT_NULL(synonym_schema)) {
-            tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
+            tmp_schema_obj.database_id_ = pcv_schema->is_explicit_db_name_
+                                          ? pcv_schema->database_id_
+                                          : synonym_schema->get_database_id();
             tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
             tmp_schema_obj.schema_id_ = synonym_schema->get_synonym_id();
             tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;

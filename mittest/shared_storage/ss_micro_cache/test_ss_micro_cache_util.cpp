@@ -56,7 +56,7 @@ void TestSSMicroCacheUtil::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 27)));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 27), 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
 }
 

@@ -289,19 +289,19 @@ private:
   static int cas_zone_names_in_palf_kv_(
       const ZoneNameArray &old_zone_names,
       const ZoneNameArray &new_zone_names);
-  static int store_max_resource_id_in_palf_kv_(
+  static int store_max_uint_in_palf_kv_(
       const common::ObString &row_key,
-      const uint64_t max_resource_id);
-  static int cas_resource_id_in_palf_kv_(
+      const uint64_t max_uint);
+  static int cas_uint_in_palf_kv_(
       const common::ObString &row_key,
-      const uint64_t orig_resource_id,
-      const uint64_t new_resource_id);
-  static int insert_resource_id_in_palf_kv_(
+      const uint64_t orig_uint,
+      const uint64_t new_uint);
+  static int insert_uint_in_palf_kv_(
       const common::ObString &row_key,
-      const uint64_t resource_id);
-  static int get_resource_id_in_palf_kv_(
+      const uint64_t uint_val);
+  static int get_uint_in_palf_kv_(
       const common::ObString &row_key,
-      uint64_t &resource_id);
+      uint64_t &uint_val);
   static int trans_str_to_uint_(
       const ObString &str_val,
       uint64_t &ret_val);

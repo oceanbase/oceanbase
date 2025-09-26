@@ -227,6 +227,7 @@ private:
       ObMicroBlockCacheKey key_;
       ObMicroBlockDataHandle micro_handle_;
       ObMicroBlockData micro_data_;
+      ObMacroBlockReader macro_block_reader_;
       TreeNodeContext context_;
       bool is_inited_;
     };

@@ -285,6 +285,7 @@ public:
                                              ObDASScanRtDef *das_rtdef,
                                              ObExecContext &exec_ctx);
   int fetch_partition_row_count(const ObString &part_spec, int64_t &row_count);
+  int fetch_partition_size(const ObString &part_spec, int64_t &row_count);
   int pull_partition_info();
 
 private:
@@ -420,19 +421,20 @@ private:
   static const char *NON_PARTITION_FLAG;
 };
 
-class ObOdpsPartitionJNIScannerMgr {
+class ObOdpsPartitionJNIDownloaderMgr {
 public:
-  ObOdpsPartitionJNIScannerMgr() : inited_(false), ref_(0)
+  ObOdpsPartitionJNIDownloaderMgr() : inited_(false), ref_(0)
   {}
-  static int fetch_row_count(ObExecContext &exec_ctx, uint64_t tenant_id, const ObString &properties,
-      ObIArray<ObExternalFileInfo> &external_table_files, bool &use_partition_gi);
+  static int init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver);
 
-  static int fetch_row_count(ObExecContext &exec_ctx, const ObString part_spec, const ObString &properties, int64_t &row_count);
+  static int fetch_row_count(const ObString &part_spec,
+                             const bool get_part_table_size,
+                             ObODPSJNITableRowIterator &odps_driver,
+                             int64_t &row_count);
 
-  static int fetch_storage_row_count(ObExecContext &exec_ctx,
+  static int fetch_storage_row_count(ObSQLSessionInfo *session,
     const ObString part_spec, const ObString &properties, int64_t &row_count);
 
-  static int fetch_storage_row_count(ObExecContext &exec_ctx, const ObString &properties, int64_t &row_count);
   static int fetch_storage_api_total_task(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
       const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &split_count,
       ObIAllocator &range_allocator);
@@ -474,7 +476,7 @@ private:
   int64_t ref_;
 };
 
-class ObOdpsJniUploaderMgr {
+class ObOdpsPartitionJNIUploaderMgr {
 public:
   struct OdpsUploader {
     OdpsUploader() : writer_ptr(nullptr)
@@ -483,7 +485,7 @@ public:
     JNIWriterPtr writer_ptr;
   };
 
-  ObOdpsJniUploaderMgr()
+  ObOdpsPartitionJNIUploaderMgr()
       : inited_(false),
         ref_(0),
         block_num_(0),
@@ -492,7 +494,7 @@ public:
         write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
 
-  ~ObOdpsJniUploaderMgr()
+  ~ObOdpsPartitionJNIUploaderMgr()
   {
     if (OB_NOT_NULL(session_holder_ptr_.get())) {
       (void)session_holder_ptr_->do_close();
@@ -530,7 +532,7 @@ public:
       const ObString &external_partition, bool is_overwrite, common::hash::ObHashMap<ObString, ObString> &params_map);
 
   int init_writer_params_in_px(
-      const ObString &properties, const ObString &external_partition, bool is_overwrite, int64_t parallel);
+      sql::ObODPSGeneralFormat &odps_format, const ObString &external_partition, bool is_overwrite, int64_t parallel);
 
   int get_odps_uploader_in_px(int task_id, const common::ObFixedArray<ObExpr *, common::ObIAllocator> &select_exprs,
       OdpsUploader &odps_uploader);

@@ -233,8 +233,8 @@ public:
   {
   public:
     ObMonitorNodeTraverseCall(common::ObIArray<ObMonitorNode> &node_array,
-                              common::ObIAllocator *alloc)
-        : node_array_(node_array), ret_(OB_SUCCESS), alloc_(alloc)
+                              common::ObIAllocator *alloc, bool fetch_profile)
+        : node_array_(node_array), ret_(OB_SUCCESS), alloc_(alloc), fetch_profile_(fetch_profile)
     {}
     int operator() (common::hash::HashMapPair<ObMonitorNodeKey,
         ObMonitorNode *> &entry);
@@ -242,6 +242,7 @@ public:
     common::ObIArray<ObMonitorNode> &node_array_;
     int ret_;
     common::ObIAllocator *alloc_;
+    bool fetch_profile_;
   };
 public:
   typedef hash::ObHashMap<ObMonitorNodeKey, ObMonitorNode *,
@@ -310,7 +311,9 @@ public:
   }
   int register_monitor_node(ObMonitorNode &node);
   int revert_monitor_node(ObMonitorNode &node);
-  int convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array, common::ObIAllocator *alloc);
+  int convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array, common::ObIAllocator *alloc,
+                               bool fetch_profile);
+
 private:
   int init(uint64_t tenant_id, const int64_t tenant_mem_size);
   void destroy();

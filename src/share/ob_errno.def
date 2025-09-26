@@ -2938,6 +2938,7 @@ DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_VALUE_INVALID, -11116, -1, "HY000", "The param
 DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_TYPE_INVALID, -11117, -1, "HY000", "This param type is invalid", "This type of param \'%.*s\' is invalid, should be %.*s");
 DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_NOT_FOUND, -11118, -1, "HY000", "This ai model is not found in the tenant", "This ai model \'%.*s\' not found in the tenant");
 DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_EXISTS, -11119, -1, "HY000", "This ai model is already exists", "This ai model \'%.*s\' is already exists");
+DEFINE_ERROR_EXT(OB_ERROR_DURING_COMMIT, -11120, ER_ERROR_DURING_COMMIT, "HY000", "Got error during COMMIT", "Got error during COMMIT: %s");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

@@ -73,6 +73,7 @@ bool ObAdminRoutine::match(const string &cmd) const
 DEF_COMMAND(TRANS, dump_memtable, 1, "tenant_id:ls_id:tablet_id # dump memtable to /tmp/memtable.*")
 {
   int ret = OB_SUCCESS;
+  COMMON_LOG(INFO, "start dump_memtable");
   string arg_str;
   uint64_t tablet_id;
   obrpc::ObDumpMemtableArg arg;
@@ -88,10 +89,12 @@ DEF_COMMAND(TRANS, dump_memtable, 1, "tenant_id:ls_id:tablet_id # dump memtable 
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arg", K(ret));
   } else if (FALSE_IT(arg.tablet_id_ = tablet_id)) {
-  } else if (OB_SUCCESS != (ret = client_->dump_memtable(arg))) {
-    COMMON_LOG(ERROR, "send req fail", K(ret));
+  } else if (OB_FAIL(client_->dump_memtable(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret), K(arg));
+  } else {
+    COMMON_LOG(INFO, "dump_memtable success", K(arg));
   }
-  COMMON_LOG(INFO, "dump_memtable", K(arg));
+  COMMON_LOG(INFO, "finish dump_memtable", K(arg));
   return ret;
 }
 

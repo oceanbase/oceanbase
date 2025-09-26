@@ -107,40 +107,46 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
   ObString package_name;
   bool is_wrap = false;
   CK (OB_NOT_NULL(package_info));
+  CK (OB_NOT_NULL(session_info_));
+  CK (OB_NOT_NULL(schema_checker_));
+  CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
   CK (package_info->is_package() || package_info->is_package_body());
   OX (package_name = package_info->get_package_name());
   OX (source = package_info->get_source());
   OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
           *allocator_, session_info_->get_dtc_params(), source));
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
-                                              false, /* is_for_trigger */ is_wrap))) {
-#ifdef OB_BUILD_ORACLE_PL
-    if (package_info->is_package()) {
-      int tmp_ret = ObPLPackageType::update_package_type_info(*package_info, package_ast, true);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("delete package type info failed", K(tmp_ret), K(ret));
+  if (OB_SUCC(ret)) {
+    ObPLCompilerEnvGuard guard(*package_info, *session_info_, *(schema_checker_->get_schema_guard()), package_ast, ret, parent_ns);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
+                                                false, /* is_for_trigger */ is_wrap))) {
+  #ifdef OB_BUILD_ORACLE_PL
+      if (package_info->is_package()) {
+        int tmp_ret = ObPLPackageType::update_package_type_info(*package_info, package_ast, true);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("delete package type info failed", K(tmp_ret), K(ret));
+        }
       }
-    }
-#endif
-    ObPL::insert_error_msg(ret);
-    switch (ret) {
-    case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
-      LOG_USER_WARN(OB_ERR_PACKAGE_DOSE_NOT_EXIST,
-                    package_info->is_package() ? "PACKAGE" : "PACKAGE BODY",
-                    db_name.length(), db_name.ptr(), package_name.length(), package_name.ptr());
-      break;
-    case OB_ERR_BAD_DATABASE:
-      LOG_USER_WARN(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
-      break;
-    default:
-      LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR,
-                    package_info->is_package() ? "PACKAGE" : "PACKAGE BODY",
-                    db_name.length(), db_name.ptr(), package_name.length(), package_name.ptr());
-      has_error = true;
-      ret = OB_SUCCESS;
-      break;
+  #endif
+      ObPL::insert_error_msg(ret);
+      switch (ret) {
+      case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
+        LOG_USER_WARN(OB_ERR_PACKAGE_DOSE_NOT_EXIST,
+                      package_info->is_package() ? "PACKAGE" : "PACKAGE BODY",
+                      db_name.length(), db_name.ptr(), package_name.length(), package_name.ptr());
+        break;
+      case OB_ERR_BAD_DATABASE:
+        LOG_USER_WARN(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
+        break;
+      default:
+        LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR,
+                      package_info->is_package() ? "PACKAGE" : "PACKAGE BODY",
+                      db_name.length(), db_name.ptr(), package_name.length(), package_name.ptr());
+        has_error = true;
+        ret = OB_SUCCESS;
+        break;
+      }
     }
   }
   OZ (error_info.collect_error_info(package_info));

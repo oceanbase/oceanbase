@@ -38,7 +38,7 @@ struct InnerDDLInfo final
 public:
   InnerDDLInfo() : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
   is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
-  is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), reserved_bit_(0)
+  is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), is_vec_tablet_rebuild_(false), reserved_bit_(0)
   {
   }
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
@@ -61,6 +61,8 @@ public:
   bool is_dummy_ddl_for_inner_visibility() const { return is_dummy_ddl_for_inner_visibility_; }
   void set_major_refreshing_mview(const bool flag) { is_major_refreshing_mview_ = flag; }
   bool is_major_refreshing_mview() const { return is_major_refreshing_mview_; }
+  void set_is_vec_tablet_rebuild(const bool flag) { is_vec_tablet_rebuild_ = flag; }
+  bool is_vec_tablet_rebuild() const { return is_vec_tablet_rebuild_; }
   inline void reset() { ddl_info_ = 0; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
@@ -73,8 +75,9 @@ public:
   static const int64_t IS_REFRESHING_MVIEW_BIT = 1;
   static const int64_t IS_RETRYABLE_DDL_BIT = 1;
   static const int64_t IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT = 1;
+  static const int64_t IS_VEC_TABLET_REBUILD_BIT = 1;
   static const int64_t IS_MAJOR_REFRESHING_MVIEW_BIT = 1;
-  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT;
+  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT - IS_VEC_TABLET_REBUILD_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -93,6 +96,7 @@ public:
       */
       uint64_t is_dummy_ddl_for_inner_visibility_: IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT;
       uint64_t is_major_refreshing_mview_ : IS_MAJOR_REFRESHING_MVIEW_BIT;
+      uint64_t is_vec_tablet_rebuild_ : IS_VEC_TABLET_REBUILD_BIT;
       uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };

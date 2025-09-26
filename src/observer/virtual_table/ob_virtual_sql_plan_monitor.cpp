@@ -40,7 +40,8 @@ ObVirtualSqlPlanMonitor::ObVirtualSqlPlanMonitor() :
     rt_nodes_(),
     rt_node_idx_(0),
     rt_start_idx_(INT64_MAX),
-    rt_end_idx_(INT64_MIN)
+    rt_end_idx_(INT64_MIN),
+    fetch_profile_(false)
 {
   server_ip_[0] = '\0';
   trace_id_[0] = '\0';
@@ -89,6 +90,13 @@ int ObVirtualSqlPlanMonitor::inner_open()
   }
 
   SERVER_LOG(DEBUG, "tenant ids", K(tenant_id_array_));
+  for (int64_t i = 0; i < output_column_ids_.count(); ++i) {
+    const uint64_t column_id = output_column_ids_.at(i);
+    if (column_id == RAW_PROFILE) {
+      fetch_profile_ = true;
+      break;
+    }
+  }
 
   if (OB_SUCC(ret)) {
     if (NULL == allocator_) {
@@ -254,7 +262,8 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   if (need_rt_node_ && OB_NOT_NULL(cur_mysql_req_mgr_)) {
     if (rt_nodes_.empty()) {
-      if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_, &profile_allocator_))) {
+      if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_, &profile_allocator_,
+                                                               fetch_profile_))) {
         LOG_WARN("fail to convert node map to array", K(ret));
       } else {
         rt_start_idx_ = MAX(rt_start_idx_, 0);

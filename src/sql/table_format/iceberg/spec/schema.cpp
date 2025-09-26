@@ -16,11 +16,14 @@
 
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
+#include "share/schema/ob_external_table_column_schema_helper.h"
 
 #include <regex>
 
 namespace oceanbase
 {
+
+using namespace share::schema;
 namespace sql
 {
 namespace iceberg
@@ -210,86 +213,88 @@ int Schema::set_column_schema_type_by_type_str(const ObString type_str,
 {
   int ret = OB_SUCCESS;
   if (0 == type_str.case_compare(TYPE_BOOLEAN)) {
-    if (lib::is_oracle_mode()) {
-      column_schema.set_data_type(ObDecimalIntType);
-      column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
-    } else {
-      column_schema.set_data_type(ObTinyIntType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bool(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup bool");
     }
   } else if (0 == type_str.case_compare(TYPE_INT)) {
-    if (lib::is_oracle_mode()) {
-      column_schema.set_data_type(ObDecimalIntType);
-      column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
-    } else {
-      column_schema.set_data_type(ObInt32Type);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_int(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup int");
     }
   } else if (0 == type_str.case_compare(TYPE_LONG)) {
-    if (lib::is_oracle_mode()) {
-      column_schema.set_data_type(ObDecimalIntType);
-      column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
-    } else {
-      column_schema.set_data_type(ObIntType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bigint(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup bigint");
     }
   } else if (0 == type_str.case_compare(TYPE_FLOAT)) {
-    column_schema.set_data_type(ObFloatType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_float(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup float");
+    }
   } else if (0 == type_str.case_compare(TYPE_DOUBLE)) {
-    column_schema.set_data_type(ObDoubleType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_double(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup double");
+    }
   } else if (type_str.prefix_match_ci(TYPE_DECIMAL)) {
     std::string tmp_type_str(type_str.ptr(), type_str.length());
     std::regex decimal_regex(R"(decimal\(\s*(\d+)\s*,\s*(\d+)\s*\))");
     std::smatch match;
-    if (std::regex_match(tmp_type_str, match, decimal_regex)) {
-      column_schema.set_data_type(ObDecimalIntType);
-      column_schema.set_data_precision(std::stoi(match[1].str()));
-      column_schema.set_data_scale(std::stoi(match[2].str()));
-    } else {
+    if (!std::regex_match(tmp_type_str, match, decimal_regex)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid decimal type", K(ret), K(type_str));
+    } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
+                                                                        std::stoi(match[1].str()), // precision
+                                                                        std::stoi(match[2].str()), // scale
+                                                                        column_schema))) {
+      LOG_WARN("failed to setup decimal");
     }
   } else if (0 == type_str.case_compare(TYPE_DATE)) {
-    if (lib::is_oracle_mode()) {
-      column_schema.set_data_type(ObDateTimeType);
-    } else {
-      column_schema.set_data_type(ObDateType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup date");
     }
   } else if (0 == type_str.case_compare(TYPE_TIME)) {
-    column_schema.set_data_type(ObTimeType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_time(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup time");
+    }
   } else if (0 == type_str.case_compare(TYPE_TIMESTAMP)) {
-    column_schema.set_data_type(lib::is_oracle_mode() ? ObTimestampNanoType : ObDateTimeType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup datetime");
+    }
   } else if (0 == type_str.case_compare(TYPE_TIMESTAMP_TZ)) {
-    column_schema.set_data_type(lib::is_oracle_mode() ? ObTimestampLTZType : ObTimestampType);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup timestamp");
+    }
   } else if (0 == type_str.case_compare(TYPE_TIMESTAMP_NS)) {
-    if (lib::is_oracle_mode()) {
-      column_schema.set_data_type(ObTimestampNanoType);
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timestamp_ns not supported yet");
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp_ns(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup timestamp ns");
     }
   } else if (0 == type_str.case_compare(TYPE_TIMESTAMP_TZ_NS)) {
-    if (lib::is_oracle_mode()) {
-      column_schema.set_data_type(ObTimestampLTZType);
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timestamptz_ns not supported yet");
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp_tz_ns(lib::is_oracle_mode(), column_schema))) {
+      LOG_WARN("failed to setup timestamp tz ns");
     }
   } else if (0 == type_str.case_compare(TYPE_STRING)) {
-    int64_t varchar_len
-        = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
-    column_schema.set_data_type(ObVarcharType);
-    column_schema.set_data_length(varchar_len);
-    column_schema.set_length_semantics(LS_CHAR);
-    column_schema.set_charset_type(ObCharsetType::CHARSET_UTF8MB4);
-    column_schema.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN);
-  } else if (0 == type_str.case_compare(TYPE_BINARY) || 0 == type_str.case_compare(TYPE_UUID)
-             || type_str.prefix_match_ci(TYPE_FIXED)) {
+    if (OB_FAIL(
+            ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
+                                                            ObCharsetType::CHARSET_UTF8MB4,
+                                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                                            column_schema))) {
+      LOG_WARN("failed to setup string");
+    }
+  } else if (0 == type_str.case_compare(TYPE_BINARY)) {
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
+                                                                ObCharsetType::CHARSET_UTF8MB4,
+                                                                ObCollationType::CS_TYPE_BINARY,
+                                                                column_schema))) {
+      LOG_WARN("failed to setup string");
+    }
+  } else if (0 == type_str.case_compare(TYPE_UUID) || type_str.prefix_match_ci(TYPE_FIXED)) {
     // UUID & FIXED used binary type directly
     int64_t varchar_len
         = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
-    column_schema.set_data_type(ObVarcharType);
-    column_schema.set_data_length(varchar_len);
-    column_schema.set_length_semantics(LS_CHAR);
-    column_schema.set_charset_type(ObCharsetType::CHARSET_BINARY);
-    column_schema.set_collation_type(ObCollationType::CS_TYPE_BINARY);
+    if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                 varchar_len,
+                                                                 ObCharsetType::CHARSET_BINARY,
+                                                                 ObCollationType::CS_TYPE_BINARY,
+                                                                 column_schema))) {
+      LOG_WARN("failed to setup varchar");
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported column type", K(type_str));
@@ -419,6 +424,7 @@ int Schema::parse_primitive_type_in_complex_type(ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("mysql didn't support timestamp_ns", K(ret));
   } else if (0 == type_str.case_compare(TYPE_STRING)) {
+    // ob array 不支持 string(lob)，暂时用 varchar 代替
     return_type = "VARCHAR(65535)";
   } else if (0 == type_str.case_compare(TYPE_BINARY) || 0 == type_str.case_compare(TYPE_UUID)
              || type_str.prefix_match_ci(TYPE_FIXED)) {

@@ -106,18 +106,18 @@ class ObOpProfile;
 struct ObMetric
 {
 public:
-  uint64_t value()
+  OB_INLINE uint64_t value() const
   {
     return ATOMIC_LOAD_RLX(&value_);
   }
 
   // for counter
-  void inc(uint64_t value) {
+  OB_INLINE void inc(uint64_t value) {
     ATOMIC_AAF(&value_, value);
   }
 
   // for gauge
-  void set(uint64_t value) {
+  OB_INLINE void set(uint64_t value) {
     ATOMIC_STORE_RLX(&value_, value);
   }
 
@@ -140,19 +140,19 @@ public:
   int64_t get_format_size(bool with_braces = true);
   int to_format_json(char *buf, const int64_t buf_len, int64_t &pos, bool with_braces);
   ObMetricId get_metric_id() { return id_; }
-  uint64_t value();
-  uint64_t get_sum_value() { return sum_value_; }
-  uint64_t get_avg_value() {
+  uint64_t value() const;
+  uint64_t get_sum_value() const { return sum_value_; }
+  uint64_t get_avg_value() const {
     if (count_ > 0) {
       return sum_value_ / count_;
     } else {
       return 0;
     }
   }
-  uint64_t get_min_value() { return min_value_; }
-  uint64_t get_max_value() { return max_value_; }
-  uint64_t get_first_value() { return first_value_; }
-  uint64_t get_variance_value() { return variance_value_; }
+  uint64_t get_min_value() const { return min_value_; }
+  uint64_t get_max_value() const { return max_value_; }
+  uint64_t get_first_value() const { return first_value_; }
+  uint64_t get_variance_value() const { return variance_value_; }
   TO_STRING_KV(K(id_), K(count_), K(sum_value_), K(min_value_), K(max_value_), K(first_value_), K(variance_value_));
 
 private:

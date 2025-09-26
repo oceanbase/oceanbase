@@ -83,8 +83,7 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
         LOG_WARN("check in black list failed", K(ret));
       } else if (!in_black_list) {
         if ((route_policy == COLUMN_STORE_ONLY && replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
-            (route_policy != COLUMN_STORE_ONLY && replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
-            (route_policy == FORCE_READONLY_ZONE && replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
+            (route_policy != COLUMN_STORE_ONLY && replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE)) {
           // skip the tmp_replica_loc
           LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(replica_loc));
         } else if (OB_FAIL(replica_locations_.push_back(replica_loc))) {

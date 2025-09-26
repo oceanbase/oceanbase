@@ -471,16 +471,17 @@ public:
     return odps_partition_downloader_mgr_.get_odps_map();
   }
   inline bool is_odps_downloader_inited() {  return odps_partition_downloader_mgr_.is_download_mgr_inited(); }
-  ObOdpsPartitionDownloaderMgr &get_odps_mgr() { return odps_partition_downloader_mgr_; }
+  ObOdpsPartitionDownloaderMgr &get_odps_downloader_mgr() { return odps_partition_downloader_mgr_; }
+  ObOdpsPartitionUploaderMgr &get_odps_uploader_mgr() { return odps_partition_uploader_mgr_; }
 #endif
 #ifdef OB_BUILD_JNI_ODPS
   inline bool is_odps_scanner_mgr_inited() {
     return odps_partition_jni_scanner_mgr_.is_jni_scanner_mgr_inited();
   }
-  ObOdpsPartitionJNIScannerMgr &get_odps_jni_scanner_mgr() {
+  ObOdpsPartitionJNIDownloaderMgr &get_odps_jni_scanner_mgr() {
     return odps_partition_jni_scanner_mgr_;
   }
-  ObOdpsJniUploaderMgr &get_odps_jni_uploader_mgr() {
+  ObOdpsPartitionJNIUploaderMgr &get_odps_jni_uploader_mgr() {
     return odps_jni_uploader_mgr_;
   }
 #endif
@@ -531,10 +532,11 @@ private:
   GITaskArrayMap gi_task_array_map_;
 #ifdef OB_BUILD_CPP_ODPS
   ObOdpsPartitionDownloaderMgr odps_partition_downloader_mgr_;
+  ObOdpsPartitionUploaderMgr odps_partition_uploader_mgr_;
 #endif
 #ifdef OB_BUILD_JNI_ODPS
-  ObOdpsPartitionJNIScannerMgr odps_partition_jni_scanner_mgr_;
-  ObOdpsJniUploaderMgr         odps_jni_uploader_mgr_;
+  ObOdpsPartitionJNIDownloaderMgr odps_partition_jni_scanner_mgr_;
+  ObOdpsPartitionJNIUploaderMgr         odps_jni_uploader_mgr_;
 #endif
   ObGranuleSplitterType splitter_type_;
   common::ObArray<ObGranulePumpArgs> pump_args_;

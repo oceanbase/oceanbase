@@ -729,8 +729,8 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObTMArray<ObAddr> addrs;
   ObTMArray<int64_t> sqc_max_task_count;
-  ObTMArray<int64_t> sqc_part_count;
-  ObTMArray<int64_t> sqc_row_count;
+  ObTMArray<double> sqc_part_count;
+  ObTMArray<double> sqc_row_count;
   ObTMArray<ObPxTabletInfo> px_tablets_info;
   bool is_opt_stat_valid = false;
   //for pkey, we send tablets row info to sqc to help decide the affinity rule
@@ -891,7 +891,7 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
   if (OB_NOT_NULL(ctx) && !ctx->interm_result_infos_.empty()) {
     ObIArray<ObTempTableResultInfo> &interm_result_infos = ctx->interm_result_infos_;
     ObArray<int64_t> sqc_max_task_count;
-    ObArray<int64_t> sqc_result_count;
+    ObArray<double> sqc_result_count;
     if (OB_FAIL(sqc_result_count.prepare_allocate(interm_result_infos.count()))) {
       LOG_WARN("Failed to pre allocate sqc part count");
     } else if (OB_FAIL(generate_dh_map_info(child))) {
@@ -1054,7 +1054,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
     sql::ObTMArray<ObAddr> addrs;
     int64_t parallel = std::max(parent.get_assigned_worker_count(), (int64_t)(1));
     ObTMArray<int64_t> sqc_max_task_counts;
-    ObTMArray<int64_t> sqc_part_counts;
+    ObTMArray<double> sqc_part_counts;
     int64_t total_task_count = 0;
     ObPxNodeSelectionMode selection_mode = px_node_pool.get_px_node_selection_mode();
     LOG_TRACE("px candidate node pool", K(parallel),
@@ -1681,11 +1681,11 @@ int ObPXServerAddrUtil::reorder_all_partitions(
  * c. 剩下线程从执行时间长到时间短挨个加入到sqc中。
  */
 int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
-                                                 const common::ObIArray<int64_t> &sqc_part_count,
+                                                 const common::ObIArray<double> &sqc_part_count,
                                                  common::ObIArray<int64_t> &results) {
   int ret = OB_SUCCESS;
   common::ObArray<ObPxSqcTaskCountMeta> sqc_task_metas;
-  int64_t total_part_count = 0;
+  double total_part_count = 0;
   int64_t total_thread_count = 0;
   int64_t thread_remain = 0;
   results.reset();
@@ -1768,13 +1768,13 @@ int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
 
 int ObPXServerAddrUtil::adjust_sqc_task_count(common::ObIArray<ObPxSqcTaskCountMeta> &sqc_tasks,
                                               int64_t parallel,
-                                              int64_t partition)
+                                              double partition)
 {
   int ret = OB_SUCCESS;
   int64_t thread_used = 0;
   int64_t partition_remain = partition;
   // 存在partition总数为0 的情况，例如，在gi任务划分中，所有partition都没有宏块的情况。
-  int64_t real_partition = NON_ZERO_VALUE(partition);
+  double real_partition = NON_ZERO_VALUE(partition);
   ARRAY_FOREACH(sqc_tasks, idx) {
     ObPxSqcTaskCountMeta &meta = sqc_tasks.at(idx);
     if (!meta.finish_) {
@@ -2282,8 +2282,6 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   } else {
     ctx.set_frames(frames);
     ctx.set_frame_cnt(frame_cnt);
-    ctx.set_ori_frames(frames);
-    ctx.set_ori_frame_cnt(frame_cnt);
     // init const vector
     ObEvalCtx eval_ctx(ctx);
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
@@ -3681,10 +3679,10 @@ int ObPxEstimateSizeUtil::prepare_px_tablets_info(ObExecContext &ctx,
   if (OB_FAIL(px_tablets_info.reserve(px_tablets_info.count() + locations.size()))) {
     LOG_WARN("failed to prepare allocate");
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema))) {
-    LOG_WARN("Failed to get table schema", K(ref_table_id));
+    LOG_WARN("Failed to get table schema", K(tenant_id), K(ref_table_id));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null schema");
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("null schema, may be deleted", K(tenant_id), K(ref_table_id));
   } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, idx_map))) {
     LOG_WARN("fail to build tablet idx map");
   } else if (OB_FAIL(fill_px_tablets_info_with_stat(ctx, scan_op, locations, idx_map,
@@ -3892,7 +3890,7 @@ for example:
         } else {
           const common::ObObj &min = handle.stat_->get_min_value();
           const common::ObObj &max = handle.stat_->get_max_value();
-          int64_t ndv = handle.stat_->get_num_distinct();
+          int64_t ndv = std::max(handle.stat_->get_num_distinct(), 1L); // avoid div 0
           if (min.is_unsigned_integer()) {
             get_range_scale(uint64_t, get_uint64);
           } else {

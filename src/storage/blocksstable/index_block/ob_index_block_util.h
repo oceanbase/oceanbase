@@ -52,6 +52,11 @@ struct ObSkipIndexColMeta
 {
   // For data with length larger than 40 bytes(normally string), we will store the prefix as min/max
   static constexpr int64_t MAX_SKIP_INDEX_COL_LENGTH = 40;
+  // Make sure max agg result for string with var-length charset accurate by ensuring max agg result
+  // can not possibly smaller than any generated string prefix by 40 bytes.
+  // explain: minimum prefix length by 40 bytes is 40 - $max_char_len + 1 = 36 bytes;
+  //          so any agg result shorter than 36 bytes must be accurate.
+  static constexpr int64_t SAFE_MBCHARSET_PREFIX_MAX_LEN = ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH - ObCharset::MAX_MB_LEN;
   static constexpr int64_t SKIP_INDEX_ROW_SIZE_LIMIT = 1 << 10; // 1kb
   static constexpr int64_t MAX_AGG_COLUMN_PER_ROW = 6; // min (loose_min) / max (loose_max) / null count / sum / bm25 params
   static constexpr ObObjDatumMapType NULL_CNT_COL_TYPE = OBJ_DATUM_8BYTE_DATA;
@@ -226,6 +231,12 @@ OB_INLINE static bool enable_skip_index_min_max_prefix(const int64_t data_versio
 {
   // TODO: set this version to latest before merge to master
   return data_version >= DATA_VERSION_4_3_5_2;
+}
+
+OB_INLINE static bool enable_revise_max_prefix(const int64_t data_version)
+{
+  return (data_version >= MOCK_DATA_VERSION_4_3_5_5 && data_version < DATA_VERSION_4_4_0_0)
+         || data_version >= DATA_VERSION_4_4_1_0;
 }
 
 int get_prefix_for_string_tc_datum(

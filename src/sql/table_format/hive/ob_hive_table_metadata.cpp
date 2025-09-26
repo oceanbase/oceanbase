@@ -603,7 +603,7 @@ int ObHiveTableMetadata::extract_host_and_port(const ObString &uri, char *host, 
         const char *port_str = needed_colon + 1;
         const int64_t port_len = tmp_uri_len - ip_len - 1;
 
-        char tmp_port[port_len];
+        char tmp_port[port_len + 1];
         if (OB_UNLIKELY(port_len > tmp_uri_len)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expected port len exceed malloc",
@@ -625,6 +625,8 @@ int ObHiveTableMetadata::extract_host_and_port(const ObString &uri, char *host, 
           } else if (OB_LIKELY(port == 0)) {
             ret = OB_INVALID_HMS_PORT;
             LOG_WARN("failed to get port", K(ret));
+          } else {
+            LOG_TRACE("get port success", K(ret), K(port));
           }
         }
       }
@@ -755,22 +757,30 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
       } else {
         LOG_TRACE("setup decimal in detail", K(ret), K(precision), K(scale));
       }
-    } else if (original_field_type.prefix_match(VARCHAR) || original_field_type.prefix_match(STRING)
+    } else if (original_field_type.prefix_match(STRING)
                || original_field_type.prefix_match(BINARY)) {
+      if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(is_oracle_mode,
+                                                                  CHARSET_UTF8MB4,
+                                                                  ObCharset::get_system_collation(),
+                                                                  column_schema))) {
+        LOG_WARN("failed to setup string", K(ret));
+      } else if (OB_LIKELY(is_csv_format) && OB_LIKELY(!is_open_csv)
+          && original_field_type.prefix_match(BINARY)) {
+        // When hive table is csv format, binary type will be stored as base64 string.
+        // And when hive table is open csv format, binary type will be stored as normal string.
+        column_schema.set_collation_type(CS_TYPE_BINARY);
+      }
+    } else if (original_field_type.prefix_match(VARCHAR)) {
       int64_t varchar_len = 0;
       if (OB_LIKELY(original_field_type.prefix_match(VARCHAR))
           && OB_FAIL(extract_varchar_char_length(original_field_type, &varchar_len))) {
         LOG_WARN("failed to extract varchar length", K(ret), K(varchar_len));
       } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(is_oracle_mode,
                                                                           varchar_len,
+                                                                          ObCharsetType::CHARSET_UTF8MB4,
+                                                                          ObCollationType::CS_TYPE_UTF8MB4_BIN,
                                                                           column_schema))) {
         LOG_WARN("failed to setup varchar", K(ret), K(varchar_len));
-      }
-      if (OB_LIKELY(is_csv_format) && OB_LIKELY(!is_open_csv)
-          && original_field_type.prefix_match(BINARY)) {
-        // When hive table is csv format, binary type will be stored as base64 string.
-        // And when hive table is open csv format, binary type will be stored as normal string.
-        column_schema.set_collation_type(CS_TYPE_BINARY);
       }
     } else if (original_field_type.prefix_match(CHAR)) {
       int64_t char_len = 0;
@@ -778,6 +788,8 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
         LOG_WARN("failed to extract char length", K(ret), K(char_len));
       } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_char(is_oracle_mode,
                                                                        char_len,
+                                                                       ObCharsetType::CHARSET_UTF8MB4,
+                                                                       ObCollationType::CS_TYPE_UTF8MB4_BIN,
                                                                        column_schema))) {
         LOG_WARN("failed to setup char", K(ret), K(char_len));
       }

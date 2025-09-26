@@ -368,6 +368,7 @@ GLOBAL_ERRSIM_POINT_DEF(526, EN_AFTER_MINOR_BUT_BEFORE_MAJOR_SPLIT, "test data-s
 GLOBAL_ERRSIM_POINT_DEF(527, EN_WRITE_SPLIT_START_LOG_DELAY_SEC, "delay seconds before write split start log");
 GLOBAL_ERRSIM_POINT_DEF(528, EN_AUTO_SPLIT_TASK_CNT_LESS_THAN, "max number of running auto split task allowed in cluster");
 GLOBAL_ERRSIM_POINT_DEF(529, EN_BLOCK_BEFORE_SPLIT_DOWNLOAD_SSTABLE, "block split before downloading sstables");
+GLOBAL_ERRSIM_POINT_DEF(530, EN_SKIP_TABLET_NUM_LIMIT_CHECK, "skip tablet num limit check");
 
 // vec index
 GLOBAL_ERRSIM_POINT_DEF(530, EN_VEC_INDEX_DROP_SHARE_TABLE_ERR, "");
@@ -658,5 +659,7 @@ GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table
 
 // DDL begin 2651 - 2700
 GLOBAL_ERRSIM_POINT_DEF(2651, EN_AUTO_SPLIT_SCHEDULER_ERR, "inject error in auto split schedule step");
+GLOBAL_ERRSIM_POINT_DEF(2652, EN_DDL_SCAN_TASK_PERIOD, "ddl scan task timer thread schedule period");
+
 // DDL end
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

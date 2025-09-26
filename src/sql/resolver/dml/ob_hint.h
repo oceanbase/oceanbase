@@ -235,6 +235,7 @@ struct ObOptParamHint
     DEF(ENABLE_GROUPING_SETS_EXPANSION,)            \
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
+    DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

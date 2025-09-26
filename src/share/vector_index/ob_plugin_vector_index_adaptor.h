@@ -35,6 +35,7 @@ namespace share
 {
 struct ObPluginVectorIndexTaskCtx;
 class ObVsagMemContext;
+class ObPluginVectorIndexMgr;
 
 struct ObVectorIndexInfo
 {
@@ -587,7 +588,8 @@ public:
     }
   }
 
-  int renew_single_snap_index();
+  int renew_single_snap_index(bool mem_saving_mode);
+  int renew_snapdata_in_lock();
   int set_adaptor_ctx_flag(ObVectorQueryAdaptorResultContext *ctx);
 
   ObString &get_index_identity() { return index_identity_; };
@@ -697,7 +699,8 @@ public:
                               roaring::api::roaring64_bitmap_t *delta_bitmap,
                               ObIAllocator *allocator);
 
-  int check_need_sync_to_follower_or_do_opt_task(bool &need_sync);
+  int check_need_sync_to_follower_or_do_opt_task(ObPluginVectorIndexMgr *mgr, bool is_leader, bool &need_sync);
+  int check_can_sync_to_follower(ObPluginVectorIndexMgr *mgr, int64_t current_snapshot_count, bool &need_sync);
 
   void sync_finish() { follower_sync_statistics_.sync_count_++; }
   void sync_succ() {

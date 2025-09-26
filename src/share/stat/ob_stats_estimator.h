@@ -46,12 +46,25 @@ protected:
                   bool need_copy_basic_stat,
                   ObOptStat &src_opt_stat,
                   ObIArray<ObOptStat> &dst_opt_stats);
+  int prepare_and_store_session(ObSQLSessionInfo *session,
+                                sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
+                                ObCharsetType& old_client_charset_type,
+                                ObCharsetType& old_connection_charset_type,
+                                ObCharsetType& old_result_charset_type,
+                                ObCollationType& old_collation_type);
+  int restore_session(ObSQLSessionInfo *session,
+                      sql::ObSQLSessionInfo::StmtSavedValue *session_value,
+                      ObCharsetType old_client_charset_type,
+                      ObCharsetType old_connection_charset_type,
+                      ObCharsetType old_result_charset_type,
+                      ObCollationType old_collation_type);
 
   int pack(ObSqlString &raw_sql_str);
 
-  int add_from_table(common::ObIAllocator &allocator,
-                     const ObString &db_name,
-                     const ObString &table_name);
+  inline void set_from_table(const ObString &from_table) { from_table_ = from_table; }
+
+  int init_escape_char_names(common::ObIAllocator &allocator,
+                             const ObOptStatGatherParam &param);
 
   int add_partition_hint(const ObString &partition);
 
@@ -102,6 +115,8 @@ protected:
   ObIAllocator &allocator_;
 
   ObString db_name_;
+  ObString tab_name_;
+  ObString data_table_name_;
   ObString from_table_;
   ObString partition_hint_;
   ObSqlString select_fields_;

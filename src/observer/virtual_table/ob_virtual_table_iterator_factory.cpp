@@ -254,7 +254,7 @@
 #include "observer/virtual_table/ob_all_virtual_dba_source.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
 #include "observer/virtual_table/ob_all_virtual_ccl_status.h"
-
+#include "observer/virtual_table/ob_all_virtual_ss_object_type_io_stat.h"
 namespace oceanbase
 {
 using namespace common;
@@ -914,6 +914,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else if (OB_FAIL(table_mgr->init(&allocator))) {
               SERVER_LOG(WARN, "failed to init all virtual table mgr", K(ret));
             } else {
+              bool is_index = false;
+              ObAllVirtualTableMgr::INDEX_TYPE index_type = ObAllVirtualTableMgr::INDEX_TYPE_MAX;
+              if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+                LOG_WARN("check is index failed", K(ret));
+              } else if (is_index) {
+                index_type = ObAllVirtualTableMgr::INDEX_TYPE_I1;
+              }
+              table_mgr->use_index_scan(index_type);
               table_mgr->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(table_mgr);
             }
@@ -1945,6 +1953,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               if (OB_FAIL(sstable_macro_info->init(&allocator, addr_))) {
                 SERVER_LOG(WARN, "fail to init ObAllVirtualPartitionSSTableMergeInfo, ", K(ret));
               } else {
+                bool is_index = false;
+                ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE index_type = ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE_MAX;
+                if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+                  LOG_WARN("check is index failed", K(ret));
+                } else if (is_index) {
+                  index_type = ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE_I1;
+                }
+                sstable_macro_info->use_index_scan(index_type);
                 vt_iter = static_cast<ObVirtualTableIterator *>(sstable_macro_info);
               }
             }
@@ -2760,7 +2776,7 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID: {
+          case OB_ALL_VIRTUAL_SOURCE_TID: {
             ObAllVirtualDbaSource *table = nullptr;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDbaSource, table))) {
               SERVER_LOG(ERROR, "ObAllVirtualDbaSource table construct fail", K(ret));
@@ -3237,6 +3253,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualHMSClientPoolStat construct failed", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(hms_client_pool_stat_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID: {
+            ObAllVirtualSSObjectTypeIoStat *ss_object_type_io_stat = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSSObjectTypeIoStat, ss_object_type_io_stat))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualSSObjectTypeIoStat", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ss_object_type_io_stat);
             }
             break;
           }

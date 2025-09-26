@@ -1172,6 +1172,8 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
 #ifdef OB_BUILD_SHARED_STORAGE
   if (OB_FAIL(ret)) {
   } else if (!GCTX.is_shared_storage_mode() || !write_slog) {
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
+    // rs will specify a replica to upload root key later.
   } else {
     ObTenantSwitchGuard guard(tenant);
     if (OB_FAIL(ObMasterKeyUtil::ss_dump_root_key_if_need_and_not_exist(tenant_id))) {

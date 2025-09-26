@@ -147,6 +147,7 @@ private:
   int64_t rt_node_idx_;
   int64_t rt_start_idx_;
   int64_t rt_end_idx_;
+  bool fetch_profile_;
   ObArenaAllocator profile_allocator_;
 };
 

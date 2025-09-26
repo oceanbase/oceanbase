@@ -26,14 +26,15 @@ namespace share
 {
 
 enum OpPrecedence {
-  PREC_OR_XOR = 1,     // OR, XOR
-  PREC_AND = 2,        // AND
-  PREC_COMP = 3,       // =, <>, <, <=, >, >=, LIKE, IN, IS
-  PREC_BIT = 4,        // |, &, <<, >>
-  PREC_ADD = 5,        // +, -
-  PREC_MUL = 6,        // *, /, DIV, MOD
-  PREC_POW = 7,        // ^
-  PREC_UNARY = 8       // NOT, ~, -, +
+  PREC_OR = 1,         // OR
+  PREC_XOR,            // XOR
+  PREC_AND,            // AND
+  PREC_BIT,            // |, &, <<, >>
+  PREC_COMP,           // =, <>, <, <=, >, >=, LIKE, IN, IS, IS NOT
+  PREC_ADD,            // +, -
+  PREC_MUL,            // *, /, DIV, MOD
+  PREC_POW,            // ^
+  PREC_UNARY           // NOT, ~, -, +
 };
 
 int get_op_precedence(ObItemType op_type);
@@ -55,6 +56,7 @@ enum ObReqExprType
   COLUMN_EXPR,
   CONST_EXPR,
   OP_EXPR,
+  CASE_EXPR,
 };
 
 class ObReqFromJson;
@@ -90,6 +92,20 @@ public:
   virtual int translate_expr(ObObjPrintParams &print_params_, char *buf_, int64_t buf_len_, int64_t *pos_, ObReqScope scope = FIELD_LIST_SCOPE, bool need_alias = true);
   virtual int get_expr_type() { return ObReqExprType::MATCH_EXPR; }
   ObReqScoreType score_type_;
+};
+
+class ObReqCaseWhenExpr : public ObReqExpr
+{
+public:
+  ObReqCaseWhenExpr() : ObReqExpr(), arg_expr_(nullptr),
+    when_exprs_(), then_exprs_(), default_expr_(nullptr) {}
+  virtual ~ObReqCaseWhenExpr() {}
+  virtual int translate_expr(ObObjPrintParams &print_params_, char *buf_, int64_t buf_len_, int64_t *pos_, ObReqScope scope = FIELD_LIST_SCOPE, bool need_alias = true);
+  virtual int get_expr_type() { return ObReqExprType::CASE_EXPR; }
+  ObReqExpr *arg_expr_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> when_exprs_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> then_exprs_;
+  ObReqExpr *default_expr_;
 };
 
 class ObReqColumnExpr : public ObReqExpr
@@ -135,6 +151,7 @@ enum ReqTableType
   BASE_TABLE,
   SUB_QUERY,
   JOINED_TABLE,
+  MULTI_SET,
 };
 
 struct OrderInfo
@@ -166,6 +183,7 @@ enum ObReqJoinType
   LEFT_OUTER_JOIN = 0,
   RIGHT_OUTER_JOIN,
   FULL_OUTER_JOIN,
+  UNION_ALL,
   MAX_JOIN_TYPE
 };
 

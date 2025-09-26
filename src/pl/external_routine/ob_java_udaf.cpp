@@ -33,14 +33,8 @@ int ObJavaUDAFExecutor::init()
   } else if (OB_INVALID_ID == aggr_info_.pl_agg_udf_type_id_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid udf id", K(ret), K(aggr_info_));
-  }  else {
-    ObJavaEnv &java_env = ObJavaEnv::getInstance();
-    // This entry is first time to setup java env
-    if (!java_env.is_env_inited()) {
-      if (OB_FAIL(java_env.setup_java_env())) {
-        LOG_WARN("failed to setup java env", K(ret));
-      }
-    }
+  } else if (OB_FAIL(ObJniConnector::java_env_init())) {
+    LOG_WARN("failed to init java env", K(ret));
   }
 
   if (OB_FAIL(ret)) {

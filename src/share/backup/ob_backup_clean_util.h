@@ -94,7 +94,7 @@ public:
       const ObBackupPath &path,
       const share::ObBackupStorageInfo *storage_info);
   static int lock_policy_table_then_check(
-      common::ObMySQLTransaction &trans, const uint64_t tenant_id, bool &policy_exists, bool log_only);
+      common::ObMySQLTransaction &trans, const uint64_t tenant_id, const bool log_only, bool &policy_exists);
   static int parse_int64_list(const ObString &str, ObIArray<int64_t> &value_list);
   static int parse_uint64_list(const ObString &str, ObIArray<uint64_t> &value_list);
   static int format_int64_list(const ObIArray<int64_t> &value_list, char *buffer,

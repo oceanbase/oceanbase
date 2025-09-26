@@ -224,7 +224,7 @@ int64_t ObExternalDataPageCache::get_page_size()
   if (tenant_config.is_valid()) {
     page_size = tenant_config->_external_table_mem_cache_page_size;
     const size_t mask = 4095; // 0xFFF
-    page_size = (page_size + mask) & ~mask;
+    page_size = next_pow2((page_size + mask) & ~mask);
     if (page_size < ObExternalDataPageCache::MIN_PAGE_SIZE) {
       page_size = ObExternalDataPageCache::MIN_PAGE_SIZE;
     } else if (page_size > ObExternalDataPageCache::MAX_PAGE_SIZE) {

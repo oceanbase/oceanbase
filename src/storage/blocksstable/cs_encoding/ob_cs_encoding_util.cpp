@@ -308,8 +308,7 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
     col_ctx.fix_data_size_ = -1;
     col_ctx.is_wide_int_ = false;
     decint_cmp_fp cmp = wide::ObDecimalIntCmpSet::get_decint_decint_cmp_func(precision_bytes, sizeof(int64_t));
-    int64_t row_idx = 0;
-    for (; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
       const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
       if (datum.is_null()) {
         null_cnt++;
@@ -320,6 +319,7 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
         LOG_ERROR("datum len is not match with precision bytes", K(ret), K(datum), K(precision_bytes));
       } else if (cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_min) < 0 || cmp(datum.get_decimal_int(), (ObDecimalInt*)&int64_max) > 0) {
         col_ctx.is_wide_int_ = true;
+        null_cnt = nop_cnt = 0;
         break;
       } else { // value range is not over int64_t, store as integer
         int64_t value = 0;
@@ -340,7 +340,7 @@ int ObCSEncodingUtil::build_column_encoding_ctx_with_col_datums_(
     if (OB_SUCC(ret)) {
       if (col_ctx.is_wide_int_) { // store as fixed len string
         col_ctx.fix_data_size_ = precision_bytes;
-        for (; row_idx < row_count; ++row_idx) {
+        for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
           const ObDatum &datum = col_ctx.col_datums_->at(row_idx);
           if (datum.is_null()) {
             null_cnt++;

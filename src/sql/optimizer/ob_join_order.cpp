@@ -25,6 +25,7 @@
 #include "sql/das/iter/ob_das_text_retrieval_eval_node.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/catalog/ob_catalog_properties.h"
+#include "share/catalog/odps/ob_odps_catalog.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "share/stat/ob_lake_table_stat.h"
 
@@ -597,9 +598,11 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
   const ObDMLStmt *stmt = NULL;
   ObSEArray<ObRawExpr*, 8> range_exprs;
   ObSEArray<OrderItem, 8> range_orders;
+  ObSqlSchemaGuard *schema_guard = nullptr;
   if (OB_ISNULL(path) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(path->strong_sharding_) || OB_ISNULL(path->table_partition_info_) ||
-      OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())) {
+      OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx()) ||
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(path), K(ret));
   } else if (OB_FALSE_IT(path->is_local_order_ = false)) {
@@ -614,14 +617,22 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     // Hence we should not use the ordering from oracle agent table.
     path->ordering_.reset();
   } else if (path->use_das_ &&
-             !path->ordering_.empty() &&
-             path->table_partition_info_->get_phy_tbl_location_info().get_partition_cnt() > 1) {
-    if (get_plan()->get_optimizer_context().is_das_keep_order_enabled()) {
-      // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
-      // otherwise the order is totally not guaranteed.
-      path->is_local_order_ = true;
-    } else {
-      path->ordering_.reset();
+             !path->ordering_.empty()) {
+    const ObTableSchema *table_schema = nullptr;
+    bool is_partitioned_table = false;
+    if (OB_FAIL(schema_guard->get_table_schema(path->index_id_, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (table_schema->is_partitioned_table()) {
+      if (get_plan()->get_optimizer_context().is_das_keep_order_enabled()) {
+        // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
+        // otherwise the order is totally not guaranteed.
+        path->is_local_order_ = true;
+      } else {
+        path->ordering_.reset();
+      }
     }
   } else if (path->ordering_.empty() || is_at_most_one_row_ || !path->strong_sharding_->is_distributed()) {
     path->is_local_order_ = false;
@@ -1663,7 +1674,7 @@ int ObJoinOrder::process_basic_vec_info_for_index_merge_node(const ObDMLStmt *st
   } else if (vec_index_schema->is_vec_hnsw_index()) {
     index_merge_path->vec_idx_info_.inited_ = true;
     index_merge_path->vec_idx_info_.vec_extra_info_.set_vec_idx_type(ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN);
-    double selectivity = 0.5;
+    double selectivity = 1.0 == index_merge_path->est_cost_info_.table_filter_sel_ ? index_merge_path->est_cost_info_.prefix_filter_sel_: index_merge_path->est_cost_info_.table_filter_sel_;
     if (FAILEDx(ObVectorIndexUtil::set_vector_index_param(vec_index_schema,
                                                                 index_merge_path->vec_idx_info_.vec_extra_info_,
                                                                 selectivity,
@@ -4026,9 +4037,13 @@ int ObJoinOrder::do_create_index_merge_path(const uint64_t table_id,
   ObSEArray<ObPCConstParamInfo, 4> const_param_constraints;
   ObSEArray<ObExprConstraint, 4> expr_constraints;
   int64_t scan_node_count = 0;
-  if (OB_ISNULL(root_node)) {
+  bool has_vec_approx = false;
+  const ObDMLStmt *stmt = NULL;
+
+  if (OB_ISNULL(root_node) || OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index merge node is null", K(ret), KPC(root_node));
+    LOG_WARN("index merge node is null", K(ret), KPC(root_node), KPC(get_plan()), KPC(stmt));
+  } else if (OB_FALSE_IT(has_vec_approx = stmt->has_vec_approx() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0)) {
   } else if (OB_FAIL(collect_index_merge_tree_info(root_node,
                                                    equal_param_constraints,
                                                    const_param_constraints,
@@ -4048,6 +4063,12 @@ int ObJoinOrder::do_create_index_merge_path(const uint64_t table_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index merge path is null", K(ret), KPC(root_node));
   } else if (OB_FALSE_IT(index_merge_path->index_cnt_ = scan_node_count)) {
+  } else if (has_vec_approx && OB_FAIL(process_basic_vec_info_for_index_merge_node(stmt,
+                                                                                   table_id,
+                                                                                   ref_table_id,
+                                                                                   index_merge_path,
+                                                                                   root_node))) {
+    LOG_WARN("failed to process basic_vec_info_for_indexmerge_node", K(ret));
   } else if (OB_FAIL(access_paths.push_back(static_cast<AccessPath*>(index_merge_path)))) {
     LOG_WARN("failed to push back index merge path", K(ret));
   } else {
@@ -13924,8 +13945,8 @@ int MergeKeyInfoHelper::get_merge_key_info(Path *path, MergeKeyInfo *&merge_key_
       } else {
         if (OB_FAIL(merge_key_infos_.push_back(merge_key_info))) {
           LOG_WARN("failed to push back merge key", K(ret));
-          merge_key_info = nullptr;
           merge_key_info->~MergeKeyInfo();
+          merge_key_info = nullptr;
         } else if (OB_FAIL(paths_.push_back(path))) {
           LOG_WARN("failed to push back", K(ret));
         }
@@ -15225,7 +15246,7 @@ public:
           }
         } else if (OB_UNLIKELY(ref_expr->get_relation_ids().overlap(*left_table_set_))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected expr", K(ret), K(*ref_expr));
+          LOG_WARN("unexpected nl params", K(ret), K(*ref_expr), K(*left_table_set_));
         } else if (OB_FAIL(new_query_ref->get_exec_params().push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
@@ -22450,6 +22471,7 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
     LOG_WARN("unexpected null lake table partition info", K(ret));
   } else if (OB_FAIL(ObLakeTableStatUtils::construct_stat_from_iceberg(MTL_ID(),
                                                                        column_ids,
+                                                                       column_exprs,
                                                                        lake_table_partition_info->get_file_descs(),
                                                                        table_stat,
                                                                        column_stats,
@@ -22556,6 +22578,24 @@ int ObJoinOrder::get_lake_table_partition_values(ObIArray<ObString> &partition_v
       LOG_WARN("unexpected null table partition info", K(ret));
     } else if (OB_FAIL(lake_table_partition_info->get_partition_values(partition_values))) {
       LOG_WARN("failed to get partition values", K(ret));
+    }
+  } else if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ODPS) {
+    int64_t ref_table_id = table_partition_info_->get_ref_table_id();
+    const ObTableSchema *table_schema = NULL;
+    ObSqlSchemaGuard *schema_guard = NULL;
+    if (OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(ref_table_id));
+    } else if (OB_FAIL(ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(*allocator_,
+                                                                table_partition_info_,
+                                                                table_schema,
+                                                                partition_values))) {
+      LOG_WARN("failed to get lake table partition values", K(ret));
     }
   } else {
     // For other lake table formats (ICEBERG, ODPS), use empty partition names (global stats)

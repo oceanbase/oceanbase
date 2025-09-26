@@ -28,7 +28,8 @@ ObAllVirtualTableMgr::ObAllVirtualTableMgr()
       tablet_handle_(),
       ls_id_(share::ObLSID::INVALID_LS_ID),
       table_store_iter_(),
-      iter_buf_(nullptr)
+      iter_buf_(nullptr),
+      index_type_(INDEX_TYPE_MAX)
 {
 }
 
@@ -93,11 +94,25 @@ void ObAllVirtualTableMgr::release_last_tenant()
 
 bool ObAllVirtualTableMgr::is_need_process(uint64_t tenant_id)
 {
+  int ret = OB_SUCCESS;
+  bool is_need = false;
   if (!is_virtual_tenant_id(tenant_id) &&
       (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)){
-    return true;
+    if (INDEX_TYPE_I1 == index_type_) {
+      bool is_match = false;
+      common::ObObj obj_tenant_id;
+      obj_tenant_id.set_int(tenant_id);
+      if(OB_FAIL(match_in_range(IDX_KEY_TENANT_ID_IDX, obj_tenant_id, is_match))) {
+        SERVER_LOG(WARN, "fail to match in range", K(ret), K(IDX_KEY_TENANT_ID_IDX), K(obj_tenant_id), K(is_match));
+      } else if (is_match) {
+        is_need = true;
+      }
+    } else {
+      is_need = true;
+    }
   }
-  return false;
+
+  return is_need;
 }
 
 int ObAllVirtualTableMgr::get_next_tablet()
@@ -114,19 +129,35 @@ int ObAllVirtualTableMgr::get_next_tablet()
       SERVER_LOG(WARN, "fail to new tablet_iter_", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(tablet_iter_->get_next_tablet(tablet_handle_))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
+  while(OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_iter_->get_next_tablet(tablet_handle_))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
+      }
+    } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle_));
+    } else {
+      ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
+      if (INDEX_TYPE_I1 == index_type_) {
+        // use index scan
+        common::ObObj obj_ls_id;
+        common::ObObj obj_tablet_id;
+        obj_ls_id.set_int(ls_id_);
+        obj_tablet_id.set_int(tablet_handle_.get_obj()->get_tablet_meta().tablet_id_.id());
+        bool is_match = false;
+        if(OB_FAIL(match_in_range(IDX_KEY_LS_ID_IDX, obj_ls_id, is_match))) {
+          SERVER_LOG(WARN, "fail to match in range", K(ret), K(IDX_KEY_LS_ID_IDX), K(obj_ls_id), K(is_match));
+        } else if (is_match && OB_FAIL(match_in_range(IDX_KEY_TABLET_ID_IDX, obj_tablet_id, is_match))) {
+          SERVER_LOG(WARN, "fail to match in range", K(ret), K(IDX_KEY_TABLET_ID_IDX), K(obj_tablet_id), K(is_match));
+        } else if (is_match) {
+          break;
+        }
+      } else {
+        break;
+      }
     }
-  } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle_));
-  } else {
-    ls_id_ = tablet_handle_.get_obj()->get_tablet_meta().ls_id_.id();
   }
-
   return ret;
 }
 
@@ -360,3 +391,31 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
   return ret;
 }
 
+void ObAllVirtualTableMgr::use_index_scan(INDEX_TYPE index_type) {
+  index_type_ = index_type;
+}
+
+int ObAllVirtualTableMgr::match_in_range(const int key_idx, const common::ObObj &obj, bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges_.count(); ++i) {
+    int cmp_low = 0, cmp_high = 0;
+    common::ObObj &obj_low = key_ranges_.at(i).start_key_.get_obj_ptr()[key_idx];
+    common::ObObj &obj_high = key_ranges_.at(i).end_key_.get_obj_ptr()[key_idx];
+    ObObjType obj_type = obj.get_type();
+    if ((!obj_low.is_min_value() && obj_type != obj_low.get_type()) ||
+        (!obj_high.is_max_value() && obj_type != obj_high.get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "unexpected value type", K(ret), K(key_idx), K(obj_type), K(obj_low), K(obj_high));
+    } else if (OB_FAIL(obj.compare(obj_low, cmp_low)) ||
+              OB_FAIL(obj.compare(obj_high, cmp_high))) {
+      SERVER_LOG(WARN, "fail to compare", K(ret), K(key_idx), K(obj), K(obj_low), K(obj_high));
+    } else if (cmp_low >= 0 && cmp_high <= 0) {
+      is_match = true;
+      break;
+    }
+  }
+
+  return ret;
+}

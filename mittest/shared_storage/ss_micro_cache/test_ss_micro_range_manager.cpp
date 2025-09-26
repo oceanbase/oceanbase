@@ -249,7 +249,7 @@ int main(int argc, char **argv)
   OB_LOGGER.set_file_name("test_ss_micro_range_manager.log", true, true);
   OB_LOGGER.set_log_level("INFO");
   ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg, true);
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -86,18 +86,13 @@ int ObAggGroupVec::eval_batch(
     const ObTableAccessContext *context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
-    const ObPushdownRowIdCtx &pd_row_id_ctx,
-    const bool reserve_memory)
+    const ObPushdownRowIdCtx &pd_row_id_ctx)
 {
   UNUSEDx(iter_param, context);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(col_offset < 0 || !pd_row_id_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(col_offset), K(pd_row_id_ctx));
-  } else if (nullptr != reader && reserve_memory) {
-    reader->reserve_reader_memory(true); // hold memory before aggregation finished
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(clear_evaluated_infos())) {
     LOG_WARN("Failed to clear evaluated infos", K(ret));
   }
@@ -522,7 +517,6 @@ int ObAggregatedStoreVec::fill_rows(
     LOG_WARN("Unexpected null reader", K(ret), KP(reader));
   } else {
     bool all_agg_pd_decoder = false;
-    reader->reserve_reader_memory(false);
     if (OB_FAIL(agg_pushdown_decoder(reader, begin_index, end_index, res, all_agg_pd_decoder))) {
       LOG_WARN("Failed to push aggregate to decoder", K(ret), KP(reader));
     } else if (all_agg_pd_decoder) {
@@ -535,7 +529,7 @@ int ObAggregatedStoreVec::fill_rows(
     } else {
       const bool is_reverse = begin_index > end_index;
       const int64_t bound_row_id = is_reverse ? begin_index + 1 : begin_index - 1;
-      if (OB_FAIL(do_aggregate(reader, need_access_data_, bound_row_id))) {
+      if (OB_FAIL(do_aggregate(reader, bound_row_id))) {
         LOG_WARN("Failed to aggregate rows", K(ret), KP(reader));
       }
     }
@@ -657,7 +651,7 @@ int ObAggregatedStoreVec::fill_row(blocksstable::ObDatumRow &row)
     count_++;
     eval_ctx_.set_batch_idx(count_);
     if (count_ >= row_capacity_) {
-       if (OB_FAIL(do_aggregate(nullptr/*reader*/, false/*reserve_memory*/))) {
+       if (OB_FAIL(do_aggregate())) {
         LOG_WARN("Failed to aggregate rows", K(ret));
       }
     }
@@ -714,8 +708,7 @@ int ObAggregatedStoreVec::fill_output_rows(
 }
 
 int ObAggregatedStoreVec::do_aggregate(
-    blocksstable::ObIMicroBlockReader *reader,
-    const bool reserve_memory,
+    blocksstable::ObIMicroBlockReader *reader/*nullptr*/,
     const int64_t bound_row_id/*OB_INVALID_CS_ROW_ID*/)
 {
   int ret = OB_SUCCESS;
@@ -731,8 +724,7 @@ int ObAggregatedStoreVec::do_aggregate(
                                                nullptr/*context*/,
                                                agg_group->col_offset_,
                                                reader,
-                                               pd_row_id_ctx,
-                                               reserve_memory))) {
+                                               pd_row_id_ctx))) {
         LOG_WARN("Failed to eval batch", K(ret), KPC(agg_group), K_(need_access_data), K_(need_get_row_ids));
       }
     }
@@ -810,6 +802,17 @@ int ObAggregatedStoreVec::reset_agg_row_id()
     } else if (OB_FAIL(agg_group->reset_agg_row_id())){
       LOG_WARN("Failed to reset agg_row_id in agg group", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObAggregatedStoreVec::prepare_batch_scan()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(do_aggregate())) {
+    LOG_WARN("Failed to aggregate rows", K(ret));
+  } else if (OB_FAIL(reset_agg_row_id())) {
+    LOG_WARN("Failed to reset agg row id", K(ret));
   }
   return ret;
 }

@@ -222,10 +222,12 @@ tools/deploy/debug/
 tools/deploy/dooba.py
 tools/deploy/etc/
 tools/deploy/focus_*
+tools/deploy/home/admin/
 tools/deploy/lib
 tools/deploy/lib/
 tools/deploy/list
 tools/deploy/log/
+tools/deploy/openlogic-openjdk-*
 tools/deploy/usr/
 tools/deploy/mysql_test/java/mytest.jar
 tools/deploy/mysql_test/r/*.reject

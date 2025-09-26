@@ -70,7 +70,7 @@ void TestSSMicroCacheEvictPersistedMeta::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32)));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/));
   micro_cache->start();
   micro_cache_ = micro_cache;
   mem_blk_mgr_ = &micro_cache_->mem_blk_mgr_;

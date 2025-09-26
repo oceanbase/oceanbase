@@ -18,6 +18,7 @@
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_backup_helper.h"
 namespace oceanbase 
 {
 using namespace common;
@@ -203,6 +204,7 @@ int ObBackupScheduleTask::deep_copy(const ObBackupScheduleTask &that)
     trace_id_ = that.trace_id_;
     dst_ = that.dst_;
     status_ = that.status_;
+    dest_id_ = that.dest_id_;
     generate_time_ = that.generate_time_;
     schedule_time_ = that.schedule_time_;
     executor_time_ = that.executor_time_;
@@ -260,7 +262,7 @@ int ObBackupScheduleTask::update_dst_and_doing_status(common::ObMySQLProxy &sql_
 }
 
 int ObBackupScheduleTask::build(const ObBackupScheduleTaskKey & key, const share::ObTaskId &trace_id, 
-    const share::ObBackupTaskStatus &status, const common::ObAddr &dst)
+    const share::ObBackupTaskStatus &status, const common::ObAddr &dst, const int64_t dest_id)
 {
   int ret = OB_SUCCESS;
   if (!key.is_valid() || !status.is_valid()) {
@@ -271,6 +273,7 @@ int ObBackupScheduleTask::build(const ObBackupScheduleTaskKey & key, const share
   } else {
     trace_id_ = trace_id;
     dst_ = dst;
+    dest_id_ = dest_id;
     if (status.is_init() || status.is_pending()) {
       status_.status_ = ObBackupTaskStatus::Status::PENDING;
     } else if (status.is_doing()) {
@@ -378,12 +381,15 @@ int ObBackupDataBaseTask::build(const share::ObBackupJobAttr &job_attr, const sh
 {
   int ret = OB_SUCCESS;
   ObBackupScheduleTaskKey key;
+  int64_t dest_id = OB_INVALID_DEST_ID;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, job_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
-  } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_))) {
+  } else if (OB_FAIL((share::ObBackupUtils::get_backup_dest_id(ls_attr.tenant_id_, dest_id)))) {
+    LOG_WARN("failed to get backup dest id", K(ret), K(ls_attr));
+  } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_, dest_id))) {
     LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", ls_attr.task_trace_id_, "status", ls_attr.status_, "dst", ls_attr.dst_);
   } else {
     incarnation_id_ = job_attr.incarnation_id_;
@@ -659,13 +665,17 @@ int ObBackupComplLogTask::build(const share::ObBackupJobAttr &job_attr, const sh
   int ret = OB_SUCCESS;
   ObBackupScheduleTaskKey key;
   share::SCN start_replay_scn;
+  int64_t dest_id = OB_INVALID_DEST_ID;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, job_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
-  } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_))) {
-    LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", ls_attr.task_trace_id_, "status", ls_attr.status_, "dst", ls_attr.dst_);
+  } else if (OB_FAIL(share::ObBackupUtils::get_backup_dest_id(ls_attr.tenant_id_, dest_id))) {
+    LOG_WARN("failed to get backup dest id", K(ret), K(ls_attr));
+  } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_, dest_id))) {
+    LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", ls_attr.task_trace_id_, "status",
+                  ls_attr.status_, "dst", ls_attr.dst_, "dest_id", dest_id);
   } else if (OB_FAIL(calc_start_replay_scn_(job_attr, set_task_attr, ls_attr, start_replay_scn))) {
     LOG_WARN("failed to calc start replay scn", K(ret), K(job_attr), K(set_task_attr), K(ls_attr));
   } else {
@@ -823,7 +833,6 @@ ObBackupCleanLSTask::ObBackupCleanLSTask()
     round_id_(OB_ARCHIVE_INVALID_ROUND_ID),
     task_type_(),
     ls_id_(),
-    dest_id_(OB_INVALID_DEST_ID),
     backup_path_()
 {
 }
@@ -855,7 +864,6 @@ int ObBackupCleanLSTask::clone(common::ObIAllocator &allocator, ObBackupSchedule
       ls_task->round_id_ = round_id_;  
       ls_task->task_type_ = task_type_;
       ls_task->ls_id_ = ls_id_;
-      ls_task->dest_id_ = dest_id_;
     }
     if (OB_SUCC(ret)) {
       out_task = ls_task;
@@ -945,7 +953,7 @@ int ObBackupCleanLSTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   arg.round_id_ = round_id_;
   arg.task_type_ = task_type_;
   arg.ls_id_ = ls_id_;
-  arg.dest_id_ = dest_id_;
+  arg.dest_id_ = get_dest_id();
   if (OB_FAIL(rpc_proxy.to(get_dst()).delete_backup_ls_task(arg))) {
     LOG_WARN("fail to send backup clean ls task", K(ret), K(arg));
   } else {
@@ -982,15 +990,16 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
     LOG_WARN("invalid argument", K(ret), K(task_attr), K(ls_attr));
   } else if (OB_FAIL(key.init(ls_attr.tenant_id_, ls_attr.job_id_, ls_attr.task_id_, ls_attr.ls_id_.id(), BackupJobType::BACKUP_CLEAN_JOB))) {
     LOG_WARN("failed to init backup schedule task key", K(ret), K(task_attr), K(ls_attr));
-  } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_))) {
-    LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", ls_attr.task_trace_id_, "status", ls_attr.status_, "dst", ls_attr.dst_);
+  } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_, task_attr.dest_id_))) {
+    LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", ls_attr.task_trace_id_, "status",
+               ls_attr.status_, "dst", ls_attr.dst_, "dest_id", task_attr.dest_id_,
+               "key", key, "dest_id", task_attr.dest_id_);
   } else {
     job_id_ = task_attr.job_id_;
     incarnation_id_ = task_attr.incarnation_id_; 
     round_id_ = ls_attr.round_id_;  
     task_type_ = ls_attr.task_type_;
     ls_id_ = ls_attr.ls_id_;
-    dest_id_ = task_attr.dest_id_;
     if (OB_FAIL(backup_path_.assign(task_attr.backup_path_))) {
       LOG_WARN("failed to assign backup path", K(ret), K(task_attr.backup_path_));
     } else if (OB_FAIL(task_attr.get_backup_clean_id(id_))) {

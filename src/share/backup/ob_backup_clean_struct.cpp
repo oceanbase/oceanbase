@@ -71,8 +71,8 @@ int ObBackupCleanStatus::set_status(const char *str)
 
 static const char *new_backup_clean_type_str[] = {
     "EMPTY",
-    "DELETE BACKUP SET",
-    "DELETE BACKUP PIECE",
+    "DELETE BACKUPSET",
+    "DELETE ARCHIVELOG_PIECE",
     "DELETE BACKUP ALL",
     "DELETE OBSOLETE BACKUP",
     "DELETE OBSOLETE BACKUP BACKUP",

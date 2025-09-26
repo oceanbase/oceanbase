@@ -1485,7 +1485,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
         } else if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("get next row failed.", K(ret));
-          } else {
+          } else if (adaptor.get_is_need_vid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("data table row count mismatched", K(ret));
           }
@@ -1601,7 +1601,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   } else if (OB_FALSE_IT(ctx_->task_status_.progress_info_.vec_opt_status_ = OB_VECTOR_ASYNC_OPT_SERIALIZE)) {
   } else if (OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
-  } else if (OB_FAIL(adaptor.renew_single_snap_index())) {
+  } else if (OB_FAIL(adaptor.renew_single_snap_index(adaptor.get_snap_index_type() == VIAT_HNSW_BQ))) {
     LOG_WARN("fail to renew single snap index", K(ret));
   }
   /* Warning!!!
@@ -1783,7 +1783,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get tx desc or ob access service, get nullptr", K(ret));
       } else if (OB_FAIL(get_old_snapshot_data(adaptor, tx_desc, snapshot_column_count, cs_type, vector_key_col_idx,
-          vector_data_col_idx, vector_vid_col_idx, vector_col_idx, extra_column_idxs, table_scan_iter, delete_row_iter))) {
+          vector_data_col_idx, vector_vid_col_idx, vector_col_idx, extra_column_idxs, table_scan_iter, delete_row_iter, snapshot))) {
         LOG_WARN("failed to get old snapshot data", K(ret));
       } else if (OB_ISNULL(adaptor.get_snap_data_()) || !adaptor.get_snap_data_()->is_inited()) {  // adaptor created by vector index async task, there won't be access from other threads.
         LOG_INFO("data table is empty, won't create snapshot index");
@@ -1941,7 +1941,8 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
     int64_t vector_col_idx,
     ObSEArray<int64_t, 4> &extra_column_idxs,
     ObTableScanIterator *table_scan_iter,
-    storage::ObValueRowIterator &delete_row_iter)
+    storage::ObValueRowIterator &delete_row_iter,
+    transaction::ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
@@ -1987,6 +1988,8 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
             LOG_WARN("invalid src lob locator.", K(ret));
           } else if (OB_FAIL(lob_mngr->build_lob_param(lob_param, allocator_, cs_type, 0, UINT64_MAX, timeout_us, lob))) {
             LOG_WARN("fail to build lob param.", K(ret));
+          } else if (OB_FAIL(lob_param.snapshot_.assign(snapshot))) {
+            LOG_WARN("fail to assign snapshot", K(ret), K(snapshot));
           } else if (OB_FAIL(lob_mngr->erase(lob_param))) {
             LOG_WARN("lob meta row delete failed.", K(ret));
           }

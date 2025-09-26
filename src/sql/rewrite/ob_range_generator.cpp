@@ -591,7 +591,25 @@ int ObRangeGenerator::generate_complex_ranges(const ObRangeNode *node)
     } else if (OB_FAIL(check_need_merge_range_nodes(node, need_merge))) {
       LOG_WARN("failed to check need merge range nodes");
     } else if (!need_merge) {
-      // do nothing
+      if (always_true_range_ != nullptr) {
+        ranges_.reset();
+        if (OB_FAIL(ranges_.push_back(always_true_range_))) {
+          LOG_WARN("failed to push back always true range");
+        }
+      } else if (0 == ranges_.count()) {
+        if (pre_range_graph_->enable_new_false_range()) {
+          all_single_value_ranges_ = false;
+        } else {
+          if (OB_ISNULL(always_false_range_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null always false range");
+          } else if (OB_FAIL(ranges_.push_back(always_false_range_))) {
+            LOG_WARN("failed to push back always false range");
+          } else {
+            all_single_value_ranges_ = false;
+          }
+        }
+      }
     } else if (OB_FAIL(merge_and_remove_ranges())) {
       LOG_WARN("faield to merge and remove ranges");
     }

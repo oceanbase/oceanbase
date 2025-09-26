@@ -30,7 +30,7 @@ int ObSemiStructColumnEncodeCtx::scan()
   bool has_outrow = false;
   is_enable_ = true;
 
-  if (schema_not_match_block_count_ > MAX_SCHEMA_NOT_MATCH_COUNT) {
+  if (OB_UNLIKELY(schema_not_match_block_count_ > MAX_SCHEMA_NOT_MATCH_COUNT)) {
     ++not_encode_block_count_;
     if (not_encode_block_count_ > MAX_NOT_ENCODE_COUNT) {
       is_enable_ = true;
@@ -41,16 +41,14 @@ int ObSemiStructColumnEncodeCtx::scan()
     }
   }
 
-  if (! is_enable_) {
+  if (OB_UNLIKELY(! is_enable_)) {
   } else if (OB_FAIL(check_has_outrow(has_outrow))) {
     LOG_WARN("check has outrow fail", K(ret));
-  } else if (has_outrow) {
+  } else if (OB_UNLIKELY(has_outrow)) {
     ++encounter_outrow_block_cnt_;
     disable_encoding();
   } else if (OB_FAIL(do_scan())) {
     LOG_WARN("scan fail", K(ret));
-  } else {
-    LOG_INFO("[xiaoma] semsitruct encode", K(ret));
   }
 
   if (OB_SEMISTRUCT_SCHEMA_NOT_MATCH == ret) {
@@ -61,19 +59,18 @@ int ObSemiStructColumnEncodeCtx::scan()
     if (OB_FAIL(do_scan())) {
       LOG_WARN("do scan fail", K(ret));
     } else {
-      LOG_INFO("[xiaoma] semsitruct encode", K(ret));
       schema_not_match_block_count_ = 0;
     }
   }
 
-  if (OB_NOT_SUPPORT_SEMISTRUCT_ENCODE == ret) {
+  if (OB_UNLIKELY(OB_NOT_SUPPORT_SEMISTRUCT_ENCODE == ret)) {
     disable_encoding();
     sub_schema_->reset();
     previous_cs_encoding_.reset();
     ret = OB_SUCCESS;
   }
 
-  if (OB_SUCC(ret) && is_enable_ ) {
+  if (OB_SUCC(ret) && OB_LIKELY(is_enable_)) {
     schema_not_match_block_count_ = 0;
     not_encode_block_count_ = 0;
     if (sub_schema_->get_freq_column_cnt() <= 0) {
@@ -115,7 +112,7 @@ int ObSemiStructColumnEncodeCtx::check_has_outrow(bool &has_outrow)
     for (int64_t row_idx = 0; !has_outrow && OB_SUCC(ret) && row_idx < row_cnt; ++row_idx) {
       const ObDatum &datum = datums_->at(row_idx);
       if (datum.is_nop() || datum.is_null()) {
-      } else if (datum.len_ < sizeof(ObLobCommon)) {
+      } else if (OB_UNLIKELY(datum.len_ < sizeof(ObLobCommon))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected lob datum len", K(ret), K(row_idx), K(datum));
       } else {
@@ -145,11 +142,11 @@ int ObSemiStructColumnEncodeCtx::init_sub_schema()
   } else if (OB_FAIL(json_schema_flatter.flat_datums(*datums_))) {
     LOG_WARN("flat json fail", K(ret), K(json_schema_flatter));
   } else if(FALSE_IT(sub_schema_->set_use_lexicographical_order(json_schema_flatter.get_use_lexicographical_order()))) {
-  } else if (sub_schema_->get_version() == ObSemiStructSubSchema::SCHEMA_VERSION) {
+  } else if (OB_UNLIKELY(sub_schema_->get_version() == ObSemiStructSubSchema::SCHEMA_VERSION)) {
     if (OB_FAIL(json_schema_flatter.build_sub_schema(sub_schema_->get_base_node(), dynamic_cast<ObSemiStructSubSchema&>(*sub_schema_)))) {
       LOG_WARN("build_sub_schema fail", K(ret), K(json_schema_flatter));
     }
-  } else if (sub_schema_->get_version() == ObSemiNewSchema::NEW_SCHEMA_VERSION) {
+  } else if (OB_LIKELY(sub_schema_->get_version() == ObSemiNewSchema::NEW_SCHEMA_VERSION)) {
     if (OB_FAIL(json_schema_flatter.build_sub_schema(dynamic_cast<ObSemiNewSchema&>(*sub_schema_)))) {
       LOG_WARN("build_sub_schema fail", K(ret), K(json_schema_flatter));
     }
@@ -205,7 +202,7 @@ int ObSemiStructColumnEncodeCtx::fill_sub_column_datums()
     LOG_WARN("flat json fail", K(ret), K(json_data_flatter));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < sub_col_datums_.count(); ++i) {
-      if (sub_col_datums_.at(i)->count() != datums_->count()) {
+      if (OB_UNLIKELY(sub_col_datums_.at(i)->count() != datums_->count())) {
         ret = OB_SEMISTRUCT_SCHEMA_NOT_MATCH;
         LOG_WARN("sub subema is not match, some frequnent clumn don't have value", KR(ret),
                       K(sub_col_datums_.at(i)->count()), K(datums_->count()));
@@ -220,10 +217,8 @@ int ObSemiStructColumnEncodeCtx::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(encoder_allocator_.init())) {
     LOG_WARN("init encoder_allocator_ fail", K(ret));
-  } else if (encoding_ctx_.major_working_cluster_version_ < DATA_VERSION_4_4_1_0) {
-    if (freq_threshold_ == 0) {
-      freq_threshold_ == 100;
-    }
+  } else if (OB_UNLIKELY(encoding_ctx_.major_working_cluster_version_ < DATA_VERSION_4_4_1_0)) {
+    freq_threshold_ = 100;
     if (OB_ISNULL(sub_schema_ = OB_NEWx(ObSemiStructSubSchema, &schema_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc ObSemiStructSubSchema memory failed", K(ret));
@@ -333,7 +328,8 @@ int ObSemiStructColumnEncodeCtx::serialize_sub_schema(ObMicroBufferWriter &buf_w
     LOG_WARN("buffer advance failed", K(ret), K(schema_serialize_size), K(sub_schema_));
   } else if (OB_FAIL(sub_schema_->encode(buf, schema_serialize_size, pos))) {
     LOG_WARN("encode sub schema fail", K(ret), K(schema_serialize_size), K(pos), K(sub_schema_));
-  } else if (schema_serialize_size != pos) {
+  } else if (OB_UNLIKELY(schema_serialize_size != pos)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("serialize sub schema incorrect", K(ret), K(schema_serialize_size), K(pos), K(sub_schema_));
   }
   return ret;

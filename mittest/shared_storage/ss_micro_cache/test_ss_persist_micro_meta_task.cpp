@@ -60,6 +60,11 @@ void TestSSPersistMicroMetaTask::SetUp()
 {
   micro_cache_ = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache_);
+  micro_cache_->stop();
+  micro_cache_->wait();
+  micro_cache_->destroy();
+  ASSERT_EQ(OB_SUCCESS, micro_cache_->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/));
+  micro_cache_->start();
   tenant_id_ = MTL_ID();
 }
 
@@ -438,7 +443,7 @@ int main(int argc, char **argv)
   OB_LOGGER.set_file_name("test_ss_persist_micro_meta_task.log", true, true);
   OB_LOGGER.set_log_level("INFO");
   ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg, true);
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

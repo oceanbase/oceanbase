@@ -765,6 +765,7 @@ int ObDDLScheduler::DDLScanTask::init()
 {
   int ret = OB_SUCCESS;
   FLOG_INFO("[DDLScanTask] begin init ddl scan task", K(tg_id_), "tenant_id", MTL_ID());
+  ATOMIC_STORE(&last_schedule_time_, 0);
   if (!is_sys_tenant(MTL_ID())) {
     LOG_INFO("ddl scan task should run on SYS tenant", "tenant_id", MTL_ID());
   } else if (OB_UNLIKELY(-1 != tg_id_)) {
@@ -804,6 +805,7 @@ void ObDDLScheduler::DDLScanTask::destroy()
     TG_DESTROY(tg_id_);
     tg_id_ = -1;
   }
+  ATOMIC_STORE(&last_schedule_time_, 0);
   FLOG_INFO("[DDLScanTask] finish destroy", K(tg_id_));
 }
 
@@ -834,6 +836,19 @@ void ObDDLScheduler::DDLScanTask::runTimerTask()
   if (OB_FAIL(ObGenDicLoader::get_instance().destroy_dic_loader_for_tenant())) {
     // overwrite ret
     LOG_WARN("fail to destroy dic loader for some tenants", K(ret));
+  }
+
+  const int64_t ddl_task_scan_period = std::abs(OB_E(common::EventTable::EN_DDL_SCAN_TASK_PERIOD) 0);
+  if (0 < ddl_task_scan_period) {
+    const int64_t current_time = ObTimeUtility::current_time();
+    const int64_t next_schedule_time = std::max(ATOMIC_LOAD(&last_schedule_time_), current_time) + ddl_task_scan_period;
+    if (next_schedule_time < current_time + DDL_TASK_SCAN_PERIOD) {
+      if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, next_schedule_time - current_time, false/*repeat*/))) {
+        LOG_WARN("fail to schedule ddl scan task", KR(ret), K(tg_id_));
+      } else {
+        inc_update(&last_schedule_time_, next_schedule_time);
+      }
+    }
   }
 }
 
@@ -1812,7 +1827,7 @@ int ObDDLScheduler::schedule_auto_split_task()
       } else if (FALSE_IT(single_arg = new (buf) obrpc::ObAlterTableArg())) {
       } else if (OB_TMP_FAIL(split_helper.build_arg(task.tenant_id_, task.ls_id_, task.tablet_id_,
           task.auto_split_tablet_size_, task.used_disk_space_, *single_arg))) {
-        if (OB_OP_NOT_ALLOW == ret) {
+        if (OB_OP_NOT_ALLOW == tmp_ret || OB_NOT_SUPPORTED == tmp_ret) {
           ignore_this_task = true;
         } else {
           LOG_WARN("fail to build arg", K(tmp_ret), K(task));

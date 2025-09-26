@@ -277,7 +277,6 @@ void ObSqlCtx::reset()
   ins_opt_ctx_.reset();
   ccl_rule_id_ = 0;
   ccl_match_time_ = 0;
-  reconstruct_ps_sql_.reset();
   matched_ccl_rule_level_values_.reset();
   matched_ccl_format_sqlid_level_values_.reset();
 }
@@ -312,6 +311,7 @@ void ObSqlSchemaGuard::reset()
   dblink_scn_.reuse();
   mocked_schema_id_counter_ = OB_MIN_EXTERNAL_OBJECT_ID;
   dblink_ids_under_oracle12c_.reset();
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "SqlSchemaGuard", ObCtxIds::DEFAULT_CTX_ID));
 }
 
 TableItem *ObSqlSchemaGuard::get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id)
@@ -894,7 +894,7 @@ int ObSqlSchemaGuard::get_catalog_table_schema(const uint64_t tenant_id,
 
 int ObSqlSchemaGuard::get_lake_table_metadata(
     const uint64_t table_id,
-    const share::ObILakeTableMetadata *&lake_table_metadata) const
+    share::ObILakeTableMetadata *&lake_table_metadata) const
 {
   int ret = OB_SUCCESS;
   lake_table_metadata = NULL;

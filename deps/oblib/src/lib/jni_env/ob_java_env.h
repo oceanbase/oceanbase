@@ -28,7 +28,7 @@ namespace common
 
 class ObJavaEnv {
 public:
-  ObJavaEnv() : is_inited_(false), setup_env_lock_(common::ObLatchIds::JAVA_ENV_LOCK) {
+  ObJavaEnv() : is_inited_(false), version_valid_(false), setup_env_lock_(common::ObLatchIds::JAVA_ENV_LOCK) {
     arena_alloc_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(OB_SYS_TENANT_ID, "JavaHomeEnv")));
   }
 
@@ -44,9 +44,12 @@ public:
   // This api will setup the connector_path and class_path
   int setup_useful_path();
   int setup_java_env();
+  int check_version_valid();
+  int set_version_valid(bool valid);
 
 private:
   bool is_inited_;
+  bool version_valid_;
   const char *java_home_;
   const char *java_opts_;
   const char *class_path_;

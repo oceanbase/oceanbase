@@ -219,6 +219,9 @@ const char *const OB_STR_BACKUP_CHECK_FILE = "check_file";
 const char *const OB_STR_BACKUP_DEST_ENDPOINT = "endpoint";
 const char *const OB_STR_BACKUP_DEST_AUTHORIZATION = "authorization";
 const char *const OB_STR_BACKUP_DEST_ID = "dest_id";
+const char *const OB_STR_BACKUP_DEST_STATUS = "status";
+const char *const OB_STR_BACKUP_DEST_STATUS_NORMAL = "NORMAL";
+const char *const OB_STR_BACKUP_DEST_STATUS_DELETING = "DELETING";
 const char *const OB_STR_BACKUP_DEST_EXTENSION = "extension";
 const char *const OB_STR_BACKUP_CHECK_FILE_NAME = "check_file_name";
 const char *const OB_STR_BACKUP_LAST_CHECK_TIME = "last_check_time";
@@ -292,6 +295,7 @@ const char *const OB_STR_LS = "logstream";
 const char *const OB_STR_COMPLEMENT_LOG = "complement_log";
 const char *const OB_STR_MAJOR_BACKUP = "major_data";
 const char *const OB_STR_MINOR_BACKUP = "minor_data";
+const int64_t OB_BACKUP_ZONE_ERROR_MSG_LENGTH = 1024;
 const char *const OB_STR_SYS_BACKUP = "sys_data";
 const char *const OB_STR_USER_BACKUP = "user_data"; // include both minor and major
 const char *const OB_STR_TURN = "turn";
@@ -1151,6 +1155,7 @@ public:
   static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
+  static int get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id);
   static int get_tenant_backup_servers(
       const char *backup_dest_str,
       const uint64_t tenant_id,
@@ -1294,7 +1299,8 @@ struct ObBackupSrcInfo final
   bool is_region() const { return ObBackupSrcType::REGION == src_type_ && !locality_list_.empty(); }
   bool is_idc() const { return ObBackupSrcType::IDC == src_type_ && !locality_list_.empty(); }
   bool is_empty() const { return ObBackupSrcType::EMPTY == src_type_ && locality_list_.empty(); }
-  int check_locality_info_valid(const ObRegion &region, const ObIDC &idc, const ObZone &zone, bool &is_valid) const;
+  int check_locality_info_valid(const ObRegion &region, const ObIDC &idc,
+                                    const ObZone &zone, bool &is_valid, int64_t &priority) const;
   bool is_valid() const { return src_type_ < ObBackupSrcType::MAX && src_type_ >= ObBackupSrcType::EMPTY; }
   TO_STRING_KV(K_(src_type), K_(locality_list));
   ObBackupSrcType src_type_;
@@ -1324,7 +1330,7 @@ int ObBackupUtils::parse_backup_format_input(
       if (format_input.ptr()[i] == split_commma || format_input.ptr()[i] == split_semicolon) {
         length = i - pos;
         if (length <= 0 || length > INT32_MAX) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "format input value is unexpcted", K(ret), K(format_input), K(length));
         } else {
           ObString tmp_string;

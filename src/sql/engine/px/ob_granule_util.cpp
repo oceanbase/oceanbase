@@ -195,11 +195,28 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
   UNUSED(tsc);
   int ret = OB_SUCCESS;
   sql::ObExternalFileFormat external_file_format;
-  if (ranges.count() < 1 || tablets.count() < 1 || OB_ISNULL(tsc)) {
+  if (tablets.count() < 1 || OB_ISNULL(tsc)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the invalid argument", K(ret), K(ranges.count()), K(tablets.count()));
+    LOG_WARN("the invalid argument", K(ret), K(tablets.count()));
   } else if (OB_FAIL(external_file_format.load_from_string(tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_, allocator))) {
     LOG_WARN("failed to load from string", K(ret), K(tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_));
+  } else if (OB_UNLIKELY(ranges.empty())) {
+    // always false range
+    ObNewRange new_range;
+    if (OB_FAIL(ObExternalTableUtils::convert_external_table_empty_range(ObExternalTableUtils::dummy_file_name(),
+                                                                         ObString(""), // content_digest
+                                                                         0, // file_size
+                                                                         0, // modify_time
+                                                                         0, // file_id
+                                                                         0, // ref_table_id
+                                                                         allocator,
+                                                                         new_range))) {
+      LOG_WARN("failed to convert external table empty range", K(ret));
+    } else if (OB_FAIL(granule_ranges.push_back(new_range)) ||
+               OB_FAIL(granule_idx.push_back(0)) ||
+               OB_FAIL(granule_tablets.push_back(tablets.at(0)))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
   } else if (external_table_files.count() == 1 &&
              external_table_files.at(0).file_id_ == INT64_MAX) {
     // dealing dummy file
@@ -234,7 +251,13 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
 #endif
     } else {
 #if defined (OB_BUILD_JNI_ODPS)
-      if (external_file_format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+      if (external_file_format.odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+         // tunnel api
+        if (OB_FAIL(split_granule_by_partition_line_tunnel(
+                allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+          LOG_WARN("failed to split granule by partition line", K(ret));
+        }
+      } else {
         if (external_file_format.odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
           if (OB_FAIL(split_granule_by_total_byte(allocator, parallelism, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
             LOG_WARN("failed to split granule by total byte", K(ret));
@@ -243,12 +266,6 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
           if (OB_FAIL(split_granule_by_total_row(allocator, parallelism, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
             LOG_WARN("failed to split granule by total row", K(ret));
           }
-        }
-      } else {
-        // tunnel api
-        if (OB_FAIL(split_granule_by_partition_line_tunnel(
-                allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
-          LOG_WARN("failed to split granule by partition line", K(ret));
         }
       }
 #else
@@ -298,9 +315,27 @@ int ObGranuleUtil::split_granule_for_lake_table(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObLakeTableFileMap *map = nullptr;
-  if (OB_UNLIKELY(ranges.count() < 1 || tablets.count() < 1)) {
+  if (OB_UNLIKELY(tablets.count() < 1)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ranges.count()), K(tablets.count()));
+    LOG_WARN("get invalid argument", K(tablets.count()));
+  } else if (OB_UNLIKELY(ranges.empty())) {
+    ObNewRange range;
+    if (OB_UNLIKELY(tablets.count() != 1) || OB_ISNULL(tablets.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected tablets counts", K(tablets));
+    } else if (OB_FAIL(ObExternalTableUtils::convert_lake_table_new_range(nullptr,
+                                                                          0, // file_id
+                                                                          tablets.at(0)->partition_id_, // part_id
+                                                                          allocator,
+                                                                          range))) {
+      LOG_WARN("failed to make lake table range");
+    } else if (OB_FAIL(granule_tablets.push_back(tablets.at(0)))) {
+      LOG_WARN("failed to push basck tablet loc");
+    } else if (OB_FAIL(granule_ranges.push_back(range))) {
+      LOG_WARN("failed to push back range");
+    } else if (OB_FAIL(granule_idx.push_back(0))) {
+      LOG_WARN("failed to push back granule idx");
+    }
   } else if (OB_FAIL(exec_ctx.get_lake_table_file_map(map))) {
     LOG_WARN("failed to get lake table file map");
   } else if (OB_ISNULL(map)) {

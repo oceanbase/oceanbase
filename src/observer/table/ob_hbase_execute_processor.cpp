@@ -143,12 +143,24 @@
   ObTableConsistencyLevel consistency_level = ObTableConsistencyLevel::STRONG;
   stat_process_type_ = get_stat_process_type();
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
+  ObTabletID route_tablet_id(ObTabletID::INVALID_TABLET_ID);
   if (OB_FAIL(init_schema_and_calc_part(ls_id))) {
     LOG_WARN("fail to init schema and calc part", K(ret));
+  } else if (FALSE_IT(route_tablet_id = arg_.cf_rows_.at(0).get_cf_row(0).get_cell(0).get_tablet_id())) {
+  } else if (!route_tablet_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("route tablet id is invalid", K(ret));
   } else if (OB_FAIL(lock_rows())) {
     LOG_WARN("fail to lock rows", K(ret));
-  } else if (OB_FAIL(start_trans(false, consistency_level, ls_id, get_timeout_ts(), !ls_id.is_valid() /*need_global_snapshot*/))) {
+  } else if (OB_FAIL(start_trans(false,
+                                 consistency_level,
+                                 ls_id,
+                                 get_timeout_ts(),
+                                 !ls_id.is_valid() /*need_global_snapshot*/))) {
     LOG_WARN("fail to start trans", K(ret), K(ls_id));
+  } else if (!trans_param_.tx_snapshot_.is_ls_snapshot()
+             && OB_FAIL(check_local_execute(route_tablet_id))) {
+    LOG_WARN("fail to check local execute", K(ret), K(route_tablet_id));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < arg_.cf_rows_.count(); ++i) {
       SMART_VAR(ObTableCtx, tb_ctx, allocator_) {

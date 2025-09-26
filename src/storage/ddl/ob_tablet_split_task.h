@@ -106,7 +106,7 @@ public:
   TO_STRING_KV(
     K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_split_ranges), K_(complement_data_ret),
     K_(skipped_split_major_keys), K_(split_point_major_macros), K_(split_point_minor_macros),
-    K_(parallel_cnt_of_each_sstable), K_(split_scn), K_(row_inserted),
+    K_(parallel_cnt_of_each_sstable), K_(split_scn), K_(row_inserted), K_(cg_row_inserted),
     K_(physical_row_count), K_(split_scn), K_(reorg_scn),
     K(ls_rebuild_seq_), K_(split_majors_count), K_(max_major_snapshot)
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -173,6 +173,7 @@ public:
   common::hash::ObHashMap<ObITable::TableKey/*source major sstable*/, ObStorageSchema*> clipped_schemas_map_;
   ObArray<ObITable::TableKey> skipped_split_major_keys_;
   int64_t row_inserted_;
+  int64_t cg_row_inserted_; // unused
   int64_t physical_row_count_;
   // the split point macro blocks in reuse macro split scenario.
   common::ObArray<blocksstable::MacroBlockId> split_point_major_macros_;

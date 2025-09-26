@@ -1437,7 +1437,9 @@ int ObMicroBlockCSEncoder::set_datum_rows_ptr_()
       if (orig_row_start_ptr != curr_row_start_ptr) {
         for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < column_cnt; ++col_idx) {
           ObDatum &datum = all_col_datums_.at(col_idx)->at(row_id);
-          if (datum.ptr_ < orig_row_start_ptr) {
+          if (datum.is_nop()) {
+            // points to static NOP, no need to change
+          } else if (datum.ptr_ < orig_row_start_ptr) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected datum ptr", K(ret), K(datum), K(orig_row_start_ptr), K(row_id), K(col_idx));
           } else {
@@ -1626,7 +1628,7 @@ int ObMicroBlockCSEncoder::copy_cell_(const ObColDesc &col_desc, const
   } else if (src.is_nop()) {
     dest.set_ext();
     dest.extend_obj_ = &NOP;
-    datum_size = sizeof(uint64_t);
+    datum_size = sizeof(ObObj);
   } else if (OB_UNLIKELY(src.is_ext())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported store extend datum type", K(ret), K(src));
@@ -1645,6 +1647,7 @@ int ObMicroBlockCSEncoder::copy_cell_(const ObColDesc &col_desc, const
              && (estimate_size_ + store_size >= estimate_size_limit_)) {
     ret = OB_BUF_NOT_ENOUGH;
   // appended_row_count_ == 0 represent a large row, do not return OB_BUF_NOT_ENOUGH
+  } else if (src.is_nop()) {
   } else if (row_buf_holder_.size() < length_ + datum_size) {
     is_row_holder_not_enough = true;
   } else {

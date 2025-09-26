@@ -75,7 +75,7 @@ void TestSSMicroCache::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30))); // 1G
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30), 1/*micro_split_cnt*/)); // 1G
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   micro_cache->micro_meta_mgr_.enable_save_meta_mem_ = false;
 }
@@ -1273,7 +1273,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   task_runner.persist_meta_task_.cur_interval_us_ = ori_persist_micro_us;
   task_runner.schedule_persist_meta_task(ori_persist_micro_us);
 
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   ASSERT_EQ(0, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(0, cache_stat.micro_stat().valid_micro_cnt_);
   ASSERT_EQ(0, micro_meta_mgr.micro_meta_map_.count());
@@ -1342,14 +1342,14 @@ TEST_F(TestSSMicroCache, test_parallel_clear_micro_cache)
   }
 
   ob_usleep(5 * 1000);
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   for (int64_t i = 0; i < thread_num; ++i) {
     ths[i].join();
   }
   ASSERT_LT(0, fail_cnt); // failed due to stop micro cache when clear_micro_cache
 
   // in case there still exists some micro_block in cache, we clear it again
-  micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
+  IGNORE_RETURN micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
 
   // check micro meta
   ASSERT_EQ(0, micro_cache->flying_req_cnt_);
@@ -1463,6 +1463,8 @@ int main(int argc, char **argv)
   system("rm -f ./test_ss_micro_cache.log*");
   OB_LOGGER.set_file_name("test_ss_micro_cache.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

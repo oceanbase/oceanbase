@@ -31,7 +31,8 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     observer::ObQueryRetryCtrl &retry_ctrl,
     ObPLSPITraceIdGuard &traceid_guard,
     stmt::StmtType stmt_type,
-    bool is_ps_cursor_open)
+    bool is_ps_cursor_open,
+    ObPLCursorInfo *cursor)
   : exec_ctx_(exec_ctx),
     session_info_(session_info),
     spi_result_(spi_result),
@@ -44,7 +45,8 @@ ObPLSqlAuditGuard::ObPLSqlAuditGuard(
     sql_used_memory_size_(0),
     pmcb_(0, sql_used_memory_size_),
     memory_guard_(pmcb_),
-    is_ps_cursor_open_(is_ps_cursor_open)
+    is_ps_cursor_open_(is_ps_cursor_open),
+    cursor_(cursor)
 
 {
   enable_perf_event_ = lib::is_diagnose_info_enabled();
@@ -111,7 +113,9 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
                                                       true,
                                                       ps_sql_,
                                                       true,
-                                                      spi_result_.get_exec_params_str_ptr());
+                                                      spi_result_.get_exec_params_str_ptr(),
+                                                      false,
+                                                      cursor_);
         session_info_.get_raw_audit_record().exec_record_ = record_bak;
         session_info_.get_raw_audit_record().try_cnt_ = try_cnt;
         session_info_.get_raw_audit_record().pl_trace_id_.reset();

@@ -191,6 +191,8 @@ OB_INLINE bool is_phy_op_type_valid(ObPhyOperatorType type)
 }
 
 const char *ob_phy_operator_type_str(ObPhyOperatorType type, bool enable_rich_format = false);
+ObPhyOperatorType get_phy_type_from_name(const char *name, uint64_t length,
+                                         bool &enable_rich_format);
 }
 }
 

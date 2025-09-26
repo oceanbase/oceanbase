@@ -288,6 +288,10 @@ int ObTableQueryAndMutateP::new_try_process()
                                    get_timeout_ts(),
                                    !exec_ctx_.get_ls_id().is_valid()/*need_global_snapshot*/))) {
       LOG_WARN("fail to start readonly transaction", K(ret));
+    } else if (!trans_param_.tx_snapshot_.is_ls_snapshot()
+               && tablet_id_.is_valid()
+               && OB_FAIL(check_local_execute(tablet_id_))) {
+      LOG_WARN("fail to check local execute", K(ret));
     } else if (OB_FAIL(model->work(exec_ctx_, arg_, result_))) {
       LOG_WARN("model fail to work", K(ret), K_(arg), K_(result));
     }
@@ -345,6 +349,7 @@ int ObTableQueryAndMutateP::try_process()
 bool ObTableQueryAndMutateP::is_new_try_process()
 {
   return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
-         !arg_.tablet_id_.is_valid() &&
+         (!arg_.tablet_id_.is_valid() ||
+         (arg_.tablet_id_.is_valid() && arg_.distribute_need_tablet_id())) &&
          TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute();
 }

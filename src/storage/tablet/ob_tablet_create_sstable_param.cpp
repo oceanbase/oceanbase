@@ -82,6 +82,8 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     co_base_snapshot_version_(-1),
     rec_scn_()
 {
+  data_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
+  other_block_ids_.set_attr(ObMemAttr(MTL_ID(), "CreateSSTable"));
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
 

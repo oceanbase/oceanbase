@@ -214,7 +214,8 @@ private:
                                     const ObDASRelatedTabletID &related_tablet_ids,
                                     transaction::ObTxDesc *trans_desc,
                                     transaction::ObTxReadSnapshot *snapshot,
-                                    ObDASIter *&iter_tree);
+                                    ObDASIter *&iter_tree,
+                                    bool is_vec_pre_filter = false);
   static int create_doc_id_scan_sub_tree(ObTableScanParam &scan_param,
                                          common::ObIAllocator &alloc,
                                          const ObDASDocIdMergeCtDef *merge_ctdef,
@@ -319,7 +320,7 @@ private:
                                         transaction::ObTxDesc *trans_desc,
                                         transaction::ObTxReadSnapshot *snapshot,
                                         ObDASIter *&pre_iter_tree,
-                                        bool& need_index_back);
+                                        bool& is_primary_index);
   static int create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
                                         common::ObIAllocator &alloc,
                                         const ObDASBaseCtDef *attach_ctdef,

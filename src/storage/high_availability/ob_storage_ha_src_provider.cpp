@@ -652,7 +652,12 @@ int ObStorageHASrcProvider::check_replica_validity(
     ret = OB_DATA_SOURCE_NOT_VALID;
     LOG_WARN("do not choose this src, replica type check failed", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(dst), K(learner_list), K(ls_info));
   } else if (OB_FAIL(fetch_ls_meta_info_(tenant_id_, ls_id_, addr, ls_info))) {
-    LOG_WARN("failed to fetch ls meta info", K(ret), K(tenant_id_), K(ls_id_), K(addr));
+    if (OB_DISK_ERROR == ret) {
+      ret = OB_DATA_SOURCE_NOT_VALID; // overwrite ret
+      LOG_WARN("do not choose this src, disk error", K(ret), K(tenant_id_), K(ls_id_), K(addr));
+    } else {
+      LOG_WARN("failed to fetch ls meta info", K(ret), K(tenant_id_), K(ls_id_), K(addr));
+    }
   } else if (!ls_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_info is invalid!", K(ret), K(tenant_id_), K(ls_id_), K(addr), K(ls_info));

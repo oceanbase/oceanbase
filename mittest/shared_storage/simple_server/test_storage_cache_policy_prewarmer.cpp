@@ -299,7 +299,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
 
   task->status_ = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING;
   for (int i = 0; i < MAX_RETRY_TIMES && !succeed; i++) {
-    micro_cache->clear_micro_cache();
+    IGNORE_RETURN micro_cache->clear_micro_cache();
     OK(prewarmer.prewarm_hot_tablet(task));
     first_stat = prewarmer.get_hot_retention_prewarm_stat();
     LOG_INFO("read init major", K(i), K(first_stat));
@@ -511,6 +511,32 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
                                                            ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] finished test_incremental_trigger");
 }
+
+TEST_F(ObStorageCachePolicyPrewarmerTest, test_force_refresh_policy_task)
+{
+  FLOG_INFO("[TEST] start test_force_refresh_policy_task");
+  share::ObTenantSwitchGuard tguard;
+  OK(tguard.switch_to(run_ctx_.tenant_id_));
+  OK(exe_sql("create table test_force_refresh_policy_task (a int)"));
+  set_ls_and_tablet_id_for_run_ctx("test_force_refresh_policy_task");
+
+  OK(exe_sql("alter table test_force_refresh_policy_task storage_cache_policy (global = 'hot');"));
+  wait_task_finished(run_ctx_.tablet_id_.id());
+  FLOG_INFO("[TEST] wait task finished in test_force_refresh_policy_task");
+
+  ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
+  ASSERT_NE(nullptr, policy_service);
+  PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
+  ASSERT_EQ(OB_SUCCESS, policy_service->tablet_status_map_.get_refactored(run_ctx_.tablet_id_.id(), policy_status));
+  ASSERT_EQ(PolicyStatus::HOT, policy_status);
+  ASSERT_EQ(OB_SUCCESS,policy_service->tablet_status_map_.erase_refactored(run_ctx_.tablet_id_.id()));
+  policy_service->refresh_policy_scheduler_.force_refresh_policy_task_.runTimerTask();
+  ASSERT_EQ(OB_SUCCESS, policy_service->tablet_status_map_.get_refactored(run_ctx_.tablet_id_.id(), policy_status));
+  ASSERT_EQ(PolicyStatus::HOT, policy_status);
+  ASSERT_TRUE(policy_service->get_need_generate_cache_task());
+  FLOG_INFO("[TEST] finish test_force_refresh_policy_task");
+}
+
 }
 }
 

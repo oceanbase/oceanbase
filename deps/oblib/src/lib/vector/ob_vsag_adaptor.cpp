@@ -37,11 +37,38 @@ using namespace vsag;
 static int vsag_errcode2ob(vsag::ErrorType vsag_errcode)
 {
   int ret = OB_ERR_VSAG_RETURN_ERROR;
-  if (vsag_errcode == vsag::ErrorType::INDEX_EMPTY/*10*/) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("vsag failed to allocate", K(ret), K(vsag_errcode));
-  } else {
-    LOG_WARN("get vsag failed.", K(ret), K(vsag_errcode));
+  switch (vsag_errcode) {
+    case vsag::ErrorType::INVALID_ARGUMENT: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid vsag parameter", K(ret), K(vsag_errcode));
+      break;
+    }
+    case vsag::ErrorType::UNSUPPORTED_INDEX:
+    case vsag::ErrorType::UNSUPPORTED_INDEX_OPERATION: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support vsag feature", K(ret), K(vsag_errcode));
+      break;
+    }
+    case vsag::ErrorType::DIMENSION_NOT_EQUAL: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the dimension of request is NOT equal to index", K(ret), K(vsag_errcode));
+      break;
+    }
+    case vsag::ErrorType::INDEX_EMPTY: {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("index is empty, cannot search or serialize", K(ret), K(vsag_errcode));
+      break;
+    }
+    case vsag::ErrorType::NO_ENOUGH_MEMORY: {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory in vasg", K(ret), K(vsag_errcode));
+      break;
+    }
+    default: {
+      ret = OB_ERR_VSAG_RETURN_ERROR;
+      LOG_WARN("vsag return error", K(ret), K(vsag_errcode));
+      break;
+    }
   }
   return ret;
 }
@@ -529,10 +556,6 @@ int construct_vsag_create_param(
                                  (use_old_serial_format ? "true": "false")))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(extra_info_size));
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
-                                 ",\"use_old_serial_format\":%s",
-                                 (use_old_serial_format ? "true": "false")))) {
-    LOG_WARN("failed to fill result_param_str", K(ret), K(extra_info_size));
-  } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
                                      ",\"%s\":{",
                                      index_type_str))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(index_type_str));
@@ -831,7 +854,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
     if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
-      LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter));
+      LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter), K(topk));
     } else {
       const std::string input_json_string(result_param_str);
       DatasetPtr query = vsag::Dataset::Make();
@@ -839,7 +862,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       if (OB_FAIL(hnsw->knn_search(query, topk, input_json_string, dist, ids,
                           result_size, valid_ratio, index_type, bitmap,
                           reverse_filter, need_extra_info, extra_infos, allocator))) {
-        LOG_WARN("[OBVSAG] knn search error happend", K(ret), K(index_type), KCSTRING(result_param_str));
+        LOG_WARN("[OBVSAG] knn search error happend", K(ret), K(index_type), K(topk), KCSTRING(result_param_str));
       }
     }
   }
@@ -871,7 +894,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
     if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
-      LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter));
+      LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter), K(topk));
     } else {
       const std::string input_json_string(result_param_str);
       DatasetPtr query = vsag::Dataset::Make();
@@ -880,7 +903,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
                             result_size, valid_ratio, index_type, bitmap,
                             reverse_filter, need_extra_info, extra_infos, iter_ctx,
                             is_last_search, allocator))) {
-        LOG_WARN("[OBVSAG] knn search error happend", K(ret), K(index_type), KCSTRING(result_param_str));
+        LOG_WARN("[OBVSAG] knn search error happend", K(ret), K(index_type), K(topk), KCSTRING(result_param_str));
       }
     }
   }

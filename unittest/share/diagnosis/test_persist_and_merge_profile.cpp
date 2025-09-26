@@ -14,6 +14,7 @@
 #define private public
 #define protected public
 #include "share/diagnosis/ob_runtime_profile.h"
+#include "share/diagnosis/ob_profile_util.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -52,8 +53,8 @@ inline void join_filter()
   if (OB_ISNULL(merge_profile = OB_NEWx(ObOpProfile<ObMergeMetric>, &arena_alloc, ObProfileId::PHY_JOIN_FILTER,  &arena_alloc))) {
     cout << "failed to allocate memory" << endl;
   } else {
-    merge_profile->merge_profile(get_current_profile(), &arena_alloc);
-    merge_profile->merge_profile(new_profile, &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, get_current_profile(), &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc);
     merge_profile->to_format_json(&arena_alloc, merge_profile_json);
     cout << merge_profile_json << endl;
   }
@@ -78,8 +79,8 @@ inline void join_filter()
   if (OB_ISNULL(merge_profile = OB_NEWx(ObOpProfile<ObMergeMetric>, &arena_alloc, ObProfileId::PHY_JOIN_FILTER, &arena_alloc))) {
     cout << "failed to allocate memory" << endl;
   } else {
-    merge_profile->merge_profile(get_current_profile(), &arena_alloc);
-    merge_profile->merge_profile(new_profile, &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, get_current_profile(), &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc);
     merge_profile->to_format_json(&arena_alloc, merge_profile_json);
     cout << merge_profile_json << endl;
   }
@@ -113,8 +114,8 @@ inline void hash_join()
   if (OB_ISNULL(merge_profile = OB_NEWx(ObOpProfile<ObMergeMetric>, &arena_alloc, ObProfileId::PHY_HASH_JOIN, &arena_alloc))) {
     cout << "failed to allocate memory" << endl;
   } else {
-    merge_profile->merge_profile(get_current_profile(), &arena_alloc);
-    merge_profile->merge_profile(new_profile, &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, get_current_profile(), &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc);
     merge_profile->to_format_json(&arena_alloc, merge_profile_json);
     cout << merge_profile_json << endl;
   }
@@ -142,8 +143,8 @@ inline void hash_join()
   if (OB_ISNULL(merge_profile = OB_NEWx(ObOpProfile<ObMergeMetric>, &arena_alloc, ObProfileId::PHY_HASH_JOIN, &arena_alloc))) {
     cout << "failed to allocate memory" << endl;
   } else {
-    merge_profile->merge_profile(get_current_profile(), &arena_alloc);
-    merge_profile->merge_profile(new_profile, &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, get_current_profile(), &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc);
     merge_profile->to_format_json(&arena_alloc, merge_profile_json, true, metric::Level::AD_HOC);
     cout << merge_profile_json << endl;
   }
@@ -165,8 +166,8 @@ inline void hash_join()
   if (OB_ISNULL(merge_profile = OB_NEWx(ObOpProfile<ObMergeMetric>, &arena_alloc, ObProfileId::PHY_HASH_JOIN, &arena_alloc))) {
     cout << "failed to allocate memory" << endl;
   }
-  merge_profile->merge_profile(get_current_profile(), &arena_alloc);
-  merge_profile->merge_profile(new_profile, &arena_alloc);
+  ObProfileUtil::merge_profile(*merge_profile, get_current_profile(), &arena_alloc);
+  ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc);
   merge_profile->to_format_json(&arena_alloc, merge_profile_json);
   cout << merge_profile_json << endl;
   ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"total io time\":{\"avg\":\"999.999US\", \"min\":\"999.999US\", \"max\":\"999.999US\"}, \"bucket size\":{\"sum\":4096}, \"PHY_JOIN_FILTER\":{\"filtered row count\":{\"sum\":40000, \"min\":20000, \"max\":20000}, \"total row count\":{\"sum\":44000, \"min\":22000, \"max\":22000}, \"total io time\":{\"avg\":\"999.999US\", \"min\":\"999.999US\", \"max\":\"999.999US\"}}}}", merge_profile_json);
@@ -189,8 +190,8 @@ inline void hash_join()
   if (OB_ISNULL(merge_profile = OB_NEWx(ObOpProfile<ObMergeMetric>, &arena_alloc, ObProfileId::PHY_HASH_JOIN, &arena_alloc))) {
     cout << "failed to allocate memory" << endl;
   } else {
-    merge_profile->merge_profile(get_current_profile(), &arena_alloc);
-    merge_profile->merge_profile(new_profile, &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, get_current_profile(), &arena_alloc);
+    ObProfileUtil::merge_profile(*merge_profile, new_profile, &arena_alloc);
     merge_profile->to_format_json(&arena_alloc, merge_profile_json);
     cout << merge_profile_json << endl;
   }

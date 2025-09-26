@@ -412,6 +412,7 @@ private:
   int get_ctdef_with_rowkey_exprs(const ObDASScanCtDef *&ctdef, ObDASScanRtDef *&rtdef);
   int get_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey);
   int get_relevance(ObIAllocator &allocator, ObIArray<double *> &rel_record);
+  int get_relevances(ObIAllocator &allocator, ObIArray<double *> &rel_record, int64_t row_count);
   int get_one_relevance(ObIAllocator &allocator, double* &rel_array);
   int add_one_relevance(int64_t vid, double* &rel_array);
   int get_from_vid_rowkey(ObIAllocator &allocator, ObRowkey *&rowkey);

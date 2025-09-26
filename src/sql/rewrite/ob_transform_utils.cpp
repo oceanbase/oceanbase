@@ -10826,19 +10826,19 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
       check_context.override_query_compare_ = need_query_compare;
       check_context.init(&select_stmt->get_query_ctx()->calculable_items_);
       int64_t param_cnt = expr->get_param_count();
-      // only first param should be replaced (if needed) for T_OP_IS and T_OP_IS_NOT expr
-      //    select null as aa group by aa having null is null;
-      // the first null in having exprs is allowed to be parameterized
-      // but the second null is not allowed
-      if (T_OP_IS == expr->get_expr_type() || T_OP_IS_NOT == expr->get_expr_type()) {
-        param_cnt = 1;
-      }
       for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
-        if (OB_FAIL(SMART_CALL(replace_with_groupby_exprs(select_stmt,
-                                                          expr->get_param_expr(i),
-                                                          need_query_compare,
-                                                          trans_ctx,
-                                                          (in_add_expr || T_OP_ADD == expr->get_expr_type()))))) {
+        // do not replace a param expr if it should always be a ConstRawExpr.
+        // e.g. `select null as aa group by aa having null is null;`
+        // the first null in having exprs is allowed to be parameterized
+        // but the second null is not allowed.
+        if (is_param_always_a_const_expr(*expr, i)) {
+          // do not replace the param of a correlated expr that should always be a ConstRawExpr
+        } else if (OB_FAIL(SMART_CALL(replace_with_groupby_exprs(
+                                      select_stmt,
+                                      expr->get_param_expr(i),
+                                      need_query_compare,
+                                      trans_ctx,
+                                      (in_add_expr || T_OP_ADD == expr->get_expr_type()))))) {
           LOG_WARN("failed to replace with groupby columns.", K(ret));
         } else { /*do nothing.*/ }
       }
@@ -11681,6 +11681,16 @@ int ObTransformUtils::is_correlated_exprs_isomorphic(ObIArray<ObRawExpr *> &left
   return ret;
 }
 
+// return true if a param expr should always be a ConstRawExpr
+bool ObTransformUtils::is_param_always_a_const_expr(const ObRawExpr &expr,
+                                                    const int64_t param_idx)
+{
+  return param_idx == 1 &&
+         (expr.get_expr_type() == T_FUN_SYS_CAST ||
+          expr.get_expr_type() == T_OP_IS ||
+          expr.get_expr_type() == T_OP_IS_NOT);
+}
+
 /**
   * If the two expressions are of the same type and the related expressions referenced are the same,
   * Is regarded as two expressions isomorphic
@@ -11715,16 +11725,15 @@ int ObTransformUtils::is_correlated_expr_isomorphic(ObRawExpr *left_expr,
     int64_t N = left_expr->get_param_count();
     is_isomorphic = true;
     for (int64_t i = 0; OB_SUCC(ret) && is_isomorphic && i < N; ++i) {
-      // the second params of IS/IS NOT exprs should be exactly the same to be identified as isomorphic
-      bool check_child_same_as = check_same_as ||
-                                 ((left_expr->get_expr_type() == T_OP_IS ||
-                                   left_expr->get_expr_type() == T_OP_IS_NOT)
-                                  && 1 == i);
-      if (OB_FAIL(SMART_CALL(is_correlated_expr_isomorphic(
-                                        left_expr->get_param_expr(i),
-                                        right_expr->get_param_expr(i),
-                                        check_child_same_as,
-                                        is_isomorphic)))) {
+      // if a param of a correlated expr should always be a ConstRawExpr,
+      // then they need to be exactly the same so that two exprs can be identified as isomorphic
+      bool check_child_same_as = check_same_as
+                                 || is_param_always_a_const_expr(*left_expr, i)
+                                 || is_param_always_a_const_expr(*right_expr, i);
+      if (OB_FAIL(SMART_CALL(is_correlated_expr_isomorphic(left_expr->get_param_expr(i),
+                                                           right_expr->get_param_expr(i),
+                                                           check_child_same_as,
+                                                           is_isomorphic)))) {
         LOG_WARN("failed to check is correlated expr isomorphic", K(ret));
       }
     }
@@ -12423,10 +12432,13 @@ int ObTransformUtils::replace_non_correlated_expr(ObRawExpr *&expr,
   } else {
     int64_t N = expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      if (OB_UNLIKELY((expr->get_expr_type() == T_OP_IS || expr->get_expr_type() == T_OP_IS_NOT) && 1 == i)) {
-        // do not replace the second param of IS/IS NOT expr
-      } else if (OB_FAIL(SMART_CALL(replace_non_correlated_expr(expr->get_param_expr(i), exec_params,
-                                                                pos, new_column_list, skip_const)))) {
+      if (is_param_always_a_const_expr(*expr, i)) {
+        // do not replace the param of a correlated expr that should always be a ConstRawExpr
+      } else if (OB_FAIL(SMART_CALL(replace_non_correlated_expr(expr->get_param_expr(i),
+                                                                exec_params,
+                                                                pos,
+                                                                new_column_list,
+                                                                skip_const)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
       }
     }
@@ -12480,11 +12492,13 @@ int ObTransformUtils::pullup_correlated_expr(const ObIArray<ObExecParamRawExpr *
     int64_t N = expr->get_param_count();
     bool param_correlated = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      if (OB_FAIL(SMART_CALL(pullup_correlated_expr(exec_params,
-                                                    expr->get_param_expr(i),
-                                                    new_select_list,
-                                                    param_correlated,
-                                                    skip_const)))) {
+      if (is_param_always_a_const_expr(*expr, i)) {
+        // do not process the param of a correlated expr that should always be a ConstRawExpr
+      } else if (OB_FAIL(SMART_CALL(pullup_correlated_expr(exec_params,
+                                                           expr->get_param_expr(i),
+                                                           new_select_list,
+                                                           param_correlated,
+                                                           skip_const)))) {
         LOG_WARN("failed to pullup correlated expr", K(ret));
       }
     }
@@ -16836,6 +16850,7 @@ int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
   if (OB_ISNULL(ctx) ||
       OB_ISNULL(expr_factory = ctx->expr_factory_) ||
       OB_ISNULL(ctx->session_info_) ||
+      OB_ISNULL(ctx->allocator_) ||
       OB_ISNULL(left_hand = expr->get_param_expr(0)) ||
       OB_ISNULL(expr->get_param_expr(1)) ||
       OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
@@ -16871,10 +16886,10 @@ int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
           OB_ISNULL(right_stmt->get_select_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(left_expr));
-      } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*expr_factory,
-                                                              right_hand,
-                                                              left_expr,
-                                                              exec_param))) {
+      } else if (OB_FAIL(ObRawExprUtils::extract_exec_param_exprs(*expr_factory,
+                                                                  right_hand,
+                                                                  left_expr,
+                                                                  exec_param))) {
         LOG_WARN("failed to get exec param expr", K(ret));
       } else if (OB_FAIL(query_cmp_to_exists_value_cmp(expr->get_expr_type(),
                                                       expr->has_flag(IS_WITH_ALL),
@@ -17074,22 +17089,20 @@ int ObTransformUtils::check_enable_global_parallel_execution(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::is_cost_based_trans_enable(ObTransformerCtx *ctx,
-                                                 const ObGlobalHint &global_hint,
-                                                 bool &is_enabled)
+bool ObTransformUtils::is_cost_based_trans_enable(ObTransformerCtx &ctx,
+                                                 const ObGlobalHint &global_hint)
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (global_hint.disable_cost_based_transform()) {
+  bool is_enabled = true;
+  if (global_hint.disable_cost_based_transform()) {
     is_enabled = false;
+  } else if (TransPolicy::ENABLE_TRANS == ctx.cbqt_policy_) {
+    is_enabled = true;
+  } else if (TransPolicy::LIMITED_TRANS == ctx.cbqt_policy_) {
+    is_enabled = !(ctx.complex_cbqt_table_num_ > 0 && ctx.max_table_num_ > ctx.complex_cbqt_table_num_);
   } else {
-    is_enabled = TransPolicy::ENABLE_TRANS == ctx->cbqt_policy_ ||
-      (TransPolicy::LIMITED_TRANS == ctx->cbqt_policy_ &&
-        !(ctx->complex_cbqt_table_num_ > 0 && ctx->max_table_num_ > ctx->complex_cbqt_table_num_));
+    is_enabled = false;
   }
-  return ret;
+  return is_enabled;
 }
 
 int ObTransformUtils::check_const_select(ObTransformerCtx *ctx,

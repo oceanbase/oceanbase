@@ -51,9 +51,8 @@ class ManifestFile : public SpecWithAllocator
 public:
   ManifestFile(ObIAllocator &allocator);
   int init_from_avro(const avro::GenericRecord &avro_manifest_file);
-  int get_manifest_entries(ObIAllocator &allocator,
-                           const ObString &access_info,
-                           ObIArray<ManifestEntry *> &manifest_entries) const;
+  int get_manifest_entries(const ObString &access_info,
+                           ObIArray<ManifestEntry *> &manifest_entries);
   ObString manifest_path;
   int64_t manifest_length; // for v1 old writer, it will not be set, actually this field not used
   int32_t partition_spec_id;
@@ -88,6 +87,13 @@ public:
 
 private:
   int get_partitions_(const avro::GenericRecord &avro_manifest_file);
+  int get_manifest_entries_(const ObString &access_info,
+                           ObIArray<ManifestEntry *> &manifest_entries) const;
+
+  // ManifestFile 一旦加载完成过一个 manifest，这个字段就会被填充
+  // 后续该 Manifest 读取 ManifestEntry 直接从这个字段返回
+  // 有效减少内存开销
+  ObArray<ManifestEntry *> cached_manifest_entries_;
 };
 
 } // namespace iceberg

@@ -13,6 +13,7 @@
 #include <jni.h>
 #include "ob_odps_jni_connector.h"
 #include "lib/jni_env/ob_java_env.h"
+#include "lib/jni_env/ob_jni_connector.h"
 
 namespace oceanbase {
 
@@ -25,7 +26,7 @@ int ObOdpsJniConnector::get_jni_class(JNIEnv *env, const char *class_name, jclas
     LOG_WARN("failed to get jni env", K(ret), K(lbt()));
   } else {
     class_obj = env->FindClass(class_name);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("jni is with exception", K(ret));
     } else if (OB_ISNULL(class_obj)) {
       ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
@@ -42,7 +43,7 @@ int ObOdpsJniConnector::get_jni_method(JNIEnv *env, jclass class_obj, const char
     LOG_WARN("failed to get jni env", K(ret), K(lbt()));
   } else {
     method_id = env->GetMethodID(class_obj, method_name, method_signature);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("jni is with exception", K(ret));
     } else if (OB_ISNULL(method_id)) {
       ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
@@ -62,7 +63,7 @@ int ObOdpsJniConnector::construct_jni_object(JNIEnv *env, jobject &object, jclas
     va_start(args, constructorMethodID);
     object = env->NewObjectV(clazz, constructorMethodID, args);
     va_end(args);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("jni is with exception", K(ret));
     } else if (OB_ISNULL(object)) {
       ret = OB_JNI_OBJECT_NOT_FOUND_ERROR;
@@ -81,90 +82,11 @@ int ObOdpsJniConnector::gen_jni_string(JNIEnv *env, const char *str, jstring &j_
     j_str = nullptr;
   } else {
     j_str = env->NewStringUTF(str);
-    if (OB_FAIL(check_jni_exception_(env))) {
+    if (OB_FAIL(ObJniConnector::check_jni_exception_(env))) {
       LOG_WARN("jni is with exception", K(ret));
     } else if (OB_ISNULL(j_str)) {
       ret = OB_JNI_OBJECT_NOT_FOUND_ERROR;
       LOG_WARN("failed to gen object: ", K(str), K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOdpsJniConnector::check_jni_exception_(JNIEnv *env) {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(env)) {
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("failed to get jni env", K(ret), K(lbt()));
-  } else {
-    jthrowable thr = env->ExceptionOccurred();
-    if (!OB_ISNULL(thr)) {
-      ret = OB_JNI_JAVA_EXCEPTION_ERROR;
-      jclass throwableClass = env->GetObjectClass(thr);
-
-      jmethodID getMessageMethod = env->GetMethodID(
-          throwableClass,
-          "getMessage",
-          "()Ljava/lang/String;"
-      );
-
-      if (getMessageMethod != nullptr) {
-          jstring jmsg = (jstring)env->CallObjectMethod(thr, getMessageMethod);
-          if (env->ExceptionCheck()) {
-              env->ExceptionClear(); // 防止调用过程中产生新异常
-          }
-
-          if (jmsg != nullptr) {
-              const char* cmsg = env->GetStringUTFChars(jmsg, nullptr);
-              int64_t len = env->GetStringUTFLength(jmsg);
-              LOG_WARN("Exception Message: ", K(cmsg), K(ret));
-              LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, len, cmsg);
-              env->ReleaseStringUTFChars(jmsg, cmsg);
-              env->DeleteLocalRef(jmsg);
-          }
-      }
-
-      // 创建StringWriter和PrintWriter
-      jclass stringWriterClass = env->FindClass("java/io/StringWriter");
-      jmethodID stringWriterCtor = env->GetMethodID(stringWriterClass, "<init>", "()V");
-      jobject stringWriter = env->NewObject(stringWriterClass, stringWriterCtor);
-
-      jclass printWriterClass = env->FindClass("java/io/PrintWriter");
-      jmethodID printWriterCtor = env->GetMethodID(printWriterClass, "<init>", "(Ljava/io/Writer;)V");
-      jobject printWriter = env->NewObject(printWriterClass, printWriterCtor, stringWriter);
-
-      // 调用printStackTrace
-      jmethodID printStackTraceMethod = env->GetMethodID(
-          throwableClass,
-          "printStackTrace",
-          "(Ljava/io/PrintWriter;)V"
-      );
-      env->CallVoidMethod(thr, printStackTraceMethod, printWriter);
-
-      // 获取堆栈字符串
-      jmethodID toStringMethod = env->GetMethodID(
-          stringWriterClass,
-          "toString",
-          "()Ljava/lang/String;"
-      );
-      jstring stackTrace = (jstring)env->CallObjectMethod(stringWriter, toStringMethod);
-
-      // 转换为C字符串
-      const char* cStackTrace = env->GetStringUTFChars(stackTrace, nullptr);
-      LOG_WARN("Exception Stack Trace: ", K(cStackTrace));
-
-      // 释放资源
-      env->ReleaseStringUTFChars(stackTrace, cStackTrace);
-      env->DeleteLocalRef(stackTrace);
-      env->DeleteLocalRef(printWriter);
-      env->DeleteLocalRef(stringWriter);
-      env->DeleteLocalRef(throwableClass);
-      env->DeleteLocalRef(printWriterClass);
-      env->DeleteLocalRef(stringWriterClass);
-
-      env->ExceptionDescribe();
-      env->ExceptionClear(); // 清除异常状态
-      env->DeleteLocalRef(thr);
     }
   }
   return ret;

@@ -886,6 +886,35 @@ int ObTableApiProcessorBase::get_tablet_id(const share::schema::ObSimpleTableSch
   return ret;
 }
 
+int ObTableApiProcessorBase::check_local_execute(const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_cache_hit = false;
+  ObLSID ls_id(ObLSID::INVALID_LS_ID);
+  ObAddr leader;
+  ObLocationService *location_service = nullptr;
+  if (OB_ISNULL(location_service = GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.location_service_ is NULL", K(ret));
+  } else if (OB_FAIL(location_service->get(MTL_ID(),
+                                          tablet_id,
+                                          0, /* expire_renew_time */
+                                          is_cache_hit,
+                                          ls_id))) {
+    LOG_WARN("fail to get ls id", K(ret), K(MTL_ID()), K(tablet_id));
+  } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id,
+                                                  MTL_ID(),
+                                                  ls_id,
+                                                  false,/* force_renew */
+                                                  leader))) {
+    LOG_WARN("get leader failed", K(ret), K(ls_id));
+  } else if (leader != GCTX.self_addr()) {
+    // inform client and odp to refresh tabelt location
+    require_rerouting_ = true;
+  }
+  return ret;
+}
+
 ObTableProccessType ObTableApiProcessorBase::get_stat_process_type(bool is_readonly,
                                                                    bool is_same_type,
                                                                    bool is_same_properties_names,

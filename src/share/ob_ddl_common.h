@@ -167,7 +167,8 @@ enum ObDDLTaskType {
   PARTITION_SPLIT_RECOVERY_TASK = 13,
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
-  SWITCH_MLOG_NAME_TASK = 16
+  SWITCH_MLOG_NAME_TASK = 16,
+  GET_SPECIFIC_TABLE_TABLETS = 17
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -466,6 +467,10 @@ static inline bool is_long_running_ddl(const ObDDLType type)
 static inline bool is_direct_load_task(const ObDDLType type)
 {
   return DDL_DIRECT_LOAD == type || DDL_DIRECT_LOAD_INSERT == type;
+}
+
+static bool is_recover_table_task(const ObDDLType ddl_type) {
+  return DDL_TABLE_RESTORE == ddl_type;
 }
 
 static inline bool is_complement_data_relying_on_dag(const ObDDLType type)
@@ -1209,6 +1214,13 @@ public:
             (is_string_lob || (CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index));
   }
 
+  static int get_rs_specific_table_tablets(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    const uint64_t index_table_id,
+    const uint64_t task_id,
+    ObIArray<ObTabletID> &tablet_ids);
+
   static int get_sys_ls_leader_addr(
     const uint64_t cluster_id,
     const uint64_t tenant_id,
@@ -1255,6 +1267,8 @@ public:
     const uint64_t &tenant_id,
     const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
+    const uint64_t data_version,
+    const ObAddr &addr,
     int64_t &data_row_cnt);
   static int get_ls_host_left_disk_space(
     const uint64_t &tenant_id,
@@ -1369,6 +1383,13 @@ public:
       share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
+  static int get_tablet_physical_row_cnt_remote(
+        const uint64_t tenant_id,
+        const share::ObLSID &ls_id,
+        const ObTabletID &tablet_id,
+        const bool calc_sstable,
+        const bool calc_memtable,
+        int64_t &physical_row_count /*OUT*/);
   static int get_tablet_physical_row_cnt(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,

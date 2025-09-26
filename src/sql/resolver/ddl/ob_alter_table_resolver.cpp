@@ -485,6 +485,7 @@ int ObAlterTableResolver::set_table_options()
       } else if (OB_FAIL(alter_table_schema.set_storage_cache_policy(storage_cache_policy_))) {
         SQL_RESV_LOG(WARN, "Write storage_cache_policy to alter_table_schema failed!", K(ret));
       }
+      storage_cache_policy_.reset();
     }
 
     if (OB_SUCC(ret) && alter_table_schema.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
@@ -2257,7 +2258,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               if (is_index_part_specified) {
                 ObTableSchema &index_schema = index_arg.index_schema_;
                 SMART_VAR(ObCreateIndexArg, my_create_index_arg) {
-                  SMART_VAR(ObTableSchema, new_table_schema) {
+                  // use allocator_ to enable the memory allocated during assign to be free when retry
+                  SMART_VAR(ObTableSchema, new_table_schema, allocator_) {
                     ObArray<ObColumnSchemaV2 *> gen_columns;
                     if (OB_FAIL(new_table_schema.assign(*table_schema_))) {
                       LOG_WARN("fail to assign schema", K(ret));
@@ -2802,9 +2804,9 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.store_format_ = store_format_;
     index_arg.index_option_.storage_format_version_ = storage_format_version_;
     index_arg.index_option_.comment_ = comment_;
-    index_arg.index_option_.storage_cache_policy_ = storage_cache_policy_;
+    index_arg.index_option_.storage_cache_policy_ = index_storage_cache_policy_;
     // reset storage cache policy, cause it will be reused in alter table options and alter index options
-    storage_cache_policy_.reset();
+    index_storage_cache_policy_.reset();
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_option_.parser_name_ = parser_name_;
     index_arg.index_option_.parser_properties_ = parser_properties_;
@@ -3123,7 +3125,8 @@ int ObAlterTableResolver::resolve_drop_constraint(const ParseNode &node)
           LOG_WARN("invalid column ids", K(ret), K(cst));
         } else if (FALSE_IT(column_id = *cst.cst_col_begin())) {
         } else if (NULL == (column_schema = alter_table_schema.get_column_schema(column_id))) {
-          AlterColumnSchema alter_column_schema;
+          // use allocator_ to enable the memory allocated during assign to be free when retry
+          SMART_VAR(AlterColumnSchema, alter_column_schema, allocator_) {
           const ObColumnSchemaV2 *origin_col_schema = NULL;
           if (OB_FAIL(schema_checker_->get_column_schema(table_schema_->get_tenant_id(),
                                                          table_schema_->get_table_id(),
@@ -3148,6 +3151,7 @@ int ObAlterTableResolver::resolve_drop_constraint(const ParseNode &node)
             }
             LOG_DEBUG("drop not null constraint", KPC(origin_col_schema), K(alter_column_schema));
           }
+          } // end smart var
         } else {
           if (OB_UNLIKELY(column_schema->is_identity_column())) {
             ret = column_schema->is_default_on_null_identity_column()
@@ -5463,7 +5467,7 @@ int ObAlterTableResolver::resolve_split_partition(const ParseNode *node,
     } else if (OB_UNLIKELY(0 == alter_table_schema.get_partition_num())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid part_num", K(ret), K(alter_table_schema.get_partition_num()));
-    } else if (OB_FAIL(fill_split_source_tablet_id(alter_table_schema.get_split_partition_name(),
+    } else if (OB_FAIL(fill_split_source_tablet_info(alter_table_schema.get_split_partition_name(),
                                                    origin_table_schema, alter_table_schema))) {
       LOG_WARN("fail to fill source split tablet id", KR(ret));
     } else if (OB_UNLIKELY(!origin_table_schema.get_part_option().is_range_part())) {
@@ -5579,7 +5583,7 @@ int ObAlterTableResolver::resolve_reorganize_partition(const ParseNode *node,
         ret = OB_ERR_SPLIT_INTO_ONE_PARTITION;
         LOG_USER_ERROR(OB_ERR_SPLIT_INTO_ONE_PARTITION);
         LOG_WARN("can not split partition into one partition", K(ret), K(alter_table_schema));
-      } else if (OB_FAIL(fill_split_source_tablet_id(alter_table_schema.get_split_partition_name(),
+      } else if (OB_FAIL(fill_split_source_tablet_info(alter_table_schema.get_split_partition_name(),
                                                      origin_table_schema, alter_table_schema))) {
         LOG_WARN("fail to fill source split tablet id", KR(ret));
       }
@@ -5588,7 +5592,7 @@ int ObAlterTableResolver::resolve_reorganize_partition(const ParseNode *node,
   return ret;
 }
 
-int ObAlterTableResolver::fill_split_source_tablet_id(const ObString& source_part_name,
+int ObAlterTableResolver::fill_split_source_tablet_info(const ObString& source_part_name,
                                                       const share::schema::ObTableSchema &origin_table_schema,
                                                       share::schema::AlterTableSchema &alter_table_schema)
 {
@@ -5620,6 +5624,10 @@ int ObAlterTableResolver::fill_split_source_tablet_id(const ObString& source_par
         LOG_ERROR("partition is null", K(ret), K(alter_table_schema));
       } else {
         inc_part_array[i]->set_split_source_tablet_id(source_part->get_tablet_id());
+        if (ObStorageCachePolicyType::MAX_POLICY == inc_part_array[i]->get_part_storage_cache_policy_type() &&
+            ObStorageCachePolicyType::MAX_POLICY != source_part->get_part_storage_cache_policy_type()) {
+          inc_part_array[i]->set_part_storage_cache_policy_type(source_part->get_part_storage_cache_policy_type());
+        }
       }
     }
   }
@@ -6127,7 +6135,8 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
   tmp_str[ObNLSFormatEnum::NLS_TIMESTAMP] = session_info_->get_local_nls_timestamp_format();
   tmp_str[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info_->get_local_nls_timestamp_tz_format();
   AlterColumnSchema dummy_column(column.get_allocator());
-  ObTableSchema tmp_table_schema; // check_default_value will change table_schema
+  // use allocator_ to enable the memory allocated during assign to be free when retry
+  SMART_VAR(ObTableSchema, tmp_table_schema, allocator_) { // check_default_value will change table_schema
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(node));
@@ -6165,6 +6174,7 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                  dummy_column.is_default_expr_v2_column()))) {
     LOG_WARN("failed to set default value", K(ret));
   }
+  } // end smart var
   // else if (OB_FAIL(process_default_value(stat, column))) {
   //   SQL_RESV_LOG(WARN, "failed to set default value", K(ret));
   //   //when add new column, the default value should saved in both origin default value
@@ -6816,7 +6826,8 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
   } else {
-    AlterColumnSchema alter_column_schema;
+    // use allocator_ to enable the memory allocated during assign to be free when retry
+    SMART_VAR(AlterColumnSchema, alter_column_schema, allocator_) {
     //resolve new column defintion
     ObColumnResolveStat stat;
     //TODO(xiyu):hanlde modify column c2 int unique key; support unique key
@@ -6990,6 +7001,7 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
           SQL_RESV_LOG(WARN, "set foreign key name to hash set failed", K(ret), K(alter_column_schema.get_column_name_str()));
         }
       }
+    } // end smart var
     }
   }
   return ret;
@@ -7077,7 +7089,8 @@ int ObAlterTableResolver::resolve_drop_column(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
     LOG_WARN("get data version failed", KR(ret), KPC(table_schema_));
   } else {
-    AlterColumnSchema alter_column_schema;
+    // use allocator_ to enable the memory allocated during assign to be free when retry
+    SMART_VAR(AlterColumnSchema, alter_column_schema, allocator_) {
     for (int i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       alter_column_schema.reset();
       if (OB_ISNULL(node.children_[i])) {
@@ -7196,6 +7209,7 @@ int ObAlterTableResolver::resolve_drop_column(
     if (FAILEDx(check_column_in_check_constraint(*table_schema_, drop_column_names_set, alter_table_stmt))) {
       SQL_RESV_LOG(WARN, "check column in check constraint failed", KR(ret));
     }
+    }// end smart var
   }
   return ret;
 }

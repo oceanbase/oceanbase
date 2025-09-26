@@ -248,7 +248,8 @@ struct ObVecIndexInfo
     is_multi_value_index_(false),
     is_spatial_index_(false),
     can_extract_range_(false),
-    vec_index_name_()
+    vec_index_name_(),
+    all_filters_can_be_picked_out_(false)
   { }
   ~ObVecIndexInfo() {}
 
@@ -299,6 +300,7 @@ struct ObVecIndexInfo
   const ObString &get_vec_index_name() const { return vec_index_name_; }
   const ObVectorIndexQueryParam& get_query_param() const { return query_param_; }
   int set_query_param(const ObVectorIndexQueryParam &param) { return query_param_.assign(param); }
+  inline void set_all_filters_can_be_picked_out(bool value) { all_filters_can_be_picked_out_ = value; }
   // topn infos
   OrderItem sort_key_;
   ObRawExpr *topk_limit_expr_;
@@ -323,6 +325,7 @@ struct ObVecIndexInfo
   bool is_spatial_index_;
   bool can_extract_range_;
   ObString vec_index_name_;
+  bool all_filters_can_be_picked_out_;
 };
 
 class ObLogTableScan : public ObLogicalOperator
@@ -807,6 +810,7 @@ public:
   virtual int generate_access_exprs();
   int copy_filter_before_index_back();
   int copy_filter_for_index_merge();
+  int copy_filter_with_virtual_gen_columns(ObRawExpr *&filter);
   void set_use_batch(bool use_batch) { use_batch_ = use_batch; }
   bool use_batch() const { return use_batch_; }
   // use group_id_expr_ when batch rescan or keep order for global lookup.

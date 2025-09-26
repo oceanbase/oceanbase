@@ -35,9 +35,10 @@ union ob_sim_fd_id
 
 int validate_fd(ObIOFd fd, bool expect);
 
-ObFdSimulator::ObFdSimulator() : array_size_(DEFAULT_ARRAY_SIZE), second_array_num_(0),
-                                 first_array_(NULL), allocator_(SET_USE_500("FdSimulator")),
-              lock_(ObLatchIds::DEFAULT_SPIN_LOCK),used_fd_cnt_(0),total_fd_cnt_(0),is_init_(false)
+ObFdSimulator::ObFdSimulator()
+  : array_size_(DEFAULT_ARRAY_SIZE), second_array_num_(0), first_array_(NULL),
+    allocator_(SET_USE_500("FdSimulator")), lock_(ObLatchIds::FD_SIMULATOR_LOCK),
+    used_fd_cnt_(0), total_fd_cnt_(0), alloc_fd_cnt_(0), release_fd_cnt_(0), is_init_(false)
 {
 }
 
@@ -76,7 +77,7 @@ int ObFdSimulator::init_manager_array(FdSlot* second_array)
     total_fd_cnt_ += array_size_;
   }
 
-  return OB_SUCCESS;
+  return ret;
 }
 
 /*init the fd management unit*/
@@ -113,15 +114,18 @@ int ObFdSimulator::extend_second_array()
 {
   int ret = OB_SUCCESS;
   if (second_array_num_ == array_size_) {
-    OB_LOG(WARN, "can not alloc second arraym, first array is full!", K(second_array_num_));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ret = OB_SIZE_OVERFLOW;
+    OB_LOG(WARN, "can not alloc second arraym, first array is full!", K_(second_array_num),
+           K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
   } else {
     FdSlot *second_array_p = static_cast<FdSlot*>(allocator_.alloc(sizeof(FdSlot)*array_size_));
     if (OB_ISNULL(second_array_p)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "fail to extend second array for fd mng!", K(second_array_num_), K(ret));
+      OB_LOG(WARN, "fail to extend second array for fd mng!", K(ret), K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     } else if (OB_FAIL(init_manager_array(second_array_p))) {
-      OB_LOG(WARN, "fail to init extend second array for fd mng!", K(second_array_num_), K(ret));
+      OB_LOG(WARN, "fail to init extend second array for fd mng!", K(ret), K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     }
   }
   return ret;
@@ -174,12 +178,15 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
     OB_LOG(WARN, "fail to alloc fd with empty ctx!");
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(try_get_fd_inner(first_array_, second_array_num_, ctx, fd))) {
-    OB_LOG(WARN, "fail to alloc fd, maybe need extend second array!");
+    OB_LOG(WARN, "fail to alloc fd, maybe need extend second array!", K_(second_array_num),
+           K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     /*after the first fail, try to extend*/
     if (OB_FAIL(extend_second_array())) {
-      OB_LOG(WARN, "fail to extand second fd array, it is full!", K(second_array_num_));
+      OB_LOG(WARN, "fail to extand second fd array, it is full!", K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     } else if (OB_FAIL(try_get_fd_inner(first_array_, second_array_num_, ctx, fd))) {
-      OB_LOG(WARN, "fail to alloc fd, it is impossible!");
+      OB_LOG(WARN, "fail to alloc fd, it is impossible!", K_(second_array_num),
+             K_(array_size), K_(used_fd_cnt), K_(total_fd_cnt));
     }
   }
 
@@ -189,6 +196,11 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
     set_fd_device_type(fd, device_type);
     set_fd_flag(fd, flag);
     used_fd_cnt_++;
+    alloc_fd_cnt_++;
+    if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { // 10s
+      OB_LOG(INFO, "fd simulator stat", K_(used_fd_cnt), K_(total_fd_cnt), K_(alloc_fd_cnt),
+             K_(release_fd_cnt), K_(second_array_num), K_(array_size));
+    }
   }
 
   return ret;
@@ -310,6 +322,7 @@ int ObFdSimulator::release_fd(const ObIOFd& fd)
     second_array[second_id].pointer.index_id = first_array_[first_id].second_array_free_hd;
     first_array_[first_id].second_array_free_hd = second_id;
     used_fd_cnt_--;
+    release_fd_cnt_++;
   }
   return ret;
 }

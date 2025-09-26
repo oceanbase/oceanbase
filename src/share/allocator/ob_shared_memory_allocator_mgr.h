@@ -65,7 +65,7 @@ public:
   int start() { return OB_SUCCESS; }
   void stop() {}
   void wait() {}
-  void destroy() {}
+  void destroy() { vector_allocator_.destroy(); }
   void update_throttle_config();
 
   ObMemstoreAllocator &memstore_allocator() { return memstore_allocator_; }

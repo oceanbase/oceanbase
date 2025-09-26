@@ -1659,6 +1659,9 @@ int ObWhereSubQueryPullup::pull_up_semi_info(ObDMLStmt* stmt,
       }
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(append(stmt->get_semi_infos(), subquery->get_semi_infos()))) {
+    LOG_WARN("failed to append semi infos", K(ret));
+  }
   return ret;
 }
 

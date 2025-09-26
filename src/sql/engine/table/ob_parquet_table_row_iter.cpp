@@ -50,6 +50,7 @@ ObParquetTableRowIterator::~ObParquetTableRowIterator()
   }
   malloc_allocator_.reset();
   reader_profile_.dump_metrics();
+  reader_profile_.update_profile();
   LOG_TRACE("print stat", K(stat_), K(mode_));
 }
 
@@ -678,7 +679,7 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
       func = NULL;
     }
   } else if ((no_log_type || log_type->is_string() || log_type->is_enum())
-             && (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_)) {
+             && (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_ || ob_is_large_text(datum_type.type_))) {
     //convert parquet enum/string to string vector
     if (parquet::Type::BYTE_ARRAY == phy_type) {
       func = &DataLoader::load_string_col;
@@ -1245,6 +1246,12 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
                                                                        fixed_length) > file_col_expr_->max_length_))) {
             ret = OB_ERR_DATA_TOO_LONG;
             LOG_WARN("data too long", K(file_col_expr_->max_length_), K(fixed_length), K(is_byte_length), K(ret));
+          } else if (ob_is_large_text(file_col_expr_->datum_meta_.type_)) {
+            if (OB_FAIL(ObTextStringHelper::string_to_templob_result(*file_col_expr_, eval_ctx_,
+                                      ObString(fixed_length, pointer_cast<const char *>(cur_v.ptr)),
+                                                                     i + row_offset_))) {
+              LOG_WARN("fail to lob result", K(ret));
+            }
           } else {
             if (!cross_page_) {
               res_ptr = (void*)(cur_v.ptr);
@@ -1308,6 +1315,12 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
                                                                         cur_v.len) > file_col_expr_->max_length_))) {
               ret = OB_ERR_DATA_TOO_LONG;
               LOG_WARN("data too long", K(file_col_expr_->max_length_), K(cur_v.len), K(is_byte_length), K(ret));
+            } else if (ob_is_large_text(file_col_expr_->datum_meta_.type_)) {
+              if (OB_FAIL(ObTextStringHelper::string_to_templob_result(*file_col_expr_, eval_ctx_,
+                                        ObString(cur_v.len, pointer_cast<const char *>(cur_v.ptr)),
+                                                                       i + row_offset_))) {
+                LOG_WARN("fail to lob result", K(ret));
+              }
             } else {
               if (!cross_page_) {
                 res_ptr = (void *)(cur_v.ptr);
@@ -2055,7 +2068,7 @@ int ObParquetTableRowIterator::DataLoader::decode_list_to_array(
   parent_def_level = max_def_level;
   max_def_level += node->is_optional() ? 2 : 1;
   bool set_innermost_value = max_def_level == record_reader_->descr()->max_definition_level();
-  int64_t values_size = (set_innermost_value ? sizeof(DstType) : sizeof(uint32_t)) * levels_count;
+  int64_t values_size = std::max(sizeof(DstType), sizeof(uint32_t)) * levels_count;
   uint8_t* nulls = reinterpret_cast<uint8_t *>(
                     attrs[attrs_idx]->get_str_res_mem(eval_ctx_, sizeof(uint8_t) * levels_count));
   uint32_t *values = reinterpret_cast<uint32_t *>(

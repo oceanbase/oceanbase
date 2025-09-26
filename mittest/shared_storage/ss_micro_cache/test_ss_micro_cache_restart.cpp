@@ -66,7 +66,7 @@ void TestSSMicroCacheRestart::SetUp()
   ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, tnt_file_mgr);
   tnt_file_mgr->persist_disk_space_task_.enable_adjust_size_ = false;
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30)));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30), 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
 }
 
@@ -88,7 +88,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   const int64_t cache_file_size = micro_cache->cache_file_size_;
   const int64_t block_size = micro_cache->phy_blk_size_;
-  LOG_INFO("TEST_CASE: start test_restart_micro_cache");
+  LOG_INFO("TEST_CASE: start test_restart_without_file");
 
   char micro_cache_file_path[512] = {0};
   ret = tnt_file_mgr->get_micro_cache_file_path(micro_cache_file_path, sizeof(micro_cache_file_path), tenant_id, MTL_EPOCH_ID());
@@ -106,7 +106,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size, 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 1st restart without micro_cache_file");
@@ -168,7 +168,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->init(tenant_id));
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(tenant_id, cache_file_size, 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->start());
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 2nd restart without micro_cache_file");
@@ -223,7 +223,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   micro_cache->set_micro_meta_compressor_type(compress_type);
   ASSERT_EQ(compress_type, micro_cache->admin_info_.get_micro_meta_compressor_type());
   ASSERT_EQ(compress_type, phy_blk_mgr.super_blk_.admin_info_.get_micro_meta_compressor_type());
-  LOG_INFO("TEST: start test_restart_micro_cache", K(compress_type));
+  LOG_INFO("TEST: ready to start case", K(compress_type));
 
   int64_t total_micro_cnt = 0;
   int64_t total_ckpt_micro_cnt = 0;
@@ -252,7 +252,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
 
   // 2. FIRST RESTART
   // 2.1 restart
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size, 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 1st restart", "cost_s", ObTimeUtility::current_time_s() - TEST_START_TIME,
     K(cache_stat.micro_stat()), K(cache_stat.task_stat()));
@@ -355,7 +355,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
 
   // 3. SECOND RESTART
   // 3.1 restart
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size, 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 2nd restart", "cost_s", ObTimeUtility::current_time_s() - TEST_START_TIME);
   ASSERT_EQ(false, micro_cache->is_enabled_);
@@ -476,7 +476,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
 
   // 4. THIRD RESTART
   // 4.1 restart, replay checkpoint will return error, thus it will clear micro_cache
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size, 1/*micro_split_cnt*/));
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_REPLAY_CKPT_ERR, OB_TIMEOUT, 0, 1);
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   LOG_INFO("TEST: finish 3rd restart", "cost_s", ObTimeUtility::current_time_s() - TEST_START_TIME);
@@ -500,205 +500,6 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_EQ(0, cache_stat.range_stat().sub_range_cnt_);
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_REPLAY_CKPT_ERR, OB_TIMEOUT, 0, 0);
 
-  // persisted_micro_cnt = 0;
-  // {
-  //   // 3.4.1 statistic persisted micro_meta count
-  //   for (int64_t i = 0; OB_SUCC(ret) && (i < micro_cnt2); ++i) {
-  //     TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr2.at(i);
-  //     ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_,
-  //                                                                                cur_info.size_);
-  //     ObSSMicroBlockMetaHandle cur_micro_meta_handle;
-  //     if (OB_SUCCESS == micro_meta_mgr.micro_meta_map_.get(&cur_micro_key, cur_micro_meta_handle)) {
-  //       ObSSMicroBlockMeta *cur_micro_meta = cur_micro_meta_handle.get_ptr();
-  //       ASSERT_NE(nullptr, cur_micro_meta);
-  //       if (cur_micro_meta->is_persisted()) {
-  //         ++persisted_micro_cnt;
-  //       }
-  //     }
-  //   }
-  //   for (int64_t i = 0; OB_SUCC(ret) && (i < micro_cnt3); ++i) {
-  //     TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr3.at(i);
-  //     ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_,
-  //                                                                                cur_info.size_);
-  //     ObSSMicroBlockMetaHandle cur_micro_meta_handle;
-  //     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&cur_micro_key, cur_micro_meta_handle));
-  //     ObSSMicroBlockMeta *cur_micro_meta = cur_micro_meta_handle.get_ptr();
-  //     if (nullptr != cur_micro_meta && cur_micro_meta->is_persisted()) {
-  //       ++persisted_micro_cnt;
-  //     }
-  //   }
-  // }
-
-  // // 3.5 evict 3 micro_block, delete 1 micro_block, mock 1 T1/T2 micro_block reuse_version mismatch
-  // ASSERT_LE(4, micro_arr3.count());
-  // ObArray<ObSSMicroBlockMeta *> evicted_micro_meta;
-  // for (int64_t i = 0; i < 3; ++i) {
-  //   TestSSCommonUtil::MicroBlockInfo &evict_micro_info = micro_arr3.at(i);
-  //   ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(evict_micro_info.macro_id_, evict_micro_info.offset_,
-  //                                                                          evict_micro_info.size_);
-  //   ObSSMicroBlockMetaHandle evict_micro_handle;
-  //   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, evict_micro_handle));
-  //   ObSSMicroBlockMeta *micro_meta = evict_micro_handle.get_ptr();
-  //   ASSERT_EQ(true, micro_meta->is_in_l1_);
-  //   ASSERT_EQ(false, micro_meta->is_in_ghost_);
-  //   ObSSMicroMetaSnapshot evict_micro;
-  //   evict_micro.micro_meta_ = *micro_meta;
-  //   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(evict_micro));
-  //   ASSERT_EQ(true, micro_meta->is_in_l1_);
-  //   ASSERT_EQ(true, micro_meta->is_in_ghost_);
-  //   ASSERT_EQ(false, micro_meta->is_valid_field());
-  //   ASSERT_EQ(OB_SUCCESS, evicted_micro_meta.push_back(micro_meta));
-  //   evict_micro_handle.reset();
-  // }
-  // ASSERT_EQ(total_ckpt_micro_cnt + micro_cnt3, cache_stat.micro_stat().total_micro_cnt_);
-  // ASSERT_EQ((total_ckpt_micro_cnt + micro_cnt3) * micro_size, cache_stat.micro_stat().total_micro_size_);
-
-  // {
-  //   TestSSCommonUtil::MicroBlockInfo &delete_micro_info = micro_arr3.at(2);
-  //   ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(delete_micro_info.macro_id_, delete_micro_info.offset_, delete_micro_info.size_);
-  //   ObSSMicroBlockMetaHandle delete_micro_handle;
-  //   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, delete_micro_handle));
-  //   ObSSMicroBlockMeta *micro_meta = delete_micro_handle.get_ptr();
-  //   ASSERT_EQ(true, micro_meta->is_in_l1_);
-  //   ASSERT_EQ(true, micro_meta->is_in_ghost_);
-  //   if (micro_meta->is_persisted()) {
-  //     --persisted_micro_cnt;
-  //   }
-  //   ObSSMicroMetaSnapshot delete_micro;
-  //   delete_micro.micro_meta_ = *micro_meta;
-  //   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_delete_micro_block_meta(delete_micro));
-  //   delete_micro_handle.reset();
-  //   ASSERT_EQ(total_ckpt_micro_cnt + micro_cnt3 - 1, cache_stat.micro_stat().total_micro_cnt_);
-  //   ASSERT_EQ((total_ckpt_micro_cnt + micro_cnt3 - 1) * micro_size, cache_stat.micro_stat().total_micro_size_);
-  // }
-
-  // bool mark_invalid = false;
-  // {
-  //   for (int64_t i = 4; i < micro_arr3.count(); ++i) {
-  //     TestSSCommonUtil::MicroBlockInfo &cur_info = micro_arr3.at(i);
-  //     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, cur_info.size_);
-  //     ObSSMicroBlockMetaHandle micro_handle;
-  //     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, micro_handle));
-  //     if (micro_handle()->is_persisted()) {
-  //       micro_handle.get_ptr()->mark_invalid();
-  //       mark_invalid = true;
-  //       break;
-  //     }
-  //   }
-  // }
-
-  // // 3.6 trigger checkpoint, wait for it finish
-  // micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MIN_MICRO_META_CKPT_INTERVAL_ROUND - 2;
-  // usleep(5 * 1000 * 1000);
-  // ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
-  // blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = ObSSExecuteBlkCheckpointOp::BLK_INFO_CKPT_INTERVAL_ROUND - 2;
-  // usleep(5 * 1000 * 1000);
-  // ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
-  // ASSERT_LT(0, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
-  // ASSERT_LT(0, phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count());
-  // ASSERT_EQ(
-  //     phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count(), cache_stat.phy_blk_stat().meta_blk_used_cnt_);
-  // ASSERT_EQ(
-  //     phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count(), cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
-
-  // ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
-  // total_ckpt_micro_cnt = cache_stat.task_stat().micro_ckpt_item_cnt_; // include 2 ghost micro_block
-
-  // if (mark_invalid) {
-  //   ASSERT_EQ(total_ckpt_micro_cnt, persisted_micro_cnt - 1);
-  // } else {
-  //   ASSERT_EQ(total_ckpt_micro_cnt, persisted_micro_cnt);
-  // }
-
-  // // 3.7 destroy micro_cache
-  // micro_cache->stop();
-  // micro_cache->wait();
-  // micro_cache->destroy();
-
-  // // 4. FOURTH START
-  // ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), cache_file_size));
-  // ASSERT_EQ(OB_SUCCESS, micro_cache->start());
-  // ASSERT_EQ(total_ckpt_micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
-  // ASSERT_EQ(total_ckpt_micro_cnt * micro_size, cache_stat.micro_stat().total_micro_size_);
-  // ASSERT_EQ(cur_data_blk_used_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
-  // ASSERT_EQ(2, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_B1].count());
-  // ASSERT_EQ(2 * micro_size, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_B1].size());
-  // ASSERT_EQ(total_ckpt_micro_cnt - 2, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_T1].count());
-  // ASSERT_EQ((total_ckpt_micro_cnt - 2) * micro_size, micro_cache->micro_meta_mgr_.arc_info_.seg_info_arr_[ARC_T1].size());
-  // const int64_t ori_persisted_micro_cnt = cache_stat.micro_stat().total_micro_cnt_;
-  // micro_cache->config_.set_micro_ckpt_compressor_type(compress_type);
-  // micro_cache->config_.set_blk_ckpt_compressor_type(compress_type);
-
-  // // 4.1 check ckpt_blk
-  // ObSSMicroCacheSuperBlock &super_block = phy_blk_mgr.super_block_;
-  // ASSERT_EQ(true, super_block.is_valid_checkpoint());
-  // const int64_t micro_ckpt_blk_cnt = super_block.micro_ckpt_entry_list_.count();
-  // for (int64_t i = 0 ; i < micro_ckpt_blk_cnt; ++i) {
-  //   ObSSPhysicalBlock *phy_blk = phy_blk_mgr.get_phy_block_by_idx_nolock(super_block.micro_ckpt_entry_list_.at(i));
-  //   ASSERT_NE(nullptr, phy_blk);
-  //   ASSERT_EQ(false, phy_blk->can_reuse());
-  // }
-  // const int64_t phy_ckpt_blk_cnt = super_block.blk_ckpt_entry_list_.count();
-  // for (int64_t i = 0 ; i < phy_ckpt_blk_cnt; ++i) {
-  //   ObSSPhysicalBlock *phy_blk = phy_blk_mgr.get_phy_block_by_idx_nolock(super_block.blk_ckpt_entry_list_.at(i));
-  //   ASSERT_NE(nullptr, phy_blk);
-  //   ASSERT_EQ(false, phy_blk->can_reuse());
-  // }
-
-  // // 4.2 add lots of micro_meta so that micro_ckpt_block is not enough
-
-  // // prevent micro_ckpt from using extra blocks from shared_blocks
-  // phy_blk_mgr.blk_cnt_info_.meta_blk_.max_cnt_ = phy_blk_mgr.blk_cnt_info_.meta_blk_.min_cnt_;
-  // const int64_t max_micro_ckpt_blk_cnt = phy_blk_mgr.blk_cnt_info_.meta_blk_.max_cnt_;
-
-  // const int64_t max_estimate_micro_cnt = max_micro_ckpt_blk_cnt * phy_blk_mgr.get_block_size() / AVG_MICRO_META_PERSIST_COST;
-  // const int64_t extra_micro_cnt = max_estimate_micro_cnt * 2 - ori_persisted_micro_cnt;
-  // const int64_t cur_macro_blk_cnt = phy_blk_mgr.blk_cnt_info_.cache_limit_blk_cnt() * 2 / 3;
-  // int64_t each_micro_cnt = extra_micro_cnt / cur_macro_blk_cnt;
-  // const int64_t payload_offset =
-  //     ObSSPhyBlockCommonHeader::get_serialize_size() + ObSSNormalPhyBlockHeader::get_fixed_serialize_size();
-  // const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
-  // const int32_t small_micro_size = (block_size - payload_offset) / each_micro_cnt - micro_index_size;
-  // ASSERT_LT(0, small_micro_size);
-
-  // char *data_buf = static_cast<char *>(allocator.alloc(small_micro_size));
-  // ASSERT_NE(nullptr, data_buf);
-  // MEMSET(data_buf, 'a', small_micro_size);
-
-  // for (int64_t i = 0; i < cur_macro_blk_cnt + 1; ++i) {
-  //   const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(macro_blk_cnt * 2 + 1 + i);
-  //   for (int64_t j = 0; j < each_micro_cnt; ++j) {
-  //     const int32_t offset = payload_offset + j * small_micro_size;
-  //     const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, small_micro_size);
-  //     ASSERT_EQ(OB_SUCCESS,
-  //         micro_cache->add_micro_block_cache(micro_key, data_buf, small_micro_size, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
-  //   }
-  //   ASSERT_EQ(OB_SUCCESS,TestSSCommonUtil::wait_for_persist_task());
-  // }
-  // ASSERT_LT(max_estimate_micro_cnt, cache_stat.micro_stat().valid_micro_cnt_);
-
-  // int64_t cur_persisted_micro_cnt = ori_persisted_micro_cnt;
-  // for (int64_t i = 0; i < cur_macro_blk_cnt + 1; ++i) {
-  //   const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(macro_blk_cnt * 2 + 1 + i);
-  //   for (int32_t j = 0; j < each_micro_cnt; ++j) {
-  //     const int32_t offset = payload_offset + j * small_micro_size;
-  //     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, small_micro_size);
-  //     ObSSMicroBlockMetaHandle micro_meta_handle;
-  //     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta_handle(micro_key, micro_meta_handle, false));
-  //     ASSERT_EQ(true, micro_meta_handle.is_valid());
-  //     if (micro_meta_handle()->is_persisted()) {
-  //       ++cur_persisted_micro_cnt;
-  //     }
-  //   }
-  // }
-  // ASSERT_LT(0, cur_persisted_micro_cnt);
-  // ASSERT_LT(max_estimate_micro_cnt, cur_persisted_micro_cnt);
-  // ASSERT_LE(cur_persisted_micro_cnt, cache_stat.micro_stat().valid_micro_cnt_);
-
-  // // 4.3 execute micro_meta ckpt, although micro_ckpt blk cnt is not enough, but it should also succ
-  // micro_ckpt_task.ckpt_op_.micro_ckpt_ctx_.exe_round_ = ObSSExecuteMicroCheckpointOp::MIN_MICRO_META_CKPT_INTERVAL_ROUND - 2;
-  // usleep(5 * 1000 * 1000);
-
   allocator.clear();
   LOG_INFO("TEST_CASE: finish test_restart_micro_cache");
 }
@@ -712,6 +513,8 @@ int main(int argc, char **argv)
   system("rm -f ./test_ss_micro_cache_restart.log*");
   OB_LOGGER.set_file_name("test_ss_micro_cache_restart.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

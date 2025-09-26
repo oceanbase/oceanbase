@@ -98,6 +98,7 @@ public:
       ObBatchFinishCheckStat &stat);
   int add_tablet_ls(const ObTabletID &tablet_id, const share::ObLSID &ls_id, const int64_t medium_scn);
   bool locality_cache_empty();
+  bool locality_cache_refresh_success();
   int64_t get_error_tablet_cnt() { return ATOMIC_LOAD(&error_tablet_cnt_); }
   void clear_error_tablet_cnt() { ATOMIC_STORE(&error_tablet_cnt_, 0); }
   void update_error_tablet_cnt(const int64_t delta_cnt)
@@ -132,6 +133,7 @@ private:
   LSInfoMap ls_info_map_; // ls leader
   lib::ObMutex lock_;
   bool ls_locality_cache_empty_;
+  bool ls_locality_cache_refresh_success_;
 };
 
 }

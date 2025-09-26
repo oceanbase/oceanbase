@@ -364,6 +364,7 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
         scan_param.ls_id_ = rowkey_domain_ls_id_;
         scan_param.sample_info_ = data_table_iter_->get_scan_param().sample_info_;
         scan_param.scan_flag_.scan_order_ = data_table_iter_->get_scan_param().scan_flag_.scan_order_;
+        scan_param.enable_new_false_range_ = data_table_iter_->get_scan_param().enable_new_false_range_;
         if (!data_table_iter_->get_scan_param().need_switch_param_) {
           scan_param.need_switch_param_ = false;
         }

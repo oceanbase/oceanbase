@@ -321,7 +321,8 @@ ObCopyTabletSSTableInfoArg::ObCopyTabletSSTableInfoArg()
   : tablet_id_(),
     max_major_sstable_snapshot_(0),
     minor_sstable_scn_range_(),
-    ddl_sstable_scn_range_()
+    ddl_sstable_scn_range_(),
+    inc_major_ddl_sstable_end_scn_()
 {
 }
 
@@ -335,6 +336,7 @@ void ObCopyTabletSSTableInfoArg::reset()
   max_major_sstable_snapshot_ = 0;
   minor_sstable_scn_range_.reset();
   ddl_sstable_scn_range_.reset();
+  inc_major_ddl_sstable_end_scn_.reset();
 }
 
 bool ObCopyTabletSSTableInfoArg::is_valid() const
@@ -346,7 +348,8 @@ bool ObCopyTabletSSTableInfoArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletSSTableInfoArg,
-    tablet_id_, max_major_sstable_snapshot_, minor_sstable_scn_range_, ddl_sstable_scn_range_);
+    tablet_id_, max_major_sstable_snapshot_, minor_sstable_scn_range_,
+    ddl_sstable_scn_range_, inc_major_ddl_sstable_end_scn_);
 
 ObCopyTabletsSSTableInfoArg::ObCopyTabletsSSTableInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -2289,10 +2292,26 @@ int ObFetchLSMetaInfoP::process()
     logservice::ObLogHandler *log_handler = nullptr;
     ObLSMetaPackage ls_meta_package;
     const bool check_archive = true;
+    int64_t disk_abnormal_time = 0;
+    ObDeviceHealthStatus dhs = DEVICE_HEALTH_NORMAL;
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && DEVICE_HEALTH_NORMAL == dhs && GCONF.fake_disk_error) {
+      dhs = DEVICE_HEALTH_ERROR;
+    }
+#endif
+
     LOG_INFO("start to fetch log stream info", K(arg_.ls_id_), K(arg_));
     if (!arg_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fetch ls info get invalid argument", K(ret), K(arg_));
+    } else if (DEVICE_HEALTH_NORMAL == dhs
+        && OB_FAIL(ObIOManager::get_instance().get_device_health_status(dhs, disk_abnormal_time))) {
+      STORAGE_LOG(WARN, "failed to check is disk error", KR(ret));
+    } else if (DEVICE_HEALTH_ERROR == dhs) {
+      ret = OB_DISK_ERROR;
+      STORAGE_LOG(ERROR, "observer has disk error, cannot be migrate src", KR(ret),
+        "disk_health_status", device_health_status_to_str(dhs), K(disk_abnormal_time));
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
@@ -4748,6 +4767,7 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
     STORAGE_LOG(WARN, "invalid argument", KR(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_SS_PREWARM);
       blocksstable::ObBufferReader data;
       char *buf = nullptr;
       last_send_time_ = this->get_receive_timestamp();
@@ -4865,6 +4885,7 @@ int ObFetchLocalCacheBlockP::process()
     LOG_WARN("invalid args", KR(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
       ObHAFetchLocalCacheBlockHeader header;
       char *buf = nullptr;
       blocksstable::ObBufferReader data;
@@ -4983,6 +5004,7 @@ int ObGetLocalCacheKeyP::process()
   } else {
     const int64_t start_us = ObTimeUtil::current_time_us();
     MTL_SWITCH(arg_.tenant_id_) {
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
       if (arg_.job_info_.job_type_ == ObHACacheJobType::MICRO_CACHE_JOB_TYPE) {
         if (OB_FAIL(process_micro_cache_job_())) {
           LOG_WARN("failed to process micro cache job", KR(ret), K(arg_));

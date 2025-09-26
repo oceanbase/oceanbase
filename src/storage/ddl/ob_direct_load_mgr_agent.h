@@ -70,7 +70,8 @@ public:
   int calc_range(const int64_t context_id, const int64_t thread_cnt);
   int fill_column_group(
       const int64_t thread_cnt,
-      const int64_t thread_id);
+      const int64_t thread_id,
+      ObInsertMonitor *insert_monitor=nullptr);
   int cancel();
   // other utils
   inline ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }

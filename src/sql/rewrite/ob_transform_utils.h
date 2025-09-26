@@ -1633,6 +1633,7 @@ public:
                                          int &pos,
                                          ObIArray<ObRawExpr*> &new_column_list,
                                          const bool skip_const = true);
+  static bool is_param_always_a_const_expr(const ObRawExpr &expr, const int64_t param_idx);
 
   static int pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                      ObIArray<ObRawExpr*> &exprs,
@@ -2044,9 +2045,8 @@ public:
                                      const TableItem *table,
                                      const ObIArray<uint64_t> &column_ids,
                                      double &repeat_rate);
-  static int is_cost_based_trans_enable(ObTransformerCtx *ctx,
-                                        const ObGlobalHint &global_hint,
-                                        bool &is_enabled);
+  static bool is_cost_based_trans_enable(ObTransformerCtx &ctx,
+                                         const ObGlobalHint &global_hint);
   static int check_const_select(ObTransformerCtx *ctx,
                                 const ObSelectStmt *stmt,
                                 bool &is_const_select);

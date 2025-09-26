@@ -54,6 +54,9 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(ObRpcWaitMasterKeyInSyncP, gctx_);
+#ifdef OB_BUILD_SHARED_STORAGE
+    RPC_PROCESSOR(ObRpcUploadRootKeyP, gctx_);
+#endif
 #endif
     RPC_PROCESSOR(ObRpcSyncAutoincValueP, gctx_);
     RPC_PROCESSOR(ObRpcClearAutoincCacheP, gctx_);
@@ -167,8 +170,10 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObFetchArbMemberP, gctx_);
 #endif
     RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);
+    RPC_PROCESSOR(ObCheckSysTableSchemaP, gctx_);
     RPC_PROCESSOR(ObWriteInnerTabletP, gctx_);
     RPC_PROCESSOR(ObRpcCheckBackupDestRWConsistencyP, gctx_);
     RPC_PROCESSOR(ObRpcCheckBackupDestVaildityP, gctx_);
     RPC_PROCESSOR(ObRpcWriteBackupDestFormatFileP, gctx_);
+    RPC_PROCESSOR(ObRpcFetchTabletPhysicalRowCntP, gctx_);
 }

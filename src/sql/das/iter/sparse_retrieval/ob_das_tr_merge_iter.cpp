@@ -669,8 +669,6 @@ int ObDASTRMergeIter::set_children_iter_rangekey()
       } else if (topk_mode_ && ir_ctdef_->need_block_max_scan()
           && OB_FAIL(block_max_scan_params_[i]->key_ranges_.push_back(inv_idx_scan_range))) {
         LOG_WARN("failed to push back lookup range", K(ret));
-      } else if (ir_ctdef_->need_fwd_idx_agg() && OB_FAIL(fwd_scan_params_[i]->key_ranges_.push_back(fwd_idx_agg_range))) {
-        LOG_WARN("failed to push back lookup range", K(ret));
       }
     }
   }
@@ -1160,7 +1158,10 @@ static int get_query_tokens_directly(ObString &query_str,
     double cur_boost = 0;
     if (OB_FAIL(ret)) {
     } else {
-      if (OB_FAIL(query_tokens.push_back(token_key))) {
+      ObString token_string;
+      if (OB_FAIL(common::ObCharset::charset_convert(alloc, token_key, ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, cs_type, token_string, common::ObCharset::CONVERT_FLAG::COPY_STRING_ON_SAME_CHARSET))) {
+        LOG_WARN("failed to convert string", K(ret), K(token_string));
+      } else if (OB_FAIL(query_tokens.push_back(token_string))) {
         LOG_WARN("failed to push token", K(ret));
       } else if (OB_FAIL(boost_values.push_back(boost_value))) {
         LOG_WARN("failed to push boost", K(ret));

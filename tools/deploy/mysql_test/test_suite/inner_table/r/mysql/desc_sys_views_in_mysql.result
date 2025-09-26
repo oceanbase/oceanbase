@@ -2803,7 +2803,7 @@ COMPATIBLE	varchar(65536)	NO
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
 FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
-INFO	varchar(4096)	NO		NULL	
+COMMENT	varchar(4096)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TENANTS|%') then 2
@@ -4988,6 +4988,7 @@ LAST_CHECK_TIMESTAMP	timestamp(6)	YES
 MAX_IOPS	bigint(20)	NO			
 MAX_BANDWIDTH	bigint(20)	NO			
 MAX_BANDWIDTH_DISPLAY	varchar(29)	NO			
+STATUS	varchar(64)	YES			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_STORAGE_INFO|%') then 2
@@ -5044,7 +5045,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	varchar(1042)	NO			
+PARAMETER	varchar(8209)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -5071,7 +5072,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	varchar(1042)	NO			
+PARAMETER	varchar(8209)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -11329,6 +11330,62 @@ when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODEL_ENDPOINTS limit 1);
+cnt
+1
+desc oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+OBJECT_TYPE	varchar(128)	NO		NULL	
+MODE	varchar(32)	NO		NULL	
+READ_CNT	bigint(20)	NO		NULL	
+READ_SIZE	bigint(20)	NO		NULL	
+READ_FAIL_CNT	bigint(20)	NO		NULL	
+READ_IOPS	bigint(20)	NO		NULL	
+WRITE_CNT	bigint(20)	NO		NULL	
+WRITE_SIZE	bigint(20)	NO		NULL	
+WRITE_FAIL_CNT	bigint(20)	NO		NULL	
+WRITE_IOPS	bigint(20)	NO		NULL	
+DELETE_CNT	bigint(20)	NO		NULL	
+DELETE_FAIL_CNT	bigint(20)	NO		NULL	
+DELETE_IOPS	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SS_OBJECT_TYPE_IO_STAT|%') then 2
+when ('' like '%|GV$OB_SS_OBJECT_TYPE_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SS_OBJECT_TYPE_IO_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_SS_OBJECT_TYPE_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+OBJECT_TYPE	varchar(128)	NO			
+MODE	varchar(32)	NO			
+READ_CNT	bigint(20)	NO			
+READ_SIZE	bigint(20)	NO			
+READ_FAIL_CNT	bigint(20)	NO			
+READ_IOPS	bigint(20)	NO			
+WRITE_CNT	bigint(20)	NO			
+WRITE_SIZE	bigint(20)	NO			
+WRITE_FAIL_CNT	bigint(20)	NO			
+WRITE_IOPS	bigint(20)	NO			
+DELETE_CNT	bigint(20)	NO			
+DELETE_FAIL_CNT	bigint(20)	NO			
+DELETE_IOPS	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SS_OBJECT_TYPE_IO_STAT|%') then 2
+when ('' like '%|V$OB_SS_OBJECT_TYPE_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SS_OBJECT_TYPE_IO_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SS_OBJECT_TYPE_IO_STAT limit 1);
 cnt
 1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from

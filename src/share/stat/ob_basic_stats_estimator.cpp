@@ -66,16 +66,17 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
   if (OB_UNLIKELY(dst_opt_stats.empty()) || OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected empty", K(ret), K(dst_opt_stats.empty()), K(param.allocator_));
+  } else if (OB_FAIL(init_escape_char_names(allocator, param))) {
+    LOG_WARN("failed to add init escape char names", K(ret));
+  } else if (OB_FALSE_IT(set_from_table(tab_name_))) {
   } else if (OB_FAIL(ObDbmsStatsUtils::init_col_stats(allocator,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_,
+  } else if (OB_FAIL(fill_hints(allocator, from_table_, param.gather_vectorize_,
                                 param.use_column_store_ && dst_opt_stats.count() == 1,
                                 use_plan_cache))) {
     LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(add_from_table(allocator, param.db_name_, param.tab_name_))) {
-    LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
@@ -1687,7 +1688,7 @@ int ObBasicStatsEstimator::fill_partition_info(ObIAllocator &allocator,
     if (param.stat_level_ == PARTITION_LEVEL) {
       if (OB_FAIL(raw_sql_str.append("WHERE "))) {
         LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, param.tab_name_.length(), param.tab_name_.ptr(),
+      } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, from_table_.length(), from_table_.ptr(),
                                                 4, "PART", part_info.part_id_))) {
         LOG_WARN("failed to append fmt", K(ret));
       }
@@ -1695,12 +1696,12 @@ int ObBasicStatsEstimator::fill_partition_info(ObIAllocator &allocator,
     } else if (param.stat_level_ == SUBPARTITION_LEVEL) {
       if (OB_FAIL(raw_sql_str.append("WHERE "))) {
         LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, param.tab_name_.length(), param.tab_name_.ptr(),
+      } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, from_table_.length(), from_table_.ptr(),
                                                 4, "PART", part_info.first_part_id_))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(raw_sql_str.append(" AND "))) {
         LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, param.tab_name_.length(), param.tab_name_.ptr(),
+      } else if (OB_FAIL(raw_sql_str.append_fmt(fmt_str, from_table_.length(), from_table_.ptr(),
                                                 7, "SUBPART", part_info.part_id_))) {
         LOG_WARN("failed to append fmt", K(ret));
       }

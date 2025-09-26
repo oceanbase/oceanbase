@@ -47,6 +47,7 @@
 #include "sql/resolver/dml/ob_transpose_resolver.h"
 #include "share/catalog/ob_catalog_utils.h"
 #include "share/ob_license_utils.h"
+#include "share/schema/ob_external_table_column_schema_helper.h"
 
 namespace oceanbase
 {
@@ -2864,8 +2865,8 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
         column_item.set_default_value(ObObj()); // set null to generated default value
         if (OB_FAIL(col_schema->get_cur_default_value().get_string(col_def))) {
           LOG_WARN("get generated column definition failed", K(ret), K(*col_schema));
-        } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_,
-                                              session_info_->get_dtc_params(), col_def))) {
+        } else if (OB_FAIL(ObSQLUtils::convert_gen_col_def_text_from_schema_for_resolve(*allocator_,
+                                              session_info_->get_dtc_params(), col_schema, col_def))) {
           LOG_WARN("fail to convert for resolve", K(ret));
         } else if (OB_FAIL(resolve_generated_column_expr(col_def, table_item, col_schema,
                                                          *col_expr, ref_expr, true, stmt))) {
@@ -3008,9 +3009,9 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> real_exprs;
   ObArray<ObRawExpr*> ref_exprs;
+  bool resolve_seq_funcs = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ObQualifiedName& q_name = columns.at(i);
-    ObQualifiedName tmp_q_name = q_name;
     ObRawExpr* real_ref_expr = NULL;
     params_.is_column_ref_ = expr->is_column_ref_expr();
 
@@ -3019,22 +3020,28 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
     } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr, true))) {
       // try to resolve nextval(seq) or currval(seq)
       if (ret == OB_ERR_BAD_FIELD_ERROR) {
-        if (i + 1 < columns.count()) {
+        if (i + 1 < columns.count() && columns.at(i + 1).access_idents_.count() > 0
+            && columns.at(i + 1).access_idents_.at(0).params_.count() > 0) {
           ObQualifiedName& q_name_next = columns.at(i + 1);
-          if ((q_name_next.is_pl_udf() || q_name_next.is_pl_var() || q_name_next.is_col_ref_access()) && !q_name_next.access_idents_.empty()) {
-            ObString &access_name = q_name_next.access_idents_.at(0).access_name_;
-            if (ObSequenceNamespaceChecker::is_curr_or_next_val(access_name)) {
-              tmp_q_name.tbl_name_.assign_ptr(const_cast<char *>(q_name.col_name_.ptr()),
-                                          static_cast<int32_t>(q_name.col_name_.length()));
-              tmp_q_name.col_name_.assign_ptr(const_cast<char *>(access_name.ptr()),
-                                          static_cast<int32_t>(access_name.length()));
-              ret = OB_SUCCESS;
-              q_name.ref_expr_ = static_cast<ObColumnRefRawExpr *>(expr);
-              if (OB_FAIL(resolve_qualified_identifier(tmp_q_name, columns, real_exprs, real_ref_expr))) {
-                LOG_WARN("resolve column ref expr failed", K(ret), K(tmp_q_name));
-              }
-              i++;
+          ObObjAccessIdent &access_ident = q_name_next.access_idents_.at(0);
+          ObString &access_name = access_ident.access_name_;
+          bool is_cloumn_ref = access_ident.params_.at(0).first->is_column_ref_expr();
+          if (is_cloumn_ref && ObSequenceNamespaceChecker::is_curr_or_next_val(access_name)) {
+            ret = OB_SUCCESS;
+            q_name.ref_expr_ = q_name_next.ref_expr_;
+            q_name.access_idents_.at(0).set_type(UNKNOWN);
+            q_name.tbl_name_.assign_ptr(
+              lib::is_mysql_mode() ? str_tolower(const_cast<char *>(q_name.col_name_.ptr()),
+                                                static_cast<int32_t>(q_name.col_name_.length())) :
+                                    const_cast<char *>(q_name.col_name_.ptr()),
+              static_cast<int32_t>(q_name.col_name_.length()));
+            q_name.col_name_.assign_ptr(const_cast<char *>(access_name.ptr()),
+                                        static_cast<int32_t>(access_name.length()));
+            resolve_seq_funcs = true;
+            if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr, true))) {
+              LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));
             }
+            i++;
           }
         }
       }
@@ -3049,7 +3056,7 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
     } else { /*do nothing*/ }
   }
   if (OB_FAIL(ret)) {
-  } else if (!expr->is_column_ref_expr()) {
+  } else if (!expr->is_column_ref_expr() && !resolve_seq_funcs) {
     // do nothing
   } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, ref_exprs, real_exprs))) {
     LOG_WARN("replace column ref expr failed", K(ret));
@@ -4210,94 +4217,83 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
         switch(type->getSubtype(i)->getKind()) {
           case orc::TypeKind::BOOLEAN:
           case orc::TypeKind::BYTE:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
-            } else {
-              column_schema.set_data_type(ObTinyIntType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bool(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup bool");
             }
             break;
           case orc::TypeKind::SHORT:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
-            } else {
-              column_schema.set_data_type(ObSmallIntType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_smallint(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup tinyint");
             }
             break;
           case orc::TypeKind::INT:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
-            } else {
-              column_schema.set_data_type(ObInt32Type);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_int(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup int");
             }
             break;
           case orc::TypeKind::LONG:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
-            } else {
-              column_schema.set_data_type(ObIntType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bigint(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup bigint");
             }
             break;
           case orc::TypeKind::FLOAT:
-            column_schema.set_data_type(ObFloatType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_float(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup float");
+            }
             break;
           case orc::TypeKind::DOUBLE:
-            column_schema.set_data_type(ObDoubleType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_double(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup double");
+            }
             break;
           case orc::TypeKind::CHAR:
           {
-            column_schema.set_data_type(ObCharType);
-            uint64_t max_len = type->getSubtype(i)->getMaximumLength();
-            if (max_len <= 0) {
-              int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                                                                   OB_MAX_MYSQL_VARCHAR_LENGTH;
-              column_schema.set_data_length(ob_max_varchar_len);
-            } else {
-              column_schema.set_data_length(static_cast<int64_t>(max_len));
+            int64_t max_len = static_cast<int64_t>(type->getSubtype(i)->getMaximumLength());
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_char(lib::is_oracle_mode(),
+                                                                      max_len,
+                                                                      CHARSET_UTF8MB4,
+                                                                      ObCharset::get_system_collation(),
+                                                                      column_schema))) {
+              LOG_WARN("failed to setup char");
             }
-            column_schema.set_length_semantics(LS_CHAR);
             break;
           }
           case orc::TypeKind::STRING:
           case orc::TypeKind::VARCHAR:
           case orc::TypeKind::BINARY:
           {
-            column_schema.set_data_type(ObVarcharType);
-            uint64_t max_len = type->getSubtype(i)->getMaximumLength();
-            if (max_len <= 0) {
-              int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                                                                   OB_MAX_MYSQL_VARCHAR_LENGTH;
-              column_schema.set_data_length(ob_max_varchar_len);
-            } else {
-              column_schema.set_data_length(static_cast<int64_t>(max_len));
+            int64_t max_len = static_cast<int64_t>(type->getSubtype(i)->getMaximumLength());
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                         max_len,
+                                                                         CHARSET_UTF8MB4,
+                                                                         ObCharset::get_system_collation(),
+                                                                         column_schema))) {
+              LOG_WARN("failed to setup varchar");
             }
-            column_schema.set_length_semantics(LS_CHAR);
             break;
           }
           case orc::TypeKind::TIMESTAMP:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObTimestampNanoType);
-            } else {
-              column_schema.set_data_type(ObDateTimeType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup datetime");
             }
             break;
           case orc::TypeKind::TIMESTAMP_INSTANT:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObTimestampLTZType);
-            } else {
-              column_schema.set_data_type(ObTimestampType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup timestamp");
             }
             break;
           case orc::TypeKind::DATE:
-            column_schema.set_data_type(ObDateType);
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup date");
+            }
             break;
           case orc::TypeKind::DECIMAL:
-            column_schema.set_data_type(ObDecimalIntType);
-            column_schema.set_data_precision(type->getSubtype(i)->getPrecision());
-            column_schema.set_data_scale(type->getSubtype(i)->getScale());
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
+                                                                         type->getSubtype(i)->getPrecision(),
+                                                                         type->getSubtype(i)->getScale(),
+                                                                         column_schema))) {
+              LOG_WARN("failed to setup decimal");
+            }
             break;
           default:
             ret = OB_NOT_SUPPORTED;
@@ -4471,50 +4467,55 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
             // 根据Parquet类型设置对应的OB类型
             switch(phy_type) {
               case parquet::Type::BOOLEAN:
-                if (lib::is_oracle_mode()) {
-                  column_schema.set_data_type(ObNumberType);
-                  column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
-                } else {
-                  column_schema.set_data_type(!is_unsigned ? ObTinyIntType : ObUTinyIntType);
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bool(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup bool");
                 }
                 break;
               case parquet::Type::INT32:
-                if (lib::is_oracle_mode()) {
-                  column_schema.set_data_type(ObNumberType);
-                  column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
-                } else {
-                  column_schema.set_data_type(!is_unsigned ? ObInt32Type : ObUInt32Type);
+                if (is_unsigned) {
+                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_uint(lib::is_oracle_mode(), column_schema))) {
+                    LOG_WARN("failed to setup uint");
+                  }
+                } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_int(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup int");
                 }
                 break;
               case parquet::Type::INT64:
-                if (lib::is_oracle_mode()) {
-                  column_schema.set_data_type(!is_unsigned ? ObNumberType : ObUNumberType);
-                  column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
-                } else {
-                  column_schema.set_data_type(!is_unsigned ? ObIntType : ObUInt64Type);
+                if (is_unsigned) {
+                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_ubigint(lib::is_oracle_mode(), column_schema))) {
+                    LOG_WARN("failed to setup ubigint");
+                  }
+                } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bigint(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup bigint");
                 }
                 break;
               case parquet::Type::FLOAT:
-                column_schema.set_data_type(ObFloatType);
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_float(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup float");
+                }
                 break;
               case parquet::Type::DOUBLE:
-                column_schema.set_data_type(ObDoubleType);
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_double(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup double");
+                }
                 break;
               case parquet::Type::BYTE_ARRAY:
               case parquet::Type::FIXED_LEN_BYTE_ARRAY:
               {
-                column_schema.set_data_type(ObVarcharType);
-                int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                                                                     OB_MAX_MYSQL_VARCHAR_LENGTH;
-                int type_len = column->type_length() <= 0 ?
-                                ob_max_varchar_len : column->type_length();
-                column_schema.set_data_length(type_len);
-                column_schema.set_length_semantics(LS_CHAR);
+                int64_t type_len = column->type_length();
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                             type_len,
+                                                                             CHARSET_UTF8MB4,
+                                                                             ObCharset::get_system_collation(),
+                                                                             column_schema))) {
+                  LOG_WARN("failed to setup varchar");
+                }
                 break;
               }
               case parquet::Type::INT96: // 通常用于timestamp
-                column_schema.set_data_type(lib::is_oracle_mode() ?
-                                            ObTimestampLTZType : ObTimestampType);
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup timestamp");
+                }
                 break;
               default:
                 ret = OB_NOT_SUPPORTED;
@@ -4527,37 +4528,47 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
           } else {
             switch(logical_type->type()) {
               case parquet::LogicalType::Type::DATE:
-                column_schema.set_data_type(lib::is_oracle_mode() ? ObDateTimeType : ObDateType);
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup date");
+                }
                 break;
               case parquet::LogicalType::Type::DECIMAL:
-                column_schema.set_data_type(ObDecimalIntType);
-                column_schema.set_data_precision(column->type_precision());
-                column_schema.set_data_scale(column->type_scale());
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
+                                                                             column->type_precision(),
+                                                                             column->type_scale(),
+                                                                             column_schema))) {
+                  LOG_WARN("failed to setup decimal");
+                }
                 break;
               case parquet::LogicalType::Type::STRING:
               {
-                column_schema.set_data_type(ObVarcharType);
-                int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                                                                     OB_MAX_MYSQL_VARCHAR_LENGTH;
-                int type_len = column->type_length() <= 0 ?
-                                ob_max_varchar_len : column->type_length();
-                column_schema.set_data_length(type_len);
-                column_schema.set_length_semantics(LS_CHAR);
+                int64_t type_len = column->type_length();
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                             type_len,
+                                                                             CHARSET_UTF8MB4,
+                                                                             ObCharset::get_system_collation(),
+                                                                             column_schema))) {
+                  LOG_WARN("failed to setup varchar");
+                }
                 break;
               }
               case parquet::LogicalType::Type::TIME:
-                column_schema.set_data_type(ObTimeType);
+                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_time(lib::is_oracle_mode(), column_schema))) {
+                  LOG_WARN("failed to setup time");
+                }
                 break;
               case parquet::LogicalType::Type::ENUM:
                 column_schema.set_data_type(ObEnumType);
                 break;
               case parquet::LogicalType::Type::TIMESTAMP:
                 if (is_utc) {
-                  column_schema.set_data_type(lib::is_oracle_mode() ?
-                                              ObTimestampLTZType : ObTimestampType);
+                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+                    LOG_WARN("failed to setup timestamp");
+                  }
                 } else {
-                  column_schema.set_data_type(lib::is_oracle_mode() ?
-                                              ObTimestampNanoType : ObDateTimeType);
+                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
+                    LOG_WARN("failed to setup datetime");
+                  }
                 }
                 break;
               default:
@@ -4881,81 +4892,83 @@ int ObDMLResolver::build_column_for_odps(const ODPSType &odps_column,
     const int32_t odps_type_scale = odps_column.get_scale();
     // 根据ODPS类型设置对应的OB类型
     switch(odps_type) {
-      case ObOdpsJniConnector::OdpsType::TINYINT:
       case ObOdpsJniConnector::OdpsType::BOOLEAN:
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObDecimalIntType);
-          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
-        } else {
-          column_schema.set_data_type(ObTinyIntType);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bool(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup bool");
+        }
+        break;
+      case ObOdpsJniConnector::OdpsType::TINYINT:
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_tinyint(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup tinyint");
         }
         break;
       case ObOdpsJniConnector::OdpsType::SMALLINT:
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObDecimalIntType);
-          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
-        } else {
-          column_schema.set_data_type(ObSmallIntType);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_smallint(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup smallint");
         }
         break;
       case ObOdpsJniConnector::OdpsType::INT:
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObDecimalIntType);
-          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
-        } else {
-          column_schema.set_data_type(ObInt32Type);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_int(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup int");
         }
         break;
       case ObOdpsJniConnector::OdpsType::BIGINT:
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObDecimalIntType);
-          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
-        } else {
-          column_schema.set_data_type(ObIntType);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bigint(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup bigint");
         }
         break;
       case ObOdpsJniConnector::OdpsType::FLOAT:
       {
-        column_schema.set_data_type(ObFloatType);
-        column_schema.set_data_length(12);
-        column_schema.set_data_scale(-1);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_float(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup float");
+        } else {
+          column_schema.set_data_length(12);
+          column_schema.set_data_scale(-1);
+        }
         break;
       }
       case ObOdpsJniConnector::OdpsType::DOUBLE:
       {
-        column_schema.set_data_type(ObDoubleType);
-        column_schema.set_data_length(23);
-        column_schema.set_data_scale(-1);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_double(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup double");
+        } else {
+          column_schema.set_data_length(23);
+          column_schema.set_data_scale(-1);
+        }
         break;
       }
       case ObOdpsJniConnector::OdpsType::DECIMAL:
       {
-        column_schema.set_data_type(ObDecimalIntType);
-        column_schema.set_data_precision(odps_type_precision);
-        column_schema.set_data_scale(odps_type_scale);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
+                                                                     odps_type_precision,
+                                                                     odps_type_scale,
+                                                                     column_schema))) {
+          LOG_WARN("failed to setup decimal");
+        }
         break;
       }
       case ObOdpsJniConnector::OdpsType::CHAR:
       {
         int64_t char_len = odps_type_length;
-        if (odps_type_length <= 0) {
-          char_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_CHAR_LENGTH;
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_char(lib::is_oracle_mode(),
+                                                                  char_len,
+                                                                  CHARSET_UTF8MB4,
+                                                                  ObCharset::get_system_collation(),
+                                                                  column_schema))) {
+          LOG_WARN("failed to setup char");
         }
-        column_schema.set_data_type(ObCharType);
-        column_schema.set_data_length(char_len);
-        column_schema.set_length_semantics(LS_CHAR);
         break;
       }
       case ObOdpsJniConnector::OdpsType::VARCHAR:
       {
         int64_t varchar_len = odps_type_length;
-        if (odps_type_length <= 0) {
-          varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                                                OB_MAX_MYSQL_VARCHAR_LENGTH;
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                     varchar_len,
+                                                                     CHARSET_UTF8MB4,
+                                                                     ObCharset::get_system_collation(),
+                                                                     column_schema))) {
+          LOG_WARN("failed to setup varchar");
         }
-        column_schema.set_data_type(ObVarcharType);
-        column_schema.set_data_length(varchar_len);
-        column_schema.set_length_semantics(LS_CHAR);
         break;
       }
       case ObOdpsJniConnector::OdpsType::STRING:
@@ -4964,48 +4977,41 @@ int ObDMLResolver::build_column_for_odps(const ODPSType &odps_column,
         column_schema.set_data_type(ObMediumTextType);
         column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
         column_schema.set_is_string_lob(); // 默认为ob的string类型
+        column_schema.set_collation_type(ObCharset::get_system_collation());
+        column_schema.set_charset_type(CHARSET_UTF8MB4);
         break;
       }
       case ObOdpsJniConnector::OdpsType::TIMESTAMP:
       {
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObTimestampLTZType);
-        } else {
-          column_schema.set_data_type(ObTimestampType);
-          column_schema.set_data_scale(6);  // 确保scale >= 6
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup timestamp");
         }
         break;
       }
       case ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ:
       {
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObTimestampNanoType);
-        } else {
-          column_schema.set_data_type(ObDateTimeType);
-          column_schema.set_data_scale(6);  // 确保scale >= 3
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup datetime");
         }
         break;
       }
       case ObOdpsJniConnector::OdpsType::DATE:
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObDateTimeType);
-        } else {
-          column_schema.set_data_type(ObDateType);
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup date");
         }
         break;
       case ObOdpsJniConnector::OdpsType::DATETIME:
       {
-        if (lib::is_oracle_mode()) {
-          column_schema.set_data_type(ObTimestampNanoType);
-        } else {
-          column_schema.set_data_type(ObDateTimeType);
-          column_schema.set_data_scale(3);  // 确保scale >= 3
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup datetime");
         }
         break;
       }
       case ObOdpsJniConnector::OdpsType::JSON:
       {
         column_schema.set_data_type(ObJsonType);
+        column_schema.set_collation_type(ObCharset::get_system_collation());
+        column_schema.set_charset_type(CHARSET_UTF8MB4);
         break;
       }
       case ObOdpsJniConnector::OdpsType::ARRAY:
@@ -7884,6 +7890,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
           table_version.object_type_ = DEPENDENCY_TABLE;
           table_version.version_ = tab_schema->get_schema_version();
           table_version.is_db_explicit_ = params_.is_in_view_ ? true : is_db_explicit;
+          table_version.invoker_db_id_ = database_id;
           uint64_t dep_db_id = tab_schema->get_database_id();
           if (common::is_cte_table(table_version.object_id_)) {
             // do nothing
@@ -20663,7 +20670,7 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
           ObColumnRefRawExpr *match_col = NULL;
           if (OB_ISNULL(cur_match_expr->get_match_columns().at(j)) || !cur_match_expr->get_match_columns().at(j)->is_column_ref_expr()) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column");
           } else if (OB_FALSE_IT(match_col = static_cast<ObColumnRefRawExpr*>(cur_match_expr->get_match_columns().at(j)))) {
           } else if (table_id != OB_INVALID_ID && table_id != match_col->get_table_id()) {
             ret = OB_INVALID_ARGUMENT;
@@ -20952,7 +20959,8 @@ int ObDMLResolver::resolve_es_match_expr(ObMatchFunRawExpr &expr)
     ObIArray<ObRawExpr*> &column_list = expr.get_match_columns();
     uint64_t table_id = OB_INVALID_ID;
     ColumnReferenceSet column_set;
-    const ObColumnSchemaV2 *fulltext_col = NULL;
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    ObCollationType collation_type = CS_TYPE_MAX;
 
     // get matched fulltext index
     for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
@@ -20983,8 +20991,16 @@ int ObDMLResolver::resolve_es_match_expr(ObMatchFunRawExpr &expr)
         LOG_WARN("unexpected nullptr to table schema", K(ret));
       } else if (OB_FAIL(resolve_match_index(column_set, *table_schema, expr))) {
         LOG_WARN("failed to resolve fulltext index access exprs", K(ret));
-      } else {
-        column_set.reset();
+      } else if (FALSE_IT(column_set.reset())) {
+      } else if (OB_FAIL(schema_checker_->get_column_schema(session_info_->get_effective_tenant_id(),
+                                                            table_item->ref_id_,
+                                                            col_ref->get_column_id(),
+                                                            column_schema))) {
+        LOG_WARN("failed to get column schema", K(ret));
+      } else if (0 == i && FALSE_IT(collation_type = column_schema->get_collation_type())) {
+      } else if (OB_UNLIKELY(column_schema->get_collation_type() != collation_type)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "MATCH: Columns have different collation types");
       }
     }
     if (OB_FAIL(ret)) {

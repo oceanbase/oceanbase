@@ -23,6 +23,7 @@
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h" // for OTTZ_MGR
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
@@ -523,6 +524,78 @@ int ObDDLUtil::get_sys_log_handler_role_and_proposal_id(
         LOG_WARN("log_handler is null", KR(ret), KP(log_handler));
       } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
         LOG_WARN("fail to get role and epoch", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_rs_specific_table_tablets(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    const uint64_t index_table_id,
+    const uint64_t task_id,
+    ObIArray<ObTabletID> &tablet_ids)
+{
+
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  const ObDatabaseSchema *db_schema = nullptr;
+  ObAlterTableArg alter_table_arg;
+
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id ||
+      OB_INVALID_ID == index_table_id || OB_INVALID_ID == task_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(data_table_id), K(index_table_id), K(task_id));
+  } else if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(table_schema)) { // skip
+    LOG_INFO("table not exist", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(alter_table_arg.alter_table_schema_.set_origin_table_name(table_schema->get_table_name_str()))) {
+    LOG_WARN("failed to set orig table name", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, table_schema->get_database_id(), db_schema))) {
+    LOG_WARN("fail to get database schema", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(db_schema)) { // skip
+    LOG_INFO("database not exist", K(ret), K(tenant_id), K(table_schema->get_database_id()));
+  } else if (OB_FAIL(alter_table_arg.alter_table_schema_.set_origin_database_name(db_schema->get_database_name_str()))) {
+    LOG_WARN("failed to set orig database name", K(ret));
+  } else {
+    alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id);
+    alter_table_arg.ddl_task_type_ = share::GET_SPECIFIC_TABLE_TABLETS;
+    alter_table_arg.table_id_ = data_table_id;
+    alter_table_arg.hidden_table_id_ = index_table_id;
+    alter_table_arg.exec_tenant_id_ = tenant_id;
+    alter_table_arg.tz_info_wrap_.set_tz_info_offset(0);
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT;
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
+    alter_table_arg.compat_mode_ = lib::Worker::CompatMode::MYSQL;
+    ObTZMapWrap tz_map_wrap;
+    int64_t rpc_timeout = 0;
+    ObSArray<uint64_t> target_tablet_ids;
+
+    if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap))) {
+      LOG_WARN("get tenant timezone map failed", K(ret), K(tenant_id));
+    } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id, index_table_id, rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+        execute_ddl_task(alter_table_arg, target_tablet_ids))) {
+      LOG_WARN("fail to get table tablet ids", K(ret));
+    } else {
+      LOG_INFO("success to get specific table tablet ids", K(ret), K(alter_table_arg), K(target_tablet_ids));
+      for (int64_t i = 0; OB_SUCC(ret) && i < target_tablet_ids.count(); ++i) {
+        ObTabletID tmp_tablet_id(target_tablet_ids.at(i));
+        if (OB_FAIL(tablet_ids.push_back(tmp_tablet_id))) {
+          LOG_WARN("fail to push back target tablet id", K(ret));
+        }
       }
     }
   }
@@ -2087,8 +2160,12 @@ int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
   } else if ((is_index_with_docid && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) ||
              (is_index_with_vid && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid)))) {
     if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
-      FLOG_INFO("There may be no rowkey_doc/vid table in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
-      ret = OB_SUCCESS;
+      if (!in_table_restore) { // only for primary key change in offline rebuild task
+        FLOG_INFO("There may be no rowkey_doc/vid table in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get rowkey_doc/vid table id", K(ret), K(is_index_with_docid), K(is_index_with_vid));
+      }
     }
   } else {
     need_update_snapshot = true;
@@ -2462,6 +2539,63 @@ int ObDDLUtil::get_tablet_paxos_member_list(
   }
   return ret;
 }
+
+int ObDDLUtil::get_tablet_physical_row_cnt_remote(
+  const uint64_t tenant_id,
+  const share::ObLSID &ls_id,
+  const ObTabletID &tablet_id,
+  const bool calc_sstable,
+  const bool calc_memtable,
+  int64_t &physical_row_count /*OUT*/)
+{
+  int ret = OB_SUCCESS;
+  physical_row_count = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("there are invalid arg", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+  } else {
+    common::ObAddr leader_addr;
+    share::ObLocationService *location_service = nullptr;
+    obrpc::ObSrvRpcProxy *srv_rpc_proxy = nullptr;
+    obrpc::ObFetchTabletPhysicalRowCntArg arg;
+    obrpc::ObFetchTabletPhysicalRowCntRes result;
+    arg.tenant_id_ = tenant_id;
+    arg.ls_id_ = ls_id;
+    arg.tablet_id_ = tablet_id;
+    arg.calc_sstable_ = calc_sstable;
+    arg.calc_memtable_ = calc_memtable;
+    const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+    const int64_t retry_interval_us = 200 * 1000; // 200ms
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      if (OB_ISNULL(location_service = GCTX.location_service_)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("location_cache is null", K(ret), KP(location_service));
+      } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+                                                                               tenant_id,
+                                                                               ls_id,
+                                                                               leader_addr,
+                                                                               rpc_timeout,
+                                                                               retry_interval_us))) {
+        LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id), K(ls_id));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(srv_rpc_proxy = GCTX.srv_rpc_proxy_)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("storage_rpc_proxy is null", K(ret), KP(srv_rpc_proxy));
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr)
+                                      .by(tenant_id)
+                                      .timeout(GCONF._ob_ddl_timeout)
+                                      .fetch_tablet_physical_row_cnt(arg, result))) {
+      LOG_WARN("failed to fetch tablet physical row cnt", K(ret), K(arg));
+    } else {
+      physical_row_count = result.physical_row_cnt_;
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_tablet_physical_row_cnt(
   const share::ObLSID &ls_id,
   const ObTabletID &tablet_id,
@@ -2835,6 +2969,8 @@ int ObDDLUtil::get_tablet_data_row_cnt(
     const uint64_t &tenant_id,
     const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
+    const uint64_t data_version,
+    const ObAddr &addr,
     int64_t &data_row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -2849,11 +2985,27 @@ int ObDDLUtil::get_tablet_data_row_cnt(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObSqlString query_string;
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(query_string.assign_fmt("SELECT max(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu",
-          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, tablet_id.id(), ls_id.id()))) {
-        LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
-      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, query_string.ptr()))) {
-        LOG_WARN("read record failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
+      if (data_version < DATA_VERSION_4_4_1_0) {
+        if (OB_FAIL(query_string.assign_fmt("SELECT max(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu",
+            OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, tablet_id.id(), ls_id.id()))) {
+          LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
+        } else if (OB_FAIL(GCTX.sql_proxy_->read(res, meta_tenant_id, query_string.ptr()))) {
+          LOG_WARN("read record failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
+        }
+      } else {
+        char ip_buf[common::OB_IP_STR_BUFF];
+        if (!addr.ip_to_string(ip_buf, sizeof(ip_buf))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to execute ip_to_string", K(ret));
+        } else if (OB_FAIL(query_string.assign_fmt("SELECT sum(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu AND svr_ip = '%s' AND svr_port = %d",
+            OB_ALL_VIRTUAL_TABLE_MGR_TNAME, tenant_id, tablet_id.id(), ls_id.id(), ip_buf, addr.get_port()))) {
+          LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
+        } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
+          LOG_WARN("read record failed", K(ret), K(tenant_id), K(query_string));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
@@ -2865,11 +3017,13 @@ int ObDDLUtil::get_tablet_data_row_cnt(
         data_row_cnt = 0;
         LOG_WARN("data size is null", K(ret));
         ret = OB_SUCCESS;
-      } else if (OB_UNLIKELY(!result_obj.is_integer_type())) {
+      } else if (result_obj.is_integer_type()) {
+        data_row_cnt = result_obj.get_int();
+      } else if (result_obj.is_decimal_int()) {
+        data_row_cnt = *result_obj.get_decimal_int()->int64_v_;
+      } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected obj type", K(ret), K(result_obj.get_type()));
-      } else {
-        data_row_cnt = result_obj.get_int();
       }
     }
   }

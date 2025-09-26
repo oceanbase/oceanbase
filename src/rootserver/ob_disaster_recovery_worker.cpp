@@ -2355,7 +2355,9 @@ int ObDRWorker::generate_ls_single_replica_dr_tasks_(
   UnitProvider unit_provider;
   share::ObUnit dest_unit;
   const share::ObLSStatusInfo *ls_status_info = nullptr;
-  if (OB_FAIL(unit_provider.init(gen_user_tenant_id(dr_ls_info.get_tenant_id()), dr_ls_info))) {
+  if (OB_FAIL(check_corresponding_sslog_ls_ready_(dr_ls_info.get_tenant_id(), dr_ls_info.get_ls_id(), dest_zone))) {
+    LOG_WARN("fail to check corresponding sslog ls ready", KR(ret), K(dr_ls_info), K(dest_zone));
+  } else if (OB_FAIL(unit_provider.init(gen_user_tenant_id(dr_ls_info.get_tenant_id()), dr_ls_info))) {
     LOG_WARN("fail to init unit provider", KR(ret), K(dr_ls_info));
   } else if (OB_FAIL(dr_ls_info.get_ls_status_info(ls_status_info))) {
     LOG_WARN("fail to get log stream status info", KR(ret));
@@ -2372,6 +2374,52 @@ int ObDRWorker::generate_ls_single_replica_dr_tasks_(
                                                    ls_acc_dr_task))) {
     LOG_WARN("failed to generate single replica task", KR(ret), K(only_for_display), K(config_version),
               K(source_server_info), K(dest_unit), K(dr_ls_info));
+  }
+  return ret;
+}
+
+int ObDRWorker::check_corresponding_sslog_ls_ready_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObZone &dest_zone)
+{
+  int ret = OB_SUCCESS;
+  common::ObMemberList member_list;
+  palf::LogConfigVersion config_version; // not used
+  common::GlobalLearnerList learner_list; // not used
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || dest_zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
+  } else if (OB_UNLIKELY(is_tenant_sslog_ls(tenant_id, ls_id))) {
+    LOG_INFO("sslog LS, skip check", K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info_from_log_service(meta_tenant_id,
+                                                                             SSLOG_LS,
+                                                                             config_version,
+                                                                             member_list,
+                                                                             learner_list))) {
+    LOG_WARN("failed to get member info", KR(ret), K(meta_tenant_id));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < member_list.get_member_number(); ++i) {
+      common::ObAddr server;
+      ObServerInfoInTable server_info;
+      if (OB_FAIL(member_list.get_server_by_index(i, server))) {
+        LOG_WARN("fail to get server by index", KR(ret), K(i));
+      } else if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
+        LOG_WARN("fail to get server info", KR(ret), K(server));
+      } else if (server_info.get_zone() == dest_zone && server_info.is_alive()) {
+        found = true;
+        LOG_INFO("found alive member in dest_zone for sslog ls", KR(ret),
+              K(tenant_id), K(ls_id), K(dest_zone), K(server), K(server_info));
+      }
+    } // end for
+    if (OB_SUCC(ret) && !found) {
+      ret = OB_EAGAIN;
+      LOG_WARN("no alive member in dest_zone for sslog ls", KR(ret), K(tenant_id), K(ls_id), K(dest_zone));
+    }
   }
   return ret;
 }

@@ -149,7 +149,7 @@ int ObDbmsStatsExecutor::gather_partition_stats(ObExecContext &ctx,
           } else {
             derive_param.global_stat_param_.need_modify_ = taskInfo.gather_global_;
             if (ERRSIM_FAILED_ANALYZE_TABLE_STATS) {
-              ret = OB_ERR_UNEXPECTED;
+              ret = ERRSIM_FAILED_ANALYZE_TABLE_STATS;
               LOG_ERROR("ERRSIM: failed to ANALYZE table stats", K(ret));
             } else if (i > 0 && ERRSIM_FAILED_ANALYZE_TIMEOUT) {
               ret = OB_TIMEOUT;
@@ -2008,7 +2008,8 @@ int ObDbmsStatsExecutor::determine_auto_sample_table(ObExecContext &ctx, ObTable
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    param.is_auto_sample_size_ = !table_schema->is_vir_table();
+    param.is_auto_sample_size_ = !table_schema->is_vir_table() &&
+                                 !table_schema->is_external_table();
   }
   return ret;
 }

@@ -158,14 +158,15 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reuse()
     }
     topn_heap_->reset();
   }
-  if (nullptr != last_ties_row_) {
-    store_row_factory_.free_row_store(last_ties_row_);
-    last_ties_row_ = nullptr;
-  }
 
   if (is_aggregate_keep_) {
+    if (nullptr != last_ties_row_) {
+      store_row_factory_.free_row_store(last_ties_row_);
+      last_ties_row_ = nullptr;
+    }
     outputted_rows_cnt_ = 0;
   }
+
   if (use_partition_topn_sort_ && OB_NOT_NULL(partition_topn_sort_)) {
     partition_topn_sort_->reuse();
   }
@@ -2320,7 +2321,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::get_next_batch(const int64_t
     if (OB_ITER_END != ret) {
       SQL_ENG_LOG(WARN, "failed to get next batch stored rows", K(ret));
     }
-  } else if (read_rows > 0 && use_heap_sort_ && OB_FAIL(adjust_topn_read_rows(sk_rows_, read_rows))) {
+  } else if (read_rows > 0 && !use_partition_topn_sort_ && OB_FAIL(adjust_topn_read_rows(sk_rows_, read_rows))) {
     SQL_ENG_LOG(WARN, "failed to adjust read rows with ties", K(ret));
   } else if (OB_FAIL(attach_rows(read_rows))) {
     SQL_ENG_LOG(WARN, "failed to attach rows", K(ret));

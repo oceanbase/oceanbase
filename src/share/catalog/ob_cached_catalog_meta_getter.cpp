@@ -87,7 +87,7 @@ int ObLakeTableMetadataCacheValue::deep_copy(char *buf,
                                              ObIKVCacheValue *&value) const
 {
 #define DEEP_COPY_LAKE_TABLE_METADATA(LAKE_TABLE_METADATA)                                         \
-  ObLakeTableMetadataCacheValue *pvalue = new (buf) ObLakeTableMetadataCacheValue();               \
+  pvalue = new (buf) ObLakeTableMetadataCacheValue();                                              \
   const LAKE_TABLE_METADATA *old_var                                                               \
       = static_cast<const LAKE_TABLE_METADATA *>(lake_table_metadata_);                            \
   LAKE_TABLE_METADATA *new_var = NULL;                                                             \
@@ -108,6 +108,7 @@ int ObLakeTableMetadataCacheValue::deep_copy(char *buf,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(buf_len), K(size()));
   } else {
+    ObLakeTableMetadataCacheValue *pvalue = NULL;
     switch (lake_table_metadata_->get_format_type()) {
       case ObLakeTableFormat::ICEBERG: {
         DEEP_COPY_LAKE_TABLE_METADATA(sql::iceberg::ObIcebergTableMetadata);
@@ -125,6 +126,10 @@ int ObLakeTableMetadataCacheValue::deep_copy(char *buf,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid format type", K(lake_table_metadata_->get_format_type()), K(ret));
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      value = pvalue;
     }
   }
 #undef DEEP_COPY_LAKE_TABLE_METADATA
@@ -359,6 +364,7 @@ int ObCachedCatalogMetaGetter::fetch_lake_table_metadata(ObIAllocator &allocator
 
 int ObCachedCatalogMetaGetter::fetch_table_statistics(
     ObIAllocator &allocator,
+    sql::ObSqlSchemaGuard &sql_schema_guard,
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
@@ -366,6 +372,7 @@ int ObCachedCatalogMetaGetter::fetch_table_statistics(
     ObIArray<ObOptExternalColumnStat *> &external_table_column_stats)
 {
   return delegate_.fetch_table_statistics(allocator,
+                                          sql_schema_guard,
                                           table_metadata,
                                           partition_values,
                                           column_names,

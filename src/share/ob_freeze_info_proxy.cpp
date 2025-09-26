@@ -27,7 +27,7 @@ namespace share
 {
 
 OB_SERIALIZE_MEMBER(ObFreezeInfo, frozen_scn_,
-                    schema_version_, data_version_);
+                    schema_version_, data_version_, is_modified_);
 
 int ObFreezeInfoProxy::get_freeze_info(
     ObISQLClient &sql_proxy,
@@ -459,10 +459,15 @@ int ObFreezeInfoProxy::construct_frozen_status_(
     ObFreezeInfo &frozen_status)
 {
   int ret = OB_SUCCESS;
+  int64_t gmt_create = 0;
+  int64_t gmt_modified = 0;
   uint64_t frozen_scn_val = OB_INVALID_SCN_VAL;
   EXTRACT_UINT_FIELD_MYSQL(result, "frozen_scn", frozen_scn_val, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "cluster_version", frozen_status.data_version_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "schema_version", frozen_status.schema_version_, int64_t);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "gmt_create", gmt_create);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "gmt_modified", gmt_modified);
+  frozen_status.is_modified_ = gmt_create != gmt_modified;
   if (FAILEDx(frozen_status.frozen_scn_.convert_for_inner_table_field(frozen_scn_val))) {
     LOG_WARN("fail to convert val to SCN", KR(ret), K(frozen_scn_val));
   }

@@ -349,7 +349,7 @@ bool ObTransTask::ready_to_handle()
       ob_usleep(RETRY_SLEEP_TIME_US);
       boot_ret = false;
     } else {
-      ob_usleep(left_time);
+      ob_usleep(static_cast<uint32_t>(left_time));
       boot_ret = true;
       next_handle_ts_ += retry_interval_us_;
     }

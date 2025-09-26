@@ -1210,13 +1210,28 @@ int ObRestorePersistHelper::transfer_tablet(
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObInnerTableOperator ls_restore_progress_table_operator;
+  int64_t total_tablet_cnt = 0;
+  int64_t finish_tablet_cnt = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
     LOG_WARN("failed to init ls restore progress table", K(ret));
-  } else if (OB_FAIL(ls_restore_progress_table_operator.decrease_column_by_one(trans, src_ls_key, OB_STR_TABLET_COUNT, affected_rows))) {
+  } else if (OB_FAIL(ls_restore_progress_table_operator.get_int_column(trans, true /*need lock*/, src_ls_key, OB_STR_TABLET_COUNT, total_tablet_cnt))) {
+    LOG_WARN("failed to get ls tablet cnt", K(ret), K(src_ls_key));
+  } else if (OB_FAIL(ls_restore_progress_table_operator.get_int_column(trans, true /*need lock*/, src_ls_key, OB_STR_FINISH_TABLET_COUNT, finish_tablet_cnt))) {
+    LOG_WARN("failed to get ls finish tablet cnt", K(ret), K(src_ls_key));
+  } else if (total_tablet_cnt == finish_tablet_cnt && finish_tablet_cnt > 0) {
+    if (OB_FAIL(ls_restore_progress_table_operator.decrease_column_by_one(trans, src_ls_key, OB_STR_FINISH_TABLET_COUNT, affected_rows))) {
+      LOG_WARN("failed to decrease finish tablet count in ls restore progress table", K(ret), K(src_ls_key));
+#ifdef ERRSIM
+    } else {
+      LOG_INFO("correct restore progress after transfer backfill", K(src_ls_key), K(dest_ls_key));
+#endif
+    }
+  }
+  if (FAILEDx(ls_restore_progress_table_operator.decrease_column_by_one(trans, src_ls_key, OB_STR_TABLET_COUNT, affected_rows))) {
     LOG_WARN("failed to decrease total tablet count in ls restore progress table", K(ret), K(src_ls_key));
   } else if (OB_FAIL(ls_restore_progress_table_operator.increase_column_by_one(trans, dest_ls_key, OB_STR_TABLET_COUNT, affected_rows))) {
     LOG_WARN("failed to increase total tablet count in ls restore progress table", K(ret), K(dest_ls_key));
@@ -1237,7 +1252,7 @@ int ObRestorePersistHelper::force_correct_restore_stat(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
-  } else if (OB_FAIL(sql.assign_fmt("%s=%s", OB_STR_FINISH_TABLET_COUNT, OB_STR_TABLET_COUNT))) {
+  } else if (OB_FAIL(sql.assign_fmt("%s=%s, %s=%s", OB_STR_FINISH_TABLET_COUNT, OB_STR_TABLET_COUNT, OB_STR_FINISH_BYTES, OB_STR_TOTAL_BYTES))) {
     LOG_WARN("failed to assign fmt", K(ret));
   } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this, group_id_))) {
     LOG_WARN("failed to init ls restore progress table", K(ret));
@@ -1254,12 +1269,13 @@ int ObRestorePersistHelper::move_ls_restore_progress_to_history(common::ObMySQLT
   int64_t affected_rows = 0;
   ObSqlString sql;
   const char *columns = "TENANT_ID, JOB_ID, LS_ID, SVR_IP, SVR_PORT, RESTORE_SCN, START_REPLAY_SCN, LAST_REPLAY_SCN, TABLET_COUNT, FINISH_TABLET_COUNT, TOTAL_BYTES, FINISH_BYTES, TRACE_ID, RESULT, COMMENT";
+  const char *select_columns = "TENANT_ID, JOB_ID, LS_ID, SVR_IP, SVR_PORT, RESTORE_SCN, START_REPLAY_SCN, LAST_REPLAY_SCN, TABLET_COUNT, TABLET_COUNT, TOTAL_BYTES, TOTAL_BYTES, TRACE_ID, RESULT, COMMENT";
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (%s)", OB_ALL_LS_RESTORE_HISTORY_TNAME, columns))) {
     LOG_WARN("failed to assign fmt", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" SELECT %s FROM %s", columns, OB_ALL_LS_RESTORE_PROGRESS_TNAME))) {
+  } else if (OB_FAIL(sql.append_fmt(" SELECT %s FROM %s", select_columns, OB_ALL_LS_RESTORE_PROGRESS_TNAME))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else if (OB_FAIL(trans.write(gen_meta_tenant_id(tenant_id_), sql.ptr(), group_id_, affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql));

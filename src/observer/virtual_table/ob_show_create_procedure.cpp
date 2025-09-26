@@ -153,9 +153,12 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
           bool ansi_quotes = false;
           bool print_column_priv = false;
           bool is_mysql_mode = lib::is_mysql_mode();
-          if (is_mysql_mode && OB_FAIL(has_show_create_function_priv(proc_info, print_column_priv))) {
+          bool need_check_priv = false;
+          if (OB_FAIL(session_->check_feature_enable(share::ObCompatFeatureType::MYSQL_SHOW_CREATE_PROCEDURE_PRIV_CHECK, need_check_priv))) {
+            LOG_WARN("failed to check feature enable", K(ret));
+          } else if (need_check_priv && is_mysql_mode && OB_FAIL(has_show_create_function_priv(proc_info, print_column_priv))) {
             SERVER_LOG(WARN, "failed to check print column priv", K(ret), K(proc_info));
-          } else if (is_mysql_mode && !print_column_priv) {
+          } else if (need_check_priv && is_mysql_mode && !print_column_priv) {
             cur_row_.cells_[cell_idx].set_null();
           } else if (OB_FAIL(session_->get_sql_quote_show_create(sql_quote_show_create))) {
             SERVER_LOG(WARN, "failed to get sql_quote_show_create", K(ret), K(session_));

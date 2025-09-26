@@ -497,7 +497,7 @@ public:
                                const ObString &tbl_name,
                                const ObTableSchema *&table_schema);
   int get_lake_table_metadata(const uint64_t table_id,
-                              const share::ObILakeTableMetadata *&lake_table_metadata) const;
+                              share::ObILakeTableMetadata *&lake_table_metadata) const;
   int get_catalog_table_id(const uint64_t tenant_id,
                            const uint64_t catalog_id,
                            const uint64_t database_id,
@@ -554,7 +554,7 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   common::ObSEArray<const share::schema::ObDatabaseSchema *, 1> mocked_database_schemas_;
-  common::ObSEArray<const share::ObILakeTableMetadata *, 1> lake_table_metadatas_;
+  common::ObSEArray<share::ObILakeTableMetadata *, 1> lake_table_metadatas_;
   uint64_t next_link_table_id_;
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
@@ -799,7 +799,6 @@ public:
   common::ObString raw_sql_;
   uint64_t ccl_rule_id_;
   uint64_t ccl_match_time_;
-  common::ObString reconstruct_ps_sql_;
   common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_rule_level_values_;
   common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_format_sqlid_level_values_;
   TO_STRING_KV(K(stmt_type_));

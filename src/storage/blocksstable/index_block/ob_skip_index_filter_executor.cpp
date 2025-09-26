@@ -55,6 +55,14 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
   } else if (FALSE_IT(meta_.col_type_ = SK_IDX_MAX)) {
   } else if (OB_FAIL(agg_row_reader_.read(meta_, param.max_datum_, param.is_max_prefix_))) {
     LOG_WARN("Failed read agg max datum", K(ret), K(meta_));
+  } else if (OB_UNLIKELY(ob_is_string_type(obj_meta.get_type())
+      && ObCharset::usemb(obj_meta.get_collation_type())
+      && !param.max_datum_.is_null()
+      && !agg_row_reader_.has_correct_max_prefix()
+      && param.max_datum_.len_ > ObSkipIndexColMeta::SAFE_MBCHARSET_PREFIX_MAX_LEN)) {
+    // Invalid agg result for string type whose prefix max might not accurate on mbcharset
+    param.min_datum_.set_null();
+    param.max_datum_.set_null();
   } else if (!param.min_datum_.is_null() &&
              OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.min_datum_))) {
     LOG_WARN("Failed to pad column on min datum", K(ret));

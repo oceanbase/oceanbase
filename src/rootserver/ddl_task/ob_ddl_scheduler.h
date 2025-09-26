@@ -355,7 +355,7 @@ private:
   class DDLScanTask : public common::ObTimerTask
   {
   public:
-    explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler), tg_id_(-1) {}
+    explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler), tg_id_(-1), last_schedule_time_(0) {}
     virtual ~DDLScanTask() {};
     int init();
     int schedule();
@@ -368,6 +368,7 @@ private:
   private:
     ObDDLScheduler &ddl_scheduler_;
     int tg_id_;
+    int64_t last_schedule_time_;
   };
 
   class HeartBeatCheckTask : public common::ObTimerTask
