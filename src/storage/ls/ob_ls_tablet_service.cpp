@@ -2638,6 +2638,8 @@ int ObLSTabletService::create_empty_shell_tablet(
   const bool is_transfer = false;
   bool is_update = false;
 
+  ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls tablet svr hasn't been inited", K(ret));
@@ -2657,7 +2659,6 @@ int ObLSTabletService::create_empty_shell_tablet(
     time_guard.click("RemoveOld");
   }
 
-  ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash()); // must lock after prepare
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "MigEmptyT"));
   ObTabletHandle tmp_tablet_hdl;
   if (OB_FAIL(ret)) {
