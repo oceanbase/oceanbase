@@ -84,6 +84,7 @@ private:
   int64_t tx_id_;
   int64_t snapshot_version_;
   transaction::ObTxReadSnapshot tx_read_snapshot_;
+  share::SCN fb_snapshot_;
   int64_t rowid_version_;
   const common::ObIArray<int32_t> *rowid_project_; //map to projected row
   common::ObSEArray<common::ObObj, DEFAULT_LOCATOR_OBJ_ARRAY_SIZE> rowid_objs_;

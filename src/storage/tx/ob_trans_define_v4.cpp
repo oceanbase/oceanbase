@@ -212,29 +212,32 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
    }                                            \
 }                                               \
 
-int ObTxReadSnapshot::serialize_for_lob(const share::ObLSID &ls_id, SERIAL_PARAMS) const
+int ObTxReadSnapshot::serialize_for_lob(const share::ObLSID &ls_id, const share::SCN &fb_snapshot, SERIAL_PARAMS) const
 {
   int ret = OB_SUCCESS;
   PREPARE_LOB_PARTS(parts, ls_id);
   LST_DO_CODE(OB_UNIS_ENCODE, core_, source_, snapshot_lsid_, snapshot_ls_role_, parts);
+  OB_UNIS_ENCODE(fb_snapshot);
   return ret;
 }
 
-int ObTxReadSnapshot::deserialize_for_lob(DESERIAL_PARAMS)
+int ObTxReadSnapshot::deserialize_for_lob(share::SCN &fb_snapshot, DESERIAL_PARAMS)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE, core_, source_, snapshot_lsid_, snapshot_ls_role_, parts_);
+  OB_UNIS_DECODE(fb_snapshot);
   if (OB_SUCC(ret)) {
     valid_ = true;
   }
   return ret;
 }
 
-int64_t ObTxReadSnapshot::get_serialize_size_for_lob(const share::ObLSID &ls_id) const
+int64_t ObTxReadSnapshot::get_serialize_size_for_lob(const share::ObLSID &ls_id, const share::SCN &fb_snapshot) const
 {
   int64_t len = 0;
   PREPARE_LOB_PARTS(parts, ls_id);
   LST_DO_CODE(OB_UNIS_ADD_LEN, core_, source_, snapshot_lsid_, snapshot_ls_role_, parts);
+  OB_UNIS_ADD_LEN(fb_snapshot);
   return len;
 }
 
