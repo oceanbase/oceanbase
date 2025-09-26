@@ -347,6 +347,7 @@ struct ObEvalCostHelper
   ObString src_qb_name_;
   int64_t outline_trans_hints_count_;
   int64_t used_trans_hints_count_;
+  ObRawExprFactory *tmp_expr_factory_;
 };
 
 class ObTransformRule

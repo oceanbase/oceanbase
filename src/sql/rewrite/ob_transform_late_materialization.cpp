@@ -519,6 +519,7 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObIArray<ObParentDMLStmt>
          .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
     CREATE_WITH_TEMP_CONTEXT(param) {
       ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+      eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
       HEAP_VAR(ObOptimizerContext,
                optctx,
                ctx_->session_info_,
