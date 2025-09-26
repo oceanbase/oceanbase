@@ -224,6 +224,7 @@ END_P SET_VAR DELIMITER
    外面已经定义，所以这里注释了，而DEC、NUMERIC关键字在lex文件会转为NUMBER，同时另外4个关键字老版本一直没有定义为保
    留关键字，出于兼容性考虑, 这里也不添加到其中，注释了，因此这6个关键字（DEC，NUMERIC，FALSE，LOCK，NUMERIC，
    OPTIMIZER_COSTS， TRUE）在ob里面是可以使用的，和mysql有区别）
+   为了便于 ADB 迁移 OB, 将 MAXVALUE 和 RANGE 调整为非保留关键字
  * https://dev.mysql.com/doc/refman/5.7/en/keywords.html
  * 注意！！！非特殊情况，禁止将关键字放到该区域
  * */
@@ -244,12 +245,12 @@ END_P SET_VAR DELIMITER
         KEY KEYS KILL
         LEADING LEAVE LEFT LIKE LIMIT LINEAR LINES LOAD LOCALTIME LOCALTIMESTAMP /*LOCK*/ LONG
         LONGBLOB LONGTEXT LOOP LOW_PRIORITY
-        MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MATCH MAXVALUE MEDIUMBLOB MEDIUMINT MEDIUMTEXT
+        MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MATCH /*MAXVALUE*/ MEDIUMBLOB MEDIUMINT MEDIUMTEXT
         MIDDLEINT MINUTE_MICROSECOND MINUTE_SECOND MOD MODIFIES
         NATURAL NOT NO_WRITE_TO_BINLOG /*NULL*/ NUMERIC
         ON OPTIMIZE /*OPTIMIZER_COSTS*/ OPTION OPTIONALLY OR ORDER OUT OUTER OUTFILE
         PARTITION PRECISION PRIMARY PROCEDURE PURGE
-        RANGE READ READS READ_WRITE REAL REFERENCES REGEXP RELEASE RENAME REPEAT REPLACE REQUIRE
+        /*RANGE*/ READ READS READ_WRITE REAL REFERENCES REGEXP RELEASE RENAME REPEAT REPLACE REQUIRE
         RESIGNAL RESTRICT RETURN REVOKE RIGHT RLIKE
         SCHEMA SCHEMAS SECOND_MICROSECOND SELECT SENSITIVE SEPARATOR SET SHOW SIGNAL SMALLINT SPATIAL
         SPECIFIC SQL SQLEXCEPTION SQLSTATE SQLWARNING SQL_BIG_RESULT SQL_CALC_FOUND_ROWS
@@ -319,7 +320,7 @@ END_P SET_VAR DELIMITER
         MASTER_SERVER_ID MASTER_SSL MASTER_SSL_CA MASTER_SSL_CAPATH MASTER_SSL_CERT MASTER_SSL_CIPHER
         MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU MAX_CONCURRENCY
         MAX_FILE_SIZE MAX_TOKEN_SIZE MAX_NGRAM_SIZE LOG_DISK_SIZE MAX_NET_BANDWIDTH MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
-        MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND MICRO_BLOCK_FORMAT_VERSION
+        MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MAXVALUE MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND MICRO_BLOCK_FORMAT_VERSION
         MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MIN_NGRAM_SIZE MIN_TOKEN_SIZE MINOR MIN_ROWS MINUS MINUTE MISMATCH MODE MODIFY MODULE MONTH MOVE MODEL
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MULTIVALUE MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
         MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME MERGE_ENGINE MAX_CLIENT_POOL_SIZE
@@ -341,7 +342,7 @@ END_P SET_VAR DELIMITER
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
-        RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
@@ -405,7 +406,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> with_column_group column_group_list column_group_element
-%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num opt_subpartition_range_or_list
+%type <node> opt_range_partition_info opt_auto_split_tablet_size_option auto_split_tablet_size_option opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list auto_partition_option auto_range_type partition_size auto_partition_type use_flashback partition_options partition_num opt_subpartition_range_or_list
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
@@ -483,7 +484,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_when check_state constraint_definition
 %type <node> create_mlog_stmt opt_mlog_option_list opt_mlog_options mlog_option opt_mlog_with mlog_with_values mlog_with_special_columns mlog_with_reference_columns mlog_with_special_column_list mlog_with_reference_column_list mlog_with_special_column mlog_with_reference_column opt_mlog_new_values mlog_including_or_excluding opt_mlog_purge mlog_purge_values mlog_purge_immediate_sync_or_async mlog_purge_start mlog_purge_next
 %type <node> drop_mlog_stmt
-%type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra unreserved_keyword_ambiguous_roles unreserved_keyword_for_role_name
+%type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra unreserved_keyword_ambiguous_roles unreserved_keyword_for_role_name unreserved_keyword_adb_compatible
 %type <reserved_keyword> mysql_reserved_keyword
 %type <ival> audit_by_session_access_option audit_whenever_option audit_or_noaudit
 %type <ival> consistency_level use_plan_cache_type
@@ -9161,24 +9162,13 @@ opt_part_id:
 ;
 
 range_expr_list:
-range_expr
-{
-  $$ = $1;
-}
-| range_expr_list ',' range_expr
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
-}
-;
-
-range_expr:
 expr
 {
   $$ = $1;
 }
-| MAXVALUE
+| range_expr_list ',' expr
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_MAXVALUE);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
 
@@ -26204,6 +26194,7 @@ unreserved_keyword_for_role_name:
 unreserved_keyword_normal { $$=$1;}
 | unreserved_keyword_special { $$=$1;}
 | unreserved_keyword_extra { $$=$1;}
+| unreserved_keyword_adb_compatible { $$=$1;}
 ;
 
 unreserved_keyword_normal:
@@ -27141,6 +27132,11 @@ unreserved_keyword_extra:
 ACCESS
 ;
 
+unreserved_keyword_adb_compatible:
+MAXVALUE
+|       RANGE
+;
+
 /*
   These non-reserved keywords cannot be used as unquoted role names:
 */
@@ -27290,7 +27286,6 @@ ACCESSIBLE
 | MASTER_BIND
 | MASTER_SSL_VERIFY_SERVER_CERT
 | MATCH
-| MAXVALUE
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
@@ -27317,7 +27312,6 @@ ACCESSIBLE
 | PRIMARY
 | PROCEDURE
 | PURGE
-| RANGE
 | READ
 | READS
 | READ_WRITE
