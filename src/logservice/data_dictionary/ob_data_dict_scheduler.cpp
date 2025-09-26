@@ -28,6 +28,7 @@ using namespace dbms_scheduler;
 int ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(const schema::ObSysVariableSchema &sys_variable,
     const uint64_t tenant_id,
     const bool is_enabled,
+    const bool schedule_at_once,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -54,7 +55,9 @@ int ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(const schem
     LOG_WARN("generate_job_id failed", KR(ret), K(tenant_id));
   } else {
     ObString exec_env(pos, buf);
-    const int64_t start_usec = (current_time/_MIN_ + 1) * _MIN_; // one minute after current_time
+     // if schedule_at_once == true, execute dump data_dictionary immediately(one minute after current_time),
+     // otherwise execute dump data_dictionary 120 minutes after current_time
+    const int64_t start_usec = schedule_at_once ? (current_time/_MIN_ + 1) * _MIN_ : (current_time/_MIN_ + 120) * _MIN_;
     ObString job_name(SCHEDULED_TRIGGER_DUMP_DATA_DICT_JOB_NAME);
     ObString job_action("DBMS_DATA_DICT.TRIGGER_DUMP()");
     ObString repeat_interval("FREQ=MINUTELY; INTERVAL=120");

@@ -29,6 +29,7 @@ public:
   static int create_scheduled_trigger_dump_data_dict_job(const schema::ObSysVariableSchema &sys_variable,
       const uint64_t tenant_id,
       const bool is_enabled,
+      const bool schedule_at_once,
       common::ObMySQLTransaction &trans);
   static int set_attr_for_trigger_dump_data_dict(
       const sql::ObSQLSessionInfo *session,
