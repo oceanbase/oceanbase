@@ -123,6 +123,34 @@ int ObClusterVersionMgr::is_supported_azblob_version() const
   return ret;
 }
 
+int ObClusterVersionMgr::is_supported_enable_worm_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t min_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+    OB_LOG(WARN, "fail to get min data version, use cluster version", K(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    if (min_data_version < DATA_VERSION_4_2_5_7) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting 'enable_worm' for data version lower than 4.2.5.7 is");
+      OB_LOG(WARN, "setting 'enable_worm' for data version lower than 4.2.5.7 is not supported",
+                K(ret), K(min_data_version));
+    }
+  } else {
+    ret = OB_SUCCESS;
+    const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (min_cluster_version < CLUSTER_VERSION_4_2_5_7) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting 'enable_worm' for cluster version lower than 4.2.5.7 is");
+      OB_LOG(WARN, "setting 'enable_worm' for cluster version lower than 4.2.5.7 is not supported",
+                K(ret), K(min_cluster_version));
+    }
+  }
+  return ret;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(ObLatchIds::LOCAL_DEVICE_LOCK), is_init_(false)
 {

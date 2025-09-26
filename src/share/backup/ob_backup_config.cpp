@@ -457,7 +457,11 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest, trans))) {
         LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id), K(backup_dest));
       } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
-        LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
+        if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                          "set backup dest: parameter enable_worm=true is required for bucket with worm.");
+      }
+      LOG_WARN("fail to check dest validity", K(ret), K_(tenant_id), K(backup_dest));
       } else {
         LOG_INFO("succ to check data dest config", K_(tenant_id), K(backup_dest));
       }
@@ -694,6 +698,10 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
     } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
       LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
     } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/))) {
+      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                          "set backup dest: parameter enable_worm=true is required for bucket with worm.");
+      }
       LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
     }
   }

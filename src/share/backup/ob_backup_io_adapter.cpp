@@ -340,6 +340,31 @@ int ObBackupIoAdapter::write_single_file(const common::ObString &uri, const shar
   return ret;
 }
 
+
+int ObBackupIoAdapter::seal_file(
+  const common::ObString &uri,
+  const share::ObBackupStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObIOFd fd;
+  ObIODevice *device_handle = nullptr;
+
+  if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info,
+                      uri, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER))) {
+    OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), KR(ret));
+  } else if (FALSE_IT(fd.device_handle_ = device_handle)) {
+  } else if (OB_FAIL(device_handle->seal_file(fd))) {
+    STORAGE_LOG(WARN, "fail to seal file", KR(ret), K(uri), K(storage_info), K(fd));
+  }
+
+  if (OB_TMP_FAIL(close_device_and_fd(device_handle, fd))) {
+    ret = COVER_SUCC(tmp_ret);
+    STORAGE_LOG(WARN, "failed to close device and fd", KR(ret), K(tmp_ret));
+  }
+  return ret;
+}
+
 int ObBackupIoAdapter::read_single_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, char *buf, 
                                         const int64_t buf_size, int64_t &read_size)
 {

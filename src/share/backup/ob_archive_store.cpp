@@ -1083,6 +1083,38 @@ int ObArchiveStore::write_single_ls_info(const int64_t dest_id, const int64_t ro
   return ret;
 }
 
+// oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/[file_id].obarc
+int ObArchiveStore::seal_file(
+  const int64_t dest_id,
+  const int64_t round_id,
+  const int64_t piece_id,
+  const ObLSID &ls_id,
+  const int64_t file_id) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObBackupPath full_path;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+  const ObBackupDest &dest = get_backup_dest();
+  bool is_normal_file = false;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_ls_archive_file_path(
+                        dest, dest_id, round_id, piece_id, ls_id, file_id, full_path))) {
+    LOG_WARN("failed to get piece info file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id));
+  } else if (OB_FAIL(util.is_exist(full_path.get_ptr(), storage_info, is_normal_file))) {
+    LOG_WARN("failed to check file exist", K(ret), K(full_path), K(storage_info));
+  } else if (is_normal_file) {
+    //if file exists, it is a normal file. a normal file do not need seal
+  } else {
+    if (OB_FAIL(util.seal_file(full_path.get_ptr(), storage_info))) {
+      LOG_WARN("failed to seal file", K(ret), K(full_path), K(storage_info));
+    }
+  }
+  return ret;
+}
+
 // oss://archive/d[dest_id]r[round_id]p[piece_id]/file_info.obarc
 int ObArchiveStore::is_piece_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const
 {

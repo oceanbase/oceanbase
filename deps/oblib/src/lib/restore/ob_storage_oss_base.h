@@ -54,6 +54,7 @@ const static int64_t MAX_ELEMENT_COUNT = 10000;//oss limit element count
 const static int64_t MULTI_BASE_BUFFER_SIZE = 16 * 1024 * 1024L;//the buf size of upload data
 static constexpr char OB_STORAGE_OSS_ALLOCATOR[] = "StorageOSS";
 
+
 // Before using oss, you need to initialize oss enviroment.
 // Thread safe guaranteed by user.
 int init_oss_env();
@@ -125,7 +126,7 @@ public:
   int init_oss_options(aos_pool_t *&aos_pool, oss_request_options_t *&oss_option);
   virtual bool is_inited();
   int get_oss_file_meta(const common::ObString &bucket, const common::ObString &object,
-                        bool &is_file_exist, char *&remote_md5, int64_t &file_length);
+                        bool &is_file_exist, const char *&remote_md5, int64_t &file_length);
   void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret, const int ob_errcode);
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
@@ -139,7 +140,7 @@ public:
   bool is_inited_;
   ObOssAccount oss_account_;
   ObStorageChecksumType checksum_type_;
-  
+  bool enable_worm_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssBase);
 };
 
@@ -147,14 +148,16 @@ class ObStorageOssWriter : public ObStorageOssBase, public ObIStorageWriter
 {
 public:
   ObStorageOssWriter();
-  ~ObStorageOssWriter();
-  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
-  int write(const char *buf,const int64_t size);
-  int pwrite(const char *buf, const int64_t size, const int64_t offset);
-  int close();
-  int64_t get_length() const { return file_length_;}
-  virtual bool is_opened() const {return is_opened_;}
-private:
+  virtual ~ObStorageOssWriter();
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) override;
+  virtual int write(const char *buf,const int64_t size) override;
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
+  virtual int close() override;
+  virtual int64_t get_length() const override { return file_length_;}
+  virtual bool is_opened() const override {return is_opened_;}
+protected:
+  int write_obj_(const char *obj_name, const char *buf, const int64_t size);
+protected:
   bool is_opened_;
   int64_t file_length_;
   common::ObArenaAllocator allocator_;
@@ -264,30 +267,21 @@ private:
   common::ObObjectStorageInfo *storage_info_;
 };
 
-class ObStorageOssAppendWriter : public ObStorageOssBase, public ObIStorageWriter
+class ObStorageOssAppendWriter : public ObStorageOssWriter
 {
 public:
-  ObStorageOssAppendWriter();
+  ObStorageOssAppendWriter():ObStorageOssWriter() {}
   virtual ~ObStorageOssAppendWriter();
 
 public:
-  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
-  int write(const char *buf, const int64_t size);
-  int pwrite(const char *buf, const int64_t size, const int64_t offset);
-  int close();
-  int64_t get_length() const { return file_length_; }
-  virtual bool is_opened() const { return is_opened_; }
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) override;
+  virtual int write(const char *buf, const int64_t size) override;
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
+  virtual int close() override;
 
 private:
   int do_write(const char *buf, const int64_t size, const int64_t offset, const bool is_pwrite);
-
-private:
-  bool is_opened_;
-  int64_t file_length_;
-  common::ObArenaAllocator allocator_;
-  common::ObString bucket_;
-  common::ObString object_;
-
+  int simulate_append_write_for_worm_(const char *buf, const int64_t size, const int64_t offset);
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssAppendWriter);
 };
 

@@ -2179,6 +2179,8 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_TABLET_NOT_EXIST :
     case OB_CHECKSUM_ERROR :
     case OB_VERSION_NOT_MATCH:
+    case OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM:
+    case OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH:
       bret = false;
       break;
     default:
@@ -4752,10 +4754,14 @@ int ObBackupDestAttributeParser::ExtraArgsCb::match(const char *key, const char 
   }
   if (OB_SUCC(ret) && !found) {
     ObSqlString err_msg;
-    err_msg.append_fmt("key '%s' is not exist, changing '%s' is", key, key);
+    int tmp_ret = OB_SUCCESS;
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("KV pair do not match any action", K(key), K(value), K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+    if (OB_SUCCESS != (tmp_ret = err_msg.append_fmt("key '%s' does not exist, changing '%s' is", key, key))) {
+      LOG_WARN("fail append err msg", K(tmp_ret));
+    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+    }
   }
   return ret;
 }

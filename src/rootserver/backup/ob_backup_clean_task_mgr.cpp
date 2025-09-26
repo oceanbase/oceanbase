@@ -352,6 +352,9 @@ int ObBackupCleanTaskMgr::process()
         ret = (OB_SUCCESS != tmp_ret) ? tmp_ret : ret; 
       }
     }
+    if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && backup_dest_.is_enable_worm()) {
+      ret = OB_SUCCESS;
+    }
   }
   
   return ret;

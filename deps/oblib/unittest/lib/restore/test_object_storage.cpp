@@ -177,7 +177,7 @@ int test_gen_object_meta(
 
   for (int64_t i = 0; OB_SUCC(ret) && i < n_fragments; i++) {
     if (OB_FAIL(databuff_printf(entry.d_name, sizeof(entry.d_name), "%s%s",
-        OB_S3_APPENDABLE_FRAGMENT_PREFIX, fragments[i]))) {
+        OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX, fragments[i]))) {
       OB_LOG(WARN, "fail to databuff printf", K(ret), K(i), K(fragments[i]));
     } else if (OB_FAIL(op.func(&entry))) {
       OB_LOG(WARN, "fail to execute op", K(ret), K(i));
@@ -247,13 +247,13 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
 
       // meta file
       ASSERT_EQ(OB_SUCCESS, databuff_printf(entry.d_name, sizeof(entry.d_name), "%s%s",
-                                            OB_S3_APPENDABLE_FRAGMENT_PREFIX,
-                                            OB_S3_APPENDABLE_SEAL_META));
+                                            OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX,
+                                            OB_ADAPTIVELY_APPENDABLE_SEAL_META));
       ASSERT_EQ(OB_SUCCESS, op.func(&entry));
       // foramt file
       ASSERT_EQ(OB_SUCCESS, databuff_printf(entry.d_name, sizeof(entry.d_name), "%s%s",
-                                            OB_S3_APPENDABLE_FRAGMENT_PREFIX,
-                                            OB_S3_APPENDABLE_FORMAT_META));
+                                            OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX,
+                                            OB_ADAPTIVELY_APPENDABLE_FORMAT_META));
       ASSERT_EQ(OB_SUCCESS, op.func(&entry));
 
       // invalid fragment name
@@ -262,7 +262,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
         ASSERT_TRUE(sizeof(entry.d_name) >= strlen(invalid_fragments[i]) + 1);
         STRCPY(entry.d_name, invalid_fragments[i]);
         ASSERT_EQ(OB_SUCCESS, databuff_printf(entry.d_name, sizeof(entry.d_name), "%s%s",
-                                              OB_S3_APPENDABLE_FRAGMENT_PREFIX,
+                                              OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX,
                                               invalid_fragments[i]));
         ASSERT_EQ(OB_INVALID_ARGUMENT, op.func(&entry));
       }
@@ -363,7 +363,7 @@ TEST_F(TestObjectStorage, test_appendable_object_util)
     {
       // valid fragment name
       const char *valid_fragments[] = {
-          OB_S3_APPENDABLE_FORMAT_META, OB_S3_APPENDABLE_SEAL_META,
+          OB_ADAPTIVELY_APPENDABLE_FORMAT_META, OB_ADAPTIVELY_APPENDABLE_SEAL_META,
           "1-7", "2-5", "3-6", "4-7", "1-7", "1-7", "1-5",    // covered by "1-7"
           "0-3", "0-3", "0-1", "1-2", "2-3",                  // covered "0-3"
           "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",    // no gap
@@ -1189,9 +1189,9 @@ TEST_F(TestObjectStorage, test_cross_testing)
     int64_t file_length = -1;
     char fragment_name[OB_MAX_URI_LENGTH] = { 0 };
     ASSERT_EQ(OB_SUCCESS,
-        construct_fragment_full_name(uri, OB_S3_APPENDABLE_FORMAT_META, fragment_name, sizeof(fragment_name)));
-    ASSERT_EQ(OB_SUCCESS, util.write_single_file(fragment_name, OB_S3_APPENDABLE_FORMAT_CONTENT_V1,
-                                                 strlen(OB_S3_APPENDABLE_FORMAT_CONTENT_V1)));
+        construct_fragment_full_name(uri, OB_ADAPTIVELY_APPENDABLE_FORMAT_META, fragment_name, sizeof(fragment_name)));
+    ASSERT_EQ(OB_SUCCESS, util.write_single_file(fragment_name, OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1,
+                                                 strlen(OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1)));
     ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, true/*is_adaptive*/, is_obj_exist));
     ASSERT_TRUE(is_obj_exist);
     ASSERT_EQ(OB_SUCCESS, util.get_file_length(uri, true/*is_adaptive*/, file_length));
@@ -1247,7 +1247,7 @@ TEST_F(TestObjectStorage, test_cross_testing)
     buf = static_cast<char *>(allocator.alloc(serialize_size));
     ASSERT_TRUE(OB_NOT_NULL(buf));
     ASSERT_EQ(OB_SUCCESS, appendable_obj_meta.serialize(buf, serialize_size, pos));
-    ASSERT_EQ(OB_SUCCESS, construct_fragment_full_name(uri, OB_S3_APPENDABLE_SEAL_META,
+    ASSERT_EQ(OB_SUCCESS, construct_fragment_full_name(uri, OB_ADAPTIVELY_APPENDABLE_SEAL_META,
                                                        seal_meta_uri, sizeof(seal_meta_uri)));
     ASSERT_EQ(OB_SUCCESS, util.write_single_file(seal_meta_uri, buf, pos));
     ASSERT_EQ(OB_SUCCESS, reader.open(uri, &cross_info));

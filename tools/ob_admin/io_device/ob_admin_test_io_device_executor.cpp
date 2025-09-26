@@ -16,6 +16,8 @@
 #include "src/logservice/archiveservice/ob_archive_file_utils.h"
 #include "src/share/backup/ob_backup_path.h"
 #include "src/share/backup/ob_backup_clean_util.h"
+#include "src/share/io/ob_io_manager.h"
+#include "src/share/ob_device_manager.h"
 #include "src/share/ob_device_manager.h"
 
 using namespace oceanbase::share;
@@ -40,6 +42,26 @@ int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
   int ret = OB_SUCCESS;
   lib::set_memory_limit(4 * 1024 * 1024 * 1024LL);
   lib::set_tenant_memory_limit(500, 4 * 1024 * 1024 * 1024LL);
+  ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
+  ObMallocAllocator *malloc = ObMallocAllocator::get_instance();
+  if (OB_ISNULL(malloc->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, 0))) {
+    if (OB_FAIL(malloc->create_and_add_tenant_allocator(OB_SERVER_TENANT_ID))) {
+      STORAGE_LOG(WARN, "failed to create_and_add_tenant_allocator", K(ret));
+    }
+  }
+
+  if (FAILEDx(tenant_base->init())) {
+    STORAGE_LOG(WARN, "failed to init tenant base", K(ret));
+  } else if (FALSE_IT(ObTenantEnv::set_tenant(tenant_base))) {
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().init())) {
+    STORAGE_LOG(WARN, "failed to init io manager", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().start())) {
+    STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  }  else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
+  }
 
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     STORAGE_LOG_FILTER(ERROR, "failed to parse cmd", K(ret), K(argc), K(argv));
@@ -411,6 +433,9 @@ int ObAdminTestIODeviceExecutor::test_clean_backup_file_()
 
   if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
     STORAGE_LOG_FILTER(ERROR, "failed to set storage info", K_(backup_path));
+  } else if (storage_info.is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info.get_delete_mode()) {
+    //enable oss worm, do not delete
   } else if (OB_FAIL(databuff_printf(check_file_dir_path, OB_MAX_URI_LENGTH, "%s%s%s",
              backup_path_, "/", check_file_dir_name))) {
     STORAGE_LOG_FILTER(ERROR, "fail to databuff printf", K(ret));

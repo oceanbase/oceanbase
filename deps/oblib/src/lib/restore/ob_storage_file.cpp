@@ -524,7 +524,7 @@ int ObStorageFileUtil::check_is_appendable(
                               uri.ptr(), cur_entry.d_name))) {
     OB_LOG(WARN, "fail to construct logic_apendable_obj_name", K(ret), K(uri), K(cur_entry.d_name));
   } else if (OB_FAIL(construct_fragment_full_name(logic_apendable_obj_name,
-                                                  OB_S3_APPENDABLE_FORMAT_META,
+                                                  OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                   tmp_uri_buf, sizeof(tmp_uri_buf)))) {
     OB_LOG(WARN, "fail to construct fragment full name", K(ret), K(uri), K(cur_entry.d_name));
   } else {

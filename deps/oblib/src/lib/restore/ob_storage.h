@@ -41,6 +41,7 @@ int get_storage_type_from_name(const char *type_str, ObStorageType &type);
 const char *get_storage_type_str(const ObStorageType &type);
 bool is_io_error(const int result);
 bool is_object_storage_type(const ObStorageType &type);
+bool is_adaptive_append_mode(const ObObjectStorageInfo &storage_info);
 
 class ObExternalIOCounter final
 {
@@ -238,7 +239,7 @@ private:
   // If there also exists 'SIMULATE_APPEND' type object in this uri, this function will just list
   // this 'appendable-dir' name, not include its children objects' name.
   //
-  // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_S3_APPENDABLE_FRAGMENT_PREFIX).
+  // NOTICE: children objects of 'appendable-dir' all have the same prefix(OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX).
   //         If there exists some children objects not have this prefix, these objects will also be listed.
   //         Cuz we think these objects are just some common objects.
   int list_adaptive_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);

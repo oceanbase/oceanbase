@@ -60,6 +60,11 @@ int ObDelHisCheckpointFileOp::func(const dirent *entry)
   } else if (OB_ISNULL(entry->d_name) || !is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid list entry, d_name is null", K(ret));
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
+  } else if (storage_info_->is_enable_worm()) {
+    //enable worm, do not delete
   } else {
     handled_file_num_++;
     uint64_t checkpoint_scn = 0;
@@ -211,6 +216,11 @@ int ObArchiveCheckpointMgr::del_last_ckpt_file_(
   if (dir_path.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dir path is empty", K(ret), K(dir_path));
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
+  } else if (storage_info_->is_enable_worm()) {
+    //enable worm, do not delete
   } else if (0 == old_checkpoint_scn) { // 0 is reserved
   } else if (OB_FAIL(file_path.join_checkpoint_info_file(file_name_, old_checkpoint_scn, type_))) {
     LOG_WARN("fail to join checkpoint info file", K(ret), K(old_checkpoint_scn));

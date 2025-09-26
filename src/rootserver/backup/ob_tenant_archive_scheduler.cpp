@@ -174,7 +174,6 @@ static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piec
       single_ls_desc.min_lsn_ = ls_piece.min_lsn_;
       single_ls_desc.max_lsn_ = ls_piece.max_lsn_;
       single_ls_desc.deleted_ = ls_piece.is_ls_deleted_;
-      
       if (OB_FAIL(ret)) {
       } else if (ls_piece.max_lsn_ > ls_piece.min_lsn_
         && OB_FAIL(store.get_file_list_in_piece(single_ls_desc.dest_id_, 
@@ -184,12 +183,25 @@ static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piec
       } else if (OB_FALSE_IT(lib::ob_sort(single_ls_desc.filelist_.begin(), single_ls_desc.filelist_.end()))) {
       } else if (OB_FAIL(piece_info_desc.filelist_.push_back(single_ls_desc))) {
         LOG_WARN("failed to push backup single_ls_desc", K(ret), K(single_ls_desc), K(piece_info_desc));
-      } else if (OB_FAIL(store.is_single_ls_info_file_exist(single_ls_desc.dest_id_, single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, is_exist))) {
+      } else if (OB_FAIL(store.is_single_ls_info_file_exist(single_ls_desc.dest_id_,
+                              single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, is_exist))) {
         LOG_WARN("failed to check single ls info file exist", K(ret), K(piece), K(single_ls_desc));
       } else if (is_exist) {
-      } else if (OB_FAIL(store.write_single_ls_info(single_ls_desc.dest_id_, single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, single_ls_desc))) {
-        LOG_WARN("failed to write single ls info file", K(ret), K(piece), K(single_ls_desc));
+      } else {
+        const int64_t file_count = single_ls_desc.filelist_.count();
+        if (file_count > 0) {
+          const int64_t max_file_id = single_ls_desc.filelist_.at(file_count-1).file_id_;
+          if (OB_FAIL(store.seal_file(single_ls_desc.dest_id_,
+                single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, max_file_id))) {
+            LOG_WARN("failed to seal last file", K(ret), K(single_ls_desc), K(max_file_id));
+          }
+        }
+        if (FAILEDx(store.write_single_ls_info(single_ls_desc.dest_id_, single_ls_desc.round_id_,
+          single_ls_desc.piece_id_, single_ls_desc.ls_id_, single_ls_desc))) {
+          LOG_WARN("failed to write single ls info file", K(ret), K(piece), K(single_ls_desc));
+        }
       }
+
     }
 
     piece_info_desc.dest_id_ = piece_info.key_.dest_id_;

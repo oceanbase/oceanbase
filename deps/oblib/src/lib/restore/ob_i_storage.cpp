@@ -233,7 +233,7 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
         K(logical_appendable_object_name), KP(fragment_name), KP(name_buf), K(name_buf_len));
   } else if (OB_FAIL(databuff_printf(name_buf, name_buf_len, pos, "%s/%s%s",
                                      logical_appendable_object_name.ptr(),
-                                     OB_S3_APPENDABLE_FRAGMENT_PREFIX, fragment_name))) {
+                                     OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX, fragment_name))) {
     OB_LOG(WARN, "failed to construct formatted mock append object fragment name",
         K(ret), K(logical_appendable_object_name), K(fragment_name));
   } else {
@@ -321,11 +321,11 @@ int ObAppendableFragmentMeta::assign(const ObAppendableFragmentMeta &other)
 int ObAppendableFragmentMeta::parse_from(ObString &fragment_name)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!fragment_name.prefix_match(OB_S3_APPENDABLE_FRAGMENT_PREFIX))) {
+  if (OB_UNLIKELY(!fragment_name.prefix_match(OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX))) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid fragment prefix", K(ret), K(fragment_name));
   } else {
-    fragment_name += strlen(OB_S3_APPENDABLE_FRAGMENT_PREFIX);
+    fragment_name += strlen(OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX);
     const char *fragment_suffix = fragment_name.reverse_find('.');
     fragment_name.clip(fragment_suffix);
     if (OB_NOT_NULL(fragment_suffix)) {
@@ -341,9 +341,9 @@ int ObAppendableFragmentMeta::parse_from(ObString &fragment_name)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (0 == fragment_name.compare(OB_S3_APPENDABLE_FORMAT_META)) {
+  } else if (0 == fragment_name.compare(OB_ADAPTIVELY_APPENDABLE_FORMAT_META)) {
     type_ = ObAppendableFragmentType::APPENDABLE_FRAGMENT_FORMAT_META;
-  } else if (0 == fragment_name.compare(OB_S3_APPENDABLE_SEAL_META)) {
+  } else if (0 == fragment_name.compare(OB_ADAPTIVELY_APPENDABLE_SEAL_META)) {
     type_ = ObAppendableFragmentType::APPENDABLE_FRAGMENT_SEAL_META;
   } else {
     ObArenaAllocator allocator(ObModIds::BACKUP);
@@ -383,9 +383,9 @@ int64_t ObAppendableFragmentMeta::to_string(char *buf, const int64_t len) const
       pos = snprintf(buf, len, "%ld-%ld%s", start_, end_, suffix_);
     } else {
       const char *meta_name = (type_ == ObAppendableFragmentType::APPENDABLE_FRAGMENT_FORMAT_META) ?
-                               OB_S3_APPENDABLE_FORMAT_META :
-                               OB_S3_APPENDABLE_SEAL_META;
-      pos = snprintf(buf, len, "%s%s%s", OB_S3_APPENDABLE_FRAGMENT_PREFIX, meta_name, suffix_);
+                               OB_ADAPTIVELY_APPENDABLE_FORMAT_META :
+                               OB_ADAPTIVELY_APPENDABLE_SEAL_META;
+      pos = snprintf(buf, len, "%s%s%s", OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX, meta_name, suffix_);
     }
 
     if (pos < 0) {

@@ -771,7 +771,12 @@ int ObBackupDataStore::write_tenant_locality_info(const ObExternTenantLocalityIn
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, locality_info))) {
-    LOG_WARN("fail to write single file", K(ret));
+    if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret && backup_set_dest_.is_enable_worm()) {
+      // if set enable_worm=true, ignore error code OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to write single file", K(ret));
+    }
   } 
 
   return ret;
@@ -810,7 +815,12 @@ int ObBackupDataStore::write_tenant_param_info(const ObExternParamInfoDesc &tena
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, tenant_param_info))) {
-    LOG_WARN("fail to write single file", K(ret));
+    if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret && backup_set_dest_.is_enable_worm()) {
+      // if set enable_worm=true, ignore error code OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to write single file", K(ret));
+    }
   }
 
   return ret;
@@ -850,7 +860,12 @@ int ObBackupDataStore::write_tenant_diagnose_info(const ObExternTenantDiagnoseIn
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, diagnose_info))) {
-    LOG_WARN("fail to write single file", K(ret));
+    if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret && backup_set_dest_.is_enable_worm()) {
+      // if set enable_worm=true, ignore error code OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to write single file", K(ret));
+    }
   } 
 
   return ret;
@@ -881,6 +896,7 @@ int ObBackupDataStore::write_backup_set_info(const ObExternBackupSetInfoDesc &ba
   
   ObBackupPathString full_path;
   share::ObBackupPath path;
+  storage::ObExternBackupSetInfoDesc backup_set_info_remote;
 
   if (!is_init()) {
     ret = OB_NOT_INIT;
@@ -891,8 +907,7 @@ int ObBackupDataStore::write_backup_set_info(const ObExternBackupSetInfoDesc &ba
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, backup_set_info))) {
     LOG_WARN("fail to write single file", K(ret));
-  } 
-
+  }
   return ret;
 }
 

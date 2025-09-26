@@ -55,6 +55,8 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
   OB_LOGGER.set_log_level("INFO");
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   } else if (OB_FAIL(run_all_tests_())) {
     OB_LOG(WARN, "failed to pass all tests", K(ret), K_(base_path));
   }
@@ -340,13 +342,21 @@ int CleanOp::func(const dirent *entry)
   int ret = OB_SUCCESS;
   ObBackupIoAdapter adapter;
 
-  if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%s/%s", base_path_, entry->d_name))) {
+  if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
+  } else if (OB_UNLIKELY(storage_info_->is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
+  } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%s/%s", base_path_, entry->d_name))) {
     OB_LOG(WARN, "fail to set uri", K(ret), K_(uri), KPC_(storage_info));
   } else if (OB_FAIL(adapter.del_file(uri_, storage_info_))) {
     OB_LOG(WARN, "fail to delete file", K(ret), K_(uri), KPC_(storage_info));
   } else {
 cleaned_objects_++;
   }
+
   return ret;
 }
 
@@ -586,6 +596,10 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
     if (OB_FAIL(databuff_printf(uri, sizeof(uri), "%s", base_uri_))) {
       OB_LOG(WARN, "fail to copy file uri", K(ret), K_(base_uri), K(thread_idx));
     }
+  } else if (OB_UNLIKELY(BenchmarkTaskType::BENCHMARK_TASK_DEL == config_.type_ && storage_info_->is_enable_worm()
+                            && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
   } else if (OB_FAIL(databuff_printf(uri, sizeof(uri), "%s/%ld", base_uri_, thread_idx))) {
     OB_LOG(WARN, "fail to construct base task dir for current thread",
         K(ret), K_(base_uri), K(thread_idx));

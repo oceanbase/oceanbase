@@ -916,8 +916,8 @@ TEST_F(TestStorageS3, test_appendable_object_util)
       dirent entry;
 
       // meta file
-      ASSERT_TRUE(sizeof(entry.d_name) >= sizeof(OB_S3_APPENDABLE_SEAL_META));
-      STRCPY(entry.d_name, OB_S3_APPENDABLE_SEAL_META);
+      ASSERT_TRUE(sizeof(entry.d_name) >= sizeof(OB_ADAPTIVELY_APPENDABLE_SEAL_META));
+      STRCPY(entry.d_name, OB_ADAPTIVELY_APPENDABLE_SEAL_META);
       ASSERT_EQ(OB_SUCCESS, op.func(&entry));
 
       // invalid fragment name
@@ -1028,7 +1028,7 @@ TEST_F(TestStorageS3, test_appendable_object_util)
     {
       // valid fragment name
       const char *valid_fragments[] = {
-          OB_S3_APPENDABLE_SEAL_META,
+          OB_ADAPTIVELY_APPENDABLE_SEAL_META,
           "1-7", "2-5", "3-6", "4-7", "1-7", "1-7", "1-5",    // covered by "1-7"
           "0-3", "0-3", "0-1", "1-2", "2-3",                  // covered "0-3"
           "7-8", "8-9", "9-10", "10-11", "11-12", "12-20",    // no gap

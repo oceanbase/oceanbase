@@ -78,7 +78,6 @@ static constexpr int MAX_S3_CLIENT_NUM = 97;
 static constexpr int MAX_S3_PART_NUM = 10000;
 static constexpr int64_t S3_MULTIPART_UPLOAD_BUFFER_SIZE = 8 * 1024 * 1024L;
 
-static constexpr char OB_S3_APPENDABLE_FORMAT_CONTENT_V1[] = "version=1";
 static constexpr char OB_STORAGE_S3_ALLOCATOR[] = "StorageS3";
 static constexpr char S3_SDK[] = "S3SDK";
 

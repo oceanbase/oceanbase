@@ -362,6 +362,7 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PREV_FULL_BACKUP_SET_ID, backup_set_desc.prev_full_backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PREV_INC_BACKUP_SET_ID, backup_set_desc.prev_inc_backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_START_TS, backup_set_desc.start_time_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_END_TS, backup_set_desc.end_time_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, backup_set_desc.result_, int);
   EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_REPLAY_SCN, start_replay_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DATA_TURN_ID, backup_set_desc.data_turn_id_, int64_t); 

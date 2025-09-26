@@ -53,6 +53,9 @@ public:
       const common::ObString &dir_path,
       const share::ObBackupStorageInfo *storage_info,
       common::ObBaseDirEntryOperator &op);
+  int seal_file(
+    const common::ObString &uri,
+    const share::ObBackupStorageInfo *storage_info);
   int read_part_file(
       const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
       char *buf, const int64_t buf_size, const int64_t offset,

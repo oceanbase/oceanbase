@@ -2289,6 +2289,8 @@ DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_IO_ERROR, -9129, -1, "HY000", "object storage
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_CHECKSUM_ERROR, -9132, -1, "HY000", "object storage data checksum error");
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_ZONE_IDC_REGION_INVALID, -9133, -1, "HY000", "backup zone or backup idc or backup region invalid", "%s");
 DEFINE_ERROR_DEP(OB_TMP_FILE_EXCEED_DISK_QUOTA, -9135, -1, "HY000", "tmp file exceeds disk quota");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM, -9140, -1, "HY000", "the object is locked by worm");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH, -9142, -1, "HY000", "the object can not be overwritten with different content");
 DEFINE_ERROR_DEP(OB_CANNOT_ACCESS_BACKUP_SET, -9147, -1, "HY000", "can not access backup set file");
 // 余留位置，在该行之前继续添加storage错误码
 

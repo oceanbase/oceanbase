@@ -202,18 +202,34 @@ int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &obje
 
 static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
 {
+  const char *const OB_OBJECT_FORBIDDEN_BY_OBJECT_LOCK = "Forbidden by object lock";
+  const char *const OB_OBJECT_NO_SUCH_BUCKET = "NoSuchBucket";
+  const char *const OB_OBJECT_FILE_IMMUTABLE = "FileImmutable";
+  const char *const OB_OBJECT_INVALID_DIGEST = "InvalidDigest";
+  const char *const OB_OBJECT_INVALID_BUCKET_NAME = "InvalidBucketName";
+  const char *const OB_OBJECT_INVALID_OBJECT_NAME =  "InvalidObjectName";
+  const char *const OB_OBJECT_BUCKET_NAME_INVALID_ERROR = "BucketNameInvalidError";
+  const char *const OB_OBJECT_INVALID_ARGUMENT = "invalid argument";
+
   if (OB_ISNULL(aos_ret)) {
     ob_errcode = OB_OSS_ERROR;
   } else if (!aos_status_is_ok(aos_ret)) {
     switch (aos_ret->code) {
       case OSS_PERMISSION_DENIED: {
-        ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+        if (OB_ISNULL(aos_ret->error_code)) {
+          ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+        } else if (0 == STRCMP(OB_OBJECT_FORBIDDEN_BY_OBJECT_LOCK, aos_ret->error_code)) {
+          ob_errcode = OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
+        } else {
+          ob_errcode = OB_BACKUP_PERMISSION_DENIED;
+        }
         break;
       }
 
       case OSS_OBJECT_NOT_EXIST: {
-        if (OB_NOT_NULL(aos_ret->error_code)
-            && (0 == STRCMP("NoSuchBucket", aos_ret->error_code))) {
+        if (OB_ISNULL(aos_ret->error_code)) {
+          ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        } else if (0 == STRCMP(OB_OBJECT_NO_SUCH_BUCKET, aos_ret->error_code)) {
           ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
           ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
@@ -222,7 +238,13 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       }
 
       case OSS_OBJECT_PWRITE_OFFSET_NOT_MATH: {
-        ob_errcode = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
+        if (OB_ISNULL(aos_ret->error_code)) {
+          ob_errcode = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
+        } else if (0 == STRCMP(OB_OBJECT_FILE_IMMUTABLE, aos_ret->error_code)) {
+          ob_errcode = OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
+        } else {
+          ob_errcode = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
+        }
         break;
       }
 
@@ -234,9 +256,9 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
       case OSS_BAD_REQUEST: {
         if (OB_ISNULL(aos_ret->error_code)) {
           ob_errcode = OB_OSS_ERROR;
-        } else if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
+        } else if (0 == STRCMP(OB_OBJECT_INVALID_DIGEST, aos_ret->error_code)) {
           ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
-        } else if (0 == STRCMP("InvalidBucketName", aos_ret->error_code)) {
+        } else if (0 == STRCMP(OB_OBJECT_INVALID_BUCKET_NAME, aos_ret->error_code)) {
           ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         } else {
           ob_errcode = OB_OSS_ERROR;
@@ -407,7 +429,8 @@ ObStorageOssBase::ObStorageOssBase()
    oss_option_(NULL),
    is_inited_(false),
    oss_account_(),
-   checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
+   checksum_type_(ObStorageChecksumType::OB_MD5_ALGO),
+   enable_worm_(false)
 {
   memset(oss_endpoint_, 0, MAX_OSS_ENDPOINT_LENGTH);
 }
@@ -428,6 +451,7 @@ void ObStorageOssBase::reset()
     oss_option_ = NULL;
     is_inited_ = false;
     checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
+    enable_worm_ = false;
   }
 }
 
@@ -453,6 +477,7 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
     OB_LOG(WARN, "aos pool or oss option is NULL", K(aos_pool_), K(oss_option_));
   } else {
     checksum_type_ = storage_info->get_checksum_type();
+    enable_worm_ = storage_info->is_enable_worm();
 #ifdef ERRSIM
     if (OB_NOT_NULL(storage_info) && (OB_SUCCESS != EventTable::EN_ENABLE_LOG_OBJECT_STORAGE_CHECKSUM_TYPE)) {
       OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
@@ -461,6 +486,10 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
     if (OB_UNLIKELY(!is_oss_supported_checksum(checksum_type_))) {
       ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for oss", K(ret), K_(checksum_type));
+    } else if (enable_worm_ && OB_UNLIKELY(ObStorageChecksumType::OB_MD5_ALGO != checksum_type_)) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "that checksum algorithm is not supported for enable worm",
+          K(ret), K_(checksum_type), KPC(storage_info));
     } else {
       is_inited_ = true;
     }
@@ -670,12 +699,12 @@ bool ObStorageOssBase::is_inited()
 int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
                                         const ObString &object_ob_string,
                                         bool &is_file_exist,
-                                        char *&remote_md5,
+                                        const char *&remote_md5,
                                         int64_t &file_length)
 {
   int ret = OB_SUCCESS;
   is_file_exist = false;
-  remote_md5 = NULL;
+  remote_md5 = nullptr;
   file_length = -1;
 
   if (!is_inited()) {
@@ -705,7 +734,7 @@ int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
     } else {
       is_file_exist = true;
       //get md5
-      remote_md5 = (char*)apr_table_get(resp_headers, OSS_META_MD5);
+      remote_md5 = static_cast<const char *>(apr_table_get(resp_headers, OSS_CONTENT_MD5));
       //get file length
       if (OB_ISNULL(file_length_ptr = (char*)apr_table_get(resp_headers, OSS_CONTENT_LENGTH))) {
         ret = OB_OSS_ERROR;
@@ -1143,8 +1172,8 @@ int ObStorageOssReader::open(const ObString &uri,
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  bool is_file_exist = false;
-  char *remote_md5 = NULL;
+  bool is_exist = false;
+  const char *remote_md5 = nullptr;
   int64_t file_length = -1;
 
   if (uri.empty()) {
@@ -1159,12 +1188,12 @@ int ObStorageOssReader::open(const ObString &uri,
     OB_LOG(WARN, "bucket name of object name is empty", K(ret));
   } else {
     if (head_meta) {
-      if (OB_SUCCESS != (ret = get_oss_file_meta(bucket_, object_, is_file_exist,
+      if (OB_SUCCESS != (ret = get_oss_file_meta(bucket_, object_, is_exist,
           remote_md5, file_length))) {
         OB_LOG(WARN, "fail to get file meta", K(bucket_), K(object_), K(ret));
-      } else if (!is_file_exist) {
+      } else if (!is_exist) {
         ret = OB_BACKUP_FILE_NOT_EXIST;
-        OB_LOG(WARN, "backup file is not exist", K(bucket_), K(object_), K(ret));
+        OB_LOG(WARN, "object is not exist", K(bucket_), K(object_), K(ret));
       } else {
         file_length_ = file_length;
         has_meta_ = true;
@@ -1405,7 +1434,7 @@ int ObStorageOssUtil::head_object_meta(const common::ObString &uri, ObStorageObj
   ObString bucket_ob_string;
   ObString object_ob_string;
   common::ObArenaAllocator allocator(OB_STORAGE_OSS_ALLOCATOR);
-  char *remote_md5 = NULL;
+  const char *remote_md5 = nullptr;
   ObStorageOssBase oss_base;
 
   if (uri.empty()) {
@@ -2057,16 +2086,6 @@ int ObStorageOssUtil::del_unmerged_parts(const ObString &uri)
   return ret;
 }
 
-
-ObStorageOssAppendWriter::ObStorageOssAppendWriter()
-  : is_opened_(false),
-    file_length_(-1),
-    allocator_(OB_STORAGE_OSS_ALLOCATOR),
-    bucket_(),
-    object_()
-{
-}
-
 ObStorageOssAppendWriter::~ObStorageOssAppendWriter()
 {
 }
@@ -2084,13 +2103,8 @@ int ObStorageOssAppendWriter::open(
   } else if (is_opened_) {
     ret = OB_OSS_ERROR;
     OB_LOG(WARN, "already open, cannot open again", K(ret), K(uri));
-  } else if (OB_FAIL(init_with_storage_info(storage_info))) {
-    OB_LOG(WARN, "failed to init oss", K(ret), K(uri));
-  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_, object_, allocator_))) {
-    OB_LOG(WARN, "get bucket object error", K(uri), K(ret));
-  } else {
-    is_opened_ = true;
-    file_length_ = 0;
+  } else if (OB_FAIL(ObStorageOssWriter::open(uri, storage_info))) {
+    OB_LOG(WARN, "fail to open writer", K(ret), K(uri), KPC(storage_info));
   }
 
   return ret;
@@ -2128,9 +2142,16 @@ int ObStorageOssAppendWriter::pwrite(const char *buf, const int64_t size, const 
   } else if (NULL == buf || size <= 0 || offset < 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", KP(buf), K(size), K(ret), K(offset));
-  } else if (OB_FAIL(do_write(buf, size, offset, is_pwrite))) {
-    OB_LOG(WARN, "failed to do write", K(ret), KP(buf), K(size), K(offset));
+  } else if (!enable_worm_) {
+    if (OB_FAIL(do_write(buf, size, offset, is_pwrite))) {
+      OB_LOG(WARN, "failed to do write", K(ret), KP(buf), K(size), K(offset));
+    }
+  } else {
+    if (OB_FAIL(simulate_append_write_for_worm_(buf, size, offset))) {
+      OB_LOG(WARN, "failed to simulate append write for worm", K(ret), KP(buf), K(size), K(offset));
+    }
   }
+
   return ret;
 }
 
@@ -2138,9 +2159,52 @@ int ObStorageOssAppendWriter::close()
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
-  is_opened_ = false;
-  allocator_.clear();
-  reset();
+  if (OB_FAIL(ObStorageOssWriter::close())) {
+    OB_LOG(WARN, "fail to close writer", K(ret));
+  }
+  return ret;
+}
+
+int ObStorageOssAppendWriter::simulate_append_write_for_worm_(const char *buf, const int64_t size, const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+  char fragment_name[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss writer not opened", K(ret));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0 || offset < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "buf is NULL or size is invalid", KP(buf), K(size), K(ret));
+  } else {
+    // write the format file when writing the first fragment because the appender may open multiple times
+    if (offset == 0) {
+      if (OB_FAIL(construct_fragment_full_name(object_, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
+        fragment_name, sizeof(fragment_name)))) {
+        OB_LOG(WARN, "failed to construct mock append object format name", K(ret), K_(bucket), K_(object));
+      } else if (OB_FAIL(write_obj_(fragment_name, OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1,
+                    strlen(OB_ADAPTIVELY_APPENDABLE_FORMAT_CONTENT_V1)))) {
+          OB_LOG(WARN, "fail to write worm oss mock append object format file", K(ret), K(fragment_name));
+      }
+    }
+
+    if (FAILEDx(construct_fragment_full_name(object_, offset, offset + size, fragment_name,  sizeof(fragment_name)))) {
+      // fragment_name: /xxx/xxx/appendable_obj_name/start-end,
+      // the data range covered by this file is from start to end == [start, end), include start not include end
+      // start == offset, end == offset + size
+      // fragment length == size
+      OB_LOG(WARN, "failed to set fragment name for oss worm append writer",
+          K(ret), K_(bucket), K_(object), K(buf), K(size), K(offset));
+    } else if (OB_FAIL(write_obj_(fragment_name, buf, size))) {
+      OB_LOG(WARN, "fail to write worm oss mock append object", K(ret), K(fragment_name), K(size));
+    } else {
+      file_length_ = offset + size;
+    }
+
+    if (OB_SUCC(ret)) {
+      OB_LOG(DEBUG, "succeed to append a fragment into worm oss",
+          K_(bucket), K_(object), K(fragment_name), K(size), K(offset));
+    }
+  }
 
   return ret;
 }
@@ -2300,9 +2364,9 @@ int ObStorageOssWriter::open(
     OB_LOG(WARN, "uri is empty", K(ret), K(uri));
   } else if (is_opened_) {
     ret = OB_OSS_ERROR;
-    OB_LOG(WARN, "already open, cannot open again", K(ret));
+    OB_LOG(WARN, "already open, cannot open again", K(ret), K(uri));
   } else if (OB_FAIL(init_with_storage_info(storage_info))) {
-    OB_LOG(WARN, "failed to init oss", K(ret), K(uri));
+    OB_LOG(WARN, "failed to init oss", K(ret), K(uri), KPC(storage_info));
   } else if (OB_FAIL(get_bucket_object_name(uri, bucket_, object_, allocator_))) {
     OB_LOG(WARN, "get bucket object error", K(uri), K(ret));
   } else {
@@ -2336,24 +2400,44 @@ int ObStorageOssWriter::pwrite(const char *buf, const int64_t size, const int64_
 int ObStorageOssWriter::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_time = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "oss writer not opened", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "buf is NULL or size is invalid", KP(buf), K(size), K(ret));
+  } else if (OB_FAIL(write_obj_(object_.ptr(), buf, size))) {
+    OB_LOG(WARN, "fail to write obj", K(ret), K_(bucket), K_(object));
+  } else {
+    file_length_ = size;
+  }
+  return ret;
+}
+
+int ObStorageOssWriter::write_obj_(const char *obj_name, const char *buf, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!is_opened_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss writer not opened", K(ret));
+  } else if (OB_ISNULL(obj_name) || OB_ISNULL(buf) || OB_UNLIKELY(size < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "obj_name is NULL or buf is NULL or size is invalid", KP(obj_name), KP(buf), K(size), K(ret));
   } else {
     aos_string_t bucket;
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
-    aos_str_set(&object, object_.ptr());
+    aos_str_set(&object, obj_name);
     aos_table_t *headers = NULL;
     aos_table_t *resp_headers = NULL;
     aos_status_t *aos_ret = NULL;
     aos_list_t buffer;
     aos_buf_t *content = NULL;
     aos_list_init(&buffer);
+    const char *remote_md5 = nullptr;
+    int64_t remote_length = 0;
+    bool is_exist = false;
 
     if (OB_ISNULL(headers = aos_table_make(aos_pool_, AOS_TABLE_INIT_SIZE))) {
       ret = OB_OSS_ERROR;
@@ -2366,27 +2450,39 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
       OB_LOG(WARN, "fail to add content md5 when putting object", K(ret));
     } else {
       aos_list_add_tail(&content->node, &buffer);
-      if (OB_ISNULL(aos_ret = oss_put_object_from_buffer(oss_option_, &bucket, &object,
-                    &buffer, headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
+      if (OB_ISNULL(aos_ret = oss_put_object_from_buffer(oss_option_, &bucket, &object, &buffer, headers,
+                                          &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
-        OB_LOG(WARN, "fail to upload one object", K(bucket_), K(object_), K(ret));
+        OB_LOG(WARN, "fail to upload one object", K(bucket_), K(obj_name), K(ret));
         print_oss_info(resp_headers, aos_ret, ret);
-
+      }
+    }
+    if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && enable_worm_) {
+      // validate md5
+      const char *current_md5 = static_cast<const char *>(apr_table_get(headers, OSS_CONTENT_MD5));
+      if (OB_FAIL(get_oss_file_meta(bucket_, obj_name, is_exist, remote_md5, remote_length))) {
+        OB_LOG(WARN, "fail to get oss file meta", K(ret), K(bucket_), K(obj_name));
+      } else if (OB_UNLIKELY(!is_exist || OB_ISNULL(current_md5) || OB_ISNULL(remote_md5))) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "object does not exist, or current_md5/remote_md5 is null",
+                  K(ret), K(bucket_), K(obj_name), K(is_exist), KP(current_md5), KP(remote_md5));
+      } else if (size == remote_length && 0 == strcmp(current_md5, remote_md5)) {
+        ret = OB_SUCCESS;
       } else {
-        file_length_ = size;
+        ret = OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
+        OB_LOG(WARN, "fail to overwrite", KR(ret), K(bucket_), K(obj_name),
+                 K(size), K(remote_length), K(current_md5), K(remote_md5), K(is_exist));
       }
     }
     //print slow info
     bool is_slow = false;
-    print_access_storage_log("oss upload one object ", object_, start_time, size, &is_slow);
+    print_access_storage_log("oss upload one object ", obj_name, start_time, size, &is_slow);
     if (is_slow) {
       print_oss_info(resp_headers, aos_ret, ret);
     }
   }
   return ret; 
 }
-
-
 
 }//tools
 }//oceanbase

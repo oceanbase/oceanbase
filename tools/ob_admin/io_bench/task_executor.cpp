@@ -825,6 +825,13 @@ int DelTaskExecutor::execute()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "DelTaskExecutor not init", K(ret), K_(base_uri));
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage_info_ is null", K(ret), KP(storage_info_));
+  } else if (OB_UNLIKELY(storage_info_->is_enable_worm()
+                && ObStorageDeleteMode::STORAGE_DELETE_MODE == storage_info_->get_delete_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "worm bucket can not do deleting opeartion", K(ret), KPC(storage_info_));
   } else if (OB_FAIL(prepare_(object_id))) {
     OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
   } else {

@@ -23337,6 +23337,30 @@ static const _error _error_OB_TMP_FILE_EXCEED_DISK_QUOTA = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9135, tmp file exceeds disk quota",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9135, tmp file exceeds disk quota"
 };
+static const _error _error_OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM = {
+      .error_name            = "OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "the object is locked by worm",
+      .str_user_error        = "the object is locked by worm",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9140, the object is locked by worm",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9140, the object is locked by worm"
+};
+static const _error _error_OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH = {
+      .error_name            = "OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "the object can not be overwritten with different content",
+      .str_user_error        = "the object can not be overwritten with different content",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9142, the object can not be overwritten with different content",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9142, the object can not be overwritten with different content"
+};
 static const _error _error_OB_CANNOT_ACCESS_BACKUP_SET = {
       .error_name            = "OB_CANNOT_ACCESS_BACKUP_SET",
       .error_cause           = "Internal Error",
@@ -29427,6 +29451,8 @@ struct ObStrErrorInit
     _errors[-OB_OBJECT_STORAGE_CHECKSUM_ERROR] = &_error_OB_OBJECT_STORAGE_CHECKSUM_ERROR;
     _errors[-OB_BACKUP_ZONE_IDC_REGION_INVALID] = &_error_OB_BACKUP_ZONE_IDC_REGION_INVALID;
     _errors[-OB_TMP_FILE_EXCEED_DISK_QUOTA] = &_error_OB_TMP_FILE_EXCEED_DISK_QUOTA;
+    _errors[-OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM] = &_error_OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM;
+    _errors[-OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH] = &_error_OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
     _errors[-OB_CANNOT_ACCESS_BACKUP_SET] = &_error_OB_CANNOT_ACCESS_BACKUP_SET;
     _errors[-OB_ERR_RESIZE_FILE_TO_SMALLER] = &_error_OB_ERR_RESIZE_FILE_TO_SMALLER;
     _errors[-OB_MARK_BLOCK_INFO_TIMEOUT] = &_error_OB_MARK_BLOCK_INFO_TIMEOUT;

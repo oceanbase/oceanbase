@@ -966,6 +966,8 @@ public:
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
+  bool is_assume_role_mode() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_assume_role_mode(); }
+  bool is_enable_worm() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_enable_worm(); }
   bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;

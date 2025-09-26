@@ -115,6 +115,15 @@ bool is_object_storage_type(const ObStorageType &type)
 { return ObStorageType::OB_STORAGE_FILE != type
       && ObStorageType::OB_STORAGE_MAX_TYPE != type;
 }
+
+bool is_adaptive_append_mode(const ObObjectStorageInfo &storage_info)
+{
+  const ObStorageType type = storage_info.get_type();
+  const bool enable_worm = storage_info.is_enable_worm();
+  return ObStorageType::OB_STORAGE_S3 == type
+      || (ObStorageType::OB_STORAGE_OSS == type && enable_worm);
+}
+
 bool is_io_error(const int result)
 {
   return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result || OB_OBJECT_STORAGE_IO_ERROR == result;
@@ -456,7 +465,7 @@ int ObStorageUtil::detect_storage_obj_meta(
     } else {
       // if need_fragment_meta is FALSE, just check format_meta exist or not
       char format_meta_uri[OB_MAX_URI_LENGTH] = { 0 };
-      if (OB_FAIL(construct_fragment_full_name(uri, OB_S3_APPENDABLE_FORMAT_META,
+      if (OB_FAIL(construct_fragment_full_name(uri, OB_ADAPTIVELY_APPENDABLE_FORMAT_META,
                                                format_meta_uri, sizeof(format_meta_uri)))) {
         OB_LOG(WARN, "fail to construct s3 format_meta name", K(ret), K(uri));
       } else if (OB_FAIL(util_->head_object_meta(format_meta_uri, obj_meta))) {
@@ -489,7 +498,7 @@ int ObStorageUtil::read_seal_meta_if_needed(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret));
   } else if (FALSE_IT(memset(seal_meta_uri, 0, OB_MAX_URI_LENGTH))) {
-  } else if (OB_FAIL(construct_fragment_full_name(uri, OB_S3_APPENDABLE_SEAL_META,
+  } else if (OB_FAIL(construct_fragment_full_name(uri, OB_ADAPTIVELY_APPENDABLE_SEAL_META,
                                                   seal_meta_uri, OB_MAX_URI_LENGTH))) {
     OB_LOG(WARN, "fail to construct s3 seal_meta name", K(ret), K(uri));
   } else {
@@ -819,7 +828,7 @@ int ObStorageUtil::handle_listed_objs(
     bool already_exist_fragment = (strlen(list_ctx->cur_appendable_full_obj_path_) > 0);
     for (int64_t i = 0; OB_SUCC(ret) && (i < list_ctx->rsp_num_); ++i) {
       ObString cur_obj_path(strlen(list_ctx->name_arr_[i]), list_ctx->name_arr_[i]);
-      char *contain_idx_ptr = strstr(cur_obj_path.ptr(), OB_S3_APPENDABLE_FRAGMENT_PREFIX);
+      char *contain_idx_ptr = strstr(cur_obj_path.ptr(), OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX);
       bool is_fragment_obj = (nullptr != contain_idx_ptr);
       if (is_fragment_obj) {
         const int64_t appendable_full_path_len = (contain_idx_ptr - cur_obj_path.ptr());
@@ -2142,7 +2151,10 @@ int64_t ObStorageAppender::get_length()
 
   if (OB_ISNULL(appender_)) {
     STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
-  } else if (OB_STORAGE_S3 != type_) {
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage info is null", K(ret), KPC_(storage_info));
+  } else if (!is_adaptive_append_mode(*storage_info_)) {
     ret_int = appender_->get_length();
   } else {
     int ret = OB_SUCCESS;
@@ -2196,7 +2208,10 @@ int ObStorageAppender::seal_for_adaptive()
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_STORAGE_S3 != type_) {
+  } else if (OB_ISNULL(storage_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "storage info is null", K(ret), KPC_(storage_info));
+  } else if (!is_adaptive_append_mode(*storage_info_)) {
   } else {
     char *buf = NULL;
     char seal_meta_uri[OB_MAX_URI_LENGTH] = { 0 };
@@ -2219,7 +2234,7 @@ int ObStorageAppender::seal_for_adaptive()
     } else if (OB_FAIL(appendable_obj_meta.serialize(buf, serialize_size, pos))) {
       OB_LOG(WARN, "failed to serialize s3 appendable object meta",
           K(ret), K(serialize_size), K_(uri), K(appendable_obj_meta));
-    } else if (OB_FAIL(construct_fragment_full_name(uri_, OB_S3_APPENDABLE_SEAL_META,
+    } else if (OB_FAIL(construct_fragment_full_name(uri_, OB_ADAPTIVELY_APPENDABLE_SEAL_META,
                                                     seal_meta_uri, sizeof(seal_meta_uri)))) {
       OB_LOG(WARN, "failed to construct s3 appendable object name for writing seal meta file",
           K(ret), K_(uri), K(appendable_obj_meta));
@@ -2233,6 +2248,13 @@ int ObStorageAppender::seal_for_adaptive()
           K_(uri),  K(seal_meta_uri), KP(buf), K(pos), K(appendable_obj_meta));
     }
     util.close();
+    if (OB_FAIL(ret)) {
+      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret && storage_info_->is_enable_worm()) {
+        ret = OB_SUCCESS;
+        OB_LOG(INFO, "seal meta file exist, can not seal file again, ignore the error code",
+                        KR(ret), K(seal_meta_uri), KPC_(storage_info));
+      }
+    }
   }
 
   return ret;
