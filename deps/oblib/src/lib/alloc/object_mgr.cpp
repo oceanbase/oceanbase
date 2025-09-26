@@ -288,8 +288,7 @@ int64_t ObjectMgr::sync_wash(int64_t wash_size)
     auto sub_mgr = ATOMIC_LOAD(&sub_mgrs_[idx]);
     if (OB_ISNULL(sub_mgr)) {
       // do nothing
-    } else {
-      sub_mgr->lock();
+    } else if (sub_mgr->trylock()) {
       washed_size += sub_mgr->sync_wash(wash_size - washed_size);
       sub_mgr->unlock();
     }
