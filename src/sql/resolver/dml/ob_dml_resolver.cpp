@@ -3051,6 +3051,8 @@ bool ObDMLResolver::check_expr_has_colref(ObRawExpr *expr)
   if (OB_ISNULL(expr)) {
   } else if (expr->is_column_ref_expr()) {
     has_colref = true;
+  } else if (expr->is_exec_param_expr()) {
+    has_colref = check_expr_has_colref(static_cast<ObExecParamRawExpr *>(expr)->get_ref_expr());
   } else {
     for (int64_t i = 0; !has_colref && i < expr->get_param_count(); ++i) {
       has_colref = check_expr_has_colref(expr->get_param_expr(i));
