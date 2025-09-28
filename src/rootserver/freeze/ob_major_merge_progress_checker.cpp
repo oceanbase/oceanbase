@@ -75,19 +75,26 @@ int ObMajorMergeProgressChecker::init(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ALWAYS_REBUILD_TABLET_STATUS_MAP);
 int ObMajorMergeProgressChecker::rebuild_tablet_status_map()
 {
   int ret = OB_SUCCESS;
   int64_t recommend_map_bucked_cnt = 0;
   int64_t tablet_cnt = MAX(table_ids_.count(), tablet_status_map_.size());
-  const bool need_rebuild_tablet_map = ObScheduleBatchSizeMgr::need_rebuild_map(
+  bool need_rebuild_tablet_map = ObScheduleBatchSizeMgr::need_rebuild_map(
     TABLET_ID_BATCH_CHECK_SIZE, tablet_cnt, tablet_status_map_.bucket_count(), recommend_map_bucked_cnt);
+#ifdef ERRSIM
+  if (ERRSIM_ALWAYS_REBUILD_TABLET_STATUS_MAP) {
+    need_rebuild_tablet_map = true;
+    LOG_INFO("ERRSIM_ALWAYS_REBUILD_TABLET_STATUS_MAP, rebuild tablet status map", K_(tenant_id));
+  }
+#endif
   if (need_rebuild_tablet_map) {
     tablet_status_map_.destroy();
     if (OB_FAIL(tablet_status_map_.create(recommend_map_bucked_cnt, "RSCompStMap", "RSCompStMap", tenant_id_))) {
-      LOG_WARN("fail to create tablet status map", KR(ret), K_(tenant_id), K(recommend_map_bucked_cnt));
+      LOG_WARN("fail to create tablet status map", KR(ret), K_(tenant_id), K(recommend_map_bucked_cnt), K(table_ids_.count()), K(tablet_cnt));
     } else {
-      LOG_INFO("success to rebuild tablet status map", KR(ret), K(recommend_map_bucked_cnt));
+      LOG_INFO("success to rebuild tablet status map", KR(ret), K_(tenant_id), K(recommend_map_bucked_cnt), K(table_ids_.count()), K(tablet_cnt));
     }
   }
   return ret;
