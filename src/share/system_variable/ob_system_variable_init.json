@@ -11843,5 +11843,44 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_join_order_enum_threshold" : {
+    "id": 10756,
+    "name": "_join_order_enum_threshold",
+    "default_value": 10,
+    "base_value": 10,
+    "data_type": "uint",
+    "info": "Control the algorithm selection for join order enumeration in query optimization",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.5.1",
+    "info_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "_optimizer_max_permutations" : {
+    "id": 10757,
+    "name": "_optimizer_max_permutations",
+    "default_value": 2000,
+    "base_value": 2000,
+    "data_type": "uint",
+    "info": "Optimizer maximum join permutations per enumeration",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.5.1",
+    "info_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "_idp_step_reduction_threshold" : {
+    "id": 10758,
+    "name": "_idp_step_reduction_threshold",
+    "default_value": 5000,
+    "base_value": 5000,
+    "data_type": "uint",
+    "info": "When the total number of enumerated join paths exceeds this threshold, the IDP algorithm will automatically reduce its step size to limit the enumeration space and improve optimization efficiency.",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.5.1",
+    "info_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }
