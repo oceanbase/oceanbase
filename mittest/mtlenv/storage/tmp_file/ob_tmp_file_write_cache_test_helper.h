@@ -252,6 +252,14 @@ void TestWriteCacheSingleThread::run1()
     read_data(buffer_size_ - read_offset_);
   }
   current_blk_pages_.reset(); // release page handle
+
+  // release page ref in blocks
+  for (int64_t i = 0; i < block_idxs_.size(); ++i) {
+    int64_t block_index = block_idxs_[i];
+    ASSERT_EQ(OB_SUCCESS, tf_block_mgr_->release_page(block_index, 0, ObTmpFileGlobal::BLOCK_PAGE_NUMS));
+  }
+
+  tf_block_mgr_->print_blocks();
   LOG_INFO("TestWriteCacheSingleThread done", K(fd_), K(write_offset_), K(read_offset_));
 }
 

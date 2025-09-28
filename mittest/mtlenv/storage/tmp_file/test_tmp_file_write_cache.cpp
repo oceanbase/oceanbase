@@ -22,6 +22,7 @@
 #include "mtlenv/mock_tenant_module_env.h"
 
 #define WRITE_CACHE_INSTANCE MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_write_cache()
+#define TMP_FILE_BLOCK_MANAGER_INSTANCE MTL(ObTenantTmpFileManager *)->get_sn_file_manager().get_tmp_file_block_manager()
 
 namespace oceanbase
 {
@@ -261,6 +262,62 @@ TEST_F(TestWriteCache, test_auto_shrink)
   delete [] buffer;
   EXPECT_NO_FATAL_FAILURE(check_resource_release());
   LOG_INFO("test_auto_shrink end");
+}
+
+TEST_F(TestWriteCache, test_shrink_abort)
+{
+  LOG_INFO("test_shrink_abort begin");
+  const int64_t WRITE_SIZE = BIG_MEMORY_LIMIT * 0.9;
+  char *buffer = generate_data(WRITE_SIZE);
+  ObTmpFileWriteCache &write_cache = WRITE_CACHE_INSTANCE;
+  write_cache.default_memory_limit_ = BIG_MEMORY_LIMIT;
+  {
+    ObTenantEnv::set_tenant(MTL_CTX());
+    TestWriteCacheSingleThread test1;
+    test1.init(MTL_CTX(), ATOMIC_FAA(&global_fd_generator_, 1), buffer, WRITE_SIZE);
+    test1.start();
+    test1.wait();
+    ASSERT_EQ(BIG_MEMORY_LIMIT, write_cache.get_current_capacity_());
+  }
+
+  write_cache.stop(); // manually control write cache thread's tick
+  write_cache.wait();
+
+  // 1. abort in SHRINKING_SWAP
+  write_cache.default_memory_limit_ = SMALL_MEMORY_LIMIT;
+  write_cache.try_shrink_();
+  ASSERT_EQ(WriteCacheShrinkContext::SHRINKING_SWAP, write_cache.shrink_ctx_.shrink_state_);
+  ASSERT_EQ(true, write_cache.is_flush_all_);
+  ASSERT_EQ(true, write_cache.shrink_ctx_.is_valid());
+
+  //  increase memory limit to abort shirnking
+  write_cache.default_memory_limit_ = BIG_MEMORY_LIMIT;
+  write_cache.try_shrink_();
+  ASSERT_EQ(WriteCacheShrinkContext::INVALID, write_cache.shrink_ctx_.shrink_state_);
+  ASSERT_EQ(false, write_cache.is_flush_all_);
+  ASSERT_EQ(false, write_cache.shrink_ctx_.is_valid());
+
+  // 2. abort in SHRINKING_RELEASE_BLOCKS
+  write_cache.default_memory_limit_ = SMALL_MEMORY_LIMIT;
+  write_cache.try_shrink_();
+  // forcibly set max_allow_alloc_page_id_ to lower_page_id_ - 1 to advance to SHRINKING_RELEASE_BLOCKS
+  write_cache.shrink_ctx_.max_allow_alloc_page_id_ = write_cache.shrink_ctx_.lower_page_id_ - 1;
+  write_cache.try_shrink_(); // advance to SHRINKING_RELEASE_BLOCKS
+  EXPECT_EQ(WriteCacheShrinkContext::SHRINKING_RELEASE_BLOCKS, write_cache.shrink_ctx_.shrink_state_);
+  ASSERT_EQ(true, write_cache.is_flush_all_);
+  ASSERT_EQ(true, write_cache.shrink_ctx_.is_valid());
+  LOG_INFO("abort in SHRINKING_RELEASE_BLOCKS", K(write_cache.shrink_ctx_));
+  write_cache.print_();
+
+  // increase memory limit to abort shirnking
+  write_cache.default_memory_limit_ = BIG_MEMORY_LIMIT;
+  write_cache.try_shrink_();
+  ASSERT_EQ(WriteCacheShrinkContext::INVALID, write_cache.shrink_ctx_.shrink_state_);
+  ASSERT_EQ(false, write_cache.is_flush_all_);
+  ASSERT_EQ(false, write_cache.shrink_ctx_.is_valid());
+
+  write_cache.start(); // restart write cache thread
+  LOG_INFO("test_shrink_abort end");
 }
 
 } // namespace oceanbase
