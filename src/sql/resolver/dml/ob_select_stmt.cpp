@@ -145,7 +145,8 @@ bool ObSelectStmt::has_concat_agg() const
             T_FUN_ORA_JSON_ARRAYAGG == aggr->get_expr_type() ||
             T_FUN_JSON_OBJECTAGG == aggr->get_expr_type() ||
             T_FUN_ORA_JSON_OBJECTAGG == aggr->get_expr_type() ||
-            T_FUN_ORA_XMLAGG == aggr->get_expr_type();
+            T_FUN_ORA_XMLAGG == aggr->get_expr_type() ||
+            T_FUNC_SYS_ARRAY_AGG == aggr->get_expr_type();
     }
   }
   return has;
