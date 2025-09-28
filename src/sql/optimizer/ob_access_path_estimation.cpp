@@ -1610,6 +1610,8 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
         }
       }
     }
+    OPT_TRACE_TIME_USED;
+    OPT_TRACE_MEM_USED;
     OPT_TRACE_END_SECTION;
   }
   return ret;
@@ -2578,19 +2580,19 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
       int64_t start_time = ObTimeUtility::current_time();
       bool throw_ds_error = false;
       if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error))) {
-        bool tp_force_throw_error = EN_THROW_DS_ERROR;
-        if (OB_TIMEOUT == (OB_E(EN_THROW_DS_ERROR) OB_SUCCESS) &&
-            OB_TIMEOUT == ret) {
+        bool tp_force_throw_error = false;
+        if (OB_TIMEOUT == ret) {
           tp_force_throw_error = false;
+          if (OB_TIMEOUT != EN_THROW_DS_ERROR) {
+            LOG_USER_WARN(OB_TIMEOUT, 0L);
+          }
+        } else {
+          tp_force_throw_error = EN_THROW_DS_ERROR;
         }
         if (tp_force_throw_error) {
           LOG_WARN("failed to dynamic sampling", K(ret), K(start_time),
                    K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
                    K(ctx.get_session_info()->get_current_query_string()));
-          if (OB_TIMEOUT == ret) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_USER_ERROR(OB_ERR_UNEXPECTED, "dynamic sampling timeout");
-          }
         } else if (!throw_ds_error) {
           LOG_WARN("failed to estimate table rowcount caused by some reason, please check!!!", K(ret),
                   K(start_time), K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
