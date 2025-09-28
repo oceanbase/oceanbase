@@ -48,7 +48,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(snapshot_);
   }
-  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
+  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_)) {
     OB_UNIS_ENCODE(session->get_effective_tenant_id());
     OB_UNIS_ENCODE(*session);
   }
@@ -137,7 +137,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(snapshot_);
   }
-  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
+  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_)) {
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObDesExecContext *des_exec_ctx = static_cast<ObDesExecContext*>(exec_ctx_);
     OB_UNIS_DECODE(tenant_id);
@@ -265,7 +265,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
     OB_UNIS_ADD_LEN(*trans_desc_);
   }
   OB_UNIS_ADD_LEN(snapshot_);
-  if (need_calc_expr_ || need_calc_udf_) {
+  if (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_) {
     OB_UNIS_ADD_LEN(session->get_effective_tenant_id());
     OB_UNIS_ADD_LEN(*session);
   }
