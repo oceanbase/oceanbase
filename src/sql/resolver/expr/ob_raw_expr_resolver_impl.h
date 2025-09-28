@@ -227,6 +227,7 @@ private:
   int process_array_map_func_node(const ParseNode *node, ObRawExpr *&expr);
   int check_replace_lambda_params_node(const ParseNode *params_node, ParseNode *func_node);
   int process_lambda_var_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_split_node(const ParseNode *node, ObRawExpr *&expr);
   int extract_var_exprs(ObRawExpr *expr, ObIArray<ObVarRawExpr *> &var_exprs);
   int check_lambda_params_duplicated(const ParseNode *params_node);
 private:

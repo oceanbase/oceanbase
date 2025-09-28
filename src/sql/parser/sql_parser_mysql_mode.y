@@ -3580,6 +3580,14 @@ MOD '(' expr ',' expr ')'
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_CARDINALITY_AGG, 1, $3);
   $$->reserved_ = 0;
 }
+| SPLIT '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_STRING_TO_ARRAY, 2, $3, $5);
+}
+| CONTAINS '(' expr_list ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $5, $3);
+}
 ;
 
 lambda_expr_params:
@@ -6407,6 +6415,14 @@ BINARY opt_string_length_i_v2
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_INT;
   $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
+}
+| INTEGER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_INT32;
+  $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
 | UNSIGNED opt_integer
