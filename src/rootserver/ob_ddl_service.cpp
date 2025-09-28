@@ -17406,6 +17406,10 @@ int ObDDLService::create_hidden_table(
   } else if (OB_ISNULL(orig_database_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig_database_schema is nullptr", K(ret));
+  } else if (OB_UNLIKELY(orig_table_schema->is_in_recyclebin() || orig_database_schema->is_in_recyclebin())) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("orig table is in recyclebin", KR(ret), K(orig_table_schema->is_in_recyclebin()),
+        K(orig_database_schema->is_in_recyclebin()));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
