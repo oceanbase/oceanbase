@@ -33,9 +33,9 @@ void opendal_bytes_init(opendal_bytes &bytes, const char *buf, const int64_t buf
 class ObDalWrapper
 {
 public:
-  static opendal_error *obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s) 
+  static opendal_error *obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s, const int64_t connect_timeout_s) 
   {
-    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s); 
+    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s); 
   }
   static void obdal_fin_env()
   {
@@ -382,10 +382,10 @@ public:
     }
   }
 public:
-  static int obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s)
+  static int obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s, const int64_t connect_timeout_s)
   {
     int ret = OB_SUCCESS;
-    opendal_error *error = ObDalWrapper::obdal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s);
+    opendal_error *error = ObDalWrapper::obdal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s);
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
@@ -880,7 +880,8 @@ int ObDalAccessor::init_env(
     const int32_t log_level,
     const int64_t thread_cnt, 
     const int64_t pool_max_idle_per_host, 
-    const int64_t pool_max_idle_time_s)
+    const int64_t pool_max_idle_time_s,
+    const int64_t connect_timeout_s)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(malloc) || OB_ISNULL(free) || OB_ISNULL(log_handler) 
@@ -888,7 +889,7 @@ int ObDalAccessor::init_env(
       || OB_UNLIKELY(thread_cnt <= 0 || pool_max_idle_per_host <= 0 || pool_max_idle_time_s <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
-  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s))) {
+  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s))) {
     OB_LOG(WARN, "failed init obdal env", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s)); 
   }
   return ret;

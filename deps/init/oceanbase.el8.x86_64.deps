@@ -10,7 +10,7 @@ repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/x86_64/
 
 
 [deps]
-obdal-0.2.2-192025061215.el8.x86_64.rpm target=community
+obdal-0.2.2-302025082510.el8.x86_64.rpm target=community
 devdeps-gtest-1.8.0-132022101316.el8.x86_64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el8.x86_64.rpm
 devdeps-libcurl-static-8.12.1-132025040210.el8.x86_64.rpm

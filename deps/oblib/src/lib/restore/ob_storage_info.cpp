@@ -375,17 +375,21 @@ int ObObjectStorageInfo::validate_arguments() const
       LOG_WARN("backup device is not nfs, endpoint do not allow to be empty", K(ret),
           K_(device_type), K_(endpoint));
     } else {
+      int64_t access_id_len = STRLEN(access_id_);
+      int64_t access_key_len = STRLEN(access_key_);
       if (is_assume_role_mode_) {
-        if (OB_UNLIKELY(0 != strlen(access_id_) || 0 != strlen(access_key_))) {
+        if (OB_UNLIKELY(0 != access_id_len || 0 != access_key_len)) {
           ret = OB_INVALID_BACKUP_DEST;
           LOG_WARN("ak/sk should not given in assume_role mode", 
-              K(ret), K_(access_id), KP_(access_key), K(strlen(access_id_)), K(strlen(access_key_)));
+              K(ret), K_(access_id), KP_(access_key), K(access_id_len), K(access_key_len));
         }
       } else {
-        if (OB_UNLIKELY(0 == strlen(access_id_) || 0 == strlen(access_key_))) {
+        if (OB_UNLIKELY(0 == access_id_len || 0 == access_key_len 
+                        || access_id_len == STRLEN(ACCESS_ID)
+                        || access_key_len == STRLEN(ACCESS_KEY))) {
           ret = OB_INVALID_BACKUP_DEST;
           LOG_WARN("ak/sk must be given in in ak/sk mode", K(ret), K_(access_id), KP_(access_key),
-              K(strlen(access_id_)), K(strlen(access_key_)));
+              K(access_id_len), K(access_key_len));
         }
       }
     }
@@ -726,7 +730,7 @@ int ObObjectStorageInfo::set_storage_info_field_(const char *info, char *field, 
   } else {
     const int64_t info_len = strlen(info);
     int64_t pos = strlen(field);
-    if (info_len >= length) {
+    if (OB_UNLIKELY(info_len >= length)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("info is too long ", K(ret), K(info_len), K(length));
     } else if (pos > 0 && OB_FAIL(databuff_printf(field, length, pos, "&"))) {

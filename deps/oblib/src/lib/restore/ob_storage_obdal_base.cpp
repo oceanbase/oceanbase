@@ -183,7 +183,8 @@ int ObDalEnvIniter::global_init()
                                              OB_LOGGER.get_level(),
                                              get_obdal_thread_cnt(),
                                              POOL_MAX_IDLE_PER_HOST,
-                                             POOL_MAX_IDLE_TIME_S))) {
+                                             POOL_MAX_IDLE_TIME_S,
+                                             CONNECT_TIMEOUT_S))) {
     OB_LOG(WARN, "failed init obdal env", K(ret));
   } else {
     signal(SIGPIPE, SIG_IGN);

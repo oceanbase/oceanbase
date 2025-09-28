@@ -25,7 +25,7 @@ namespace common
 class ObDalAccessor
 {
 public:
-  static int init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s);
+  static int init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s, const int64_t connect_timeout_s);
   static void fin_env();
 
 public:
