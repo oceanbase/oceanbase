@@ -5637,7 +5637,8 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
           || T_FUN_ORA_JSON_ARRAYAGG == aggr_info.get_expr_type()
           || T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type()
           || T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type()
-          || T_FUN_ORA_XMLAGG == aggr_info.get_expr_type()) {
+          || T_FUN_ORA_XMLAGG == aggr_info.get_expr_type()
+          || T_FUNC_SYS_ARRAY_AGG == aggr_info.get_expr_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this aggr func is not supported in hash group by", K(ret), K(aggr_info));
       }
