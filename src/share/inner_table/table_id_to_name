@@ -3055,6 +3055,7 @@
 # 28272: GV$OB_SQL_CCL_STATUS
 # 28273: V$OB_SQL_CCL_STATUS
 # 28274: V$OB_DYNAMIC_PARTITION_TABLES
+# 28279: DBA_OB_PL_OBJ_CACHE_STATUS
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

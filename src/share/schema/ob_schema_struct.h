@@ -1544,7 +1544,7 @@ struct ObSchemaObjVersion
     return get_schema_type(object_type_);
   }
 
-  static  ObSchemaType get_schema_type(ObDependencyTableType object_type)
+  static ObSchemaType get_schema_type(ObDependencyTableType object_type)
   {
     ObSchemaType ret_type = OB_MAX_SCHEMA;
     switch (object_type) {
@@ -1585,6 +1585,46 @@ struct ObSchemaObjVersion
     return ret_type;
   }
 
+  static ObDependencyTableType get_depemdency_table_type(ObObjectType object_type)
+  {
+    ObDependencyTableType ret_type = DEPENDENCY_INVALID;
+    switch (object_type) {
+      case ObObjectType::TABLE:
+        ret_type = DEPENDENCY_TABLE;
+        break;
+      case ObObjectType::VIEW:
+        ret_type = DEPENDENCY_VIEW;
+        break;
+      case ObObjectType::PROCEDURE:
+        ret_type = DEPENDENCY_PROCEDURE;
+        break;
+      case ObObjectType::FUNCTION:
+        ret_type = DEPENDENCY_FUNCTION;
+        break;
+      case ObObjectType::PACKAGE:
+        ret_type = DEPENDENCY_PACKAGE;
+        break;
+      case ObObjectType::PACKAGE_BODY:
+        ret_type = DEPENDENCY_PACKAGE_BODY;
+        break;
+      case ObObjectType::SEQUENCE:
+        ret_type = DEPENDENCY_SEQUENCE;
+        break;
+      case ObObjectType::TYPE:
+        ret_type = DEPENDENCY_TYPE;
+        break;
+      case ObObjectType::TYPE_BODY:
+        ret_type = DEPENDENCY_TYPE_BODY;
+        break;
+      case ObObjectType::SYNONYM:
+        ret_type = DEPENDENCY_SYNONYM;
+        break;
+      default:
+        break;
+    }
+    return ret_type;
+  }
+
   static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
@@ -1612,6 +1652,9 @@ struct ObSchemaObjVersion
         break;
       case DEPENDENCY_TYPE:
         ret_type = ObObjectType::TYPE;
+        break;
+      case DEPENDENCY_TYPE_BODY:
+        ret_type = ObObjectType::TYPE_BODY;
         break;
       case DEPENDENCY_SYNONYM:
         ret_type = ObObjectType::SYNONYM;

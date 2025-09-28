@@ -138,7 +138,8 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
   int resolve_type_body(const ParseNode *body_node,
                         obrpc::ObCreateUDTArg &crt_udt_arg,
-                        const share::schema::ObUDTTypeInfo *udt_info);
+                        const share::schema::ObUDTTypeInfo *udt_info,
+                        bool is_invoker_right);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUDTBodyResolver);

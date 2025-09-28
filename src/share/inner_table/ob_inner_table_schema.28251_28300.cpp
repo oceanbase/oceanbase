@@ -790,6 +790,57 @@ int ObInnerTableSchema::v_ob_dynamic_partition_tables_ora_schema(ObTableSchema &
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_pl_obj_cache_status_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_PL_OBJ_CACHE_STATUS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_PL_OBJ_CACHE_STATUS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     OBJECT_NAME,     OBJECT_ID,     OBJECT_TYPE,     STATUS,     COMPILE_DB_ID,     CASE       WHEN IS_INVOKER_RIGHT = 'TRUE' THEN         CASE           WHEN PL_CACHE_STATUS = 'VALID PL CACHE OBJ' THEN 'VALID DISK CACHE OBJ'           ELSE 'UNKNOWN'         END       ELSE         CASE           WHEN COMPILE_DB_ID IS NULL THEN 'NOT IN DISK CACHE'           ELSE oceanbase.DBMS_UTILITY.CHECK_DISK_CACHE_OBJ_EXPIRED(OBJECT_ID, MERGE_VERSION)         END     END AS DISK_CACHE_STATUS,     PL_CACHE_STATUS   FROM   (   SELECT     ALLT.OBJECT_NAME AS OBJECT_NAME,     ALLT.OBJECT_ID AS OBJECT_ID,     ALLT.OBJECT_TYPE AS OBJECT_TYPE,     ALLT.STATUS AS STATUS,     ALLT.COMPILE_DB_ID AS COMPILE_DB_ID,     ALLT.IS_INVOKER_RIGHT AS IS_INVOKER_RIGHT,     ALLT.MERGE_VERSION AS MERGE_VERSION,     DECODE(ALLT.COMPILE_DB_ID,             NULL, 'NOT IN PL CACHE',             oceanbase.DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,               ALLT.COMPILE_DB_ID)) AS PL_CACHE_STATUS     FROM     (       SELECT             PACKAGE_NAME AS OBJECT_NAME,             PACKAGE_ID AS OBJECT_ID,             'PACKAGE BODY' AS OBJECT_TYPE,             'VALID' AS STATUS,             D.COMPILE_DB_ID AS COMPILE_DB_ID,             D.MERGE_VERSION AS MERGE_VERSION,             CASE WHEN BITAND(PS.FLAG, 4) = 4               THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT       FROM SYS.ALL_VIRTUAL_PACKAGE_SYS_AGENT PS       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D       ON D.KEY_ID = PS.PACKAGE_ID       WHERE PS.TYPE = 2        UNION ALL        SELECT             P.PACKAGE_NAME AS OBJECT_NAME,             P.PACKAGE_ID OBJECT_ID,             'PACKAGE BODY' AS OBJECT_TYPE,             CASE WHEN EXISTS                         (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E                         WHERE P.TENANT_ID = E.TENANT_ID AND P.PACKAGE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 3 OR E.OBJ_TYPE = 5))                       THEN 'INVALID'                 WHEN TYPE = 2 AND EXISTS                         (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT EB                         WHERE OBJ_ID IN                                   (SELECT PACKAGE_ID FROM SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT PB                                   WHERE PB.PACKAGE_NAME = P.PACKAGE_NAME AND PB.DATABASE_ID = P.DATABASE_ID AND PB.TENANT_ID = P.TENANT_ID AND TYPE = 1)                         AND EB.OBJ_TYPE = 3)                     THEN 'INVALID'                 ELSE 'VALID' END AS STATUS,             D.COMPILE_DB_ID AS COMPILE_DB_ID,             D.MERGE_VERSION AS MERGE_VERSION,             CASE WHEN BITAND(P.FLAG, 4) = 4               THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT       FROM SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT P       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D       ON D.KEY_ID = P.PACKAGE_ID       WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID()       AND P.TYPE = 2        UNION ALL        SELECT             R.ROUTINE_NAME AS OBJECT_NAME,             R.ROUTINE_ID OBJECT_ID,             CASE WHEN ROUTINE_TYPE = 1 THEN 'PROCEDURE'                 WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'                 ELSE NULL END AS OBJECT_TYPE,             CASE WHEN EXISTS                         (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E                         WHERE R.TENANT_ID = E.TENANT_ID AND R.ROUTINE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 9 OR E.OBJ_TYPE = 12))                       THEN 'INVALID'                 ELSE 'VALID' END AS STATUS,             D.COMPILE_DB_ID AS COMPILE_DB_ID,             D.MERGE_VERSION AS MERGE_VERSION,             CASE WHEN BITAND(R.FLAG, 16) = 16               THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT       FROM SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT R       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D       ON D.KEY_ID = R.ROUTINE_ID       WHERE (ROUTINE_TYPE = 1 OR ROUTINE_TYPE = 2) AND R.TENANT_ID = EFFECTIVE_TENANT_ID()        UNION ALL        SELECT             OBJECT_NAME,             OBJECT_TYPE_ID AS OBJECT_ID,             'TYPE BODY' AS OBJECT_TYPE,             CASE WHEN EXISTS                         (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E                         WHERE TY.TENANT_ID = E.TENANT_ID AND TY.OBJECT_TYPE_ID = E.OBJ_ID AND E.OBJ_TYPE = 6)                       THEN 'INVALID'                 ELSE 'VALID' END AS STATUS,             D.COMPILE_DB_ID AS COMPILE_DB_ID,             D.MERGE_VERSION AS MERGE_VERSION,             CASE WHEN BITAND(TY.FLAG, 4) = 4               THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT       FROM SYS.ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT TY       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D       ON BITAND(D.KEY_ID, -2305843009213693953) = TY.COLL_TYPE       WHERE TY.TENANT_ID = EFFECTIVE_TENANT_ID() and TY.TYPE = 2        UNION ALL        SELECT           T.TRIGGER_NAME AS OBJECT_NAME,           T.TRIGGER_ID AS OBJECT_ID,           'TRIGGER' AS OBJECT_TYPE,           CASE WHEN EXISTS                       (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E                       WHERE T.TENANT_ID = E.TENANT_ID AND T.TRIGGER_ID = E.OBJ_ID AND (E.OBJ_TYPE = 7))                     THEN 'INVALID'                 ELSE 'VALID' END AS STATUS,           D.COMPILE_DB_ID AS COMPILE_DB_ID,           D.MERGE_VERSION AS MERGE_VERSION,           CASE WHEN BITAND(T.package_flag, 4) = 4             THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT       FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT T       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D       ON BITAND(BITAND(D.KEY_ID, -4611686018427387905), 9223372036854775807) = T.TRIGGER_ID       WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID()         AND T.TRIGGER_NAME NOT LIKE 'RECYCLE_%'         AND D.KEY_ID < 0     ) ALLT   ) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::all_table_idx_data_table_id_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

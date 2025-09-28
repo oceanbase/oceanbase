@@ -162,13 +162,14 @@ int ObPLRecompileTaskHelper::construct_select_dep_table_sql(ObSqlString& query_i
                                     uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  UNUSED(tenant_id);
   static constexpr char get_dep_objs_info[] =
     "SELECT * FROM %s where tenant_id = %ld and dep_obj_id > 300000 "
     " and ref_obj_id in ( " ;
   
   OZ (query_inner_sql.assign_fmt(get_dep_objs_info, 
-                                       OB_ALL_VIRTUAL_DEPENDENCY_TNAME,
-                                       tenant_id));
+                                       OB_ALL_TENANT_DEPENDENCY_TNAME,
+                                       OB_INVALID_TENANT_ID));
   if (OB_SUCC(ret)) {
     common::hash::ObHashMap<int64_t, std::pair<ObString, int64_t>>::iterator iter = ddl_drop_obj_map.begin();
     int64_t map_size = ddl_drop_obj_map.size();
@@ -265,7 +266,7 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(
   SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
     if (!ddl_drop_obj_map.empty() || !ddl_alter_obj_infos.empty()) {
       OZ (construct_select_dep_table_sql(query_inner_sql, ddl_drop_obj_map, ddl_alter_obj_infos, tenant_id));
-      OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
+      OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
       CK (OB_NOT_NULL(result = res.get_result()));
       if (OB_SUCC(ret)) {
         while (OB_SUCC(ret) && OB_SUCC(result->next())) {
