@@ -313,9 +313,10 @@ public:
   static int json_base_replace(ObIJsonBase *json_old, ObIJsonBase *json_new,
                                ObIJsonBase *&json_doc);
 
-  static int find_and_add_cache(ObJsonPathCache* path_cache, ObJsonPath*& res_path,
+  static int find_and_add_cache(ObIAllocator &allocator,
+                                ObJsonPathCache* path_cache, ObJsonPath*& res_path,
                                 ObString& path_str, int arg_idx, bool enable_wildcard, 
-                                bool is_const = false);
+                                bool is_const);
   static int find_and_add_schema_cache(ObJsonSchemaCache* schema_cache, ObIJsonBase*& j_schema,
                                       ObString& schema_str, int arg_idx, const ObJsonInType& in_type);
 

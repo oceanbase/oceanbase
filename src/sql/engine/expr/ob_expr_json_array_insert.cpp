@@ -104,6 +104,7 @@ int ObExprJsonArrayInsert::eval_json_array_insert(const ObExpr &expr, ObEvalCtx 
   for (int32 i = 1; OB_SUCC(ret) && i < expr.arg_cnt_ && !is_null; i += 2) {
     hit.reset();
     ObExpr *arg = expr.args_[i];
+    bool is_const = arg->is_const_expr();
     ObDatum *json_datum = NULL;
     if (OB_FAIL(temp_allocator.eval_arg(expr.args_[i], ctx, json_datum))) {
       LOG_WARN("failed: eval json path datum.", K(ret));
@@ -115,7 +116,7 @@ int ObExprJsonArrayInsert::eval_json_array_insert(const ObExpr &expr, ObEvalCtx 
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *json_datum,
                   arg->datum_meta_, arg->obj_meta_.has_lob_header(), j_path_text))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
-      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, i, false))) {
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, j_path, j_path_text, i, false, is_const))) {
         LOG_WARN("parse text to path failed", K(j_path_text), K(ret));
       } else if (j_path->path_node_cnt() == 0
           || j_path->last_path_node()->get_node_type() != JPN_ARRAY_CELL) {

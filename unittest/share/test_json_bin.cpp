@@ -115,8 +115,7 @@ static void check_json_diff_valid(ObIAllocator &allocator, const ObString& j_tex
     ObJsonPath* json_path = nullptr;
     ObString path_str = json_diffs[i].path_;
     int path_idx = path_cache.size();
-    ASSERT_EQ(OB_SUCCESS, path_cache.find_and_add_cache(json_path, path_str, path_idx));
-    ASSERT_EQ(path_cache.path_stat_at(path_idx), ObPathParseStat::OK_NOT_NULL);
+    ASSERT_EQ(OB_SUCCESS, path_cache.find_and_add_cache(allocator, json_path, path_str, path_idx));
     ObJsonSeekResult hit;
     if (json_diffs[i].op_ == ObJsonDiffOp::REPLACE
         || json_diffs[i].op_ == ObJsonDiffOp::REMOVE) {
@@ -3276,8 +3275,7 @@ static void json_set(ObIAllocator& allocator, ObString& j_text, std::vector<std:
     ObJsonPath* json_path = nullptr;
     ObIJsonBase *j_new_node = nullptr;
     int path_idx = path_cache.size();
-    ASSERT_EQ(OB_SUCCESS, path_cache.find_and_add_cache(json_path, path, path_idx));
-    ASSERT_EQ(path_cache.path_stat_at(path_idx), ObPathParseStat::OK_NOT_NULL);
+    ASSERT_EQ(OB_SUCCESS, path_cache.find_and_add_cache(allocator, json_path, path, path_idx));
     ObJsonSeekResult hit;
     ASSERT_EQ(OB_SUCCESS, j_bin->seek(*json_path, json_path->path_node_cnt(), true, false, hit));
     ASSERT_EQ(1, hit.size());
