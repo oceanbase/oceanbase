@@ -5,6 +5,7 @@ on:
     branches: [ master, develop ]
   pull_request:
     branches: [ master, develop ]
+    types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
       - 'docs/**'
       - '.github/ISSUE_TEMPLATE/**'
@@ -15,6 +16,7 @@ on:
 
 jobs:
   ubuntu-build:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-22.04
     steps:
     - name: Free Disk Space
