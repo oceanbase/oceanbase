@@ -95,7 +95,17 @@ struct ObMergedProfileItem
   int64_t op_id_{0};
   int64_t plan_depth_{0};
   uint64_t max_db_time_{0};
+  int64_t plan_hash_value_{0};
+  ObString sql_id_;
   ObMergedProfile *profile_{nullptr};
+};
+
+struct ExecutionBound
+{
+  TO_STRING_KV(K_(start_idx), K_(end_idx), K_(execution_count));
+  int64_t start_idx_;
+  int64_t end_idx_;
+  int64_t execution_count_;
 };
 
 class ObProfileUtil
@@ -108,7 +118,8 @@ public:
                                int64_t param_tenant_id, bool fetch_all_op, int64_t op_id,
                                ObIArray<ObProfileItem> &profile_items);
   static int get_merged_profiles(ObIAllocator *alloc, const ObIArray<ObProfileItem> &profile_items,
-                                 ObIArray<ObMergedProfileItem> &merged_profile_items);
+                                 ObIArray<ObMergedProfileItem> &merged_profile_items,
+                                 ObIArray<ExecutionBound> &execution_bounds);
   static int merge_profile(ObMergedProfile &merged_profile, const ObProfile *piece_profile,
                            ObIAllocator *alloc);
 

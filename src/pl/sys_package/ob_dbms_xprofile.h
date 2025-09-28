@@ -66,15 +66,16 @@ private:
   static int flatten_op_profile(const ObIArray<ObProfileItem> &profile_items,
                                 ProfileText &profile_text);
 
-  static int aggregate_op_profile(sql::ObExecContext &ctx, const ObIArray<ObProfileItem> &profile_items,
-                                  const ObString &sql_id, const ObString &trace_id,
-                                  ProfileText &profile_text);
+  static int aggregate_op_profile(sql::ObExecContext &ctx,
+                                  const ObIArray<ObProfileItem> &profile_items,
+                                  const ObString &trace_id, ProfileText &profile_text);
 
   static int format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
-                                 const ObString &sql_id, const ObString &trace_id,
+                                 const ExecutionBound &execution_bound,
                                  ProfileText &profile_text);
 
   static int format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
+                                 const ExecutionBound &execution_bound,
                                  ProfileText &profile_text);
 
   static int set_display_result(sql::ObExecContext &ctx, ProfileText &profile_text,

@@ -76,6 +76,8 @@ int ObMergedProfileItem::init_from(ObIAllocator *alloc, const ObProfileItem &pro
   int ret = OB_SUCCESS;
   op_id_ = profile_item.op_id_;
   plan_depth_ = profile_item.plan_depth_;
+  plan_hash_value_ = profile_item.plan_hash_value_;
+  sql_id_ = profile_item.sql_id_;
   max_db_time_ = 0;
   profile_ = OB_NEWx(ObMergedProfile, alloc, profile_item.profile_->get_id(),
                                   alloc, profile_item.profile_->enable_rich_format());
@@ -149,7 +151,7 @@ int ObProfileUtil::get_profile_by_id(ObIAllocator *alloc, int64_t session_tenant
     LOG_WARN("failed to append svr_port");
   } else if (!fetch_all_op && OB_FAIL(sql.append_fmt("AND PLAN_LINE_ID=%.ld ", op_id))) {
     LOG_WARN("failed to assign op_id");
-  } else if (OB_FAIL(sql.append_fmt("ORDER BY PLAN_LINE_ID "))) {
+  } else if (OB_FAIL(sql.append_fmt("ORDER BY PLAN_HASH_VALUE, SQL_ID, PLAN_LINE_ID "))) {
     LOG_WARN("failed to append order by op id");
   } else if (OB_FAIL(inner_get_profile(alloc, session_tenant_id, sql, profile_items))) {
     LOG_WARN("failed to get profile info");
@@ -160,7 +162,8 @@ int ObProfileUtil::get_profile_by_id(ObIAllocator *alloc, int64_t session_tenant
 
 int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
                                        const ObIArray<ObProfileItem> &profile_items,
-                                       ObIArray<ObMergedProfileItem> &merged_profile_items)
+                                       ObIArray<ObMergedProfileItem> &merged_profile_items,
+                                       ObIArray<ExecutionBound> &execution_bounds)
 {
   int ret = OB_SUCCESS;
   if (profile_items.empty()) {
@@ -172,13 +175,16 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
     }
     while (idx < profile_items.count() && OB_SUCC(ret)) {
       const ObProfileItem &cur_item = profile_items.at(idx);
-      if (cur_item.op_id_ == merged_item.op_id_) {
+      // here we use sql_id and plan_hash_value to distinguish different sql execution plans
+      if (cur_item.sql_id_ == merged_item.sql_id_
+          && cur_item.plan_hash_value_ == merged_item.plan_hash_value_
+          && cur_item.op_id_ == merged_item.op_id_) {
         // same op_id, merge
         if (OB_FAIL(merge_profile(*merged_item.profile_, cur_item.profile_, alloc))) {
           LOG_WARN("failed to merge profile");
         }
       } else {
-        // different op_id, save and new one
+        // different op_id, or another sql execution, save and new one
         const ObMergeMetric *metric = merged_item.profile_->get_metric(ObMetricId::DB_TIME);
         if (OB_NOT_NULL(metric)) {
           merged_item.max_db_time_ = metric->get_max_value();
@@ -201,6 +207,44 @@ int ObProfileUtil::get_merged_profiles(ObIAllocator *alloc,
       }
       if (OB_FAIL(merged_profile_items.push_back(merged_item))) {
         LOG_WARN("failed to pushback");
+      }
+    }
+
+    // multiple queries may executed with same trace id, we should split them
+    if (OB_SUCC(ret)) {
+      int64_t last_plan_hash = merged_profile_items.at(0).plan_hash_value_;
+      ObString last_sql_id = merged_profile_items.at(0).sql_id_;
+      int64_t start_idx = 0;
+      int64_t end_idx = 0;
+      int64_t execution_cnt = 1;
+      for (int64_t i = 1; i < merged_profile_items.count() && OB_SUCC(ret); ++i) {
+        const ObMergedProfileItem &cur_item = merged_profile_items.at(i);
+        if (last_sql_id == cur_item.sql_id_ && last_plan_hash == cur_item.plan_hash_value_) {
+          // in same plan execution, continue
+          if (cur_item.op_id_ == 0) {
+            // record the number of operator 0 as the execution count of this plan sinc
+            // operator 0 can not be paralleled
+            execution_cnt++;
+          }
+        } else {
+          // meet new plan, save previous plan's range
+          last_sql_id = cur_item.sql_id_;
+          last_plan_hash = cur_item.plan_hash_value_;
+          end_idx = i - 1;
+          if (OB_FAIL(execution_bounds.push_back({start_idx, end_idx, execution_cnt}))) {
+            LOG_WARN("failed to push back");
+          } else {
+            start_idx = i;
+            execution_cnt = 1;
+          }
+        }
+      }
+      // process last one
+      if (OB_SUCC(ret)) {
+        end_idx = merged_profile_items.count() - 1;
+        if (OB_FAIL(execution_bounds.push_back({start_idx, end_idx, execution_cnt}))) {
+          LOG_WARN("failed to push back");
+        }
       }
     }
   }
