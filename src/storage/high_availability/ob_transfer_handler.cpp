@@ -3657,10 +3657,6 @@ int ObTransferHandler::inner_do_with_abort_status_(
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
     } else if (OB_FAIL(get_local_ls_member_list_(member_list))) {
       LOG_WARN("failed to get ls member list", K(ret), K(task_info));
-    } else if (OB_FAIL(inner_lock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
-      LOG_WARN("failed to lock ls member list", K(ret), K(task_info));
-    } else if (OB_FAIL(wait_transfer_in_tablet_abort_(task_info, member_list))) {
-      LOG_WARN("failed to wait transfer int tablet abort", K(ret), K(task_info));
     } else if (OB_FAIL(do_trans_transfer_aborted_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer aborted", K(ret), K(task_info));
 #ifdef ERRSIM
@@ -3668,9 +3664,6 @@ int ObTransferHandler::inner_do_with_abort_status_(
       ret = EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED;
       STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
 #endif
-    } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list,
-        status, true/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
-      LOG_WARN("failed to unlock ls member list", K(ret), K(task_info));
     } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
       LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
     } else {
