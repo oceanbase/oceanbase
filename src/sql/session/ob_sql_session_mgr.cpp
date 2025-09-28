@@ -754,8 +754,8 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   {
     memtable::ObLockWaitMgr *mgr = nullptr;
     if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can't get lock wait mgr", K(ret), K(session.get_server_sid()));
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can't get lock wait mgr", K(session.get_server_sid()));
     } else {
       LOG_INFO("notify lockwaitmgr killed session", K(session.get_server_sid()));
       mgr->notify_killed_session(session.get_server_sid());

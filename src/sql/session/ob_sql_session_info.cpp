@@ -2149,11 +2149,9 @@ int ObSQLSessionInfo::kill_query()
   update_last_active_time();
   set_session_state(QUERY_KILLED);
   {
-    int ret = OB_SUCCESS;
     memtable::ObLockWaitMgr *mgr = nullptr;
     if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can't get lock wait mgr", K(get_server_sid()));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "can't get lock wait mgr", K(get_server_sid()));
     } else {
       LOG_INFO("notify lockwaitmgr killed session", K(get_server_sid()));
       mgr->notify_killed_session(get_server_sid());
