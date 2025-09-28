@@ -52,8 +52,6 @@ int ObFunctionTableOp::inner_rescan()
     LOG_WARN("failed to inner rescan", K(ret));
   } else if (OB_FAIL(reset_udtf_ctx())) {
     LOG_WARN("failed to reset udtf ctx", K(ret));
-  } else if (OB_FAIL(ObExprGeneratorFunc::reset_curr_value(*MY_SPEC.value_expr_, eval_ctx_))) {
-    LOG_WARN("failed to reset curr_value", K(ret));
   } else {
     node_idx_ = 0;
     if (MY_SPEC.has_correlated_expr_) {
@@ -280,6 +278,10 @@ int ObFunctionTableOp::reset_udtf_ctx()
 
     if (OB_SUCC(ret)) {
       udtf_ctx->reset();
+    }
+  } else {  // generator function
+    if (OB_FAIL(ObExprGeneratorFunc::reset_curr_value(*MY_SPEC.value_expr_, eval_ctx_))) {
+      LOG_WARN("failed to reset curr_value", K(ret));
     }
   }
 
