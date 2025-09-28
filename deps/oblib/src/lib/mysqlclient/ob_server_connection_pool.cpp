@@ -227,14 +227,14 @@ int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, 
              || 0 == port
              || db_tenant.empty() || db_user.empty() || db_pass.empty()
              || (!lib::is_oracle_mode() && db_name.empty())
-             || OB_UNLIKELY(cluster_str.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
-             || OB_UNLIKELY(db_tenant.length() >= OB_MAX_TENANT_NAME_LENGTH)
-             || OB_UNLIKELY(db_user.length() >= OB_MAX_USER_NAME_LENGTH)
-             || OB_UNLIKELY(db_pass.length() >= OB_MAX_PASSWORD_LENGTH)
-             || OB_UNLIKELY(db_name.length() >= OB_MAX_DATABASE_NAME_LENGTH)
+             || OB_UNLIKELY(cluster_str.length() > OB_MAX_CLUSTER_NAME_LENGTH)
+             || OB_UNLIKELY(db_tenant.length() > OB_MAX_TENANT_NAME_LENGTH)
+             || OB_UNLIKELY(db_user.length() > OB_MAX_USER_NAME_LENGTH)
+             || OB_UNLIKELY(db_pass.length() > OB_MAX_PASSWORD_LENGTH)
+             || OB_UNLIKELY(db_name.length() > OB_MAX_DATABASE_NAME_LENGTH)
              || OB_UNLIKELY(host_name.length() > OB_MAX_DOMIN_NAME_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("db param buffer is not enough", K(ret),
+    LOG_WARN("db param buffer is not enough or param is empty", K(ret),
              K(dblink_id), K(db_tenant), K(db_user), K(db_pass), K(db_name), K(port), K(host_name));
   } else {
     dblink_id_ = dblink_id;
