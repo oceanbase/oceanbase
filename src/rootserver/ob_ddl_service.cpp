@@ -24738,7 +24738,7 @@ int ObDDLService::create_tenant(
               (ObSysVariableSchema, meta_sys_variable)) {
     if (OB_FAIL(schema_guard.get_user_tenant_count(user_tenant_count))) {
       LOG_WARN("fail to get tenant ids", KR(ret));
-    } else if (OB_FAIL(ObLicenseUtils::check_for_create_tenant(user_tenant_count, arg.is_creating_standby_))) {
+    } else if (OB_FAIL(ObLicenseUtils::check_for_create_tenant(user_tenant_count, arg.is_creating_standby_, user_tenant_schema.get_tenant_name_str()))) {
       LOG_WARN("fail to check create tenant allowed", KR(ret), K(user_tenant_count));
     } else if (OB_FAIL(check_inner_stat())) {
       LOG_WARN("fail to check inner stat", KR(ret));
