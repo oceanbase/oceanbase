@@ -349,7 +349,8 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
     const int result, const int64_t delta_cnt)
 {
   int ret = OB_SUCCESS;
-  if (macro_id_.is_id_mode_share()) {
+  // 500 tenant not have local cache service
+  if ((is_meta_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()) || is_user_tenant(MTL_ID())) && macro_id_.is_id_mode_share()) {
     ObSSLocalCacheService *local_cache_service = nullptr;
     if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
