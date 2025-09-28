@@ -1764,7 +1764,14 @@ int ObTmpFileType::create_parent_dir(const MacroBlockId &file_id, const uint64_t
   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(OB_DIR_MGR.create_tmp_file_dir(tenant_id, tenant_epoch_id, file_id.second_id()))) {
+
+  // ERRSIM for testing: simulate disk space exhaustion during parent dir creation
+  // This allows testing the scenario where file allocation succeeds but parent dir creation fails
+  ret = OB_E(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR) OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
+    LOG_INFO("ERRSIM: simulating disk space exhaustion during parent dir creation", KR(ret), K(file_id));
+  } else if (OB_FAIL(OB_DIR_MGR.create_tmp_file_dir(tenant_id, tenant_epoch_id, file_id.second_id()))) {
     LOG_WARN("fail to create tmp file dir", KR(ret));
   }
   return ret;
