@@ -2948,6 +2948,7 @@ typedef enum ObItemType
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_HYBRID_SEARCH_EXPRESSION = 4915,
   T_SKIP_INDEX_LEVEL = 4916,
+  T_RESCAN = 4917, // rescan_op
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

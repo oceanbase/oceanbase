@@ -480,6 +480,7 @@ DEFINE_ERROR_EXT_DEP(OB_LICENSE_SCOPE_EXCEEDED, -4407, -1, "HY000", "The current
 DEFINE_ERROR(OB_MIGRATE_TX_DATA_NOT_CONTINUES, -4408, -1, "HY000", "migrate tx data not continues");
 DEFINE_ERROR(OB_INVALID_ZERO_DATE, -4409, -1, "HY000", "invalid zero date in no_zero_date mode");
 DEFINE_ERROR(OB_LS_NOT_IN_LEARNER_LIST, -4410, -1, "HY000", "ls not in learner list");
+DEFINE_ERROR(OB_MEMORY_LEAK, -4411, -1, "HY000", "observer has memory leak");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // 通用错误码值域[-4000, -4500)，含sstable等
