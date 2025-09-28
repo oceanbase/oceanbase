@@ -1493,6 +1493,8 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
         }
       }
     }
+    OPT_TRACE_TIME_USED;
+    OPT_TRACE_MEM_USED;
     OPT_TRACE_END_SECTION;
   }
   return ret;

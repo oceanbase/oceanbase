@@ -590,7 +590,9 @@ int ObOptEstObjToScalar::convert_obj_to_scalar(const ObObj *obj, double &scalar)
         break;
     }
   }
-
+  if (OB_SUCC(ret) && !std::isfinite(scalar)) {
+    scalar = DBL_MAX;
+  }
   return ret;
 }
 

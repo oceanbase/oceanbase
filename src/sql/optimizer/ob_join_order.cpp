@@ -12152,6 +12152,8 @@ int ObJoinOrder::calc_join_filter_selectivity(const Path& left_path,
       OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null plan", K(ret));
+  } else if (info.right_distinct_card_ <= OB_DOUBLE_EPSINON) {
+    // do nothing
   } else if (FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(&left_path.parent_->get_output_equal_sets(),
                                                                     left_path.get_path_output_rows(),
                                                                     &left_path.parent_->get_ambient_card()))) {
@@ -12198,6 +12200,8 @@ int ObJoinOrder::calc_join_filter_sel_for_pk_join_fk(const Path& left_path,
   if (OB_ISNULL(plan) || OB_ISNULL(left_path.parent_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null plan", K(ret));
+  } else if (info.right_distinct_card_ <= OB_DOUBLE_EPSINON) {
+    // do nothing
   } else if (OB_FAIL(ObOptSelectivity::is_columns_contain_pkey(plan->get_update_table_metas(),
                                                                info.lexprs_,
                                                                left_contain_pk,
