@@ -4600,7 +4600,7 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams &params
       LOG_WARN("resolve expr failed", K(ret));
     } else if (sub_query_info.count() > 0) {
       ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
-    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(*params.allocator_, part_value_expr, columns))) {
+    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(*params.allocator_, part_type, part_value_expr, columns))) {
       LOG_WARN("resolve columns failed", K(ret));
     } else if (udf_info.count() > 0) {
       ret = OB_NOT_SUPPORTED;
@@ -4685,6 +4685,7 @@ int ObResolverUtils::resolve_partition_list_value_expr(ObResolverParams &params,
 //for recursively process columns item in resolve_partition_range_value_expr
 //just wrap columns process logic in resolve_partition_range_value_expr
 int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObIAllocator &allocator,
+                                                                    const ObPartitionFuncType part_type,
                                                                     ObRawExpr *&expr,
                                                                     ObArray<ObQualifiedName> &columns)
 {
@@ -4714,7 +4715,9 @@ int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObIAllocator
         LOG_WARN("failed to push back pari exprs", K(ret));
       }
     } else if (q_name.tbl_name_.empty() && !q_name.col_name_.empty() && 1 == columns.count()
-               && 0 == q_name.col_name_.case_compare("MAXVALUE")) {
+               && 0 == q_name.col_name_.case_compare("MAXVALUE")
+               && PARTITION_FUNC_TYPE_LIST != part_type
+               && PARTITION_FUNC_TYPE_LIST_COLUMNS != part_type) {
       ObConstRawExpr *c_expr = NULL;
       if (OB_ISNULL(c_expr = (ObConstRawExpr *)allocator.alloc(sizeof(ObConstRawExpr)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -4795,7 +4798,7 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams &params
     } else if (sub_query_info.count() > 0) {
       ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
 
-    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(*params.allocator_, part_value_expr, columns))) {
+    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(*params.allocator_, part_type, part_value_expr, columns))) {
       LOG_WARN("resolve columns failed", K(ret));
     } else if (OB_UNLIKELY(udf_info.count() > 0)) {
       ret = OB_ERR_UNEXPECTED;
