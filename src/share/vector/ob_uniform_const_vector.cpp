@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "ob_uniform_const_vector.h"
+#include "ob_uniform_vector.ipp"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 // init uniform const vectors
 

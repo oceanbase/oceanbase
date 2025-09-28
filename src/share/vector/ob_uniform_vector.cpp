@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "share/vector/ob_uniform_vector.h"
+#include "share/vector/ob_uniform_vector.ipp"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 
 namespace oceanbase

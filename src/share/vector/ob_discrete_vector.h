@@ -47,6 +47,18 @@ public:
   int no_null_cmp_batch_rows(VECTOR_COMPARE_BATCH_ROWS_ARGS) const override;
 };
 
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_NUMBER>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_EXTEND>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_STRING>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_ENUM_SET_INNER>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_RAW>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_ROWID>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_LOB>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_JSON>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_GEO>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_UDT>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_COLLECTION>>;
+extern template class ObDiscreteVector<VectorBasicOp<VEC_TC_ROARINGBITMAP>>;
 } // end namespace common
 } // end namespace oceanbase
 #endif // OCEANBASE_SHARE_VECTOR_OB_DISCRETE_VECTOR_H_
