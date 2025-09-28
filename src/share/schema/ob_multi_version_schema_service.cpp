@@ -3997,6 +3997,24 @@ bool ObMultiVersionSchemaService::is_tenant_refreshed(const uint64_t tenant_id) 
   return bret;
 }
 
+int ObMultiVersionSchemaService::check_all_tenant_schema_refreshed(bool &all_refreshed)
+{
+  int ret = OB_SUCCESS;
+  all_refreshed = true;
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant ids failed", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+      if (!is_tenant_refreshed(tenant_ids.at(i))) {
+        all_refreshed = false;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 // sql should retry when tenant is normal but never refresh schema successfully.
 bool ObMultiVersionSchemaService::is_schema_error_need_retry(
      ObSchemaGetterGuard *guard,
