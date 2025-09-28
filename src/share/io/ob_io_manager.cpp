@@ -2774,7 +2774,7 @@ int ObTenantIOManager::print_io_status()
     LOG_INFO("[IO STATUS CANCEL]", K_(tenant_id), K(io_cancel_count));
 #ifdef ENABLE_DEBUG_LOG
     if (io_cancel_count > 10000) {
-      LOG_ERROR("too much io cancelled", K_(tenant_id), K(io_cancel_count));
+      LOG_ERROR("too much io canceled", K_(tenant_id), K(io_cancel_count));
     }
 #endif
   }

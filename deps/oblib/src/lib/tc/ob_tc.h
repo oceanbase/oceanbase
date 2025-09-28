@@ -21,18 +21,26 @@ struct TCLink
   TCLink* next_;
 };
 
+class TCRequestOwner
+{
+public:
+  virtual bool is_canceled() const = 0;
+};
+
 struct TCRequest
 {
-  TCRequest(): link_(NULL), qid_(-1), bytes_(0), start_ns_(0), storage_key_(0), norm_bytes_(0) {
+  TCRequest(TCRequestOwner *owner): link_(NULL), qid_(-1), bytes_(0), start_ns_(0), storage_key_(0), norm_bytes_(0), owner_(owner) {
   }
-  TCRequest(int qid, int64_t bytes): link_(NULL), qid_(qid), bytes_(bytes), start_ns_(0), storage_key_(0), norm_bytes_(0) {}
+  TCRequest(int qid, int64_t bytes): link_(NULL), qid_(qid), bytes_(bytes), start_ns_(0), storage_key_(0), norm_bytes_(0), owner_(NULL) {}
   ~TCRequest() {}
+  bool is_canceled() const { return (NULL != owner_) && owner_->is_canceled(); }
   TCLink link_;
   int qid_;
   int64_t bytes_;
   int64_t start_ns_;
   uint64_t storage_key_;
   int64_t norm_bytes_; // for local device
+  TCRequestOwner *owner_;
 };
 
 class ITCHandler

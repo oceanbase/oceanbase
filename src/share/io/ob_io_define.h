@@ -502,6 +502,7 @@ public:
   ObIOGroupKey get_group_key() const;
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
+  bool is_canceled() const { return is_canceled_; }
   int64_t get_data_size() const;
   uint64_t get_io_usage_index();
   uint64_t get_tenant_id() const;
@@ -555,7 +556,7 @@ public:
   ObIORetCode ret_code_;
 };
 
-class ObIORequest : public common::ObDLinkBase<ObIORequest>
+class ObIORequest : public common::ObDLinkBase<ObIORequest>, public TCRequestOwner
 {
 public:
   ObIORequest();
@@ -567,7 +568,6 @@ public:
   virtual void reset();
   void free();
   void set_result(ObIOResult &io_result);
-  bool is_canceled();
   int64_t timeout_ts() const;
   int64_t get_data_size() const;
   ObIOGroupKey get_group_key() const;
@@ -594,6 +594,7 @@ public:
   void free_io_buffer();
   void inc_ref(const char *msg = nullptr);
   void dec_ref(const char *msg = nullptr);
+  bool is_canceled() const;
 
   int64_t get_remained_io_timeout_us();
 

@@ -2487,7 +2487,7 @@ int ObServer::init_io()
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
       io_config.sync_io_thread_count_ = GCONF.sync_io_thread_count;
-      const int64_t max_io_depth = 256;
+      const int64_t max_io_depth = 500;
       if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
         LOG_ERROR("config io manager fail, ", KR(ret));
       } else {
@@ -3825,7 +3825,7 @@ int ObServer::init_server_in_arb_mode()
   LOG_INFO("io thread connection negotiation enabled!");
   arb_opts.negotiation_enable_ = 1;          // enable negotiation
   arb_opts.rpc_port_ = rpc_port;
-  const int64_t max_io_depth = 256;
+  const int64_t max_io_depth = 500;
   ObIOConfig io_config;
   io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
   const double io_memory_ratio = 0.2;
