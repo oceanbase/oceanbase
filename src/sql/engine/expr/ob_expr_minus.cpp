@@ -93,6 +93,13 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
         precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
                                             + CARRY_OFFSET + scale);
       }
+      const ObObjTypeClass result_tc = type.get_type_class();
+      if (lib::is_mysql_mode() && ObNumberTC == result_tc) {
+        scale1 = static_cast<ObScale>(MAX(type1.get_calc_scale(), scale1));
+        scale2 = static_cast<ObScale>(MAX(type2.get_calc_scale(), scale2));
+        ObScale calc_scale = MAX(scale1, scale2);
+        type.set_calc_scale(calc_scale);
+      }
     }
     type.set_scale(scale);
 

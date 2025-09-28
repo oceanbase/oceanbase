@@ -1557,6 +1557,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           result_type = child_expr->get_result_type();
           ObObjType obj_type = result_type.get_type();
           ObScale scale_increment = 0;
+          ObScale calc_scale = result_type.get_calc_scale();
           if (T_FUN_AVG == expr.get_expr_type()) {
             int64_t increment = 0;
             if (OB_ISNULL(my_session_)) {
@@ -1636,6 +1637,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               scale_increment_recover = result_type.get_scale();
               result_type.set_scale(static_cast<ObScale>(
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
+              result_type.set_calc_scale(
+                static_cast<ObScale>(MIN(OB_MAX_DOUBLE_FLOAT_SCALE, calc_scale + scale_increment)));
             }
             result_type.set_precision(static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
           }

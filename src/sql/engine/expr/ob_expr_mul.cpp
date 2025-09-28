@@ -71,6 +71,13 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
       } else {
         type.set_scale(MIN(static_cast<ObScale>(scale1 + scale2), OB_MAX_DECIMAL_SCALE));
       }
+      const ObObjTypeClass result_tc = type.get_type_class();
+      if (lib::is_mysql_mode() && ObNumberTC == result_tc) {
+        scale1 = static_cast<ObScale>(MAX(type1.get_calc_scale(), scale1));
+        scale2 = static_cast<ObScale>(MAX(type2.get_calc_scale(), scale2));
+        ObScale calc_scale = MAX(scale1, scale2);
+        type.set_calc_scale(calc_scale);
+      }
     }
     ObPrecision precision1 = static_cast<ObPrecision>(MAX(type1.get_precision(), 0));
     ObPrecision precision2 = static_cast<ObPrecision>(MAX(type2.get_precision(), 0));
@@ -82,8 +89,8 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
       if (lib::is_mysql_mode() && type.is_double()) {
         type.set_precision(ObMySQLUtil::float_length(type.get_scale()));
       } else {
-        type.set_precision(static_cast<ObPrecision>((precision1 - scale1)
-            +  (precision2 - scale2) + type.get_scale()));
+        ObPrecision precision = static_cast<ObPrecision>(precision1 + precision2);
+        type.set_precision(precision);
       }
     }
   }
