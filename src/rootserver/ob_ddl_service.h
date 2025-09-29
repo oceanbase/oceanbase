@@ -239,7 +239,7 @@ public:
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
   virtual int add_table_schema(share::schema::ObTableSchema &table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
-  virtual int drop_inner_table(const share::schema::ObTableSchema &table_schema);
+  virtual int drop_inner_table(const share::schema::ObTableSchema &table_schema, const bool delete_priv = true);
   virtual int create_sys_tenant(const obrpc::ObCreateTenantArg &arg,
                                 share::schema::ObTenantSchema &tenant_schema);
   virtual int create_tenant(const obrpc::ObCreateTenantArg &arg,
@@ -2370,7 +2370,8 @@ private:
       const common::ObString *ddl_stmt_str,
       ObMySQLTransaction *sql_trans,
       share::schema::DropTableIdHashSet *drop_table_set,
-      ObMockFKParentTableSchema *mock_fk_parent_table_ptr);
+      ObMockFKParentTableSchema *mock_fk_parent_table_ptr,
+      const bool delete_priv = true);
   int drop_aux_table_in_drop_table(
       ObMySQLTransaction &trans,
       ObDDLOperator &ddl_operator,

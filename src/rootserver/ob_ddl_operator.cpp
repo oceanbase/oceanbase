@@ -4229,7 +4229,8 @@ int ObDDLOperator::drop_table(
     const ObString *ddl_stmt_str/*=NULL*/,
     const bool is_truncate_table/*false*/,
     DropTableIdHashSet *drop_table_set/*=NULL*/,
-    const bool is_drop_db/*false*/)
+    const bool is_drop_db/*false*/,
+    const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   bool tmp = false;
@@ -4290,7 +4291,8 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
     const ObString *ddl_stmt_str/*=NULL*/,
     const bool is_truncate_table/*false*/,
     DropTableIdHashSet *drop_table_set/*=NULL*/,
-    const bool is_drop_db/*false*/)
+    const bool is_drop_db/*false*/,
+    const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -4306,8 +4308,10 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   //delete all object privileges granted on the object
   uint64_t obj_type = static_cast<uint64_t>(ObObjectType::TABLE);
   uint64_t table_id = table_schema.get_table_id();
-  if (OB_SUCC(ret) && !is_drop_db) {
+  if (OB_SUCC(ret) && !is_drop_db && delete_priv) {
     OZ (drop_obj_privs(tenant_id, table_id, obj_type, trans),tenant_id, table_id, obj_type);
+  } else {
+    LOG_WARN("do not cascade drop obj priv", K(ret), K(is_drop_db), K(delete_priv));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
