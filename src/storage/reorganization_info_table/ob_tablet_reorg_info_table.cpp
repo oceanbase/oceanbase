@@ -260,17 +260,18 @@ bool ObTransferDataValue::is_valid() const
 int64_t ObTransferDataValue::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  databuff_printf(buf, buf_len, pos, "{");
-  databuff_printf(buf, buf_len, pos, "tablet_status:%s", ObTabletStatus::get_str(tablet_status_));
-  databuff_printf(buf, buf_len, pos, ", ");
-  databuff_printf(buf, buf_len, pos, "transfer_seq:%ld", transfer_seq_);
-  databuff_printf(buf, buf_len, pos, ", ");
-  databuff_printf(buf, buf_len, pos, "relative_ls_id:%ld", relative_ls_id_.id());
-  databuff_printf(buf, buf_len, pos, ", ");
-  databuff_printf(buf, buf_len, pos, "transfer_scn:%ld", transfer_scn_.get_val_for_tx());
-  databuff_printf(buf, buf_len, pos, ", ");
-  databuff_printf(buf, buf_len, pos, "src_reorganization_scn:%ld", src_reorganization_scn_.get_val_for_tx());
-  databuff_printf(buf, buf_len, pos, "}");
+  int tmp_ret = OB_SUCCESS;
+  tmp_ret = databuff_printf(buf, buf_len, pos, "{");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "tablet_status:%s", ObTabletStatus::get_str(tablet_status_));
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, ", ");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "transfer_seq:%ld", transfer_seq_);
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, ", ");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "relative_ls_id:%ld", relative_ls_id_.id());
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, ", ");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "transfer_scn:%ld", transfer_scn_.get_val_for_tx());
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, ", ");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "src_reorganization_scn:%ld", src_reorganization_scn_.get_val_for_tx());
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
 
@@ -451,12 +452,11 @@ int64_t ObTabletReorgInfoData::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   int tmp_ret = OB_SUCCESS;
-  databuff_printf(buf, buf_len, pos, "{");
-  databuff_printf(buf, buf_len, pos, "key:");
-  databuff_printf(buf, buf_len, pos, key_);
-  databuff_printf(buf, buf_len, pos, ", ");
-  pos += to_value_string(buf + pos, buf_len);
-  databuff_printf(buf, buf_len, pos, "}");
+  tmp_ret = databuff_printf(buf, buf_len, pos, "{");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "key:");
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, ", ");
+  OB_SUCCESS != tmp_ret ? : pos += to_value_string(buf + pos, buf_len - pos);
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
 
@@ -474,7 +474,7 @@ int64_t ObTabletReorgInfoData::to_value_string(char *buf, const int64_t buf_len)
       const int64_t tmp_pos = transfer_data_value.to_string(value_buf, buf_len);
     }
   }
-  databuff_printf(buf, buf_len, pos, "value:%s", value_buf);
+  OB_SUCCESS != tmp_ret ? : tmp_ret = databuff_printf(buf, buf_len, pos, "value:%s", value_buf);
   return pos;
 }
 
