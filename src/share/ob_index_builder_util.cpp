@@ -771,26 +771,16 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
     int64_t old_cnt = data_schema.get_column_count();
     ObColumnSortItem new_sort_item = sort_items.at(i);
     ObColumnSchemaV2 *gen_col = NULL;
-    if (new_sort_item.prefix_len_ > 0) {
-      //handle prefix column index
-      if (OB_FAIL(generate_prefix_column(new_sort_item, arg.sql_mode_, data_schema, gen_col))) {
-        LOG_WARN("generate prefix column failed", K(ret));
-      } else {
-        new_sort_item.column_name_ = gen_col->get_column_name_str();
-        new_sort_item.prefix_len_ = 0;
-      }
-    } else if (!new_sort_item.is_func_index_) {
+    if (!new_sort_item.is_func_index_ && new_sort_item.prefix_len_ <= 0) {
       //非函数索引情况下, 走此路径.
       const ObColumnSchemaV2 *col_schema = data_schema.get_column_schema(new_sort_item.column_name_);
       if (OB_ISNULL(col_schema)) {
         ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS,
-                       new_sort_item.column_name_.length(),
-                       new_sort_item.column_name_.ptr());
+                      new_sort_item.column_name_.length(),
+                      new_sort_item.column_name_.ptr());
       }
     } else {
-      //parse ordinary index expr as the real expr(maybe column expression)
-      const ObString &index_expr_def = new_sort_item.column_name_;
       ObArenaAllocator allocator(ObModIds::OB_SQL_EXPR);
       ObRawExprFactory expr_factory(allocator);
       SMART_VAR(sql::ObSQLSessionInfo, session) {
@@ -832,77 +822,89 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
             LOG_WARN("fail to update session vars", K(ret));
           } else if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_SQL_MODE, sql_mode_obj))) {
             LOG_WARN("fail to update sql mode", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(&arg,
-                                                        index_expr_def,
-                                                        expr_factory,
-                                                        session,
-                                                        data_schema,
-                                                        expr,
-                                                        &schema_checker,
-                                                        ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
-                                                        NULL))) {
-            LOG_WARN("build generated column expr failed", K(ret));
-          } else if (!expr->is_column_ref_expr()) {
-            //real index expr, so generate hidden generated column in data table schema
-            if (lib::Worker::CompatMode::MYSQL == compat_mode) {
-              if (ob_is_geometry(expr->get_result_type().get_type())) {
-                ret = OB_ERR_SPATIAL_FUNCTIONAL_INDEX;
-                LOG_WARN("Spatial functional index is not supported.", K(ret));
-              } else if (ob_is_json_tc(expr->get_result_type().get_type())) {
-                ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
-                LOG_WARN("Cannot create a functional index on an expression that returns a JSON or GEOMETRY.",K(ret));
-              } else if (ob_is_collection_sql_type(expr->get_result_type().get_type())) {
-                ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
-                LOG_WARN("Cannot create a functional index on an expression that returns a ARRAY.",K(ret));
-              } else if (ob_is_text_tc(expr->get_result_type().get_type()) || ob_is_lob_tc(expr->get_result_type().get_type())) {
-                ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
-                LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
-              }
-            }
-            if (OB_FAIL(ret)) {
-            } else if (OB_ISNULL(GCTX.schema_service_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null", K(ret));
-            } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(data_schema.get_tenant_id(), guard))) {
-              LOG_WARN("get schema guard failed", K(ret));
-            } else if (OB_FAIL(generate_ordinary_generated_column(
-                *expr, session, data_schema, gen_col, &guard))) {
-              LOG_WARN("generate ordinary generated column failed", K(ret));
-            } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
-                gen_col->get_cur_default_value().get_string(), session, data_schema))) {
-              LOG_WARN("fail to check printed generated column expr", K(ret));
+          } else if (new_sort_item.prefix_len_ > 0) {
+            //handle prefix column index
+            if (OB_FAIL(generate_prefix_column(new_sort_item, arg.sql_mode_, session, data_schema, gen_col))) {
+              LOG_WARN("generate prefix column failed", K(ret));
             } else {
               new_sort_item.column_name_ = gen_col->get_column_name_str();
-              new_sort_item.is_func_index_ = false;
+              new_sort_item.prefix_len_ = 0;
             }
-            if (OB_SUCC(ret) && lib::Worker::CompatMode::MYSQL == compat_mode) {
-              ObSEArray<ObRawExpr*, 4> dep_columns;
-              if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, dep_columns))) {
-                LOG_WARN("extract column exprs failed", K(ret), K(expr));
+          } else {
+            //parse ordinary index expr as the real expr(maybe column expression)
+            const ObString &index_expr_def = new_sort_item.column_name_;
+            if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(&arg,
+                                                          index_expr_def,
+                                                          expr_factory,
+                                                          session,
+                                                          data_schema,
+                                                          expr,
+                                                          &schema_checker,
+                                                          ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
+                                                          NULL))) {
+              LOG_WARN("build generated column expr failed", K(ret));
+            } else if (!expr->is_column_ref_expr()) {
+              //real index expr, so generate hidden generated column in data table schema
+              if (lib::Worker::CompatMode::MYSQL == compat_mode) {
+                if (ob_is_geometry(expr->get_result_type().get_type())) {
+                  ret = OB_ERR_SPATIAL_FUNCTIONAL_INDEX;
+                  LOG_WARN("Spatial functional index is not supported.", K(ret));
+                } else if (ob_is_json_tc(expr->get_result_type().get_type())) {
+                  ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
+                  LOG_WARN("Cannot create a functional index on an expression that returns a JSON or GEOMETRY.",K(ret));
+                } else if (ob_is_collection_sql_type(expr->get_result_type().get_type())) {
+                  ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+                  LOG_WARN("Cannot create a functional index on an expression that returns a ARRAY.",K(ret));
+                } else if (ob_is_text_tc(expr->get_result_type().get_type()) || ob_is_lob_tc(expr->get_result_type().get_type())) {
+                  ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
+                  LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_ISNULL(GCTX.schema_service_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null", K(ret));
+              } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(data_schema.get_tenant_id(), guard))) {
+                LOG_WARN("get schema guard failed", K(ret));
+              } else if (OB_FAIL(generate_ordinary_generated_column(
+                  *expr, session, data_schema, gen_col, &guard))) {
+                LOG_WARN("generate ordinary generated column failed", K(ret));
+              } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
+                  gen_col->get_cur_default_value().get_string(), session, data_schema))) {
+                LOG_WARN("fail to check printed generated column expr", K(ret));
               } else {
-                for (int64_t j = 0; OB_SUCC(ret) && j < dep_columns.count(); ++j) {
-                  const ObRawExpr *dep_column = dep_columns.at(j);
-                  if (OB_ISNULL(dep_column)) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("deps_column is null");
-                  } else if (!dep_column->is_column_ref_expr()) {
-                    ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("dep column is invalid", K(ret), KPC(dep_column));
-                  } else if (dep_column->is_auto_increment()) {
-                    ret = OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT;
-                    LOG_USER_ERROR(OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, arg.index_name_.length(), arg.index_name_.ptr());
-                    LOG_WARN("Functional index cannot refer to an auto-increment column.", K(ret));
+                new_sort_item.column_name_ = gen_col->get_column_name_str();
+                new_sort_item.is_func_index_ = false;
+              }
+              if (OB_SUCC(ret) && lib::Worker::CompatMode::MYSQL == compat_mode) {
+                ObSEArray<ObRawExpr*, 4> dep_columns;
+                if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, dep_columns))) {
+                  LOG_WARN("extract column exprs failed", K(ret), K(expr));
+                } else {
+                  for (int64_t j = 0; OB_SUCC(ret) && j < dep_columns.count(); ++j) {
+                    const ObRawExpr *dep_column = dep_columns.at(j);
+                    if (OB_ISNULL(dep_column)) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("deps_column is null");
+                    } else if (!dep_column->is_column_ref_expr()) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("dep column is invalid", K(ret), KPC(dep_column));
+                    } else if (dep_column->is_auto_increment()) {
+                      ret = OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT;
+                      LOG_USER_ERROR(OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, arg.index_name_.length(), arg.index_name_.ptr());
+                      LOG_WARN("Functional index cannot refer to an auto-increment column.", K(ret));
+                    }
                   }
                 }
               }
+            } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+              const ObColumnRefRawExpr *ref_expr = static_cast<const ObColumnRefRawExpr*>(expr);
+              new_sort_item.column_name_ = ref_expr->get_column_name();
+              new_sort_item.is_func_index_ = false;
+            } else {
+              ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+              LOG_WARN("Functional index on a column is not supported.", K(ret), K(*expr));
             }
-          } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
-            const ObColumnRefRawExpr *ref_expr = static_cast<const ObColumnRefRawExpr*>(expr);
-            new_sort_item.column_name_ = ref_expr->get_column_name();
-            new_sort_item.is_func_index_ = false;
-          } else {
-            ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
-            LOG_WARN("Functional index on a column is not supported.", K(ret), K(*expr));
           }
           exec_ctx.set_physical_plan_ctx(NULL);
         }
@@ -1062,6 +1064,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
 int ObIndexBuilderUtil::generate_prefix_column(
     const ObColumnSortItem &sort_item,
     const ObSQLMode sql_mode,
+    ObSQLSessionInfo &session,
     ObTableSchema &data_schema,
     ObColumnSchemaV2 *&prefix_col)
 {
@@ -1069,6 +1072,7 @@ int ObIndexBuilderUtil::generate_prefix_column(
   ObColumnSchemaV2 *old_column = NULL;
   ObColumnSchemaV2 prefix_column;
   char col_name_buf[OB_MAX_COLUMN_NAMES_LENGTH] = {'\0'};
+  uint64_t tenant_data_version = 0;
   SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_def) {
     MEMSET(expr_def, 0, sizeof(expr_def));
     int64_t name_pos = 0;
@@ -1171,6 +1175,15 @@ int ObIndexBuilderUtil::generate_prefix_column(
           LOG_WARN("add column to data schema failed", K(ret));
         } else {
           prefix_col = data_schema.get_column_schema(prefix_column.get_column_id());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+          //do nothing
+        } else if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_prefix_gen_col(*old_column, session, *prefix_col))) {
+          LOG_WARN("fail to extract sysvar from expr", K(ret));
         }
       }
     }
