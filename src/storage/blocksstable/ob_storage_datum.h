@@ -21,6 +21,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "common/row/ob_row.h"
 #include "storage/ob_storage_util.h"
+#include "tools/ob_admin/ob_admin_common_utils.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,8 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE void shallow_copy_from_datum(const ObDatum &src);
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
-  OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len, const bool for_dump = false) const;
+  OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len, const bool for_dump = false, 
+                int64_t hex_length = tools::ObDumpMacroBlockContext::DEFUALT_DUMP_HEX_LENGTH) const;
   OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
   OB_INLINE const char *to_cstring2(const bool for_dump = false) const;
   //only for unittest
@@ -340,7 +342,7 @@ OB_INLINE bool ObStorageDatum::operator==(const common::ObObj &other) const
   return bret;
 }
 
-OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, const bool for_dump) const
+OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, const bool for_dump, int64_t hex_length) const
 {
   int64_t pos = 0;
   if (is_ext()) {
@@ -355,7 +357,6 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, 
     pos = to_string(buf, buf_len);
   } else {
     int ret = OB_SUCCESS;
-    const static int64_t STR_MAX_PRINT_LEN = 128L;
     if (null_) {
       J_NULL();
     } else {
@@ -363,8 +364,7 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, 
       BUF_PRINTF("len: %d, flag: %d, null: %d", len_, flag_, null_);
       if (len_ > 0) {
         OB_ASSERT(NULL != ptr_);
-        const int64_t plen = std::min(static_cast<int64_t>(len_),
-            static_cast<int64_t>(STR_MAX_PRINT_LEN));
+        const int64_t plen = std::min(static_cast<int64_t>(len_), hex_length);
         // print hex value
         BUF_PRINTF(", hex: ");
         if (OB_FAIL(hex_print(ptr_, plen, buf, buf_len, pos))) {
@@ -409,8 +409,8 @@ OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(co
 class ObStorageDatumWrapper final
 {
 public:
-  ObStorageDatumWrapper(const ObStorageDatum& datum, bool for_dump)
-    : datum_(datum), for_dump_(for_dump)
+  ObStorageDatumWrapper(const ObStorageDatum& datum, bool for_dump, int64_t hex_length)
+    : datum_(datum), for_dump_(for_dump), hex_length_(hex_length)
     {}
   ~ObStorageDatumWrapper() = default;
   OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -419,6 +419,7 @@ private:
 private:
   const ObStorageDatum& datum_;
   const bool for_dump_;
+  int64_t hex_length_;
 };
 } // namespace blocksstable
 } // namespace oceanbase

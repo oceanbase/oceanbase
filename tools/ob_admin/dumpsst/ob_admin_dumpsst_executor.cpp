@@ -163,7 +163,7 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
   int ret = OB_SUCCESS;
 
   int opt = 0;
-  const char* opt_string = "d:hf:a:i:n:qxk:m:t:o:s:p:";
+  const char* opt_string = "d:hf:a:i:n:qxk:m:t:o:s:p:l:";
 
   struct option longopts[] = {
     // commands
@@ -184,6 +184,7 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
     { "offset", 1, NULL, 'p'},
     // long options
     { "prewarm_index", 1, NULL, 1000},
+    { "hex_length", 1, NULL, 'l'},
     { 0, 0, 0, 0}, // end of array, don't change
   };
 
@@ -274,6 +275,10 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
     }
     case 's': {
       dump_macro_context_.scn_ = strtoll(optarg, NULL, 10);
+      break;
+    }
+    case 'l': {
+      dump_macro_context_.hex_length_ = strtoll(optarg, NULL, 10);
       break;
     }
     case 1000: {
@@ -743,6 +748,7 @@ void ObAdminDumpsstExecutor::print_usage()
   printf(HELP_FMT, "-s,--scn", "macro block logical version");
   printf(HELP_FMT, "-o,--object_file", "object file path");
   printf(HELP_FMT, "-p,--offset", "data offset in object file");
+  printf(HELP_FMT, "-l,--hex_length", "max length of hex string");
 
   printf("SN mode commands:\n");
   printf("  dump all rows in data macro block: \n");

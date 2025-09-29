@@ -555,7 +555,7 @@ ObSSTableDataBlockReader::ObSSTableDataBlockReader()
     bloomfilter_header_(NULL), column_types_(NULL), column_orders_(NULL),
     column_checksum_(NULL), macro_reader_(), allocator_(ObModIds::OB_CS_SSTABLE_READER),
     hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0),
-    printer_()
+    printer_(), print_hex_length_(tools::ObDumpMacroBlockContext::DEFUALT_DUMP_HEX_LENGTH)
 {
 }
 
@@ -563,7 +563,7 @@ ObSSTableDataBlockReader::~ObSSTableDataBlockReader()
 {
 }
 
-int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const bool hex_print, FILE *fd)
+int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const int64_t hex_length, const bool hex_print, FILE *fd)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -583,6 +583,7 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
   } else {
     data_ = data;
     size_ = size;
+    print_hex_length_ = hex_length;
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
     case ObMacroBlockCommonHeader::SSTableIndex: {
@@ -885,7 +886,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         printer_.print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
       } else {
         printer_.print_store_row(
-            row, column_types_, column_type_array_cnt_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
+            row, column_types_, column_type_array_cnt_, print_hex_length_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
       }
 
       if (MicroBlockType::INDEX == block_type) {
@@ -951,7 +952,7 @@ int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIte
     LOG_WARN("Failed to parse macro block meta", K(ret));
   } else {
     printer_.print_store_row(
-            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, true, is_trans_sstable_);
+            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, print_hex_length_, true, is_trans_sstable_);
     printer_.print_macro_meta(&macro_meta);
   }
   return ret;
