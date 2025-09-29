@@ -5028,7 +5028,7 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
   bool is_drop_fts_or_multivalue_or_vector_index = false;
   common::ObArray<ObString> dropping_indexes;
   const share::schema::ObTableSchema *table_schema = nullptr;
-  const int64_t data_table_id = alter_table_arg.alter_table_schema_.get_table_id();
+  int64_t data_table_id = alter_table_arg.alter_table_schema_.get_table_id();
   const uint64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
   has_drop_and_add_index = false;
   if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, table_schema))) {
@@ -5064,6 +5064,9 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         } else {
           const share::schema::ObTableSchema *index_schema = nullptr;
           const int64_t index_table_id = drop_index_arg->index_table_id_;
+          if (table_schema->is_materialized_view()) {
+            data_table_id = table_schema->get_data_table_id();
+          }
           if (OB_FAIL(get_index_schema_by_name(data_table_id,
                                                table_schema->get_database_id(),
                                                *drop_index_arg,
