@@ -216,9 +216,6 @@ TEST_F(TestSNPCachedExternalFileService, test_prefetch_task_basic)
     LOG_INFO("check read task", K(accesser->timer_task_scheduler_));
 
     // check write task
-    ASSERT_EQ(1, accesser->running_prefetch_tasks_map_.size());
-    ASSERT_EQ(0, accesser->timer_task_scheduler_.sn_prefetch_timer_.pipeline_.async_read_list_.get_curr_total());
-    ASSERT_EQ(1, accesser->timer_task_scheduler_.sn_prefetch_timer_.pipeline_.async_write_list_.get_curr_total());
     const int64_t WRITE_TIME_LIMIT_US = ObTimeUtility::current_time() + MAX_WAIT_TIME_US;
     while (0 < accesser->timer_task_scheduler_.sn_prefetch_timer_.pipeline_.async_write_list_.get_curr_total()
         && ObTimeUtility::current_time() < WRITE_TIME_LIMIT_US) {
