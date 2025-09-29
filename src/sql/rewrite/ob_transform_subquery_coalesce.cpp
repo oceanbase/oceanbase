@@ -208,7 +208,7 @@ int ObTransformSubqueryCoalesce::adjust_transform_types(uint64_t &transform_type
 {
   int ret = OB_SUCCESS;
   if(cost_based_trans_tried_) {
-    transform_types &= (~(1 << transformer_type_));
+    transform_types &= (~(1ULL << transformer_type_));
   }
   return ret;
 }

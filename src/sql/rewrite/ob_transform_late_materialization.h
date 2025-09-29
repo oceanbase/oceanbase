@@ -142,6 +142,7 @@ private:
                          bool &is_expected,
                          ObCostBasedLateMaterializationCtx &check_ctx);
   virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;
+  virtual int adjust_transform_types(uint64_t &transform_types) override;
 };
 
 }
