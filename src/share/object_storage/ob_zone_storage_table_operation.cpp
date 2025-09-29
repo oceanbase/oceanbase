@@ -933,6 +933,39 @@ int ObStorageInfoOperator::update_storage_bandwidth(common::ObISQLClient &proxy,
   return ret;
 }
 
+int ObStorageInfoOperator::update_storage_extension(common::ObISQLClient &proxy,
+                                                    const common::ObZone &zone,
+                                                    const share::ObBackupDest &storage_dest,
+                                                    const uint64_t op_id,
+                                                    const ObStorageUsedType::TYPE used_for,
+                                                    const char *extension)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(!storage_dest.is_valid() || !ObStorageUsedType::is_valid(used_for) || OB_INVALID_ID == op_id) || OB_ISNULL(extension)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(storage_dest), K(extension), K(op_id), K(used_for));
+  } else if (OB_FAIL(sql.assign_fmt(
+               "UPDATE %s SET %s = '%s' WHERE %s = '%s' AND %s = '%s' AND "
+               "%s = '%s' AND %s = '%s' AND %s = %lu",
+               OB_ALL_ZONE_STORAGE_TNAME, OB_STR_STORAGE_EXTENSION, extension,
+               OB_STR_STORAGE_ZONE, zone.ptr(), OB_STR_STORAGE_DEST_PATH,
+               storage_dest.get_root_path().ptr(), OB_STR_STORAGE_USEDFOR,
+               ObStorageUsedType::get_str(used_for), OB_STR_STORAGE_DEST_ENDPOINT,
+               storage_dest.get_storage_info()->endpoint_, OB_STR_STORAGE_OP_ID, op_id))) {
+    LOG_WARN("assign sql string failed", KR(ret), K(zone), K(used_for), K(storage_dest));
+  } else if (OB_FAIL(proxy.write(sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to execute sql", KR(ret), K(sql));
+  } else if (OB_UNLIKELY(!(is_single_row(affected_rows) || is_zero_row(affected_rows)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, invalid affected rows", KR(ret), K(affected_rows));
+  } else {
+    LOG_INFO("update storage extension in zone storage table", K(sql), K(extension));
+  }
+  return ret;
+}
+
 int ObStorageInfoOperator::update_storage_state(common::ObISQLClient &proxy,
                                                 const common::ObZone &zone,
                                                 const ObBackupDest &storage_dest,

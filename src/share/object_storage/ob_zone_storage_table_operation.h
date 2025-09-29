@@ -49,6 +49,11 @@ public:
                                       const uint64_t op_id,
                                       const ObStorageUsedType::TYPE used_for,
                                       const int64_t max_bandwidth);
+  static int update_storage_extension(common::ObISQLClient &proxy, const common::ObZone &zone,
+                                      const share::ObBackupDest &storage_dest,
+                                      const uint64_t op_id,
+                                      const ObStorageUsedType::TYPE used_for,
+                                      const char *extension);
   static int update_storage_state(common::ObISQLClient &proxy, const common::ObZone &zone,
                                   const share::ObBackupDest &storage_dest,
                                   const ObStorageUsedType::TYPE used_for, const uint64_t op_id,
