@@ -205,11 +205,14 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
                                                              const bool has_all_column_group)
 {
   int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
   set_init_value_for_column_store_();
   if (OB_UNLIKELY(!storage_schema.is_valid() || !tablet_id.is_valid() 
       || OB_INVALID_VERSION == snapshot_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(storage_schema), K(snapshot_version));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
   } else if (OB_FAIL(storage_schema.get_encryption_id(encrypt_id_))) {
     LOG_WARN("fail to get_encryption_id", K(ret), K(storage_schema));
   } else {
@@ -250,7 +253,9 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     filled_tx_scn_.set_min();
     tx_data_recycle_scn_.set_min();
     original_size_ = 0;
-    compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+    compressor_type_ = compat_version >= DATA_VERSION_4_3_5_5 
+                       ? storage_schema.get_compressor_type()
+                       : ObCompressorType::NONE_COMPRESSOR;
     table_backup_flag_.reset();
     table_shared_flag_.reset();
     sstable_logic_seq_ = 0;
@@ -345,8 +350,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
 
   root_block_addr_.set_none_addr();
   data_block_macro_meta_addr_.set_none_addr();
-  root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-  latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  root_row_store_type_ = basic_meta.latest_row_store_type_;
   data_index_tree_height_ = 0;
   index_blocks_cnt_ = 0;
   data_blocks_cnt_ = 0;
@@ -359,7 +363,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   filled_tx_scn_ = end_scn;
   tx_data_recycle_scn_.set_min();
   original_size_ = 0;
-  compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  compressor_type_ = basic_meta.compressor_type_;
   nested_offset_ = 0;
   nested_size_ = 0;
   root_macro_seq_ = 0;
@@ -409,7 +413,7 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_minor_sstable(const comm
   filled_tx_scn_ = end_scn;
   tx_data_recycle_scn_.set_min();
   original_size_ = 0;
-  compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+  compressor_type_ = table_schema.get_compressor_type();
   table_backup_flag_.reset();
   table_shared_flag_.reset();
   sstable_logic_seq_ = 0;
