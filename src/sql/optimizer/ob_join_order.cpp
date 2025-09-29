@@ -15207,6 +15207,12 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
         && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(),
                                                  contain_fake_cte, path_info))) {
       LOG_WARN("failed to get valid path info from hint", K(ret));
+    } else if (OB_FAIL(try_add_nlj_path_for_values_table(left_tree,
+                                                         right_tree,
+                                                         left_paths.at(0),
+                                                         ignore_hint,
+                                                         path_info))) {
+      LOG_WARN("failed to try add nlj path for values table", K(ret));
     } else if (RIGHT_OUTER_JOIN == path_info.join_type_
                || FULL_OUTER_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
@@ -15322,6 +15328,48 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
           OPT_TRACE(ob_dist_algo_str(dist_algo));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::try_add_nlj_path_for_values_table(const ObJoinOrder &left_tree,
+                                                   const ObJoinOrder &right_tree,
+                                                   const Path *left_path,
+                                                   const bool ignore_hint,
+                                                   ValidPathInfo &path_info)
+{
+  // always try nlj path if the left tree of an inner join
+  // is a values table, or a subquery - unary ops (typically a distinct) - values table
+  // unless hint disabled it
+  int ret = OB_SUCCESS;
+  bool can_use_nlj = true;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Input argument error", K(get_plan()), K(ret));
+  } else {
+    const ObLogPlanHint &log_hint = get_plan()->get_log_plan_hint();
+    const LogJoinHint *log_join_hint = log_hint.get_join_hint(right_tree.get_tables());
+    if (INNER_JOIN != path_info.join_type_) {
+      // not inner join, do nothing
+    } else if (!ignore_hint && NULL != log_join_hint
+               && !(log_join_hint->local_methods_ & NESTED_LOOP_JOIN)) {
+      // hint disabled nlj, do nothing
+    } else if (left_tree.get_type() == VALUES_TABLE_ACCESS) {
+      // if left tree is a values table, try nlj
+      path_info.local_methods_ |= NESTED_LOOP_JOIN;
+    } else if (NULL != left_path && left_path->is_subquery_path()) {
+      // left tree is a subquery - unary ops - values table
+      const SubQueryPath *subquery_path = static_cast<const SubQueryPath *>(left_path);
+      const ObLogicalOperator *root = subquery_path->root_;
+      while (NULL != root && root->get_type() != log_op_def::LOG_VALUES_TABLE_ACCESS
+             && root->get_num_of_child() == 1) {
+        root = root->get_child(0);
+      }
+      if (NULL != root && root->get_type() == log_op_def::LOG_VALUES_TABLE_ACCESS) {
+        path_info.local_methods_ |= NESTED_LOOP_JOIN;
+      }
+    } else { /* do nothing */
     }
   }
   return ret;
