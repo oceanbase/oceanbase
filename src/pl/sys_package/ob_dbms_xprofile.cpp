@@ -141,8 +141,7 @@ int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
       LOG_WARN("failed to flatten op profile");
     }
   } else if (ProfileDisplayType::AGGREGATED == profile_text.type_) {
-    if (OB_FAIL(aggregate_op_profile(ctx, profile_items, profile_items.at(0).sql_id_, trace_id,
-                                     profile_text))) {
+    if (OB_FAIL(aggregate_op_profile(ctx, profile_items, trace_id, profile_text))) {
       LOG_WARN("failed to aggregate op profile");
     }
   }
@@ -182,24 +181,40 @@ int ObDbmsXprofile::flatten_op_profile(const ObIArray<ObProfileItem> &profile_it
 
 int ObDbmsXprofile::aggregate_op_profile(ObExecContext &ctx,
                                          const ObIArray<ObProfileItem> &profile_items,
-                                         const ObString &sql_id,
                                          const ObString &trace_id,
                                          ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
   ObTMArray<ObMergedProfileItem> merged_items;
-  if (OB_FAIL(ObProfileUtil::get_merged_profiles(&ctx.get_allocator(), profile_items, merged_items))) {
+  ObTMArray<ExecutionBound> execution_bounds;
+  if (OB_FAIL(ObProfileUtil::get_merged_profiles(&ctx.get_allocator(), profile_items, merged_items,
+                                                 execution_bounds))) {
     LOG_WARN("failed to get merged profiles");
-  } else if (OB_FAIL(format_summary_info(merged_items, sql_id, trace_id, profile_text))) {
-    LOG_WARN("failed to format summary info");
-  } else if (OB_FAIL(format_agg_profiles(merged_items, profile_text))) {
-    LOG_WARN("failed to format agg profile");
+  } else {
+    int64_t buf_len = profile_text.buf_len_;
+    int64_t &pos = profile_text.pos_;
+    char *buf = profile_text.buf_;
+    OZ(BUF_PRINTF("Trace ID: "));
+    if (OB_SUCC(ret)) {
+      pos += trace_id.to_string(buf + pos, buf_len - pos);
+    }
+    OZ(BUF_PRINTF("\n"));
+
+    // for each execution plan, print its summary info and profile info
+    for (int64_t i = 0; i < execution_bounds.count() && OB_SUCC(ret); ++i) {
+      const ExecutionBound &execution_bound = execution_bounds.at(i);
+      if (OB_FAIL(format_summary_info(merged_items, execution_bound, profile_text))) {
+        LOG_WARN("failed to format summary info");
+      } else if (OB_FAIL(format_agg_profiles(merged_items, execution_bound, profile_text))) {
+        LOG_WARN("failed to format agg profile");
+      }
+    }
   }
   return ret;
 }
 
 int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
-                                        const ObString &sql_id, const ObString &trace_id,
+                                        const ExecutionBound &execution_bound,
                                         ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
@@ -208,12 +223,14 @@ int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &mer
   char *buf = profile_text.buf_;
 
   uint64_t total_db_time = 0;
+  int64_t start_idx = execution_bound.start_idx_;
+  int64_t end_idx = execution_bound.end_idx_;
   ObTMArray<ObMergedProfileItem> copied_items;
-  if (OB_FAIL(copied_items.reserve(merged_items.count()))) {
-    LOG_WARN("failed to reserve", K(merged_items.count()));
+  if (OB_FAIL(copied_items.reserve(end_idx - start_idx + 1))) {
+    LOG_WARN("failed to reserve", K(end_idx - start_idx + 1));
   }
 
-  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+  for (int64_t i = start_idx; i <= end_idx && OB_SUCC(ret); ++i) {
     if (OB_FAIL(copied_items.push_back(merged_items.at(i)))) {
       LOG_WARN("failed to push back");
     } else {
@@ -221,13 +238,12 @@ int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &mer
     }
   }
 
-  OZ(BUF_PRINTF("Trace ID: "));
-  if (OB_SUCC(ret)) {
-    pos += trace_id.to_string(buf + pos, buf_len - pos);
-  }
   OZ(BUF_PRINTF("\nSQL ID: "));
   if (OB_SUCC(ret)) {
+    const ObString sql_id = copied_items.at(0).sql_id_;
+    int64_t execution_count = execution_bound.execution_count_;
     pos += sql_id.to_string(buf + pos, buf_len - pos);
+    OZ(BUF_PRINTF(", Execution Count: %d", execution_count));
   }
 
   if (OB_SUCC(ret) && total_db_time > 0) {
@@ -250,18 +266,21 @@ int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &mer
 }
 
 int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
+                                        const ExecutionBound &execution_bound,
                                         ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
   int64_t buf_len = profile_text.buf_len_;
   int64_t &pos = profile_text.pos_;
   char *buf = profile_text.buf_;
-  OZ(BUF_PRINTF("\nProfile Details:\n"));
+  OZ(BUF_PRINTF("Profile Details:\n"));
 
   metric::Level display_level = profile_text.display_level_;
   const char *json = nullptr;
   ObArenaAllocator arena_alloc;
-  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+  int64_t start_idx = execution_bound.start_idx_;
+  int64_t end_idx = execution_bound.end_idx_;
+  for (int64_t i = start_idx; i <= end_idx && OB_SUCC(ret); ++i) {
     if (i % 32 == 0) {
       arena_alloc.reset_remain_one_page();
     }
@@ -279,6 +298,7 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
       OZ(BUF_PRINTF("%s\n", json));
     }
   }
+  OZ(BUF_PRINTF("\n"));
   return ret;
 }
 
