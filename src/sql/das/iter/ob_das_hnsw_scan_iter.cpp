@@ -769,6 +769,19 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
     } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, ls_leader))) {
       LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id_));
     } else if (OB_FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
+    } else if (!ls_leader) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (!tenant_config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
+      } else if (!tenant_config->load_vector_index_on_follower) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "when load_vector_index_on_follower is false, weak read using vector index on follower is");
+        LOG_WARN("when load_vector_index_on_follower is false, weak read using vector index on follower is not supported", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else {
       RWLock::RLockGuard lock_guard(adaptor->get_query_lock());
       if (is_pre_filter() || is_in_filter()) {
