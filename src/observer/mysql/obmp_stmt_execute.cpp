@@ -2051,8 +2051,6 @@ int ObMPStmtExecute::process()
       retry_ctrl_.set_sys_global_schema_version(sys_version);
       session.partition_hit().reset();
       session.set_pl_can_retry(true);
-      session.set_enable_mysql_compatible_dates(
-        session.get_enable_mysql_compatible_dates_from_config());
 
       need_response_error = false;
       need_disconnect = false;
