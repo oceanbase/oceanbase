@@ -1387,6 +1387,15 @@ int ObUserTenantBackupDeleteMgr::get_all_dest_backup_piece_infos_(
         LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
       } else if (OB_FAIL(archive_table_op.get_candidate_obsolete_backup_pieces(*sql_proxy_, clog_data_clean_point.start_replay_scn_, backup_path_str.ptr(), backup_piece_infos))) {
         LOG_WARN("failed to get candidate obsolete backup sets", K(ret)); 
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < backup_piece_infos.count(); j++) {
+          const ObTenantArchivePieceAttr &backup_piece_info = backup_piece_infos.at(j);
+          if (backup_piece_info.end_scn_ >= clog_data_clean_point.start_replay_scn_) {
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("backup piece can not be deleted, because end_scn is greater than clog_data_clean_point.start_replay_scn_",
+                K(ret), K(backup_piece_info), K(clog_data_clean_point));
+          }
+        }
       }
     }
   }
