@@ -3102,7 +3102,6 @@ int ObLSTabletService::update_rows(
     bool rowkey_change = false;
     UpdateIndexArray update_idx;
     ObRowStore row_store;
-    bool delay_new = false;
     bool lob_update = false;
     ObRelativeTable &relative_table = run_ctx.relative_table_;
     char *buf = nullptr;
@@ -3134,9 +3133,33 @@ int ObLSTabletService::update_rows(
       ObStoreRow *tmp_tbl_rows = nullptr;
       ObTabletHandle tmp_handle;
       ObRowsInfo *rows_infos = nullptr;
+      /**
+      * When _ob_immediate_row_conflict_check is true, indicates MySQL compatibility mode requiring:
+      * - Row-by-row UPDATE execution
+      * - Immediate conflict row checking
+      *
+      * Normally conflict row checking not needed for non-unique indexes, it is required in these special cases:
+      * 1. Partitioned table PK updates causing row movement:
+      *    - DAS layer splits into DELETE+INSERT
+      *    - Global indexes may use UPDATE directly
+      *    - Different execution paths may cause inconsistent conflict handling
+      *    between main table and index table
+      *
+      * 2. PDML (Parallel DML) PK updates:
+      *    - Different threads updating different rows
+      *    - Update order mismatch between main table and index table
+      *    - May lead to inconsistent conflict resolution
+      *
+      * For these cases, non-unique indexes MUST still perform conflict checking
+      * (through duplicate key error reporting) to prevent data inconsistency, but this checking
+      * can keep using batch interfaces without row-by-row updates.
+      */
+      const bool use_row_by_row_update = ctx.mvcc_acc_ctx_.write_flag_.is_immediate_row_check() &&
+        rowkey_change && (!relative_table.is_storage_index_table() || relative_table.is_unique_index());
       // delay_new is for oracle compatible, refer to
-      const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() || relative_table.is_unique_index());
-      const bool delay_new = check_exist && lib::is_oracle_mode();
+      //const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() || relative_table.is_unique_index());
+      //const bool delay_new = check_exist && lib::is_oracle_mode();
+      bool delay_new = false;
 
       while (OB_SUCC(ret)
           && OB_SUCC(row_iter->get_next_rows(old_rows, old_rows_count))
@@ -3221,8 +3244,7 @@ int ObLSTabletService::update_rows(
               LOG_WARN("failed to update row to tablet", K(ret), K(old_tbl_row), K(new_tbl_row));
             }
           } else {
-            // for mysql compatible, batch primary key updation can only be processed row by row
-            if (check_exist && lib::is_mysql_mode()) {
+            if (use_row_by_row_update) {
               for (int64_t i = 0; OB_SUCC(ret) && i < new_rows_count; i++) {
                 if (OB_FAIL(update_row_to_tablet(tmp_handle,
                                                  run_ctx,
@@ -3909,18 +3931,6 @@ int ObLSTabletService::need_check_old_row_legitimacy(ObDMLRunningCtx &run_ctx,
       } else {
         need_check = table_ptr->is_major_sstable();
       }
-    }
-  } else if (dml_param.is_batch_stmt_ && !data_table.is_index_table()) {
-    //batch stmt execution dependency defensive check to check
-    //if the same row was modified multiple times
-    need_check = true;
-    ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
-    // no need to check old row, just for bmsql performance optimization
-    // TODO yuchen.ywc
-    if (OB_SUCCESS != ret) {
-      LOG_INFO("error sim when current statement is batch update", K(ret), K(is_udf));
-      need_check = false;
-      ret = OB_SUCCESS;
     }
   } else if (GCONF.enable_defensive_check()) {
     need_check = true;
@@ -5268,7 +5278,8 @@ int ObLSTabletService::process_new_rows(
       const bool check_exist = rowkey_change &&
         (!relative_table.is_storage_index_table() ||
          relative_table.is_unique_index() ||
-         run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
+         run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop() ||
+         run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_immediate_row_check());
       if (OB_FAIL(tablet_handle.get_obj()->insert_rows(relative_table,
                                                        run_ctx.store_ctx_,
                                                        check_exist,
@@ -5345,8 +5356,8 @@ int ObLSTabletService::process_new_row(
 
       const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() ||
         relative_table.is_unique_index() ||
-        run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_immediate_row_check() ||
-        run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop());
+        run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_update_pk_dop() ||
+        run_ctx.store_ctx_.mvcc_acc_ctx_.write_flag_.is_immediate_row_check());
       if (OB_FAIL(tablet_handle.get_obj()->insert_row(relative_table,
                                                       run_ctx.store_ctx_,
                                                       check_exist,
