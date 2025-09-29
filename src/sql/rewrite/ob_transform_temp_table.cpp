@@ -3513,6 +3513,8 @@ int ObTransformTempTable::prepare_eval_cte_cost_stmt(ObDMLStmt &root_stmt,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
@@ -3588,6 +3590,8 @@ int ObTransformTempTable::copy_and_replace_trans_root(ObDMLStmt &root_stmt,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
