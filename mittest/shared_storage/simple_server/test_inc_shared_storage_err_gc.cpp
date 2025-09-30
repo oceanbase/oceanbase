@@ -137,7 +137,7 @@ public:
     SCN snapshot;
     SCN tenant_gc_scn;
     tenant_gc_scn.set_max();
-    ObArray<ObFuture<SSGCTaskRet>> results;
+  ObArray<SSGCTaskRet> tenant_results;
 
     ObArray<ObFunction<SSGCTaskRet(const ObLSID, const ObTabletID, const SCN)>> gc_task_execute_list;
     ObArray<ObLSID> ls_id_list;
@@ -159,15 +159,33 @@ public:
       for (int64_t i = 0; i < ls_id_list.count() && OB_SUCC(ret); i++) {
         const ObLSID ls_id = ls_id_list.at(i);
         SCN ls_gc_scn;
-        if (OB_FAIL(gc_log_stream_in_ss_(snapshot, ls_id, gc_task_execute_list, ls_gc_scn, results))) {
+        ObArray<SSGCTaskRet> ls_results;
+        if (OB_FAIL(gc_log_stream_in_ss_(snapshot, ls_id, gc_task_execute_list, ls_gc_scn, ls_results))) {
           LOG_WARN("gc log_streams in ss failed", KR(ret), K(snapshot));
         } else if (ls_gc_scn.is_valid()) {
           tenant_gc_scn = SCN::min(tenant_gc_scn, ls_gc_scn);
         }
+        if (OB_SUCC(ret) && !ls_results.empty()) {
+          if (OB_FAIL(process_ls_results_(ls_results, last_succ_scns))) {
+            LOG_WARN("process ls results failed", KR(ret), K(ls_id));
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < ls_results.count(); j++) {
+              if (OB_FAIL(tenant_results.push_back(ls_results.at(j)))) {
+                LOG_WARN("push ls result to all results failed", KR(ret), K(ls_id));
+                break;
+              }
+            }
+          }
+          ls_results.reset();
+        }
+
+        FLOG_INFO("finish gc log stream", KR(ret), K(snapshot), K(ls_id), K(last_succ_scns));
       }
     }
-    if (FAILEDx(set_last_succ_scns_(tenant_gc_scn, results, last_succ_scns))) {
-      LOG_WARN("set last success scns failed", KR(ret), K(tenant_gc_scn));
+    if (OB_SUCC(ret) && !tenant_results.empty()) {
+      if (OB_FAIL(set_last_succ_scns_(tenant_gc_scn, tenant_results, last_succ_scns))) {
+        LOG_WARN("set last success scns failed", KR(ret), K(tenant_gc_scn));
+      }
     }
 
     return ret;
