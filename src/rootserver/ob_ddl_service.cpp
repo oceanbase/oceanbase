@@ -20160,6 +20160,7 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
   uint64_t session_id = arg.session_id_;
   bool is_oracle_mode = lib::Worker::CompatMode::ORACLE == arg.compat_mode_
                         ? true : false;
+  ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     common::sqlclient::ObMySQLResult *result = NULL;
     bool skip_escape = false;
@@ -20175,6 +20176,8 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
     } else if (OB_ISNULL(tmp_database_name)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("database name is NULL", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GSCHEMASERVICE.get_tenant_name_case_mode(tenant_id, name_case_mode))) {
+      LOG_WARN("failed to get tenant name case mode", KR(ret), K(tenant_id));
     } else if (OB_FAIL(sql.assign_fmt("SELECT session_id, a.database_id, table_id, database_name, table_name "
                               "FROM %s a JOIN (SELECT session_id, database_id, table_id, table_name FROM %s "
                               "UNION ALL SELECT session_id, database_id, table_id, table_name FROM %s WHERE tenant_id = %ld) c "
@@ -20193,13 +20196,14 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
       ObString new_database_name;
       ObString new_table_name;
       bool not_find_table = true;
+      const bool case_compare = (OB_ORIGIN_AND_SENSITIVE != name_case_mode);
       while(OB_SUCC(ret) && OB_SUCC(result->next())) {
         EXTRACT_INT_FIELD_MYSQL(*result, "session_id", tmp_session_id, uint64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "database_id", database_id, uint64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, uint64_t);
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "database_name", new_database_name);
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", new_table_name);
-        if (OB_SUCC(ret) && is_oracle_mode){
+        if (OB_SUCC(ret) && !case_compare){
           if (0 != new_database_name.compare(database_name)) {
             //do nothing
           } else if (0 != new_table_name.compare(table_name)) {
