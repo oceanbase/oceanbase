@@ -157,9 +157,10 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
       } else {
         ObString path_text = path_data->get_string();
         ObJsonPath *j_path = NULL;
+        bool is_const = expr.args_[i]->is_const_expr();
         if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[i], ctx, allocator, path_text, is_null_result))) {
           LOG_WARN("fail to get real data.", K(ret), K(path_text));
-        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, path_text, i, true))) {
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(allocator, path_cache, j_path, path_text, i, true, is_const))) {
           LOG_WARN("parse text to path failed", K(path_text), K(ret));
         } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, false, hit))) {
           LOG_WARN("json seek failed", K(path_text), K(ret));
