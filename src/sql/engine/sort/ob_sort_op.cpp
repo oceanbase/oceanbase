@@ -129,10 +129,22 @@ void ObSortOp::destroy()
 
 int ObSortOp::inner_close()
 {
+  int ret = OB_SUCCESS;
   sort_impl_.collect_memory_dump_info(op_monitor_info_);
   sort_impl_.unregister_profile();
   prefix_sort_impl_.unregister_profile();
-  return OB_SUCCESS;
+  if (MY_SPEC.enable_pd_topn_filter()) {
+    uint32_t expr_ctx_id = MY_SPEC.pd_topn_filter_info_.expr_ctx_id_;
+    ObExprTopNFilterContext *topn_filter_ctx =
+        static_cast<ObExprTopNFilterContext *>(ctx_.get_expr_op_ctx(expr_ctx_id));
+    if (OB_NOT_NULL(topn_filter_ctx)) {
+      SET_METRIC_VAL(ObMetricId::TOPN_RUNTIME_FILTER_CHECK_ROWS, topn_filter_ctx->check_count_);
+      SET_METRIC_VAL(ObMetricId::TOPN_RUNTIME_FILTER_FILTER_ROWS, topn_filter_ctx->filter_count_);
+      SET_METRIC_VAL(ObMetricId::TOPN_RUNTIME_FILTER_BYPASS_ROWS,
+                     topn_filter_ctx->total_count_ - topn_filter_ctx->check_count_);
+    }
+  }
+  return ret;
 }
 
 int ObSortOp::get_int_value(const ObExpr *in_val, int64_t &out_val)

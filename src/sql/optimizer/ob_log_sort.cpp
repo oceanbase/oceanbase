@@ -604,6 +604,9 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
   } else if (OB_ISNULL(topn_expr_)) {
     // not topn scene
     can_allocate = false;
+  } else if (topn_expr_ && part_cnt_ > 0) {
+    // no topn runtime filter in partition topn
+    can_allocate = false;
   } else if (prefix_pos_ > 0) {
     // For index (c1, c2 c3), if order by c1, c3, its prefix sort scene
     // if all the date of c1 is unique, topn runtime filter is useless,
