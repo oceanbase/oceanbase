@@ -3697,30 +3697,47 @@ int ObParquetTableRowIterator::next_sector(const int64_t capacity, ObEvalCtx &ev
 {
   int ret = OB_SUCCESS;
   read_count = 0;
-  while (OB_SUCC(ret) && 0 == read_count) {
-    if (state_.logical_read_row_count_ >= state_.cur_row_group_row_count_) {
-      if (OB_FAIL(next_row_group())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to next row group", K(ret));
+  try {
+    while (OB_SUCC(ret) && 0 == read_count) {
+      if (state_.logical_read_row_count_ >= state_.cur_row_group_row_count_) {
+        if (OB_FAIL(next_row_group())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to next row group", K(ret));
+          }
+        }
+      }
+      if (!file_column_exprs_.count()) {
+        read_count = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
+        state_.logical_read_row_count_ += read_count;
+        state_.logical_eager_read_row_count_ += read_count;
+      } else {
+        if (OB_FAIL(ret)) {
+        } else if (sector_iter_.is_end() && FALSE_IT(move_next())) {
+        } else if (OB_FAIL(sector_iter_.prepare_next(state_.cur_row_group_row_count_ - (has_eager_columns()
+                                  ? state_.logical_eager_read_row_count_ : state_.logical_read_row_count_),
+                                      capacity, scan_param_->pd_storage_filters_, eval_ctx))) {
+          LOG_WARN("failed to prepare next", K(ret));
+        } else if (sector_iter_.is_empty()) {
+        } else if (FALSE_IT(scan_param_->op_->clear_evaluated_flag())) {
+        } else if (OB_FAIL(project_lazy_columns(read_count, capacity))) {
+          LOG_WARN("failed to project lazy columns", K(ret));
         }
       }
     }
-    if (!file_column_exprs_.count()) {
-      read_count = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
-      state_.logical_read_row_count_ += read_count;
-      state_.logical_eager_read_row_count_ += read_count;
-    } else {
-      if (OB_FAIL(ret)) {
-      } else if (sector_iter_.is_end() && FALSE_IT(move_next())) {
-      } else if (OB_FAIL(sector_iter_.prepare_next(state_.cur_row_group_row_count_ - (has_eager_columns()
-                                ? state_.logical_eager_read_row_count_ : state_.logical_read_row_count_),
-                                    capacity, scan_param_->pd_storage_filters_, eval_ctx))) {
-        LOG_WARN("failed to prepare next", K(ret));
-      } else if (sector_iter_.is_empty()) {
-      } else if (FALSE_IT(scan_param_->op_->clear_evaluated_flag())) {
-      } else if (OB_FAIL(project_lazy_columns(read_count, capacity))) {
-        LOG_WARN("failed to project lazy columns", K(ret));
-      }
+  } catch (const ObErrorCodeException &ob_error) {
+    if (OB_SUCC(ret)) {
+      ret = ob_error.get_error_code();
+      LOG_WARN("fail to read file", K(ret));
+    }
+  } catch(const std::exception& e) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());
+    }
+  } catch(...) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
     }
   }
   return ret;
