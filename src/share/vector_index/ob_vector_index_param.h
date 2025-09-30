@@ -30,7 +30,8 @@ public:
     flags_(0),
     ef_search_(0),
     refine_k_(0),
-    ob_sparse_drop_ratio_search_(0)
+    ob_sparse_drop_ratio_search_(0),
+    ivf_nprobes_(0)
   {}
   virtual ~ObVectorIndexQueryParam() {}
   int assign(const ObVectorIndexQueryParam &other);
@@ -43,16 +44,18 @@ public:
       uint64_t is_set_refine_k_             : 1;
       uint64_t is_set_drop_ratio_search_    : 1;
       uint64_t is_set_similarity_threshold_ : 1;
-      uint64_t reserved_                    : 60;
+      uint64_t is_set_ivf_nprobes_          : 1;
+      uint64_t reserved_                    : 59;
     };
   };
   int32_t ef_search_;
   float refine_k_;
   float ob_sparse_drop_ratio_search_;
   float similarity_threshold_;
+  int32_t ivf_nprobes_;
 
   TO_STRING_KV(K_(is_set_ef_search), K_(ef_search),
-      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(reserved));
+      K_(is_set_refine_k), K_(refine_k), K_(ob_sparse_drop_ratio_search), K_(is_set_similarity_threshold), K_(similarity_threshold), K_(is_set_ivf_nprobes), K_(ivf_nprobes), K_(reserved));
 
 };
 

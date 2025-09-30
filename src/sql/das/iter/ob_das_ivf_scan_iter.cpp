@@ -267,7 +267,11 @@ int ObDASIvfBaseScanIter::inner_init(ObDASIterParam &param)
         } else {
           ObSQLSessionInfo *session = nullptr;
           uint64_t ob_ivf_nprobes = 0;
-          if (OB_ISNULL(session = sort_rtdef_->eval_ctx_->exec_ctx_.get_my_session())) {
+
+          if (OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->vec_query_param_.is_set_ivf_nprobes_) {
+            nprobes_ = vec_aux_ctdef_->vec_query_param_.ivf_nprobes_;
+            LOG_TRACE("use stmt ivf_nprobes", K(nprobes_));
+          } else if (OB_ISNULL(session = sort_rtdef_->eval_ctx_->exec_ctx_.get_my_session())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to get session", K(ret), KPC(session));
           } else if (OB_FAIL(session->get_ob_ivf_nprobes(ob_ivf_nprobes))) {

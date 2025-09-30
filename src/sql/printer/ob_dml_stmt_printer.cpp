@@ -2296,6 +2296,9 @@ int ObDMLStmtPrinter::print_vector_index_query_param()
       if (OB_SUCC(ret) && param.is_set_refine_k_) {
         DATA_PRINTF(", refine_k=%f", param.refine_k_);
       }
+      if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
+        DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
+      }
       DATA_PRINTF(") ");
     }
   }

@@ -427,7 +427,21 @@ int ObVectorIndexUtil::resolve_query_param(
           param.refine_k_ = out_val;
           param.is_set_refine_k_ = 1;
         }
-      } else {
+      } else if (param_name.case_compare("IVF_NPROBES") == 0) {
+        if (param.is_set_ivf_nprobes_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate ivf_nprobes param", K(ret), K(i));
+        } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
+        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 65536)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
+        } else {
+          param.ivf_nprobes_ = value_node->value_;
+          param.is_set_ivf_nprobes_ = 1;
+        }
+      }  else {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid query param", K(ret), K(i), K(param_name));
       }
