@@ -142,7 +142,7 @@ namespace common {
                                                    bucket_cnt,                \
                                                    histogram_type,            \
                                                    spare1                     \
-                                             FROM %s                          \
+                                             FROM %s%s                        \
                                              WHERE %s"
 
 #define COLUMN_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, %lu, usec_to_time(%ld), 0, 0, usec_to_time(%ld), 0, 0, \
@@ -170,14 +170,13 @@ namespace common {
                                                       endpoint_value,           \
                                                       b_endpoint_value,         \
                                                       endpoint_repeat_cnt       \
-                                                FROM %s                         \
+                                                FROM %s%s                       \
                                                 WHERE %s"
 
 #define CHECK_TABLE_STAT "SELECT partition_id FROM %s WHERE tenant_id = %lu \
                           and table_id = %lu %s"
 
-#define CHECK_COLUMN_STAT "SELECT partition_id, column_id FROM %s WHERE tenant_id = %lu \
-                           and table_id = %lu %s"
+#define CHECK_COLUMN_STAT "SELECT partition_id, column_id FROM %s%s WHERE %s"
 
 int ObDbmsStatsHistoryManager::backup_opt_stats(ObExecContext &ctx,
                                                 ObMySQLTransaction &trans,
@@ -427,7 +426,19 @@ int ObDbmsStatsHistoryManager::backup_column_stats(ObExecContext &ctx,
   int64_t map_size = part_ids.count() * column_ids.count();
   bool is_specify_partition = param.is_specify_partition();
   bool is_specify_column = param.is_specify_column();
+  ObSqlString part_col_ids_table;
+  ObSqlString where_str;
   if (part_ids.empty() || column_ids.empty()) {
+    // do nothing
+  } else if (OB_FAIL(gen_column_stats_where_str(param.tenant_id_,
+                                                param.table_id_,
+                                                is_specify_partition,
+                                                is_specify_column,
+                                                part_ids,
+                                                column_ids,
+                                                part_col_ids_table,
+                                                where_str))) {
+    LOG_WARN("failed to gen part col where str", K(ret));
   } else if (OB_FAIL(having_stat_part_col_map.create(map_size,
                                                      "PartColHashMap",
                                                      "PartColNode",
@@ -436,15 +447,13 @@ int ObDbmsStatsHistoryManager::backup_column_stats(ObExecContext &ctx,
   } else if (OB_FAIL(generate_having_stat_part_col_map(ctx,
                                                        param.tenant_id_,
                                                        param.table_id_,
-                                                       is_specify_partition,
-                                                       is_specify_column,
-                                                       part_ids,
-                                                       column_ids,
+                                                       part_col_ids_table,
+                                                       where_str,
                                                        having_stat_part_col_map))) {
-    LOG_WARN("failed to calssify table stat part ids", K(ret));
-  } else if (OB_FAIL(backup_having_column_stats(trans, param.tenant_id_, param.table_id_,
-                                                is_specify_partition || is_specify_column,
-                                                part_ids, column_ids,
+    LOG_WARN("failed to generate having stat part col map", K(ret));
+  } else if (OB_FAIL(backup_having_column_stats(trans, param.tenant_id_,
+                                                part_col_ids_table,
+                                                where_str,
                                                 having_stat_part_col_map,
                                                 saving_time))) {
     LOG_WARN("failed to backup have column part stats", K(ret));
@@ -453,61 +462,93 @@ int ObDbmsStatsHistoryManager::backup_column_stats(ObExecContext &ctx,
                                             having_stat_part_col_map,
                                             saving_time))) {
     LOG_WARN("failed to backup column part stats", K(ret));
-  } else if (OB_FAIL(backup_histogram_stats(trans, param.tenant_id_, param.table_id_,
-                                            is_specify_partition,
-                                            is_specify_column,
-                                            part_ids, column_ids,
+  } else if (OB_FAIL(backup_histogram_stats(trans, param.tenant_id_,
+                                            part_col_ids_table,
+                                            where_str,
                                             having_stat_part_col_map,
                                             saving_time))) {
-    LOG_WARN("faile to do backup histogram stats", K(ret));
+    LOG_WARN("failed to do backup histogram stats", K(ret));
   } else {/*do nothing*/}
+  return ret;
+}
+
+int ObDbmsStatsHistoryManager::gen_column_stats_where_str(const uint64_t tenant_id,
+                                                          const uint64_t table_id,
+                                                          const bool is_specify_partition,
+                                                          const bool is_specify_column,
+                                                          const ObIArray<int64_t> &partition_ids,
+                                                          const ObIArray<uint64_t> &column_ids,
+                                                          ObSqlString &part_col_ids_table,
+                                                          ObSqlString &where_str)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString partition_ids_table;
+  ObSqlString column_ids_table;
+  if (OB_FAIL(where_str.assign_fmt(" tenant_id = %lu and table_id = %lu",
+                                   share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                   share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
+    LOG_WARN("failed to assign tenant id and table id", K(ret));
+  }
+  if (OB_SUCC(ret) && is_specify_partition) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
+      if (OB_FAIL(partition_ids_table.append_fmt("%s%ld%s", i == 0 ? " (values row(" : "row(",
+                                                 partition_ids.at(i),
+                                                 i == partition_ids.count() - 1 ? ")) AS partition_ids_table(pid)" : "), "))) {
+        LOG_WARN("failed to append sql", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  if (OB_SUCC(ret) && is_specify_column) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+      if (OB_FAIL(column_ids_table.append_fmt("%s%lu%s", i == 0 ? " (values row(" : "row(",
+                                              column_ids.at(i),
+                                              i == column_ids.count() - 1 ? ")) AS column_ids_table(cid)" : "), "))) {
+        LOG_WARN("failed to append sql", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_specify_partition && is_specify_column) {
+    if (OB_FAIL(part_col_ids_table.assign_fmt(", (select /*+NO_MERGE*/ * from %s, %s) part_col_ids_table",
+                                               partition_ids_table.ptr(),
+                                               column_ids_table.ptr()))) {
+      LOG_WARN("failed to assign partition and column ids table", K(ret));
+    } else if (OB_FAIL(where_str.append_fmt(" and partition_id = part_col_ids_table.pid and column_id = part_col_ids_table.cid"))) {
+      LOG_WARN("failed to append where str", K(ret));
+    }
+  } else if (is_specify_partition || is_specify_column) {
+    if (OB_FAIL(part_col_ids_table.assign_fmt(", %s",
+                                              is_specify_partition ? partition_ids_table.ptr() : column_ids_table.ptr()))) {
+      LOG_WARN("failed to assign partition and column ids table", K(ret));
+    } else if (OB_FAIL(where_str.append_fmt(is_specify_partition ? " and partition_id = partition_ids_table.pid"
+                                                                   : " and column_id = column_ids_table.cid"))) {
+      LOG_WARN("failed to append where str", K(ret));
+    }
+  } else {
+    if (OB_FAIL(part_col_ids_table.assign_fmt(" "))) {
+      LOG_WARN("failed to assign partition and column ids table", K(ret));
+    }
+  }
   return ret;
 }
 
 int ObDbmsStatsHistoryManager::generate_having_stat_part_col_map(ObExecContext &ctx,
                                                                  const uint64_t tenant_id,
                                                                  const uint64_t table_id,
-                                                                 const bool is_specify_partition,
-                                                                 const bool is_specify_column,
-                                                                 const ObIArray<int64_t> &partition_ids,
-                                                                 const ObIArray<uint64_t> &column_ids,
+                                                                 const ObSqlString &part_col_ids_table,
+                                                                 const ObSqlString &where_str,
                                                                  hash::ObHashMap<ObOptColumnStat::Key, bool> &have_stat_part_col_map)
 {
   int ret = OB_SUCCESS;
-  ObSqlString partition_list;
-  ObSqlString column_list;
-  ObSqlString extra_partition_str;
-  ObSqlString extra_column_str;
-  ObSqlString extra_where_str;
   ObSqlString raw_sql;
-  ObSQLSessionInfo *session = ctx.get_my_session();
   ObMySQLProxy *mysql_proxy = ctx.get_sql_proxy();
-  if (OB_ISNULL(mysql_proxy) || OB_ISNULL(session) ||
-      OB_UNLIKELY(partition_ids.empty() || column_ids.empty())) {
+  if (OB_ISNULL(mysql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy), K(session), K(partition_ids), K(column_ids));
-  } else if (is_specify_partition &&
-             OB_FAIL(gen_partition_list(partition_ids, partition_list))) {
-    LOG_WARN("failed to gen partition list", K(ret));
-  } else if (is_specify_partition &&
-             OB_FAIL(extra_partition_str.append_fmt(" and partition_id in %s", partition_list.ptr()))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (is_specify_column &&
-             OB_FAIL(gen_column_list(column_ids, column_list))) {
-    LOG_WARN("failed to gen column list", K(ret));
-  } else if (is_specify_column &&
-             OB_FAIL(extra_column_str.append_fmt(" and column_id in %s", column_list.ptr()))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if ((is_specify_partition || is_specify_column) &&
-             OB_FAIL(extra_where_str.append_fmt("%s%s",
-                                                is_specify_partition ? extra_partition_str.ptr() : " ",
-                                                is_specify_column ? extra_column_str.ptr() : " "))) {
-    LOG_WARN("failed to append fmt", K(ret));
+    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy));
   } else if (OB_FAIL(raw_sql.append_fmt(CHECK_COLUMN_STAT,
                                         share::OB_ALL_COLUMN_STAT_TNAME,
-                                        share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                        share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
-                                        (is_specify_partition || is_specify_column) ? extra_where_str.ptr() : " "))) {
+                                        part_col_ids_table.ptr(),
+                                        where_str.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
@@ -540,7 +581,7 @@ int ObDbmsStatsHistoryManager::generate_having_stat_part_col_map(ObExecContext &
             }
           }
         }
-        if (OB_ITER_END != ret) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to get result", K(ret));
         } else {
           ret = OB_SUCCESS;
@@ -555,16 +596,14 @@ int ObDbmsStatsHistoryManager::generate_having_stat_part_col_map(ObExecContext &
       }
     }
   }
-  LOG_TRACE("generate having stat part col map", K(have_stat_part_col_map.size()), K(partition_ids), K(column_ids));
+  LOG_TRACE("generate having stat part col map", K(have_stat_part_col_map.size()), K(where_str));
   return ret;
 }
 
 int ObDbmsStatsHistoryManager::backup_having_column_stats(ObMySQLTransaction &trans,
                                                           const uint64_t tenant_id,
-                                                          const uint64_t table_id,
-                                                          const bool is_specify_gather,
-                                                          const ObIArray<int64_t> &partition_ids,
-                                                          const ObIArray<uint64_t> &column_ids,
+                                                          const ObSqlString &part_col_ids_table,
+                                                          const ObSqlString &where_str,
                                                           hash::ObHashMap<ObOptColumnStat::Key, bool> &having_stat_part_col_map,
                                                           const int64_t saving_time)
 {
@@ -572,121 +611,24 @@ int ObDbmsStatsHistoryManager::backup_having_column_stats(ObMySQLTransaction &tr
   if (having_stat_part_col_map.size() != 0) {
     ObSqlString raw_sql;
     ObSqlString select_sql;
-    ObSqlString where_str;
-    bool need_backup = true;
-    if (OB_LIKELY(having_stat_part_col_map.size() == partition_ids.count() * column_ids.count())) {
-      if (!is_specify_gather) {
-        if (OB_FAIL(where_str.append_fmt(" tenant_id = %lu and table_id = %lu",
-                                         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                         share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
-          LOG_WARN("failed to append fmt", K(ret));
-        }
-      } else {
-        ObSqlString partition_list;
-        ObSqlString column_list;
-        if (OB_FAIL(gen_partition_list(partition_ids, partition_list))) {
-          LOG_WARN("failed to gen partition list", K(ret));
-        } else if (OB_FAIL(gen_column_list(column_ids, column_list))) {
-          LOG_WARN("failed to gen partition list", K(ret));
-        } else if (OB_FAIL(where_str.append_fmt(" tenant_id = %lu and table_id = %lu and partition_id in %s and column_id in %s",
-                                                share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                                share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
-                                                partition_list.ptr(),
-                                                column_list.ptr()))) {
-          LOG_WARN("failed to append fmt", K(ret));
-        }
-      }
+    uint64_t data_version = 0;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret));
+    } else if (OB_FAIL(select_sql.append_fmt(SELECT_COLUMN_STAT,
+                                             saving_time,
+                                             share::OB_ALL_COLUMN_STAT_TNAME,
+                                             part_col_ids_table.ptr(),
+                                             where_str.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    } else if (OB_FAIL(raw_sql.append_fmt(INSERT_COLUMN_STAT_HISTORY,
+                                          share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
+                                          select_sql.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to exec sql", K(raw_sql), K(ret));
     } else {
-      // tenant_id = xx and table_id = xx and ((partition_id in xx and column_id in xx) or ((partition_id, column_id) in ((xx))))
-      ObSqlString partition_list;
-      ObSqlString part_col_list;
-      bool is_first_part_list = true;
-      bool is_first_part_col_list = true;
-      for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); ++i) {
-        bool all_get = true;
-        ObSqlString tmp_part_col_list;
-        bool is_first = true;
-        for (int64_t j = 0; OB_SUCC(ret) && j < column_ids.count(); ++j) {
-          ObOptColumnStat::Key key(tenant_id, table_id, partition_ids.at(i), column_ids.at(j));
-          bool val = false;
-          if (OB_FAIL(having_stat_part_col_map.get_refactored(key, val))) {
-            if (OB_HASH_NOT_EXIST == ret) {
-              ret = OB_SUCCESS; // continue
-              all_get = false;
-            } else {
-              LOG_WARN("failed to get map", K(ret), K(key));
-            }
-          } else if (OB_FAIL(tmp_part_col_list.append_fmt("%s(%ld, %lu)", is_first ? " " : ", ",
-                                                          partition_ids.at(i),
-                                                          column_ids.at(j)))) {
-            LOG_WARN("failed to append fmt", K(ret));
-          } else {
-            is_first = false;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (all_get) {
-            if (OB_FAIL(partition_list.append_fmt("%s%ld",
-                                                  is_first_part_list ? " " : ", ",
-                                                  partition_ids.at(i)))) {
-              LOG_WARN("failed to append fmt", K(ret));
-            } else {
-              is_first_part_list = false;
-            }
-          } else if (tmp_part_col_list.empty()) {
-            //do nothing
-          } else if (OB_FAIL(part_col_list.append_fmt("%s%s",
-                                                      is_first_part_col_list ? " " : ", ",
-                                                      tmp_part_col_list.ptr()))) {
-            LOG_WARN("failed to append fmt", K(ret));
-          } else {
-            is_first_part_col_list = false;
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObSqlString all_column_list;
-        ObSqlString part_col_where1;
-        ObSqlString part_col_where2;
-        if (OB_FAIL(gen_column_list(column_ids, all_column_list))) {
-          LOG_WARN("failed to gen partition list", K(ret));
-        } else if (!partition_list.empty() &&
-                   OB_FAIL(part_col_where1.append_fmt("(partition_id in (%s) and column_id in %s)",
-                                                       partition_list.ptr(),
-                                                       all_column_list.ptr()))) {
-          LOG_WARN("failed to append fmt", K(ret));
-        } else if (!part_col_list.empty() &&
-                   OB_FAIL(part_col_where2.append_fmt("((partition_id, column_id) in (%s))",
-                                                       part_col_list.ptr()))) {
-          LOG_WARN("failed to append fmt", K(ret));
-        } else if (part_col_where1.empty() && part_col_where2.empty()) {
-          need_backup = false;
-        } else if (OB_FAIL(where_str.append_fmt(" tenant_id = %lu and table_id = %lu and (%s %s %s)",
-                                                share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                                share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
-                                                part_col_where1.empty() ? " " : part_col_where1.ptr(),
-                                                !part_col_where1.empty() && !part_col_where2.empty() ? "or" : " ",
-                                                part_col_where2.empty() ? " " : part_col_where2.ptr()))) {
-          LOG_WARN("failed to append fmt", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret) && need_backup) {
-      int64_t affected_rows = 0;
-      if (OB_FAIL(select_sql.append_fmt(SELECT_COLUMN_STAT,
-                                        saving_time,
-                                        share::OB_ALL_COLUMN_STAT_TNAME,
-                                        where_str.ptr()))) {
-        LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_FAIL(raw_sql.append_fmt(INSERT_COLUMN_STAT_HISTORY,
-                                            share::OB_ALL_COLUMN_STAT_HISTORY_TNAME,
-                                            select_sql.ptr()))) {
-        LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
-        LOG_WARN("fail to exec sql", K(raw_sql), K(ret));
-      } else {
-        LOG_TRACE("succeed to backup having column stats", K(raw_sql), K(affected_rows));
-      }
+      LOG_TRACE("succeed to backup having column stats", K(raw_sql), K(affected_rows));
     }
   }
   return ret;
@@ -794,49 +736,21 @@ int ObDbmsStatsHistoryManager::backup_no_column_stats(ObMySQLTransaction &trans,
 
 int ObDbmsStatsHistoryManager::backup_histogram_stats(ObMySQLTransaction &trans,
                                                       const uint64_t tenant_id,
-                                                      const uint64_t table_id,
-                                                      const bool is_specify_partition,
-                                                      const bool is_specify_column,
-                                                      const ObIArray<int64_t> &partition_ids,
-                                                      const ObIArray<uint64_t> &column_ids,
+                                                      const ObSqlString &part_col_ids_table,
+                                                      const ObSqlString &where_str,
                                                       hash::ObHashMap<ObOptColumnStat::Key, bool> &having_stat_part_col_map,
                                                       const int64_t saving_time)
 {
   int ret = OB_SUCCESS;
   if (having_stat_part_col_map.size() != 0) {//only process have stat part col.
     ObSqlString raw_sql;
-    ObSqlString where_str;
-    ObSqlString extra_partition_str;
-    ObSqlString extra_column_str;
-    ObSqlString extra_where_str;
-    ObSqlString partition_list;
-    ObSqlString column_list;
     int64_t affected_rows = 0;
-    if (is_specify_partition && OB_FAIL(gen_partition_list(partition_ids, partition_list))) {
-      LOG_WARN("failed to gen partition list", K(ret));
-    } else if (is_specify_partition &&
-               OB_FAIL(extra_partition_str.append_fmt(" and partition_id in %s", partition_list.ptr()))) {
-      LOG_WARN("failed to append fmt", K(ret));
-    } else if (is_specify_column && OB_FAIL(gen_column_list(column_ids, column_list))) {
-      LOG_WARN("failed to gen column list", K(ret));
-    } else if (is_specify_column &&
-               OB_FAIL(extra_column_str.append_fmt(" and column_id in %s", column_list.ptr()))) {
-      LOG_WARN("failed to append fmt", K(ret));
-    } else if ((is_specify_partition || is_specify_column) &&
-               OB_FAIL(extra_where_str.append_fmt("%s%s",
-                                                  is_specify_partition ? extra_partition_str.ptr() : " ",
-                                                  is_specify_column ? extra_column_str.ptr() : " "))) {
-      LOG_WARN("failed to append fmt", K(ret));
-    } else if (OB_FAIL(where_str.append_fmt(" tenant_id = %lu and table_id = %lu %s",
-                                            share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                            share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
-                                            (is_specify_partition || is_specify_column) ? extra_where_str.ptr() : " "))) {
-        LOG_WARN("failed to append fmt", K(ret));
-    } else if (OB_FAIL(raw_sql.append_fmt(INSERT_HISTOGRAM_STAT_HISTORY,
-                                          share::OB_ALL_HISTOGRAM_STAT_HISTORY_TNAME,
-                                          saving_time,
-                                          share::OB_ALL_HISTOGRAM_STAT_TNAME,
-                                          where_str.ptr()))) {
+    if (OB_FAIL(raw_sql.append_fmt(INSERT_HISTOGRAM_STAT_HISTORY,
+                                   share::OB_ALL_HISTOGRAM_STAT_HISTORY_TNAME,
+                                   saving_time,
+                                   share::OB_ALL_HISTOGRAM_STAT_TNAME,
+                                   part_col_ids_table.ptr(),
+                                   where_str.ptr()))) {
       LOG_WARN("failed to append fmt", K(ret));
     } else if (OB_FAIL(trans.write(tenant_id, raw_sql.ptr(), affected_rows))) {
       LOG_WARN("fail to exec sql", K(raw_sql), K(ret));

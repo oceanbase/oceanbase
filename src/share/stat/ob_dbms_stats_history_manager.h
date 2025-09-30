@@ -143,21 +143,26 @@ private:
                                  const ObIArray<int64_t> &part_ids,
                                  const ObIArray<uint64_t> &column_ids);
 
+  static int gen_column_stats_where_str(const uint64_t tenant_id,
+                                        const uint64_t table_id,
+                                        const bool is_specify_partition,
+                                        const bool is_specify_column,
+                                        const ObIArray<int64_t> &partition_ids,
+                                        const ObIArray<uint64_t> &column_ids,
+                                        ObSqlString &part_col_ids_table,
+                                        ObSqlString &where_str);
+
   static int generate_having_stat_part_col_map(ObExecContext &ctx,
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
-                                               const bool is_specify_partition,
-                                               const bool is_specify_column,
-                                               const ObIArray<int64_t> &partition_ids,
-                                               const ObIArray<uint64_t> &column_ids,
+                                               const ObSqlString &part_col_ids_table,
+                                               const ObSqlString &where_str,
                                                hash::ObHashMap<ObOptColumnStat::Key, bool> &have_stat_part_col_map);
 
   static int backup_having_column_stats(ObMySQLTransaction &trans,
                                         const uint64_t tenant_id,
-                                        const uint64_t table_id,
-                                        const bool is_specify_gather,
-                                        const ObIArray<int64_t> &partition_ids,
-                                        const ObIArray<uint64_t> &column_ids,
+                                        const ObSqlString &part_col_ids_table,
+                                        const ObSqlString &where_str,
                                         hash::ObHashMap<ObOptColumnStat::Key, bool> &having_stat_part_col_map,
                                         const int64_t saving_time);
 
@@ -171,11 +176,8 @@ private:
 
    static int backup_histogram_stats(ObMySQLTransaction &trans,
                                      const uint64_t tenant_id,
-                                     const uint64_t table_id,
-                                     const bool is_specify_partition,
-                                     const bool is_specify_column,
-                                     const ObIArray<int64_t> &partition_ids,
-                                     const ObIArray<uint64_t> &column_ids,
+                                     const ObSqlString &part_col_ids_table,
+                                     const ObSqlString &where_str,
                                      hash::ObHashMap<ObOptColumnStat::Key, bool> &having_stat_part_col_map,
                                      const int64_t saving_time);
 
