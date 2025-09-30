@@ -75,7 +75,7 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
   } else {
     int64_t mbmaxlen = 1;
     ObCollationType cs_type = static_cast<ObCollationType>(col_collation->get_int());
-    int32_t col_len = static_cast<int32_t>(col_length->get_int());
+    int32_t col_len = min(static_cast<int32_t>(col_length->get_int()), OB_MAX_VARCHAR_LENGTH_KEY);
     ObString escape_str;
     ObString pattern_str = pattern_val->get_string();
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
