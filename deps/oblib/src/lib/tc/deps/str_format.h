@@ -19,6 +19,7 @@ public:
   ~StrFormat() {}
   char* cstr() { return buf_; }
   void append(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+  void clear() { pos_ = 0; }
 private:
   char* buf_;
   int64_t limit_;
