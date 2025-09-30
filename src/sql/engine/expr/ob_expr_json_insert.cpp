@@ -107,6 +107,7 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   
   for (int32 i = 1; OB_SUCC(ret) && i < expr.arg_cnt_ && !is_null; i += 2) {
     ObExpr *arg = expr.args_[i];
+    bool is_const = arg->is_const_expr();
     json_datum = NULL;
     if (OB_FAIL(temp_allocator.eval_arg(expr.args_[i], ctx, json_datum))) {
       LOG_WARN("failed: eval json path datum.", K(ret));
@@ -117,7 +118,7 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       ObJsonPath *j_path;
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, j_path_text, is_null))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
-      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, i, false))) {
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, j_path, j_path_text, i, false, is_const))) {
         LOG_WARN("failed: parse text to path.", K(j_path_text), K(ret));
       } else if (j_path->path_node_cnt() == 0) {
         // do nothing
