@@ -286,11 +286,11 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
         if (OB_SUCC(ret) && exist) {
           bool exist_non_syn_object= false;
           bool is_private_syn = false;
-          OZ (schema_checker.check_exist_same_name_object_with_synonym(session_info->get_effective_tenant_id(),
-                                                                        database_id,
-                                                                        udf_expr->get_func_name(),
-                                                                        exist_non_syn_object,
-                                                                        is_private_syn));
+          OZ (schema_checker.check_object_exists_by_name(session_info->get_effective_tenant_id(),
+                                                         database_id,
+                                                         udf_expr->get_func_name(),
+                                                         exist_non_syn_object,
+                                                         is_private_syn));
           if (OB_SUCC(ret) && (!exist_non_syn_object || is_private_syn)) {
             for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
               int64_t schema_version = OB_INVALID_VERSION;
@@ -1869,13 +1869,13 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
         LOG_WARN("failed to add synonym id to synonym checker",
                 K(ret), K(tenant_id), K(database_id), K(synonym_name));
       }
-    } else if (OB_FAIL(schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
-                                                                                object_database_id,
-                                                                                object_name,
-                                                                                exist_non_syn_object,
-                                                                                is_private_syn)) ||
-                                                                                !exist_non_syn_object ||
-                                                                                is_private_syn) {
+    } else if (OB_FAIL(schema_checker.check_object_exists_by_name(tenant_id,
+                                                                  object_database_id,
+                                                                  object_name,
+                                                                  exist_non_syn_object,
+                                                                  is_private_syn)) ||
+                                                                  !exist_non_syn_object ||
+                                                                  is_private_syn) {
       ret = OB_SUCCESS;
       OZ (SMART_CALL(resolve_synonym_object_recursively(
         schema_checker, synonym_checker, tenant_id,

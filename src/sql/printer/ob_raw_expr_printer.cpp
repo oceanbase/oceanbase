@@ -3574,11 +3574,11 @@ do { \
     LOG_WARN("database schema info is null", K(ret), K(database_schema), KPC(expr), K(tenant_id)); \
   } else if (OB_FAIL(checker.init(*schema_guard_, schema_guard_->get_session_id()))) { \
     LOG_WARN("failed to init schema checker", K(ret)); \
-  } else if (OB_FAIL(checker.check_exist_same_name_object_with_synonym(tenant_id, \
-                                                                       database_schema->get_database_id(), \
-                                                                       database_schema->get_database_name_str(), \
-                                                                       exist, \
-                                                                       is_private_synonym))) { \
+  } else if (OB_FAIL(checker.check_object_exists_by_name(tenant_id, \
+                                                         database_schema->get_database_id(), \
+                                                         database_schema->get_database_name_str(), \
+                                                         exist, \
+                                                         is_private_synonym))) { \
     LOG_WARN("failed to check exist same name object with database name", K(ret), KPC(database_schema)); \
   } else if (!exist) { \
     PRINT_IDENT_WITH_QUOT(database_schema->get_database_name_str()); \

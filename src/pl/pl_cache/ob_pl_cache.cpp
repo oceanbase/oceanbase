@@ -748,11 +748,11 @@ int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
         } else {
           bool exist = false;
           bool is_private_syn = false;
-          OZ (schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
-                                                                        pcv_schema.invoker_db_id_,
-                                                                        synonym_info->get_synonym_name_str(),
-                                                                        exist,
-                                                                        is_private_syn));
+          OZ (schema_checker.check_object_exists_by_name(synonym_info->get_tenant_id(),
+                                                         pcv_schema.invoker_db_id_,
+                                                         synonym_info->get_synonym_name_str(),
+                                                         exist,
+                                                         is_private_syn));
           if (OB_FAIL(ret)) {
           } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
