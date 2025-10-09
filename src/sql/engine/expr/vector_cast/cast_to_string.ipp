@@ -45,15 +45,25 @@ struct ToStringCastImpl
               length = ob_fcvt(in_val, in_scale_, buf_len - 1, buf_, NULL);
             } else {
               int32_t double_width = buf_len - 1;
+              bool error = false;
               if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) &&
                   ob_is_double_tc(expr.args_[0]->datum_meta_.type_) && expr.max_length_ > 0) {
                 double_width = min(double_width, expr.max_length_);
               }
               length = ob_gcvt_opt(
-                  in_val, arg_type, double_width, buf_, NULL, lib::is_oracle_mode(), TRUE);
+                  in_val, arg_type, double_width, buf_, &error, lib::is_oracle_mode(), TRUE);
               if (length == 0 && double_width < buf_len - 1) {
                 length = double_width;
                 buf_[length] = '\0';
+                if (OB_UNLIKELY(error) && CM_IS_COLUMN_CONVERT(expr.extra_)) {
+                  if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
+                    ObDataTypeCastUtil::log_user_error_warning(ctx_.exec_ctx_.get_user_logging_ctx(),
+                      OB_ERR_DATA_TRUNCATED, "", "", expr.extra_);
+                  } else {
+                    ret = OB_ERR_DATA_TOO_LONG;
+                    SQL_LOG(WARN, "fail to set truncated double string", K(ret));
+                  }
+                }
               }
             }
           }
@@ -67,7 +77,8 @@ struct ToStringCastImpl
           }
           char *out_ptr = NULL;
           int64_t out_len = 0;
-          if (OB_FAIL(CastHelperImpl::vector_copy_string_zf(
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(CastHelperImpl::vector_copy_string_zf(
                           expr, ctx_, idx, length, buf_, out_scale_, out_len, out_ptr, align_offset))) {
             SQL_LOG(WARN, "vector_copy_string_zf failed", K(ret), K(buf_));
           } else {
