@@ -245,7 +245,7 @@ int ObDictDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int64_t ro
     }
 
     if (OB_FAIL(ret)) {
-    } else if (decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_)) {
+    } else if (OB_FAIL(decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_))) {
       LOG_WARN("failed to decode dict", K(ret), K(ref));
     }
 

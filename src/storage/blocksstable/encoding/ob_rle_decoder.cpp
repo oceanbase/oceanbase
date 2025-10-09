@@ -386,7 +386,7 @@ int ObRLEDecoder::in_operator(
         ++traverse_it;
         ++dict_ref;
       }
-      if (found && OB_FAIL(set_res_with_bitset(parent, col_ctx, ref_bitset, result_bitmap))) {
+      if (OB_SUCC(ret) && found && OB_FAIL(set_res_with_bitset(parent, col_ctx, ref_bitset, result_bitmap))) {
         LOG_WARN("Failed to set result_bitmap", K(ret));
       }
     }

@@ -310,7 +310,8 @@ int ObRawDecoder::decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int
         }
       }
       // fill data
-      if (OB_FAIL(load_data_to_obj_cell(ctx.obj_meta_, cell_data, cell_len, cell))) {
+      if (OB_FAIL(ret)){
+      } else if (OB_FAIL(load_data_to_obj_cell(ctx.obj_meta_, cell_data, cell_len, cell))) {
         LOG_WARN("Failed to load data to object cell", K(ret), K(cell));
       }
     }
