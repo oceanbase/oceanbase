@@ -488,10 +488,14 @@ int ObDDLResolver::check_alter_stmt_storage_cache_policy(const ObTableSchema *or
       } else {
         ObStorageCachePolicy storage_cache_policy;
         AlterTableSchema &alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-        if (OB_FAIL(storage_cache_policy.load_from_string(alter_table_schema.get_storage_cache_policy()))) {
-          LOG_WARN("failed to load storage cache policy", K(ret));
-        } else if (OB_FAIL(check_storage_cache_policy(storage_cache_policy, ori_table_schema))) {
-          LOG_WARN("failed to check storage cache policy", K(ret), K(storage_cache_policy), K(alter_table_stmt->get_alter_table_arg()));
+        if (alter_table_schema.get_storage_cache_policy().empty()) {
+          // do nothing
+        } else {
+          if (OB_FAIL(storage_cache_policy.load_from_string(alter_table_schema.get_storage_cache_policy()))) {
+            LOG_WARN("failed to load storage cache policy", K(ret));
+          } else if (OB_FAIL(check_storage_cache_policy(storage_cache_policy, ori_table_schema))) {
+            LOG_WARN("failed to check storage cache policy", K(ret), K(storage_cache_policy), K(alter_table_stmt->get_alter_table_arg()));
+          }
         }
       }
     }
