@@ -52,7 +52,7 @@ public:
   virtual int process() override;
 private:
   int get_ids();
-  void sync_capacity(uint8_t client_type);
+  void sync_capacity(uint8_t client_type, bool allow_distribute_capability);
   int verify_password(const ObString &tenant, const ObString &user, const ObString &pass_secret,
                       const ObString &pass_scramble, const ObString &database, uint64_t &user_token);
   int generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database,
