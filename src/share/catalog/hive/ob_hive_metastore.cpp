@@ -326,10 +326,21 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
       String str_host = String(host);
       socket_ = std::make_shared<TSocket>(str_host, port);
       socket_->setKeepAlive(true);
+
+      int64_t timeout_ms;
+      if (socket_timeout_ == 0) {
+        timeout_ms = socket_timeout_;
+      } else if (OB_FALSE_IT(timeout_ms = socket_timeout_ / 1000)) {
+      } else if (timeout_ms == 0) {
+        // 用户只是设置了一个不到1ms的值，并不是禁用超时
+        // 但socket的api入参的单位是ms，所以设置一个最小的ms的值
+        timeout_ms = 1;
+      }
+
       // Default is 10 seconds.
-      socket_->setConnTimeout(socket_timeout_);
-      socket_->setRecvTimeout(socket_timeout_);
-      socket_->setSendTimeout(socket_timeout_);
+      socket_->setConnTimeout(timeout_ms);
+      socket_->setRecvTimeout(timeout_ms);
+      socket_->setSendTimeout(timeout_ms);
     }
 
     if (OB_FAIL(ret)) {

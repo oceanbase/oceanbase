@@ -641,7 +641,7 @@ private:
   int64_t client_id_;
   ObHMSClientPool *client_pool_; // Pool pointer for auto return
   bool is_in_use_;               // Flag to indicate if client is currently in use
-  int64_t socket_timeout_;
+  int64_t socket_timeout_;       // us
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHiveMetastoreClient);
 };

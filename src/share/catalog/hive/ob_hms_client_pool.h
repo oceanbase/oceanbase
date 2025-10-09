@@ -134,7 +134,7 @@ private:
   HMSClientList *client_queue_;
 
   int64_t pool_size_;
-  int64_t socket_timeout_;
+  int64_t socket_timeout_;    // us
   int64_t total_clients_;
   int64_t in_use_clients_;
   volatile int64_t waiting_threads_;     // Number of threads waiting for clients (atomic access)
