@@ -1397,6 +1397,8 @@ public:
   ExprFixedArray ext_mapping_column_exprs_;
   ObFixedArray<uint64_t, ObIAllocator> ext_mapping_column_ids_;
   bool ext_enable_late_materialization_;
+  // used by virtual table
+  common::ObFixedArray<uint64_t, common::ObIAllocator> vt_pd_col_ids_;
 };
 
 //下压到存储层的表达式执行依赖的op ctx

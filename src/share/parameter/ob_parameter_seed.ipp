@@ -3051,3 +3051,6 @@ DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_sql_audit_filter_pushdown, OB_TENANT_PARAMETER, "True",
+         "Enable or disable sql audit filter pushdown.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
