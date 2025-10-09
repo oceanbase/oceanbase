@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_EXT_INFO_CALLBACK_
 #define OCEANBASE_STORAGE_OB_EXT_INFO_CALLBACK_
 
-#include "share/allocator/ob_lob_ext_info_log_allocator.h"
+#include "share/lob/ob_lob_ext_info_log_allocator.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "lib/json_type/ob_json_diff.h"
 
