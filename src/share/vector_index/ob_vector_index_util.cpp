@@ -4160,8 +4160,8 @@ int ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(share::schema::ObSchem
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
-  const uint64_t old_index_id = arg.table_id_;
-  const uint64_t new_index_id = arg.index_table_id_;
+  const uint64_t new_index_id = arg.table_id_;
+  const uint64_t old_index_id = arg.index_table_id_;
   const ObString old_index_name = arg.index_name_;
   const ObTableSchema *old_index_schema = nullptr;
   const ObTableSchema *new_index_schema = nullptr;
@@ -4209,7 +4209,7 @@ int ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(share::schema::ObSchem
         LOG_WARN("fail to get index name", K(ret));
       }
     }
-    LOG_INFO("succ to get rebuild drop index id and name", K(ret),
+    LOG_INFO("succ to get rebuild drop index id and name", K(ret), K(rebuild_succ),
       K(arg.index_table_id_), K(arg.index_name_),
       K(old_index_schema->get_table_name()), K(new_index_schema->get_table_name()));
   }
