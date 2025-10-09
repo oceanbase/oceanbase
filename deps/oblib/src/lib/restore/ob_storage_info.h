@@ -177,7 +177,7 @@ struct ObObjectStorageCredential
 class ObClusterStateBaseMgr
 {
 public:
-  ObClusterStateBaseMgr() {}
+  ObClusterStateBaseMgr() : is_write_with_if_match_(false) {}
   virtual ~ObClusterStateBaseMgr() {}
   virtual int is_supported_assume_version() const
   {
@@ -195,12 +195,15 @@ public:
   {
     return false;
   }
-  virtual bool is_write_with_if_match() const { return false; }
+  virtual bool is_write_with_if_match() const { return is_write_with_if_match_; }
   static ObClusterStateBaseMgr &get_instance()
   {
     static ObClusterStateBaseMgr mgr;
     return mgr;
   }
+private:
+  void set_is_write_with_if_match_(const bool is_write_with_if_match) { is_write_with_if_match_ = is_write_with_if_match; }
+  bool is_write_with_if_match_;
 };
 
 enum ObStorageDeleteMode: uint8_t
