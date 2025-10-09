@@ -475,7 +475,7 @@ int ObReverseLink::open(int64_t session_sql_req_level)
                     cluster_.length(), cluster_.ptr());
     }
     (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", passwd_.length(), passwd_.ptr());
-    (void)snprintf(host_name_cstr_, sizeof(host_name_), "%.*s", host_name_.length(), host_name_.ptr());
+    (void)snprintf(host_name_cstr_, sizeof(host_name_cstr_), "%.*s", host_name_.length(), host_name_.ptr());
     LOG_DEBUG("open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
     param_ctx.link_type_ = common::sqlclient::DBLINK_DRV_OB;
     if (OB_FAIL(reverse_conn_.connect(db_user_, db_pass_, "", host_name_cstr_, port_, 10, true, session_sql_req_level))) { //just set connect timeout to 10s, read and write have not timeout
