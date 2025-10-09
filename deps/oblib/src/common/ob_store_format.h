@@ -70,13 +70,6 @@ enum class ObMergeEngineType : uint8_t
   OB_MERGE_ENGINE_MAX
 };
 
-enum ObSkipIndexLevel : uint8_t
-{
-  OB_SKIP_INDEX_LEVEL_BASE_ONLY = 0,
-  OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE = 1,
-  OB_SKIP_INDEX_LEVEL_MAX
-};
-
 struct ObStoreFormatItem
 {
   const char* format_name_;

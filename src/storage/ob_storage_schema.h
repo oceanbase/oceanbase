@@ -332,7 +332,6 @@ public:
   virtual inline ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   virtual inline bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
   virtual inline bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
-  virtual inline ObSkipIndexLevel get_skip_index_level() const override { return skip_index_level_; }
   virtual inline bool is_column_info_simplified() const override { return column_info_simplified_; }
 
   virtual int init_column_meta_array(
@@ -375,7 +374,7 @@ public:
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
       "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group), K_(merge_engine_type),
-      K_(micro_block_format_version), K_(skip_index_level));
+      K_(micro_block_format_version));
 public:
   static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
@@ -477,7 +476,6 @@ public:
   ObMergeEngineType merge_engine_type_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
   common::ObString semistruct_properties_;
-  ObSkipIndexLevel skip_index_level_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

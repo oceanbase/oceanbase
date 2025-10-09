@@ -706,7 +706,6 @@ public:
   virtual inline ObMergeEngineType get_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
   virtual inline bool is_delete_insert_merge_engine() const { return false; }
   virtual inline bool is_insert_only_merge_engine() const { return false; }
-  virtual inline ObSkipIndexLevel get_skip_index_level() const { return ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY; }
   virtual inline ObTableModeFlag get_table_mode_flag() const { return TABLE_MODE_MAX; }
   virtual inline ObTableType get_table_type() const { return MAX_TABLE_TYPE; }
   virtual inline ObTableMode get_table_mode_struct() const = 0;
@@ -1505,7 +1504,6 @@ public:
   inline void set_store_format(const common::ObStoreFormatType store_format) { store_format_ = store_format; }
   inline void set_storage_format_version(const int64_t storage_format_version) { storage_format_version_ = storage_format_version; }
   inline void set_merge_engine_type(const ObMergeEngineType merge_engine_type) { merge_engine_type_ = merge_engine_type; }
-  inline void set_skip_index_level(const ObSkipIndexLevel skip_index_level) { skip_index_level_ = skip_index_level; }
   int set_store_format(const common::ObString &store_format);
   inline void set_row_store_type(const common::ObRowStoreType row_store_type) { row_store_type_ = row_store_type; }
   int set_row_store_type(const common::ObString &row_store);
@@ -1647,7 +1645,6 @@ public:
   inline virtual ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   inline virtual bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
   inline virtual bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
-  inline virtual ObSkipIndexLevel get_skip_index_level() const override { return skip_index_level_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const char *get_comment() const { return extract_str(comment_); }
@@ -2462,7 +2459,6 @@ protected:
   common::ObString external_sub_path_;
   uint64_t tmp_mlog_tid_;
   common::ObString semistruct_properties_;
-  ObSkipIndexLevel skip_index_level_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
