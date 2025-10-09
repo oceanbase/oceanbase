@@ -3596,7 +3596,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
     case SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_base_ob_enable_ps_parameter_anonymous_block(int_val != 0));
+      OX (sys_vars_cache.set_base_plsql_can_transform_sql_to_assign(int_val != 0));
       break;
     }
     default: {
