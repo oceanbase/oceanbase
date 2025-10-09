@@ -333,8 +333,14 @@ int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatu
   } else if (-1 == index_build_task_id_ && OB_FAIL(rebuild_index_impl())) {
     LOG_WARN("send drop index rpc failed", KR(ret));
   } else if (OB_FAIL(check_ddl_task_finish(tenant_id_, index_build_task_id_, state_finished))) {
+    if (state_finished) {
+      index_build_task_id_ = -1;
+      new_index_id_ = -1;
+      LOG_INFO("failed to create vec index, reset new_index_id_ to avoid submit drop again", KR(ret));
+    }
     LOG_WARN("check ddl task finish failed", K(ret), K(index_build_task_id_));
   }
+
   if (state_finished || OB_FAIL(ret)) {
     (void)switch_status(new_status, true, ret);
     LOG_INFO("rebuild_index_task wait_child_task_finish finished", KR(ret), K(*this));
