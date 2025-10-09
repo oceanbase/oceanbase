@@ -64,6 +64,9 @@ int ObExprBaseLRpad::calc_type_length_mysql(const ObExprResType result_type,
   } else if (OB_FAIL(ObExprUtil::get_round_int64(len, expr_ctx, int_len))) {
     LOG_WARN("get_round_int64 failed and ignored", K(ret));
     ret = OB_SUCCESS;
+  } else if (int_len < 0) {
+    // 当长度参数为负数时，结果长度应该为0，因为RPAD/LPAD会返回NULL
+    result_size = 0;
   } else {
     if (!ob_is_string_type(text.get_type())) {
       result_size = int_len;
@@ -128,7 +131,8 @@ int ObExprBaseLRpad::calc_type_length_oracle(const ObExprResType &result_type,
     LOG_WARN("get_trunc_int64 failed and ignored", K(ret));
     ret = OB_SUCCESS;
   } else if (width < 0) {
-    //do nothing
+    // 当长度参数为负数时，结果长度应该为0，因为RPAD/LPAD会返回NULL
+    result_size = 0;
   } else {
     // both_const_str 为 true 表示 rpad(a, count, b) 中的 a 和 b 均为常量
     bool both_const_str = false;
