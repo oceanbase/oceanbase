@@ -41,7 +41,8 @@ OB_SERIALIZE_MEMBER(ObPxFinishSqcResultMsg, dfo_id_, sqc_id_, rc_, trans_result_
                     sqc_data_block_cache_hit_cnt_, sqc_index_block_read_cnt_,
                     sqc_index_block_cache_hit_cnt_, sqc_blockscan_block_cnt_,
                     sqc_blockscan_row_cnt_, sqc_pushdown_storage_filter_row_cnt_,
-                    sqc_fuse_row_cache_hit_, sqc_network_wait_time_);
+                    sqc_fuse_row_cache_hit_, sqc_network_wait_time_,
+                    sqc_iceberg_data_files_);
 OB_SERIALIZE_MEMBER(ObPxFinishTaskResultMsg, dfo_id_, sqc_id_, task_id_, rc_);
 OB_SERIALIZE_MEMBER((ObPxBloomFilterChInfo, dtl::ObDtlChTotalInfo), filter_id_);
 OB_SERIALIZE_MEMBER((ObPxBloomFilterChSet, dtl::ObDtlChSet), filter_id_, sqc_id_);

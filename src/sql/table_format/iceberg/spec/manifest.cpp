@@ -14,8 +14,10 @@
 
 #include "sql/table_format/iceberg/spec/manifest.h"
 
+#include <avro/Generic.hh>
+#include <avro/GenericDatum.hh>
+
 #include "share/ob_define.h"
-#include "sql/table_format/iceberg/spec/manifest_list.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "storage/lob/ob_lob_manager.h"
 
@@ -25,6 +27,9 @@ namespace sql
 {
 namespace iceberg
 {
+
+OB_SERIALIZE_MEMBER(ObSerializableDataFile, content_, file_format_,
+                    record_count_, file_size_in_bytes_, file_path_)
 
 ManifestMetadata::ManifestMetadata(ObIAllocator &allocator)
     : SpecWithAllocator(allocator), schema(allocator), partition_spec(allocator)

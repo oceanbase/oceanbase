@@ -17,11 +17,14 @@
 #include "lib/json_type/ob_json_parse.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 
-#include <avro/Generic.hh>
-#include <avro/GenericDatum.hh>
-#include <avro/Types.hh>
 #include <optional>
 #include <s2/base/casts.h>
+#include <avro/Types.hh>
+
+namespace avro {
+class GenericRecord;
+class GenericDatum;
+}
 
 namespace oceanbase
 {

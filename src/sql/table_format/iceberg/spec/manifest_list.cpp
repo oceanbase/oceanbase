@@ -14,12 +14,15 @@
 
 #include "sql/table_format/iceberg/spec/manifest_list.h"
 
+#include <avro/DataFile.hh>
+#include <avro/Generic.hh>
+#include <avro/GenericDatum.hh>
+
 #include "share/ob_define.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/partition.h"
 #include "sql/table_format/iceberg/spec/schema.h"
 
-#include <avro/DataFile.hh>
 
 namespace oceanbase
 {

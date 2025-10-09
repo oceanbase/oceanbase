@@ -93,7 +93,9 @@ public:
       is_overwrite_(false),
       external_properties_(alloc),
       external_partition_(alloc),
-      alias_names_(alloc)
+      alias_names_(alloc),
+      field_ids_(alloc),
+      lake_table_format_(share::ObLakeTableFormat::INVALID)
   {
   }
 
@@ -117,6 +119,8 @@ public:
   ObExternalFileFormat::StringData external_properties_;
   ObExternalFileFormat::StringData external_partition_;
   ObExternalFileFormat::StringList alias_names_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> field_ids_;
+  share::ObLakeTableFormat lake_table_format_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
