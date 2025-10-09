@@ -442,6 +442,7 @@ int ObIODeviceLocalFileOp::scan_dir(const char *dir_name, common::ObBaseDirEntry
  * scan_dir_rec is scan directory recursion,
  * you need to provide file_op and dir_op, dir_op is used to operate directory, file_op is used to operate other files, for example reg file, link file.
  */
+static int scan_dir_rec_count = 0;
 int ObIODeviceLocalFileOp::scan_dir_rec(const char *dir_name,
                                         ObScanDirOp &file_op,
                                         ObScanDirOp &dir_op)
@@ -450,6 +451,16 @@ int ObIODeviceLocalFileOp::scan_dir_rec(const char *dir_name,
   DIR *open_dir = nullptr;
   struct dirent entry;
   struct dirent *result = nullptr;
+  ret = EventTable::EN_CALIBRATE_DISK_SPACE_SLEEP;
+  if (OB_FAIL(ret)) {
+    scan_dir_rec_count++;
+    if (scan_dir_rec_count == 2) {  // The fault point is related to tmp_file : the first level is tmp_data, and the second level is tmp_file_id.
+      SHARE_LOG(INFO, "calibrate disk space sleep", K(ret));
+      ob_usleep(2L * 1000L * 1000L); // 2s
+    }
+    SHARE_LOG(INFO, "Fault injection triggered in scan_dir_rec", K(dir_name));
+    ret = OB_SUCCESS;
+  }
   if (OB_ISNULL(dir_name)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dir_name));

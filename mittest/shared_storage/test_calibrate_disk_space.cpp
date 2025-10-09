@@ -17,6 +17,7 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
+#include "lib/utility/ob_tracepoint.h"
 #undef private
 #undef protected
 
@@ -56,11 +57,12 @@ public:
       if (idx % 2 == 0) {
         if (is_delete_dir_) {
           const int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
-          ob_usleep(1L * 1000L * 1000L); //1s
+          TP_SET_EVENT(EventTable::EN_CALIBRATE_DISK_SPACE_SLEEP, OB_TIMEOUT, 0, 1);
           LOG_INFO("start to calibrate tmp file alloc disk size");
           ASSERT_EQ(OB_NO_SUCH_FILE_OR_DIRECTORY, tenant_file_mgr->calibrate_disk_space_task_.calibrate_alloc_disk_size(
                     ObStorageObjectType::TMP_FILE, start_calc_size_time_s, 0, 0));
           LOG_INFO("finish to calibrate tmp file alloc disk size");
+          TP_SET_EVENT(EventTable::EN_CALIBRATE_DISK_SPACE_SLEEP, OB_TIMEOUT, 0, 0);
         } else {
           if (is_gc_tmp_file_) {
             //because delete remote files need 9ms, delete local files need 5s
@@ -77,9 +79,10 @@ public:
         }
       } else {
         if (is_delete_dir_) {
-          LOG_INFO("start to delete tmp file dir");
           int64_t start_us = ObTimeUtility::current_time();
-          for (int64_t i = dir_num_; i >= 0; --i) {
+          ob_usleep(1L * 1000L * 1000L); // 1s
+          LOG_INFO("start to delete tmp file dir");
+          for (int64_t i = dir_num_ - 1; i >= 0; --i) {
             MacroBlockId tmp_file;
             tmp_file.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
             tmp_file.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
@@ -123,7 +126,7 @@ public:
 public:
   static const uint64_t tmp_file_id_ = 1001;
   static const int64_t file_num_ = 100000; // 10w
-  static const int64_t dir_num_ = 30000; // 3w
+  static const int64_t dir_num_ = 1;
   static const int64_t file_size_ = 8 * 1024L; // 8KB
   static const int64_t thread_cnt_ = 2;
 };
