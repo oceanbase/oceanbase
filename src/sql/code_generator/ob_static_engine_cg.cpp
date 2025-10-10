@@ -9970,7 +9970,7 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
     phy_plan_->calc_whether_need_trans();
   }
 
-  if (OB_SUCC(ret) && log_plan.get_optimizer_context().extend_sql_plan_monitor_metrics()) {
+  if (OB_SUCC(ret) && my_session->get_extend_sql_plan_monitor_metrics()) {
     phy_plan_->set_extend_sql_plan_monitor_metrics();
   }
 

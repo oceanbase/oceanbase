@@ -7676,5 +7676,10 @@ int8_t ObBasicSessionInfo::get_min_const_integer_precision() const
   return inf_pc_configs_.min_const_integer_precision_;
 }
 
+bool ObBasicSessionInfo::get_extend_sql_plan_monitor_metrics() const
+{
+  return inf_pc_configs_.extend_sql_plan_monitor_metrics_;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase
