@@ -195,7 +195,7 @@ TEST_F(TestSSBatchMicroCheckpointTask, test_access_ghost_persisted_meta)
   for (int64_t i = 0; i < evicted_key_arr.count(); ++i) {
     const ObSSMicroBlockCacheKey &micro_key = evicted_key_arr.at(i);
     ObSSMicroBlockMetaHandle micro_meta_handle;
-    ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, micro_key.get_macro_tablet_id().id(), false));
+    ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, micro_key.get_macro_tablet_id().id(), true));
     ObSSMicroBlockMetaInfo meta_info;
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_meta_info(micro_key, meta_info));
     ASSERT_EQ(true, meta_info.is_in_l1());
