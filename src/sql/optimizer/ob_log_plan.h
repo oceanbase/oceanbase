@@ -262,7 +262,7 @@ struct DistinctPushdownContext {
   inline bool get_is_pushed_down_through_shuffle() const { return pushed_down_through_shuffle_; }
   inline void set_pushed_down_through_shuffle(bool pushed_down_through_shuffle)
   { pushed_down_through_shuffle_ = pushed_down_through_shuffle; }
-  int merge_with(const common::ObIArray<ObRawExpr *> &distinct_expr, bool & merged);
+  int merge_with(const common::ObIArray<ObRawExpr *> &distinct_expr, bool & update, bool & pushded);
   int normalize();
   int map(const common::ObIArray<ObRawExpr *> &from_exprs,
           const common::ObIArray<ObRawExpr *> &to_exprs,
