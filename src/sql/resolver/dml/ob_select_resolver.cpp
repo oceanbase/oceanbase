@@ -915,10 +915,13 @@ int ObSelectResolver::check_order_by()
             if (OB_ISNULL(expr->get_param_expr(0))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("to_char has no child expr", K(ret));
-            } else if (expr->get_param_expr(0)->get_result_type().is_number()) {
-              if (OB_FAIL(select_item_exprs.push_back(expr->get_param_expr(0)))) {
-                LOG_WARN("fail to push back expr", K(ret));
-              } 
+            } else {
+              ObObjType type = expr->get_param_expr(0)->get_result_meta().get_type();
+              if ((ObTinyIntType <= type && type <= ObUNumberType) || type == ObDecimalIntType) {
+                if (OB_FAIL(select_item_exprs.push_back(expr->get_param_expr(0)))) {
+                  LOG_WARN("fail to push back expr", K(ret));
+                } 
+              }
             }
           }
         }
