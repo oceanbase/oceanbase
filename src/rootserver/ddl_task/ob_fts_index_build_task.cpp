@@ -1920,11 +1920,20 @@ int ObFtsIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
       }
       break;
     }
-    case ObDDLTaskStatus::VALIDATE_CHECKSUM: {
+    case ObDDLTaskStatus::WAIT_AUX_TABLE_COMPLEMENT: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                           MAX_LONG_OPS_MESSAGE_LENGTH,
                           pos,
-                          "STATUS: VALIDATE_CHECKSUM"))) {
+                          "STATUS: WAIT_AUX_TABLE_COMPLEMENT"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    }
+    case ObDDLTaskStatus::TAKE_EFFECT:{
+      if (OB_FAIL(databuff_printf(stat_info_.message_,
+                          MAX_LONG_OPS_MESSAGE_LENGTH,
+                          pos,
+                          "STATUS: TAKE_EFFECT"))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;
