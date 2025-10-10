@@ -627,9 +627,8 @@ int ObMacroBlockWriter::inner_init(
         STORAGE_LOG(WARN, "unexpected null builder", K(ret), KPC(sstable_index_builder));
       } else if (OB_FAIL(builder_->set_parallel_task_idx(parallel_idx))) {
         STORAGE_LOG(WARN, "fail to set_parallel_task_idx", K(ret), K(parallel_idx));
-      }
-      // Init micro block bloom filter.
-      if (data_store_desc_->enable_macro_block_bloom_filter()) {
+      } else if (data_store_desc_->enable_macro_block_bloom_filter()) {
+        // Init micro block bloom filter.
         if (OB_UNLIKELY(data_store_desc_->get_tablet_id().is_ls_inner_tablet())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument, cannot create micro block bloom filter for ls inner tablet", K(ret), KPC(data_store_desc_));
