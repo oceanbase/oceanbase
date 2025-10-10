@@ -145,6 +145,10 @@ int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
       LOG_WARN("failed to aggregate op profile");
     }
   }
+  if (OB_SIZE_OVERFLOW == ret) {
+    // overwrite error code to display truncated result.
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 
