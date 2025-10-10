@@ -980,6 +980,12 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
             LOG_WARN("fail to parse request returning into param values", K(ret), K(i));
           } else {
             LOG_DEBUG("after parser resolve returning into", K(param), K(i));
+            if (param.is_pl_extend()) {
+              int ret = ObUserDefinedType::destruct_obj(param, nullptr);
+              if (OB_SUCCESS != ret) {
+                LOG_WARN("fail to destruct obj", K(ret), K(i));
+              }
+            }
           }
         }
       }
