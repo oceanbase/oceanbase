@@ -6784,6 +6784,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
              !stmt->is_single_table_stmt()) {
     /*do nothing*/
   } else if (OB_FAIL(check_can_scala_storage_pushdown(*static_cast<const ObSelectStmt*>(stmt),
+                                                      group_exprs,
                                                       is_scala_push_down))) {
     LOG_WARN("failed to check is statistic gather sql", K(ret));
   } else if (!is_scala_push_down &&
@@ -18425,7 +18426,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
       ++distinct_count;
     }
   }
-    if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) {
   } else if (distinct_count > 0 && distinct_count < aggrs.count()) {
     can_push = false;
   } else if (can_push && OB_FAIL(append(pushdown_groupby_columns, distinct_exprs))) {
@@ -19576,6 +19577,7 @@ int ObLogPlan::remove_duplicate_constraints()
 }
 
 int ObLogPlan::check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
+                                                const ObIArray<ObRawExpr *> &group_exprs,
                                                 bool &can_pushdown)
 {
   int ret = OB_SUCCESS;
@@ -19591,9 +19593,9 @@ int ObLogPlan::check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
     // do nothing
   } else if (!query_ctx->get_global_hint().has_dbms_stats_hint()) {
     // do nothing
-  } else if (stmt.get_group_exprs().count() != 1) {
+  } else if (group_exprs.count() != 1) {
     // do nothing
-  } else if (OB_ISNULL(group_expr = stmt.get_group_exprs().at(0))) {
+  } else if (OB_ISNULL(group_expr = group_exprs.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (group_expr->get_expr_type() != T_FUN_SYS_CALC_PARTITION_ID) {
@@ -19601,7 +19603,7 @@ int ObLogPlan::check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
   } else {
     can_pushdown = get_optimizer_context().get_rowsets_enabled();
   }
-    return ret;
+  return ret;
 }
 
 int ObLogPlan::extend_rollup_to_groupset(const ObIArray<ObRawExpr *> &gby_exprs,

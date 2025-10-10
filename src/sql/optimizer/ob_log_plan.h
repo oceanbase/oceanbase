@@ -1036,6 +1036,7 @@ public:
                                      bool &can_push);
 
   int check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
+                                       const ObIArray<ObRawExpr *> &group_exprs,
                                        bool &can_pushdown);
 
   int check_table_columns_can_storage_pushdown(const uint64_t tenant_id,
