@@ -45,7 +45,6 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
   allocator/ob_tx_data_allocator.cpp
-  allocator/ob_lob_ext_info_log_allocator.cpp
 )
 
 ob_set_subtarget(ob_share backup
@@ -577,6 +576,10 @@ ob_set_subtarget(ob_share wr
   wr/ob_wr_task.cpp
   wr/ob_wr_snapshot_rpc_processor.cpp
   wr/ob_wr_collector.cpp
+)
+
+ob_set_subtarget(ob_share lob
+  lob/ob_lob_ext_info_log_allocator.cpp
 )
 
 if (NOT OB_BUILD_STANDALONE)

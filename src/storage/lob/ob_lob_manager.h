@@ -24,7 +24,7 @@
 #include "storage/lob/ob_lob_meta_manager.h"
 #include "storage/ob_storage_rpc.h"
 #include "share/throttle/ob_share_resource_throttle_tool.h"
-#include "share/allocator/ob_lob_ext_info_log_allocator.h"
+#include "share/lob/ob_lob_ext_info_log_allocator.h"
 
 namespace oceanbase
 {
