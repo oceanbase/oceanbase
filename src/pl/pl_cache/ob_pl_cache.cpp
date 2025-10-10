@@ -590,7 +590,7 @@ int ObPLObjectValue::need_check_schema_version(ObPLCacheCtx &pc_ctx,
     bool has_sys_dep = stored_sys_schema_objs_.count() > 0;
     need_check = ((new_schema_version != cached_tenant_schema_version)
                   || contain_tmp_table_);
-    if (!need_check && has_sys_dep) {
+    if (has_sys_dep) {
       OX (cached_sys_schema_version = ATOMIC_LOAD(&sys_schema_version_));
       OZ (pc_ctx.schema_guard_->get_schema_version(OB_SYS_TENANT_ID, new_sys_schema_version));
       OX (need_check_sys_obj = new_sys_schema_version != cached_sys_schema_version);
