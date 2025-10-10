@@ -402,7 +402,7 @@ public:
   // pending_free_items in pending_free_tablet_arr are incremented according to free time
   int64_t free_time_;
   GCTabletType gc_type_;
-  int64_t tablet_transfer_seq_;
+  int64_t tablet_transfer_seq_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
   int64_t last_gc_version_;
 };
 

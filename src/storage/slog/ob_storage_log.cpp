@@ -251,7 +251,7 @@ OB_SERIALIZE_MEMBER(ObDeleteTabletLog,
                     status_,
                     free_time_,
                     gc_type_,
-                    tablet_transfer_seq_,
+                    tablet_transfer_seq_, // FARM COMPAT WHITELIST
                     last_gc_version_);
 
 DEF_TO_STRING(ObDeleteTabletLog)
@@ -330,7 +330,14 @@ int ObGCTabletLog::hash(uint64_t &hash_val) const
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGCTabletLog, ls_id_, ls_epoch_, tablet_id_, tablet_meta_version_, status_, tablet_transfer_seq_);
+OB_SERIALIZE_MEMBER(ObGCTabletLog,
+                    ls_id_,
+                    ls_epoch_,
+                    tablet_id_,
+                    tablet_meta_version_,
+                    status_,
+                    tablet_transfer_seq_ // FARM COMPAT WHITELIST
+                    );
 
 DEF_TO_STRING(ObGCTabletLog)
 {
