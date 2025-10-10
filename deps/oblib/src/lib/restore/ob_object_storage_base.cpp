@@ -37,7 +37,9 @@ ObObjectStorageTenantGuard::~ObObjectStorageTenantGuard()
 
 uint64_t ObObjectStorageTenantGuard::get_tenant_id()
 {
-  if (OB_UNLIKELY(tl_tenant_id_ == OB_SERVER_TENANT_ID)) {
+  if (OB_UNLIKELY(tl_tenant_id_ == OB_SERVER_TENANT_ID)
+      && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+    // log once at a minimum interval of 1s
     OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tenant id is 500", K(tl_tenant_id_), K(lbt()));
   }
   return tl_tenant_id_;
