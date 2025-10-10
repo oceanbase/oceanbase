@@ -385,6 +385,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_restart_read_super_blk_error)
   persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
 
+  ASSERT_LT(0, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_LT(0, phy_blk_mgr.super_blk_.blk_ckpt_info_.blk_ckpt_used_blks_.count());
   ASSERT_LT(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.micro_ckpt_entries_.count());
   ASSERT_NE(0, phy_blk_mgr.super_blk_.micro_ckpt_time_us_);
