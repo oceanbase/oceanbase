@@ -22224,6 +22224,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
                                                                   ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE :
                                                                   ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES;
     bool disallow_ivf_index = false;
+    bool disallow_multivalue_index = !GCONF._enable_add_fulltext_index_to_existing_table;
     // if new table should not build doc id column, don't need build doc-rowkey mapping
     // which come from rebuild hidden table index
     ObDocIDType doc_id_type = ObDocIDType::INVALID;
@@ -22249,6 +22250,10 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("create vector index on partition table without primary key not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on partition table without primary key");
+      } else if (disallow_multivalue_index && index_table_schema->is_multivalue_index_aux()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("execute offline ddl or table restore task on table with multivalue index not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "execute offline ddl or table restore task on table with multivalue index");
       } else if (OB_FAIL(check_index_table_need_rebuild(*index_table_schema,
                                                         drop_cols_id_arr,
                                                         is_oracle_mode,
