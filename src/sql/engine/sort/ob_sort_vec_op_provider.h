@@ -53,6 +53,11 @@ public:
   {
     return is_inited_;
   }
+  void destroy()
+  {
+    reset();
+    mem_entify_guard_.~MemEntifyFreeGuard();
+  }
   void reset();
   int sort();
   int init(ObSortVecOpContext &context);
