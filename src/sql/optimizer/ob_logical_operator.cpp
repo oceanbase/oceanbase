@@ -2799,9 +2799,23 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
             || log_op_def::LOG_UPDATE == get_type()) {
           ObLogDelUpd *dml_log_op = static_cast<ObLogDelUpd *>(this);
           if (dml_log_op->is_pdml()) {
-            LocationConstraint loc_cons;
             is_pdml = true;
-            if (OB_FAIL(get_tbl_loc_cons_for_pdml_index(loc_cons))) {
+            LocationConstraint loc_cons;
+            bool is_scan_use_das = false;
+            ObIArray<ObTablePartitionInfo *> & partition_infos =
+                get_plan()->get_optimizer_context().get_table_partition_info();
+            for (int64_t i = 0; i < partition_infos.count(); ++i) {
+              const ObTablePartitionInfo *cur_info = partition_infos.at(i);
+              if (OB_NOT_NULL(cur_info) &&
+                  cur_info->get_table_id() == dml_log_op->get_loc_table_id() &&
+                  cur_info->get_ref_table_id() == dml_log_op->get_index_tid()) {
+                is_scan_use_das = cur_info->get_table_location().use_das();
+                break;
+              }
+            }
+            if (is_scan_use_das) {
+              // do nothing
+            } else if (OB_FAIL(get_tbl_loc_cons_for_pdml_index(loc_cons))) {
               LOG_WARN("failed to get table location constraint for pdml index",
                 K(ret), K(get_name()));
             } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
