@@ -230,6 +230,7 @@ int ObChecksumValidator::get_tablet_ls_pairs(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SET_UNCOMPACTED_WHEN_TABLET_STATUS_MAP_EMPTY);
 int ObChecksumValidator::validate_checksum(
   const uint64_t table_id,
   share::schema::ObSchemaGetterGuard &schema_guard)
@@ -247,8 +248,13 @@ int ObChecksumValidator::validate_checksum(
   } else if (table_compaction_info_.is_verified()
     || table_compaction_info_.can_skip_verifying()) {
     // do nothing
-  } else if (tablet_status_map_.empty()) {
+#ifdef ERRSIM
+  } else if (ERRSIM_SET_UNCOMPACTED_WHEN_TABLET_STATUS_MAP_EMPTY && tablet_status_map_.empty()) {
     table_compaction_info_.set_uncompacted();
+    LOG_INFO("ERRSIM_SET_UNCOMPACTED_WHEN_TABLET_STATUS_MAP_EMPTY, set uncompacted", K_(table_id), K_(table_compaction_info));
+#endif
+  } else if (table_compaction_info_.is_uncompacted() && tablet_status_map_.empty()) { // tablet_status_map_ is empty, means all tablets are not compacted
+    // do nothing
   } else if (OB_FAIL(schema_guard_->get_simple_table_schema(tenant_id_, table_id_, simple_schema_))) {
     LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id), K_(table_compaction_info));
   } else if (OB_UNLIKELY(nullptr == simple_schema_ // table deleted
@@ -710,6 +716,9 @@ int ObChecksumValidator::validate_index_checksum() {
     if (EN_SPECIAL_INDEX_TABLE_VERIFY && !simple_schema_->should_not_validate_data_index_ckm()) {
       should_handle_index_table = false;
     }
+    if (ERRSIM_SET_UNCOMPACTED_WHEN_TABLET_STATUS_MAP_EMPTY) {
+      table_compaction_info_.set_can_skip_verifying();
+    }
 #endif
     if (should_handle_index_table && !table_compaction_info_.finish_idx_verified() && OB_FAIL(handle_index_table(*simple_schema_))) {
       LOG_WARN("fail to handle index table", KR(ret), KPC_(simple_schema));
@@ -793,11 +802,10 @@ int ObChecksumValidator::handle_index_table(
       } else if (OB_FAIL(idx_ckm_validate_array_.push_back(ObIndexCkmValidatePair(data_table_id, index_table_id)))) {
         LOG_WARN("failed to push back table validate info", K(ret), K(data_table_id), K(index_table_id));
       }
-    } else if (index_compaction_info.can_skip_verifying()
-      || data_compaction_info.can_skip_verifying()) {
-        // if one of them can skip verifying, that means we don't need to
-        // execute index checksum verification. Mark index table as
-        // INDEX_CKM_VERIFIED directly.
+    } else if (data_compaction_info.can_skip_verifying()) {
+      // if data table can skip verifying, that means we don't need to
+      // execute index checksum verification. Mark index table as
+      // INDEX_CKM_VERIFIED directly.
       index_compaction_info.set_index_ckm_verified();
     }
   }
