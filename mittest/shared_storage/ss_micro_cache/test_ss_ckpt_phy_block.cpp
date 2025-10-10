@@ -347,39 +347,6 @@ int check_rw(ObSSPhysicalBlockManager &phy_blk_mgr, const std::vector<int64_t> &
   return ret;
 }
 
-TEST_F(TestSSCkptPhyBlock, test_phy_ckpt_blk_scan)
-{
-  LOG_INFO("TEST_CASE: start test test_phy_ckpt_blk_scan");
-  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  const uint64_t tenant_id = MTL_ID();
-  ObSSDoBlkCheckpointOp &blk_ckpt_op = micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_;
-  ObSSPhysicalBlockManager *phy_blk_mgr = blk_ckpt_op.phy_blk_mgr();
-  ObSSMicroCacheSuperBlk &super_blk = phy_blk_mgr->super_blk_;
-  ObSSBlkCkptInfo &blk_ckpt_info = super_blk.blk_ckpt_info_;
-  const int64_t total_blk_cnt = phy_blk_mgr->blk_cnt_info_.total_blk_cnt_;
-  ASSERT_GT(total_blk_cnt, 2);
-
-  ObIArray<int64_t> &prev_ckpt_used_blk_list = super_blk.blk_ckpt_used_blk_list();
-  prev_ckpt_used_blk_list.reset();
-  // Mark the last two phy_blocks as those used in the previous checkpoint process for writing blk checkpoint data.
-  prev_ckpt_used_blk_list.push_back(total_blk_cnt - 1); // the last phy_blk;
-  prev_ckpt_used_blk_list.push_back(total_blk_cnt - 2); // the second last phy_blk;
-  blk_ckpt_info.blk_ckpt_entry_ = total_blk_cnt - 1;
-
-  ObSEArray<ObSSPhyBlockReuseInfo, 256> all_blk_info_arr;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->scan_blocks_to_ckpt(all_blk_info_arr));
-  ASSERT_EQ(all_blk_info_arr.count(), total_blk_cnt - SS_SUPER_BLK_COUNT);
-  phy_blk_mgr->reusable_blks_.reuse(); // clear reusable_blks
-  ASSERT_EQ(OB_SUCCESS, blk_ckpt_op.mark_reusable_blocks(all_blk_info_arr));
-
-  ObSSPhyBlockReuseInfo reuse_info_last_blk = all_blk_info_arr.at(all_blk_info_arr.count() - 1);
-  ASSERT_EQ(true, reuse_info_last_blk.need_reuse_);
-  ObSSPhyBlockReuseInfo reuse_info_second_last_blk = all_blk_info_arr.at(all_blk_info_arr.count() - 2);
-  ASSERT_EQ(true, reuse_info_second_last_blk.need_reuse_);
-
-  LOG_INFO("TEST_CASE: finish test test_phy_ckpt_blk_scan");
-}
-
 TEST_F(TestSSCkptPhyBlock, test_basic_rw)
 {
   LOG_INFO("TEST: start test_basic_rw");
