@@ -2311,7 +2311,7 @@ int ObPartitionMergePolicy::deal_with_ss_minor_result(
     // due to the shared tablet can not provide read mds table
     // use local tablet instead, this may caused accurated result, but it is safe
     ObTabletHandle local_tablet_handle;
-    if (OB_FAIL(ls.get_tablet(tablet_id, local_tablet_handle))) {
+    if (OB_FAIL(ls.get_tablet(tablet_id, local_tablet_handle, 10_s, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("local tablet not exist, skip minor merge", K(ret), K(tablet_id));
         ret = OB_NO_NEED_MERGE;
