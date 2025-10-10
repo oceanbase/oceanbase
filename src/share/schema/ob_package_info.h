@@ -110,6 +110,13 @@ public:
   OB_INLINE void set_pkg_invalid() { flag_ |= PKG_FLAG_INVALID; }
   OB_INLINE void set_noneditionable() { flag_ |= PKG_FLAG_NONEDITIONABLE; }
   OB_INLINE void set_invoker_right() { flag_ |= PKG_FLAG_INVOKER_RIGHT; }
+  OB_INLINE void set_invoker_right(bool is_invoker_right) { 
+    if (is_invoker_right) {
+      flag_ |= PKG_FLAG_INVOKER_RIGHT;
+    } else {
+      flag_ &= ~PKG_FLAG_INVOKER_RIGHT;
+    }
+  }
   OB_INLINE void set_accessible_by_clause() { flag_ |= PKG_FLAG_ACCESSIBLE_BY; }
 
   OB_INLINE bool is_pkg_invalid() { return PKG_FLAG_INVALID == (flag_ & PKG_FLAG_INVALID); }
