@@ -17946,7 +17946,13 @@ int ObDMLResolver::resolve_win_dist_option(const ParseNode *option,
         dist_option.use_topn_sort_ = dist_method->value_ & topn_flag;
         break;
       }
-      case T_DISTRIBUTE_RANGE:  dist_option.algo_ = WinDistAlgo::WIN_DIST_RANGE;  break;
+      case T_DISTRIBUTE_RANGE:  {
+        dist_option.algo_ = WinDistAlgo::WIN_DIST_RANGE;
+        dist_option.use_hash_sort_ = dist_method->value_ & hash_sort_flag;
+        dist_option.is_push_down_ = false;
+        dist_option.use_topn_sort_ = dist_method->value_ & topn_flag;
+        break;
+      }
       case T_DISTRIBUTE_LIST:   dist_option.algo_ = WinDistAlgo::WIN_DIST_LIST;   break;
       default: is_valid = false;  break;
     }

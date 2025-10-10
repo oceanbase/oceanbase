@@ -323,8 +323,8 @@ enum WinDistAlgo
   WIN_DIST_NONE    = (1UL),
   WIN_DIST_HASH    = (1UL << 1), // hash distribute
   WIN_DIST_RANGE   = (1UL << 2), // range distribute
-  WIN_DIST_LIST    = (1UL << 3),  // range + random distribute
-  WIN_DIST_HASH_LOCAL   = (1UL << 4)  // range + random distribute
+  WIN_DIST_HASH_LOCAL   = (1UL << 3),  // local hash
+  WIN_DIST_LIST    = (1UL << 4)  // range + random distribute
 };
 
 inline WinDistAlgo get_win_dist_algo(uint64_t method)
