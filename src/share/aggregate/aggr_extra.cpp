@@ -542,10 +542,10 @@ DataStoreVecExtraResult::~DataStoreVecExtraResult()
   reuse();
   if (need_sort_) {
     if (sort_ != nullptr) { 
-      sort_->reset();
+      sort_->destroy();
     }
   } else {
-    store_->reset();
+    store_->destroy();
   }
   data_store_brs_holder_.destroy();
   sort_ = nullptr;
