@@ -252,12 +252,12 @@ int ObColNullCountAggregator::eval(const ObStorageDatum &datum, const ObSkipInde
 
   if (!can_aggregate_) {
     // Skip
-  } else if (OB_UNLIKELY(datum.is_ext()) || OB_ISNULL(result_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected aggregate status", K(ret), K(datum), KP_(result));
   } else if (datum.is_nop()) {
     // null count on nop data not supported
     set_not_aggregate();
+  } else if (OB_UNLIKELY(datum.is_ext()) || OB_ISNULL(result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected aggregate status", K(ret), K(datum), KP_(result));
   } else if (agg_datum_attr.is_raw_data_) {
     null_count_ += datum.is_null() ? 1 : 0;
   } else if (datum.is_null()) {
