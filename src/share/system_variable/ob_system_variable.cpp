@@ -92,7 +92,7 @@ ObSpecialSysVarValues::ObSpecialSysVarValues()
       tmp_tm.tm_gmtoff = 0 - tmp_tm.tm_gmtoff;
     }
     const int64_t tz_hour = tmp_tm.tm_gmtoff / 3600;
-    const int64_t tz_minuts = (tmp_tm.tm_gmtoff % 3600) % 60;
+    const int64_t tz_minuts = (tmp_tm.tm_gmtoff % 3600) / 60;
     if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::system_time_zone_str_,
                                 ObSpecialSysVarValues::SYSTEM_TIME_ZONE_MAX_LEN,
                                 pos,
