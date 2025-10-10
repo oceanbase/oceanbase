@@ -19,15 +19,40 @@ namespace oceanbase
 {
 namespace storage
 {
-
 struct ObStorageCacheHitStat
 {
   ObStorageCacheHitStat();
   ~ObStorageCacheHitStat();
+  ObStorageCacheHitStat(const bool is_hit, const int64_t delta_cnt, const int64_t delta_size)
+  {
+    reset();
+    if (is_hit) {
+      update_cache_hit(delta_cnt, delta_size);
+    } else {
+      update_cache_miss(delta_cnt, delta_size);
+    }
+  }
   void reset();
 
   void update_cache_hit(const int64_t delta_cnt, const int64_t delta_size);
   void update_cache_miss(const int64_t delta_cnt, const int64_t delta_size);
+
+  int64_t get_hit_cnt() const
+  {
+    return ATOMIC_LOAD(&cache_hit_cnt_);
+  }
+  int64_t get_hit_bytes() const
+  {
+    return ATOMIC_LOAD(&cache_hit_bytes_);
+  }
+  int64_t get_miss_cnt() const
+  {
+    return ATOMIC_LOAD(&cache_miss_cnt_);
+  }
+  int64_t get_miss_bytes() const
+  {
+    return ATOMIC_LOAD(&cache_miss_bytes_);
+  }
 
   TO_STRING_KV(K(cache_hit_cnt_), K(cache_miss_cnt_), K(cache_hit_bytes_), K(cache_miss_bytes_));
 

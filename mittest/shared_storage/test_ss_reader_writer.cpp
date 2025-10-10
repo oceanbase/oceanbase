@@ -377,12 +377,12 @@ void check_local_cache_tablet_stat(const common::ObTabletID effective_tablet_id,
                                    const int64_t hit_cnt)
 {
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
-  ObSSLocalCacheTabletStatEntry entry;
+  ObStorageCacheHitStat entry;
   local_cache_service->get_local_cache_tablet_stat(effective_tablet_id, entry);
-  ASSERT_EQ(access_cnt, entry.access_cnt_);
-  ASSERT_EQ(access_size, entry.access_size_);
-  ASSERT_EQ(hit_cnt, entry.hit_cnt_);
-  ASSERT_EQ(hit_size, entry.hit_size_);
+  ASSERT_EQ(access_cnt, entry.get_miss_cnt() + entry.get_hit_cnt());
+  ASSERT_EQ(access_size, entry.get_miss_bytes() + entry.get_hit_bytes());
+  ASSERT_EQ(hit_cnt, entry.get_hit_cnt());
+  ASSERT_EQ(hit_size, entry.get_hit_bytes());
 }
 void check_object_type_stat(const MacroBlockId &macro_id,
                           const uint64_t read_cnt,
@@ -397,10 +397,13 @@ void check_object_type_stat(const MacroBlockId &macro_id,
   object_handle.get_io_handle().get_io_flag(flag);
   bool is_remote = flag.is_sync();
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
-  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
-  ASSERT_EQ(read_size, type_stat.read_size_);
-  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
-  ASSERT_EQ(write_size, type_stat.write_size_);
+  ObSSBaseStat stat;
+  type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+  ASSERT_EQ(read_cnt, stat.get_cnt());
+  ASSERT_EQ(read_size, stat.get_size());
+  type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+  ASSERT_EQ(write_cnt, stat.get_cnt());
+  ASSERT_EQ(write_size, stat.get_size());
 }
 
 TEST_F(TestSSReaderWriter, private_macro_reader_writer)

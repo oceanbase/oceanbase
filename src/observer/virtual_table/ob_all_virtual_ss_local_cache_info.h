@@ -20,6 +20,9 @@
 #include "share/object_storage/ob_object_storage_struct.h"
 #include "lib/stat/ob_di_cache.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_ss_local_cache_stat.h"
+#endif
 
 namespace oceanbase
 {
@@ -93,12 +96,14 @@ private:
 
   int add_micro_cache_inst_();
   int add_macro_cache_inst_();
+  int get_macro_cache_used_disk_size(ObSSLocalCacheInfoInst &inst);
   int add_tmpfile_cache_inst_();
-  int add_shared_macro_cache_inst_();
-  int add_private_macro_cache_inst_();
-  int add_external_table_cache_inst_();
+  int add_macro_block_inst_(const ObSSMacroBlockType macro_block_type);
   int add_local_cache_inst_();
   int set_all_cache_insts_();
+#ifdef OB_BUILD_SHARED_STORAGE
+  void get_hit_stat_(const ObStorageCacheHitStat &hit_stat, ObSSLocalCacheInfoInst &inst);
+#endif
 
 private:
   char ip_buf_[common::MAX_IP_ADDR_LENGTH];

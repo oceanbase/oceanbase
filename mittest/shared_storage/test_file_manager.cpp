@@ -611,7 +611,9 @@ void check_object_type_stat(const MacroBlockId &macro_id, const uint64_t delete_
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
   ObSSObjectTypeStat type_stat;
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), true, type_stat));
-  ASSERT_EQ(delete_cnt, type_stat.delete_cnt_);
+  ObSSBaseStat stat;
+  type_stat.get_stat(ObSSObjectTypeStatType::DELETE, stat);
+  ASSERT_EQ(delete_cnt, stat.get_cnt());
 }
 TEST_F(TestFileManager, test_private_macro_file_operator)
 {
@@ -1603,10 +1605,13 @@ void check_object_type_stat(const MacroBlockId &macro_id,
   object_handle.get_io_handle().get_io_flag(flag);
   bool is_remote = flag.is_sync();
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
-  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
-  ASSERT_EQ(read_size, type_stat.read_size_);
-  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
-  ASSERT_EQ(write_size, type_stat.write_size_);
+  ObSSBaseStat stat;
+  type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+  ASSERT_EQ(read_cnt, stat.get_cnt());
+  ASSERT_EQ(read_size, stat.get_size());
+  type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+  ASSERT_EQ(write_cnt, stat.get_cnt());
+  ASSERT_EQ(write_size, stat.get_size());
 }
 TEST_F(TestFileManager, test_user_tenant_slog_io_operator)
 {
