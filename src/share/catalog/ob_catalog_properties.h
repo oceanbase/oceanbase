@@ -191,7 +191,7 @@ public:
   common::ObString keytab_;
   common::ObString krb5conf_;
   int64_t max_client_pool_size_;
-  int64_t socket_timeout_;
+  int64_t socket_timeout_;   // us
   int64_t cache_refresh_interval_sec_;
 };
 
