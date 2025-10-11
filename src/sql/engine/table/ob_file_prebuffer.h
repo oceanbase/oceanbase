@@ -190,7 +190,7 @@ private:
     {
       return l->range_.offset_ < r->range_.offset_;
     }
-    TO_STRING_KV(K_(range), K_(buf), K_(col_cache_entry));
+    TO_STRING_KV(K_(range), K_(buf));
     ReadRange range_;
     bool is_waited_;
     void *buf_;
