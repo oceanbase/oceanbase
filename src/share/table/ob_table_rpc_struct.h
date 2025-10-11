@@ -43,7 +43,8 @@ public:
       pass_scramble_(),
       database_name_(),
       ttl_us_(0),
-      client_info_()
+      client_info_(),
+      allow_distribute_capability_(false)
   {}
 public:
   uint8_t auth_method_;  // always 1 for now
@@ -61,6 +62,7 @@ public:
   ObString database_name_;
   int64_t ttl_us_;  // 0 means no TTL
   ObString client_info_; // json format string, record client parameters
+  bool allow_distribute_capability_; // used to determine whether the version of client and odp fully support distributed capability
 public:
   TO_STRING_KV(K_(auth_method),
                K_(client_type),
@@ -74,7 +76,8 @@ public:
                K_(user_name),
                K_(database_name),
                K_(ttl_us),
-               K_(client_info));
+               K_(client_info),
+               K_(allow_distribute_capability));
 };
 
 enum ObTableLoginFlag

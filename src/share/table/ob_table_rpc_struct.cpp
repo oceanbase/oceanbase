@@ -31,7 +31,8 @@ OB_SERIALIZE_MEMBER(ObTableLoginRequest,
                     pass_scramble_,
                     database_name_,
                     ttl_us_,
-                    client_info_);
+                    client_info_,
+                    allow_distribute_capability_);
 
 OB_SERIALIZE_MEMBER(ObTableLoginResult,
                     server_capabilities_,

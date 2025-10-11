@@ -99,7 +99,7 @@ int ObTableLoginP::process()
           LOG_WARN("failed to record login client info", K(ret), K(login));
         } else {
           // sync server capacity to client
-          sync_capacity(login.client_type_);
+          sync_capacity(login.client_type_, login.allow_distribute_capability_);
         }
       }
       result_.reserved1_ = can_use_redis_v2() ? ObTableLoginFlag::REDIS_PROTOCOL_V2 : ObTableLoginFlag::LOGIN_FLAG_NONE;
@@ -133,11 +133,12 @@ int ObTableLoginP::process()
   return ret;
 }
 
-void ObTableLoginP::sync_capacity(uint8_t client_type)
+void ObTableLoginP::sync_capacity(uint8_t client_type, bool allow_distribute_capability)
 {
   ObTableClientType type = static_cast<ObTableClientType>(client_type);
   uint32_t server_capabilities = ObTableServerCapacity::CAPACITY_NONE;
   if (type == ObTableClientType::JAVA_HTABLE_CLIENT &&
+      allow_distribute_capability &&
       TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute()) {
     server_capabilities |= ObTableServerCapacity::DISTRIBUTED_EXECUTE;
   }
