@@ -1149,6 +1149,7 @@ void ObPluginVectorIndexService::stop()
     if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
       tenant_vec_async_task_sched_->stop();
     }
+    get_vec_async_task_handle().stop();
     kmeans_build_task_handler_.stop();
   }
 }

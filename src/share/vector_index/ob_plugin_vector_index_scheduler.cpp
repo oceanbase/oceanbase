@@ -1425,8 +1425,16 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 
   int64_t async_task_ref = 0;
   if (OB_NOT_NULL(vector_index_service_)) {
-    vector_index_service_->get_vec_async_task_handle().set_stop();
-    async_task_ref = vector_index_service_->get_vec_async_task_handle().get_async_task_ref();
+    ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+    if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      }
+    } else if (OB_NOT_NULL(index_ls_mgr)) {
+      async_task_ref = index_ls_mgr->get_async_task_opt().get_ls_processing_task_cnt();
+    }
   }
 
   int64_t dag_ref = get_dag_ref();
@@ -1441,10 +1449,17 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 
 void ObPluginVectorIndexLoadScheduler::stop()
 {
+  int ret = OB_SUCCESS;
   is_stopped_= true;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   if (OB_NOT_NULL(vector_index_service_)) {
-    vector_index_service_->get_vec_async_task_handle().stop();
+    if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    } else if (OB_NOT_NULL(index_ls_mgr)) {
+      index_ls_mgr->get_async_task_opt().set_stop();
+    }
   }
+  FLOG_INFO("vector index task scheduler stop", K(ls_->get_ls_id()), KP(index_ls_mgr));
 };
 
 void ObPluginVectorIndexLoadScheduler::destroy()

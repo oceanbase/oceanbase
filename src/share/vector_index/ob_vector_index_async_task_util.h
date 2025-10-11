@@ -42,7 +42,7 @@ class ObPluginVectorIndexMgr;
     bool is_cancel = false; \
     if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) { \
       LOG_WARN("fail to check task is cancel", KPC(ctx_));  \
-    } else if (is_cancel || (OB_NOT_NULL(vector_index_service) && vector_index_service->get_vec_async_task_handle().is_stopped())) { \
+    } else if (is_cancel || (OB_NOT_NULL(vec_idx_mgr_) && vec_idx_mgr_->get_async_task_opt().is_stop())) { \
       ret = OB_CANCELED;  \
       LOG_INFO("async task is cancel", KPC(ctx_));  \
     } else {  \
@@ -245,7 +245,8 @@ public:
   ObVecIndexAsyncTaskOption(uint64_t tenant_id) :
     mem_attr_(tenant_id, "VecIdxATaskCtx"),
     allocator_(mem_attr_),
-    ls_task_cnt_(0)
+    ls_task_cnt_(0),
+    stop_(false)
   {
     SET_IGNORE_MEM_VERSION(mem_attr_);
     allocator_.set_attr(mem_attr_);
@@ -261,6 +262,8 @@ public:
   void inc_ls_task_cnt() { ATOMIC_INC(&ls_task_cnt_); }
   void dec_ls_task_cnt() { ATOMIC_DEC(&ls_task_cnt_); }
   int64_t get_ls_processing_task_cnt() const { return ATOMIC_LOAD(&ls_task_cnt_); }
+  void set_stop() { stop_ = true; }
+  bool is_stop() { return stop_; }
   VecIndexAsyncTaskMap &get_async_task_map() { return task_ctx_map_; }
   ObIAllocator *get_allocator() { return &allocator_; }
   TO_STRING_KV(K(mem_attr_));
@@ -270,6 +273,7 @@ private:
   VecIndexAsyncTaskMap task_ctx_map_;
   ObArenaAllocator allocator_;
   volatile int64_t ls_task_cnt_;
+  bool stop_;
 };
 
 // QUEUE_THREAD
