@@ -21,11 +21,11 @@ devdeps-libaio-0.3.112-12022092915.el7.x86_64.rpm
 devdeps-relaxed-rapidjson-1.0.0-52023011719.el7.x86_64.rpm
 devdeps-openssl-static-1.1.1u-22023100710.el7.x86_64.rpm
 devdeps-libxml2-2.13.6-22025032016.el7.x86_64.rpm
-devdeps-mxml-2.12.0-12022090616.el7.x86_64.rpm
+devdeps-mxml-3.3.1-22025092517.el7.x86_64.rpm
 devdeps-apr-1.6.5-32022090616.el7.x86_64.rpm
 devdeps-xz-5.2.2-42022090615.el7.x86_64.rpm
 devdeps-lua-5.4.6-22023082916.el7.x86_64.rpm
-devdeps-oss-c-sdk-3.11.2-42024100915.el7.x86_64.rpm
+devdeps-oss-c-sdk-3.11.2-142025100915.el7.x86_64.rpm
 devdeps-zlib-static-1.2.13-82024102414.el7.x86_64.rpm
 devdeps-ncurses-static-6.5-62025040314.el7.x86_64.rpm
 devdeps-boost-1.74.0-22022110914.el7.x86_64.rpm
