@@ -110,8 +110,8 @@ struct StmtCompareHelper {
     K_(stmt)
   );
 
-  ObSEArray<ObStmtMapInfo, 8> stmt_map_infos_;
-  ObSEArray<ObSelectStmt*, 8> similar_stmts_;
+  ObSEArray<ObStmtMapInfo, 8, common::ModulePageAllocator, true> stmt_map_infos_;
+  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> similar_stmts_;
   QbNameList hint_force_stmt_set_;
   ObSelectStmt *stmt_;
 

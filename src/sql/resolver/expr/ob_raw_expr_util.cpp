@@ -5579,6 +5579,8 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
         }
       } else if (OB_FAIL(expr->formalize(session_info))) {
         LOG_WARN("fail to extract info", K(ret));
+      } else if (OB_FAIL(expr->pull_relation_id())) {
+        LOG_WARN("fail to pull relation id", K(ret));
       }
     }
     (const_cast<ObSQLSessionInfo *>(session_info))->set_stmt_type(stmt_type_bak);
@@ -10721,6 +10723,16 @@ int ObRawExprUtils::resolve_qualified_names(ObIAllocator &allocator,
     }
   }
   return ret;
+}
+
+bool ObRawExprUtils::is_invalid_type_for_compare(const ObRawExprResType &type)
+{
+  return ObLongTextType == type.get_type() ||
+          ObLobType == type.get_type() ||
+          (is_oracle_mode() && ObJsonType == type.get_type()) ||
+          ObRoaringBitmapType == type.get_type() ||
+          ObCollectionSQLType == type.get_type() ||
+          ObExtendType == type.get_type();
 }
 
 }
