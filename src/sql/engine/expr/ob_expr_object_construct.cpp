@@ -188,12 +188,22 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
   CK(expr.arg_cnt_ >= info->elem_types_.count());
   CK(OB_NOT_NULL(session = ctx.exec_ctx_.get_my_session()));
   ObObj *objs = nullptr;
+  ObIAllocator *alloc = &ctx.exec_ctx_.get_allocator();
+  pl::ObPLExecCtx *pl_exec_ctx = nullptr;
+  // for ojbect construct in pl, use top_expr_allocator
+  // we will destroy this obj in pl final interface
+  if (OB_NOT_NULL(session) &&
+      OB_NOT_NULL(session->get_pl_context()) &&
+      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
+      pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
+    alloc = pl_exec_ctx->get_top_expr_allocator();
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(expr.eval_param_value(ctx))) {
     LOG_WARN("failed to eval param ", K(ret));
   } else if (expr.arg_cnt_ > 0
      && OB_ISNULL(objs = static_cast<ObObj *>
-        (ctx.exec_ctx_.get_allocator().alloc(expr.arg_cnt_ * sizeof(ObObj))))) {
+        (alloc->alloc(expr.arg_cnt_ * sizeof(ObObj))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc mem for objs", K(ret));
   } else if (OB_FAIL(fill_obj_stack(expr, ctx, objs))) {
@@ -205,12 +215,12 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("rowsize_ is not equel to input", K(ret), K(info->rowsize_), K(expr.arg_cnt_));
   } else if (OB_ISNULL(record
            = static_cast<pl::ObPLRecord*>
-             (ctx.exec_ctx_.get_allocator().alloc(pl::ObRecordType::get_init_size(expr.arg_cnt_))))) {
+             (alloc->alloc(pl::ObRecordType::get_init_size(expr.arg_cnt_))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   } else {
     new(record)pl::ObPLRecord(info->udt_id_, expr.arg_cnt_);
-    OZ (record->init_data(ctx.exec_ctx_.get_allocator(), false));
+    OZ (record->init_data(*alloc, false));
     CK (OB_NOT_NULL(record->get_allocator()));
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (objs[i].is_null() && info->elem_types_.at(i).is_ext()) {
@@ -229,13 +239,13 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
           OZ (ObSPIService::spi_pad_char_or_varchar(session,
                                                     info->elem_types_.at(i).get_type(),
                                                     info->elem_types_.at(i).get_accuracy(),
-                                                    &ctx.exec_ctx_.get_allocator(),
+                                                    alloc,
                                                     &(objs[i])));
         }
         // param ObObj may have different accuracy with the argument, need conversion
         ObObj tmp;
         OZ (ObSPIService::spi_convert(*session,
-                                      ctx.exec_ctx_.get_allocator(),
+                                      *alloc,
                                       objs[i],
                                       info->elem_types_.at(i),
                                       tmp,

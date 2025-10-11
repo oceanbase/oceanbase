@@ -706,6 +706,7 @@ struct ObPLExecCtx : public ObPLINS
                                 const ObUserDefinedType *&user_type,
                                 ObIAllocator *allocator = NULL) const;
   virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
+  inline sql::ObExecContext *get_exec_ctx() const { return exec_ctx_; }
 
   common::ObIAllocator *allocator_;
   sql::ObExecContext *exec_ctx_;
@@ -777,7 +778,8 @@ public:
     pure_sub_plsql_exec_time_(0),
     profiler_time_stack_(nullptr),
     need_free_(),
-    param_converted_()
+    param_converted_(),
+    cur_complex_obj_count_(INT64_MAX)
   { }
   virtual ~ObPLExecState();
 
@@ -862,6 +864,7 @@ public:
   }
   ObPLContext *get_top_pl_context() { return top_context_; }
   ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
+  void try_clear_complex_obj();
 
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
@@ -895,6 +898,7 @@ private:
   ObPLProfilerTimeStack *profiler_time_stack_;
   common::ObSEArray<bool,8> need_free_;
   common::ObSEArray<bool,8> param_converted_;
+  int64_t cur_complex_obj_count_; // for destory plctx record's obj
 };
 
 class ObPLCallStackTrace;

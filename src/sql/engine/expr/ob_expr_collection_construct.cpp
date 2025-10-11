@@ -206,11 +206,20 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     }
   }
 
-  ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
+  ObIAllocator *alloc = &ctx.exec_ctx_.get_allocator();
+  pl::ObPLExecCtx *pl_exec_ctx = nullptr;
+  // for collection construct in pl, use top_expr_allocator
+  // we will destroy this obj in pl final interface
+  if (OB_NOT_NULL(session) &&
+      OB_NOT_NULL(session->get_pl_context()) &&
+      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
+      pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
+    alloc = pl_exec_ctx->get_top_expr_allocator();
+  }
   if (OB_SUCC(ret)) {
     if (pl::PL_NESTED_TABLE_TYPE == info->type_) {
       if (NULL == (coll =
-      static_cast<pl::ObPLNestedTable*>(alloc.alloc(sizeof(pl::ObPLNestedTable) + 8)))) {
+      static_cast<pl::ObPLNestedTable*>(alloc->alloc(sizeof(pl::ObPLNestedTable) + 8)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
       } else {
@@ -218,7 +227,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
       }
     } else if (pl::PL_VARRAY_TYPE == info->type_) {
       if (NULL == (coll =
-      static_cast<pl::ObPLVArray*>(alloc.alloc(sizeof(pl::ObPLVArray) + 8)))) {
+      static_cast<pl::ObPLVArray*>(alloc->alloc(sizeof(pl::ObPLVArray) + 8)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
       } else {
@@ -227,7 +236,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
       }
     } else if (pl::PL_ASSOCIATIVE_ARRAY_TYPE == info->type_) {
        if (NULL == (coll =
-        static_cast<pl::ObPLAssocArray*>(alloc.alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
+        static_cast<pl::ObPLAssocArray*>(alloc->alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
         } else {
@@ -238,7 +247,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
       LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
     }
   }
-  OZ (coll->init_allocator(alloc, true));
+  OZ (coll->init_allocator(*alloc, true));
   OZ(expr.eval_param_value(ctx));
 
   for (int64_t i = 0; OB_SUCC(ret) && info->not_null_ && i < expr.arg_cnt_; ++i) {
@@ -263,7 +272,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     } else {
       schema_guard = exec_ctx.get_sql_ctx()->schema_guard_;
     }
-    pl::ObPLResolveCtx resolve_ctx(alloc,
+    pl::ObPLResolveCtx resolve_ctx(*alloc,
                                    *session,
                                    *(schema_guard),
                                    package_guard,
@@ -393,7 +402,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
             OZ (ObSPIService::spi_pad_char_or_varchar(session,
                                                       info->index_type_.get_obj_type(),
                                                       info->index_type_.get_accuracy(),
-                                                      &alloc,
+                                                      alloc,
                                                       &key));
 
             pl::ObPLAssocArray* assoc_array = static_cast<pl::ObPLAssocArray*>(coll);
@@ -405,7 +414,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
             }
             OZ((ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
                                                               session->get_pl_context()->get_current_ctx(),
-                                                              alloc,
+                                                              *alloc,
                                                               *assoc_array,
                                                               1)));
             OZ(assoc_array->insert_sort(key, assoc_array->get_count() - 1, search_end, assoc_array->get_count() - 1));
@@ -423,7 +432,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
             OZ (ObSPIService::spi_pad_char_or_varchar(session,
                                                       info->elem_type_.get_obj_type(),
                                                       info->elem_type_.get_accuracy(),
-                                                      &alloc,
+                                                      alloc,
                                                       &v));
             CK (OB_NOT_NULL(assoc_array->get_data()));
             OZ (deep_copy_obj(*coll->get_allocator(),
@@ -442,7 +451,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
             OZ (ObSPIService::spi_pad_char_or_varchar(session,
                                                       info->elem_type_.get_obj_type(),
                                                       info->elem_type_.get_accuracy(),
-                                                      &alloc,
+                                                      alloc,
                                                       &v));
             OZ (deep_copy_obj(*coll->get_allocator(),
                               v,
