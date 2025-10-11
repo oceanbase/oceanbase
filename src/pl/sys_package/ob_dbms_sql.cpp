@@ -1650,7 +1650,9 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
     // 2.* fill row store
     if (cursor->is_streaming()) {
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
-      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0));
+      OZ (ObSPIService::fill_cursor(
+        cursor->get_cursor_entity(),
+        *(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {
