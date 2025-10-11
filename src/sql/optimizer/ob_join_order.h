@@ -2733,6 +2733,11 @@ struct MergeKeyInfoHelper
     int get_valid_path_info_from_hint(const ObRelIds &table_set,
                                       bool contain_fake_cte,
                                       ValidPathInfo &path_info);
+    int try_add_nlj_path_for_values_table(const ObJoinOrder& left_tree,
+                                          const ObJoinOrder& right_tree,
+                                          const Path* left_path,
+                                          const bool ignore_hint,
+                                          ValidPathInfo& path_info);
 
     int check_depend_table(const ObJoinOrder &left_tree,
                            const ObJoinOrder &right_tree,
