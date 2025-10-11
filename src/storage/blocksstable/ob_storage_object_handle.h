@@ -15,9 +15,7 @@
 
 #include "share/io/ob_io_define.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/ob_ss_local_cache_service.h"
-#endif
+
 namespace oceanbase
 {
 namespace storage
