@@ -182,12 +182,12 @@ int ObLogBR::init_data(const RecordType type,
     // treate cluster_id as thread_id
     // convert from 64 bit to 32 bit
     data_->setThreadId(static_cast<uint32_t>(cluster_id));
-    // set trans commit timestamp (second)
-    int64_t commit_version_usec = commit_version / NS_CONVERSION;
-    data_->setTimestamp(commit_version_usec / 1000000);
-    // set trans commit timestamp (microsecond)
     // note: combine getTimestamp() and getRecordUsec() as complete trans commit timestamp
-    data_->setRecordUsec(static_cast<uint32_t>(commit_version_usec % 1000000));
+    // set trans commit timestamp (second)
+    data_->setTimestamp(commit_version / _SEC_NS_);
+    // set trans commit timestamp (nanosecond)
+    // parse as nanosecond with msg after 202509
+    data_->setRecordUsec(static_cast<uint32_t>(commit_version % _SEC_NS_));
 
     // won't use this field
     data_->putFilterRuleVal("0", 1);
