@@ -1800,6 +1800,9 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
       if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
         pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
       }
+      if (resolve_ctx.session_info_.is_pl_debug_on()) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+      }
       ObString sql;
       if (OB_FAIL(ObPLCacheCtx::assemble_format_routine_name (sql, package))) {
         LOG_WARN("Failed to asseble format routine name!", K(ret));
@@ -1866,6 +1869,9 @@ int ObPLPackageManager::get_package_from_plan_cache(const ObPLResolveCtx &resolv
       }
       if (resolve_ctx.session_info_.get_pl_code_coverage() != nullptr) {
         pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+      }
+      if (resolve_ctx.session_info_.is_pl_debug_on()) {
+        pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
       }
 
       // get package from plan cache

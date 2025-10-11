@@ -261,6 +261,7 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                 int16_t sub_id = 0;
                 OZ (cg.init());
                 if (cg.get_debug_mode()
+                    || cg.get_profile_mode()
                     || !routine_ast->get_is_all_sql_stmt()
                     || !routine_ast->get_obj_access_exprs().empty()) {
                   OZ (SMART_CALL(decode_dll(session_info, schema_guard, routine->get_exec_env(), *routine_ast, *routine, buf, len, pos, cur_level, sub_id)));
@@ -278,6 +279,11 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
                   OX (routine->set_has_parallel_affect_factor(routine_ast->has_parallel_affect_factor()));
                   OX (routine->set_ret_type(routine_ast->get_ret_type()));
                   OZ (routine->set_types(routine_ast->get_user_type_table()));
+                  if (OB_SUCC(ret) && cg.get_profile_mode()) {
+                    OX (routine->set_profiler_unit_info(key_id_, routine->get_proc_type()));
+                    OZ (SMART_CALL(
+                          ObPLCodeGenerator::set_profiler_unit_info_recursive(*routine)));
+                  }
                 } else {
                   // simple routine(generate by generate_simpile interface), skip encode header byte
                   OZ (SMART_CALL(decode_dll(session_info, schema_guard, routine->get_exec_env(), *routine_ast, *routine, buf, len, pos, cur_level, sub_id)));
@@ -601,10 +607,10 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
       LOG_WARN("fail to get build_version", K(ret));
     } else if (OB_FAIL(query_inner_sql.assign_fmt(
       "select merge_version, dll %s %s from OCEANBASE.%s where database_id = %ld and key_id = %ld "
-      "and compile_db_id = %ld and arch_type = '%s' and build_version = '%s'",
+      "and compile_db_id = %ld and arch_type = '%.*s' and build_version = '%s'",
         (is_stack_size_column_exist(data_version)) ? ", stack_size" : "",
         (is_extra_info_column_exist(data_version)) ? ", extra_info" : "",
-        OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.ptr(), build_version))) {
+        OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_,  arch_type_.length(), arch_type_.ptr(), build_version))) {
       LOG_WARN("assign format failed", K(ret));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
@@ -704,6 +710,27 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     }
   }
 
+  return ret;
+}
+
+int ObRoutinePersistentInfo::mask_special_compile_mode(ObSQLSessionInfo &session_info)
+{
+  int ret = OB_SUCCESS;
+  char buffer[64];
+  int64_t pos = 0;
+  if (nullptr != session_info.get_pl_profiler()) {
+    special_compile_mode_ |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+  }
+  if (session_info.is_pl_debug_on()) {
+    special_compile_mode_ |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+  }
+  OZ (databuff_printf(buffer, sizeof(buffer), pos, "%.*s",
+                              arch_type_.length(), arch_type_.ptr()));
+  OZ (databuff_printf(buffer, sizeof(buffer), pos, "_%lu",
+                                    special_compile_mode_));
+  ObString new_arch_type;
+  OZ (ob_write_string(allocator_, ObString(pos, buffer), new_arch_type));
+  OX (arch_type_ = new_arch_type);
   return ret;
 }
 
