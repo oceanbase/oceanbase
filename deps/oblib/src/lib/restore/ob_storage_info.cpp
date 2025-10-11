@@ -1721,10 +1721,10 @@ int ObDeviceCredentialMgr::parse_device_credential_(
   } else if (OB_FAIL(parser.parse(res_ptr, STRLEN(res_ptr), root))) {
     LOG_WARN("parse json failed", K(ret));
   } else if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     LOG_WARN("no root value", K(ret));
   } else if (json::JT_OBJECT != root->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_OBJECT_STORAGE_IO_ERROR;
     LOG_WARN("error json format", K(ret), K(root->get_type()));
   } else {
     ObString access_key_id;
@@ -1752,10 +1752,10 @@ int ObDeviceCredentialMgr::parse_device_credential_(
 
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(code != 200 || !success_val.case_compare("true"))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       LOG_WARN("unexpected response", K(ret), K(code), K(err_code), K(success_val), K(request_id));
     } else if (OB_UNLIKELY(json::JT_OBJECT != response_val->get_type())) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_OBJECT_STORAGE_IO_ERROR;
       LOG_WARN("invalid response value", K(ret), K(response_val->get_type()));
     } else {
       DLIST_FOREACH_X(it, response_val->get_object(), OB_SUCC(ret))
@@ -1763,10 +1763,10 @@ int ObDeviceCredentialMgr::parse_device_credential_(
         for (int64_t i = 0; (i < ARRAYSIZEOF(response_items_)) && OB_SUCC(ret); ++i) {
           if (0 == it->name_.case_compare(response_items_[i])) {
             if (i != 3 && OB_UNLIKELY(json::JT_STRING != it->value_->get_type())) {
-              ret = OB_ERR_UNEXPECTED;
+              ret = OB_OBJECT_STORAGE_IO_ERROR;
               LOG_WARN("invalid response item", K(ret), K(it->name_), K(it->value_->get_type()));
             } else if (i == 3 && OB_UNLIKELY(json::JT_NUMBER != it->value_->get_type())) {
-              ret = OB_ERR_UNEXPECTED;
+              ret = OB_OBJECT_STORAGE_IO_ERROR;
               LOG_WARN("invalid response item", K(ret), K(it->name_), K(it->value_->get_type()));
             } else {
               switch (i) {
