@@ -103,9 +103,9 @@ int ObSelectIntoOp::inner_open()
       if (OB_SUCC(ret)) {
         ObBackupIoAdapter util;
 
-        if (url_.empty() || access_info_.is_valid()) {
+        if (url_.empty() || !access_info_.is_valid()) {
           ret = OB_FILE_NOT_EXIST;
-          LOG_WARN("file path not exist", K(ret), K(url_), K(access_info_));
+          LOG_WARN("file path not exist", K(ret), K(url_), K(access_info_), K(access_info_.is_valid()));
         } else if (OB_FAIL(util.get_and_init_device(device_handle_, &access_info_, url_))) {
           LOG_WARN("fail to init device", K(ret), K(url_), K(access_info_));
         }
@@ -150,6 +150,9 @@ int ObSelectIntoOp::inner_open()
 int ObSelectIntoOp::inner_get_next_row()
 {
   int ret = 0 == top_limit_cnt_ ? OB_ITER_END : OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_SQL_SELECT_INTO_OP_RETRY) OB_SUCCESS;
+  }
   int64_t row_count = 0;
   const ObItemType into_type = MY_SPEC.into_type_;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
@@ -195,7 +198,7 @@ int ObSelectIntoOp::inner_get_next_row()
 
 int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_E(EventTable::EN_SQL_SELECT_INTO_OP_RETRY) OB_SUCCESS;
   const ObBatchRows *child_brs = NULL;
   int64_t batch_size = min(max_row_cnt, MY_SPEC.max_batch_size_);
   int64_t row_count = 0;
@@ -274,12 +277,33 @@ int ObSelectIntoOp::inner_rescan()
 int ObSelectIntoOp::inner_close()
 {
   int ret = OB_SUCCESS;
-  if (file_location_ == IntoFileLocation::REMOTE_OSS) {
-    if (OB_FAIL(data_writer_.flush(get_flush_function()))) {
-      LOG_WARN("fail to flush data", K(ret));
+  int old_errcode = ctx_.get_errcode();
+  bool need_retry = true;
+  if (OB_SUCCESS == old_errcode) {
+    need_retry = false;
+    if (file_location_ == IntoFileLocation::REMOTE_OSS) {
+      if (OB_FAIL(data_writer_.flush(get_flush_function()))) {
+        LOG_WARN("fail to flush data", K(ret));
+      }
+    }
+  }
+  // delete oss file before close_file
+  if (OB_SUCC(ret) && need_retry
+      && IntoFileLocation::REMOTE_OSS == file_location_) {
+    for (int i = 0; i < created_files_.count() && OB_SUCC(ret); i++) {
+      LOG_TRACE("delete oss file", K(created_files_.at(i)));
+      OZ(device_handle_->unlink(created_files_.at(i).ptr()));
     }
   }
   OZ(close_file());
+  // delete disk file after close_file
+  if (OB_SUCC(ret) && need_retry
+      && IntoFileLocation::SERVER_DISK == file_location_) {
+    for (int i = 0; i < created_files_.count() && OB_SUCC(ret); i++) {
+      LOG_TRACE("delete disk file", K(created_files_.at(i)));
+      OZ(common::FileDirectoryUtils::delete_file(created_files_.at(i).ptr()));
+    }
+  }
   return ret;
 }
 
@@ -361,10 +385,19 @@ int ObSelectIntoOp::open_file()
       LOG_WARN("fail already exist", K(ret), K(url_));
     } else if (OB_FAIL(device_handle_->open(url_with_suffix.ptr(), -1, 0, fd_, &iod_opts))) {
       LOG_WARN("fail to open file", K(ret));
+    } else {
+      ObString url_with_suffix_str;
+      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), url_with_suffix.string(), url_with_suffix_str))) {
+        LOG_WARN("fail to write string", K(ret));
+      } else if (OB_FAIL(created_files_.push_back(url_with_suffix_str))) {
+        LOG_WARN("fail to push back string", K(ret));
+      }
     }
   } else {
     if (OB_FAIL(file_appender_.create(url_, true))) {
       LOG_WARN("create dumpfile failed", K(ret), K(url_));
+    } else if (OB_FAIL(created_files_.push_back(url_))) {
+      LOG_WARN("fail to push back string", K(ret));
     }
     file_location_ = IntoFileLocation::SERVER_DISK;
   }
@@ -597,6 +630,7 @@ void ObSelectIntoOp::destroy()
     device_handle_ = NULL;
   }
   ObOperator::destroy();
+  created_files_.destroy();
 }
 
 

@@ -66,7 +66,8 @@ public:
       file_location_(IntoFileLocation::SERVER_DISK),
       write_offset_(0),
       write_bytes_(0),
-      split_file_id_(0)
+      split_file_id_(0),
+      created_files_()
   {
   }
 
@@ -164,6 +165,7 @@ private:
   int64_t write_bytes_;
   int64_t split_file_id_;
   ObIOBufferWriter data_writer_;
+  ObArray<ObString> created_files_;
 };
 
 }
