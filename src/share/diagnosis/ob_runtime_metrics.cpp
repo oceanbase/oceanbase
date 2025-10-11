@@ -21,7 +21,7 @@ namespace oceanbase
 namespace common
 {
 int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t value,
-                     metric::Unit unit)
+                     metric::Unit unit, bool as_json_format = true)
 {
   static constexpr uint64_t kilo = 1000UL;
   static constexpr uint64_t mega = 1000UL * 1000UL;
@@ -32,7 +32,9 @@ int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t va
   int ret = OB_SUCCESS;
 
 #define UNIT_PRINT(kilo_base, mega_base, giga_base, unit, kilo_unit, mega_unit, giga_unit, value)  \
-  OZ(J_QUOTE());                                                                                   \
+  if (as_json_format) {                                                                            \
+    OZ(J_QUOTE());                                                                                 \
+  }                                                                                                \
   if (value < kilo_base) {                                                                         \
     OZ(BUF_PRINTF("%lu", value));                                                                  \
     OZ(J_NAME(unit));                                                                              \
@@ -49,7 +51,9 @@ int value_print_help(char *buf, const int64_t buf_len, int64_t &pos, uint64_t va
     OZ(BUF_PRINTF("%.3lf", double_val));                                                           \
     OZ(J_NAME(giga_unit));                                                                         \
   }                                                                                                \
-  OZ(J_QUOTE());
+  if (as_json_format) {                                                                            \
+    OZ(J_QUOTE());                                                                                 \
+  }
 
   switch (unit) {
   case metric::Unit::INT: {
@@ -198,6 +202,17 @@ int ObMetric::to_format_json(char *buf, const int64_t buf_len, int64_t &pos, boo
   return ret;
 }
 
+int ObMetric::pretty_print(char *buf, const int64_t buf_len, int64_t &pos,
+                           const ObString &prefix) const
+{
+  int ret = OB_SUCCESS;
+  OZ(J_NAME(prefix.ptr()));
+  OZ(J_NAME(get_metric_name(id_)));
+  OZ(J_COLON());
+  OZ(value_print_help(buf, buf_len, pos, value(), get_metric_unit(id_)), false);
+  return ret;
+}
+
 /*
   format example:
                     |<-main_agg->|<----------------extra_agg-------------------->|
@@ -272,6 +287,65 @@ int ObMergeMetric::to_format_json(char *buf, const int64_t buf_len, int64_t &pos
   if (with_braces) {
     OZ(J_OBJ_END());
   }
+  return ret;
+}
+
+int ObMergeMetric::pretty_print(char *buf, const int64_t buf_len, int64_t &pos,
+                                const ObString &prefix) const
+{
+  // pretty format like:
+  // output rows:100 [min=10, max=15]
+  int ret = OB_SUCCESS;
+  int agg_type = get_metric_agg_type(get_metric_id());
+  bool need_comma = false;
+  uint64_t main_value = 0;
+  switch (agg_type & 0x3) {
+  case M_FIRST_VAL: {
+    main_value = get_first_value();
+    break;
+  }
+  case M_SUM: {
+    main_value = get_sum_value();
+    break;
+  }
+  case M_AVG: {
+    main_value = get_avg_value();
+    break;
+  }
+  default: {
+    break;
+  }
+  }
+
+  OZ(J_NAME(prefix.ptr()));
+  OZ(J_NAME(get_metric_name(id_)));
+  OZ(J_COLON());
+  OZ(value_print_help(buf, buf_len, pos, main_value, get_metric_unit(id_), false));
+  if (OB_SUCC(ret) && agg_type >= 0x4) {
+    OZ(BUF_PRINTF(" ["));
+    if (agg_type & E_MIN) {
+      OZ(BUF_PRINTF("min="));
+      OZ(value_print_help(buf, buf_len, pos, get_min_value(), get_metric_unit(id_), false));
+      need_comma = true;
+    }
+    if (agg_type & E_MAX) {
+      if (need_comma) {
+        OZ(J_COMMA());
+      }
+      OZ(BUF_PRINTF("max="));
+      OZ(value_print_help(buf, buf_len, pos, get_max_value(), get_metric_unit(id_), false));
+      need_comma = true;
+    }
+    if (agg_type & E_VARIANCE) {
+      if (need_comma) {
+        OZ(J_COMMA());
+      }
+      OZ(BUF_PRINTF("variance="));
+      OZ(value_print_help(buf, buf_len, pos, get_variance_value(), get_metric_unit(id_), false));
+    }
+    OZ(BUF_PRINTF("]"));
+  }
+
   return ret;
 }
 

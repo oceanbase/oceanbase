@@ -15,6 +15,7 @@
 #define protected public
 #include "share/diagnosis/ob_runtime_profile.h"
 #include "share/diagnosis/ob_profile_util.h"
+#include "pl/sys_package/ob_dbms_xprofile.cpp"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -310,6 +311,134 @@ TEST_F(ObRuntimeProfileTest, test_deep_profile_tree)
   new_profile->to_format_json(&arena_alloc, persist_profile_json, true, metric::Level::AD_HOC);
   cout << persist_profile_json << endl;
   ASSERT_STREQ("{\"PHY_HASH_JOIN\":{\"output batches\":100, \"output rows\":100, \"PHY_JOIN_FILTER\":{\"filtered row count\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_GRANULE_ITERATOR\":{\"output rows\":100, \"skipped rows\":100, \"output batches\":100, \"PHY_TABLE_SCAN\":{\"output rows\":100, \"skipped rows\":100}, \"PHY_INSERT\":{\"skipped rows\":100, \"output batches\":100}}}}}", persist_profile_json);
+}
+
+void prepare_profile_item(int64_t op_id, int64_t plan_depth, ObOpProfile<> *profile,
+                          sql::ObTMArray<ObProfileItem> &profile_items)
+{
+  int ret = OB_SUCCESS;
+  ObProfileItem item;
+  item.op_id_ = op_id;
+  item.profile_ = profile;
+  item.plan_depth_ = plan_depth;
+  profile_items.push_back(item);
+  ObProfileSwitcher switcher(profile);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_BATCHES, 100);
+  INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, 100);
+}
+
+TEST_F(ObRuntimeProfileTest, test_pretty_print_profile)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator arena_alloc;
+  sql::ObTMArray<ObProfileItem> profile_items;
+  sql::ObTMArray<ObMergedProfileItem> merged_items;
+  sql::ObTMArray<ExecutionBound> execution_bounds;
+
+  ObOpProfile<> op_profile_0(ObProfileId::PHY_HASH_JOIN, &arena_alloc);
+  ObOpProfile<> op_profile_1(ObProfileId::PHY_JOIN_FILTER, &arena_alloc);
+  ObOpProfile<> op_profile_2(ObProfileId::PHY_GRANULE_ITERATOR, &arena_alloc);
+  ObOpProfile<> op_profile_3(ObProfileId::PHY_TABLE_SCAN, &arena_alloc);
+  ObOpProfile<> op_profile_4(ObProfileId::PHY_JOIN_FILTER, &arena_alloc);
+  ObOpProfile<> op_profile_5(ObProfileId::PHY_GRANULE_ITERATOR, &arena_alloc);
+  ObOpProfile<> op_profile_6(ObProfileId::PHY_TABLE_SCAN, &arena_alloc);
+
+  prepare_profile_item(0, 0, &op_profile_0, profile_items);
+  prepare_profile_item(1, 1, &op_profile_1, profile_items);
+  prepare_profile_item(2, 2, &op_profile_2, profile_items);
+  prepare_profile_item(3, 3, &op_profile_3, profile_items);
+  prepare_profile_item(4, 1, &op_profile_4, profile_items);
+  prepare_profile_item(5, 2, &op_profile_5, profile_items);
+  prepare_profile_item(6, 3, &op_profile_6, profile_items);
+
+  OZ(ObProfileUtil::get_merged_profiles(&arena_alloc, profile_items, merged_items, execution_bounds));
+
+  pl::ProfilePrefixHelper prefix_helper(arena_alloc);
+  prefix_helper.prepare_pretty_prefix(merged_items);
+  int64_t buf_len = 1024 * 1024;
+  int64_t pos = 0;
+  char *buf = static_cast<char *>(arena_alloc.alloc(buf_len));
+
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    const char *text = nullptr;
+    const ObMergedProfileItem &item = merged_items.at(i);
+    OZ(item.profile_->to_format_json(&arena_alloc, text, true, metric::Level::AD_HOC));
+    MEMSET(buf + pos, ' ', item.plan_depth_);
+    pos += item.plan_depth_;
+    OZ(BUF_PRINTF("%ld ", item.op_id_));
+    OZ(BUF_PRINTF("%s\n", text));
+  }
+  cout << buf << endl;
+  ASSERT_STREQ("0 {\"PHY_HASH_JOIN\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n 1 {\"PHY_JOIN_FILTER\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n  2 {\"PHY_GRANULE_ITERATOR\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n   3 {\"PHY_TABLE_SCAN\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n 4 {\"PHY_JOIN_FILTER\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n  5 {\"PHY_GRANULE_ITERATOR\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n   6 {\"PHY_TABLE_SCAN\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n", buf);
+
+  pos = 0;
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    const char *text = nullptr;
+    const ObMergedProfileItem &item = merged_items.at(i);
+    OZ(item.profile_->pretty_print(
+        &arena_alloc, text, prefix_helper.get_prefixs().at(i).profile_prefix_,
+        prefix_helper.get_prefixs().at(i).metric_prefix_, metric::Level::AD_HOC));
+    OZ(BUF_PRINTF("%s\n", text));
+  }
+  cout << buf << endl;
+  ASSERT_STREQ("0.PHY_HASH_JOIN \n\xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x9C\xE2\x94\x80" "1.PHY_JOIN_FILTER \n\xE2\x94\x82 \xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82 \xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x82 \xE2\x94\x94\xE2\x94\x80" "2.PHY_GRANULE_ITERATOR \n\xE2\x94\x82   \xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82   \xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x82   \xE2\x94\x94\xE2\x94\x80" "3.PHY_TABLE_SCAN \n\xE2\x94\x82       output batches:100 [min=100, max=100]\n\xE2\x94\x82       output rows:100 [min=100, max=100]\n\xE2\x94\x94\xE2\x94\x80" "4.PHY_JOIN_FILTER \n  \xE2\x94\x82  output batches:100 [min=100, max=100]\n  \xE2\x94\x82  output rows:100 [min=100, max=100]\n  \xE2\x94\x94\xE2\x94\x80" "5.PHY_GRANULE_ITERATOR \n    \xE2\x94\x82  output batches:100 [min=100, max=100]\n    \xE2\x94\x82  output rows:100 [min=100, max=100]\n    \xE2\x94\x94\xE2\x94\x80" "6.PHY_TABLE_SCAN \n        output batches:100 [min=100, max=100]\n        output rows:100 [min=100, max=100]\n", buf);
+  ASSERT_EQ(0, ret);
+}
+
+TEST_F(ObRuntimeProfileTest, test_pretty_print_profile_incomplete)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator arena_alloc;
+  sql::ObTMArray<ObProfileItem> profile_items;
+  sql::ObTMArray<ObMergedProfileItem> merged_items;
+  sql::ObTMArray<ExecutionBound> execution_bounds;
+
+  ObOpProfile<> op_profile_0(ObProfileId::PHY_HASH_JOIN, &arena_alloc);
+  ObOpProfile<> op_profile_1(ObProfileId::PHY_JOIN_FILTER, &arena_alloc);
+  // ObOpProfile<> op_profile_2(ObProfileId::PHY_GRANULE_ITERATOR, &arena_alloc);
+  ObOpProfile<> op_profile_3(ObProfileId::PHY_TABLE_SCAN, &arena_alloc);
+  ObOpProfile<> op_profile_4(ObProfileId::PHY_JOIN_FILTER, &arena_alloc);
+  // ObOpProfile<> op_profile_5(ObProfileId::PHY_GRANULE_ITERATOR, &arena_alloc);
+  ObOpProfile<> op_profile_6(ObProfileId::PHY_TABLE_SCAN, &arena_alloc);
+
+  prepare_profile_item(0, 0, &op_profile_0, profile_items);
+  prepare_profile_item(1, 1, &op_profile_1, profile_items);
+  prepare_profile_item(3, 3, &op_profile_3, profile_items);
+  prepare_profile_item(4, 1, &op_profile_4, profile_items);
+  prepare_profile_item(6, 3, &op_profile_6, profile_items);
+
+  OZ(ObProfileUtil::get_merged_profiles(&arena_alloc, profile_items, merged_items, execution_bounds));
+
+  pl::ProfilePrefixHelper prefix_helper(arena_alloc);
+  prefix_helper.prepare_pretty_prefix(merged_items);
+  int64_t buf_len = 1024 * 1024;
+  int64_t pos = 0;
+  char *buf = static_cast<char *>(arena_alloc.alloc(buf_len));
+
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    const char *text = nullptr;
+    const ObMergedProfileItem &item = merged_items.at(i);
+    OZ(item.profile_->to_format_json(&arena_alloc, text, true, metric::Level::AD_HOC));
+    MEMSET(buf + pos, ' ', item.plan_depth_);
+    pos += item.plan_depth_;
+    OZ(BUF_PRINTF("%ld ", item.op_id_));
+    OZ(BUF_PRINTF("%s\n", text));
+  }
+  cout << buf << endl;
+  ASSERT_STREQ("0 {\"PHY_HASH_JOIN\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n 1 {\"PHY_JOIN_FILTER\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n   3 {\"PHY_TABLE_SCAN\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n 4 {\"PHY_JOIN_FILTER\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n   6 {\"PHY_TABLE_SCAN\":{\"output batches\":{\"sum\":100, \"min\":100, \"max\":100}, \"output rows\":{\"sum\":100, \"min\":100, \"max\":100}}}\n", buf);
+
+  pos = 0;
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    const char *text = nullptr;
+    const ObMergedProfileItem &item = merged_items.at(i);
+    OZ(item.profile_->pretty_print(
+        &arena_alloc, text, prefix_helper.get_prefixs().at(i).profile_prefix_,
+        prefix_helper.get_prefixs().at(i).metric_prefix_, metric::Level::AD_HOC));
+    OZ(BUF_PRINTF("%s\n", text));
+  }
+  cout << buf << endl;
+  ASSERT_STREQ("0.PHY_HASH_JOIN \n\xE2\x94\x82  output batches:100 [min=100, max=100]\n\xE2\x94\x82  output rows:100 [min=100, max=100]\n\xE2\x94\x9C\xE2\x94\x80" "1.PHY_JOIN_FILTER \n\xE2\x94\x82   output batches:100 [min=100, max=100]\n\xE2\x94\x82   output rows:100 [min=100, max=100]\n\xE2\x94\x82 \xE2\x94\x82 3.PHY_TABLE_SCAN \n\xE2\x94\x82 \xE2\x94\x82   output batches:100 [min=100, max=100]\n\xE2\x94\x82 \xE2\x94\x82   output rows:100 [min=100, max=100]\n\xE2\x94\x94\xE2\x94\x80" "4.PHY_JOIN_FILTER \n    output batches:100 [min=100, max=100]\n    output rows:100 [min=100, max=100]\n  \xE2\x94\x82 6.PHY_TABLE_SCAN \n  \xE2\x94\x82   output batches:100 [min=100, max=100]\n  \xE2\x94\x82   output rows:100 [min=100, max=100]\n", buf);
+  ASSERT_EQ(0, ret);
 }
 
 int main(int argc, char **argv)
