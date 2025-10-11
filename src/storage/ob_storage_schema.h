@@ -69,7 +69,7 @@ public:
   inline common::ColumnType get_data_type() const { return meta_type_.get_type(); }
   inline bool is_generated_column() const { return is_generated_column_; }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
-  int deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val);
+  int deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val, const bool check_nop = false);
 
   TO_STRING_KV(K_(meta_type), K_(is_column_stored_in_sstable), K_(is_rowkey_column),
       K_(is_generated_column), K_(orig_default_value));

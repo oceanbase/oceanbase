@@ -265,9 +265,11 @@ int ObSingleRowGetter::open(const ObDatumRowkey &rowkey, bool use_fuse_row_cache
         STORAGE_LOG(WARN, "fail to protect table", K(ret));
       }
     }
-    single_merge_ = new(buf) ObSingleMerge();
-    if (OB_FAIL(single_merge_->init(access_param_, access_ctx_, get_table_param_))) {
-      STORAGE_LOG(WARN, "Fail to init ObSingleMerge, ", K(ret));
+    if (OB_SUCC(ret)) {
+      single_merge_ = new(buf) ObSingleMerge();
+      if (OB_FAIL(single_merge_->init(access_param_, access_ctx_, get_table_param_))) {
+        STORAGE_LOG(WARN, "Fail to init ObSingleMerge, ", K(ret));
+      }
     }
   }
 

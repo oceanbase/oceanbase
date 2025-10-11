@@ -96,10 +96,14 @@ bool ObStorageColumnSchema::is_valid() const
   return common::ob_is_valid_obj_type(static_cast<ObObjType>(meta_type_.get_type()));
 }
 
-int ObStorageColumnSchema::deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val)
+int ObStorageColumnSchema::deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val, const bool check_nop)
 {
   int ret = OB_SUCCESS;
-  if (default_val.get_deep_copy_size() > 0) {
+
+  if (OB_UNLIKELY(check_nop && default_val.is_nop_value())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Invalid default value", K(ret), K(default_val));
+  } else if (default_val.get_deep_copy_size() > 0) {
     char *buf = nullptr;
     int64_t pos = 0;
     const int64_t alloc_size = default_val.get_deep_copy_size();
@@ -433,7 +437,8 @@ int ObStorageSchema::deserialize(
     column_array_.set_allocator(&allocator);
   }
 
-  if (OB_FAIL(serialization::decode(buf, data_len, pos, storage_schema_version_))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, storage_schema_version_))) {
     STORAGE_LOG(WARN, "failed to deserialize version", K(ret), K(data_len), K(pos));
   } else if (STORAGE_SCHEMA_VERSION == storage_schema_version_
       || STORAGE_SCHEMA_VERSION_V2 == storage_schema_version_) {
@@ -652,7 +657,7 @@ int ObStorageSchema::generate_column_array(
         col_schema.default_checksum_ = datum.checksum(0);
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, orig_default_val))) {
+      } else if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, orig_default_val, true /*check nop*/))) {
         STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(orig_default_val));
       } else if (OB_FAIL(column_array_.push_back(col_schema))) {
         STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
