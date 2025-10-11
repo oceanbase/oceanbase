@@ -1169,6 +1169,7 @@ int ObDDLUtil::generate_build_replica_sql(
             LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
           } else if (!column_schema->is_tbl_part_key_column()) {
             // do nothing
+          } else if (is_contain(extra_column_ids, static_cast<uint64_t>(col_id))) {
           } else if (OB_FAIL(extra_column_ids.push_back(col_id))) {
             LOG_WARN("failed to push column id", K(ret), K(col_id));
           } else if (column_schema->is_generated_column()) {
