@@ -2008,6 +2008,11 @@ private:
     const share::schema::ObTableSchema &new_table_schema,
     share::schema::ObSchemaGetterGuard &schema_guard,
     share::schema::AlterTableSchema &alter_table_schema);
+  static int fill_new_constraint_info(
+      const obrpc::ObAlterTableArg::AlterConstraintType op_type,
+      const AlterTableSchema &tmp_alter_table_schema,
+      const ObTableSchema &new_table_schema,
+      AlterTableSchema &alter_table_schema);
   /**
    * Rebuild check constraint expr, if the expr str contains the old column name
    *

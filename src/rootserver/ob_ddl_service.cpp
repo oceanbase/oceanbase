@@ -8218,6 +8218,37 @@ int ObDDLService::refill_column_id_array_for_constraint(
   return ret;
 }
 
+int ObDDLService::fill_new_constraint_info(
+      const obrpc::ObAlterTableArg::AlterConstraintType op_type,
+      const AlterTableSchema &tmp_alter_table_schema,
+      const ObTableSchema &new_table_schema,
+      AlterTableSchema &alter_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == op_type) {
+    ObTableSchema::const_constraint_iterator new_iter = tmp_alter_table_schema.constraint_begin();
+    ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
+    for (; OB_SUCC(ret) && iter != alter_table_schema.constraint_end() && new_iter != tmp_alter_table_schema.constraint_end(); iter++, new_iter++) {
+      if (OB_UNLIKELY((*iter)->get_constraint_name_str() != (*new_iter)->get_constraint_name_str())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("constraint name not match", K(ret), K((*iter)->get_constraint_name_str()), K((*new_iter)->get_constraint_name_str()));
+      } else {
+        (*iter)->set_schema_version((*new_iter)->get_schema_version());
+        (*iter)->set_tenant_id(new_table_schema.get_tenant_id());
+        (*iter)->set_table_id(new_table_schema.get_table_id());
+        (*iter)->set_constraint_id((*new_iter)->get_constraint_id());
+        (*iter)->set_constraint_type((*new_iter)->get_constraint_type());
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(iter != alter_table_schema.constraint_end() || new_iter != tmp_alter_table_schema.constraint_end())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("constraints count in alter table schema not match", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::rebuild_constraint_check_expr(
     const share::schema::ObColumnSchemaV2 &orig_column,
     const share::schema::ObColumnSchemaV2 &alter_column,
@@ -13495,6 +13526,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                 ddl_operator,
                 trans))) {
               LOG_WARN("alter table constraints failed", K(ret));
+            } else if (OB_FAIL(fill_new_constraint_info(alter_table_arg.alter_constraint_type_, tmp_alter_table_schema, new_table_schema, alter_table_schema))) {
+              LOG_WARN("failed to fill new constraint info", K(ret));
             }
           }
         }
