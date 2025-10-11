@@ -34,6 +34,7 @@ void ObIDService::reset()
   latest_log_ts_.reset();
   submit_log_ts_ = OB_INVALID_TIMESTAMP;
   ls_ = NULL;
+  is_flushing_ = false;
 }
 
 int ObIDService::submit_log_with_lock_(const int64_t last_id, const int64_t limited_id)
@@ -255,20 +256,71 @@ int ObIDService::update_ls_id_meta(const bool write_slog)
   return ret;
 }
 
+// write slog without lock
+int ObIDService::update_ls_id_meta_for_flush(
+    const int64_t id_service_type,
+    const int64_t limited_id,
+    const SCN latest_log_ts)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  const bool write_slog = true;
+
+  if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(IDS_LS, ls_handle, ObLSGetMod::TRANS_MOD))) {
+    TRANS_LOG(WARN, "get id service log stream failed", KR(ret), K(id_service_type),
+        K(limited_id), K(latest_log_ts));
+  } else if (OB_FAIL(ls_handle.get_ls()->update_id_meta(id_service_type,
+          limited_id, latest_log_ts, write_slog))) {
+    TRANS_LOG(WARN, "update id meta fail", K(ret), K(id_service_type), K(limited_id),
+        K(latest_log_ts));
+  } else {
+    // do nothing
+  }
+
+  return ret;
+}
+
 int ObIDService::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
-  WLockGuard guard(rwlock_);
-  SCN latest_rec_log_ts = rec_log_ts_.atomic_get();
-  if (latest_rec_log_ts <= rec_scn) {
-    latest_rec_log_ts = rec_log_ts_.atomic_get();
-    if (OB_FAIL(update_ls_id_meta(true))) {
-      TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_));
+  const int64_t start_ts = ObTimeUtility::current_time();
+  int64_t service_type = ServiceType::INVALID_ID_SERVICE_TYPE;
+  SCN latest_rec_log_ts;
+  int64_t limited_id;
+  SCN latest_log_ts;
+  bool need_flush = false;
+  { // protected by lock
+    WLockGuard guard(rwlock_);
+    if (is_flushing_) {
+      ret = OB_EAGAIN;
+      TRANS_LOG(WARN, "is flushing", K(ret), K(service_type_));
     } else {
-      rec_log_ts_.atomic_bcas(latest_rec_log_ts, SCN::max_scn());
+      service_type = service_type_;
+      latest_rec_log_ts = rec_log_ts_.atomic_get();
+      limited_id = ATOMIC_LOAD(&limited_id_);
+      latest_log_ts = latest_log_ts_.atomic_load();
+      if (latest_rec_log_ts <= rec_scn) {
+        need_flush = true;
+        is_flushing_ = true;
+      }
     }
-    TRANS_LOG(INFO, "flush", K(ret), K(service_type_), K(rec_log_ts_), K(limited_id_));
   }
+  if (need_flush) {
+    if (OB_FAIL(update_ls_id_meta_for_flush(service_type, limited_id, latest_log_ts))) {
+      TRANS_LOG(WARN, "update ls id meta for flush failed", KR(ret), K(service_type),
+          K(limited_id), K(latest_log_ts));
+    }
+    { // protected by lock
+      WLockGuard guard(rwlock_);
+      if (OB_SUCC(ret)) {
+        rec_log_ts_.atomic_bcas(latest_rec_log_ts, SCN::max_scn());
+      }
+      is_flushing_ = false;
+    }
+  }
+  const int64_t used_time_us = ObTimeUtility::current_time() - start_ts;
+  TRANS_LOG(INFO, "flush", K(ret), K(service_type), K(latest_rec_log_ts), K(limited_id),
+      K(latest_log_ts), K(need_flush), K(used_time_us));
 
   return ret;
 }
@@ -539,6 +591,7 @@ int ObPresistIDLogCb::serialize_ls_log(ObPresistIDLog &ls_log, int64_t service_t
 int ObPresistIDLogCb::on_success()
 {
   int ret = OB_SUCCESS;
+  ObTimeGuard timeguard("on_success", 100000);
 
   switch (id_srv_type_) {
     case ObIDService::ServiceType::TimestampService: {
@@ -679,6 +732,7 @@ OB_DEF_DESERIALIZE(ObAllIDMeta)
 void ObAllIDMeta::update_all_id_meta(const ObAllIDMeta &all_id_meta)
 {
   ObSpinLockGuard lock_guard(lock_);
+  ObSpinLockGuard src_lock_guard(all_id_meta.lock_);
   for(int i=0; i<ObIDService::MAX_SERVICE_TYPE; i++) {
     (void)inc_update(&id_meta_[i].limited_id_, all_id_meta.id_meta_[i].limited_id_);
     id_meta_[i].latest_log_ts_.inc_update(all_id_meta.id_meta_[i].latest_log_ts_);
