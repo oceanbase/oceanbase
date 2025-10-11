@@ -956,7 +956,10 @@ int ObLSMigrationHandler::generate_build_ls_dag_net_()
     if (ls_->get_ls_id() == errsim_ls_id) {
       SERVER_EVENT_SYNC_ADD("storage_ha", "before_add_build_ls_dag_net",
                             "tenant_id", ls_->get_tenant_id(),
-                            "ls_id", ls_->get_ls_id().id());
+                            "ls_id", ls_->get_ls_id().id(),
+                            "src", ls_migration_task.arg_.src_.get_server(),
+                            "dst", ls_migration_task.arg_.dst_.get_server(),
+                            "task_id", ls_migration_task.task_id_);
       DEBUG_SYNC(BEFORE_ADD_BUILD_LS_MIGRATION_DAG_NET);
     }
 #endif
@@ -991,7 +994,10 @@ int ObLSMigrationHandler::generate_prepare_ls_dag_net_()
     if (ls_->get_ls_id() == errsim_ls_id) {
       SERVER_EVENT_SYNC_ADD("storage_ha", "before_add_prepare_ls_dag_net",
                             "tenant_id", ls_->get_tenant_id(),
-                            "ls_id", ls_->get_ls_id().id());
+                            "ls_id", ls_->get_ls_id().id(),
+                            "src", ls_migration_task.arg_.src_.get_server(),
+                            "dst", ls_migration_task.arg_.dst_.get_server(),
+                            "task_id", ls_migration_task.task_id_);
       DEBUG_SYNC(BEFORE_ADD_PREPARE_LS_MIGRATION_DAG_NET);
     }
 #endif
@@ -1028,7 +1034,10 @@ int ObLSMigrationHandler::generate_complete_ls_dag_net_()
     if (ls_->get_ls_id() == errsim_ls_id) {
       SERVER_EVENT_SYNC_ADD("storage_ha", "before_add_complete_ls_dag_net",
                             "tenant_id", ls_->get_tenant_id(),
-                            "ls_id", ls_->get_ls_id().id());
+                            "ls_id", ls_->get_ls_id().id(),
+                            "src", ls_migration_task.arg_.src_.get_server(),
+                            "dst", ls_migration_task.arg_.dst_.get_server(),
+                            "task_id", ls_migration_task.task_id_);
       DEBUG_SYNC(BEFORE_ADD_COMPLETE_LS_MIGRATION_DAG_NET);
     }
 #endif
