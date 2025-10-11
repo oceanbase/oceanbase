@@ -615,45 +615,11 @@ int ObLocalityCheckHelp::check_alter_locality(
     LOG_WARN("fail to check single locality replace valid", KR(ret), K(pre_zone_locality), K(cur_zone_locality));
   } else if (replace_locality) {
     FLOG_INFO("replace locality is valid", K(pre_zone_locality), K(cur_zone_locality));
-    if (OB_FAIL(set_data_version_from_palf_kv_(tenant_id))) {
-      LOG_WARN("fail to get data version in palf kv", KR(ret), K(tenant_id));
-    }
   } else if (OB_FAIL(check_alter_locality_valid(alter_paxos_tasks, pre_paxos_num, cur_paxos_num,
                                                 arb_service_status))) {
     LOG_WARN("check alter locality valid failed", K(ret), K(alter_paxos_tasks),
              K(pre_paxos_num), K(cur_paxos_num), K(non_paxos_locality_modified), K(arb_service_status));
   }
-  return ret;
-}
-
-int ObLocalityCheckHelp::set_data_version_from_palf_kv_(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  uint64_t sys_data_version = 0;
-  uint64_t user_data_version = 0;
-  uint64_t meta_data_version = 0;
-  if (is_sys_tenant(tenant_id)) { // ignore sys tenant
-  } else if (OB_UNLIKELY(!GCTX.is_shared_storage_mode())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not in ss mode", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
-    LOG_WARN("fail to get data version", KR(ret));
-  } else if (sys_data_version < DATA_VERSION_4_4_1_0) {
-    LOG_INFO("sys tenant data version is less than 4.4.1.0, skip update data version", KR(ret), KDV(sys_data_version));
-  } else if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(tenant_id, user_data_version))) {
-    LOG_WARN("fail to get data version in palf kv", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(gen_meta_tenant_id(tenant_id), meta_data_version))) {
-    LOG_WARN("fail to get meta tenant data version in palf kv", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ODV_MGR.set(tenant_id, user_data_version))) {
-    LOG_WARN("fail to update data_version", KR(ret), K(tenant_id), KDV(user_data_version));
-  } else if (OB_FAIL(ODV_MGR.set(gen_meta_tenant_id(tenant_id), meta_data_version))) {
-    LOG_WARN("fail to update data_version", KR(ret), K(tenant_id), KDV(meta_data_version));
-  }
-#endif
   return ret;
 }
 

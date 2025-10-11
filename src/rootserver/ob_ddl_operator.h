@@ -125,6 +125,7 @@ public:
   virtual int purge_tenant_in_recyclebin(const share::schema::ObTenantSchema &tenant_schema,
                                          common::ObMySQLTransaction &trans,
                                          const common::ObString *ddl_stmt_str);
+  virtual int try_init_tenant_data_version(const uint64_t tenant_id);
   virtual int replace_sys_variable(share::schema::ObSysVariableSchema &sys_variable_schema,
                                    const int64_t schema_version,
                                    common::ObMySQLTransaction &trans,

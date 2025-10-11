@@ -475,7 +475,6 @@ private:
       return cmp;
     }
   };
-  static int set_data_version_from_palf_kv_(const uint64_t tenant_id);
   static int get_alter_paxos_replica_number_replica_task(
       const common::ObIArray<share::ObZoneReplicaAttrSet> &pre_zone_locality,
       const common::ObIArray<share::ObZoneReplicaAttrSet> &cur_zone_locality,
