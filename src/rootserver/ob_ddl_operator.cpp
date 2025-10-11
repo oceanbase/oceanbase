@@ -23,6 +23,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_tablet_drop.h"
+#include "rootserver/ob_server_zone_op_service.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_zone_merge_info.h"
@@ -486,6 +487,8 @@ int ObDDLOperator::alter_tenant(ObTenantSchema &tenant_schema,
     LOG_WARN("invalid tenant schema", K(tenant_schema), K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(OB_SYS_TENANT_ID, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret));
+  } else if (OB_FAIL(try_init_tenant_data_version(tenant_schema.get_tenant_id()))) {
+    LOG_WARN("fail to init tenant data version", KR(ret), K(tenant_schema));
   } else {
     tenant_schema.set_schema_version(new_schema_version);
     const ObSchemaOperationType op = OB_DDL_ALTER_TENANT;
@@ -494,6 +497,41 @@ int ObDDLOperator::alter_tenant(ObTenantSchema &tenant_schema,
       LOG_WARN("schema_service_impl alter_tenant failed", K(tenant_schema), K(ret));
     }
   }
+  return ret;
+}
+
+int ObDDLOperator::try_init_tenant_data_version(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  uint64_t sys_data_version = 0;
+  uint64_t tmp_data_version = 0;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (!GCTX.is_shared_storage_mode()) {
+    LOG_INFO("not in ss mode");
+  } else if (is_sys_tenant(tenant_id)) { // ignore sys tenant
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
+    LOG_WARN("failed to GET_MIN_DATA_VERSION", KR(ret));
+  } else if (sys_data_version < DATA_VERSION_4_4_1_0) {
+    LOG_WARN("sys tenant data version is less than 4.4.1.0", KR(ret), KDV(sys_data_version));
+  } else if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(tenant_id, tmp_data_version))) {
+    LOG_INFO("try to get tenant data version from palf kv", KR(tmp_ret), K(tenant_id));
+    uint64_t user_data_version = 0;
+    uint64_t meta_data_version = 0;
+    if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(tenant_id, user_data_version))) {
+      LOG_WARN("fail to get data version in palf kv", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+      LOG_WARN("fail to get meta tenant data version in palf kv", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ODV_MGR.set(tenant_id, user_data_version))) {
+      LOG_WARN("fail to update data_version", KR(ret), K(tenant_id), KDV(user_data_version));
+    } else if (OB_FAIL(ODV_MGR.set(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+      LOG_WARN("fail to update data_version", KR(ret), K(tenant_id), KDV(meta_data_version));
+    }
+  }
+#endif
   return ret;
 }
 
