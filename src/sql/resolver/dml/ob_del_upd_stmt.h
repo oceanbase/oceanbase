@@ -199,7 +199,8 @@ public:
       all_values_simple_const_(false),
       column_conv_exprs_(),
       assignments_(),
-      column_in_values_vector_()
+      column_in_values_vector_(),
+      is_insertup_update_assign_need_calc_(false)
   {
   }
   ObInsertTableInfo(ObDmlTableType dml_type) :
@@ -212,7 +213,8 @@ public:
       column_conv_exprs_(),
       part_generated_col_dep_cols_(),
       assignments_(),
-      column_in_values_vector_()
+      column_in_values_vector_(),
+      is_insertup_update_assign_need_calc_(false)
   {
   }
   virtual ~ObInsertTableInfo()
@@ -240,7 +242,8 @@ public:
                K_(column_conv_exprs),
                K_(part_generated_col_dep_cols),
                K_(assignments),
-               K_(column_in_values_vector));
+               K_(column_in_values_vector),
+               K_(is_insertup_update_assign_need_calc));
   bool is_replace_;  // replace semantic for mysql
   bool is_overwrite_;
   // 下面两个变量组合在一起描述了 INSERT 的 VALUES 结构
@@ -260,6 +263,8 @@ public:
   common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> part_generated_col_dep_cols_;
   ObAssignments assignments_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_in_values_vector_;
+  // for insert up update, if the update assignment need to calc
+  bool is_insertup_update_assign_need_calc_;
 };
 
 class ObMergeTableInfo: public ObInsertTableInfo

@@ -1427,12 +1427,17 @@ public:
   int deep_copy(const sql::ObExprPtrIArray *exprs, const int64_t batch_idx);
   int reset_trans_info_datum();
   int write_trans_info_datum(blocksstable::ObDatumRow &out_row);
+  void set_local_dynamic_filter_params(const common::ObSEArray<common::ObDatum, 4> &params)
+  { local_dynamic_filter_params_ = &params; }
+  const common::ObSEArray<common::ObDatum, 4> *get_local_dynamic_filter_params()
+  { return local_dynamic_filter_params_; }
 public:
   ObPushdownFilterExecutor *pd_storage_filters_;
   ObEvalCtx &eval_ctx_;
   const ObPushdownExprSpec &expr_spec_;
   // enable new vec2.0 format
   const bool enable_rich_format_;
+  const common::ObSEArray<common::ObDatum, 4> *local_dynamic_filter_params_;
 };
 
 // filter row for storage callback.

@@ -19,6 +19,49 @@ namespace oceanbase
 namespace sql
 {
 
+int ObExprLocalDynamicFilterContext::init_params(const common::ObIArray<ObDatum> &params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    hash_set_.reuse();
+  } else if (OB_FAIL(hash_set_.create(params.count() * 2, "LocalDynamicFilter", "LocalDynamicFilter"))) {
+    LOG_WARN("failed to create hash set", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); i++) {
+    if (OB_FAIL(hash_set_.set_refactored(params.at(i).get_uint64()))) {
+      LOG_WARN("failed to set hash set", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObExprLocalDynamicFilterContext::is_filtered(const ObDatum &datum, bool &is_filtered)
+{
+  int ret = OB_SUCCESS;
+  is_filtered = true;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("local dynamic filter context is not inited", K(ret));
+  } else {
+    uint64_t col_value = datum.get_uint64();
+    if (OB_FAIL(hash_set_.exist_refactored(col_value))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        is_filtered = true;
+        ret = OB_SUCCESS;
+      } else if (OB_HASH_EXIST == ret) {
+        is_filtered = false;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to check if col value exists", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprLocalDynamicFilter::calc_result_typeN(ObExprResType &type, ObExprResType *types,
                                                 int64_t param_num, ObExprTypeCtx &type_ctx) const
 {
@@ -32,7 +75,6 @@ int ObExprLocalDynamicFilter::calc_result_typeN(ObExprResType &type, ObExprResTy
   return ret;
 }
 
-// local dynamic filter should only be pushdown white filter, and it is not expected to call the eval function.
 int ObExprLocalDynamicFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                       ObExpr &rt_expr) const
 {
@@ -46,7 +88,27 @@ int ObExprLocalDynamicFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr 
 
 int ObExprLocalDynamicFilter::eval_local_dynamic_filter(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
-  return OB_NOT_IMPLEMENT;
+  int ret = OB_SUCCESS;
+  ObExprLocalDynamicFilterContext *local_dynamic_filter_ctx = nullptr;
+  if (OB_ISNULL(expr.args_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (OB_ISNULL(local_dynamic_filter_ctx = static_cast<ObExprLocalDynamicFilterContext *>(
+                                                  ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_))) ||
+             !local_dynamic_filter_ctx->do_local_dynamic_filter()) {
+    // not merge range opt, always return 1 means the row is not filtered
+    res.set_int(1);
+  } else {
+    const ObDatum &datum = expr.args_[0]->locate_expr_datum(ctx);
+    bool is_filtered = true;
+    if (OB_FAIL(local_dynamic_filter_ctx->is_filtered(datum, is_filtered))) {
+      LOG_WARN("failed to check if col value exists", K(ret));
+    } else {
+      res.set_int(is_filtered ? 0 : 1);
+    }
+    LOG_TRACE("local dynamic filter eval result", K(datum), K(ctx), K(is_filtered));
+  }
+  return ret;
 }
 
 int ObExprLocalDynamicFilter::eval_local_dynamic_filter_batch(const ObExpr &expr, ObEvalCtx &ctx,
@@ -61,7 +123,31 @@ int ObExprLocalDynamicFilter::prepare_storage_white_filter_data(const ObExpr &ex
                                                                 LocalDynamicFilterParams &params,
                                                                 bool &is_data_prepared)
 {
-  return OB_NOT_IMPLEMENT;
+  int ret = OB_SUCCESS;
+  params.reuse();
+  is_data_prepared = false;
+  const LocalDynamicFilterParams *filter_params = dynamic_filter.get_op().get_local_dynamic_filter_params();
+  ObExprLocalDynamicFilterContext *local_dynamic_filter_ctx = nullptr;
+
+  if (OB_ISNULL(local_dynamic_filter_ctx = static_cast<ObExprLocalDynamicFilterContext *>(
+                                           eval_ctx.exec_ctx_.get_expr_op_ctx(expr.expr_ctx_id_))) ||
+      !local_dynamic_filter_ctx->do_local_dynamic_filter()) {
+    dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+  } else if (OB_NOT_NULL(filter_params) && !filter_params->empty()) {
+    if (OB_FAIL(params.assign(*filter_params))) {
+      LOG_WARN("failed to assign local dynamic filter params", K(ret));
+    } else {
+      dynamic_filter.get_filter_node().set_op_type(WHITE_OP_IN);
+      dynamic_filter.set_filter_action(DynamicFilterAction::DO_FILTER);
+      dynamic_filter.set_filter_val_meta(expr.args_[0]->obj_meta_);
+      dynamic_filter.hash_func_ = &pk_increment_hash_func;
+      is_data_prepared = true;
+    }
+  } else {
+    dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+  }
+  LOG_TRACE("local dynamic filter prepare filter params", K(dynamic_filter.get_filter_action()), K(expr), KPC(filter_params));
+  return ret;
 }
 
 int ObExprLocalDynamicFilter::update_storage_white_filter_data(const ObExpr &expr,

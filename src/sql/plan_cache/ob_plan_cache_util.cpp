@@ -541,6 +541,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_runtime_filter_adaptive_apply_ = tenant_config->_enable_runtime_filter_adaptive_apply;
     extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
     enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
+    enable_insertup_column_store_opt_ = tenant_config->_enable_insertup_column_store_opt;
   }
 
   return ret;

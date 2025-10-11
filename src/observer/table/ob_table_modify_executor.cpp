@@ -588,7 +588,7 @@ int ObTableApiModifyExecutor::fetch_conflict_rowkey(sql::ObConflictChecker &conf
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
       }
-    } else if (OB_FAIL(conflict_checker.build_primary_table_lookup_das_task())) {
+    } else if (OB_FAIL(conflict_checker.build_primary_table_lookup_das_task(conflict_checker.eval_ctx_))) {
       LOG_WARN("fail to build lookup_das_task", K(ret));
     }
   }

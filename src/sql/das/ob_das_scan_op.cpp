@@ -16,7 +16,8 @@
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
-
+#include "sql/optimizer/ob_storage_estimator.h"
+#include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 
 namespace oceanbase
 {
@@ -475,6 +476,108 @@ int ObDASScanOp::init_related_tablet_ids(ObDASRelatedTabletID &related_tablet_id
   return ret;
 }
 
+int ObDASScanOp::check_merge_range_opt()
+{
+  int ret = OB_SUCCESS;
+  int64_t range_cnt = scan_param_.key_ranges_.count();
+  if (OB_ISNULL(scan_ctdef_) || OB_ISNULL(scan_rtdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scan ctdef is null", K(ret));
+  } else if (scan_rtdef_->do_local_dynamic_filter_) {
+    // use the row estimation interface to get number of logical rows after merging ranges,
+    // enable the optimization if the number of logical rows does not increase significantly after merging.
+    int64_t merge_opt_threshold = - EVENT_CALL(EventTable::EN_MERGE_RANGE_OPT_THRESHOLD);
+    merge_opt_threshold = merge_opt_threshold > 0 ? merge_opt_threshold : 10;
+    ObNewRange merge_range;
+    ObObj *start_obj = nullptr;
+    ObObj *end_obj = nullptr;
+    uint64_t min_rowkey = UINT64_MAX;
+    uint64_t max_rowkey = 0;
+    if (OB_ISNULL(start_obj = OB_NEWx(ObObj, &op_alloc_))
+        || OB_ISNULL(end_obj = OB_NEWx(ObObj, &op_alloc_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate enough memory", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < range_cnt; i++) {
+        min_rowkey = std::min(min_rowkey, scan_param_.key_ranges_.at(i).start_key_.get_obj_ptr()[0].get_uint64());
+        max_rowkey = std::max(max_rowkey, scan_param_.key_ranges_.at(i).start_key_.get_obj_ptr()[0].get_uint64());
+      }
+      start_obj[0].set_uint64(min_rowkey);
+      end_obj[0].set_uint64(max_rowkey);
+      merge_range.table_id_ = scan_ctdef_->ref_table_id_;
+      merge_range.start_key_.assign(start_obj, 1);
+      merge_range.end_key_.assign(end_obj, 1);
+      merge_range.border_flag_.set_inclusive_start();
+      merge_range.border_flag_.set_inclusive_end();
+      ObSimpleBatch batch;
+      batch.type_ = common::ObSimpleBatch::T_SCAN;
+      batch.range_ = &merge_range;
+      ObArray<ObEstRowCountRecord> records; // unused
+      double logical_row_count = 0;
+      double physical_row_count = 0;
+      share::SCN max_readable_scn;
+      if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), nullptr, max_readable_scn))) {
+        LOG_WARN("failed to get gts", K(ret));
+      } else if (FALSE_IT(scan_param_.frozen_version_ = static_cast<int64_t>(max_readable_scn.get_val_for_sql()))) {
+      } else if (OB_FAIL(ObStorageEstimator::storage_estimate_partition_batch_rowcount(MTL_ID(), batch, scan_param_, records, logical_row_count, physical_row_count))) {
+        LOG_WARN("failed to estimate row count", K(ret));
+      } else if (FALSE_IT(scan_param_.frozen_version_ = -1)) {  // restore frozen version
+      } else if (logical_row_count <= static_cast<double>(range_cnt * merge_opt_threshold)) {
+        // no significant increase, enable range merge
+        scan_param_.key_ranges_.reuse();
+        if (OB_FAIL(scan_param_.key_ranges_.push_back(merge_range))) {
+          LOG_WARN("failed to push back key ranges", K(merge_range), K(ret));
+        }
+      }
+
+      // whether performs merge range opt or not, filter params should be prepared
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(scan_rtdef_->p_pd_expr_op_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pd expr op is null", K(ret));
+      } else if (OB_FAIL(prepare_local_dynamic_filter_context())) {
+        LOG_WARN("failed to prepare local dynamic filter context", K(ret));
+      } else {
+        scan_rtdef_->p_pd_expr_op_->set_local_dynamic_filter_params(scan_rtdef_->local_dynamic_filter_params_);
+      }
+      LOG_TRACE("check merge range opt", K(ret), K(scan_rtdef_->local_dynamic_filter_params_.count()), K(merge_opt_threshold), K(merge_range), K(scan_param_), KPC(scan_rtdef_), K(logical_row_count));
+    }
+  }
+  return ret;
+}
+
+int ObDASScanOp::prepare_local_dynamic_filter_context()
+{
+  int ret = OB_SUCCESS;
+  ObExpr *local_dynamic_filter = nullptr;
+  if (OB_UNLIKELY(scan_ctdef_->pd_expr_spec_.pushdown_filters_.count() != 1)
+      || OB_ISNULL(local_dynamic_filter = scan_ctdef_->pd_expr_spec_.pushdown_filters_.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pushdown filter", K(ret), K(scan_ctdef_->pd_expr_spec_.pushdown_filters_));
+  } else {
+    uint64_t op_id = local_dynamic_filter->expr_ctx_id_;
+    ObExecContext &exec_ctx = scan_rtdef_->eval_ctx_->exec_ctx_;
+    ObExprLocalDynamicFilterContext *local_dynamic_filter_ctx = nullptr;
+    if (OB_ISNULL(local_dynamic_filter_ctx = static_cast<ObExprLocalDynamicFilterContext *>(
+              exec_ctx.get_expr_op_ctx(op_id)))) {
+      // create local dynamic filter context
+      if (OB_FAIL(exec_ctx.create_expr_op_ctx(op_id, local_dynamic_filter_ctx))) {
+        LOG_WARN("failed to create local dynamic filter context", K(ret), K(op_id));
+      } else if (OB_ISNULL(local_dynamic_filter_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("local dynamic filter context is null", K(ret));
+      }
+    }
+    if (OB_FAIL(ret) || OB_ISNULL(local_dynamic_filter_ctx)) {
+    } else if (OB_FAIL(local_dynamic_filter_ctx->init_params(scan_rtdef_->local_dynamic_filter_params_))) {
+      LOG_WARN("failed to init local dynamic filter context", K(ret));
+    } else {
+      local_dynamic_filter_ctx->set_do_local_dynamic_filter(true);
+    }
+  }
+  return ret;
+}
+
 int ObDASScanOp::open_op()
 {
   int ret = OB_SUCCESS;
@@ -488,6 +591,8 @@ int ObDASScanOp::open_op()
   ObDASIterTreeType tree_type = ITER_TREE_INVALID;
   if (OB_FAIL(init_scan_param())) {
     LOG_WARN("init scan param failed", K(ret));
+  } else if (OB_FAIL(check_merge_range_opt())) {
+    LOG_WARN("failed to check merge range opt");
   } else if (FALSE_IT(tree_type = get_iter_tree_type())) {
   } else if (SUPPORTED_DAS_ITER_TREE(tree_type)) {
     ObDASIter *result = nullptr;

@@ -3306,6 +3306,8 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   // the white pushdown filter with type WHITE_OP_IN is not available now
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
     bool_ret = false;
+  } else if (T_OP_LOCAL_DYNAMIC_FILTER == type_) {
+    // local dynamic filter always as white filter
   } else if (with_null_equal_cond()) {
     // <=> join is not allowed to pushdown as white filter
     bool_ret = false;
@@ -3335,6 +3337,7 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   } else {
     bool_ret = false;
   }
+  LOG_TRACE("check is white runtime filter", K(bool_ret), KPC(this));
   return bool_ret;
 }
 

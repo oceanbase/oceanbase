@@ -60,6 +60,7 @@ private:
                                        const ObSimpleBatch &batch,
                                        obrpc::ObEstPartResElement &res);
 
+public:
   // do compute query range row counts
   // 通过存储层接口获取逻辑行和物理行信息
   //@param[in] batch : query range集合

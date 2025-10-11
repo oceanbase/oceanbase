@@ -984,7 +984,10 @@ public:
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
                KPC_(upd_ctdef),
-               K_(is_upd_rowkey))
+               K_(das_index_scan_ctdef),
+               K_(lookup_ctdef_for_batch),
+               K_(is_upd_rowkey),
+               K_(do_opt_path))
   ObInsCtDef *ins_ctdef_;
   ObUpdCtDef *upd_ctdef_;
   bool is_upd_rowkey_;

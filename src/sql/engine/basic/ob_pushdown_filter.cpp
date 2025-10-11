@@ -21,6 +21,7 @@
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 #include "sql/engine/expr/ob_json_param_type.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 
 namespace oceanbase
 {
@@ -64,12 +65,14 @@ ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPAR
     [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
   ObExprJoinFilter::prepare_storage_white_filter_data,
   ObExprTopNFilter::prepare_storage_white_filter_data,
+  ObExprLocalDynamicFilter::prepare_storage_white_filter_data,
 };
 
 ObDynamicFilterExecutor::UpdatePushdownDataFunc ObDynamicFilterExecutor::UPDATE_PD_DATA_FUNCS
     [DynamicFilterType::MAX_DYNAMIC_FILTER_TYPE] = {
   nullptr,
   ObExprTopNFilter::update_storage_white_filter_data,
+  ObExprLocalDynamicFilter::update_storage_white_filter_data,
 };
 
 OB_SERIALIZE_MEMBER(ObPushdownFilterNode, type_, n_child_, col_ids_);
@@ -262,6 +265,8 @@ int ObPushdownDynamicFilterNode::set_op_type(const ObRawExpr &raw_expr)
     // for topn pushdown filter, we can not sure whether is ascding or not
     // so we set the real optype in ObExprTopNFilter::prepare_storage_white_filter_data
     dynamic_filter_type_ = PD_TOPN_FILTER;
+  } else if (T_OP_LOCAL_DYNAMIC_FILTER == raw_expr.get_expr_type()) {
+    dynamic_filter_type_ = LOCAL_FILTER;
   }
   return ret;
 }
@@ -2698,7 +2703,10 @@ int ObDynamicFilterExecutor::check_runtime_filter(ObPushdownFilterExecutor *pare
       } else if (DynamicFilterAction::FILTER_ALL == filter_action_) {
         // bitmap is inited as all false, do not fill false again
       } else if (DynamicFilterAction::DO_FILTER == filter_action_) {
-        is_needed = !runtime_filter_ctx_->dynamic_disable();
+        is_needed = true;
+        if (OB_NOT_NULL(runtime_filter_ctx_)) {
+          is_needed = !runtime_filter_ctx_->dynamic_disable();
+        }
         if (!is_needed) {
           filter_bitmap_->reuse(true);
         }
@@ -2754,6 +2762,10 @@ int ObDynamicFilterExecutor::try_preparing_data()
       // runtime filter with null equal condition will not be pushed down as white filter,
       // so it's not need to check null params.
       // check_null_params();
+      if (get_filter_node().get_dynamic_filter_type() == LOCAL_FILTER) {
+        ObObjMeta col_obj_meta = filter_.expr_->args_[0]->obj_meta_;
+        cmp_func_ = get_datum_cmp_func(col_obj_meta, col_obj_meta);
+      }
     }
   }
   return ret;
@@ -3049,7 +3061,8 @@ ObPushdownOperator::ObPushdownOperator(
   : pd_storage_filters_(nullptr),
     eval_ctx_(eval_ctx),
     expr_spec_(expr_spec),
-    enable_rich_format_(enable_rich_format)
+    enable_rich_format_(enable_rich_format),
+    local_dynamic_filter_params_(nullptr)
 {
 }
 

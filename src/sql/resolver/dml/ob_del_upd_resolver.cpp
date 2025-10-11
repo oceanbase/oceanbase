@@ -4786,6 +4786,58 @@ int ObDelUpdResolver::resolve_insert_update_assignment(const ParseNode *node, Ob
     LOG_WARN("failed to assign assignmnts", K(ret));
   } else if (OB_FAIL(add_relation_columns(tables_assign))) {
     LOG_WARN("Add needed columns error", K(ret));
+  } else {
+    // Currently, update clause with calculation operations is not supported.
+    table_info.is_insertup_update_assign_need_calc_ = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !table_info.is_insertup_update_assign_need_calc_ && i < table_info.assignments_.count(); ++i) {
+      const ObRawExpr *raw_expr = table_info.assignments_.at(i).expr_;
+      if (OB_ISNULL(raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(check_insertup_assignment_need_calc(raw_expr, table_info.is_insertup_update_assign_need_calc_))) {
+        LOG_WARN("check insertup update assign need calc failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::check_insertup_assignment_need_calc(const ObRawExpr *raw_expr, bool &need_calc)
+{
+  int ret = OB_SUCCESS;
+  // Whitelist:
+  // [T_FUN_COLUMN_CONV, T_FUN_SYS_CAST, T_FUN_INNER_TRIM, T_FUN_PAD, T_QUESTIONMARK, T_FUN_SYS_VALUES,
+  // T_REF_COLUMN, T_INT32, T_INT, T_TINYINT, T_CHAR, T_VARCHAR]
+  if (OB_ISNULL(raw_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_UNLIKELY(need_calc)) {
+    // do nothing
+  } else if (raw_expr->get_expr_type() != T_QUESTIONMARK &&
+             raw_expr->get_expr_type() != T_FUN_SYS_VALUES &&
+             raw_expr->get_expr_type() != T_REF_COLUMN &&
+             raw_expr->get_expr_type() != T_FUN_SYS_CAST &&
+             raw_expr->get_expr_type() != T_FUN_INNER_TRIM &&
+             raw_expr->get_expr_type() != T_FUN_PAD &&
+             raw_expr->get_expr_type() != T_FUN_COLUMN_CONV &&
+             // param of function expr
+             raw_expr->get_expr_type() != T_INT32 &&
+             raw_expr->get_expr_type() != T_INT &&
+             raw_expr->get_expr_type() != T_TINYINT &&
+             raw_expr->get_expr_type() != T_CHAR &&
+             raw_expr->get_expr_type() != T_VARCHAR) {
+    need_calc = true;
+    LOG_TRACE("need calc", K(raw_expr->get_expr_type()));
+  } else {
+    // eg.
+    // insert on duplicate key update c1 = 1
+    // insert on duplicate key update c1 = c1
+    // insert on duplicate key update c1 = values(c1)
+    for (int64_t i = 0; i < raw_expr->get_param_count(); i++) {
+      if (OB_FAIL(check_insertup_assignment_need_calc(raw_expr->get_param_expr(i), need_calc))) {
+        LOG_WARN("check insertup update assign need calc failed", K(ret), KPC(raw_expr->get_param_expr(i)));
+      }
+    }
   }
   return ret;
 }

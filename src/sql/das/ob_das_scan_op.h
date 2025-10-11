@@ -356,7 +356,7 @@ public:
   ObDasExecuteLocalInfo *das_execute_local_info_;
   ObDasExecuteRemoteInfo *das_execute_remote_info_;
   bool do_local_dynamic_filter_;
-  common::ObSEArray<common::ObDatum, 1> local_dynamic_filter_params_;
+  common::ObSEArray<common::ObDatum, 4> local_dynamic_filter_params_;
   common::ObLimitParam topn_param_;
 
 private:
@@ -422,6 +422,8 @@ public:
   int get_fts_tablet_ids(common::ObIArray<ObDASFTSTabletID> &fts_tablet_ids, ObDASBaseRtDef *rtdef);
   int get_rowkey_domain_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const;
   int init_scan_param();
+  int check_merge_range_opt();
+  int prepare_local_dynamic_filter_context();
   int rescan();
   int reuse_iter();
   void reset_access_datums_ptr(int64_t capacity = 0);

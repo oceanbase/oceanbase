@@ -203,6 +203,23 @@ typedef common::hash::ObHashSet<ObConflictRange, common::hash::NoPthreadDefendMo
 class ObConflictChecker
 {
 public:
+  struct ConflictCheckerBatchGuard
+  {
+  public:
+    ConflictCheckerBatchGuard() : idx_(0), size_(0) {}
+    ~ConflictCheckerBatchGuard() = default;
+
+    OB_INLINE bool is_iter_end() const { return idx_ == size_; }
+    OB_INLINE void reset() { idx_ = 0; size_ = 0; }
+
+    TO_STRING_KV(K_(idx), K_(size));
+
+  public:
+    int64_t idx_;
+    int64_t size_;
+  };
+
+public:
   ObConflictChecker(common::ObIAllocator &allocator,
                     ObEvalCtx &eval_ctx,
                     const ObConflictCheckerCtdef &checker_ctdef);
@@ -259,7 +276,7 @@ public:
   int post_all_das_scan_tasks();
 
   // todo @kaizhan.dkz 构建回表的das scan task
-  int build_primary_table_lookup_das_task();
+  int build_primary_table_lookup_das_task(ObEvalCtx &eval_ctx);
 
   int add_lookup_range_no_dup(storage::ObTableScanParam &scan_param,
                               ObNewRange &lookup_range,
@@ -277,19 +294,25 @@ public:
 
   int destroy();
 
+  int get_next_row_from_data_table(DASOpResultIter &result_iter,
+                                   ObChunkDatumStore::StoredRow *&conflict_row,
+                                   bool need_convert_to_stored_row = true);
+
+  int get_next_rows_from_data_table(DASOpResultIter &result_iter, ObEvalCtx &eval_ctx);
+
+  int clear_eval_flags(const ObExprPtrIArray &calc_exprs, ObEvalCtx &eval_ctx);
+
 private:
   int to_expr(const ObChunkDatumStore::StoredRow *replace_row);
-  int calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc);
+  int calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc, ObEvalCtx &eval_ctx);
 
   // get当前行对应的scan_op
   int get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_scan_op);
 
   // 构建回表的range信息
-  int build_data_table_range(ObNewRange &lookup_range, ObRowkey &table_rowkey);
+  int build_data_table_range(ObEvalCtx &eval_ctx, ObNewRange &lookup_range, ObRowkey &table_rowkey);
 
   // --------------------------
-  int get_next_row_from_data_table(DASOpResultIter &result_iter,
-                                   ObChunkDatumStore::StoredRow *&conflict_row);
 
   // 构建ob_rowkey
   int build_rowkey(ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_cst_ctdef);
@@ -300,12 +323,13 @@ private:
   int init_das_scan_rtdef();
   int init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *&attach_rtdef);
   int attach_related_taskinfo(ObDASScanOp &target_op, ObDASBaseRtDef *attach_rtdef);
-
   int get_tmp_string_buffer(common::ObIAllocator *&allocator);
 public:
   static const int64_t MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM = 1 * 1024 * 1024;
   common::ObArrayWrap<ObConflictRowMapCtx> conflict_map_array_;
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
+  ObEvalCtx *batch_eval_ctx_; // for batch exprs
+  const ObDASScanCtDef *das_scan_ctdef_for_lookup_;
   const ObConflictCheckerCtdef &checker_ctdef_;
   ObDASScanRtDef das_scan_rtdef_;
   ObDASAttachRtInfo *attach_rtinfo_;
@@ -320,6 +344,7 @@ public:
   lib::MemoryContext tmp_mem_ctx_;
   ObSEArray<ObTabletSnapshotMaping, 16> snapshot_maping_;
   ConflictRangeDistCtx *conflict_range_dist_ctx_;
+  ConflictCheckerBatchGuard batch_guard_; // vectorized for lookup
 };
 }  // namespace sql
 }  // namespace oceanbase

@@ -16,6 +16,7 @@
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_insert_op.h"
+#include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 
 namespace oceanbase
@@ -133,6 +134,9 @@ int ObTableInsertUpOp::inner_open()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+  const ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
+  const ObDASInsCtDef &das_ins_ctdef = insert_up_ctdef->ins_ctdef_->das_ctdef_;
+
   NG_TRACE(insertup_open);
   if (OB_FAIL(check_insert_up_ctdefs_valid())) {
     LOG_WARN("check insert up ctdefs valid failed", K(ret));
@@ -149,11 +153,68 @@ int ObTableInsertUpOp::inner_open()
                                                "insert_up_row_store",
                                                false/*enable_dump*/))) {
     LOG_WARN("fail to init replace row store", K(ret));
+  } else if (insert_up_ctdef->do_opt_path_) {
+    ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
+    ObIAllocator *allocator = nullptr;
+    ObObj *objs = nullptr;
+    void *buf = nullptr;
+    int64_t bucket_num = OB_DEFAULT_INSERT_UP_BATCH_ROW_COUNT * 10;
+    const ObPhysicalPlan *plan = MY_SPEC.get_phy_plan();
+    lib::ContextParam param;
+    param.set_mem_attr(MTL_ID(),
+                       "InsertUpOptCtx",
+                       ObCtxIds::DEFAULT_CTX_ID).set_properties(lib::USE_TL_PAGE_OPTIONAL);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(conflict_mem_ctx_, param))) {
+      LOG_WARN("create conflict mem context entity failed", K(ret));
+    } else if (OB_ISNULL(conflict_mem_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else if (OB_FAIL(get_opt_rowkey_cst_ctdef(rowkey_cst_ctdef))) {
+      LOG_WARN("get opt rowkey cst ctdef failed", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(plan)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plan is nullptr", K(ret));
+    } else if (OB_ISNULL(rowkey_cst_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rowkey cst ctdef is nullptr", K(ret));
+    } else if (OB_ISNULL(insert_up_ctdef->lookup_ctdef_for_batch_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(conflict_map_.create(bucket_num, ObModIds::OB_HASH_BUCKET))) {
+      LOG_WARN("create conflict map failed", K(ret));
+    } else if (OB_ISNULL(tmp_rowkey_ = static_cast<ObRowkey*>(ctx_.get_allocator().alloc(sizeof(ObRowkey))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc tmp rowkey failed", K(ret));
+    } else if (OB_ISNULL(objs = static_cast<ObObj*>(ctx_.get_allocator().alloc(sizeof(ObObj) * rowkey_cst_ctdef->rowkey_expr_.count())))){
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    } else if (OB_ISNULL(buf = ctx_.get_allocator().alloc(sizeof(ObEvalCtx)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    } else {
+      tmp_rowkey_->assign(objs, rowkey_cst_ctdef->rowkey_expr_.count());
+
+      // In some cases, the datum's ptr of exprs depends on the batch size of the first batch to reset.
+      // If the first batch size is larger than subsequent batches, it may cause illegal memory access.
+      // Eg. insert update c1 = -c1
+      // all_saved_exprs does not save -c1, instead adds a neg expr in the column conv of c1,
+      // the neg expr will only reset datum in the first batch.
+      conflict_checker_.batch_eval_ctx_ = new(buf) ObEvalCtx(ctx_);
+      conflict_checker_.batch_eval_ctx_->reuse(eval_ctx_.get_batch_size());
+      conflict_checker_.batch_eval_ctx_->set_max_batch_size(plan->get_batch_size());
+      conflict_checker_.das_scan_ctdef_for_lookup_ = insert_up_ctdef->lookup_ctdef_for_batch_;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(iter_end_)) {
+    //do nothing
   } else if (OB_FAIL(inner_open_with_das())) {
     LOG_WARN("inner open with das failed", K(ret));
   } else {
-    const ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
-    const ObDASInsCtDef &das_ins_ctdef = insert_up_ctdef->ins_ctdef_->das_ctdef_;
     is_ignore_ = das_ins_ctdef.is_ignore_;
     conflict_checker_.set_local_tablet_loc(MY_INPUT.get_tablet_loc());
   }
@@ -167,10 +228,12 @@ int ObTableInsertUpOp::inner_open_with_das()
   const ObExprFrameInfo *expr_frame_info = NULL;
   ObDASTableLoc *table_loc = nullptr;
   bool use_partition_gts_opt = false;
+  bool do_opt_path = MY_SPEC.insert_up_ctdefs_.at(0)->do_opt_path_;
   expr_frame_info = nullptr != MY_SPEC.expr_frame_info_
                                ? MY_SPEC.expr_frame_info_
                                : &MY_SPEC.plan_->get_expr_frame_info();
-  if (ctx_.get_das_ctx().get_use_gts_opt()) {
+
+  if (ctx_.get_das_ctx().get_use_gts_opt() && !do_opt_path) {
     gts_state_ = MY_SPEC.has_global_unique_index_ == true ?
         WITH_UNIQUE_GLOBAL_INDEX_STATE : USE_PARTITION_SNAPSHOT_STATE;
     if (gts_state_ == USE_PARTITION_SNAPSHOT_STATE) {
@@ -222,11 +285,14 @@ OB_INLINE int ObTableInsertUpOp::init_insert_up_rtdef()
     const ObUpdCtDef *upd_ctdef = insert_up_ctdef->upd_ctdef_;
     ObInsRtDef &ins_rtdef = insert_up_rtdefs_.at(i).ins_rtdef_;
     ObUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(i).upd_rtdef_;
-    if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_,
-                                             ins_rtdef,
-                                             *ins_ctdef,
-                                             trigger_clear_exprs_,
-                                             fk_checkers_))) {
+    if (OB_ISNULL(ins_ctdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ins ctdef is nullptr", K(ret));
+    } else if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_,
+                                                    ins_rtdef,
+                                                    *ins_ctdef,
+                                                    trigger_clear_exprs_,
+                                                    fk_checkers_))) {
       LOG_WARN("init insert rt_def failed", K(ret), KPC(ins_ctdef));
     } else if (OB_ISNULL(upd_ctdef)) {
       ret = OB_ERR_UNEXPECTED;
@@ -241,6 +307,55 @@ OB_INLINE int ObTableInsertUpOp::init_insert_up_rtdef()
       ins_rtdef.das_rtdef_.table_loc_->is_writing_ = true;
     }
   }
+
+  const ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
+  ObDASScanCtDef *das_index_scan_ctdef = insert_up_ctdef->das_index_scan_ctdef_;
+  if (OB_FAIL(ret)) {
+  } else if (das_index_scan_ctdef != nullptr) {
+    ObPhysicalPlanCtx *plan_ctx = eval_ctx_.exec_ctx_.get_physical_plan_ctx();
+    ObSQLSessionInfo *my_session = eval_ctx_.exec_ctx_.get_my_session();
+    ObTaskExecutorCtx &task_exec_ctx = eval_ctx_.exec_ctx_.get_task_exec_ctx();
+    ObIAllocator &allocator = dml_rtctx_.das_ref_.get_das_alloc();
+    ObDASTableLoc *table_loc = insert_up_rtdefs_.at(0).ins_rtdef_.das_rtdef_.table_loc_;
+    void *buf = nullptr;
+
+    if (OB_ISNULL(table_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table location is null", K(ret));
+    } else if (OB_NOT_NULL(das_index_scan_rtdef_)) {
+      das_index_scan_rtdef_->table_loc_ = table_loc;
+    } else if (OB_ISNULL(buf = ctx_.get_allocator().alloc(sizeof(ObDASScanRtDef)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc das index scan rtdef", K(ret));
+    } else if (OB_ISNULL(das_index_scan_rtdef_ = new(buf) ObDASScanRtDef())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc das index scan rtdef", K(ret));
+    } else {
+      ObQueryFlag query_flag(ObQueryFlag::KeepOrder, // scan_order
+                             false, // daily_merge
+                             false, // optimize
+                             false, // sys scan
+                             false, // full_row
+                             false, // index_back
+                             false, // query_stat
+                             ObQueryFlag::MysqlMode, // sql_mode
+                             true // read_latest
+                             );
+      das_index_scan_rtdef_->timeout_ts_ = plan_ctx->get_ps_timeout_timestamp();
+      das_index_scan_rtdef_->sql_mode_ = my_session->get_sql_mode();
+      das_index_scan_rtdef_->stmt_allocator_.set_alloc(&allocator);
+      das_index_scan_rtdef_->scan_allocator_.set_alloc(&allocator);
+      das_index_scan_rtdef_->scan_flag_.flag_ = query_flag.flag_;
+      das_index_scan_rtdef_->tenant_schema_version_ = task_exec_ctx.get_query_tenant_begin_schema_version();
+      das_index_scan_rtdef_->eval_ctx_ = &eval_ctx_;
+      das_index_scan_rtdef_->ctdef_ = das_index_scan_ctdef;
+      das_index_scan_rtdef_->table_loc_ = table_loc;
+
+      if (OB_FAIL(das_index_scan_rtdef_->init_pd_op(eval_ctx_.exec_ctx_, *das_index_scan_ctdef))) {
+        LOG_WARN("init pushdown storage filter failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -249,8 +364,25 @@ int ObTableInsertUpOp::inner_close()
   int ret = OB_SUCCESS;
   int close_ret = OB_SUCCESS;
   NG_TRACE(insertup_inner_close);
+
+  if (das_index_scan_rtdef_ != nullptr) {
+    das_index_scan_rtdef_->~ObDASScanRtDef();
+    ctx_.get_allocator().free(das_index_scan_rtdef_);
+    das_index_scan_rtdef_ = nullptr;
+  }
+
+  if (tmp_rowkey_ != nullptr) {
+    ctx_.get_allocator().free(tmp_rowkey_);
+    tmp_rowkey_ = nullptr;
+  }
+
   if (OB_FAIL(conflict_checker_.close())) {
     LOG_WARN("fail to close conflict_checker", K(ret));
+  } else if (conflict_map_.created() && OB_FAIL(conflict_map_.destroy())) {
+    LOG_WARN("fail to destroy conflict map", K(ret));
+  } else if (conflict_mem_ctx_ != nullptr) {
+    DESTROY_CONTEXT(conflict_mem_ctx_);
+    conflict_mem_ctx_ = nullptr;
   }
 
   if (upd_rtctx_.das_ref_.has_task()) {
@@ -289,6 +421,8 @@ int ObTableInsertUpOp::inner_rescan()
       LOG_WARN("init insert up rtdef failed", K(ret));
     } else if (OB_FAIL(reuse())) {
       LOG_WARN("reuse op fail", K(ret));
+    } else {
+      found_rows_ = 0;
     }
   }
   return ret;
@@ -299,6 +433,8 @@ int ObTableInsertUpOp::inner_get_next_row()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+  const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
+  bool do_opt_path = !back_to_old_path_ && insert_up_ctdef.do_opt_path_;
   if (iter_end_) {
     LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
     ret = OB_ITER_END;
@@ -308,7 +444,10 @@ int ObTableInsertUpOp::inner_get_next_row()
     } else if (OB_ISNULL(my_session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is null", K(ret));
-    } else if (OB_FAIL(do_insert_up())) {
+    } else if (do_opt_path && OB_FAIL(do_opt_insert_up())) {
+      LOG_WARN("fail to do opt insert_up", K(ret));
+    } else if (FALSE_IT(do_opt_path = !back_to_old_path_ && insert_up_ctdef.do_opt_path_)) {
+    } else if (!do_opt_path && OB_FAIL(do_insert_up())) {
       LOG_WARN("fail to do insert_up", K(ret));
     } else {
       if (OB_FAIL(plan_ctx->sync_last_value_local())) {
@@ -597,7 +736,7 @@ int ObTableInsertUpOp::insert_row_to_das(const ObInsCtDef &ins_ctdef,
     LOG_WARN("insert row with das failed", K(ret));
   } else {
     LOG_TRACE("insert one row", KPC(tablet_loc),
-              "insert row", ROWEXPR2STR(eval_ctx_, ins_ctdef.new_row_));
+                                "insert row", ROWEXPR2STR(eval_ctx_, ins_ctdef.new_row_));
   }
 
   return ret;
@@ -694,8 +833,8 @@ int ObTableInsertUpOp::lock_one_row_to_das(const ObUpdCtDef &upd_ctdef,
                                             upd_ctdef.old_row_))) {
     LOG_WARN("delete row with das failed", K(ret));
   } else {
-    LOG_DEBUG("lock one_row", KPC(tablet_loc), "upd lock_row",
-              ROWEXPR2STR(eval_ctx_, upd_ctdef.old_row_));
+    LOG_TRACE("lock one row", KPC(tablet_loc), "upd lock_row",
+                              ROWEXPR2STR(eval_ctx_, upd_ctdef.old_row_));
   }
 
   return ret;
@@ -718,7 +857,7 @@ int ObTableInsertUpOp::insert_upd_new_row_to_das()
   return ret;
 }
 
-int ObTableInsertUpOp::insert_row_to_das()
+int ObTableInsertUpOp::insert_row_to_das(bool calc_hidden_pk)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.insert_up_ctdefs_.count(); ++i) {
@@ -729,8 +868,13 @@ int ObTableInsertUpOp::insert_row_to_das()
     ObInsRtDef &ins_rtdef = insert_up_rtdefs_.at(i).ins_rtdef_;
     ObDASTabletLoc *tablet_loc = nullptr;
     // do insert
-    OZ(calc_insert_tablet_loc(*ins_ctdef, ins_rtdef, tablet_loc));
-    OZ(insert_row_to_das(*ins_ctdef, ins_rtdef, tablet_loc));
+    if (OB_FAIL(calc_insert_tablet_loc(*ins_ctdef, ins_rtdef, tablet_loc))) {
+      LOG_WARN("calc insert partition key failed", K(ret), KPC(ins_ctdef));
+    } else if (calc_hidden_pk && OB_FAIL(ObDMLService::set_heap_table_hidden_pk(*ins_ctdef, tablet_loc->tablet_id_, eval_ctx_))) {
+      LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc));
+    } else if (OB_FAIL(insert_row_to_das(*ins_ctdef, ins_rtdef, tablet_loc))) {
+      LOG_WARN("insert row with das failed", K(ret));
+    }
   }
   return ret;
 }
@@ -748,6 +892,39 @@ int ObTableInsertUpOp::delete_upd_old_row_to_das()
     OZ(calc_upd_old_row_tablet_loc(*upd_ctdef, upd_rtdef, tablet_loc));
     // do delete
     OZ(delete_one_upd_old_row_das(*upd_ctdef, upd_rtdef, tablet_loc));
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::update_row_to_das()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(MY_SPEC.insert_up_ctdefs_.count() > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not support global index", K(ret));
+  } else {
+    const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
+    const ObUpdCtDef *upd_ctdef = insert_up_ctdef.upd_ctdef_;
+    ObInsertUpRtDef &insert_up_rtdef = insert_up_rtdefs_.at(0);
+    ObUpdRtDef &upd_rtdef = insert_up_rtdef.upd_rtdef_;
+    ObDASTabletLoc *old_tablet_loc = nullptr;
+
+    // not support updating unique keys now, therefore, the partitions will not change
+    if (OB_FAIL(calc_upd_old_row_tablet_loc(*upd_ctdef, upd_rtdef, old_tablet_loc))) {
+      LOG_WARN("fail to calc update old_row pkey", K(ret), KPC(upd_ctdef));
+    } else if (OB_FAIL(ObDMLService::update_row(upd_ctdef->dupd_ctdef_,
+                                                upd_rtdef.dupd_rtdef_,
+                                                old_tablet_loc,
+                                                upd_rtctx_,
+                                                upd_ctdef->full_row_))) {
+      LOG_WARN("update row with das failed", K(ret),
+                                             "old row", ROWEXPR2STR(eval_ctx_, upd_ctdef->old_row_),
+                                             "new row", ROWEXPR2STR(eval_ctx_, upd_ctdef->new_row_));
+    } else {
+      LOG_TRACE("update one row", KPC(old_tablet_loc),
+                                  "old row", ROWEXPR2STR(eval_ctx_, upd_ctdef->old_row_),
+                                  "new row", ROWEXPR2STR(eval_ctx_, upd_ctdef->new_row_));
+    }
   }
   return ret;
 }
@@ -975,6 +1152,590 @@ int ObTableInsertUpOp::get_next_row_from_child()
   return ret;
 }
 
+int ObTableInsertUpOp::do_opt_insert_up()
+{
+  int ret = OB_SUCCESS;
+  int64_t update_row_cnt = 0;
+  int64_t insert_row_cnt = 0;
+  bool do_index_lookup = need_do_index_lookup();
+  bool check_back_to_old_path = true;
+  while(OB_SUCC(ret) && !iter_end_ && !back_to_old_path_) {
+    add_need_conflict_result_flag();
+    if (OB_FAIL(load_batch_and_check_exist())) {
+      LOG_WARN("fail to load batch and check exist", K(ret));
+    } else if (do_index_lookup && OB_FAIL(build_primary_table_lookup_task())) {
+      LOG_WARN("fail to build primary table lookup task", K(ret));
+    } else if (OB_FAIL(post_all_check_exist_das_task(conflict_checker_.das_ref_))) {
+      LOG_WARN("fail to post all check exist das task", K(ret));
+    } else if (OB_FAIL(reset_das_env())) {
+      // the index scan borrows das_ref_ from dml_rtctx_
+      // and has already completed lookup the primary table, das_ref_ needs to be cleaned up,
+      // also insert does not need to fetch conflict row
+      LOG_WARN("reset das env failed", K(ret));
+    } else if (OB_FAIL(do_opt_insert_up_cache(update_row_cnt, insert_row_cnt))) {
+      LOG_WARN("fail to do opt insert up cache", K(ret));
+    } else if (OB_FAIL(post_all_dml_das_task(upd_rtctx_))) {
+      LOG_WARN("do insert rows post process failed", K(ret));
+    }
+    // no need to handle after row processing for opt insert up,
+    // because there is no after row trigger or foreign key check
+    OB_ASSERT(dml_modify_rows_.empty());
+
+    LOG_TRACE("do opt insert up done", K(update_row_cnt), K(insert_row_cnt));
+
+    if (OB_SUCC(ret) && !iter_end_) {
+      if (check_back_to_old_path && !back_to_old_path_) {
+        back_to_old_path_ = update_row_cnt == 0;
+        if (back_to_old_path_ && OB_FAIL(reset_env_back_to_old_path())) {
+          LOG_WARN("fail to reset env back to old path", K(ret));
+        }
+      }
+      // only check fisrt batch
+      check_back_to_old_path = false;
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(reuse())) {
+        LOG_WARN("fail to reuse insert_up op", K(ret));
+      } else {
+        update_row_cnt = 0;
+        insert_row_cnt = 0;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::load_batch_and_check_exist()
+{
+  int ret = OB_SUCCESS;
+  int row_count = 0;
+  bool reach_mem_limit = false;
+  int64_t default_row_store_mem_limit = OB_DEFAULT_INSERT_UP_MEMORY_LIMIT;
+  int64_t memory_limes = - EVENT_CALL(EventTable::EN_INSERT_UP_MEMORY_LIMIT);
+  int64_t simulate_batch_count = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
+  const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
+  const bool do_index_lookup = need_do_index_lookup();
+  if (memory_limes > 0) {
+    default_row_store_mem_limit = default_row_store_mem_limit * memory_limes;
+  } else if (upd_rtctx_.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
+    default_row_store_mem_limit = OB_DEFAULT_INSERT_UP_MEMORY_LIMIT * 5; // 10M
+  }
+  while (OB_SUCC(ret) && !reach_mem_limit) {
+    if (OB_FAIL(get_next_row_from_child())) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to load next row from child", K(ret));
+      } else {
+        iter_end_ = true;
+      }
+    } else if (do_index_lookup && OB_FAIL(build_index_table_check_exist_task())) {
+      // lookup the index table to get rowkey, and then lookup the data table
+      LOG_WARN("fail to build index table check exist das task", K(ret));
+    } else if (!do_index_lookup && OB_FAIL(build_primary_table_check_exist_task())) {
+      // lookup the data table derectly
+      LOG_WARN("fail to build primary table check exist das task", K(ret));
+    } else {
+      row_count++;
+      if (insert_up_row_store_.get_mem_used() >= default_row_store_mem_limit ||
+          is_ignore_ || execute_single_row_) {
+        reach_mem_limit = true;
+        LOG_TRACE("insert up rows used memory over limit", K(row_count),
+                                                           K(default_row_store_mem_limit),
+                                                           K(insert_up_row_store_.get_mem_used()),
+                                                           K(is_ignore_),
+                                                           K(execute_single_row_));
+
+      } else if (simulate_batch_count != 0 && row_count >= simulate_batch_count) {
+        reach_mem_limit = true;
+        LOG_TRACE("insert up rows reach simulate_batch_count", K(row_count), K(default_row_store_mem_limit));
+      }
+    }
+  }
+
+  ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  return ret;
+}
+
+int ObTableInsertUpOp::do_opt_insert_up_cache(int64_t &update_row_cnt, int64_t &insert_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  const ObPhysicalPlan *plan = MY_SPEC.get_phy_plan();
+  DASOpResultIter result_iter = conflict_checker_.das_ref_.begin_result_iter();
+  ObRowkey *constraint_key = tmp_rowkey_;
+  ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
+  ObChunkDatumStore::StoredRow *conflict_row = nullptr;
+
+  if (OB_FAIL(get_opt_rowkey_cst_ctdef(rowkey_cst_ctdef))) {
+    LOG_WARN("fail to get rowkey cst ctdef", K(ret));
+  } else if (OB_ISNULL(rowkey_cst_ctdef) || OB_ISNULL(conflict_checker_.batch_eval_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(conflict_checker_.checker_ctdef_.cst_ctdefs_));
+  } else if (OB_ISNULL(constraint_key)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(constraint_key));
+  } else if (OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(plan));
+  } else if (OB_LIKELY(plan->is_vectorized())) {
+    while (OB_SUCC(ret)) {
+      // The current process is considered to be executed in one single row
+      // so to standardize the process, evaluated flag of one single row needs to be cleaned up,
+      if (OB_FAIL(ObSQLUtils::clear_evaluated_flag(conflict_checker_.checker_ctdef_.table_column_exprs_, *conflict_checker_.batch_eval_ctx_))) {
+        LOG_WARN("fail to clear evaluated flag", K(ret));
+      } else if (OB_FAIL(conflict_checker_.get_next_rows_from_data_table(result_iter, *conflict_checker_.batch_eval_ctx_))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next rows from data table", K(ret));
+        }
+      } else {
+        ObConflictValue *constraint_value = nullptr;
+
+        ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*conflict_checker_.batch_eval_ctx_);
+        batch_info_guard.set_batch_size(1);
+        batch_info_guard.set_batch_idx(0);
+        if (OB_FAIL(build_tmp_conflict_rowkey(*conflict_checker_.batch_eval_ctx_, constraint_key, rowkey_cst_ctdef))) {
+          LOG_WARN("fail to build constraint key", K(ret));
+        } else if (OB_ISNULL(constraint_value = const_cast<ObConflictValue*>(conflict_map_.get(*constraint_key)))) {
+          // do nothing
+          LOG_TRACE("lookup unexpected update row", KPC(constraint_key));
+        } else if (FALSE_IT(constraint_value->new_row_source_ = ObNewRowSource::FROM_UPDATE)) {
+        } else if (OB_FAIL(do_conflict_update_row(*constraint_value))) {
+          LOG_WARN("fail to do conflict update row", K(ret), KPC(constraint_value));
+        }
+      }
+    }
+  } else {
+    while (OB_SUCC(ret) && OB_SUCC(conflict_checker_.get_next_row_from_data_table(result_iter, conflict_row, false))) {
+      // got row
+      ObConflictValue *constraint_value = nullptr;
+
+      if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, constraint_key, rowkey_cst_ctdef))) {
+        LOG_WARN("fail to build constraint key", K(ret));
+      } else if (OB_ISNULL(constraint_value = const_cast<ObConflictValue*>(conflict_map_.get(*constraint_key)))) {
+        // must be here
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get constraint value", K(ret), KPC(constraint_key));
+      } else if (FALSE_IT(constraint_value->new_row_source_ = ObNewRowSource::FROM_UPDATE)) {
+      } else if (OB_FAIL(do_conflict_update_row(*constraint_value))) {
+        LOG_WARN("fail to do conflict update row", K(ret), KPC(constraint_value));
+      }
+    }
+  }
+
+  ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+
+  ObConflictRowMap::iterator start_row_iter = conflict_map_.begin();
+  ObConflictRowMap::iterator end_row_iter = conflict_map_.end();
+
+  LOG_TRACE("do opt insert up cache", K(conflict_map_.size()));
+  for (; OB_SUCC(ret) && start_row_iter != end_row_iter; ++ start_row_iter) {
+    ObConflictValue &constraint_value = start_row_iter->second;
+
+    if (constraint_value.new_row_source_ == ObNewRowSource::FROM_UPDATE) {
+      // skip, already processed
+      update_row_cnt ++;
+    } else if (constraint_value.new_row_source_ == ObNewRowSource::FROM_INSERT) {
+      if (OB_FAIL(do_conflict_insert_row(constraint_value))) {
+        LOG_WARN("fail to do conflict insert row", K(ret));
+      } else {
+        insert_row_cnt++;
+      }
+    } else {
+      // it's not gonna happen
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(constraint_value));
+    }
+  } // end for
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(update_row_cnt + insert_row_cnt != conflict_map_.size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(update_row_cnt), K(insert_row_cnt), K(conflict_map_.size()));
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::do_conflict_update_row(const ObConflictValue &constraint_value)
+{
+  int ret = OB_SUCCESS;
+  const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
+  ObInsertUpRtDef &insert_up_rtdef = insert_up_rtdefs_.at(0);
+  const ObInsCtDef &ins_ctdef = *(insert_up_ctdef.ins_ctdef_);
+  const ObUpdCtDef &upd_ctdef = *(insert_up_ctdef.upd_ctdef_);
+  ObInsRtDef &ins_rtdef = insert_up_rtdef.ins_rtdef_;
+  ObUpdRtDef &upd_rtdef = insert_up_rtdef.upd_rtdef_;
+  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  ObAuditRecordData &audit_record = GET_MY_SESSION(ctx_)->get_raw_audit_record();
+  bool is_skipped = false;
+  int64_t insert_rows = 0;
+  int64_t update_rows = 0;
+  int64_t found_rows = 0;
+
+  // do update
+  // baseline_datum_row_ must be null
+  // current_datum_row_ is saved insert row with all saved exprs
+  const ObChunkDatumStore::StoredRow *saved_insert_row = constraint_value.current_datum_row_;
+  found_rows++;
+  audit_record.insert_update_or_replace_duplicate_row_count_++;
+  clear_datum_eval_flag();
+  if (OB_UNLIKELY(constraint_value.new_row_source_ != ObNewRowSource::FROM_UPDATE)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(constraint_value));
+  } else if (OB_UNLIKELY(saved_insert_row == nullptr || constraint_value.baseline_datum_row_ != nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(constraint_value));
+  } else if (OB_FAIL(saved_insert_row->to_expr(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
+    LOG_WARN("fail to convert row to expr", K(ret), K(constraint_value),
+                                            "all saved exprs", ROWEXPR2STR(eval_ctx_, MY_SPEC.all_saved_exprs_));
+  } else if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
+    LOG_WARN("process update failed", K(ret), K(upd_ctdef));
+  } else if (is_ignore_) {
+    if (OB_FAIL(do_update_with_ignore())) {
+      LOG_WARN("do update with ignore failed", K(ret));
+    } else if (upd_rtdef.is_row_changed_) {
+      insert_rows++;
+      update_rows++;
+    }
+  } else if (upd_rtdef.is_row_changed_) {
+    if (OB_FAIL(update_row_to_das())) {
+      LOG_WARN("update row failed", K(ret));
+    } else  {
+      insert_rows++;
+      update_rows++;
+    }
+  } else {
+    // do lock
+    ObDASTabletLoc *tablet_loc = nullptr;
+    if (OB_FAIL(calc_upd_old_row_tablet_loc(upd_ctdef, upd_rtdef, tablet_loc))) {
+      LOG_WARN("fail to calc pkey for lock", K(ret), K(upd_ctdef));
+    } else if (OB_FAIL(lock_one_row_to_das(upd_ctdef, upd_rtdef, tablet_loc))) {
+      LOG_WARN("fail to write one row to lock task", K(ret), KPC(tablet_loc), K(upd_ctdef));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+    int64_t affected_rows = my_session->get_capability().cap_flags_.OB_CLIENT_FOUND_ROWS ?
+                            insert_rows + found_rows : insert_rows + update_rows;
+    if (OB_FAIL(replace_implict_cursor(affected_rows, found_rows, 0, update_rows))) {
+      LOG_WARN("merge implict cursor failed", K(ret));
+    }
+  }
+
+  upd_rtdef.found_rows_ += found_rows;
+  insert_rows_ += insert_rows;
+  upd_changed_rows_ += update_rows;
+  return ret;
+}
+
+
+int ObTableInsertUpOp::do_conflict_insert_row(const ObConflictValue &constraint_value)
+{
+  int ret = OB_SUCCESS;
+  const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
+  ObInsertUpRtDef &insert_up_rtdef = insert_up_rtdefs_.at(0);
+  const ObInsCtDef &ins_ctdef = *(insert_up_ctdef.ins_ctdef_);
+  ObInsRtDef &ins_rtdef = insert_up_rtdef.ins_rtdef_;
+  bool is_skipped = false;
+  int64_t insert_rows = 0;
+
+  // do insert
+  // baseline_datum_row_ must be null
+  // current_datum_row_ is saved insert row with all saved exprs
+  const ObChunkDatumStore::StoredRow *saved_insert_row = constraint_value.current_datum_row_;
+  clear_datum_eval_flag();
+  if (OB_UNLIKELY(constraint_value.new_row_source_ != ObNewRowSource::FROM_INSERT)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(constraint_value));
+  } else if (OB_UNLIKELY(constraint_value.baseline_datum_row_ != nullptr || saved_insert_row == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pointer", K(ret), K(constraint_value));
+  } else if (OB_FAIL(saved_insert_row->to_expr(MY_SPEC.all_saved_exprs_, eval_ctx_))) {
+    LOG_WARN("fail to convert row to expr", K(ret), K(constraint_value),
+                                            "all saved exprs", ROWEXPR2STR(eval_ctx_, MY_SPEC.all_saved_exprs_));
+  } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
+    LOG_WARN("fail to do process insert", K(ret), K(ins_ctdef),
+              "insert_row", ROWEXPR2STR(eval_ctx_, get_primary_table_insert_row()));
+  } else if (OB_FAIL(insert_row_to_das(true))) {
+    LOG_WARN("insert row failed", K(ret), K(constraint_value));
+  } else {
+    insert_rows++;
+    if (OB_FAIL(replace_implict_cursor(insert_rows, 0, 0, 0))) {
+      LOG_WARN("merge implict cursor failed", K(ret));
+    }
+  }
+
+  insert_rows_ += insert_rows;
+  return ret;
+}
+
+int ObTableInsertUpOp::build_index_table_check_exist_task()
+{
+  int ret = OB_SUCCESS;
+  bool duped = false;
+  ObChunkDatumStore::StoredRow *row = nullptr;
+  ObChunkDatumStore::StoredRow *unique_rowkey = nullptr;
+  ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
+  ObExpr *auto_inc_expr = nullptr;
+  const ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
+  ObUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(0).upd_rtdef_;
+  ObInsRtDef &ins_rtdef = insert_up_rtdefs_.at(0).ins_rtdef_;
+  const ObInsCtDef &ins_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0)->ins_ctdef_);
+
+  if (OB_UNLIKELY(MY_SPEC.all_saved_exprs_.count() < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(MY_SPEC.all_saved_exprs_));
+  } else if (OB_ISNULL(auto_inc_expr = MY_SPEC.all_saved_exprs_.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(MY_SPEC.all_saved_exprs_));
+  } else if (OB_UNLIKELY(!insert_up_ctdef->ins_ctdef_->is_table_without_pk_ ||
+                         !insert_up_ctdef->ins_ctdef_->is_primary_index_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), KPC(insert_up_ctdef));
+  } else if (OB_UNLIKELY(auto_inc_expr->type_ != ObItemType::T_TABLET_AUTOINC_NEXTVAL)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), KPC(auto_inc_expr));
+  } else {
+    ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx_);
+    datum.set_uint(0);
+    auto_inc_expr->get_eval_info(eval_ctx_).evaluated_ = true;
+  }
+
+  ++ ins_rtdef.cur_row_num_;
+  // cst_ctdefs_.at(0) is hiden pk, cst_ctdefs_.at(1) is unique key
+  // child output -> all_saved_exprs_[table info's column_conv_exprs_, assigned column exprs, stmt id expr]
+  if (OB_UNLIKELY(conflict_checker_.checker_ctdef_.cst_ctdefs_.count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(conflict_checker_.checker_ctdef_.cst_ctdefs_));
+  } else if (OB_FAIL(get_opt_rowkey_cst_ctdef(rowkey_cst_ctdef))) {
+    LOG_WARN("fail to get rowkey cst ctdef", K(ret));
+  } else if (OB_ISNULL(rowkey_cst_ctdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(conflict_checker_.checker_ctdef_.cst_ctdefs_));
+  } else if (OB_UNLIKELY(insert_up_ctdef->unique_key_conv_exprs_.count() != insert_up_ctdef->unique_index_rowkey_exprs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(insert_up_ctdef->unique_key_conv_exprs_.count()), K(insert_up_ctdef->unique_index_rowkey_exprs_.count()));
+  } else if (OB_FAIL(ObDMLService::check_column_type(MY_SPEC.all_saved_exprs_, ins_rtdef.cur_row_num_, ins_ctdef.column_infos_, *this))) {
+    LOG_WARN("fail to check column type", K(ret));
+  } else if (OB_FAIL(insert_up_row_store_.add_row(MY_SPEC.all_saved_exprs_, &eval_ctx_, &row))) {
+    LOG_WARN("fail to build row", K(ret),
+                                  "all saved exprs", ROWEXPR2STR(eval_ctx_, MY_SPEC.all_saved_exprs_));
+  } else {
+    for (int64_t i = 0; i < insert_up_ctdef->unique_key_conv_exprs_.count(); ++i) {
+      ObDatum *datum = nullptr;
+      if (OB_UNLIKELY(insert_up_ctdef->unique_key_conv_exprs_.at(i)->datum_meta_.type_ !=
+                      insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->datum_meta_.type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(insert_up_ctdef->unique_key_conv_exprs_.at(i)->datum_meta_.type_),
+                                             K(insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->datum_meta_.type_));
+      } else if (OB_FAIL(insert_up_ctdef->unique_key_conv_exprs_.at(i)->eval(eval_ctx_, datum))) {
+        LOG_WARN("fail to eval unique key conv expr", K(ret));
+      } else if (OB_ISNULL(datum)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KPC(insert_up_ctdef->unique_key_conv_exprs_.at(i)));
+      } else {
+        ObDatum &unique_datum = insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
+        unique_datum.set_datum(*datum);
+        insert_up_ctdef->unique_index_rowkey_exprs_.at(i)->get_eval_info(eval_ctx_).evaluated_ = true;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(add_new_row_to_conflict_map(row, rowkey_cst_ctdef, duped))) {
+    LOG_WARN("fail to add new row to conflict map", K(ret), KPC(row));
+  } else if (duped) {
+    ++ upd_rtdef.found_rows_;
+  } else {
+    // build index table lookup task
+    ObDASScanOp *das_scan_op = nullptr;
+    ObDASTabletLoc *tablet_loc = nullptr;
+    ObDASTabletLoc *primary_tablet_loc = nullptr;
+    ObDASRef &das_ref = dml_rtctx_.das_ref_; // borrowing it for a while
+
+    // get tablet loc
+    if (MY_SPEC.use_dist_das_) {
+      ObTabletID tablet_id;
+      ObObjectID partition_id = OB_INVALID_ID;
+      ObExpr *part_id_expr = insert_up_ctdef->ins_ctdef_->multi_ctdef_->calc_part_id_expr_;
+
+      if (OB_ISNULL(part_id_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("calc_part_id_expr_ is null", K(ret));
+      } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(part_id_expr, eval_ctx_, partition_id, tablet_id))) {
+        LOG_WARN("fail to calc part id", K(ret), KPC(part_id_expr));
+      } else if (OB_FAIL(deal_hint_part_selection(partition_id))) {
+        LOG_WARN("partition not match", K(ret));
+      } else if (OB_FAIL(ctx_.get_das_ctx().extended_tablet_loc(*das_index_scan_rtdef_->table_loc_, tablet_id, primary_tablet_loc))) {
+        LOG_WARN("extended tablet loc failed", K(ret));
+      } else if (OB_ISNULL(primary_tablet_loc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("primary tablet loc is null", K(ret));
+      } else if (OB_ISNULL(tablet_loc = ObDASUtils::get_related_tablet_loc(*primary_tablet_loc,
+                                                                           insert_up_ctdef->das_index_scan_ctdef_->ref_table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get related tablet loc failed", K(ret), KPC(primary_tablet_loc));
+      }
+    } else {
+      if (OB_ISNULL(tablet_loc = ObDASUtils::get_related_tablet_loc(*MY_INPUT.get_tablet_loc(),
+                                                                    insert_up_ctdef->das_index_scan_ctdef_->ref_table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get related tablet loc failed", K(ret), KPC(primary_tablet_loc));
+      }
+    }
+
+    // get das scan op
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet_loc should be not null", K(ret));
+    } else if (OB_ISNULL(insert_up_ctdef->das_index_scan_ctdef_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("das index scan ctdef should be not null", K(ret));
+    } else if (OB_UNLIKELY(!das_ref.has_das_op(tablet_loc, das_scan_op))) {
+      if (OB_FAIL(das_ref.prepare_das_task(tablet_loc, das_scan_op))) {
+        LOG_WARN("prepare das task failed", K(ret));
+      } else {
+        das_scan_op->set_scan_ctdef(insert_up_ctdef->das_index_scan_ctdef_);
+        das_scan_op->set_scan_rtdef(das_index_scan_rtdef_);
+        das_index_scan_rtdef_->table_loc_->is_reading_ = true;
+      }
+    }
+
+    // get lookup range
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(das_scan_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("das scan op should be not null", K(ret));
+    } else {
+      storage::ObTableScanParam &scan_param = das_scan_op->get_scan_param();
+      ObIAllocator &allocator = das_ref.get_das_alloc();
+      ObRowkey index_table_rowkey;
+      ObNewRange lookup_range;
+      ObObj *obj_ptr = nullptr;
+      void *buf = nullptr;
+      int64_t rowkey_cnt = rowkey_cst_ctdef->rowkey_expr_.count();
+
+      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * rowkey_cnt))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
+      } else if (OB_ISNULL(obj_ptr = new(buf) ObObj[rowkey_cnt])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new obj ptr failed", K(ret), K(rowkey_cnt));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+          ObObj tmp_obj;
+          ObExpr *expr = rowkey_cst_ctdef->rowkey_expr_.at(i);
+          ObDatum *col_datum = nullptr;
+          if (OB_ISNULL(expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
+          } else if (OB_FAIL(expr->eval(eval_ctx_, col_datum))) {
+            LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));
+          } else if (OB_ISNULL(col_datum)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("evaluated column datum in rowkey is nullptr", K(ret), K(i));
+          } else if (OB_FAIL(col_datum->to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
+            LOG_WARN("convert datum to obj failed", K(ret));
+          } else if (OB_FAIL(ob_write_obj(allocator, tmp_obj, obj_ptr[i]))) {
+            LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          index_table_rowkey.assign(obj_ptr, rowkey_cnt);
+          uint64_t ref_table_id = insert_up_ctdef->das_index_scan_ctdef_->ref_table_id_;
+          if (OB_FAIL(lookup_range.build_range(ref_table_id, index_table_rowkey))) {
+            LOG_WARN("build lookup range failed", K(ret), K(ref_table_id), K(index_table_rowkey));
+          } else if (OB_FAIL(scan_param.key_ranges_.push_back(lookup_range))) {
+            LOG_WARN("add lookup range to array failed", K(ret), K(lookup_range));
+          } else {
+            LOG_TRACE("add lookup range to array", K(ret), K(lookup_range));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::build_primary_table_lookup_task()
+{
+  int ret = OB_SUCCESS;
+  int64_t row_cnt = 0;
+  if (!need_do_index_lookup()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_ISNULL(conflict_checker_.batch_eval_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(post_all_check_exist_das_task(dml_rtctx_.das_ref_))) {
+    LOG_WARN("fail to post all check exist das task", K(ret));
+  } else {
+    DASOpResultIter result_iter = dml_rtctx_.das_ref_.begin_result_iter();
+    while (OB_SUCC(ret)) {
+      // index scan op access exprs contains the unique key expr and the primary key expr
+      das_index_scan_rtdef_->p_pd_expr_op_->clear_datum_eval_flag();
+      if (OB_FAIL(result_iter.get_next_row())) {
+        if (OB_ITER_END == ret) {
+          if (OB_FAIL(result_iter.next_result())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fetch next task failed", K(ret));
+            }
+          }
+        } else {
+          LOG_WARN("get next row from das result failed", K(ret));
+        }
+      } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task(*conflict_checker_.batch_eval_ctx_))) {
+        LOG_WARN("fail to build das task", K(ret));
+      } else {
+        row_cnt ++;
+      }
+    }
+
+    LOG_TRACE("build primary table lookup task", K(ret), K(row_cnt), K(eval_ctx_));
+    ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::build_primary_table_check_exist_task()
+{
+  int ret = OB_SUCCESS;
+  bool duped = false;
+  ObChunkDatumStore::StoredRow *row = nullptr;
+  ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
+  ObUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(0).upd_rtdef_;
+  ObInsRtDef &ins_rtdef = insert_up_rtdefs_.at(0).ins_rtdef_;
+  const ObInsCtDef &ins_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0)->ins_ctdef_);
+
+  ++ ins_rtdef.cur_row_num_;
+  // cst_ctdefs_.at(0) is primary key
+  if (OB_UNLIKELY(conflict_checker_.checker_ctdef_.cst_ctdefs_.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(conflict_checker_.checker_ctdef_.cst_ctdefs_));
+  } else if (OB_FAIL(get_opt_rowkey_cst_ctdef(rowkey_cst_ctdef))) {
+    LOG_WARN("fail to get rowkey cst ctdef", K(ret));
+  } else if (OB_ISNULL(rowkey_cst_ctdef) || OB_ISNULL(conflict_checker_.batch_eval_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(conflict_checker_.checker_ctdef_.cst_ctdefs_));
+  } else if (OB_FAIL(ObDMLService::check_column_type(MY_SPEC.all_saved_exprs_, ins_rtdef.cur_row_num_, ins_ctdef.column_infos_, *this))) {
+    LOG_WARN("fail to check column type", K(ret));
+  } else if (OB_FAIL(insert_up_row_store_.add_row(MY_SPEC.all_saved_exprs_, &eval_ctx_, &row))) {
+    LOG_WARN("fail to build row", K(ret));
+  } else if (OB_FAIL(row->to_expr(conflict_checker_.checker_ctdef_.data_table_rowkey_expr_,
+                                  conflict_checker_.eval_ctx_,
+                                  conflict_checker_.checker_ctdef_.data_table_rowkey_expr_.count()))) {
+    // rowkey exprs are always in front of all_saved_exprs_
+    LOG_WARN("fail to convert row to expr", K(ret));
+  } else if (OB_FAIL(add_new_row_to_conflict_map(row, rowkey_cst_ctdef, duped))) {
+    LOG_WARN("fail to add new row to conflict map", K(ret), KPC(row));
+  } else if (duped) {
+    ++ upd_rtdef.found_rows_;
+  } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task(*conflict_checker_.batch_eval_ctx_))) {
+    LOG_WARN("fail to build das task", K(ret), KPC(row));
+  }
+  return ret;
+}
+
 int ObTableInsertUpOp::rollback_savepoint(const transaction::ObTxSEQ &savepoint_no)
 {
   int ret = OB_SUCCESS;
@@ -1082,7 +1843,7 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end,
         reach_mem_limit = true;
         LOG_TRACE("insert up rows used memory over limit", K(default_row_store_mem_limit), K(insert_rows),
               K(insert_up_row_store_.get_mem_used()), K(is_ignore_), K(execute_single_row_));
-      } else if (simulate_batch_count != 0 && row_count > simulate_batch_count) {
+      } else if (simulate_batch_count != 0 && row_count >= simulate_batch_count) {
         reach_mem_limit = true;
         LOG_TRACE("insert up rows reach simulate_batch_count", K(row_count), K(default_row_store_mem_limit));
       }
@@ -1240,7 +2001,7 @@ int ObTableInsertUpOp::fetch_conflict_rowkey(int64_t row_cnt)
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
       }
-    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
+    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task(conflict_checker_.eval_ctx_))) {
       LOG_WARN("fail to build lookup_das_task", K(ret));
     }
   }
@@ -1418,7 +2179,7 @@ int ObTableInsertUpOp::do_insert(const ObConflictValue &constraint_value)
     OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
     OZ(delete_upd_old_row_to_das());
     OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_insert_row(), eval_ctx_));
-    OZ(insert_row_to_das());
+    OZ(insert_row_to_das(false));
   } else if (NULL != constraint_value.baseline_datum_row_ &&
              NULL == constraint_value.current_datum_row_) {
     // only delete
@@ -1428,7 +2189,7 @@ int ObTableInsertUpOp::do_insert(const ObConflictValue &constraint_value)
              NULL != constraint_value.current_datum_row_) {
     // only insert
     OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_insert_row(), eval_ctx_));
-    OZ(insert_row_to_das());
+    OZ(insert_row_to_das(false));
   }
   return ret;
 }
@@ -1485,9 +2246,15 @@ int ObTableInsertUpOp::reuse()
   if (OB_SUCC(ret)) {
     if (OB_FAIL(conflict_checker_.reuse())) {
       LOG_WARN("fail to reuse conflict checker", K(ret));
+    } else if (conflict_map_.created() && OB_FAIL(conflict_map_.reuse())) {
+      LOG_WARN("fail to reuse conflict map", K(ret));
     } else {
       insert_up_row_store_.reset();
       dml_modify_rows_.clear();
+    }
+
+    if (conflict_mem_ctx_ != nullptr) {
+      conflict_mem_ctx_->reset_remain_one_page();
     }
   }
 
@@ -1645,6 +2412,46 @@ int ObTableInsertUpOp::update_auto_increment(const ObExpr &expr,
   return ret;
 }
 
+int ObTableInsertUpOp::reset_env_back_to_old_path()
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(back_to_old_path_)) {
+    ObDASScanRtDef &das_scan_rtdef = conflict_checker_.das_scan_rtdef_;
+    das_scan_rtdef.eval_ctx_ = &conflict_checker_.eval_ctx_;
+    conflict_map_.reuse();
+    conflict_mem_ctx_->reset_remain_one_page();
+    conflict_checker_.das_scan_ctdef_for_lookup_ = &conflict_checker_.checker_ctdef_.das_scan_ctdef_;
+    das_scan_rtdef.do_local_dynamic_filter_ = false;
+
+    // reset pushdown operator
+    if (das_scan_rtdef.p_row2exprs_projector_ != nullptr) {
+      das_scan_rtdef.p_row2exprs_projector_->~ObRow2ExprsProjector();
+      das_scan_rtdef.p_row2exprs_projector_ = nullptr;
+    }
+    if (das_scan_rtdef.p_pd_expr_op_ != nullptr) {
+      das_scan_rtdef.p_pd_expr_op_->~ObPushdownOperator();
+      das_scan_rtdef.p_pd_expr_op_ = nullptr;
+    }
+
+    if (OB_ISNULL(conflict_checker_.das_scan_ctdef_for_lookup_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_UNLIKELY(nullptr != conflict_checker_.checker_ctdef_.attach_spec_.attach_ctdef_)) {
+      // opt path not support domain index
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(das_scan_rtdef.init_pd_op(conflict_checker_.eval_ctx_.exec_ctx_,
+                                                 *conflict_checker_.das_scan_ctdef_for_lookup_))) {
+      LOG_WARN("fail to init pd op", K(ret));
+    } else {
+      das_scan_rtdef.ctdef_ = conflict_checker_.das_scan_ctdef_for_lookup_;
+    }
+
+    LOG_TRACE("reset env back to old path");
+  }
+  return ret;
+}
+
 int ObTableInsertUpOp::check_insert_up_ctdefs_valid() const
 {
   int ret = OB_SUCCESS;
@@ -1655,6 +2462,190 @@ int ObTableInsertUpOp::check_insert_up_ctdefs_valid() const
     CK(OB_NOT_NULL(insert_up_ctdef->ins_ctdef_));
     //CK(OB_NOT_NULL(insert_up_ctdef->upd_ctdef_));
   }
+  return ret;
+}
+
+int ObTableInsertUpOp::get_opt_rowkey_cst_ctdef(ObRowkeyCstCtdef *&rowkey_info)
+{
+  int ret = OB_SUCCESS;
+  rowkey_info = nullptr;
+  if (conflict_checker_.checker_ctdef_.cst_ctdefs_.count() == 1) {
+    rowkey_info = conflict_checker_.checker_ctdef_.cst_ctdefs_.at(0);
+  } else if (conflict_checker_.checker_ctdef_.cst_ctdefs_.count() == 2) {
+    rowkey_info = conflict_checker_.checker_ctdef_.cst_ctdefs_.at(1);
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow *new_row, ObRowkeyCstCtdef *rowkey_info, bool &duped)
+{
+  int ret = OB_SUCCESS;
+  ObConflictValue *value = nullptr;
+
+  if (OB_ISNULL(rowkey_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rowkey_info is null", K(ret));
+  } else if (OB_ISNULL(tmp_rowkey_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tmp_rowkey_ is null", K(ret));
+  } else if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, tmp_rowkey_, rowkey_info))) {
+    LOG_WARN("fail to build rowkey", K(ret), KPC(tmp_rowkey_), KPC(rowkey_info));
+  } else if (OB_ISNULL(value = const_cast<ObConflictValue*>(conflict_map_.get(*tmp_rowkey_)))) {
+    ObRowkey *new_rowkey = nullptr;
+    ObConflictValue new_value;
+    new_value.current_datum_row_ = new_row;
+    new_value.new_row_source_ = ObNewRowSource::FROM_INSERT;
+    if (OB_FAIL(build_conflict_rowkey(eval_ctx_, new_rowkey, rowkey_info))) {
+      LOG_WARN("fail to build new_rowkey", K(ret), KPC(rowkey_info));
+    } else if (OB_ISNULL(new_rowkey)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rowkey is null", K(ret), KPC(rowkey_info));
+    } else if (OB_FAIL(conflict_map_.set_refactored(*new_rowkey, new_value))) {
+      LOG_WARN("insert to map failed", K(ret), KPC(new_rowkey));
+    } else {
+      duped = false;
+    }
+  } else {
+    if (OB_ISNULL(value->current_datum_row_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), KPC(tmp_rowkey_));
+    } else {
+      duped = true;
+      value->current_datum_row_ = new_row;
+      value->new_row_source_ = ObNewRowSource::FROM_INSERT;
+    }
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::post_all_check_exist_das_task(ObDASRef &das_ref)
+{
+  int ret = OB_SUCCESS;
+  if (gts_state_ == WITHOUT_GTS_OPT_STATE) {
+    ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
+    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+    if (OB_FAIL(ObSqlTransControl::get_read_snapshot(my_session,
+                                                     plan_ctx,
+                                                     ctx_.get_das_ctx().get_snapshot()))) {
+      LOG_WARN("fail to get global read snapshot", K(ret));
+    } else {
+      gts_state_ = GTE_GTS_STATE;
+      LOG_TRACE("do opt insert up path, use global gts", K(ctx_.get_das_ctx().get_snapshot()));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(das_ref.execute_all_task())) {
+    LOG_WARN("fail to execute das task", K(ret));
+  }
+  return ret;
+}
+
+int ObTableInsertUpOp::build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rowkey) || OB_ISNULL(rowkey_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null", K(ret), K(rowkey), K(rowkey_info));
+  } else {
+    ObObj *obj_ptr = rowkey->get_obj_ptr();
+
+    if (OB_ISNULL(obj_ptr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("obj_ptr is null", K(ret));
+    } else if (OB_FAIL(conflict_checker_.clear_eval_flags(rowkey_info->calc_exprs_, eval_ctx))) {
+      LOG_WARN("clear eval flag failed", K(ret), K(rowkey_info->calc_exprs_));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < rowkey_info->rowkey_expr_.count(); ++i) {
+        ObDatum *datum = nullptr;
+        const ObObjMeta &col_obj_meta = rowkey_info->rowkey_expr_.at(i)->obj_meta_;
+        ObExpr *expr = rowkey_info->rowkey_expr_.at(i);
+        const ObAccuracy *col_accuracy = nullptr;
+
+        if (rowkey_info->rowkey_accuracys_.count() == rowkey_info->rowkey_expr_.count()) {
+          col_accuracy = &rowkey_info->rowkey_accuracys_.at(i);
+        }
+
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr is null", K(ret), K(i));
+        } else if (OB_FAIL(expr->eval(eval_ctx, datum))) {
+          LOG_WARN("expr eval fail", K(ret), K(i), KPC(expr));
+        } else if (OB_ISNULL(datum) || OB_ISNULL(datum->ptr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(i));
+        } else if (OB_FAIL(datum->to_obj(obj_ptr[i], col_obj_meta))) {
+          LOG_WARN("datum to obj fail", K(ret), K(i), KPC(expr), KPC(datum));
+        } else if (col_accuracy != nullptr &&
+                   OB_FAIL(ObDASUtils::reshape_storage_value(col_obj_meta,
+                                                             *col_accuracy,
+                                                             conflict_mem_ctx_->get_allocator(),
+                                                             obj_ptr[i]))) {
+          LOG_WARN("reshape storage value failed", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableInsertUpOp::build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_info)
+{
+  int ret = OB_SUCCESS;
+  ObObj *objs = nullptr;
+  int64_t rowkey_cnt = 0;
+  ObIAllocator &alloc = conflict_mem_ctx_->get_allocator();
+
+  if (OB_ISNULL(rowkey_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null", K(ret), K(rowkey_info));
+  } else if (FALSE_IT(rowkey_cnt = rowkey_info->rowkey_expr_.count())) {
+  } else if (OB_ISNULL(rowkey = static_cast<ObRowkey*>(alloc.alloc(sizeof(ObRowkey))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else if (OB_ISNULL(objs = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj)* rowkey_cnt)))){
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret));
+  } else if (OB_FAIL(conflict_checker_.clear_eval_flags(rowkey_info->calc_exprs_, eval_ctx))) {
+    LOG_WARN("fail to clear rowkey flag", K(ret), K(rowkey_info->calc_exprs_));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+      ObDatum *datum = nullptr;
+      ObObj tmp_obj;
+      const ObObjMeta &col_obj_meta = rowkey_info->rowkey_expr_.at(i)->obj_meta_;
+      ObExpr *expr = rowkey_info->rowkey_expr_.at(i);
+      const ObAccuracy *col_accuracy = nullptr;
+
+      if (rowkey_info->rowkey_accuracys_.count() == rowkey_cnt) {
+        col_accuracy = &rowkey_info->rowkey_accuracys_.at(i);
+      }
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(i));
+      } else if (OB_FAIL(expr->eval(eval_ctx, datum))) {
+        LOG_WARN("expr eval fail", K(ret), K(i), KPC(expr));
+      } else if (OB_ISNULL(datum) || OB_ISNULL(datum->ptr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(i));
+      } else if (OB_FAIL(datum->to_obj(tmp_obj, col_obj_meta))) {
+        LOG_WARN("datum to obj fail", K(ret), K(i), KPC(expr), KPC(datum));
+      } else if (col_accuracy != nullptr &&
+                 OB_FAIL(ObDASUtils::reshape_storage_value(col_obj_meta,
+                                                           *col_accuracy,
+                                                           alloc,
+                                                           tmp_obj))) {
+        LOG_WARN("reshape storage value failed", K(ret));
+      } else if (OB_FAIL(ob_write_obj(alloc, tmp_obj, objs[i]))) {
+        LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      rowkey->assign(objs, rowkey_cnt);
+    }
+  }
+
   return ret;
 }
 

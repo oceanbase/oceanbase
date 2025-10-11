@@ -270,6 +270,7 @@ protected:
                                                     ObIArray<uint64_t>& the_missing_label_se_columns,
                                                     ObIArray<ObRawExpr*> &value_row);
   virtual int resolve_insert_update_assignment(const ParseNode *node, ObInsertTableInfo& table_info);
+  int check_insertup_assignment_need_calc(const ObRawExpr *raw_expr, bool &need_calc);
   int add_relation_columns(ObIArray<ObTableAssignment> &table_assigns);
   virtual int replace_column_ref(common::ObArray<ObRawExpr*> *value_row,
                                  ObRawExpr *&expr,

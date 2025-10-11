@@ -88,6 +88,12 @@ public:
       conflict_checker_(ctx.get_allocator(),
                         eval_ctx_,
                         MY_SPEC.conflict_checker_ctdef_),
+      back_to_old_path_(false),
+      conflict_map_(),
+      tmp_rowkey_(nullptr),
+      conflict_mem_ctx_(),
+      das_index_scan_rtdef_(nullptr),
+      // opt_batch_info_guard_(eval_ctx_),
       insert_up_row_store_("InsertUpRow"),
       is_ignore_(false),
       gts_state_(WITHOUT_GTS_OPT_STATE),
@@ -130,6 +136,12 @@ protected:
 
   int do_insert_up();
 
+  int do_opt_insert_up();
+
+  int load_batch_and_check_exist();
+
+  int do_opt_insert_up_cache(int64_t &update_row_cnt, int64_t &insert_row_cnt);
+
   int rollback_savepoint(const transaction::ObTxSEQ &savepoint_no);
 
   // 检查是否有duplicated key 错误发生
@@ -149,11 +161,13 @@ protected:
                           ObUpdRtDef &upd_rtdef,
                           const ObDASTabletLoc *tablet_loc);
 
-  int insert_row_to_das();
+  int insert_row_to_das(bool calc_hidden_pk = false);
 
   int delete_upd_old_row_to_das();
 
   int insert_upd_new_row_to_das();
+
+  int update_row_to_das();
 
   int delete_one_upd_old_row_das(const ObUpdCtDef &upd_ctdef,
                                  ObUpdRtDef &upd_rtdef,
@@ -227,6 +241,7 @@ protected:
   int record_stmt_last_update_id();
 private:
   int check_insert_up_ctdefs_valid() const;
+  int reset_env_back_to_old_path();
 
   const ObIArray<ObExpr *> &get_primary_table_insert_row();
 
@@ -242,6 +257,31 @@ private:
 
   int reuse();
 
+  bool need_do_index_lookup() { return MY_SPEC.insert_up_ctdefs_.at(0)->do_index_lookup_; }
+
+  int get_opt_rowkey_cst_ctdef(ObRowkeyCstCtdef *&rowkey_info);
+
+  int mock_hidden_pk(ObExpr *auto_inc_expr);
+
+  int add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow *new_row, ObRowkeyCstCtdef *rowkey_info, bool &duped);
+
+  int build_primary_table_lookup_task();
+
+  int build_primary_table_check_exist_task();
+
+  int build_index_table_check_exist_task();
+
+  int build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info);
+
+  int build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_info);
+
+  int post_all_check_exist_das_task(ObDASRef &das_ref);
+
+  int do_conflict_update_row(const ObConflictValue &constraint_value);
+
+  int do_conflict_insert_row(const ObConflictValue &constraint_value);
+
+
 protected:
   const static int64_t OB_DEFAULT_INSERT_UP_MEMORY_LIMIT = 2 * 1024 * 1024L;  // 2M in default
   const static int64_t OB_DEFAULT_INSERT_UP_BATCH_ROW_COUNT = 1000L;  // 1000 in default
@@ -250,6 +290,11 @@ protected:
   int64_t found_rows_;
   ObDMLRtCtx upd_rtctx_;
   ObConflictChecker conflict_checker_;
+  bool back_to_old_path_;
+  ObConflictRowMap conflict_map_;        // for opt path
+  ObRowkey *tmp_rowkey_;                 // for opt path
+  lib::MemoryContext conflict_mem_ctx_;  // for opt path
+  ObDASScanRtDef *das_index_scan_rtdef_; // for opt path
   common::ObArrayWrap<ObInsertUpRtDef> insert_up_rtdefs_;
   ObChunkDatumStore insert_up_row_store_; //所有的insert_up的行的集合
   bool is_ignore_; // 暂时记录一下是否是ignore的insert_up SQL语句

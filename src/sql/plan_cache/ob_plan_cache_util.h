@@ -1183,6 +1183,7 @@ public:
     enable_runtime_filter_adaptive_apply_(false),
     extend_sql_plan_monitor_metrics_(false),
     enable_mysql_compatible_dates_(false),
+    enable_insertup_column_store_opt_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1244,6 +1245,7 @@ public:
   bool enable_runtime_filter_adaptive_apply_;
   bool extend_sql_plan_monitor_metrics_;
   bool enable_mysql_compatible_dates_;
+  bool enable_insertup_column_store_opt_;
 
 private:
   // current cluster config version_

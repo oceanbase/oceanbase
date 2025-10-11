@@ -494,7 +494,7 @@ int ObTableReplaceOp::fetch_conflict_rowkey(int64_t replace_row_cnt)
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
       }
-    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
+    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task(conflict_checker_.eval_ctx_))) {
       LOG_WARN("fail to build lookup_das_task", K(ret));
     }
   }
