@@ -442,7 +442,7 @@ int ObHiveTableMetadata::setup_external_location(const Apache::Hadoop::Hive::Tab
     ObString final_location = real_location.empty() ? location : real_location;
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get storage info str", K(ret));
-    } else if (OB_FAIL(table_schema.set_external_file_location(real_location))) {
+    } else if (OB_FAIL(table_schema.set_external_file_location(final_location))) {
       LOG_WARN("failed to set external file location", K(ret));
     } else if (OB_FAIL(table_schema.set_external_file_location_access_info(access_info))) {
       LOG_WARN("failed to set external file location access info", K(ret));
