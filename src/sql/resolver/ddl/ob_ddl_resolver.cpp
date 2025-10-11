@@ -12004,6 +12004,9 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
           } else if (!valid) {
             ret = common::OB_ERR_PARSE_SQL;
             LOG_WARN("invalid size", KR(ret), K(buf));
+          } else if (ObPartitionOption::MIN_AUTO_PART_SIZE_BY_USER > auto_part_size) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "auto part size must be greater than or equal to 128MB", K(ret), K(buf));
           }
         }
       }
