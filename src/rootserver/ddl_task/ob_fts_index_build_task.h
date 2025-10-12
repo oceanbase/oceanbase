@@ -45,6 +45,7 @@ public:
   virtual int cleanup_impl() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
+  virtual bool support_longops_monitoring() const override { return true; }
   virtual int serialize_params_to_message(
       char *buf,
       const int64_t buf_size,
@@ -55,7 +56,6 @@ public:
       const int64_t buf_size,
       int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
-  virtual bool support_longops_monitoring() const override { return false; }
   virtual int on_child_task_finish(
     const uint64_t child_task_key,
     const int ret_code) override;
