@@ -81,17 +81,25 @@ public:
   bool is_supported_file() const { return MAX_FD_FILE != fd_type_; }
   bool is_audit_file() const { return FD_AUDIT_FILE == fd_type_; }
   bool is_alert_file() const { return FD_ALERT_FILE == fd_type_; }
-
+  void set_cached_item()  { is_cached_item_ = true; }
+  bool is_cached_item() const { return is_cached_item_; }
+  inline void set_slot(int64_t slot) { slot_  = slot; }
+  inline int64_t get_slot() const { return slot_; }
+  inline void set_large_item(bool is_large) { is_large_item_ = is_large; }
+  inline bool is_large_item() const { return is_large_item_; }
 private:
   ObPLogFDType fd_type_;
   int32_t log_level_;
   int32_t tl_type_;
   bool is_force_allow_;
   bool is_size_overflow_;
+  bool is_cached_item_;
+  bool is_large_item_;
   int64_t timestamp_;
   int64_t header_pos_;
   int64_t buf_size_;
   int64_t pos_;
+  int64_t slot_;
   char buf_[0];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLogItem);

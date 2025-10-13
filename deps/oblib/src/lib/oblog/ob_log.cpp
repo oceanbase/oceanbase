@@ -498,7 +498,8 @@ ObLogger::ObLogger()
     enable_wf_flag_(false), rec_old_file_flag_(false), can_print_(true),
     enable_async_log_(true), use_multi_flush_(false), stop_append_log_(false), enable_perf_mode_(false),
     last_async_flush_count_per_sec_(0), log_allocator_(&get_allocator()), log_compressor_(nullptr), enable_log_limit_(true),
-    is_arb_replica_(false), new_file_info_(nullptr), info_as_wdiag_(true)
+    is_arb_replica_(false), new_file_info_(nullptr), info_as_wdiag_(true),
+    alloc_from_cache_count_(0), alloc_from_allocator_count_(0)
 {
   id_level_map_.set_level(OB_LOG_LEVEL_DBA_ERROR);
 
@@ -509,6 +510,8 @@ ObLogger::ObLogger()
   memset(written_count_, 0, sizeof(written_count_));
   memset(dropped_count_, 0, sizeof(dropped_count_));
   memset(current_written_count_, 0, sizeof(current_written_count_));
+  memset(prealloc_plog_items_, 0, sizeof(prealloc_plog_items_));
+  memset(large_prealloc_plog_items_, 0, sizeof(large_prealloc_plog_items_));
 }
 
 ObLogger::~ObLogger()
@@ -1512,7 +1515,7 @@ int ObLogger::add_files_to_list(void *files,
 }
 
 int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
-                   const bool is_arb_replica)
+                   const bool is_arb_replica, int64_t memory_limit)
 {
   int ret = OB_SUCCESS;
   LOG_DBA_INFO_V2(OB_SERVER_SYSLOG_SERVICE_INIT_BEGIN,
@@ -1534,6 +1537,66 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     for (int i = 0; i < ARRAYSIZEOF(per_error_log_limiters_); i++) {
       new (&per_error_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
     }
+
+    typedef struct ObPlogItemCount {
+      ObPlogItemCount() : normal_item_count_per_slot_(0), large_item_count_per_slot_(0) {}
+      ObPlogItemCount(int32_t n, int32_t l)
+      : normal_item_count_per_slot_(n), large_item_count_per_slot_(l) {}
+      int32_t normal_item_count_per_slot_;
+      int32_t large_item_count_per_slot_;
+    } ObPlogItemCount;
+
+    /*
+      memory limit <=4G use 6MB cache
+      4G < memory limit <= 8G use 12MB cache
+      8G < memory limit <= 16G use 24MB cache
+      16G < memory limit <=64G use 48MB cache
+      64G < memory_limit use 96MB cache
+    */
+    ObPlogItemCount items[5] = {
+      {64, 8},
+      {128, 16},
+      {256, 32},
+      {512, 64},
+      {1024, 128},
+    };
+
+    ObPlogItemCount item;
+
+    if (memory_limit <= (4L << 30)) {
+      item = items[0];
+    } else if (memory_limit <= (8L << 30)) {
+      item = items[1];
+    } else if (memory_limit <= (16L << 30)) {
+      item = items[2];
+    } else if (memory_limit <= (64L << 30)) {
+      item = items[3];
+    } else {
+      item = items[4];
+    }
+
+    PreparePlogConfig normal_config  = {
+      .n_way_ = LOG_POOL_N_WAY,
+      .prealloc_count_ = item.normal_item_count_per_slot_,
+      .log_size_ = LOG_ITEM_SIZE + BASE_LOG_SIZE,
+      .prealloc_items_ = prealloc_plog_items_,
+      .log_item_pool_ = log_item_pool_,
+    };
+
+    PreparePlogConfig large_config  = {
+      .n_way_ = LARGE_LOG_POOL_N_WAY,
+      .prealloc_count_ = item.large_item_count_per_slot_,
+      .log_size_ = LOG_ITEM_SIZE + MAX_LOG_SIZE,
+      .prealloc_items_ = large_prealloc_plog_items_,
+      .log_item_pool_ = large_log_item_pool_,
+    };
+
+    if (OB_FAIL(prepare_prealloc_plog_items_impl(normal_config))) {
+      LOG_STDERR("pre alloc plog items fail, ret=%d\n", ret);
+    } else if (OB_FAIL(prepare_prealloc_plog_items_impl(large_config))) {
+      LOG_STDERR("pre alloc large plog items fail, ret=%d\n", ret);
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObBaseLogWriter::init(log_cfg, thread_name))) {
         LOG_STDERR("init ObBaseLogWriter error. ret=%d\n", ret);
@@ -1554,6 +1617,57 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     LOG_DBA_INFO_V2(OB_SERVER_SYSLOG_SERVICE_INIT_SUCCESS,
                     DBA_STEP_INC_INFO(server_start),
                     "observer syslog service init success.");
+  }
+  return ret;
+}
+
+int ObLogger::prepare_prealloc_plog_items_impl(PreparePlogConfig& config)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < config.n_way_; i++) {
+    if (NULL == &config.log_item_pool_[i]) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_STDERR("log_item_pool_ is NULL, ret=%d, i=%ld", ret, i);
+    } else {
+      if (OB_FAIL(config.log_item_pool_[i].init(config.prealloc_count_))) {
+        LOG_STDERR("init log_item_pool failed, ret=%d, i=%ld", ret, i);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t total_size = config.log_size_ * config.prealloc_count_;
+    int64_t i = 0;
+    for (i = 0; OB_SUCC(ret) && i < config.n_way_; i++) {
+      if (OB_UNLIKELY(NULL != config.prealloc_items_[i])) {
+        ret = OB_INIT_TWICE;
+        LOG_STDERR("prealloc plog items has been allocated, prealloc_plog_items_=%p, ret=%d\n",prealloc_plog_items_, ret);
+      } else {
+        config.prealloc_items_[i] = common::ob_malloc(total_size,
+                                                SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger",
+                                                common::ObCtxIds::LOGGER_CTX_ID)));
+        if (OB_ISNULL(config.prealloc_items_[i])) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          LOG_STDERR("allocate prealloc_plog_items failed, ret=%d, total_size=%ld, log_size=%ld",
+                      ret, total_size, config.log_size_);
+        } else {
+          for (int64_t index = 0; common::OB_SUCCESS == ret && index < config.prealloc_count_; index++) {
+            char *item = reinterpret_cast<char *>(config.prealloc_items_[i]) + (index * config.log_size_);
+            if (OB_FAIL(config.log_item_pool_[i].push(item))) {
+              LOG_STDERR("push prealloc plog item into to fail, ret=%d, index=%ld", ret, index);
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+        for (i; i >= 0; i--) {
+          if (OB_NOT_NULL(config.prealloc_items_[i])) {
+            ob_free(config.prealloc_items_[i]);
+            config.prealloc_items_[i] = NULL;
+          }
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1863,27 +1977,51 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
   int ret = OB_SUCCESS;
   log_item = NULL;
   if (!stop_append_log_) {
-    char *buf = nullptr;
-    if (OB_UNLIKELY(nullptr == (buf = (char*)log_allocator_->alloc(size)))) {
-      int64_t wait_us = get_wait_us(level);
-      const int64_t per_us = MIN(wait_us, 10);
-      while (wait_us > 0) {
-        if (nullptr != (buf = (char*)log_allocator_->alloc(size))) {
-          break;
-        } else {
-          ob_usleep(per_us);
-          wait_us -= per_us;
-        }
+    void *vlog_item = NULL;
+    bool is_large = (size - LOG_ITEM_SIZE == MAX_LOG_SIZE) ? true : false;
+    int64_t slot = is_large ? (common::get_itid() % LARGE_LOG_POOL_N_WAY) :
+                              (common::get_itid() % LOG_POOL_N_WAY);
+    if (!is_large) {
+      if (OB_FAIL(log_item_pool_[slot].pop(vlog_item))) {
+        ret = OB_SUCCESS;
       }
-      if (nullptr == buf) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_STDERR("alloc_log_item error, ret=%d level=%d\n", ret, level);
+    } else {
+      if (OB_FAIL(large_log_item_pool_[slot].pop(vlog_item))) {
+        ret = OB_SUCCESS;
       }
     }
-    if (OB_SUCC(ret)) {
-      log_item = new (buf) ObPLogItem();
+    if (OB_NOT_NULL(vlog_item)) {
+      ATOMIC_INC(&alloc_from_cache_count_);
+      log_item = new (vlog_item) ObPLogItem();
       log_item->set_buf_size(size - LOG_ITEM_SIZE);
       log_item->set_log_level(level);
+      log_item->set_cached_item();
+      log_item->set_slot(slot);
+      log_item->set_large_item(is_large);
+    } else {
+      char *buf = nullptr;
+      if (OB_UNLIKELY(nullptr == (buf = (char*)log_allocator_->alloc(size)))) {
+        int64_t wait_us = get_wait_us(level);
+        const int64_t per_us = MIN(wait_us, 10);
+        while (wait_us > 0) {
+          if (nullptr != (buf = (char*)log_allocator_->alloc(size))) {
+            break;
+          } else {
+            ob_usleep(per_us);
+            wait_us -= per_us;
+          }
+        }
+        if (nullptr == buf) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_STDERR("alloc_log_item error, ret=%d level=%d\n", ret, level);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ATOMIC_INC(&alloc_from_allocator_count_);
+        log_item = new (buf) ObPLogItem();
+        log_item->set_buf_size(size - LOG_ITEM_SIZE);
+        log_item->set_log_level(level);
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1896,9 +2034,17 @@ void ObLogger::free_log_item(ObPLogItem *log_item)
 {
   ObDisableDiagnoseGuard disable_diagnose_guard;
   if (NULL != log_item) {
-    const int level = log_item->get_log_level();
-    log_item->~ObPLogItem();
-    log_allocator_->free(log_item);
+    if (log_item->is_cached_item()) {
+      if (!log_item->is_large_item()) {
+        log_item_pool_[log_item->get_slot()% LOG_POOL_N_WAY].push(log_item);
+      } else {
+        large_log_item_pool_[log_item->get_slot()% LARGE_LOG_POOL_N_WAY].push(log_item);
+      }
+    } else {
+      const int level = log_item->get_log_level();
+      log_item->~ObPLogItem();
+      log_allocator_->free(log_item);
+    }
   }
 }
 
