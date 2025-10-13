@@ -453,6 +453,7 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
   } else {
     // heartbeat, updtae last_heartbeat_timestamp_usec_
     int64_t checkpoint_timestamp_usec = OB_INVALID_TIMESTAMP;
+    int64_t msg_ver = br->id() >> 56; // high 8 bit is msg version
 
     if (is_first_br) {
       // oblog_tailf -f $CONFIG -t 0 means start at current time
@@ -461,10 +462,21 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
       checkpoint_timestamp_usec = br->getCheckpoint1() * 1000000 + br->getCheckpoint2();
       is_first_br = false;
     } else if (HEARTBEAT == br->recordType()) {
-      checkpoint_timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+      if (msg_ver < 6) {
+        // recordUsec is macro part
+        checkpoint_timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+      } else {
+        // recordUsec is nano part
+        checkpoint_timestamp_usec = (br->getTimestamp() * 1000000) + (br->getRecordUsec() / 1000);
+      }
       if (checkpoint_timestamp_usec < last_heartbeat_timestamp_usec_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("checkpoint rollbacked", KR(ret), K(checkpoint_timestamp_usec), K_(last_heartbeat_timestamp_usec));
+        LOG_ERROR("checkpoint rollbacked", KR(ret), K(msg_ver),
+            K(checkpoint_timestamp_usec), K_(last_heartbeat_timestamp_usec),
+            "checkpiont_sec", br->getCheckpoint1(),
+            "checkpint_usec", br->getCheckpoint2(),
+            "timestamp_sec", br->getTimestamp(),
+            "timestamp_nano", br->getRecordUsec());
       }
     }
 
@@ -473,20 +485,21 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
 
       // Calibration timestamp and checkpoint
       int64_t precise_timestamp = ObBinlogRecordPrinter::get_precise_timestamp(*br);
-      int64_t timestamp_sec = precise_timestamp / 1000000;
-      int64_t timestamp_usec = precise_timestamp % 1000000;
-      int64_t expect_checkpoint1 = last_heartbeat_timestamp_usec_ / 1000000;
-      int64_t expect_checkpoint2 = last_heartbeat_timestamp_usec_ % 1000000;
+      const int64_t factor = msg_ver < 6 ? _SEC_ : _SEC_NS_;
+      int64_t timestamp_sec = precise_timestamp / factor;
+      int64_t timestamp_nsec = precise_timestamp % factor;
+      int64_t expect_checkpoint1 = last_heartbeat_timestamp_usec_ / _SEC_;
+      int64_t expect_checkpoint2 = last_heartbeat_timestamp_usec_ % _SEC_;
 
       if (OB_UNLIKELY(timestamp_sec != br->getTimestamp())
-          || OB_UNLIKELY(timestamp_usec != br->getRecordUsec())) {
+          || OB_UNLIKELY(timestamp_nsec != br->getRecordUsec())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("timestamp is not right", KR(ret), K(precise_timestamp), "br_sec", br->getTimestamp(),
+        LOG_ERROR("timestamp is not right", KR(ret), K(msg_ver), K(precise_timestamp), "br_sec", br->getTimestamp(),
             "br_usec", br->getRecordUsec());
       } else if (OB_UNLIKELY(expect_checkpoint1 != br->getCheckpoint1())
           || OB_UNLIKELY(expect_checkpoint2 != br->getCheckpoint2())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("checkpoint is not right", KR(ret), K(br), K(last_heartbeat_timestamp_usec_),
+        LOG_ERROR("checkpoint is not right", KR(ret), K(br), K(last_heartbeat_timestamp_usec_), K(msg_ver),
             K(expect_checkpoint1), "br_checkpoint1", br->getCheckpoint1(),
             K(expect_checkpoint2), "br_checkpoint2", br->getCheckpoint2(),
             "getTimestamp", br->getTimestamp(), "getRecordUsec", br->getRecordUsec(),

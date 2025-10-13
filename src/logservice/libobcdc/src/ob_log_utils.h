@@ -87,6 +87,7 @@ const int64_t _MIN_ = 60L * _SEC_;
 const int64_t _HOUR_ = 60L * _MIN_;
 const int64_t _DAY_ = 24L * _HOUR_;
 const int64_t _YEAR_ = 365L * _DAY_;
+const int64_t _SEC_NS_ = NS_CONVERSION * _SEC_;
 
 int print_human_tstamp(char *buf, const int64_t buf_len, int64_t &pos,
     const int64_t usec_tstamp);

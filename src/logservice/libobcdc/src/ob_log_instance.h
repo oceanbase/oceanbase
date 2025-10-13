@@ -317,7 +317,7 @@ private:
 
   volatile bool           stop_flag_ CACHE_ALIGNED;
   // Record microsecond timestamps
-  int64_t                 last_heartbeat_timestamp_micro_sec_ CACHE_ALIGNED;
+  int64_t                 last_heartbeat_timestamp_nano_sec_ CACHE_ALIGNED;
 
   // Specify the OB_LOGGER directory path
   char                    assign_log_dir_[common::OB_MAX_FILE_NAME_LENGTH];
