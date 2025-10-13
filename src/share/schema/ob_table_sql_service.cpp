@@ -2425,9 +2425,8 @@ int ObTableSqlService::create_table(ObTableSchema &table,
   int64_t cost_usec = 0;
   const uint64_t tenant_id = table.get_tenant_id();
 
-  if (!table.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid create table argument, ", K(table));
+  if (OB_FAIL(table.check_valid(true/*count by byte*/))) {
+    LOG_WARN("invalid create table argument, ", K(ret), K(table));
   } else if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
   }

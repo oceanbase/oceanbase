@@ -1234,6 +1234,7 @@ public:
   { auto_increment_cache_size_ = auto_increment_cache_size; }
 //get methods
   bool is_valid() const;
+  int check_valid(const bool count_varchar_size_by_byte) const;
 
   int get_generated_column_by_define(const common::ObString &col_def,
                                      const bool only_hidden_column,
