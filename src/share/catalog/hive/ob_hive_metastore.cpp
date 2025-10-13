@@ -28,18 +28,43 @@ namespace oceanbase
 {
 namespace share
 {
+/* --------------------- Utility Functions ---------------------*/
+// Format qualified database name with catalog prefix
+// Returns "@catalog#dbname" format when catalog is provided
+static inline void format_qualified_db_name(String &result, const String &cat_name, const String &db_name)
+{
+  // "@" + cat_name + "#" + db_name
+  result.reserve(1 + cat_name.size() + 1 + db_name.size());
+  result.append("@");
+  result.append(cat_name);
+  result.append("#");
+  result.append(db_name);
+}
+
 /* --------------------- start of Hive Client Operations ---------------------*/
 void ListDBNamesOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
-  client->get_all_databases(databases_);
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_all_databases(databases_);
+  } else {
+    String pattern;
+    format_qualified_db_name(pattern, cat_name_, "");
+    client->get_databases(databases_, pattern);
+  }
 }
 
 void GetDatabaseOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
-  LOG_TRACE("get the database by name", K(ret), K(db_name_.c_str()));
+  LOG_TRACE("get the database by name", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()));
   try {
-    client->get_database(db_, db_name_);
+    if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+      client->get_database(db_, db_name_);
+    } else {
+      String f_db_name;
+      format_qualified_db_name(f_db_name, cat_name_, db_name_);
+      client->get_database(db_, f_db_name);
+    }
     found_ = true;
   } catch (ApacheHive::NoSuchObjectException &ex) {
     found_ = false;
@@ -49,21 +74,39 @@ void GetDatabaseOperation::execute_impl(ThriftHiveMetastoreClient *client)
 void GetAllTablesOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
-  LOG_TRACE("get the all tables", K(ret), K(db_name_.c_str()));
-  client->get_all_tables(tb_names_, db_name_);
+  LOG_TRACE("get the all tables", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()));
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_all_tables(tb_names_, db_name_);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->get_all_tables(tb_names_, f_db_name);
+  }
 }
 
 void ListPartitionsOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
-  LOG_TRACE("get partitions", K(db_name_.c_str()), K(tb_name_.c_str()), K(max_parts_));
-  client->get_partitions(partitions_, db_name_, tb_name_, max_parts_);
+  LOG_TRACE("get partitions", K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()), K(max_parts_));
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_partitions(partitions_, db_name_, tb_name_, max_parts_);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->get_partitions(partitions_, f_db_name, tb_name_, max_parts_);
+  }
 }
 
 void ListPartitionNamesOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
-  LOG_TRACE("get partition names", K(ret), K(db_name_.c_str()), K(tb_name_.c_str()), K(max_parts_));
-  client->get_partition_names(partition_names_, db_name_, tb_name_, max_parts_);
+  LOG_TRACE("get partition names", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()), K(max_parts_));
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_partition_names(partition_names_, db_name_, tb_name_, max_parts_);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->get_partition_names(partition_names_, f_db_name, tb_name_, max_parts_);
+  }
 }
 
 void GetPartitionValuesOperation::execute_impl(ThriftHiveMetastoreClient *client)
@@ -71,10 +114,11 @@ void GetPartitionValuesOperation::execute_impl(ThriftHiveMetastoreClient *client
   int ret = OB_SUCCESS;
   PartitionValuesRequest req;
   PartitionValuesResponse resp;
-  LOG_TRACE("get partition of table", K(ret), K(db_name_.c_str()), K(tb_name_.c_str()));
+  LOG_TRACE("get partition of table", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()));
 
   req.dbName = db_name_;
   req.tblName = tb_name_;
+  req.catName = cat_name_;
   // Note: partition keys must be not empty.
   req.partitionKeys = partition_keys_;
 
@@ -86,13 +130,19 @@ void GetPartitionValuesOperation::execute_impl(ThriftHiveMetastoreClient *client
 void GetTableOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
-  LOG_TRACE("get table schema", K(ret), K(db_name_.c_str()), K(tb_name_.c_str()));
+  LOG_TRACE("get table schema", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()));
 
   // Mark the hive metastore client is newest version, such as v4.x.x.
   // Method `get_table` is not supported in v4.x.x.
   if (OB_LIKELY(!is_newest_version_)) {
     try {
-      client->get_table(table_, db_name_, tb_name_);
+      if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+        client->get_table(table_, db_name_, tb_name_);
+      } else {
+        String f_db_name;
+        format_qualified_db_name(f_db_name, cat_name_, db_name_);
+        client->get_table(table_, f_db_name, tb_name_);
+      }
       found_ = true;
     } catch (ApacheHive::UnknownTableException &ex) {
       found_ = false;
@@ -111,12 +161,14 @@ void GetTableOperation::execute_impl(ThriftHiveMetastoreClient *client)
   if (OB_LIKELY(!found_ && is_newest_version_)) {
     LOG_TRACE("try to get table by newest method `get_table_req`",
               K(ret),
+              K(cat_name_.c_str()),
               K(db_name_.c_str()),
               K(tb_name_.c_str()));
     ApacheHive::GetTableRequest req;
     ApacheHive::GetTableResult result;
     req.dbName = db_name_;
     req.tblName = tb_name_;
+    req.catName = cat_name_;
     try {
       client->get_table_req(result, req);
       table_ = result.table;
@@ -134,12 +186,19 @@ void GetLatestPartitionDdlTimeOperation::execute_impl(ThriftHiveMetastoreClient 
   int ret = OB_SUCCESS;
   LOG_TRACE("get all partitions",
             K(ret),
+            K(cat_name_.c_str()),
             K(db_name_.c_str()),
             K(tb_name_.c_str()),
             K(max_parts_),
             K_(latest_ddl_time));
   Partitions partitions;
-  client->get_partitions(partitions, db_name_, tb_name_, max_parts_);
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_partitions(partitions, db_name_, tb_name_, max_parts_);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->get_partitions(partitions, f_db_name, tb_name_, max_parts_);
+  }
   int64_t tmp_ddl_time;
   std::map<String, String>::iterator params_iter;
 
@@ -172,9 +231,18 @@ void UnlockOperation::execute_impl(ThriftHiveMetastoreClient *client)
 
 void AlterTableOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
-  client->alter_table(db_name_, tb_name_, new_table_);
-  LOG_TRACE("alter table operation completed successfully");
+  int ret = OB_SUCCESS;
+  LOG_TRACE("alter table", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()));
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->alter_table(db_name_, tb_name_, new_table_);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->alter_table(f_db_name, tb_name_, new_table_);
+  }
+  LOG_TRACE("alter table operation completed successfully", K(ret));
 }
+
 void GetTableStatisticsOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
@@ -183,6 +251,7 @@ void GetTableStatisticsOperation::execute_impl(ThriftHiveMetastoreClient *client
   ApacheHive::TableStatsRequest request;
   request.dbName = db_name_;
   request.tblName = tb_name_;
+  request.catName = cat_name_;
   request.colNames = column_names_;
   request.engine = "hive";
 
@@ -205,6 +274,7 @@ void GetPartitionsStatisticsOperation::execute_impl(ThriftHiveMetastoreClient *c
   LOG_TRACE("get partitions statistics", K(ret), K(db_name_.c_str()), K(tb_name_.c_str()));
 
   ApacheHive::PartitionsStatsRequest request;
+  request.catName = cat_name_;
   request.dbName = db_name_;
   request.tblName = tb_name_;
   request.colNames = column_names_;
@@ -227,26 +297,39 @@ void GetPartitionsStatisticsOperation::execute_impl(ThriftHiveMetastoreClient *c
 void GetAllPartitionsOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
-  LOG_TRACE("get all partitions for basic stats", K(ret), K(db_name_.c_str()), K(tb_name_.c_str()));
-  client->get_partitions(partitions_, db_name_, tb_name_, -1);
+  LOG_TRACE("get all partitions for basic stats", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()));
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_partitions(partitions_, db_name_, tb_name_, -1);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->get_partitions(partitions_, f_db_name, tb_name_, -1);
+  }
 }
 
 void GetPartitionsByNamesOperation::execute_impl(ThriftHiveMetastoreClient *client)
 {
   int ret = OB_SUCCESS;
-  LOG_TRACE("get partitions by names", K(ret), K(db_name_.c_str()), K(tb_name_.c_str()),
+  LOG_TRACE("get partitions by names", K(ret), K(cat_name_.c_str()), K(db_name_.c_str()), K(tb_name_.c_str()),
             "partition_count", partition_names_.size());
-  client->get_partitions_by_names(partitions_, db_name_, tb_name_, partition_names_);
+  if (cat_name_.empty() || 0 == strcmp(cat_name_.c_str(), HMS_DEFAULT_CATALOG)) {
+    client->get_partitions_by_names(partitions_, db_name_, tb_name_, partition_names_);
+  } else {
+    String f_db_name;
+    format_qualified_db_name(f_db_name, cat_name_, db_name_);
+    client->get_partitions_by_names(partitions_, f_db_name, tb_name_, partition_names_);
+  }
 }
 
 /* --------------------- end of Hive Client Operations ---------------------*/
 /* --------------------- start of ObHiveMetastoreClient ---------------------*/
 ObHiveMetastoreClient::ObHiveMetastoreClient()
     : allocator_(nullptr), socket_(), transport_(), protocol_(), hive_metastore_client_(), uri_(),
-      properties_(), hms_keytab_(), hms_principal_(), hms_krb5conf_(), service_(), server_FQDN_(),
-      state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), conn_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
-      kerberos_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), is_inited_(false), is_opened_(false),
-      last_kinit_ts_(0), client_id_(0), client_pool_(nullptr), is_in_use_(false), socket_timeout_(-1)
+      properties_(), hms_keytab_(), hms_principal_(), hms_krb5conf_(), hms_default_catalog_(),
+      service_(), server_FQDN_(), state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
+      conn_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), kerberos_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
+      is_inited_(false), is_opened_(false), last_kinit_ts_(0), client_id_(0), client_pool_(nullptr),
+      is_in_use_(false), socket_timeout_(-1)
 {
 }
 
@@ -307,6 +390,14 @@ int ObHiveMetastoreClient::setup_hive_metastore_client(const ObString &uri,
                                      hms_krb5conf_,
                                      true))) {
     LOG_WARN("failed to write krb5conf", K(ret));
+  } else if (OB_ISNULL(hive_catalog_properties.default_catalog_)
+             || hive_catalog_properties.default_catalog_.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ob_write_string(*allocator_,
+                                     hive_catalog_properties.default_catalog_,
+                                     hms_default_catalog_,
+                                     true))) {
+    LOG_WARN("failed to write default catalog", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -523,6 +614,9 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
     }
     if (!hms_krb5conf_.empty()) {
       allocator_->free(hms_krb5conf_.ptr());
+    }
+    if (!hms_default_catalog_.empty()) {
+      allocator_->free(hms_default_catalog_.ptr());
     }
     if (!properties_.empty()) {
       allocator_->free(properties_.ptr());
@@ -849,9 +943,14 @@ int ObHiveMetastoreClient::list_db_names(ObIAllocator &allocator, ObIArray<ObStr
 {
   int ret = OB_SUCCESS;
   Strings databases;
-  ListDBNamesOperation op(databases);
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
+  ListDBNamesOperation op(databases, cat_name);
   if (OB_FAIL(try_call_hive_client(op))) {
-    LOG_WARN("failed to call get all databases operation", K(ret));
+    LOG_WARN("failed to call get all databases operation", K(ret), K(cat_name.c_str()));
   } else {
     for (Strings::iterator iter = databases.begin(); OB_SUCC(ret) && iter != databases.end();
          iter++) {
@@ -873,9 +972,14 @@ int ObHiveMetastoreClient::get_database(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   std::shared_ptr<ApacheHive::Database> database = std::make_shared<ApacheHive::Database>();
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String db_name = String(ns_name.ptr(), ns_name.length());
   bool found = false;
-  GetDatabaseOperation op(*database, db_name, found);
+  GetDatabaseOperation op(*database, cat_name, db_name, found);
   if (OB_FAIL(try_call_hive_client(op))) {
     LOG_WARN("failed to call get database operation", K(ret));
   } else if (OB_UNLIKELY(!found)) {
@@ -900,10 +1004,18 @@ int ObHiveMetastoreClient::list_table_names(const ObString &db_name,
   int ret = OB_SUCCESS;
 
   Strings table_names;
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(db_name.ptr(), db_name.length());
-  GetAllTablesOperation op(table_names, d_name);
+  GetAllTablesOperation op(table_names, cat_name, d_name);
   if (OB_FAIL(try_call_hive_client(op))) {
-    LOG_WARN("failed to call get database operation", K(ret));
+    LOG_WARN("failed to call get database operation",
+             K(ret),
+             K(cat_name.c_str()),
+             K(db_name));
   } else {
     for (Strings::iterator iter = table_names.begin(); OB_SUCC(ret) && iter != table_names.end();
          iter++) {
@@ -926,16 +1038,25 @@ int ObHiveMetastoreClient::get_latest_schema_version(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
   bool found = false;
   std::shared_ptr<ApacheHive::Table> table = std::make_shared<ApacheHive::Table>();
-  GetTableOperation table_op(*table, d_name, t_name, found);
+  GetTableOperation table_op(*table, cat_name, d_name, t_name, found);
   if (OB_FAIL(try_call_hive_client(table_op))) {
-    LOG_WARN("failed to call to get table operation", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("failed to call to get table operation",
+             K(ret),
+             K(cat_name.c_str()),
+             K(ns_name),
+             K(tb_name));
   } else if (OB_UNLIKELY(!found)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("failed to find table", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("failed to find table", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   } else {
     schema_version = table->createTime;
     if (OB_LIKELY(table->partitionKeys.empty())) {
@@ -952,9 +1073,13 @@ int ObHiveMetastoreClient::get_latest_schema_version(const ObString &ns_name,
     } else {
       // Fetch the latest partition ddl time.
       int64_t latest_ddl_time = -1;
-      GetLatestPartitionDdlTimeOperation ddl_time_op(latest_ddl_time, d_name, t_name);
+      GetLatestPartitionDdlTimeOperation ddl_time_op(latest_ddl_time, cat_name, d_name, t_name);
       if (OB_FAIL(try_call_hive_client(ddl_time_op))) {
-        LOG_WARN("failed to call to get partition latest ddl time", K(ret), K(ns_name), K(tb_name));
+        LOG_WARN("failed to call to get partition latest ddl time",
+                 K(ret),
+                 K(cat_name.c_str()),
+                 K(ns_name),
+                 K(tb_name));
       } else if (OB_UNLIKELY(-1 == latest_ddl_time)) {
         // DO NOTHING, use table create time as the schema version
       } else if (schema_version < latest_ddl_time) {
@@ -975,19 +1100,23 @@ int ObHiveMetastoreClient::get_table(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
-
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
   bool found = false;
-  GetTableOperation table_op(original_table, d_name, t_name, found);
+  GetTableOperation table_op(original_table, cat_name, d_name, t_name, found);
   if (OB_FAIL(try_call_hive_client(table_op))) {
     LOG_WARN("failed to call to get table operation", K(ret), K(ns_name), K(tb_name));
   } else if (OB_UNLIKELY(!found)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("failed to find out table", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("failed to find out table", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   } else {
-    LOG_TRACE("found original table", K(ret), K(ns_name), K(tb_name));
+    LOG_TRACE("found original table", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   }
   return ret;
 }
@@ -997,12 +1126,16 @@ int ObHiveMetastoreClient::list_partitions(const ObString &ns_name,
                                            Partitions &partitions)
 {
   int ret = OB_SUCCESS;
-
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
-  ListPartitionsOperation partitions_op(partitions, d_name, t_name);
+  ListPartitionsOperation partitions_op(partitions, cat_name, d_name, t_name);
   if (OB_FAIL(try_call_hive_client(partitions_op))) {
-    LOG_WARN("failed to call get table partition name operation", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("failed to call get table partition name operation", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   }
   return ret;
 }
@@ -1016,6 +1149,11 @@ int ObHiveMetastoreClient::list_partition_names(const ObString &ns_name,
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
 
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
   // TODO(bitao): add dynamic max_parts variable
@@ -1024,9 +1162,9 @@ int ObHiveMetastoreClient::list_partition_names(const ObString &ns_name,
   //  p1: year=2025/month=1/day=1
   //  p2: year=2025/month=2/day=1
   //  p3: year=2025/month=3/day=2
-  ListPartitionNamesOperation partition_names_op(partition_names, d_name, t_name);
+  ListPartitionNamesOperation partition_names_op(partition_names, cat_name, d_name, t_name);
   if (OB_FAIL(try_call_hive_client(partition_names_op))) {
-    LOG_WARN("failed to call get table partition name operation", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("failed to call get table partition name operation", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   }
   return ret;
 }
@@ -1039,6 +1177,11 @@ int ObHiveMetastoreClient::get_part_values_rows(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
   if (OB_UNLIKELY(part_keys.empty())) {
@@ -1046,12 +1189,14 @@ int ObHiveMetastoreClient::get_part_values_rows(const ObString &ns_name,
     LOG_WARN("invalid partition keys to get partition value", K(ret));
   } else {
     GetPartitionValuesOperation partition_values_op(partition_values_rows,
+                                                    cat_name,
                                                     d_name,
                                                     t_name,
                                                     part_keys);
     if (OB_FAIL(try_call_hive_client(partition_values_op))) {
       LOG_WARN("failed to execute to get partition values operation",
                K(ret),
+               K(cat_name.c_str()),
                K(ns_name),
                K(tb_name));
     }
@@ -1068,7 +1213,11 @@ int ObHiveMetastoreClient::get_table_statistics(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
-
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
@@ -1080,7 +1229,12 @@ int ObHiveMetastoreClient::get_table_statistics(const ObString &ns_name,
     LOG_WARN("column names should not be empty for table statistics request",
              K(ret), K(ns_name), K(tb_name));
   } else {
-    GetTableStatisticsOperation table_stats_op(table_stats_result, d_name, t_name, column_names, found);
+    GetTableStatisticsOperation table_stats_op(table_stats_result,
+                                               cat_name,
+                                               d_name,
+                                               t_name,
+                                               column_names,
+                                               found);
     if (OB_FAIL(try_call_hive_client(table_stats_op))) {
       LOG_WARN("failed to execute get table statistics operation", K(ret), K(ns_name), K(tb_name));
     } else if (OB_UNLIKELY(!found)) {
@@ -1103,7 +1257,11 @@ int ObHiveMetastoreClient::get_partition_statistics(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
-
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
@@ -1119,14 +1277,31 @@ int ObHiveMetastoreClient::get_partition_statistics(const ObString &ns_name,
     LOG_WARN("partition names should not be empty for partition statistics request",
              K(ret), K(ns_name), K(tb_name));
   } else {
-    GetPartitionsStatisticsOperation partition_stats_op(partition_stats_result, d_name, t_name,
-                                                        column_names, partition_names, found);
+    GetPartitionsStatisticsOperation partition_stats_op(partition_stats_result,
+                                                        cat_name,
+                                                        d_name,
+                                                        t_name,
+                                                        column_names,
+                                                        partition_names,
+                                                        found);
     if (OB_FAIL(try_call_hive_client(partition_stats_op))) {
-      LOG_WARN("failed to execute get partitions statistics operation", K(ret), K(ns_name), K(tb_name));
+      LOG_WARN("failed to execute get partitions statistics operation",
+               K(ret),
+               K(cat_name.c_str()),
+               K(ns_name),
+               K(tb_name));
     } else if (OB_UNLIKELY(!found)) {
-      LOG_TRACE("partition statistics not found", K(ret), K(ns_name), K(tb_name));
+      LOG_TRACE("partition statistics not found",
+                K(ret),
+                K(cat_name.c_str()),
+                K(ns_name),
+                K(tb_name));
     } else {
-      LOG_TRACE("partition statistics operation completed successfully", K(ret), K(ns_name), K(tb_name));
+      LOG_TRACE("partition statistics operation completed successfully",
+                K(ret),
+                K(cat_name.c_str()),
+                K(ns_name),
+                K(tb_name));
     }
   }
 
@@ -1140,7 +1315,11 @@ int ObHiveMetastoreClient::get_table_basic_stats(const ObString &ns_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
-
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
@@ -1150,16 +1329,25 @@ int ObHiveMetastoreClient::get_table_basic_stats(const ObString &ns_name,
 
   ApacheHive::Table table;
   bool found = false;
-  GetTableOperation table_op(table, d_name, t_name, found);
+  GetTableOperation table_op(table, cat_name, d_name, t_name, found);
   if (OB_FAIL(try_call_hive_client(table_op))) {
-    LOG_WARN("failed to execute get table operation", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("failed to execute get table operation",
+             K(ret),
+             K(cat_name.c_str()),
+             K(ns_name),
+             K(tb_name));
   } else if (OB_UNLIKELY(!found)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not found", K(ret), K(ns_name), K(tb_name));
+    LOG_WARN("table not found", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   } else {
     // Extract basic stats from table parameters
     extract_basic_stats_from_parameters(table.parameters, basic_stats);
-    LOG_TRACE("table basic stats extracted", K(ret), K(ns_name), K(tb_name), K(basic_stats));
+    LOG_TRACE("table basic stats extracted",
+              K(ret),
+              K(cat_name.c_str()),
+              K(ns_name),
+              K(tb_name),
+              K(basic_stats));
   }
 
   return ret;
@@ -1174,26 +1362,45 @@ int ObHiveMetastoreClient::get_partition_basic_stats(const ObString &ns_name,
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
 
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(ns_name.ptr(), ns_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
-  LOG_TRACE("get partition basic stats", K(ret), K(ns_name), K(tb_name),
-            "partition_count", partition_names.size());
+  LOG_TRACE("get partition basic stats",
+            K(ret),
+            K(cat_name.c_str()),
+            K(ns_name),
+            K(tb_name),
+            "partition_count",
+            partition_names.size());
 
   partition_basic_stats.clear();
 
   if (OB_UNLIKELY(partition_names.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("partition names should not be empty for partition basic stats request",
-             K(ret), K(ns_name), K(tb_name));
+             K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
   } else {
     // 获取指定分区的信息
     Partitions partitions;
-    GetPartitionsByNamesOperation partitions_op(partitions, d_name, t_name, partition_names);
+    GetPartitionsByNamesOperation partitions_op(partitions,
+                                                cat_name,
+                                                d_name,
+                                                t_name,
+                                                partition_names);
 
     if (OB_FAIL(try_call_hive_client(partitions_op))) {
-      LOG_WARN("failed to call get partitions by names operation", K(ret), K(ns_name), K(tb_name),
-               "partition_count", partition_names.size());
+      LOG_WARN("failed to call get partitions by names operation",
+               K(ret),
+               K(cat_name.c_str()),
+               K(ns_name),
+               K(tb_name),
+               "partition_count",
+               partition_names.size());
     } else {
       partition_basic_stats.reserve(partition_names.size());
 
@@ -1202,13 +1409,28 @@ int ObHiveMetastoreClient::get_partition_basic_stats(const ObString &ns_name,
           ObHiveBasicStats stats;
           extract_basic_stats_from_parameters(partitions[i].parameters, stats);
           partition_basic_stats.push_back(stats);
-          LOG_TRACE("partition basic stats extracted by index", K(ret), K(ns_name), K(tb_name),
-                   "partition_name", partition_names[i].c_str(), "index", i, K(stats));
+          LOG_TRACE("partition basic stats extracted by index",
+                    K(ret),
+                    K(cat_name.c_str()),
+                    K(ns_name),
+                    K(tb_name),
+                    "partition_name",
+                    partition_names[i].c_str(),
+                    "index",
+                    i,
+                    K(stats));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition count mismatch", K(ret), K(ns_name), K(tb_name),
-                 "requested", partition_names.size(), "returned", partitions.size());
+        LOG_WARN("partition count mismatch",
+                 K(ret),
+                 K(cat_name.c_str()),
+                 K(ns_name),
+                 K(tb_name),
+                 "requested",
+                 partition_names.size(),
+                 "returned",
+                 partitions.size());
       }
     }
   }
@@ -1253,11 +1475,15 @@ int ObHiveMetastoreClient::alter_table(const ObString &db_name,
 {
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
-
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(db_name.ptr(), db_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
-  AlterTableOperation alter_op(d_name, t_name, new_table);
+  AlterTableOperation alter_op(cat_name, d_name, t_name, new_table);
   if (OB_FAIL(try_call_hive_client(alter_op))) {
     LOG_WARN("failed to execute alter table operation", K(ret), K(db_name), K(tb_name));
   } else {
@@ -1274,6 +1500,11 @@ int ObHiveMetastoreClient::alter_table_with_lock(const ObString &db_name,
   int ret = OB_SUCCESS;
   UNUSED(case_mode);
 
+  String cat_name;
+  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
+  } else {
+    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
+  }
   String d_name = String(db_name.ptr(), db_name.length());
   String t_name = String(tb_name.ptr(), tb_name.length());
 
@@ -1287,7 +1518,7 @@ int ObHiveMetastoreClient::alter_table_with_lock(const ObString &db_name,
     String h_name = String(svr_ip);
     LOG_TRACE("server ip", K(ret), K(addr));
     // Create alter table operation with user and hostname
-    AlterTableOperation alter_op(d_name, t_name, new_table, u_name, h_name);
+    AlterTableOperation alter_op(cat_name, d_name, t_name, new_table, u_name, h_name);
     // Use lock-aware call method
     if (OB_FAIL(try_call_hive_client_with_lock(alter_op))) {
       LOG_WARN("failed to execute alter table operation with lock",

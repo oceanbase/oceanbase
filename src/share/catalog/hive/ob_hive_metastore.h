@@ -60,6 +60,8 @@ static constexpr int64_t OB_MAX_ACCESS_INFO_LENGTH = 1600;
 const char *const HMS_KEYTAB = "hms_keytab=";
 const char *const HMS_PRINCIPAL = "hms_principal=";
 const char *const HMS_KRB5CONF = "hms_krb5conf=";
+// The default catalog from hive metastore is 'hive' which starts from version 3.0.
+const char *const HMS_DEFAULT_CATALOG = "hive";
 
 struct ObHiveBasicStats
 {
@@ -91,6 +93,7 @@ public:
   virtual ~LockableOperation() = default;
 
   // Basic information required for locking
+  virtual const String& get_cat_name() const = 0;
   virtual const String& get_db_name() const = 0;
   virtual const String& get_table_name() const = 0;
 
@@ -123,7 +126,8 @@ public:
 class ListDBNamesOperation : public ObHiveClientOperation<ListDBNamesOperation>
 {
 public:
-  ListDBNamesOperation(Strings &databases) : databases_(databases)
+  ListDBNamesOperation(Strings &databases, const String &cat_name)
+      : databases_(databases), cat_name_(cat_name)
   {
   }
 
@@ -132,13 +136,17 @@ public:
 
 private:
   Strings &databases_;
+  const String &cat_name_;
 };
 
 class GetDatabaseOperation : public ObHiveClientOperation<GetDatabaseOperation>
 {
 public:
-  GetDatabaseOperation(ApacheHive::Database &db, const String &db_name, bool &found)
-      : db_(db), db_name_(db_name), found_(found)
+  GetDatabaseOperation(ApacheHive::Database &db,
+                       const String &cat_name,
+                       const String &db_name,
+                       bool &found)
+      : db_(db), cat_name_(cat_name), db_name_(db_name), found_(found)
   {
   }
 
@@ -148,6 +156,7 @@ public:
 
 private:
   ApacheHive::Database &db_;
+  const String &cat_name_;
   const String &db_name_;
   bool &found_;
 };
@@ -155,8 +164,8 @@ private:
 class GetAllTablesOperation : public ObHiveClientOperation<GetAllTablesOperation>
 {
 public:
-  GetAllTablesOperation(Strings &tb_names, const String &db_name)
-      : tb_names_(tb_names), db_name_(db_name)
+  GetAllTablesOperation(Strings &tb_names, const String &cat_name, const String &db_name)
+      : tb_names_(tb_names), cat_name_(cat_name), db_name_(db_name)
   {
   }
 
@@ -165,6 +174,7 @@ public:
 
 private:
   Strings &tb_names_;
+  const String &cat_name_;
   const String &db_name_;
 };
 
@@ -172,17 +182,20 @@ class ListPartitionsOperation : public ObHiveClientOperation<ListPartitionsOpera
 {
 public:
   ListPartitionsOperation(Partitions &partitions,
+                          const String &cat_name,
                           const String &db_name,
                           const String &tb_name,
                           const int16_t max_parts)
-      : partitions_(partitions), db_name_(db_name), tb_name_(tb_name), max_parts_(max_parts)
+      : partitions_(partitions), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name),
+        max_parts_(max_parts)
   {
   }
 
   ListPartitionsOperation(Partitions &partitions,
+                          const String &cat_name,
                           const String &db_name,
                           const String &tb_name)
-      : partitions_(partitions), db_name_(db_name), tb_name_(tb_name), max_parts_(-1)
+      : partitions_(partitions), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name), max_parts_(-1)
   {
   }
 
@@ -191,6 +204,7 @@ public:
 
 private:
   Partitions &partitions_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const int16_t max_parts_;
@@ -200,18 +214,20 @@ class ListPartitionNamesOperation : public ObHiveClientOperation<ListPartitionNa
 {
 public:
   ListPartitionNamesOperation(Strings &partition_names,
+                              const String &cat_name,
                               const String &db_name,
                               const String &tb_name,
                               const int16_t max_parts)
-      : partition_names_(partition_names), db_name_(db_name), tb_name_(tb_name),
+      : partition_names_(partition_names), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name),
         max_parts_(max_parts)
   {
   }
 
   ListPartitionNamesOperation(Strings &partition_names,
+                              const String &cat_name,
                               const String &db_name,
                               const String &tb_name)
-      : partition_names_(partition_names), db_name_(db_name), tb_name_(tb_name), max_parts_(-1)
+      : partition_names_(partition_names), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name), max_parts_(-1)
   {
   }
 
@@ -220,6 +236,7 @@ public:
 
 private:
   Strings &partition_names_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const int16_t max_parts_;
@@ -229,10 +246,11 @@ class GetPartitionValuesOperation : public ObHiveClientOperation<GetPartitionVal
 {
 public:
   GetPartitionValuesOperation(PartitionValuesRows &partition_values_rows,
+                              const String &cat_name,
                               const String &db_name,
                               const String &tb_name,
                               const FieldSchemas &partition_keys)
-      : partition_values_rows_(partition_values_rows), db_name_(db_name), tb_name_(tb_name),
+      : partition_values_rows_(partition_values_rows), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name),
         partition_keys_(partition_keys)
   {
   }
@@ -242,6 +260,7 @@ public:
 
 private:
   PartitionValuesRows &partition_values_rows_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const FieldSchemas &partition_keys_;
@@ -251,10 +270,11 @@ class GetTableOperation : public ObHiveClientOperation<GetTableOperation>
 {
 public:
   GetTableOperation(ApacheHive::Table &table,
+                    const String &cat_name,
                     const String &db_name,
                     const String &tb_name,
                     bool &found)
-      : table_(table), db_name_(db_name), tb_name_(tb_name), found_(found),
+      : table_(table), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name), found_(found),
         is_newest_version_(false)
   {
   }
@@ -264,6 +284,7 @@ public:
 
 private:
   ApacheHive::Table &table_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   bool &found_;
@@ -275,18 +296,20 @@ class GetLatestPartitionDdlTimeOperation
 {
 public:
   GetLatestPartitionDdlTimeOperation(int64_t &latest_ddl_time,
+                                     const String &cat_name,
                                      const String &db_name,
                                      const String &tb_name,
                                      const int16_t max_parts)
-      : latest_ddl_time_(latest_ddl_time), db_name_(db_name), tb_name_(tb_name),
+      : latest_ddl_time_(latest_ddl_time), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name),
         max_parts_(max_parts)
   {
   }
 
   GetLatestPartitionDdlTimeOperation(int64_t &latest_ddl_time,
+                                     const String &cat_name,
                                      const String &db_name,
                                      const String &tb_name)
-      : latest_ddl_time_(latest_ddl_time), db_name_(db_name), tb_name_(tb_name), max_parts_(-1)
+      : latest_ddl_time_(latest_ddl_time), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name), max_parts_(-1)
   {
   }
 
@@ -295,6 +318,7 @@ public:
 
 private:
   int64_t &latest_ddl_time_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const int16_t max_parts_;
@@ -338,13 +362,14 @@ class AlterTableOperation : public ObHiveClientOperation<AlterTableOperation>,
                             public LockableOperation
 {
 public:
-  AlterTableOperation(const String &db_name,
+  AlterTableOperation(const String &cat_name,
+                      const String &db_name,
                       const String &tb_name,
                       const ApacheHive::Table &new_table,
                       const String &user = "oceanbase",
                       const String &hostname = "localhost")
-      : db_name_(db_name), tb_name_(tb_name), new_table_(new_table), user_(user),
-        hostname_(hostname)
+      : cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name), new_table_(new_table),
+        user_(user), hostname_(hostname)
   {
   }
 
@@ -352,6 +377,10 @@ public:
   void execute_impl(ThriftHiveMetastoreClient *client);
 
   // Implement LockableOperation interfaces.
+  const String &get_cat_name() const override
+  {
+    return cat_name_;
+  }
   const String &get_db_name() const override
   {
     return db_name_;
@@ -391,6 +420,7 @@ public:
   }
 
 private:
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const ApacheHive::Table &new_table_;
@@ -401,11 +431,12 @@ class GetTableStatisticsOperation : public ObHiveClientOperation<GetTableStatist
 {
 public:
   GetTableStatisticsOperation(ApacheHive::TableStatsResult &table_stats_result,
+                              const String &cat_name,
                               const String &db_name,
                               const String &tb_name,
                               const std::vector<std::string> &column_names,
                               bool &found)
-      : table_stats_result_(table_stats_result), db_name_(db_name), tb_name_(tb_name),
+      : table_stats_result_(table_stats_result), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name),
         column_names_(column_names), found_(found)
   {
   }
@@ -415,6 +446,7 @@ public:
 
 private:
   ApacheHive::TableStatsResult &table_stats_result_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const std::vector<std::string> &column_names_;
@@ -425,12 +457,13 @@ class GetPartitionsStatisticsOperation : public ObHiveClientOperation<GetPartiti
 {
 public:
   GetPartitionsStatisticsOperation(ApacheHive::PartitionsStatsResult &partition_stats_result,
+                                   const String &cat_name,
                                    const String &db_name,
                                    const String &tb_name,
                                    const std::vector<std::string> &column_names,
                                    const std::vector<std::string> &partition_names,
                                    bool &found)
-      : partition_stats_result_(partition_stats_result), db_name_(db_name), tb_name_(tb_name),
+      : partition_stats_result_(partition_stats_result), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name),
         column_names_(column_names), partition_names_(partition_names), found_(found)
   {
   }
@@ -440,6 +473,7 @@ public:
 
 private:
   ApacheHive::PartitionsStatsResult &partition_stats_result_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const std::vector<std::string> &column_names_;
@@ -451,9 +485,10 @@ class GetAllPartitionsOperation : public ObHiveClientOperation<GetAllPartitionsO
 {
 public:
   GetAllPartitionsOperation(Partitions &partitions,
+                           const String &cat_name,
                            const String &db_name,
                            const String &tb_name)
-      : partitions_(partitions), db_name_(db_name), tb_name_(tb_name)
+      : partitions_(partitions), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name)
   {
   }
 
@@ -462,6 +497,7 @@ public:
 
 private:
   Partitions &partitions_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
 };
@@ -470,10 +506,11 @@ class GetPartitionsByNamesOperation : public ObHiveClientOperation<GetPartitions
 {
 public:
   GetPartitionsByNamesOperation(Partitions &partitions,
+                               const String &cat_name,
                                const String &db_name,
                                const String &tb_name,
                                const std::vector<std::string> &partition_names)
-      : partitions_(partitions), db_name_(db_name), tb_name_(tb_name), partition_names_(partition_names)
+      : partitions_(partitions), cat_name_(cat_name), db_name_(db_name), tb_name_(tb_name), partition_names_(partition_names)
   {
   }
 
@@ -482,6 +519,7 @@ public:
 
 private:
   Partitions &partitions_;
+  const String &cat_name_;
   const String &db_name_;
   const String &tb_name_;
   const std::vector<std::string> &partition_names_;
@@ -626,6 +664,7 @@ private:
   ObString hms_keytab_;
   ObString hms_principal_;
   ObString hms_krb5conf_;
+  ObString hms_default_catalog_;
   ObString service_;
   ObString server_FQDN_;
 

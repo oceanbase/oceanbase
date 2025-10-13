@@ -227,6 +227,18 @@ int ObHMSClientPool::get_client(ObHiveMetastoreClient *&client)
         } else if (OB_KERBEROS_ERROR == tmp_ret) {
           ret = OB_KERBEROS_ERROR;
           LOG_WARN("failed to get or create client due to kerberos error", K(ret));
+        } else if (OB_HMS_ERROR == tmp_ret) {
+          ret = OB_HMS_ERROR;
+          LOG_WARN("failed to get or create client due to hms error", K(ret));
+        } else if (OB_ALLOCATE_MEMORY_FAILED == tmp_ret) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to get or create client due to allocate memory failed", K(ret));
+        } else if (OB_INVALID_ARGUMENT == tmp_ret) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("failed to get or create client due to invalid argument", K(ret));
+        } else if (OB_NOT_SUPPORTED == tmp_ret) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("failed to get or create client due to not supported", K(ret));
         } else {
           LOG_WARN("failed to get or create client", K(ret), K(tmp_ret));
         }
