@@ -24,6 +24,7 @@ namespace storage
 template<typename PrefetchType>
 ObSSTableRowScanner<PrefetchType>::~ObSSTableRowScanner()
 {
+  storage::ObIndexSkipScanFactory::destroy_index_skip_scanner(skip_scanner_);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, micro_data_scanner_, ObMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_micro_data_scanner_, ObMultiVersionMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_di_micro_data_scanner_, ObMultiVersionDIMicroBlockRowScanner);
@@ -32,6 +33,7 @@ ObSSTableRowScanner<PrefetchType>::~ObSSTableRowScanner()
 template<typename PrefetchType>
 void ObSSTableRowScanner<PrefetchType>::reset()
 {
+  storage::ObIndexSkipScanFactory::destroy_index_skip_scanner(skip_scanner_);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, micro_data_scanner_, ObMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_micro_data_scanner_, ObMultiVersionMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_di_micro_data_scanner_, ObMultiVersionDIMicroBlockRowScanner);
@@ -44,11 +46,15 @@ void ObSSTableRowScanner<PrefetchType>::reset()
   micro_scanner_ = nullptr;
   prefetcher_.reset();
   ObStoreRowIterator::reset();
+  skip_state_.reset();
 }
 
 template<typename PrefetchType>
 void ObSSTableRowScanner<PrefetchType>::reuse()
 {
+  if (nullptr != skip_scanner_) {
+    skip_scanner_->reuse();
+  }
   ObStoreRowIterator::reuse();
   is_opened_ = false;
   is_di_base_iter_ = false;
@@ -68,11 +74,13 @@ void ObSSTableRowScanner<PrefetchType>::reuse()
   micro_scanner_ = nullptr;
   sstable_ = nullptr;
   prefetcher_.reuse();
+  skip_state_.reset();
 }
 
 template<typename PrefetchType>
 void ObSSTableRowScanner<PrefetchType>::reclaim()
 {
+  storage::ObIndexSkipScanFactory::destroy_index_skip_scanner(skip_scanner_);
   is_opened_ = false;
   is_di_base_iter_ = false;
   cur_range_idx_ = -1;
@@ -92,6 +100,7 @@ void ObSSTableRowScanner<PrefetchType>::reclaim()
   access_ctx_ = nullptr;
   ObStoreRowIterator::reset();
   is_reclaimed_ = true;
+  skip_state_.reset();
 }
 
 template<typename PrefetchType>
@@ -160,6 +169,13 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
                           prefetcher_.get_index_prefetch_depth(),
                           prefetcher_.get_micro_data_pefetch_depth()))) {
         LOG_WARN("Failed to build row id handle", K(ret), KPC(sample_executor));
+      } else if (OB_UNLIKELY(iter_param.is_skip_scan() &&
+                 OB_FAIL(ObIndexSkipScanFactory::build_index_skip_scanner(iter_param,
+                                                                          access_ctx,
+                                                                          static_cast<const ObDatumRange *>(query_range),
+                                                                          skip_scanner_)))) {
+        LOG_WARN("failed to build index skip scanner", K(ret));
+      } else if (FALSE_IT(prefetcher_.skip_scanner_ = skip_scanner_)) {
       } else if (OB_FAIL(prefetcher_.prefetch())) {
         LOG_WARN("ObSSTableRowScanner prefetch failed", K(ret));
       } else {
@@ -246,7 +262,20 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
     if (OB_SUCC(ret)) {
       bool can_blockscan = false;
       ObMicroBlockData block_data;
-      if (OB_FAIL(micro_handle.get_micro_block_data(&macro_block_reader_, block_data))) {
+      if (OB_UNLIKELY(has_skip_scanner())) {
+        if (access_ctx_->query_flag_.is_reverse_scan()) {
+          const ObIndexSkipState *next_state = prefetcher_.get_next_skip_state();
+          if (nullptr != next_state) {
+            if (OB_FAIL(skip_scanner_->skip(micro_info, *next_state, micro_info.skip_state_))) {
+              LOG_WARN("fail to skip endkey", K(ret));
+            }
+          }
+        } else if (OB_FAIL(skip_scanner_->skip(micro_info, skip_state_, micro_info.skip_state_))) {
+          LOG_WARN("fail to skip endkey", K(ret));
+        }
+      }
+      if (OB_FAIL(ret) || micro_info.skip_state_.is_skipped()) {
+      } else if (OB_FAIL(micro_handle.get_micro_block_data(&macro_block_reader_, block_data))) {
         LOG_WARN("Fail to get block data", K(ret), K(micro_handle));
       } else if (OB_FAIL(micro_scanner_->open(
                   micro_handle.macro_block_id_,
@@ -266,14 +295,14 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
           sample_executor->set_block_row_range(prefetcher_.cur_micro_data_fetch_idx_,
                                                micro_scanner_->get_current_pos(),
                                                micro_scanner_->get_last_pos(),
-                                               prefetcher_.current_micro_info().get_row_count());
+                                               micro_info.get_row_count());
         }
         if (nullptr != filter) {
           micro_info.pre_process_filter(*filter);
         }
         if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->reset_agg_row_id())) {
           LOG_WARN("Fail to reset agg row id", K(ret));
-        } else if (OB_FAIL(micro_scanner_->apply_filter(can_blockscan))) {
+        } else if (!has_skip_scanner() && OB_FAIL(micro_scanner_->apply_filter(can_blockscan))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to apply filter", K(ret));
           } else {
@@ -293,8 +322,13 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
         LOG_TRACE("[PUSHDOWN] pushdown for block scan", K(prefetcher_.cur_micro_data_fetch_idx_), K(micro_info), KPC(block_row_store_));
       }
       if (OB_SUCC(ret)) {
-        access_ctx_->inc_micro_access_cnt();
-        REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_scanner_->get_data_length());
+        if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(micro_info) &&
+                        OB_FAIL(skip_scanner_->skip(*micro_scanner_, micro_info, true/*first*/)))) {
+          LOG_WARN("Fail to skip rows", K(ret));
+        } else {
+          access_ctx_->inc_micro_access_cnt();
+          REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_scanner_->get_data_length());
+        }
         LOG_DEBUG("Success to open micro block", K(ret), K(read_handle), K(prefetcher_.cur_micro_data_fetch_idx_),
                   K(micro_info), K(micro_handle), KPC(this), K(common::lbt()));
       }
@@ -414,6 +448,11 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
       if (OB_FAIL(micro_scanner_->get_next_row(store_row))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next row", K(ret));
+        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()) &&
+                   OB_FAIL(skip_scanner_->skip(*micro_scanner_, prefetcher_.current_micro_info())))) {
+          LOG_WARN("Fail to switch prefix", K(ret));
+        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()))) {
+          LOG_DEBUG("[INDEX SKIP SCAN] skip to next prefix and it has data, continue get row");
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
           ret = OB_ITER_END;
           if (ObStoreRowIterator::IteratorRowLockAndDuplicationCheck == type_ ||
@@ -525,6 +564,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
     }
 
     bool need_prefetch = false;
+    blocksstable::ObMicroIndexInfo &micro_info = prefetcher_.current_micro_info();
     while (OB_SUCC(ret) && !block_row_store_->is_end()) {
       if (OB_SUCCESS == micro_scanner_->end_of_block() && !can_batch_scan()) {
         if (!is_di_base_iter_) {
@@ -536,6 +576,11 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
       } else if (OB_FAIL(micro_scanner_->get_next_rows())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next row", K(ret));
+        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()) &&
+                   OB_FAIL(skip_scanner_->skip(*micro_scanner_, prefetcher_.current_micro_info())))) {
+          LOG_WARN("Fail to switch prefix", K(ret));
+        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()))) {
+          LOG_DEBUG("[INDEX SKIP SCAN] skip to next prefix and it has data, continue get rows");
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
           ret = OB_ITER_END;
           LOG_DEBUG("[INDEX BLOCK] Open data block handle iter end", K(ret),

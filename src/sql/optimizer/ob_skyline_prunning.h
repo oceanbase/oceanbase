@@ -55,6 +55,11 @@ public:
    * */
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const = 0;
   Dimension get_dim_type() const { return dim_type_; }
+  static int add_column_ids(common::ObIArray<uint64_t> &dst_column_ids,
+                            const common::ObIArray<uint64_t> &src_column_ids);
+  static int compare_columns(const common::ObIArray<uint64_t> &left_column_ids,
+                             const common::ObIArray<uint64_t> &right_column_ids,
+                             CompareStat &status);
   static const int64_t DIM_COUNT = static_cast<int64_t>(MAX_DIM);;
   VIRTUAL_TO_STRING_KV(K(dim_type_));
 private:
@@ -91,12 +96,9 @@ public:
   friend class ObOptimizerTraceImpl;
   ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
     is_interesting_order_(false),
-    column_cnt_(0),
     need_index_back_(false),
-    can_extract_range_(false),
-    filter_column_cnt_(0)
-  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-    MEMSET(filter_column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER); }
+    can_extract_range_(false)
+  { }
   virtual ~ObInterestOrderDim() {}
   void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
@@ -106,22 +108,18 @@ public:
   int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
-               K_(column_cnt),
-               "column_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_),
+               "column_ids", column_ids_,
                K_(need_index_back),
                K_(can_extract_range),
-               K_(filter_column_cnt),
-               "filter column_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+               "filter column_ids", filter_column_ids_);
 private:
   bool is_interesting_order_;
-  int64_t column_cnt_;
-  uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
-  bool const_column_info_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
+  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> column_ids_;
+  common::ObSEArray<bool, 8, common::ModulePageAllocator, true> const_column_info_;
   // some filter conditions on index columns
   bool need_index_back_;
   bool can_extract_range_;
-  int64_t filter_column_cnt_;
-  uint64_t filter_column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
+  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> filter_column_ids_;
 };
 
 //consider query range subset
@@ -136,19 +134,37 @@ class ObQueryRangeDim: public ObSkylineDim
 public:
   friend class ObOptimizerTraceImpl;
   ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE),
-    column_cnt_(0),
-    contain_always_false_(false)
-  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);}
-  virtual ~ObQueryRangeDim() {}
+    contain_always_false_(false),
+    skip_scan_comparable_(false)
+  { }
+  virtual ~ObQueryRangeDim() = default;
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
-  int add_rowkey_ids(const common::ObIArray<uint64_t> &column_ids);
+
+  int add_range_column_ids(const common::ObIArray<uint64_t> &column_ids) {
+    return add_column_ids(range_column_ids_, column_ids);
+  }
+  int add_ss_range_column_ids(const common::ObIArray<uint64_t> &column_ids) {
+    return add_column_ids(ss_range_column_ids_, column_ids);
+  }
+  int add_ss_offset_column_ids(const common::ObIArray<uint64_t> &column_ids) {
+    return add_column_ids(ss_offset_column_ids_, column_ids);
+  }
   void set_contain_always_false(bool contain_always_false) { contain_always_false_ = contain_always_false; }
-  VIRTUAL_TO_STRING_KV(K_(column_cnt), K_(contain_always_false),
-               "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
-private:
-  int64_t column_cnt_;
-  uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
+  void set_skip_scan_comparable(bool comparable) { skip_scan_comparable_ = comparable; }
+
+  VIRTUAL_TO_STRING_KV(
+    K(get_dim_type()),
+    K_(range_column_ids),
+    K_(ss_range_column_ids),
+    K_(ss_offset_column_ids),
+    K_(contain_always_false),
+    K_(skip_scan_comparable));
+protected:
+  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> range_column_ids_;
+  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ss_range_column_ids_;
+  ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ss_offset_column_ids_;
   bool contain_always_false_;
+  bool skip_scan_comparable_;
 };
 
 class ObUniqueRangeDim: public ObSkylineDim
@@ -204,14 +220,14 @@ private:
 struct KeyPrefixComp
 {
   KeyPrefixComp() : status_(ObSkylineDim::UNCOMPARABLE) {}
-  int operator()(const uint64_t *left, const bool *left_const,
-                 const int64_t left_cnt, const uint64_t *right,
-                 const bool *right_const, const int64_t right_cnt);
+  int operator()(const ObIArrayWrap<uint64_t> &left, const ObIArrayWrap<bool> &left_const,
+                 const ObIArrayWrap<uint64_t> &right, const ObIArrayWrap<bool> &right_const);
   ObSkylineDim::CompareStat get_result() { return status_; }
 private:
-  static int do_compare(const uint64_t *left, const int64_t left_cnt,
-                        const uint64_t *right, const bool *right_const,
-                        const int64_t right_cnt, ObSkylineDim::CompareStat &status);
+  static int do_compare(const ObIArrayWrap<uint64_t> &left,
+                        const ObIArrayWrap<uint64_t> &right,
+                        const ObIArrayWrap<bool> &right_const,
+                        ObSkylineDim::CompareStat &status);
   ObSkylineDim::CompareStat status_;
 };
 
@@ -219,12 +235,11 @@ struct RangeSubsetComp
 {
 public:
   RangeSubsetComp() : status_(ObSkylineDim::UNCOMPARABLE) {}
-  int operator()(const uint64_t *left, const int64_t left_cnt,
-                 const uint64_t *right, const int64_t right_cnt);
+  int operator()(const ObIArrayWrap<uint64_t> &left, const ObIArrayWrap<uint64_t> &right);
   ObSkylineDim::CompareStat get_result() { return status_; }
 private:
-  static int do_compare(const uint64_t *left, const int64_t left_cnt,
-                        const uint64_t *right, const int64_t right_cnt,
+  static int do_compare(const ObIArrayWrap<uint64_t> &left,
+                        const ObIArrayWrap<uint64_t> &right,
                         ObSkylineDim::CompareStat &status);
   ObSkylineDim::CompareStat status_;
 };
@@ -253,8 +268,11 @@ public:
                                 const common::ObIArray<bool> &const_column_info,
                                 common::ObIAllocator &allocator);
   int add_query_range_dim(const common::ObIArray<uint64_t> &prefix_range_ids,
+                          const common::ObIArray<uint64_t> &ss_range_ids,
+                          const common::ObIArray<uint64_t> &ss_offset_ids,
                           common::ObIAllocator &allocator,
-                          bool contain_always_false);
+                          bool contain_always_false,
+                          bool skip_scan_comparable);
   int add_unique_range_dim(int64_t range_cnt, ObIAllocator &allocator);
   int add_sharding_info_dim(ObShardingInfo *sharding_info, bool is_single_get, bool is_global_index, bool is_index_back, bool can_extract_range, ObIAllocator &allocator);
   bool can_prunning() const { return can_prunning_; }

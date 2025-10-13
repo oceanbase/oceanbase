@@ -10554,9 +10554,11 @@ int ObQueryRange::set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &col
 
 int ObQueryRange::get_prefix_info(int64_t &equal_prefix_count,
                                   int64_t &range_prefix_count,
+                                  int64_t &ss_range_prefix_count,
                                   bool &contain_always_false) const
 {
   int ret = OB_SUCCESS;
+  ss_range_prefix_count = 0; // TODO
   if (OB_ISNULL(get_table_grapth().key_part_head_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("table_graph.key_part_head_ is not inited.", K(ret));

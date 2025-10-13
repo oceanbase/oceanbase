@@ -1553,7 +1553,8 @@ struct MergeKeyInfoHelper
                                const common::ObIArray<uint64_t> &valid_index_ids,
                                common::ObIArray<uint64_t> &skyline_index_ids,
                                ObIArray<ObRawExpr *> &restrict_infos,
-                               bool ignore_index_back_dim = false);
+                               bool ignore_index_back_dim = false,
+                               ObIArray<OptSkipScanState> *skip_scan_states = nullptr);
 
     int pruning_unstable_access_path(const uint64_t table_id,
                                      const uint64_t ref_table_id,
@@ -1577,7 +1578,8 @@ struct MergeKeyInfoHelper
                            ObIArray<ObRawExpr *> &restrict_infos,
                            bool use_unique_index,
                            bool ignore_order_dim,
-                           bool ignore_index_back_dim = false);
+                           bool ignore_index_back_dim,
+                           OptSkipScanState skip_scan_states);
     int is_vector_inv_index_tid(const uint64_t index_table_id, bool& is_vec_tid);
 
     int fill_index_info_entry(const uint64_t table_id,
@@ -2000,6 +2002,7 @@ struct MergeKeyInfoHelper
                            const uint64_t ref_id,
                            const uint64_t index_id,
                            const ObIndexInfoCache &index_info_cache,
+                           const bool use_column_store,
                            PathHelper &helper,
                            ObSQLSessionInfo *session_info,
                            OptSkipScanState &use_skip_scan);
@@ -2176,6 +2179,8 @@ struct MergeKeyInfoHelper
                                       const ObIndexInfoCache &index_info_cache,
                                       bool &contain_always_false,
                                       common::ObIArray<uint64_t> &prefix_range_ids,
+                                      common::ObIArray<uint64_t> &ss_offset_ids,
+                                      common::ObIArray<uint64_t> &ss_range_ids,
                                       ObIArray<ObRawExpr *> &restrict_infos);
 
     /**

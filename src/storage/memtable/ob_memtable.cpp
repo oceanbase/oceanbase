@@ -923,6 +923,10 @@ int ObMemtable::scan(const ObTableIterParam &param,
       // allocate iterator for mini/minor mege
       ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObMemtableMultiVersionScanIterator, scan_iter_ptr);
       query_range = &m_get_real_range(real_range, range, context.query_flag_.is_reverse_scan());
+    } else if (OB_UNLIKELY(param.is_skip_scan())) {
+      // allocate iterator for table skip scan
+      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObMemtableSkipScanIterator, scan_iter_ptr);
+      query_range = &range;
     } else {
       // allocate iterator for table scan
       ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObMemtableScanIterator, scan_iter_ptr);

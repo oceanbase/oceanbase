@@ -35,6 +35,7 @@ public:
       equal_prefix_count_(0),
       equal_prefix_null_count_(0),
       range_prefix_count_(0),
+      ss_range_prefix_count_(0),
       index_column_count_(0),
       range_columns_(),
       expr_constraints_(),
@@ -57,6 +58,7 @@ public:
   uint64_t get_equal_prefix_count() const { return equal_prefix_count_; };
   uint64_t get_equal_prefix_null_count() const { return equal_prefix_null_count_; };
   uint64_t get_range_prefix_count() const { return range_prefix_count_; };
+  uint64_t get_ss_range_prefix_count() const { return ss_range_prefix_count_; };
   uint64_t get_index_column_count() const { return index_column_count_; };
   bool get_contain_always_false() const { return contain_always_false_; }
   
@@ -95,6 +97,8 @@ public:
   { equal_prefix_null_count_ = equal_prefix_null_count; }
   void set_range_prefix_count(const int64_t range_prefix_count)
   { range_prefix_count_ = range_prefix_count; }
+  void set_ss_range_prefix_count(const int64_t ss_range_prefix_count)
+  { ss_range_prefix_count_ = ss_range_prefix_count; }
   void set_index_column_count(const int64_t index_column_count)
   { index_column_count_ = index_column_count; };
   void set_contain_always_false(const bool contain_always_false)
@@ -121,6 +125,7 @@ private:
   int64_t equal_prefix_count_;
   int64_t equal_prefix_null_count_;
   int64_t range_prefix_count_;
+  int64_t ss_range_prefix_count_;
   int64_t index_column_count_; // index column count without adding primary key
   common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true> range_columns_;
   common::ObSEArray<ObExprConstraint, 8, common::ModulePageAllocator, true> expr_constraints_;

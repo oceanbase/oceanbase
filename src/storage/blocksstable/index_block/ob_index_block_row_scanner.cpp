@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_index_block_row_scanner.h"
 #include "storage/access/ob_rows_info.h"
+#include "storage/access/ob_index_skip_scanner.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
@@ -372,6 +373,7 @@ bool ObIndexBlockIterParam::is_valid() const
 ObIndexBlockRowIterator::ObIndexBlockRowIterator()
   : is_inited_(false),
     is_reverse_scan_(false),
+    skip_state_(),
     iter_step_(1),
     idx_row_parser_(),
     datum_utils_(nullptr)
@@ -386,11 +388,17 @@ ObIndexBlockRowIterator::~ObIndexBlockRowIterator()
 
 void ObIndexBlockRowIterator::reset()
 {
+  skip_state_.reset();
   iter_step_ = 1;
   datum_utils_ = nullptr;
   is_reverse_scan_ = false;
   idx_row_parser_.reset();
   is_inited_ = false;
+}
+
+void ObIndexBlockRowIterator::reuse()
+{
+  skip_state_.reset();
 }
 
 /******************             ObRAWIndexBlockRowIterator              **********************/
@@ -433,6 +441,7 @@ void ObRAWIndexBlockRowIterator::reset()
 
 void ObRAWIndexBlockRowIterator::reuse()
 {
+  ObIndexBlockRowIterator::reuse();
   current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   end_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
@@ -1567,36 +1576,48 @@ int ObIndexBlockRowScanner::open(const MacroBlockId &macro_id,
 int ObIndexBlockRowScanner::get_next(
     ObMicroIndexInfo &idx_block_row,
     const bool is_multi_check,
-    const bool is_sorted_multi_get)
+    const bool is_sorted_multi_get,
+    storage::ObIndexSkipScanner *skip_scanner)
 {
   int ret = OB_SUCCESS;
   idx_block_row.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
-  } else if (end_of_block()) {
-    ret = OB_ITER_END;
-  } else if (is_multi_check && OB_FAIL(skip_to_next_valid_position(idx_block_row))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("Failed to skip to next valid position", K(ret), K(curr_rowkey_begin_idx_), K(rowkey_end_idx_), KPC(rows_info_));
-    } else if (OB_ISNULL(iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter is null", K(index_format_), K(ret));
-    } else {
-      iter_->set_iter_end();
-    }
-  } else if (OB_FAIL(get_next_idx_row(idx_block_row))) {
-    LOG_WARN("Failed to get next idx row", K(ret), K(is_multi_check));
-  } else if (is_sorted_multi_get) {
-    idx_block_row.rowkeys_info_ = rowkeys_info_;
-    idx_block_row.rowkey_begin_idx_ = curr_rowkey_begin_idx_;
-    idx_block_row.rowkey_end_idx_ = curr_rowkey_begin_idx_ + 1;
-    if (OB_ISNULL(iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter is null", K(index_format_), K(ret));
-    } else if (OB_FAIL(iter_->find_rowkeys_belong_to_curr_idx_row(idx_block_row, rowkey_end_idx_, rowkeys_info_))) {
-      LOG_WARN("Failed to find rowkeys", K(ret));
-    }
+  } else {
+    const bool has_skip_scanner = nullptr != skip_scanner && !skip_scanner->is_disabled();
+    do {
+      if (end_of_block()) {
+        ret = OB_ITER_END;
+      } else if (is_multi_check && OB_FAIL(skip_to_next_valid_position(idx_block_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("Failed to skip to next valid position", K(ret), K(curr_rowkey_begin_idx_), K(rowkey_end_idx_), KPC(rows_info_));
+        } else if (OB_ISNULL(iter_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter is null", K(index_format_), K(ret));
+        } else {
+          iter_->set_iter_end();
+        }
+      } else if (OB_FAIL(get_next_idx_row(idx_block_row))) {
+        LOG_WARN("Failed to get next idx row", K(ret), K(is_multi_check));
+      } else if (is_sorted_multi_get) {
+        idx_block_row.rowkeys_info_ = rowkeys_info_;
+        idx_block_row.rowkey_begin_idx_ = curr_rowkey_begin_idx_;
+        idx_block_row.rowkey_end_idx_ = curr_rowkey_begin_idx_ + 1;
+        if (OB_ISNULL(iter_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("iter is null", K(index_format_), K(ret));
+        } else if (OB_FAIL(iter_->find_rowkeys_belong_to_curr_idx_row(idx_block_row, rowkey_end_idx_, rowkeys_info_))) {
+          LOG_WARN("Failed to find rowkeys", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && has_skip_scanner) {
+        ObIndexSkipState &skip_state = iter_->get_skip_state();
+        if (OB_FAIL(skip_scanner->skip(idx_block_row, skip_state, idx_block_row.skip_state_))) {
+          LOG_WARN("failed to check skip scanner", K(ret), K(idx_block_row.endkey_));
+        }
+      }
+    } while (OB_SUCC(ret) && has_skip_scanner && idx_block_row.skip_state_.is_skipped());
   }
   return ret;
 }

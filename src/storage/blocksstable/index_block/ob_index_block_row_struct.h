@@ -21,6 +21,7 @@
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/blocksstable/index_block/ob_agg_row_struct.h"
 #include "storage/column_store/ob_column_store_util.h"
+#include "storage/access/ob_index_skip_scanner.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 
 namespace oceanbase
@@ -479,7 +480,8 @@ public:
       nested_offset_(0),
       cs_row_range_(),
       skipping_filter_results_(),
-      table_read_info_(nullptr)
+      table_read_info_(nullptr),
+      skip_state_()
   {
   }
   OB_INLINE void reset()
@@ -498,6 +500,7 @@ public:
     cs_row_range_.reset();
     skipping_filter_results_.reset();
     table_read_info_ = nullptr;
+    skip_state_.reset();
   }
   OB_INLINE bool is_valid() const
   {
@@ -779,7 +782,7 @@ public:
   TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), K_(endkey), KP_(ps_node),
       KP_(agg_row_buf), K_(agg_buf_size), K_(flag), K_(range_idx), K_(parent_macro_id),
       K_(nested_offset), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(cs_row_range),
-      K_(skipping_filter_results), KP_(table_read_info));
+      K_(skipping_filter_results), KP_(table_read_info), K_(skip_state));
 
 public:
   const ObIndexBlockRowHeader *row_header_;
@@ -819,6 +822,7 @@ public:
   ObCSRange cs_row_range_;
   ObSkippingFilterResults skipping_filter_results_;
   const ObITableReadInfo *table_read_info_;
+  ObIndexSkipState skip_state_;
 };
 
 

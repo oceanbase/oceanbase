@@ -24,6 +24,7 @@
 #include "storage/memtable/mvcc/ob_keybtree.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/access/ob_simple_rows_merger.h"
+#include "storage/access/ob_index_skip_scanner.h"
 #include "share/cache/ob_kvcache_pointer_swizzle.h"
 namespace oceanbase
 {
@@ -139,7 +140,7 @@ public:
   ObIndexBlockRowIterator();
   virtual ~ObIndexBlockRowIterator();
   virtual void reset();
-  virtual void reuse() = 0;
+  virtual void reuse();
   virtual int init(const ObMicroBlockData &idx_block_data,
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
@@ -187,12 +188,17 @@ public:
     datum_utils_ = datum_utils;
     return OB_SUCCESS;
   }
+  OB_INLINE ObIndexSkipState &get_skip_state()
+  {
+    return skip_state_;
+  }
   bool is_inited() { return is_inited_; }
-  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_reverse_scan_), K(iter_step_), KPC(datum_utils_));
+  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_reverse_scan_), K_(skip_state), K(iter_step_), KPC(datum_utils_));
 
 protected:
   bool is_inited_;
   bool is_reverse_scan_;
+  ObIndexSkipState skip_state_;
   int64_t iter_step_;
   ObIndexBlockRowParser idx_row_parser_;
   const ObStorageDatumUtils *datum_utils_;
@@ -368,7 +374,8 @@ public:
   int get_next(
       ObMicroIndexInfo &idx_block_row,
       const bool is_multi_check = false,
-      const bool is_sorted_multi_get = false);
+      const bool is_sorted_multi_get = false,
+      storage::ObIndexSkipScanner *skip_scanner = nullptr);
   void set_iter_param(const ObSSTable *sstable,
                       const ObTablet *tablet);
   bool end_of_block() const;

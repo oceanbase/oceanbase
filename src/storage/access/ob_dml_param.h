@@ -163,7 +163,11 @@ public:
     return  snapshot_.valid_ && ObVTableScanParam::is_valid() && (!is_mds_query_ || nullptr != mds_collector_);
   }
   OB_INLINE bool use_index_skip_scan() const {
-    return (1 == ss_key_ranges_.count()) && (!ss_key_ranges_.at(0).is_whole_range());
+    return 1 == ss_key_ranges_.count() &&
+           !ss_key_ranges_.at(0).is_whole_range() &&
+           sample_info_.is_no_sample() &&
+           !is_mview_query() &&
+           scan_flag_.is_ordered_scan(); // not mow query(ObQueryFlag::NoOrder)
   }
   OB_INLINE bool is_mview_query() const {
     return nullptr != op_filters_ && scan_flag_.is_mr_mview_query();

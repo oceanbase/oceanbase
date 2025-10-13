@@ -82,6 +82,7 @@ public:
   virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const = 0;
   virtual int get_prefix_info(int64_t &equal_prefix_count,
                               int64_t &range_prefix_count,
+                              int64_t &ss_range_prefix_count,
                               bool &contain_always_false) const = 0;
 
   // to string

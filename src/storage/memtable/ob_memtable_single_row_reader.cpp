@@ -103,12 +103,12 @@ int ObMemtableSingleRowReader::init_a_new_range(const ObDatumRange &new_range_to
   } else if (OB_FAIL(ObMemtableKey::build(start_key,
                                           *out_cols,
                                           &real_range.get_start_key().get_store_rowkey(),
-                                          *context_->get_range_allocator()))) {
+                                          *context_->allocator_))) {
     TRANS_LOG(WARN, "start key build fail", K(param_->table_id_), K(real_range));
   } else if (OB_FAIL(ObMemtableKey::build(end_key,
                                           *out_cols,
                                           &real_range.get_end_key().get_store_rowkey(),
-                                          *context_->get_range_allocator()))) {
+                                          *context_->allocator_))) {
     TRANS_LOG(WARN, "end key build fail", K(param_->table_id_), K(real_range));
   } else {
     ObMvccEngine& mvcc_engine = memtable_->get_mvcc_engine();

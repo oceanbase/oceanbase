@@ -46,6 +46,7 @@ class QueryRangeInfo;
 #define OPT_CTX (get_plan()->get_optimizer_context())
 
 ERRSIM_POINT_DEF(EN_FORCE_INDEX_MERGE_PLAN, "Force to use index merge if it is possible");
+ERRSIM_POINT_DEF(EN_FORCE_INDEX_SKIP_SCAN_PLAN, "Force to use index skip scan if it is possible");
 
 ObJoinOrder::~ObJoinOrder()
 {
@@ -1087,6 +1088,9 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t equal_prefix_count = 0;
     int64_t equal_prefix_null_count = 0;
     int64_t range_prefix_count = 0;
+    int64_t ss_range_prefix_count = 0;
+    int64_t dummy1 = 0;
+    bool dummy2 = false;
     bool contain_always_false = false;
     bool has_exec_param = false;
     int64_t out_index_prefix = -1;
@@ -1152,6 +1156,11 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                   range_prefix_count,
                                                                   contain_always_false))) {
       LOG_WARN("failed to compute query range prefix count", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::check_prefix_ranges_count(range_info.get_ss_ranges(),
+                                                                  dummy1,
+                                                                  ss_range_prefix_count,
+                                                                  dummy2))) {
+      LOG_WARN("failed to compute query range prefix count", K(ret));
     } else if (OB_FAIL(check_has_exec_param(*query_range_provider, has_exec_param))) {
       LOG_WARN("failed to check has exec param", K(ret));
     } else if (!has_exec_param) {
@@ -1159,6 +1168,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       //有exec param就使用query range的形状计算equal prefix count
       range_info.set_equal_prefix_count(equal_prefix_count);
       range_info.set_range_prefix_count(range_prefix_count);
+      range_info.set_ss_range_prefix_count(ss_range_prefix_count);
       range_info.set_contain_always_false(contain_always_false);
     } else if (OB_FAIL(get_preliminary_prefix_info(*query_range_provider, range_info))) {
       LOG_WARN("failed to get preliminary prefix info", K(ret));
@@ -1207,8 +1217,18 @@ int ObJoinOrder::check_has_exec_param(const ObQueryRangeProvider &query_range,
   int ret = OB_SUCCESS;
   has_exec_param = false;
   const ObIArray<ObRawExpr*> &range_exprs = query_range.get_range_exprs();
+  const ObIArray<ObRawExpr*> &ss_range_exprs = query_range.get_ss_range_exprs();
   for (int64_t i = 0; OB_SUCC(ret) && !has_exec_param && i < range_exprs.count(); ++i) {
     ObRawExpr *expr = range_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+      has_exec_param = true;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_exec_param && i < ss_range_exprs.count(); ++i) {
+    ObRawExpr *expr = ss_range_exprs.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
@@ -1225,17 +1245,20 @@ int ObJoinOrder::get_preliminary_prefix_info(ObQueryRangeProvider &query_range_p
   int ret = OB_SUCCESS;
   int64_t equal_prefix_count = 0;
   int64_t range_prefix_count = 0;
+  int64_t ss_range_prefix_count = 0;
   bool contain_always_false = false;
   if (OB_FAIL(query_range_provider.get_prefix_info(equal_prefix_count,
                                                    range_prefix_count,
+                                                   ss_range_prefix_count,
                                                    contain_always_false))) {
     LOG_WARN("failed to get prefix info");
   } else {
     range_info.set_equal_prefix_count(equal_prefix_count);
     range_info.set_range_prefix_count(range_prefix_count);
     range_info.set_contain_always_false(contain_always_false);
+    range_info.set_ss_range_prefix_count(ss_range_prefix_count);
     LOG_TRACE("success to get preliminary prefix info", K(equal_prefix_count),
-                      K(range_prefix_count), K(contain_always_false));
+                      K(range_prefix_count), K(contain_always_false), K(ss_range_prefix_count));
   }
   return ret;
 }
@@ -2563,6 +2586,8 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
                                                const ObIndexInfoCache &index_info_cache,
                                                bool &contain_always_false,
                                                ObIArray<uint64_t> &prefix_range_ids,
+                                               ObIArray<uint64_t> &ss_offset_ids,
+                                               ObIArray<uint64_t> &ss_range_ids,
                                                ObIArray<ObRawExpr *> &restrict_infos)
 {
   int ret = OB_SUCCESS;
@@ -2572,6 +2597,9 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
   bool is_special_index = index_info_entry.is_index_geo() ||
                           index_info_entry.is_multivalue_index() ||
                           index_info_entry.is_fulltext_index();
+  prefix_range_ids.reuse();
+  ss_offset_ids.reuse();
+  ss_range_ids.reuse();
   if (index_info_entry.is_multivalue_index() &&
       OB_FAIL(check_exprs_overlap_multivalue_index(table_id, index_table_id, restrict_infos, index_keys, expr_match))) {
     LOG_WARN("get_range_columns failed", K(ret));
@@ -2583,28 +2611,46 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
   } else if (!is_special_index && OB_FAIL(check_exprs_overlap_index(restrict_infos, index_keys, expr_match))) {
     LOG_WARN("check quals match index error", K(restrict_infos), K(index_keys));
   } else if (expr_match) {
-    prefix_range_ids.reset();
     const QueryRangeInfo *query_range_info = NULL;
     if (OB_FAIL(index_info_cache.get_query_range(table_id, index_table_id,
                                                  query_range_info))) {
       LOG_WARN("get_range_columns failed", K(ret));
-    } else if (OB_ISNULL(query_range_info)) {
+    } else if (OB_ISNULL(query_range_info) || OB_ISNULL(query_range_info->get_query_range_provider())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query_range_info should not be null", K(ret));
     } else {
       contain_always_false = query_range_info->get_contain_always_false();
       uint64_t range_prefix_count = query_range_info->get_range_prefix_count();
+      uint64_t ss_offset = 0;
+      uint64_t ss_prefix_count = 0;
+      if (!query_range_info->get_ss_ranges().empty()) {
+        ss_offset = query_range_info->get_query_range_provider()->get_skip_scan_offset();
+        ss_prefix_count = query_range_info->get_ss_range_prefix_count();
+      }
       const ObIArray<ColumnItem> &range_columns = query_range_info->get_range_columns();
       if (index_info_entry.is_index_geo()) {
         range_prefix_count = 1;
       }
       ObSEArray<uint64_t, 4> range_col_ids;
-      if (OB_UNLIKELY(range_prefix_count > range_columns.count())) {
+      if (OB_UNLIKELY(range_prefix_count > range_columns.count()) ||
+          OB_UNLIKELY(ss_offset > range_columns.count()) ||
+          OB_UNLIKELY(ss_prefix_count + ss_offset > range_columns.count())) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("range prefix count is invalid", K(range_prefix_count), K(ret));
+        LOG_WARN("range prefix count is invalid",
+            K(range_prefix_count), K(ss_offset), K(ss_prefix_count), K(range_columns), K(ret));
       } else {
         for (int i = 0; OB_SUCC(ret) && i < range_prefix_count; ++i) {
           if (OB_FAIL(prefix_range_ids.push_back(range_columns.at(i).column_id_))) {
+            LOG_WARN("failed to push back column_id", K(ret), K(i));
+          }
+        }
+        for (int i = 0; OB_SUCC(ret) && i < ss_offset; ++i) {
+          if (OB_FAIL(ss_offset_ids.push_back(range_columns.at(i).column_id_))) {
+            LOG_WARN("failed to push back column_id", K(ret), K(i));
+          }
+        }
+        for (int i = 0; OB_SUCC(ret) && i < ss_prefix_count; ++i) {
+          if (OB_FAIL(ss_range_ids.push_back(range_columns.at(ss_offset + i).column_id_))) {
             LOG_WARN("failed to push back column_id", K(ret), K(i));
           }
         }
@@ -2666,7 +2712,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                     ObIArray<ObRawExpr *> &restrict_infos,
                                     bool use_unique_index,
                                     bool ignore_order_dim,
-                                    bool ignore_index_back_dim)
+                                    bool ignore_index_back_dim,
+                                    OptSkipScanState skip_scan_state)
 {
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard *guard = NULL;
@@ -2688,6 +2735,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
     ObSEArray<uint64_t, 8> interest_column_ids;
     ObSEArray<bool, 8> const_column_info;
     ObSEArray<uint64_t, 8> prefix_range_ids;  //for query range compare
+    ObSEArray<uint64_t, 8> ss_offset_ids;
+    ObSEArray<uint64_t, 8> ss_range_ids;
     bool contain_always_false = false;
     int64_t range_cnt = index_info_entry->get_range_info().get_range_count();
     if (OB_FAIL(extract_interesting_column_ids(ordering_info->get_index_keys(),
@@ -2702,9 +2751,17 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                                      index_info_cache,
                                                      contain_always_false,
                                                      prefix_range_ids,
+                                                     ss_offset_ids,
+                                                     ss_range_ids,
                                                      restrict_infos))) {
       LOG_WARN("check_and_extract query range failed", K(ret));
     } else {
+      if (OptSkipScanState::SS_DISABLE == skip_scan_state ||
+          !OPT_CTX.get_is_skip_scan_enabled()) {
+        ss_offset_ids.reuse();
+        ss_range_ids.reuse();
+        skip_scan_state = OptSkipScanState::SS_DISABLE;
+      }
       const ObTableSchema *index_schema = NULL;
       if (OB_FAIL(guard->get_table_schema(index_table_id, index_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
@@ -2727,8 +2784,11 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
          *     b. for non unique index, we compare the range prefix column
          * (4) sharding
          * */
-        bool can_extract_range = prefix_range_ids.count() > 0 || contain_always_false;
+        bool can_extract_range = prefix_range_ids.count() > 0 ||
+                                 contain_always_false ||
+                                 ss_range_ids.count() > 0;
         bool is_get = index_info_entry->get_range_info().is_get();
+        bool skip_scan_comparable = (OptSkipScanState::SS_UNSET != skip_scan_state);
         if (!ignore_index_back_dim &&
             OB_FAIL(index_dim.add_index_back_dim(is_index_back,
                                                  *allocator_))) {
@@ -2743,8 +2803,11 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
           LOG_WARN("add interesting order dim failed", K(interest_column_ids), K(ret));
         } else if (!use_unique_index &&
                    OB_FAIL(index_dim.add_query_range_dim(prefix_range_ids,
+                                                         ss_range_ids,
+                                                         ss_offset_ids,
                                                          *allocator_,
-                                                         contain_always_false))) {
+                                                         contain_always_false,
+                                                         skip_scan_comparable))) {
           LOG_WARN("add query range dimension failed", K(ret));
         } else if (use_unique_index &&
                    OB_FAIL(index_dim.add_unique_range_dim(range_cnt,
@@ -2803,7 +2866,8 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                         const ObIArray<uint64_t> &valid_index_ids,
                                         ObIArray<uint64_t> &skyline_index_ids,
                                         ObIArray<ObRawExpr *> &restrict_infos,
-                                        bool ignore_index_back_dim)
+                                        bool ignore_index_back_dim,
+                                        ObIArray<OptSkipScanState> *skip_scan_states)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> valid_unique_index_ids;
@@ -2816,6 +2880,10 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                          candidate_index_ids,
                                          use_unique_index))) {
     LOG_WARN("failed to prune non unique index", K(ret));
+  } else if (NULL != skip_scan_states &&
+             OB_UNLIKELY(skip_scan_states->count() != candidate_index_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected count", KPC(skip_scan_states), K(candidate_index_ids));
   } else {
     OPT_TRACE("candidate valid index ids", candidate_index_ids);
     LOG_TRACE("succeed to get valid index ids",
@@ -2825,6 +2893,9 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
     bool has_add = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < candidate_index_ids.count(); ++i) {
       const uint64_t tid = candidate_index_ids.at(i);
+      OptSkipScanState skip_scan_state = nullptr == skip_scan_states ?
+                                         OptSkipScanState::SS_UNSET :
+                                         skip_scan_states->at(i);
       LOG_TRACE("cal dimension info of index", K(tid));
       ObIndexSkylineDim *index_dim = NULL;
       if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(*allocator_, index_dim))) {
@@ -2841,7 +2912,8 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                             restrict_infos,
                                             use_unique_index,
                                             use_unique_index, /*ignore interesting order*/
-                                            ignore_index_back_dim))) {
+                                            ignore_index_back_dim,
+                                            skip_scan_state))) {
         LOG_WARN("Failed to cal dimension info", K(ret), "index_id", candidate_index_ids, K(i));
       } else if (stmt->has_vec_approx()) {
         // check tid is vec_index
@@ -3198,20 +3270,21 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                is_create_das_path,
                                is_create_basic_path))) {
         LOG_WARN("failed to check will use das", K(ret));
-      } else if (OB_FAIL(will_use_skip_scan(table_id,
-                                            ref_table_id,
-                                            valid_index_ids.at(i),
-                                            index_info_cache,
-                                            helper,
-                                            session_info,
-                                            use_skip_scan))) {
-        LOG_WARN("failed to check will use skip scan", K(ret));
       } else if (OB_FAIL(get_plan()->will_use_column_store(table_id,
                                                           valid_index_ids.at(i),
                                                           ref_table_id,
                                                           use_column_store,
                                                           use_row_store))) {
         LOG_WARN("failed to check will use column store", K(ret));
+      } else if (OB_FAIL(will_use_skip_scan(table_id,
+                                            ref_table_id,
+                                            valid_index_ids.at(i),
+                                            index_info_cache,
+                                            use_column_store,
+                                            helper,
+                                            session_info,
+                                            use_skip_scan))) {
+        LOG_WARN("failed to check will use skip scan", K(ret));
       } else if (is_create_das_path &&
                  use_row_store &&
                  OB_FAIL(create_one_access_path(table_id,
@@ -3829,7 +3902,7 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
                                             node->ap_,
                                             true,  /* use_das */
                                             use_row_store ? false : true, /* use_column_store */
-                                            OptSkipScanState::SS_UNSET /* use_skip_scan */ ))) {
+                                            use_column_store ? OptSkipScanState::SS_DISABLE : OptSkipScanState::SS_UNSET /* use_skip_scan */ ))) {
     LOG_WARN("failed to create one access path", K(table_id), K(ref_table_id), K(node->index_tid_));
   } else if (OB_FAIL(scan_ap.push_back(node->ap_))) {
     LOG_WARN("failed to push back access path", K(ret));
@@ -4683,6 +4756,7 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
                                     const uint64_t ref_id,
                                     const uint64_t index_id,
                                     const ObIndexInfoCache &index_info_cache,
+                                    const bool use_column_store,
                                     PathHelper &helper,
                                     ObSQLSessionInfo *session_info,
                                     OptSkipScanState &use_skip_scan)
@@ -4700,6 +4774,8 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
     LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(query_ctx), K(ret));
   } else if (is_virtual_table(ref_id)) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
+  } else if (use_column_store) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
                                                            index_info_entry))) {
     LOG_WARN("failed to get index info entry", K(table_id), K(index_id), K(ret));
@@ -4714,7 +4790,7 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
                                                                          hint_force_skip_scan,
                                                                          hint_force_no_skip_scan))) {
     LOG_WARN("failed to check use skip scan", K(ret), K(table_id));
-  } else if (hint_force_skip_scan) {
+  } else if (hint_force_skip_scan || OB_UNLIKELY(EN_FORCE_INDEX_SKIP_SCAN_PLAN)) {
     use_skip_scan = OptSkipScanState::SS_HINT_ENABLE;
   } else if (hint_force_no_skip_scan) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
@@ -4749,7 +4825,7 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
       LOG_WARN("failed to add column meta no duplicate", K(ret));
     }
   }
-  LOG_TRACE("check use skip scan", K(helper.is_inner_path_),
+  LOG_TRACE("check use skip scan", K(index_id), K(helper.is_inner_path_),
                           K(hint_force_skip_scan), K(hint_force_no_skip_scan), K(use_skip_scan));
   return ret;
 }
@@ -11387,10 +11463,12 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   bool need_prune = false;
+  bool contain_small_range = false;
   ObSEArray<int64_t, 2> none_range_path_positions;
   AccessPath *ap = NULL;
   const QueryRangeInfo *query_range_info = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    bool extract_range = false; ;
     if (OB_ISNULL(ap = access_paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
@@ -11402,27 +11480,31 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
     } else if (OB_ISNULL(query_range_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query_range_info should not be null", K(ret));
-    } else if (ap->range_prefix_count_ <= 0 &&
+    } else if (FALSE_IT(extract_range =
+        (ap->range_prefix_count_ > 0 || OptSkipScanState::SS_DISABLE != ap->use_skip_scan_))) {
+    } else if (!extract_range &&
                !query_range_info->get_contain_always_false() &&
                !ap->vec_idx_info_.is_post_filter() &&
                OB_FAIL(none_range_path_positions.push_back(i))) {
       LOG_WARN("failed to push back pos", K(ret));
     } else {
-      need_prune |= ap->range_prefix_count_ > 0 &&
+      contain_small_range |= extract_range &&
                     ap->get_logical_query_range_row_count() < PRUNING_ROW_COUNT_THRESHOLD;
-      need_prune |= ap->range_prefix_count_ > 0 &&
+      contain_small_range |= extract_range &&
                     ap->est_cost_info_.index_meta_info_.is_geo_index_;
     }
   }
+  need_prune = (contain_small_range || OPT_CTX.get_is_skip_scan_enabled());
 
-  if (OB_SUCC(ret) && need_prune) {
+  if (OB_SUCC(ret) && contain_small_range) {
     for (int64_t i = none_range_path_positions.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       int64_t base_path_pos = none_range_path_positions.at(i);
       if (OB_ISNULL(ap = access_paths.at(base_path_pos))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected pos or access path", K(ret), K(base_path_pos),
                                                   K(access_paths.count()), K(ap));
-      } else if (ap->range_prefix_count_ > 0) {
+      } else if (ap->range_prefix_count_ > 0 ||
+                 OptSkipScanState::SS_DISABLE != ap->use_skip_scan_) {
         /* do nothing */
       } else if (OB_FAIL(access_paths.remove(base_path_pos))) {
         LOG_WARN("failed to remove access path", K(ret), K(base_path_pos));
@@ -11435,15 +11517,19 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
   }
 
   ObSEArray<uint64_t, 8> valid_index_ids;
+  ObSEArray<OptSkipScanState, 8> skip_scan_states;
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
-    if (OB_ISNULL(ap = access_paths.at(i))) {
+    if (OB_ISNULL(ap = access_paths.at(i)) ||
+        OB_UNLIKELY(OptSkipScanState::SS_UNSET == ap->use_skip_scan_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
+      LOG_WARN("unexpected param", K(ret), KPC(ap));
     } else if (ap->is_index_merge_path()) {
       // do nothing
     } else if (ObOptimizerUtil::find_item(valid_index_ids, ap->index_id_)) {
     } else if (OB_FAIL(valid_index_ids.push_back(ap->index_id_))) {
       LOG_WARN("failed to push back index id", K(ret));
+    } else if (OB_FAIL(skip_scan_states.push_back(ap->use_skip_scan_))) {
+      LOG_WARN("failed to push back ss state", K(ret));
     }
   }
   if (OB_SUCC(ret) && need_prune) {
@@ -11460,7 +11546,8 @@ int ObJoinOrder::try_pruning_base_table_access_path(const uint64_t table_id,
                                               valid_index_ids,
                                               skyline_index_ids,
                                               helper.filters_,
-                                              true))) {
+                                              contain_small_range,
+                                              &skip_scan_states))) {
       LOG_WARN("failed to pruning_index", K(table_id), K(ref_table_id), K(ret));
     }
     for (int i = access_paths.count() - 1; OB_SUCC(ret) && i >= 0; --i) {

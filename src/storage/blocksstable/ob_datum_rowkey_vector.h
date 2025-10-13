@@ -178,7 +178,8 @@ public:
       const int64_t row_idx,
       const ObStorageDatumUtils &datum_utils,
       int &cmp_ret,
-      const bool compare_datum_cnt) const;
+      const bool compare_datum_cnt,
+      int64_t *not_eq_ptr = nullptr) const;
   int compare_rowkey(
       const ObDiscreteDatumRowkey &rowkey,
       const int64_t row_idx,
@@ -222,6 +223,7 @@ public:
       const int64_t buf_size,
       ObRowkeyVector *rowkey_vector);
   static bool is_all_integer_cols(const int64_t col_cnt, const storage::ObITableReadInfo *table_read_info);
+  int64_t print_rowkey(const int64_t row_idx, char *buf, int64_t buf_len) const;
   DECLARE_TO_STRING;
 private:
   int compare_datum_rowkey(
@@ -230,7 +232,8 @@ private:
       const ObStorageDatumUtils &datum_utils,
       const int64_t cmp_cnt,
       int &cmp_ret,
-      const bool compare_datum_cnt) const;
+      const bool compare_datum_cnt,
+      int64_t *not_eq_ptr = nullptr) const;
 public:
   union {
     struct {

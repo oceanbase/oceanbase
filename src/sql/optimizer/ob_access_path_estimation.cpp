@@ -1789,6 +1789,7 @@ int ObAccessPathEstimation::calc_skip_scan_prefix_ndv(AccessPath &ap, double &pr
         log_plan->get_selectivity_ctx().init_op_ctx(temp_equal_sets, temp_rows);
       }
     }
+    OPT_TRACE("succeed to update skip scan info:", &ap);
   }
   return ret;
 }
@@ -1829,12 +1830,11 @@ int ObAccessPathEstimation::update_use_skip_scan(ObCostTableScanInfo &est_cost_i
                                                 * est_cost_info.ss_postfix_range_filters_sel_
                                                 / est_cost_info.ss_prefix_ndv_,
                                                 1.0);
-    const double ss_row_count = est_cost_info.ss_prefix_ndv_
-                                    + row_count_per_range * est_cost_info.ss_prefix_ndv_;
     const double index_scan_cost = row_count * (NORMAL_CPU_TUPLE_COST);
-    const double skip_scan_cost = ss_row_count * NORMAL_MICRO_BLOCK_RND_COST;
+    const double skip_scan_cost = est_cost_info.ss_prefix_ndv_
+                                    * (NORMAL_FETCH_ROW_RND_COST + row_count_per_range * NORMAL_CPU_TUPLE_COST);
     LOG_TRACE("decide use skip scan by ndv and selectively", K(use_skip_scan), K(row_count), K(row_count_per_range),
-                  K(ss_row_count), K(index_scan_cost), K(skip_scan_cost),
+                  K(index_scan_cost), K(skip_scan_cost),
                   K(est_cost_info.ss_prefix_ndv_), K(est_cost_info.ss_postfix_range_filters_sel_),
                   K(est_cost_info.ss_postfix_range_filters_));
     bool reset_skip_scan = false;
@@ -1842,12 +1842,17 @@ int ObAccessPathEstimation::update_use_skip_scan(ObCostTableScanInfo &est_cost_i
       /* do nothing */
     } else if (!table_meta_info->has_opt_stat_) {
       reset_skip_scan = true;
-    } else if (est_cost_info.ss_prefix_ndv_ > 1000 || est_cost_info.ss_postfix_range_filters_sel_ > 0.01) {
+      OPT_TRACE("NO OPT STAT, DISABLE SKIP SCAN");
+    } else if (est_cost_info.ss_prefix_ndv_ > 200000 // set threshold to 0.002 of 100 million
+                || est_cost_info.ss_prefix_ndv_ > 0.002 * row_count
+                || est_cost_info.ss_postfix_range_filters_sel_ > 0.01) {
       reset_skip_scan = true;
+      OPT_TRACE("UNEXPECTED SKIP SCAN NDV/SELECTIVITY, DISABLE SKIP SCAN");
     } else if (skip_scan_cost < index_scan_cost) {
       use_skip_scan = OptSkipScanState::SS_NDV_SEL_ENABLE;
     } else {
       reset_skip_scan = true;
+      OPT_TRACE("SKIP SCAN COST IS HIGHER THAN INDEX SCAN, DISABLE SKIP SCAN");
     }
     if (OB_SUCC(ret) && reset_skip_scan) {
       if (OB_FAIL(reset_skip_scan_info(est_cost_info, all_predicate_sel, use_skip_scan))) {

@@ -35,6 +35,7 @@ namespace oceanbase
 namespace storage
 {
 struct ObTransNodeDMLStat;
+class ObIndexSkipScanner;
 }
 
 namespace memtable
@@ -287,6 +288,35 @@ protected:
   int32_t sql_sequence_col_idx_;
   blocksstable::ObCompatRowReader row_reader_;
   ObOuputRowValidateChecker row_checker_;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class ObMemtableSkipScanIterator : public ObMemtableScanIterator
+{
+public:
+  ObMemtableSkipScanIterator();
+  virtual ~ObMemtableSkipScanIterator();
+  int init(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      storage::ObITable *table,
+      const void *query_range) override;
+  virtual void reset() override;
+  virtual void reuse() override;
+  int skip_to_range(const ObDatumRange &range);
+  int check_always_false(const ObDatumRange &range, bool &is_false);
+  int get_next_skip_row(const blocksstable::ObDatumRow *&row);
+protected:
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) override;
+private:
+  bool is_end_;
+  bool is_skip_start_;
+  bool is_false_range_;
+  ObMemtable *memtable_;
+  const storage::ObTableIterParam *param_;
+  storage::ObTableAccessContext *context_;
+  storage::ObIndexSkipScanner *skip_scanner_;
+  DISALLOW_COPY_AND_ASSIGN(ObMemtableSkipScanIterator);
 };
 
 }  // namespace memtable

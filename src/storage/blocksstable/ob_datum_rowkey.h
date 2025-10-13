@@ -83,7 +83,7 @@ public:
 
   int equal(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, bool &is_equal) const;
   int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
-              const bool compare_datum_cnt = true) const;
+              const bool compare_datum_cnt = true, int64_t *not_eq_ptr = nullptr) const;
   int compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
@@ -253,14 +253,14 @@ struct ObDiscreteDatumRowkey
   ~ObDiscreteDatumRowkey() = default;
   OB_INLINE bool is_valid() const { return row_idx_ >= 0 && nullptr != rowkey_vector_; }
   int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
-              const bool compare_datum_cnt = true) const;
+              const bool compare_datum_cnt = true, int64_t *not_eq_ptr = nullptr) const;
   int compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
   int get_column_int(const int64_t col_idx, int64_t &int_val) const;
-  TO_STRING_KV(K_(row_idx), KP_(rowkey_vector));
+  DECLARE_TO_STRING;
   int64_t row_idx_;
   const ObRowkeyVector *rowkey_vector_;
 };
@@ -291,7 +291,7 @@ struct ObCommonDatumRowkey
   }
   OB_INLINE const ObDiscreteDatumRowkey *get_discrete_rowkey() const { return discrete_rowkey_; }
   int compare(const ObDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
-              const bool compare_datum_cnt = true) const;
+              const bool compare_datum_cnt = true, int64_t *not_eq_ptr = nullptr) const;
   int compare(const ObDiscreteDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,

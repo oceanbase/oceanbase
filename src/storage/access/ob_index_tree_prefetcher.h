@@ -514,6 +514,7 @@ public:
       micro_data_prefetch_idx_(0),
       row_lock_check_version_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
       agg_store_(nullptr),
+      skip_scanner_(nullptr),
       can_blockscan_(false),
       need_check_prefetch_depth_(false),
       use_multi_block_prefetch_(false),
@@ -621,6 +622,14 @@ public:
   {
     return MAX_DATA_PREFETCH_DEPTH;
   }
+  OB_INLINE const ObIndexSkipState *get_next_skip_state() const
+  {
+    const ObIndexSkipState *tmp_state = nullptr;
+    if (cur_micro_data_fetch_idx_ + 1 < micro_data_prefetch_idx_) {
+      tmp_state = &micro_data_infos_[(cur_micro_data_fetch_idx_ + 1) % MAX_DATA_PREFETCH_DEPTH].skip_state_;
+    }
+    return tmp_state;
+  }
 
   static const int64_t MIN_MULTI_BLOCK_PREFETCH_BATCH_COUNT = 4;
   static const int64_t MULTI_BLOCK_PREFETCH_FAKE_BLOCK_SIZE = 16 << 10; // 16KB
@@ -634,7 +643,7 @@ public:
                        K_(is_prefetch_end), K_(cur_range_fetch_idx), K_(cur_range_prefetch_idx), K_(max_range_prefetching_cnt),
                        K_(cur_micro_data_fetch_idx), K_(micro_data_prefetch_idx),
                        K_(iter_type), K_(cur_level), K_(index_tree_height), K_(max_rescan_height), KP_(long_life_allocator), K_(prefetch_depth),
-                       K_(total_micro_data_cnt), KP_(query_range), K_(tree_handle_cap),
+                       K_(total_micro_data_cnt), KP_(query_range), K_(tree_handle_cap), KP_(agg_store), KP_(skip_scanner),
                        K_(can_blockscan), K_(need_check_prefetch_depth), K_(use_multi_block_prefetch), K_(need_submit_io),
                        K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)), K_(multi_io_params));
 protected:
@@ -737,12 +746,13 @@ protected:
         index_block_read_handles_[i].reset();
       }
     }
-        OB_INLINE int get_next_data_row(
+    OB_INLINE int get_next_data_row(
         const bool is_multi_check,
-        ObMicroIndexInfo &block_info)
+        ObMicroIndexInfo &block_info,
+        ObIndexSkipScanner *skip_scanner = nullptr)
     {
       int ret = OB_SUCCESS;
-      if (OB_FAIL(index_scanner_.get_next(block_info, is_multi_check))) {
+      if (OB_FAIL(index_scanner_.get_next(block_info, is_multi_check, false/*is_sorted_multi_get*/, skip_scanner))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
         }
@@ -764,8 +774,9 @@ protected:
         ObIndexTreeMultiPassPrefetcher &prefetcher)
     {
       int ret = OB_SUCCESS;
+      ObIndexSkipScanner *skip_scanner = prefetcher.access_ctx_->query_flag_.is_reverse_scan() ? nullptr : prefetcher.skip_scanner_;
       while (OB_SUCC(ret)) {
-        if (OB_FAIL(index_scanner_.get_next(block_info, prefetcher.is_multi_check()))) {
+        if (OB_FAIL(index_scanner_.get_next(block_info, prefetcher.is_multi_check(), false/*is_sorted_multi_get*/, skip_scanner))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
           } else if (fetch_idx_ < prefetch_idx_) {
@@ -907,6 +918,7 @@ public:
   int64_t micro_data_prefetch_idx_;
   int64_t row_lock_check_version_;
   ObAggStoreBase *agg_store_;
+  ObIndexSkipScanner *skip_scanner_;
 protected:
   bool can_blockscan_;
   bool need_check_prefetch_depth_;
