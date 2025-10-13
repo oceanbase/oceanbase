@@ -1021,7 +1021,8 @@ int ObSortOpImpl::build_chunk(const int64_t level, Input &input, int64_t extra_s
           "rows", chunk->datum_store_.get_row_cnt(),
           "file_size", chunk->datum_store_.get_file_size(),
           "memory_hold", chunk->datum_store_.get_mem_hold(),
-          "mem_used", mem_context_->used());
+          "mem_used", mem_context_->used(),
+          "ht_bucket_size", get_ht_bucket_size());
 
     }
   }
@@ -1066,7 +1067,7 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
   if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(
       &mem_context_->get_malloc_allocator()))) {
     LOG_WARN("failed to get max available memory size", K(ret));
-  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+  } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
     LOG_WARN("failed to update used memory size", K(ret));
   } else {
     dumped = need_dump();
@@ -1079,7 +1080,7 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
               UNUSED(max_memory_size);
               return need_dump();
             },
-            dumped, mem_context_->used()))) {
+            dumped, get_total_used_size()))) {
           LOG_WARN("failed to extend memory size", K(ret));
         }
       } else if (profile_.get_cache_size() < profile_.get_global_bound_size()) {
@@ -1090,10 +1091,10 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
               UNUSED(max_memory_size);
               return need_dump();
             },
-            dumped, mem_context_->used()))) {
+            dumped, get_total_used_size()))) {
           LOG_WARN("failed to extend memory size", K(ret));
         }
-        LOG_TRACE("trace sort need dump", K(dumped), K(mem_context_->used()),
+        LOG_TRACE("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_ht_bucket_size()),
           K(get_memory_limit()), K(profile_.get_cache_size()), K(profile_.get_expect_size()));
       } else {
         // one-pass
@@ -1108,7 +1109,8 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
           }
         } else { }
       }
-      LOG_INFO("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_memory_limit()),
+      LOG_INFO("trace sort need dump", K(dumped), K(mem_context_->used()),
+        K(get_ht_bucket_size()), K(get_memory_limit()),
         K(profile_.get_cache_size()), K(profile_.get_expect_size()),
         K(sql_mem_processor_.get_data_size()), K(sql_mem_processor_.is_auto_mgr()));
     }
@@ -1146,7 +1148,7 @@ int ObSortOpImpl::before_add_row()
       [&](int64_t cur_cnt){ return rows_->count() > cur_cnt; },
       updated))) {
       LOG_WARN("failed to update max available mem size periodically", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
       LOG_WARN("failed to update used memory size", K(ret));
     } else if (GCONF.is_sql_operator_dump_enabled()) {
       if (rows_->count() >= MAX_ROW_CNT) {
@@ -1798,7 +1800,7 @@ int ObSortOpImpl::build_ems_heap(int64_t &merge_ways)
             [&](int64_t max_memory_size) {
               return max_memory_size < need_size;
             },
-            dumped, mem_context_->used()))) {
+            dumped, get_total_used_size()))) {
           LOG_WARN("failed to extend memory size", K(ret));
         }
         merge_ways = std::max(merge_ways, get_memory_limit() / ObChunkDatumStore::BLOCK_SIZE);
@@ -2403,7 +2405,7 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
                                 [&](int64_t cur_cnt){ return topn_heap_->heap_.count() > cur_cnt; },
                                 updated))) {
         LOG_WARN("failed to get max available memory size", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
       LOG_WARN("failed to update used memory size", K(ret));
     }
   }
