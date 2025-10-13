@@ -173,6 +173,7 @@ public:
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
       obrpc::ObGetRecycleSchemaVersionsResult &result);
+  void set_exist_unfinished_recycle() { exist_unfinished_recycle_ = true; }
 private:
   int check_inner_stat();
   bool is_valid_recycle_schema_version(const int64_t recycle_schema_version);
@@ -216,6 +217,7 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::ReadWriteDefendMode> recycle_schema_versions_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::ReadWriteDefendMode> last_recycle_schema_versions_;
+  bool exist_unfinished_recycle_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaHistoryRecycler);
 };
 
