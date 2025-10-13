@@ -548,6 +548,7 @@ private:
   int64_t max_cnt_;
   int64_t idx_;
   int32_t suspect_tablet_count_[share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX];
+  int32_t multi_version_diagnose_tablet_count_[ObStorageSnapshotInfo::SNAPSHOT_MAX];
   ObMergeType suspect_merge_type_[share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX];
   int32_t diagnose_tablet_count_[COMPACTION_DIAGNOSE_TYPE_MAX];
 };
