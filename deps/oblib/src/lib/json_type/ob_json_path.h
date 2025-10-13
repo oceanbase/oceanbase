@@ -396,55 +396,52 @@ public:
     ERROR,
   };
 
-  struct ObPathCacheStat{
+  struct ObJsonPathItem {
+    ObJsonPath* path_;
     ObPathParseStat state_;
     int index_;
-    ObPathCacheStat() : state_(UNINITIALIZED), index_(-1) {}
-    ObPathCacheStat(ObPathParseStat state, int idx) : state_(state), index_(idx) {};
-    ObPathCacheStat(const ObPathCacheStat& stat) : state_(stat.state_), index_(stat.index_) {}
+    ObJsonPathItem() : path_(NULL), state_(UNINITIALIZED), index_(-1) {}
   };
-  typedef PageArena<ObJsonPath*, ModulePageAllocator> JsonPathArena;
-  typedef PageArena<ObPathCacheStat, ModulePageAllocator> PathCacheStatArena;
-  typedef ObVector<ObJsonPath*, JsonPathArena> ObJsonPathPointers;
-  typedef ObVector<ObPathCacheStat, PathCacheStatArena> ObPathCacheStatArr;
+
+  const static int64_t MAX_PATH_CACHE_COUNT = 10;
+  typedef PageArena<ObJsonPathItem, ModulePageAllocator> JsonPathItemArena;
+  typedef ObVector<ObJsonPathItem, JsonPathItemArena> ObJsonPathItemVector;
+  typedef PageArena<ObJsonPathItemVector*, ModulePageAllocator> JsonPathVectorArena;
+  typedef ObVector<ObJsonPathItemVector*, JsonPathVectorArena> ObJsonPathPointers;
   static const int64_t DEFAULT_PAGE_SIZE = (1LL << 10); // 1kb
 
 public:
   ObJsonPathCache(common::ObIAllocator *allocator) :
         allocator_(allocator),
         page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-        path_cache_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
-        path_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
-        path_arr_ptr_(&path_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-        stat_arr_(&path_cache_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
+        path_item_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
+        path_vector_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
+        path_arr_ptr_(&path_vector_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
   ~ObJsonPathCache() {};
 
-  ObJsonPath* path_at(size_t idx);
-
-  ObPathParseStat path_stat_at(size_t idx);
+  size_t get_cached_path_count(size_t idx);
+  ObJsonPath* find_path(ObString& path_str, size_t idx);
   
   size_t size();
   void reset();
 
-  int find_and_add_cache(ObJsonPath*& parse_path, ObString& path_str, int arg_idx, bool is_const = false);
+  int find_and_add_cache(ObIAllocator &allocator, ObJsonPath*& parse_path, ObString& path_str, int arg_idx, bool is_const = false);
   void set_allocator(common::ObIAllocator *allocator);
   common::ObIAllocator* get_allocator();
 private:
   int set_path(ObJsonPath* path, ObPathParseStat stat, int arg_idx, int index);
-  bool is_match(ObString& path_str, size_t idx); 
 
   int fill_empty(size_t reserve_size);
+  int fill_empty(int arg_idx, size_t reserve_size);
 
 private:
   common::ObIAllocator *allocator_;
   ModulePageAllocator page_allocator_;
-  PathCacheStatArena path_cache_arena_;
-  JsonPathArena      path_arena_;
+  JsonPathItemArena path_item_arena_;
+  JsonPathVectorArena path_vector_arena_;
   ObJsonPathPointers path_arr_ptr_;
-  ObPathCacheStatArr stat_arr_;
 };
 
-using ObPathCacheStat = ObJsonPathCache::ObPathCacheStat;
 using ObPathParseStat = ObJsonPathCache::ObPathParseStat;
 
 class ObJsonPathUtil

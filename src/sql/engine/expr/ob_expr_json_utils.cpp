@@ -1590,7 +1590,7 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 0, true, param_ctx->is_json_path_const_))) {
+    if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, j_path, j_path_text, 0, true, param_ctx->is_json_path_const_))) {
       is_cover_by_error = false;
       if (lib::is_oracle_mode()) {
         ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;

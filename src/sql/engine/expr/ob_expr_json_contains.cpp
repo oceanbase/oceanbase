@@ -97,12 +97,13 @@ int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, O
       } else if (expr.args_[2]->datum_meta_.type_ == ObNullType || path_data->is_null()) {
         is_null_result = true;
       } else {
+        bool is_const = expr.args_[2]->is_const_expr();
         ObJsonSeekResult sub_json_targets;
         ObString path_val = path_data->get_string();
         ObJsonPath *json_path;
         if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[2], ctx, temp_allocator, path_val, is_null_result))) {
           LOG_WARN("fail to get real data.", K(ret), K(path_val));
-        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 2, false))) {
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, json_path, path_val, 2, false, is_const))) {
           LOG_WARN("json path parse failed", K(path_data->get_string()), K(ret));
         } else if (OB_FAIL(json_target->seek(*json_path, json_path->path_node_cnt(), true, false, sub_json_targets))) {
           LOG_WARN("json seek failed", K(path_data->get_string()), K(ret));

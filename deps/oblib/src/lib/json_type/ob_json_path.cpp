@@ -954,38 +954,54 @@ ObJsonPathBasicNode* ObJsonPath::last_path_node()
   return (path_nodes_.size() > 1 ? path_node(path_nodes_.size() - 1): path_node(0));
 }
 
-
-bool ObJsonPathCache::is_match(ObString& path_str, size_t idx)
-{
-  bool result = false;
-  if (idx < size()) {
-    ObJsonPath* path = path_at(idx);
-    if (OB_NOT_NULL(path)) {
-      result = ObJsonPathUtil::string_cmp_skip_charactor(path_str, path->get_path_string(), ' ') == 0;
-    }
-  }
-  return result;
-}
-
-int ObJsonPathCache::find_and_add_cache(ObJsonPath*& res_path, ObString& path_str, int arg_idx, bool is_const)
+int ObJsonPathCache::find_and_add_cache(
+    ObIAllocator &allocator,
+    ObJsonPath*& res_path,
+    ObString& path_str,
+    int arg_idx,
+    bool is_const)
 {
   INIT_SUCC(ret);
-  if (!((is_const && arg_idx < size()) || is_match(path_str, arg_idx))) {
-    void* buf = allocator_->alloc(sizeof(ObJsonPath));
-    if (OB_NOT_NULL(buf)) {
-      ObJsonPath* path = new (buf) ObJsonPath(path_str, allocator_);
-      if (OB_FAIL(path->parse_path())) {
-        LOG_WARN("wrong path expression, parse path failed or with wildcards", K(ret), K(path_str));
-      } else {
-        ret = set_path(path, path_str.length() == 0 ? OK_NULL : OK_NOT_NULL, arg_idx, arg_idx);
-        res_path = path;
-      }
-    } else {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc path.", K(ret));
+
+  ObJsonPath* json_path = nullptr;
+
+  if (is_const) {
+    if (arg_idx < size()) {  // for const path, only one path is cached
+      json_path = path_arr_ptr_[arg_idx]->at(0).path_;
     }
   } else {
-    res_path = path_at(arg_idx);
+    json_path = find_path(path_str, arg_idx);
+  }
+
+  if (OB_NOT_NULL(json_path)) {
+    res_path = json_path;
+  } else {
+    void* buf = nullptr;
+    ObJsonPath* json_path = nullptr;
+    int path_cnt = get_cached_path_count(arg_idx);
+    if (path_cnt < MAX_PATH_CACHE_COUNT) {
+      if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObJsonPath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc path.", K(ret));
+      } else {
+        json_path = new (buf) ObJsonPath(path_str, allocator_);
+      }
+    } else {
+      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObJsonPath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc path.", K(ret));
+      } else {
+        json_path = new (buf) ObJsonPath(path_str, &allocator);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(json_path->parse_path())) {
+      LOG_WARN("wrong path expression, parse path failed or with wildcards", K(ret), K(path_str));
+    } else if (OB_FALSE_IT(res_path = json_path)) {
+    } else if (path_cnt < MAX_PATH_CACHE_COUNT) {
+      ret = set_path(json_path, path_str.length() == 0 ? OK_NULL : OK_NOT_NULL, arg_idx, arg_idx);
+    }
   }
   return ret;
 }
@@ -997,43 +1013,80 @@ int ObJsonPathCache::fill_empty(size_t reserve_size)
     // fill element in vector
     if (OB_FAIL(path_arr_ptr_.reserve(reserve_size))) {
       LOG_WARN("fail to reserve for path arr.", K(ret), K(reserve_size));
-    } else if (OB_FAIL(stat_arr_.reserve(reserve_size))) {
-      LOG_WARN("fail to reserve for stat arr.", K(ret), K(reserve_size));
-    } else if (path_arr_ptr_.size() != stat_arr_.size()) {
-      LOG_WARN("Length is not equals.", K(ret), K(reserve_size));
     }
     for (size_t cur = path_arr_ptr_.size(); OB_SUCC(ret) && cur < reserve_size; ++cur) {
-      if (OB_FAIL(path_arr_ptr_.push_back(NULL))) {
-        LOG_WARN("fail to push NUll to path arr", K(ret));
-      } else if (OB_FAIL(stat_arr_.push_back(ObPathCacheStat()))) {
-        LOG_WARN("fail to push stat to stat arr", K(ret));
+      void* buf = nullptr;
+      ObJsonPathItemVector* path_item_vector = nullptr;
+      if (OB_ISNULL(buf = path_item_arena_.alloc(sizeof(ObJsonPathItemVector)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc path item vector", K(ret));
+      } else {
+        path_item_vector = new (buf) ObJsonPathItemVector(&path_item_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR);
+        if (OB_FAIL(path_arr_ptr_.push_back(path_item_vector))) {
+          LOG_WARN("fail to push NUll to path arr", K(ret));
+        }
       }
     }
   }
   return ret;
 }
 
-ObPathParseStat ObJsonPathCache::path_stat_at(size_t idx)
+int ObJsonPathCache::fill_empty(int arg_idx, size_t reserve_size)
 {
-  ObPathParseStat stat = UNINITIALIZED;
-  if (idx < stat_arr_.size()) {
-    stat = stat_arr_[idx].state_;
+  INIT_SUCC(ret);
+  if (arg_idx < path_arr_ptr_.size()) {
+    if (reserve_size > path_arr_ptr_[arg_idx]->size()) {
+      if (OB_FAIL(path_arr_ptr_[arg_idx]->reserve(reserve_size))) {
+        LOG_WARN("fail to reserve for path item vector", K(ret), K(reserve_size));
+      }
+      for (size_t cur = path_arr_ptr_[arg_idx]->size(); OB_SUCC(ret) && cur < reserve_size; ++cur) {
+        if (OB_FAIL(path_arr_ptr_[arg_idx]->push_back(ObJsonPathItem()))) {
+          LOG_WARN("fail to push path item to path item vector", K(ret));
+        }
+      }
+    }
   }
-  return stat;
+  return ret;
 }
 
-ObJsonPath* ObJsonPathCache::path_at(size_t idx)
+size_t ObJsonPathCache::get_cached_path_count(size_t idx)
 {
-  ObJsonPath *ptr = nullptr;
-  if (idx < path_arr_ptr_.size()) {
-    ptr = path_arr_ptr_[idx];
+  size_t count = 0;
+  if (idx < size()) {
+    ObJsonPathItemVector* path_item_vector = path_arr_ptr_[idx];
+    if (OB_NOT_NULL(path_item_vector)) {
+      count = path_item_vector->size();
+    }
   }
-  return ptr;
+  return count;
+}
+
+ObJsonPath* ObJsonPathCache::find_path(ObString& path_str, size_t idx)
+{
+  ObJsonPath* found_path = nullptr;
+  if (idx < size()) {
+    ObJsonPathItemVector* path_item_vector = path_arr_ptr_[idx];
+    if (OB_NOT_NULL(path_item_vector)) {
+      for (int64_t i = 0; i < path_item_vector->size() && found_path == nullptr; ++i) {
+        ObJsonPath* path = (*path_item_vector)[i].path_;
+        if (OB_NOT_NULL(path) &&
+            ObJsonPathUtil::string_cmp_skip_charactor(path_str, path->get_path_string(), ' ') == 0) {
+          found_path = path;
+        }
+      }
+    }
+  }
+  return found_path;
 }
 
 void ObJsonPathCache::reset()
 {
-  stat_arr_.clear();
+  for (int64_t i = 0; i < path_arr_ptr_.size(); ++i) {
+    ObJsonPathItemVector* path_vector = path_arr_ptr_[i];
+    if (OB_NOT_NULL(path_vector)) {
+      path_vector->clear();
+    }
+  }
   path_arr_ptr_.clear();
 }
 
@@ -1051,8 +1104,18 @@ int ObJsonPathCache::set_path(ObJsonPath* path, ObPathParseStat stat, int arg_id
     ret = OB_ERROR_OUT_OF_RANGE;
     LOG_WARN("index out of range.", K(ret), K(index), K(path_arr_ptr_.size()));
   } else {
-    path_arr_ptr_[index] = path;
-    stat_arr_[index] = ObPathCacheStat(stat, arg_idx);
+    ObJsonPathItemVector* path_item_vector = path_arr_ptr_[index];
+    int64_t size = path_item_vector->size();
+    if (OB_ISNULL(path_item_vector)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(fill_empty(arg_idx, size + 1))) {
+      LOG_WARN("fail to fill empty.", K(ret), K(arg_idx));
+    } else {
+      ObJsonPathItem& json_path_item = (*path_item_vector)[size];
+      json_path_item.path_ = path;
+      json_path_item.state_ = stat;
+      json_path_item.index_ = arg_idx;
+    }
   }
   return ret;
 }

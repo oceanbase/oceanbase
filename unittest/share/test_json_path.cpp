@@ -1364,32 +1364,30 @@ TEST_F(TestJsonPath, test_pathcache_funcion) {
 
   // initial state verify
   ASSERT_EQ(path_cache.get_allocator(), &allocator);
-  ASSERT_EQ(path_cache.path_stat_at(0), ObPathParseStat::UNINITIALIZED);
 
   // test a nornal json path
   ObJsonPath* json_path = NULL;
   int ok_path1_idx = path_cache.size();
 
   // parse a normal path
-  ret = path_cache.find_and_add_cache(json_path, ok_path1, ok_path1_idx);
+  ret = path_cache.find_and_add_cache(allocator, json_path, ok_path1, ok_path1_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_EQ(path_cache.path_stat_at(ok_path1_idx), ObPathParseStat::OK_NOT_NULL);
 
   // can read again
-  ObJsonPath* read_ok_path1 = path_cache.path_at(ok_path1_idx);
+  ObJsonPath* read_ok_path1 = path_cache.find_path(ok_path1, ok_path1_idx);
   ASSERT_STREQ(json_path->get_path_string().ptr(), read_ok_path1->get_path_string().ptr());
 
   // cache stratety works, iff the path string unchanged, the path needn't parse again
-  ret = path_cache.find_and_add_cache(json_path, ok_path1, ok_path1_idx);
+  ret = path_cache.find_and_add_cache(allocator, json_path, ok_path1, ok_path1_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(json_path, read_ok_path1);
 
   ObString ok_path2 = "  $.\"  abc d \"  ";
   // some spaces do not has any effect upon the path cache
-  ret = path_cache.find_and_add_cache(json_path, ok_path2, ok_path1_idx);
+  ret = path_cache.find_and_add_cache(allocator, json_path, ok_path2, ok_path1_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(json_path, read_ok_path1);
-  ObJsonPath* read_ok_path2 = path_cache.path_at(ok_path1_idx);
+  ObJsonPath* read_ok_path2 = path_cache.find_path(ok_path2, ok_path1_idx);
   ASSERT_EQ(read_ok_path2, read_ok_path1);
 }
 
@@ -1405,20 +1403,19 @@ TEST_F(TestJsonPath, test_pathcache_exprire) {
   int ok_path1_idx = path_cache.size();
 
   // parse a normal path
-  ret = path_cache.find_and_add_cache(json_path, ok_path1, ok_path1_idx);
+  ret = path_cache.find_and_add_cache(allocator, json_path, ok_path1, ok_path1_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_EQ(path_cache.path_stat_at(ok_path1_idx), ObPathParseStat::OK_NOT_NULL);
 
-  ObJsonPath* read_ok_path1 = path_cache.path_at(ok_path1_idx);
+  ObJsonPath* read_ok_path1 = path_cache.find_path(ok_path1, ok_path1_idx);
 
   ObString ok_path2 = "  $.\"efs d \"";
   // some spaces do not has any effect upon the path cache
-  ret = path_cache.find_and_add_cache(json_path, ok_path2, ok_path1_idx);
+  ret = path_cache.find_and_add_cache(allocator, json_path, ok_path2, ok_path1_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   // json path string differs, cache invalid
   ASSERT_NE(json_path, read_ok_path1);
-  ObJsonPath* read_ok_path2 = path_cache.path_at(ok_path1_idx);
+  ObJsonPath* read_ok_path2 = path_cache.find_path(ok_path2, ok_path1_idx);
   ASSERT_EQ(read_ok_path2, json_path);
 }
 
@@ -1434,12 +1431,10 @@ TEST_F(TestJsonPath, test_pathcache_reset) {
   int ok_path1_idx = path_cache.size();
 
   // parse a normal path
-  ret = path_cache.find_and_add_cache(json_path, ok_path1, ok_path1_idx);
+  ret = path_cache.find_and_add_cache(allocator, json_path, ok_path1, ok_path1_idx);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_EQ(path_cache.path_stat_at(ok_path1_idx), ObPathParseStat::OK_NOT_NULL);
 
   path_cache.reset();
-  ASSERT_EQ(path_cache.path_stat_at(ok_path1_idx), ObPathParseStat::UNINITIALIZED);
   ASSERT_EQ(path_cache.size(), 0);
 }
 
