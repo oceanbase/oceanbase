@@ -798,7 +798,12 @@ int ObIOCalibration::refresh(const bool only_refresh, const ObIArray<ObIOBenchRe
       LOG_WARN("reset io ability failed", K(ret));
     }
   }
-  LOG_INFO("refresh io calibration", K(ret), K(only_refresh), K(items), K(io_ability_));
+  ObIOAbility io_ability;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = ObIOCalibration::get_instance().get_io_ability(io_ability))) {
+    LOG_WARN("get io ability failed", KR(tmp_ret));
+  }
+  LOG_INFO("refresh io calibration", K(ret), K(only_refresh), K(items), K(io_ability));
   return ret;
 }
 
