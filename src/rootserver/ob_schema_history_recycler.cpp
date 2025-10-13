@@ -86,7 +86,8 @@ ObSchemaHistoryRecycler::ObSchemaHistoryRecycler()
     zone_mgr_(NULL),
     sql_proxy_(NULL),
     recycle_schema_versions_(),
-    last_recycle_schema_versions_()
+    last_recycle_schema_versions_(),
+    exist_unfinished_recycle_(false)
 {
 }
 
@@ -299,6 +300,8 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
       const uint64_t tenant_id = tenant_ids.at(i);
+      // reset unfinished flag for this tenant
+      exist_unfinished_recycle_ = false;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("schema history recycler is stopped", KR(ret));
       } else {
@@ -318,7 +321,9 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
           if (OB_INVALID_VERSION == last_recycle_schema_version || last_recycle_schema_version < recycle_schema_version) {
             if (OB_FAIL(try_recycle_schema_history(tenant_id, recycle_schema_version, exist_failed_recycle))) {
               LOG_WARN("fail to recycle schema history by tenant", KR(ret), K(tenant_id), K(recycle_schema_version));
-            } else if (!exist_failed_recycle && OB_FAIL(last_recycle_schema_versions_.set_refactored(tenant_id, recycle_schema_version, 1/*overwrite*/))) {
+            } else if (!exist_failed_recycle // some recycle failed, do not update last recycle schema version
+                       && !exist_unfinished_recycle_ // some recycle is unfinished, do not update last recycle schema version
+                       && OB_FAIL(last_recycle_schema_versions_.set_refactored(tenant_id, recycle_schema_version, 1/*overwrite*/))) {
               LOG_WARN("fail to set last recycle schema version", KR(ret), K(tenant_id), K(recycle_schema_version));
             }
           } else {
@@ -1355,6 +1360,9 @@ int EXECUTOR::fill_schema_history_map() \
   /*TODO:(yanmu.ztl) double check total cnt*/ \
   if (OB_FAIL(check_stop())) { \
     LOG_WARN("schema history recycler is stopped", K(ret)); \
+  } else if (OB_ISNULL(recycler_)) { \
+    ret = OB_ERR_UNEXPECTED; \
+    LOG_WARN("recycler is null", KR(ret)); \
   } else if (OB_FAIL(schema_history_map_.create(hash::cal_next_prime(BUCKET_NUM), \
                                                 "ScheHisRecMap", "ScheHisRecMap"))) { \
     LOG_WARN("fail to create map", K(ret)); \
@@ -1429,6 +1437,10 @@ int EXECUTOR::fill_schema_history_map() \
               /* And schema history recycle may never be executed if error occur when analysis is still running. */ \
               /* So, we recylce history immediately when recycle schema history count reaches threshold. */ \
               ret = OB_ITER_END; \
+              /* set unfinished flag to indicate that the scan is not finished, */ \
+              /* do not update last recycle schema version, */ \
+              /* so next round will continue to recycle */ \
+              recycler_->set_exist_unfinished_recycle(); \
             } \
           } else { \
             ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret; \
