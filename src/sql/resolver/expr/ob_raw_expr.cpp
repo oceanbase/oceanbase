@@ -4564,6 +4564,8 @@ bool ObSysFunRawExpr::inner_same_as(
     }
   } else if (T_FUN_SYS_RAND == get_expr_type() ||
              T_FUN_SYS_RANDOM == get_expr_type() ||
+             T_FUN_SYS_UUID == get_expr_type() ||
+             T_FUN_SYS_UUID_SHORT == get_expr_type() ||
              T_FUN_SYS_GUID == get_expr_type() ||
              T_OP_GET_USER_VAR == get_expr_type() ||
              T_OP_GET_SYS_VAR == get_expr_type() ||
