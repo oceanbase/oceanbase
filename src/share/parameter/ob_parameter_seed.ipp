@@ -1854,3 +1854,8 @@ ERRSIM_DEF_STR(palf_inject_receive_log_error_zone, OB_CLUSTER_PARAMETER, "", "sp
 DEF_BOOL(_like_range_support_non_bmp_chars, OB_TENANT_PARAMETER, "False",
         "like range support non-bmp chars for utf8mb4_bin",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "override backup start scn in errsim"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
