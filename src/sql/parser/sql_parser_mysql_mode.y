@@ -300,7 +300,7 @@ END_P SET_VAR DELIMITER
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
-        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST
+        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST HYBRID_SEARCH
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
@@ -586,6 +586,7 @@ END_P SET_VAR DELIMITER
 %type <node> es_sql_opt
 %type <node> operator_list
 %type <node> semistruct_properties_list semistruct_properties semistruct_encoding_type_option
+%type <node> hybrid_search_expr hybrid_search_param
 
 %type <node> algorithm_opt lock_opt
 %start sql_stmt
@@ -14171,6 +14172,10 @@ tbl_name
 {
   $$ = $1;
 }
+| hybrid_search_expr
+{
+  $$ = $1;
+}
 ;
 
 tbl_name:
@@ -26086,6 +26091,34 @@ UNNEST '(' simple_expr_list ')'
 }
 ;
 
+hybrid_search_expr:
+HYBRID_SEARCH '(' literal ',' hybrid_search_param ')'
+{
+  ParseNode *alias_node = NULL;
+  make_name_node(alias_node, result->malloc_pool_, "");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH_EXPRESSION, 3, $3, $5, alias_node);
+}
+| HYBRID_SEARCH '(' literal ',' hybrid_search_param ')' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH_EXPRESSION, 3, $3, $5, $7);
+}
+| HYBRID_SEARCH '(' literal ',' hybrid_search_param ')' AS relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH_EXPRESSION, 3, $3, $5, $8);
+}
+;
+
+hybrid_search_param:
+literal
+{
+  $$ = $1;
+}
+| USER_VARIABLE
+{
+  $$ = $1;
+}
+;
+
 create_ccl_rule_stmt:
 CREATE CONCURRENT_LIMITING_RULE opt_if_not_exists relation_name
 ON ccl_database_table_optition
@@ -26516,6 +26549,7 @@ ACCESS_INFO
 |       HOT_RETENTION
 |       HYBRID
 |       HYBRID_HIST
+|       HYBRID_SEARCH
 |       ID
 |       IDC
 |       IDENTIFIED

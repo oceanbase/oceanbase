@@ -379,6 +379,10 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         OZ (resolve_unnest_item(*table_node, table_item));
         break;
       }
+      case T_HYBRID_SEARCH_EXPRESSION: {
+        OZ (resolve_hybrid_search_item(*table_node, table_item));
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_PARSER_SYNTAX;

@@ -13,11 +13,10 @@
 #pragma once
 
 #include "ob_query_parse.h"
-#include "share/schema/ob_schema_struct.h"
-#include "sql/resolver/ob_schema_checker.h"
+#include "pl/ob_pl.h"
+#include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "pl/ob_pl.h"
 
 namespace oceanbase {
 namespace share {
@@ -51,6 +50,7 @@ public:
   DISABLE_COPY_ASSIGN(ObHybridSearchExecutor);
 
   int init(const pl::ObPLExecCtx &ctx, const ObHybridSearchArg &arg);
+  int init(sql::ObExecContext *ctx, const ObHybridSearchArg &arg);
   int execute(const ObString &query_str, ObIAllocator &allocator,
               ObString &result);
 
@@ -77,7 +77,6 @@ private:
   int get_basic_column_names(const ObTableSchema *table_schema, ObIArray<ObString> &col_names);
 
 private:
-  const pl::ObPLExecCtx *pl_ctx_;
   sql::ObExecContext *ctx_;
   sql::ObSQLSessionInfo *session_info_;
   sql::ObSchemaChecker schema_checker_;

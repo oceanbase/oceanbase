@@ -402,6 +402,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"hidden", HIDDEN},
   {"hybrid", HYBRID},
   {"hybrid_hist", HYBRID_HIST},
+  {"hybrid_search", HYBRID_SEARCH},
   {"id", ID},
   {"idc", IDC},
   {"identified", IDENTIFIED},

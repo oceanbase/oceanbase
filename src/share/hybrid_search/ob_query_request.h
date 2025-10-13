@@ -33,6 +33,7 @@ public :
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_items_;
   int translate(char *buf, int64_t buf_len, int64_t &res_len);
   int add_score_item(ObIAllocator &alloc, ObReqExpr *score_item);
+  inline bool is_score_item_exist() { return !score_items_.empty(); }
   bool output_all_columns_;
   common::ObString score_alias_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> match_idxs_;
