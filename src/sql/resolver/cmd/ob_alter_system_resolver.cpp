@@ -5713,6 +5713,7 @@ int ObAlterSystemResolverUtil::get_tenant_ids(const ParseNode &t_node, ObIArray<
         } else if (OB_SYS_TENANT_ID == tenant_id) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tenant id list is unexpected", K(ret), K(tenant_id));
+          LOG_USER_ERROR(OB_ERR_UNEXPECTED, "tenant list should not contain system tenant");
         } else {
           int hash_ret = tenant_id_set.exist_refactored(tenant_id);
           if (OB_HASH_EXIST == hash_ret) {
