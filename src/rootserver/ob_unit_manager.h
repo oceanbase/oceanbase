@@ -314,24 +314,26 @@ private:
 
   struct PoolOperationInfo
   {
-    PoolOperationInfo() : old_unit_num_(0), new_unit_num_(0), alter_type_(AUN_NOP) {}
-    PoolOperationInfo(int64_t old_unit_num, int64_t new_unit_num, AlterUnitNumType alter_type)
-     : old_unit_num_(old_unit_num), new_unit_num_(new_unit_num), alter_type_(alter_type) {}
+    PoolOperationInfo() : old_unit_num_(0), new_unit_num_(0), alter_type_(AUN_NOP), replica_type_(REPLICA_TYPE_FULL) {}
+    PoolOperationInfo(int64_t old_unit_num, int64_t new_unit_num, AlterUnitNumType alter_type, common::ObReplicaType replica_type)
+     : old_unit_num_(old_unit_num), new_unit_num_(new_unit_num), alter_type_(alter_type), replica_type_(replica_type) {}
     ~PoolOperationInfo() {}
     bool operator==(const PoolOperationInfo &other) const
     {
       return old_unit_num_ == other.old_unit_num_
           && new_unit_num_ == other.new_unit_num_
-          && alter_type_ == other.alter_type_;
+          && alter_type_ == other.alter_type_
+          && replica_type_ == other.replica_type_;
     }
     bool operator!=(const PoolOperationInfo &other) const
     {
       return !(*this == other);
     }
-    TO_STRING_KV(K_(old_unit_num), K_(new_unit_num), K_(alter_type))
+    TO_STRING_KV(K_(old_unit_num), K_(new_unit_num), K_(alter_type), K_(replica_type))
     int64_t old_unit_num_;
     int64_t new_unit_num_;
     AlterUnitNumType alter_type_;
+    common::ObReplicaType replica_type_;
   };
 
   struct ZoneUnitPtr
@@ -444,6 +446,9 @@ private:
   int check_expand_zone_resource_allowed_by_new_unit_stat_(
       const common::ObIArray<share::ObResourcePoolName> &pool_names);
   int check_grant_pools_unit_num_legal_(
+      const uint64_t tenant_id,
+      const common::ObIArray<share::ObResourcePoolName> &pool_names);
+  int check_grant_pools_replica_type_legal_(
       const uint64_t tenant_id,
       const common::ObIArray<share::ObResourcePoolName> &pool_names);
   int check_unit_num_legal_after_pools_operation_(
@@ -1018,6 +1023,12 @@ private:
       const double hard_limit,
       ObResourceType &not_enough_resource,
       AlterResourceErr &not_enough_resource_config) const;
+  static int check_tenant_exist_(
+         const uint64_t tenant_id,
+         bool &is_exist);
+  static int read_parameter_from_seed_tenant_(
+         const char * parameter_name,
+         ObString &parameter_value);
   //LOCK IN
   int commit_alter_unit_num_in_trans_(
     const common::ObIArray<share::ObResourcePool *> &pools,
@@ -1037,6 +1048,7 @@ private:
     }
     return str;
   }
+  int check_tenant_enable_logonly_replica_(const uint64_t tenant_id, bool &enable_logonly_replica);
 
 private:
   bool inited_;

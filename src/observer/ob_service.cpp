@@ -2862,21 +2862,9 @@ int ObService::fill_ls_replica(
         LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
       } else if (OB_FAIL(get_role_from_palf_(*log_service, ls_id, role, proposal_id))) {
         LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
-      } else if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
-                                          tenant_id, is_compatible_with_readonly_replica))) {
-        LOG_WARN("fail to check data version for read-only replica", KR(ret), K(tenant_id));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (!is_compatible_with_readonly_replica) {
-        replica_type = REPLICA_TYPE_FULL;
-      } else if (learner_list.contains(gctx_.self_addr())) {
-        // if replica exists in learner_list, report it as R-replica.
-        // Otherwise, report as F-replica
-        replica_type = REPLICA_TYPE_READONLY;
-      }
-
-      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_replica_type_(GCTX.self_addr(), ob_member_list, learner_list,
+                                           ls_handle.get_ls()->get_ls_meta(), replica_type))) {
+        LOG_WARN("fail to get replica type", KR(ret));
       } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
         LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
       } else if (OB_FAIL(replica.init(
@@ -2905,6 +2893,36 @@ int ObService::fill_ls_replica(
       } else {
         LOG_TRACE("finish fill ls replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
       }
+    }
+  }
+  return ret;
+}
+
+// this function is expected to not fail
+int ObService::get_replica_type_(
+    const common::ObAddr &addr,
+    const ObMemberList &ob_member_list,
+    const GlobalLearnerList &learner_list,
+    const ObLSMeta &ls_meta,
+    ObReplicaType &replica_type)
+{
+  int ret = OB_SUCCESS;
+  const bool is_logonly = REPLICA_TYPE_LOGONLY == ls_meta.get_replica_type();
+  const bool in_member_list = ob_member_list.contains(addr);
+  const bool in_learner_list = learner_list.contains(addr);
+  if (is_logonly) {
+    replica_type = REPLICA_TYPE_LOGONLY;
+  } else {
+    // if replica exists in learner_list, report it as R-replica.
+    // Otherwise, report as F-replica
+    if (in_learner_list) {
+      replica_type = REPLICA_TYPE_READONLY;
+    } else if (in_member_list) {
+      replica_type = REPLICA_TYPE_FULL;
+    } else {
+      replica_type = REPLICA_TYPE_FULL;
+      LOG_WARN("replica not in member_list or learner_list",
+               K(addr), K(ob_member_list), K(learner_list), K(ls_meta));
     }
   }
   return ret;
@@ -3406,6 +3424,7 @@ int ObService::init_tenant_config(
 }
 
 ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_GET_LOW_READABLE_SCN_ERROR);
 ERRSIM_POINT_DEF(ERRSIM_GET_LS_READABLE_SCN_OLD);
 int ObService::get_ls_replayed_scn(
     const ObGetLSReplayedScnArg &arg,
@@ -3488,6 +3507,11 @@ int ObService::get_ls_replayed_scn(
       cur_readable_scn.convert_from_ts(current_time);
       LOG_WARN("set ls replica readble_scn small", K(arg), K(cur_readable_scn),
           K(current_time));
+    }
+    if (OB_SUCC(ret) && ERRSIM_GET_LOW_READABLE_SCN_ERROR) {
+      cur_readable_scn.convert_from_ts(cur_readable_scn.convert_to_ts() - 1_s * abs(ERRSIM_GET_LOW_READABLE_SCN_ERROR));
+      LOG_WARN("set low readable_scn", KR(ret), K(cur_readable_scn), K(ObTimeUtility::current_time()),
+          K(ERRSIM_GET_LOW_READABLE_SCN_ERROR));
     }
     if (FAILEDx(ls->get_offline_scn(offline_scn))) {
       LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));

@@ -132,6 +132,7 @@ public:
   inline bool is_valid() const;
   inline bool is_strong_leader() const { return common::is_strong_leader(role_); }
   inline bool is_in_service() const { return replica_status_ == share::REPLICA_STATUS_NORMAL; }
+  inline bool is_logonly_replica() const { return common::REPLICA_TYPE_LOGONLY == replica_type_; }
   inline bool is_paxos_replica() const { return common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type_
                                                 || common::REPLICA_TYPE_FULL == replica_type_
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
@@ -290,6 +291,14 @@ public:
 private:
   int find_idx_(const common::ObAddr &server, int64_t &idx) const;
   int find_idx_(const ObLSReplica &replica, int64_t &idx) const;
+  // rectify replica_type and replica_status
+  // @params[out] replica, which replica to recitfy
+  // @params[in]  member_list, leader's member_list
+  // @params[in]  learner_list, leader's learner_list
+  int rectify_replica_type_and_status_(
+      ObLSReplica *&replica,
+      const ObLSReplica::MemberList *member_list,
+      const common::GlobalLearnerList *learner_list);
 
 private:
   uint64_t tenant_id_;                      //which tenant's log stream

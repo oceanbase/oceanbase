@@ -91,6 +91,9 @@ int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls is null", K(ret), K(ls_id_));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "logonly replica has no tx table", KR(ret), KPC(ls));
   } else if (OB_ISNULL(tx_table = ls->get_tx_table())) {
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "get_tx_table from log stream fail.", K(ret), K(*ls));

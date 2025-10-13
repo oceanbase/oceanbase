@@ -2063,6 +2063,15 @@ int64_t ObTenantSchema::get_full_replica_num() const
   return num;
 }
 
+int64_t ObTenantSchema::get_logonly_replica_num() const
+{
+  int64_t num = 0;
+  for (int64_t i = 0; i < zone_replica_attr_array_.count(); ++i) {
+    num += zone_replica_attr_array_.at(i).get_logonly_replica_num();
+  }
+  return num;
+}
+
 int64_t ObTenantSchema::get_all_replica_num() const
 {
   int64_t num = 0;

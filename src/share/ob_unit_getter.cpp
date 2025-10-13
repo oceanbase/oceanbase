@@ -30,7 +30,10 @@ OB_SERIALIZE_MEMBER(ObUnitInfoGetter::ObTenantConfig,
                     mode_,
                     create_timestamp_,
                     has_memstore_,
-                    is_removed_);
+                    is_removed_,
+                    hidden_sys_data_disk_config_size_,
+                    actual_data_disk_size_,
+                    replica_type_);
 
 const char* ObUnitInfoGetter::unit_status_strs_[] = {
     "NORMAL",
@@ -50,7 +53,10 @@ ObUnitInfoGetter::ObTenantConfig::ObTenantConfig()
     mode_(lib::Worker::CompatMode::INVALID),
     create_timestamp_(0),
     has_memstore_(true),
-    is_removed_(false)
+    is_removed_(false),
+    hidden_sys_data_disk_config_size_(0),
+    actual_data_disk_size_(0),
+    replica_type_(REPLICA_TYPE_FULL)
 {}
 
 int ObUnitInfoGetter::ObTenantConfig::init(
@@ -61,7 +67,8 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     lib::Worker::CompatMode compat_mode,
     const int64_t create_timestamp,
     const bool has_memstore,
-    const bool is_remove)
+    const bool is_remove,
+    const common::ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(config_.assign(config))) {
@@ -74,6 +81,7 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     create_timestamp_ = create_timestamp;
     has_memstore_ = has_memstore;
     is_removed_ = is_remove;
+    replica_type_ = replica_type;
   }
   return ret;
 }
@@ -114,7 +122,8 @@ int ObUnitInfoGetter::ObTenantConfig::divide_meta_tenant(ObTenantConfig& meta_te
       lib::Worker::CompatMode::MYSQL,       // always MYSQL mode
       create_timestamp_,
       has_memstore_,
-      is_removed_))) {
+      is_removed_,
+      replica_type_))) {
     LOG_WARN("init meta tenant config fail", KR(ret), KPC(this), K(meta_config));
   }
   // update self unit resource
@@ -134,6 +143,7 @@ void ObUnitInfoGetter::ObTenantConfig::reset()
   mode_ = lib::Worker::CompatMode::INVALID;
   create_timestamp_ = 0;
   is_removed_ = false;
+  replica_type_ = REPLICA_TYPE_FULL;
 }
 
 bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) const
@@ -145,7 +155,8 @@ bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) c
           mode_ == other.mode_ &&
           create_timestamp_ == other.create_timestamp_ &&
           has_memstore_ == other.has_memstore_ &&
-          is_removed_ == other.is_removed_);
+          is_removed_ == other.is_removed_ &&
+          replica_type_ == other.replica_type_);
 }
 
 int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantConfig &other)
@@ -163,6 +174,7 @@ int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantCon
     create_timestamp_ = other.create_timestamp_;
     has_memstore_ = other.has_memstore_;
     is_removed_ = other.is_removed_;
+    replica_type_ = other.replica_type_;
   }
   return ret;
 }
@@ -242,6 +254,7 @@ int ObUnitInfoGetter::get_server_tenant_configs(const common::ObAddr &server,
       tenant_config.reset();
       tenant_config.tenant_id_ = tenant_id;
       tenant_config.unit_id_ = unit_id;
+      tenant_config.replica_type_ = unit_infos.at(i).unit_.replica_type_;
       if (common::REPLICA_TYPE_LOGONLY == unit_infos.at(i).unit_.replica_type_) {
         // Logonly unit can hold logonly replicas only,
         // no need to reserve memory for memstore

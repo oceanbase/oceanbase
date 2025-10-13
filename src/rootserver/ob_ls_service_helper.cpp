@@ -364,7 +364,7 @@ int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
       const ObLSID &ls_id, share::SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !is_user_tenant(tenant_id))) {
+  if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
   } else {
@@ -757,6 +757,7 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
     ObUnitIDList unit_list;
     if (0 == new_ls_group_id) { // for dup ls
       unit_group_id = 0;
+      unit_list.reset();
     } else if (OB_SUCC(tenant_info.get_ls_group_info(new_ls_group_id, ls_group_info))) {
       unit_group_id = ls_group_info.unit_group_id_;
       if (OB_FAIL(unit_list.assign(ls_group_info.unit_list_))) {
@@ -765,13 +766,15 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
     } else if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get ls group info", KR(ret), K(new_ls_group_id));
     } else {
-      ret = OB_SUCCESS;  // try to get new unit group id
-      //如果没有一样的ls_group，unit_group和unit_list保持不变
-      //升级过程中禁掉了均衡操作，已经发起的操作会取消掉
-      //这里的兼容性不考虑版本号没啥问题
-      unit_group_id = ls_info.unit_group_id_;
-      if (OB_FAIL(unit_list.assign(ls_info.get_unit_list()))) {
-        LOG_WARN("assign failed", KR(ret), K(ls_info));
+      ret = OB_SUCCESS;  // try to get new unit group id and unit list
+      if (ls_info.unit_group_id_ != 0 || !ls_info.get_unit_list().empty()) {
+        // 如果当前unit_group_id和unit_list其中之一有效，则直接沿用
+        unit_group_id = ls_info.unit_group_id_;
+        if (OB_FAIL(unit_list.assign(ls_info.get_unit_list()))) {
+          LOG_WARN("assign failed", KR(ret), K(ls_info));
+        }
+      } else if (OB_FAIL(choose_new_unit_group_or_list_(ls_id, sql_proxy, tenant_info, unit_group_id, unit_list))) {
+        LOG_WARN("failed to choose new unit group or list", KR(ret), K(ls_id), K(tenant_info));
       }
     }
     ObLSStatusOperator status_op;
@@ -814,7 +817,7 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
       }
     }
     LOG_INFO("[LS_MGR] alter ls group id", KR(ret), K(ls_info),
-        K(new_ls_group_id), K(unit_group_id));
+        K(new_ls_group_id), K(unit_group_id), K(unit_list));
   }
   return ret;
 }
@@ -896,14 +899,14 @@ int ObLSServiceHelper::create_new_ls_in_trans(
 }
 
 int ObLSServiceHelper::choose_new_unit_group_or_list_(const share::ObLSID &ls_id,
-    common::ObMySQLTransaction &trans,
+    common::ObISQLClient &sql_proxy,
       ObTenantLSInfo& tenant_ls_info, uint64_t &unit_group_id,
       share::ObUnitIDList &unit_list)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
   const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
-  ObGlobalStatProxy global_proxy(trans, gen_meta_tenant_id(tenant_id));
+  ObGlobalStatProxy global_proxy(sql_proxy, gen_meta_tenant_id(tenant_id));
   if (OB_UNLIKELY(!ls_id.is_valid() || !tenant_ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(tenant_ls_info));

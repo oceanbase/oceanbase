@@ -685,7 +685,8 @@ int ObMultiTenant::construct_meta_for_hidden_sys(ObTenantMeta &meta)
                         lib::Worker::CompatMode::MYSQL,
                         create_timestamp,
                         has_memstore,
-                        false /*is_removed*/))) {
+                        false /*is_removed*/,
+                        ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     LOG_WARN("fail to init hidden sys tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     LOG_WARN("fail to build tenant meta", K(ret), K(tenant_id));
@@ -719,7 +720,8 @@ int ObMultiTenant::construct_meta_for_virtual_tenant(const uint64_t tenant_id,
                         lib::Worker::CompatMode::MYSQL,
                         create_timestamp,
                         has_memstore,
-                        false /*is_removed*/))) {
+                        false /*is_removed*/,
+                        ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     LOG_WARN("fail to init virtual tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     LOG_WARN("fail to build tenant meta", K(ret), K(tenant_id));

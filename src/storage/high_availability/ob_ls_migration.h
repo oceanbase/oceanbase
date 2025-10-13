@@ -252,6 +252,8 @@ private:
   int create_all_tablets_with_4_1_rpc_();
 
   int record_server_event_();
+  int join_learner_list_();
+  int ls_online_();
 
 private:
   bool is_inited_;
@@ -441,7 +443,6 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObDataTabletsMigrationTask"), KP(this), KPC(ctx_));
 private:
-  int join_learner_list_();
   int ls_online_();
   int generate_tablet_group_migration_dag_();
   int generate_tablet_group_dag_(

@@ -65,11 +65,11 @@ public:
   static int check_sys_ls_primary_zone_balanced(const uint64_t tenant_id, int &check_ret);
 
 private:
-  static int adjust_primary_zone_by_ls_group_(const common::ObIArray<common::ObZone> &primary_zone_array,
-                                       const ObIArray<share::ObLSPrimaryZoneInfo> &primary_zone_infos,
-                                       const share::schema::ObTenantSchema &tenant_schema);
+  static int adjust_primary_zone_by_ls_group_(const common::ObIArray<common::ObArray<common::ObZone>> &multi_level_primary_zone_array,
+                                       const ObIArray<share::ObLSPrimaryZoneInfo> &primary_zone_infos);
   static int set_ls_to_primary_zone_(const common::ObIArray<common::ObZone> &primary_zone_array,
                              const ObIArray<share::ObLSPrimaryZoneInfo> &primary_zone_infos,
+                             const bool is_first_level,
                              common::ObIArray<common::ObZone> &ls_primary_zone,
                              common::ObIArray<uint64_t> &count_group_by_zone);
   static int balance_ls_primary_zone_(const common::ObIArray<common::ObZone> &primary_zone_array,

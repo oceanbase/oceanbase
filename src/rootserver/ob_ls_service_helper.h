@@ -265,7 +265,7 @@ private:
       const share::SCN &transfer_scn,
       bool &replay_finish);
   static int choose_new_unit_group_or_list_(const share::ObLSID &ls_id,
-      common::ObMySQLTransaction &trans,
+      common::ObISQLClient &sql_proxy,
       ObTenantLSInfo& tenant_ls_info, uint64_t &unit_group_id,
       share::ObUnitIDList &unit_list);
 };

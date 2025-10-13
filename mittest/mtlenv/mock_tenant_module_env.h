@@ -458,7 +458,8 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
                         lib::Worker::CompatMode::MYSQL,
                         create_timestamp,
                         has_memstore,
-                        false /*is_removed*/))) {
+                        false /*is_removed*/,
+                        ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     STORAGE_LOG(WARN, "fail to init tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     STORAGE_LOG(WARN, "fail to build tenant meta", K(ret), K(tenant_id));

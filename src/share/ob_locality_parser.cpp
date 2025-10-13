@@ -49,14 +49,11 @@ int ObLocalityParser::parse_type(const char *str, int64_t len, ObReplicaType &re
     replica_type = REPLICA_TYPE_FULL;
   } else if (0 == STRCASECMP(F_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_FULL;
+  // L-replica supported from 4.2.5.7
   } else if (0 == STRCASECMP(LOGONLY_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_LOGONLY;
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "logonly-replica");
   } else if ( 0 == STRCASECMP(L_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_LOGONLY;
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "logonly-replica");
   } else if (0 == STRCASECMP(ENCRYPTION_LOGONLY_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_ENCRYPTION_LOGONLY;
     ret = OB_NOT_SUPPORTED;

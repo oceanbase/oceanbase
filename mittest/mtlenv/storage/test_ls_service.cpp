@@ -21,6 +21,8 @@
 #include "src/storage/slog/ob_storage_log_item.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_tablet_helper.h"
+#include "deps/oblib/src/lib/ob_define.h"
+#include "deps/oblib/src/lib/ob_replica_define.h"
 
 namespace oceanbase
 {
@@ -297,6 +299,89 @@ TEST_F(TestLSService, ls_safe_destroy)
     }
   }
   ASSERT_FALSE(waiting);
+}
+
+// Helper function to generate create LS arg with logonly replica type
+int gen_create_logonly_ls_arg(const int64_t tenant_id,
+                              const share::ObLSID &ls_id,
+                              obrpc::ObCreateLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObReplicaType replica_type = REPLICA_TYPE_LOGONLY;  // L副本类型
+  ObReplicaProperty property;
+  share::ObAllTenantInfo tenant_info;
+  const share::SCN create_scn = share::SCN::base_scn();
+  arg.reset();
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
+  palf::PalfBaseInfo palf_base_info;
+
+  if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
+    STORAGE_LOG(WARN, "failed to init tenant info", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_scn, compat_mode, false, palf_base_info))) {
+    STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info));
+  }
+  return ret;
+}
+
+TEST_F(TestLSService, create_logonly_ls)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObCreateLSArg arg;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  bool exist = false;
+  ObLSID id_200(200);  // 使用不同的LS ID避免冲突
+  ObLSHandle handle;
+  ObLS *ls = NULL;
+
+  LOG_INFO("create_logonly_ls begin");
+
+  // 1. create logonly LS
+  ASSERT_EQ(OB_SUCCESS, gen_create_logonly_ls_arg(tenant_id, id_200, arg));
+  LOG_INFO("create_logonly_ls", K(arg), K(id_200));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
+
+  // 2. verify LS exists
+  EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
+  EXPECT_TRUE(exist);
+
+  // 3. get LS and verify replica type
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_200, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(id_200, handle.get_ls()->get_ls_id());
+
+  // 4. verify it's a logonly replica
+  ObReplicaType replica_type = handle.get_ls()->get_replica_type();
+  EXPECT_EQ(REPLICA_TYPE_LOGONLY, replica_type);
+  LOG_INFO("logonly ls created successfully", K(replica_type), K(id_200));
+
+  // 5. verify LS meta replica type
+  ObReplicaType meta_replica_type = handle.get_ls()->get_ls_meta().get_replica_type();
+  EXPECT_EQ(REPLICA_TYPE_LOGONLY, meta_replica_type);
+
+  // 6. verify it's a log replica according to ObReplicaTypeCheck
+  EXPECT_TRUE(ObReplicaTypeCheck::is_log_replica(replica_type));
+  EXPECT_FALSE(ObReplicaTypeCheck::is_full_replica(replica_type));
+  EXPECT_FALSE(ObReplicaTypeCheck::is_readonly_replica(replica_type));
+
+  // 7. remove the LS
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_200, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
+  EXPECT_FALSE(exist);
+
+  // 8. wait safe destroy
+  handle.reset();
+  int64_t cnt = 0;
+  bool waiting = false;
+  while (cnt++ < 20) {
+    ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_200, waiting));
+    if (waiting) {
+      ::sleep(1);
+    } else {
+      break;
+    }
+  }
+  ASSERT_FALSE(waiting);
+  LOG_INFO("create_logonly_ls end");
 }
 
 TEST_F(TestLSService, check_ls_iter_cnt)

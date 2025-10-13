@@ -101,6 +101,7 @@ class ObDRWorker : public share::ObCheckStopProvider
 {
 public:
   typedef common::ObIArray<ObLSReplicaTaskDisplayInfo> LSReplicaTaskDisplayInfoArray;
+  static const int64_t DR_WORKER_PRINT_INTERVAL = 60 * 1000 * 1000L; //1min
 public:
   ObDRWorker(volatile bool &stop);
   virtual ~ObDRWorker();
@@ -244,18 +245,20 @@ private:
       const common::ObReplicaType &replica_type,
       const DRLSInfo &dr_ls_info,
       int64_t &new_p);
-  // check whether the values of member list count and new paxs_replica_num are legal in alter full replica
-  // @param [in] member_list_count, count of leader member list after alter full replica
+  // check whether the values of member list count and new paxs_replica_num are legal in alter paxos replica
+  // @param [in] member_list_count, count of leader member list after alter paxos replica
   // @param [in] new_p, new paxos_replica_num
-  int check_for_alter_full_replica_(
+  int check_for_alter_paxos_replica_(
       const int64_t member_list_count,
       const int64_t new_p);
   // check if majority is satisfied when remove replica
   // @param [in] server_addr, target replica to remove in which server
+  // @param [in] replica_type_to_remove, whe removed replica's type
   // @param [in] dr_ls_info, dr_ls_info
   // @param [in] new_p, new paxos_replica_num
   int check_majority_for_remove_(
       const common::ObAddr& server_addr,
+      const common::ObReplicaType &replica_type_to_remove,
       const DRLSInfo &dr_ls_info,
       const int64_t new_p);
   // check the count of inactive server except desti_server_addr
@@ -265,7 +268,8 @@ private:
   int check_other_inactive_server_count_(
       const common::ObAddr& desti_server_addr,
       const DRLSInfo &dr_ls_info,
-      int64_t& other_inactive_server_count);
+      int64_t& other_inactive_server_count,
+      common::ObMemberList &member_list);
 
   struct TaskCountStatistic
   {
@@ -352,11 +356,11 @@ private:
         paxos_replica_number_(0) {}
     virtual ~RemoveReplicaLATask() {}
   public:
-    virtual ObDRTaskType get_task_type() const override { return ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
+    virtual ObDRTaskType get_task_type() const override { return ObReplicaTypeCheck::is_paxos_replica(replica_type_)
                                                                ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA
                                                                : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA; }
     virtual LATaskPrio get_task_priority() const override {
-      LATaskPrio priority = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
+      LATaskPrio priority = ObReplicaTypeCheck::is_paxos_replica(replica_type_)
                           ? LATaskPrio::LA_P_REMOVE_PAXOS
                           : LATaskPrio::LA_P_REMOVE_NON_PAXOS;
       return priority;
@@ -517,19 +521,19 @@ private:
   struct ReplicaDesc
   {
   public:
-    ReplicaDesc(const ObReplicaType replica_type,
-                const int64_t memstore_percent,
-                const int64_t replica_num)
-      : replica_type_(replica_type),
-        memstore_percent_(memstore_percent),
-        replica_num_(replica_num) {}
     ReplicaDesc()
       : replica_type_(REPLICA_TYPE_MAX),
         memstore_percent_(100),
-        replica_num_(0) {}
+        replica_num_(0),
+        zone_() {}
     TO_STRING_KV(K(replica_type_),
                  K(memstore_percent_),
-                 K(replica_num_));
+                 K(replica_num_),
+                 K(zone_));
+    int init(const ObReplicaType replica_type,
+             const int64_t memstore_percent,
+             const int64_t replica_num,
+             const ObZone &zone);
     int64_t cast(const common::ObReplicaType replica_type) {
       int64_t ret_val = 0;
       if (REPLICA_TYPE_READONLY == replica_type) {
@@ -552,6 +556,7 @@ private:
     ObReplicaType replica_type_;
     int64_t memstore_percent_;
     int64_t replica_num_;
+    ObZone zone_;
   };
 
   struct ReplicaStatDesc
@@ -646,7 +651,8 @@ private:
         const common::ObZone &zone,
         const share::ObLSStatusInfo &ls_status_info,
         const bool is_locality_alignment,
-        share::ObUnit &unit);
+        share::ObUnit &unit,
+        DRLSInfo &dr_ls_info);
     int init_unit_set(
         DRLSInfo &dr_ls_info);
 
@@ -772,7 +778,18 @@ private:
     int check_zone_exist_in_unit_list_(
         const ObZone &zone,
         bool &zone_exist_in_unit_list);
-    bool is_dup_ls_on_gts_unit_(const uint64_t unit_id);
+    int check_replica_matched_with_locality_(
+        const ReplicaStatDesc &replica_stat_desc,
+        const ReplicaDescArray &locality_zone_desc,
+        bool &matched_with_locality);
+    int inner_check_replica_matched_with_locality_(
+        const ReplicaStatDesc &replica_stat_desc,
+        const ReplicaDesc &locality_replica_desc,
+        bool &replica_type_matched_with_locality,
+        bool &replica_location_matched_with_locality);
+    int check_replica_location_is_correct_(
+        const ReplicaStatDesc &replica_stat_desc,
+        bool &replica_on_correct_location);
   private:
     static const int64_t LOCALITY_MAP_BUCKET_NUM = 100;
     static const int64_t UNIT_SET_BUCKET_NUM = 5000;
@@ -1045,11 +1062,12 @@ private:
   // @params[in]  only_for_display, whether just to display this task
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
   // @params[out] acc_dr_task, accumulated disaster recovery task count
-  int try_remove_readonly_replica_for_deleting_unit_(
+  int try_remove_readonly_replica_for_deleting_and_gts_unit_(
       const share::ObLSReplica &ls_replica,
       const bool &only_for_display,
       DRLSInfo &dr_ls_info,
-      int64_t &acc_dr_task);
+      int64_t &acc_dr_task,
+      const bool &is_unit_deleting);
 
   // If unit is delting and a replica is on it,
   // we have to migrate this replica to another unit
@@ -1062,7 +1080,7 @@ private:
   // @params[in]  unit_in_group_stat_info, unit group info of this log stream
   // @params[in]  only_for_display, whether just to display this task
   // @params[out] acc_dr_task, accumulated disaster recovery task count
-  int try_migrate_replica_for_deleting_unit_(
+  int try_migrate_replica_for_deleting_and_gts_unit_(
       ObDRWorker::UnitProvider &unit_provider,
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &ls_replica,
@@ -1071,7 +1089,8 @@ private:
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
       const bool &only_for_display,
-      int64_t &acc_dr_task);
+      int64_t &acc_dr_task,
+      const bool &is_unit_deleting);
 
   // migrate replica to a certain unit
   int try_migrate_replica_for_migrate_to_unit_(
@@ -1089,11 +1108,12 @@ private:
   // @params[in]  ls_replica, the replica to do type transform
   // @params[in]  only_for_display, whether just to display this task
   // @params[out] acc_dr_task, accumulated disaster recovery task count
-  int try_type_transform_for_deleting_unit_(
+  int try_type_transform_for_deleting_and_gts_unit_(
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &ls_replica,
       const bool &only_for_display,
-      int64_t &acc_dr_task);
+      int64_t &acc_dr_task,
+      const bool &is_unit_deleting);
 
   // do type tranfrom for duplicate ls when it needs to migrate to a certain unit
   int try_type_transform_for_migrate_to_unit_(

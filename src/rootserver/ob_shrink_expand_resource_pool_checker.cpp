@@ -208,6 +208,8 @@ int ObShrinkExpandResourcePoolChecker::get_tenant_alter_unit_(
         LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
       } else if (OB_FAIL(delete_unit_ids.push_back(unit.unit_id_))) {
         LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
+      } else if (common::ObReplicaType::REPLICA_TYPE_LOGONLY == unit.replica_type_) {
+        // no unit group id, skip
       } else if (!has_exist_in_array(delete_unit_group_ids, unit.unit_group_id_)) {
         if (OB_FAIL(delete_unit_group_ids.push_back(unit.unit_group_id_))) {
           LOG_WARN("failed to push back", KR(ret), K(i), K(unit));
@@ -226,7 +228,7 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
     const uint64_t tenant_id,
     const ObIArray<common::ObAddr> &servers,
     const ObIArray<uint64_t> &unit_ids,
-    const ObIArray<uint64_t> &unit_group_ids,
+    const ObIArray<uint64_t> &unit_group_ids,   // only for compatibility
     bool &is_finished)
 {
   int ret = OB_SUCCESS;
@@ -235,10 +237,9 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
     ret = OB_NOT_INIT;
     LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-             || 0 == servers.count() || 0 == unit_ids.count()
-             || 0 == unit_group_ids.count())) {
+             || 0 == servers.count() || 0 == unit_ids.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(servers), K(unit_ids), K(unit_group_ids));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(servers), K(unit_ids));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(unit_mgr_) || OB_ISNULL(lst_operator_)) {
@@ -259,7 +260,9 @@ int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls
       int64_t ls_replica_cnt = 0;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("ObShrinkExpandResourcePoolChecker stopped", KR(ret));
-      } else if (has_exist_in_array(unit_group_ids, ls_status_info.unit_group_id_)) {
+      } else if (ls_status_info.unit_group_id_ != 0
+                 && has_exist_in_array(unit_group_ids, ls_status_info.unit_group_id_)) {
+        // only for compatibility
         is_finished = false;
         LOG_INFO("has ls in the unit group", KR(ret), K(ls_status_info));
       } else if (OB_FAIL(lst_operator_->get(

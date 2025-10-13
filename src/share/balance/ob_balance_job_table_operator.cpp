@@ -16,6 +16,9 @@
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
 #include "src/share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
+#include "share/ob_unit_table_operator.h"
+#include "observer/ob_server_struct.h"
+#include "share/ob_locality_parser.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -162,14 +165,20 @@ int ObBalanceJobDesc::get_unit_lcm_count(int64_t &lcm_count) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(zone_unit_num_list_));
   } else {
-    int64_t zone_unit_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < zone_unit_num_list_.count(); ++i) {
       const ObDisplayZoneUnitCnt &zone_unit = zone_unit_num_list_.at(i);
+      const ObReplicaType &replica_type = zone_unit.get_replica_type();
       int64_t unit_num = zone_unit.get_unit_cnt();
-      if (enable_gts_standalone_) {
+      if (enable_gts_standalone_ && ObReplicaTypeCheck::gts_standalone_applicable(replica_type)) {
         unit_num--;
       }
-      lcm_count = lcm(lcm_count, unit_num);
+      if (unit_num <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit num is less than 0", KR(ret), K(tenant_id_), K(zone_unit), K(unit_num),
+            K(replica_type), K(enable_gts_standalone_));
+      } else {
+        lcm_count = lcm(lcm_count, unit_num);
+      }
     }
   }
   return ret;
@@ -841,10 +850,19 @@ int ObDisplayZoneUnitCnt::parse_from_display_str(const common::ObString &str)
   reset();
   errno = 0;
   char zone_buf[MAX_ZONE_LENGTH + 1] = {0};
-  if (OB_UNLIKELY(2 != sscanf(str.ptr(), "%128[^:]:%ld", zone_buf, &unit_cnt_))) { // MAX_ZONE_LENGTH = 128
+  char replica_type_str[MAX_REPLICA_TYPE_LENGTH + 1] = {0};
+  if (OB_LIKELY(3 == sscanf(str.ptr(), "%128[^:]:%16[^:]:%ld", zone_buf, replica_type_str, &unit_cnt_))) { // MAX_ZONE_LENGTH = 128, MAX_REPLICA_TYPE_LENGTH = 16
+    if (OB_FAIL(ObLocalityParser::parse_type(replica_type_str, strlen(replica_type_str), replica_type_))) {
+      LOG_WARN("parse type failed", KR(ret), K(replica_type_str));
+    }
+  } else if (OB_LIKELY(2 == sscanf(str.ptr(), "%128[^:]:%ld", zone_buf, &unit_cnt_))) { // MAX_ZONE_LENGTH = 128
+    // for compatibility, default to full replica type
+    replica_type_ = common::ObReplicaType::REPLICA_TYPE_FULL;
+  } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str", KR(ret), K(str), KPC(this), K(errno), KERRMSG);
-  } else if (OB_FAIL(zone_.assign(zone_buf))) {
+  }
+  if (FAILEDx(zone_.assign(zone_buf))) {
     LOG_WARN("assign failed", KR(ret), K(zone_buf), KPC(this));
   }
   return ret;
@@ -856,8 +874,23 @@ int ObDisplayZoneUnitCnt::to_display_str(char *buf, const int64_t len, int64_t &
   if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0 || pos < 0 || pos >= len || !is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(buf), K(len), K(pos), KPC(this));
-  } else if (OB_FAIL(databuff_printf(buf, len, pos, "%s:%ld", zone_.ptr(), unit_cnt_))) {
-    LOG_WARN("databuff_printf failed", KR(ret), K(len), K(pos), K(buf), KPC(this));
+  } else {
+    // It is ensured that tenant's unit replica_type can be NOT FULL
+    //  only when tenant data_version is higher than 4.2.5.7
+    // So it's safe to use new format if replica_type_ is not F.
+    if (REPLICA_TYPE_FULL != replica_type_) {
+      char replica_type_str[MAX_REPLICA_TYPE_LENGTH + 1] = {0};
+      if (OB_FAIL(replica_type_to_string(replica_type_, replica_type_str, sizeof(replica_type_str)))) {
+        LOG_WARN("replica_type_to_string failed", KR(ret), K(replica_type_));
+      } else if (OB_FAIL(databuff_printf(buf, len, pos, "%s:%s:%ld", zone_.ptr(), replica_type_str, unit_cnt_))) {
+        LOG_WARN("databuff_printf failed", KR(ret), K(len), K(pos), K(buf), KPC(this));
+      }
+    } else {
+      // If replica_type_ is F, we use old format. replica_type can be parsed as F by default.
+      if (OB_FAIL(databuff_printf(buf, len, pos, "%s:%ld", zone_.ptr(), unit_cnt_))) {
+        LOG_WARN("databuff_printf failed", KR(ret), K(len), K(pos), K(buf), KPC(this));
+      }
+    }
   }
   return ret;
 }

@@ -387,12 +387,28 @@ int LogConfigMgr::get_arbitration_member(common::ObMember &arb_member) const
   return ret;
 }
 
-int LogConfigMgr::get_curr_member_list(ObMemberList &member_list, int64_t &replica_num) const
+int LogConfigMgr::get_curr_member_list(ObMemberList &member_list, int64_t &replica_num, const bool &filter_logonly_member) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
+  } else if (filter_logonly_member) {
+    common::ObMemberList tmp_member_list;
+    if (OB_FAIL(log_ms_meta_.curr_.config_.get_expected_paxos_memberlist(tmp_member_list, replica_num))) {
+      LOG_WARN("fail to get_expected_paxos_memberlist", KR(ret));
+    } else {
+      for (int64_t index = 0; index < tmp_member_list.get_member_number() && OB_SUCC(ret); ++index) {
+        common::ObMember member;
+        if (OB_FAIL(tmp_member_list.get_member_by_index(index, member))) {
+          LOG_WARN("fail to get member by index", KR(ret), K(tmp_member_list), K(index));
+        } else if (member.is_logonly()) {
+          replica_num--;
+        } else if (OB_FAIL(member_list.add_member(member))) {
+          LOG_WARN("fail to add member", KR(ret), K(member));
+        }
+      }
+    }
   } else if (OB_FAIL(log_ms_meta_.curr_.config_.get_expected_paxos_memberlist(member_list, replica_num))) {
     PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), K_(palf_id), K_(self));
   } else {
@@ -1089,8 +1105,9 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
     const common::GlobalLearnerList &curr_learner_list = log_ms_meta_.curr_.config_.learnerlist_;
     const common::GlobalLearnerList &degraded_learnerlist = log_ms_meta_.curr_.config_.degraded_learnerlist_;
     const common::ObMember &member = args.server_;
-    const common::ObMember member_wo_flag = common::ObMember(args.server_.get_server(), \
-                                                             args.server_.get_timestamp());
+    const common::ObMember member_wo_flag = args.server_.is_migrating()
+                                            ? common::ObMember(args.server_.get_server(), args.server_.get_timestamp())
+                                            : args.server_;
     const int64_t new_replica_num = args.new_replica_num_;
     // Note: for reentrancy of SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM, we check if the member
     //       without the flag is in the log_sync_memberlist

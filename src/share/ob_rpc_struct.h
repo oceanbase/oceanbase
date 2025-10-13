@@ -3213,7 +3213,8 @@ public:
 
   bool need_create_inner_tablets() const
   {
-    return CREATE_WITH_PALF != create_ls_type_;
+    return CREATE_WITH_PALF != create_ls_type_ &&
+           !ObReplicaTypeCheck::is_log_replica(replica_type_);
   }
   DECLARE_TO_STRING;
 

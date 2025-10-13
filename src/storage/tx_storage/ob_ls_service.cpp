@@ -149,7 +149,8 @@ int ObLSService::get_resource_constraint_value(ObResoureConstraintValue &constra
   return ret;
 }
 
-int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constraint_value)
+int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constraint_value,
+                                                const bool is_check_for_logonly)
 {
   int ret = OB_SUCCESS;
   int64_t config_value = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER;
@@ -164,8 +165,14 @@ int ObLSService::get_resource_constraint_value_(ObResoureConstraintValue &constr
 
   // 2. memory
   const int64_t tenant_memory = lib::get_tenant_memory_limit(MTL_ID());
-  memory_value = OB_MAX(tenant_memory - SMALL_TENANT_MEMORY_LIMIT, 0) / TENANT_MEMORY_PER_LS_NEED +
-    OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT;
+  const int64_t memory_per_ls = is_check_for_logonly ? TENANT_MEMORY_PER_LOGONLY_LS_NEED : TENANT_MEMORY_PER_LS_NEED;
+  if (is_check_for_logonly) {
+    memory_value = tenant_memory / memory_per_ls;
+    LOG_TRACE("memory check for logonly replica", K(memory_value), K(tenant_memory), K(memory_per_ls));
+  } else {
+    memory_value = OB_MAX(tenant_memory - SMALL_TENANT_MEMORY_LIMIT, 0) / memory_per_ls +
+      OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_FOR_SMALL_TENANT;
+  }
 
   // 3. clog disk
   palf::PalfOptions palf_opts;
@@ -424,12 +431,12 @@ int ObLSService::start()
   return ret;
 }
 
-int ObLSService::check_tenant_ls_num_()
+int ObLSService::check_tenant_ls_num_(const bool is_check_for_logonly)
 {
   int ret = OB_SUCCESS;
   ObResoureConstraintValue constraint_value;
-  if (OB_FAIL(get_resource_constraint_value_(constraint_value))) {
-    LOG_WARN("get resource constraint value failed", K(ret));
+  if (OB_FAIL(get_resource_constraint_value_(constraint_value, is_check_for_logonly))) {
+    LOG_WARN("get resource constraint value failed", K(ret), K(is_check_for_logonly));
   } else {
     int64_t min_constraint_value = 0;
     int64_t min_constraint_type = 0;
@@ -438,7 +445,7 @@ int ObLSService::check_tenant_ls_num_()
     constraint_value.get_min_constraint(min_constraint_type, min_constraint_value);
     if (normal_ls_count + removeing_ls_count + 1 > min_constraint_value) {
       ret = OB_TOO_MANY_TENANT_LS;
-      LOG_WARN("too many ls of a tenant", K(ret), K(normal_ls_count), K(removeing_ls_count),
+      LOG_WARN("too many ls of a tenant", K(ret), K(normal_ls_count), K(removeing_ls_count), K(is_check_for_logonly),
                K(min_constraint_type), K(get_constraint_type_name(min_constraint_type)), K(min_constraint_value));
       LOG_DBA_WARN_(OB_STORAGE_LS_COUNT_REACH_UPPER_LIMIT, ret,
                     "The current tenant has too many log streams. ",
@@ -458,6 +465,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
                                   const SCN &create_scn,
+                                  const ObReplicaType &replica_type,
                                   ObLS *&ls)
 {
   int ret = OB_SUCCESS;
@@ -475,6 +483,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                               migration_status,
                               restore_status,
                               create_scn,
+                              replica_type,
                               rs_reporter_))) {
     LOG_WARN("fail to init ls", K(ret), K(lsid));
   }
@@ -643,14 +652,15 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     } else if (waiting_destroy) {
       ret = OB_LS_WAITING_SAFE_DESTROY;
       LOG_WARN("ls waiting for destroy, need retry later", K(ret), K(arg));
-    } else if (OB_FAIL(check_tenant_ls_num_())) {
-      LOG_WARN("too many ls", K(ret));
+    } else if (OB_FAIL(check_tenant_ls_num_(ObReplicaTypeCheck::is_log_replica(arg.get_replica_type())))) {
+      LOG_WARN("too many ls", K(ret), K(arg));
     } else if (OB_FAIL(inner_create_ls_(arg.get_ls_id(),
                                         migration_status,
                                         (is_ls_to_restore_(arg) ?
                                          ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START) :
                                          ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE)),
                                         create_scn,
+                                        arg.get_replica_type(),
                                         ls))) {
       LOG_WARN("inner create log stream failed.", K(ret), K(arg), K(migration_status));
     } else {
@@ -1024,6 +1034,7 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
                                       migration_status,
                                       restore_status,
                                       ls_meta.get_clog_checkpoint_scn(),
+                                      ls_meta.get_replica_type(),
                                       ls))) {
     LOG_WARN("fail to inner create ls", K(ret), K(ls_meta.ls_id_));
   } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_INNER_CREATED)) {
@@ -1289,8 +1300,8 @@ int ObLSService::create_ls_for_ha(
     } else if (waiting_destroy) {
       ret = OB_LS_WAITING_SAFE_DESTROY;
       LOG_WARN("ls waiting for destroy, need retry later", K(ret), K(arg));
-    } else if (OB_FAIL(check_tenant_ls_num_())) {
-      LOG_WARN("too many ls", K(ret));
+    } else if (OB_FAIL(check_tenant_ls_num_(ObReplicaTypeCheck::is_log_replica(arg.dst_.get_replica_type())))) {
+      LOG_WARN("too many ls", K(ret), K(arg));
     } else if (OB_FAIL(ObMigrationStatusHelper::trans_migration_op(arg.type_, migration_status))) {
       LOG_WARN("failed to trans migration op", K(ret), K(arg), K(task_id));
     } else if (OB_FAIL(get_restore_status_(restore_status))) {
@@ -1299,6 +1310,7 @@ int ObLSService::create_ls_for_ha(
                                         migration_status,
                                         restore_status,
                                         ObScnRange::MIN_SCN, /* create scn */
+                                        arg.dst_.get_replica_type(),
                                         ls))) {
       LOG_WARN("create ls failed", K(ret), K(arg), K(task_id));
     } else {

@@ -143,6 +143,34 @@ int DRLSInfo::get_tenant_id(
   return ret;
 }
 
+int DRLSInfo::check_zone_is_logonly(
+    const common::ObZone &zone,
+    bool &is_logonly) const
+{
+  int ret = OB_SUCCESS;
+  is_logonly = false;
+  if (OB_UNLIKELY(zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone));
+  } else {
+    bool find_zone = false;
+    for (int64_t index = 0; index < zone_locality_array_.count() && OB_SUCC(ret); ++index) {
+      const share::ObZoneReplicaAttrSet &zone_type_desc = zone_locality_array_.at(index);
+      if (zone_type_desc.zone_ == zone) {
+        find_zone = true;
+        is_logonly = 0 != zone_type_desc.get_logonly_replica_num();
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!find_zone) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("zone not exist in locality", KR(ret), K(zone));
+    }
+  }
+  return ret;
+}
+
 int DRLSInfo::get_ls_id(
     uint64_t &tenant_id,
     ObLSID &ls_id) const
@@ -658,6 +686,8 @@ int DRLSInfo::get_member_by_server(
   } else if (member_list.contains(server_addr)) {
     if (OB_FAIL(member_list.get_member_by_addr(server_addr, member))) {
       LOG_WARN("fail to get member by addr", KR(ret), K(server_addr), K(member_list));
+    } else if (OB_FAIL(rectify_replica_type_for_member(member))) {
+      LOG_WARN("fail to rectify replica type", KR(ret), K(member), K(member_list));
     }
   } else if (learner_list.contains(server_addr)) {
     if (OB_FAIL(learner_list.get_learner_by_addr(server_addr, member))) {
@@ -696,6 +726,37 @@ int DRLSInfo::check_replica_exist_and_get_ls_replica(
     LOG_WARN("ls_replica_ptr is null", KR(ret), K(server_addr), KP(ls_replica_ptr), K(inner_ls_info_));
   } else if (OB_FAIL(ls_replica.assign(*ls_replica_ptr))) {
     LOG_WARN("ls_replica assign failed", KR(ret), K(server_addr), KP(ls_replica_ptr));
+  }
+  return ret;
+}
+
+int DRLSInfo::rectify_replica_type_for_member(
+    ObMember &member) const
+{
+  int ret = OB_SUCCESS;
+  share::ObLSReplica ls_replica;
+  if (OB_UNLIKELY(!member.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(member));
+  } else if (OB_FAIL(check_replica_exist_and_get_ls_replica(
+                         member.get_server(), ls_replica))) {
+    LOG_WARN("fail to get replica", KR(ret), K(member));
+  } else if (ObReplicaTypeCheck::is_log_replica(ls_replica.get_replica_type())) {
+    member.set_logonly();
+  }
+  return ret;
+}
+
+int DRLSInfo::get_unit_ids(
+    common::ObIArray<uint64_t> &unit_ids) const
+{
+  int ret = OB_SUCCESS;
+  unit_ids.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(ls_status_info_.get_unit_list(unit_ids))) {
+    LOG_WARN("fail to get unit list ids", KR(ret), K(ls_status_info_));
   }
   return ret;
 }

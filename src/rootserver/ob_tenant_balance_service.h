@@ -133,7 +133,6 @@ private:
       int64_t &last_statistic_bg_stat_time,
       int64_t &last_statistic_schema_version,
       share::ObTransferTaskID &last_statistic_max_transfer_task_id);
-  int get_active_unit_num_(int64_t &active_unit_num) const;
   //transfer partition
   int transfer_partition_(int64_t &job_cnt);
   int try_finish_transfer_partition_(const share::ObBalanceJob &job,

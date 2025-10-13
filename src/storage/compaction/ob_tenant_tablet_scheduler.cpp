@@ -1055,6 +1055,11 @@ int ObTenantTabletScheduler::check_ls_state(
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is offline", K(ret), K(ls));
     }
+  } else if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+    // skip logonly replica
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is logonly", K(ret), K(ls));
+    }
   } else {
     need_merge = true;
   }

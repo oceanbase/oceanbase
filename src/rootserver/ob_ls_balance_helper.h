@@ -120,6 +120,10 @@ public:
   {
     return ls_group_info_.count();
   }
+  bool is_gts_standalone_applicable() const
+  {
+    return common::ObReplicaTypeCheck::gts_standalone_applicable(unit_->replica_type_);
+  }
 public:
   ObUnit* unit_;
   //only for foreach
@@ -182,8 +186,9 @@ struct ObZoneLSStat
 {
 public:
   ObZoneLSStat() { reset();}
-  ObZoneLSStat(const ObZone &zone, bool in_locality) :
+  ObZoneLSStat(const ObZone &zone, bool in_locality, common::ObReplicaType replica_type = common::ObReplicaType::REPLICA_TYPE_FULL) :
     zone_(zone), is_balance_(false), is_in_locality_(in_locality),
+    replica_type_(replica_type),
     gts_unit_(NULL), valid_unit_array_(), deleting_unit_array_() {}
   ~ObZoneLSStat() {}
   void reset()
@@ -191,6 +196,7 @@ public:
     zone_.reset();
     is_balance_ = false;
     is_in_locality_ = false;
+    replica_type_ = common::ObReplicaType::REPLICA_TYPE_FULL;
     gts_unit_ = NULL;
     valid_unit_array_.reset();
     deleting_unit_array_.reset();
@@ -202,21 +208,38 @@ public:
   }
   int assign(const ObZoneLSStat &other);
   int add_unit_ls_info(ObUnitLSStat &zone_ls_stat);
+  int set_unit_gts_standalone(ObUnitLSStat &unit_stat);
   //由于deleting状态的unit不计入unit_group中，所以直接使用ug_array的大小即可
   int64_t get_valid_unit_num() const
   {
     return valid_unit_array_.count();
   }
+  int64_t get_pool_unit_num() const
+  {
+    // including all units except for deleting units
+    return valid_unit_array_.count() + (NULL == gts_unit_ ? 0 : 1);
+  }
   int get_unit_info_by_ug_id(const uint64_t ug_id, ObUnitLSStat* &unit_info);
   int get_min_unit_valid_for_normal_ls(ObUnitLSStat* &unit_info) const;
+  int get_max_unit_valid_for_normal_ls(ObUnitLSStat* &unit_info) const;
   int get_ug_array(ObUGArray &ug_array);
   int set_is_balance();
   bool is_all_unit_active() const;
   int calculate_variance_score(double &variance_score) const;
+  // 判断在开启gts_standalone时，该zone是否适用gts_standalone
+  bool is_gts_standalone_applicable() const
+  {
+    return common::ObReplicaTypeCheck::gts_standalone_applicable(replica_type_) && is_in_locality_;
+  }
+  bool is_need_to_align_to_ug() const
+  {
+    return common::ObReplicaTypeCheck::need_to_align_to_ug(replica_type_) && is_in_locality_;
+  }
 public:
   common::ObZone zone_;
   bool is_balance_;
   bool is_in_locality_;
+  common::ObReplicaType replica_type_;
   ObUnitLSStat* gts_unit_;//可能为空
   ObSEArray<ObUnitLSStat*, 10> valid_unit_array_;
   ObSEArray<ObUnitLSStat*, 5> deleting_unit_array_;//deleting
@@ -252,11 +275,28 @@ private:
   int ret_;
 };
 
+class ChooseSysLSUnitCmp
+{
+public:
+  ChooseSysLSUnitCmp(const bool is_determine_gts_unit, const ObLSInfo &sys_ls_info, const ObUnitLSStat *inherit_unit = nullptr) :
+      is_determine_gts_unit_(is_determine_gts_unit), sys_ls_info_(sys_ls_info), inherit_unit_(inherit_unit), ret_(OB_SUCCESS) {}
+  ~ChooseSysLSUnitCmp() {}
+  bool operator()(const ObUnitLSStat *left, const ObUnitLSStat *right);
+  int try_compare_by_sys_ls_replica(
+      const ObUnitLSStat *left, const ObUnitLSStat *right, bool &bret, bool &priority_decided);
+  int get_ret() const { return ret_; }
+private:
+  const bool is_determine_gts_unit_;
+  const ObLSInfo &sys_ls_info_;
+  const ObUnitLSStat *inherit_unit_;
+  int ret_;
+};
+
 class ObTenantLSBalanceInfo
 {
 public:
   ObTenantLSBalanceInfo(ObIAllocator &allocator):
-    is_inited_(false), tenant_id_(), tenant_role_(), job_desc_(), sys_ls_info_(),
+    is_inited_(false), tenant_id_(), tenant_role_(), job_desc_(), sys_ls_info_(), sys_ls_target_unit_list_(),
     normal_ls_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "LSInfo")),
     duplicate_ls_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "DupLSInfo")),
     unit_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "UnitInfo")),
@@ -273,6 +313,7 @@ public:
     tenant_role_.reset();
     job_desc_.reset();
     sys_ls_info_.reset();
+    sys_ls_target_unit_list_.reset();
     normal_ls_info_.reset();
     duplicate_ls_info_.reset();
     unit_info_.reset();
@@ -302,7 +343,7 @@ public:
   //参考locality
   int get_valid_unit_list(share::ObUnitIDList &unit_list);
   TO_STRING_KV(K_(tenant_id), K_(tenant_role), K_(job_desc), K(sys_ls_info_),
-                 K(normal_ls_info_), K(duplicate_ls_info_),
+                 K(sys_ls_target_unit_list_), K(normal_ls_info_), K(duplicate_ls_info_),
                  K(unit_info_), K(ls_group_array_), K(ug_array_),
                  K(unit_array_), K(zone_array_));
   int split_hetero_zone_to_homo_unit_group(ObHeteroUGArray &hetero_ug_array);
@@ -338,7 +379,7 @@ private:
   int build_ls_group_array_();
   int build_unit_ls_array_();
   int get_or_create_unit_group_info_(ObUnitLSStat &unit_ls_info, ObUnitGroupStat* &ug_info);
-  int create_new_zone_info_(ObZone &zone);
+  int create_new_zone_info_(ObZone &zone, const common::ObReplicaType replica_type);
   int build_zone_ls_info_();
 private:
   bool is_inited_;
@@ -347,6 +388,7 @@ private:
   ObBalanceJobDesc job_desc_;
   //初始值
   share::ObLSStatusInfo sys_ls_info_;
+  ObUnitIDList sys_ls_target_unit_list_;
   //正常可以在均衡的日志流
   common::ObArray<share::ObLSStatusInfo> normal_ls_info_;
   common::ObArray<share::ObLSStatusInfo> duplicate_ls_info_;
@@ -434,7 +476,7 @@ public:
   int construct_ls_part_info(const ObSplitLSParam &src_ls,
       const share::ObLSID &dest_ls_id,
       share::ObTransferPartList &part_list);
-  int try_construct_job_unit_list_op(const share::ObBalanceStrategy &balance_strategy, const bool only_job_strategy);
+  int try_construct_job_without_task(const share::ObBalanceStrategy &balance_strategy, const bool only_job_strategy);
   int construct_src_split_param_array(
       ObLSGroupStat &lg_array,
       ObSplitLSParamArray &src_ls);
@@ -446,6 +488,15 @@ public:
       const int64_t target_count,
       ObSplitLSParamArray &src_ls,
       ObIArray<ObSplitLSParamArray> &dest_split_array);
+  int filter_unit_list_in_locality_(const ObUnitIDList &unit_list, ObUnitIDList &tgt_unit_list, ObArray<ObZone> &tgt_zone_list);
+  //把日志流组的unit_list转换成unit_group_id
+  int convert_unit_list_to_unit_stat_(const ObUnitIDList &unit_list,
+                                  ObArray<ObUnitLSStat*> &unit_stat_array);
+  int reorganize_sys_ls_unit_list_();
+  int do_reorganize_sys_ls_unit_list_(const bool need_remove_deleting_unit);
+  int determine_zone_sys_ls_unit_(const ObLSInfo &sys_ls_info, ObZoneLSStat &zone_stat, ObUnitLSStat *&determined_unit);
+  int get_valid_unit_by_inherit_(ObZoneLSStat &zone_stat,
+                      const ObUnitIDList &valid_unit_list, ObUnitLSStat* &unit);
 
 protected:
   ObTenantLSBalanceInfo *tenant_info_;
@@ -466,6 +517,7 @@ public:
   ~ObDupLSBalance() {}
   int balance(const bool only_job_strategy);
 private:
+  int check_dup_ls_need_balance_(bool &need_balance);
   int generate_shrink_task_();
   int get_ls_group_(uint64_t &ls_group_id);
 };
@@ -475,17 +527,6 @@ class ObUnitGroupBalance : public ObLSBalanceStrategy
 public:
   // if zone unit_num larger than this value, do not execute balance due to complexity
   const int64_t MAX_SUPPORTED_UNIT_NUM = 10;
-  struct ChooseGTSUnitComp
-  {
-    ChooseGTSUnitComp(const ObLSInfo &sys_ls_info) : sys_ls_info_(sys_ls_info), ret_(OB_SUCCESS) {}
-    bool operator()(const ObUnitLSStat *left, const ObUnitLSStat *right);
-    int try_compare_by_sys_ls_replica(
-        const ObUnitLSStat *left, const ObUnitLSStat *right, bool &bret, bool &priority_decided);
-    int get_ret() const { return ret_; }
-    const ObLSInfo &sys_ls_info_;
-    int ret_;
-  };
-
   class MaxWeightMatchHelper
   {
   public:
@@ -518,8 +559,6 @@ public:
   int balance(const bool only_job_strategy);
 private:
   int try_determine_and_set_gts_units_();
-  int try_clear_sys_ls_unit_list_();
-  int determine_and_set_zone_gts_unit_(const ObLSInfo &sys_ls_info, ObZoneLSStat &zone_stat);
   int reorganize_homo_zones_ug_(const common::ObIArray<ObZoneLSStat*> &homo_zone_stats);
   int reorganize_zone_ug_to_ref_zone_(const ObZoneLSStat &ref_zone, const ObZoneLSStat &adjust_zone);
   int stat_ls_count_matrix_(const ObZoneLSStat &ref_zone, const ObZoneLSStat &adjust_zone, ObMatrix<int64_t> &ls_count_matrix, bool &all_ls_in_unit_group);
@@ -535,9 +574,6 @@ public:
   ~ObLSGroupLocationBalance() {}
   int balance(const bool only_job_strategy);
 private:
-  //把日志流组的unit_list转换成unit_group_id
-  int convert_unit_list_to_unit_stat_(ObLSGroupStat &ls_group,
-                                  ObArray<ObUnitLSStat*> &unit_stat_array);
   int choose_unit_group_from_ug_array_(const ObArray<ObUnitLSStat*> &unit_stat_array,
                                        ObUGArray &ug_array,
                                        uint64_t &unit_group_id);
@@ -707,14 +743,11 @@ public:
   ~ObUnitListBalance() {}
   int balance(const bool only_job_strategy);
 private:
-  int reorganize_sys_ls_unit_list_by_locality_();
   int reorganize_unit_list_by_locality_(ObLSGroupStat &ls_group);
-  int filter_unit_list_in_locality_(const ObUnitIDList &unit_list, ObUnitIDList &tgt_unit_list, ObArray<ObZone> &tgt_zone_list);
-  int get_valid_unit_by_inherit_(ObZoneLSStat &zone_stat,
-                      const ObLSGroupStat &ls_group, ObUnitLSStat* &unit);
   int construct_lg_unit_group_ids_(ObHeteroUGArray &hetero_ug, ObLSGroupStat &ls_group);
   int balance_ls_unit_group_(ObUGArray &ug_array);
-  int construct_lg_unit_list_(ObLSGroupStat &ls_group);
+  int balance_ls_unit_for_L_(ObZoneLSStat &zone_stat);
+  int construct_lg_unit_list_();
 };
 
 class ObLSBalanceTaskHelper

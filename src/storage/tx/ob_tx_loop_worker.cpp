@@ -180,73 +180,77 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
       common::ObRole role = common::ObRole::INVALID_ROLE;
       int64_t base_proposal_id, proposal_id;
 
-      if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
-        TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
-        status  = MinStartScnStatus::UNKOWN;
-      } else if (role == common::ObRole::FOLLOWER) {
-        status = MinStartScnStatus::UNKOWN;
-      }
-
-      // tx gc, interval = 15s
-      if (can_tx_gc) {
-        // TODO shanyan.g close ctx gc temporarily because of logical bug
-        //
-
-        // ATTENTION : get_max_decided_scn must before iterating all trans ctx.
-        // set max_decided_scn as default value
-        if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_max_decided_scn(max_decided_scn))) {
-          TRANS_LOG(WARN, "get max decided scn failed", KR(tmp_ret), K(min_start_scn));
-          max_decided_scn.set_invalid();
-        } else {
-          (void)cur_ls_ptr->update_min_start_scn_info(max_decided_scn);
+      if (ObReplicaTypeCheck::is_log_replica(cur_ls_ptr->get_replica_type())) {
+        // do nothing
+      } else {
+        if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
+          TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
+          status  = MinStartScnStatus::UNKOWN;
+        } else if (role == common::ObRole::FOLLOWER) {
+          status = MinStartScnStatus::UNKOWN;
         }
-        min_start_scn = max_decided_scn;
-        do_tx_gc_(cur_ls_ptr, min_start_scn, status);
-      }
 
-      if(MinStartScnStatus::UNKOWN == status) {
-        // do nothing
-      } else if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, proposal_id))) {
-        TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
-        status = MinStartScnStatus::UNKOWN;
-      } else if (role == common::ObRole::FOLLOWER) {
-        status = MinStartScnStatus::UNKOWN;
-      } else if (base_proposal_id != proposal_id) {
-        status = MinStartScnStatus::UNKOWN;
-      }
+        // tx gc, interval = 15s
+        if (can_tx_gc) {
+          // TODO shanyan.g close ctx gc temporarily because of logical bug
+          //
 
-      // During the transfer, we should not update min_start_scn, otherwise we
-      // will ignore the ctx that has been transferred in. So we check whether
-      // transfer is going on there.
-      //
-      // TODO(handora.qc): while after we have checked the transfer and later
-      // submitted the log, the transfer may also happens during these two
-      // operations. So we need double check it in the log application/replay.
-      if(MinStartScnStatus::UNKOWN == status) {
-        // do nothing
-      } else if (cur_ls_ptr->get_transfer_status().get_transfer_prepare_enable()) {
-        TRANS_LOG(INFO, "ignore min start scn during transfer prepare enabled",
-                  K(cur_ls_ptr->get_transfer_status()), K(status), K(min_start_scn));
-        status = MinStartScnStatus::UNKOWN;
-      }
+          // ATTENTION : get_max_decided_scn must before iterating all trans ctx.
+          // set max_decided_scn as default value
+          if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_max_decided_scn(max_decided_scn))) {
+            TRANS_LOG(WARN, "get max decided scn failed", KR(tmp_ret), K(min_start_scn));
+            max_decided_scn.set_invalid();
+          } else {
+            (void)cur_ls_ptr->update_min_start_scn_info(max_decided_scn);
+          }
+          min_start_scn = max_decided_scn;
+          do_tx_gc_(cur_ls_ptr, min_start_scn, status);
+        }
 
-      if (MinStartScnStatus::UNKOWN == status) {
-        min_start_scn.reset();
-      } else if (MinStartScnStatus::NO_CTX == status) {
-        min_start_scn.set_min();
-      }
+        if(MinStartScnStatus::UNKOWN == status) {
+          // do nothing
+        } else if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, proposal_id))) {
+          TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
+          status = MinStartScnStatus::UNKOWN;
+        } else if (role == common::ObRole::FOLLOWER) {
+          status = MinStartScnStatus::UNKOWN;
+        } else if (base_proposal_id != proposal_id) {
+          status = MinStartScnStatus::UNKOWN;
+        }
 
-      // keep alive, interval = 100ms
-      do_keep_alive_(cur_ls_ptr, min_start_scn, status);
+        // During the transfer, we should not update min_start_scn, otherwise we
+        // will ignore the ctx that has been transferred in. So we check whether
+        // transfer is going on there.
+        //
+        // TODO(handora.qc): while after we have checked the transfer and later
+        // submitted the log, the transfer may also happens during these two
+        // operations. So we need double check it in the log application/replay.
+        if(MinStartScnStatus::UNKOWN == status) {
+          // do nothing
+        } else if (cur_ls_ptr->get_transfer_status().get_transfer_prepare_enable()) {
+          TRANS_LOG(INFO, "ignore min start scn during transfer prepare enabled",
+                    K(cur_ls_ptr->get_transfer_status()), K(status), K(min_start_scn));
+          status = MinStartScnStatus::UNKOWN;
+        }
 
-      if (can_gc_retain_ctx) {
-        do_retain_ctx_gc_(cur_ls_ptr);
-      }
-      // ignore ret
-      (void)cur_ls_ptr->get_tx_svr()->check_all_readonly_tx_clean_up();
+        if (MinStartScnStatus::UNKOWN == status) {
+          min_start_scn.reset();
+        } else if (MinStartScnStatus::NO_CTX == status) {
+          min_start_scn.set_min();
+        }
 
-      if (can_adjust_log_cb_pool) {
-        do_log_cb_pool_adjust_(cur_ls_ptr, role);
+        // keep alive, interval = 100ms
+        do_keep_alive_(cur_ls_ptr, min_start_scn, status);
+
+        if (can_gc_retain_ctx) {
+          do_retain_ctx_gc_(cur_ls_ptr);
+        }
+        // ignore ret
+        (void)cur_ls_ptr->get_tx_svr()->check_all_readonly_tx_clean_up();
+
+        if (can_adjust_log_cb_pool) {
+          do_log_cb_pool_adjust_(cur_ls_ptr, role);
+        }
       }
     }
   }

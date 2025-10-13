@@ -1465,6 +1465,9 @@ int ObTenantCheckpointSlogHandler::get_tablet_svr(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret), K(ls_id));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has not tablet", KR(ret), KPC(ls));
   } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet service is null", K(ret), K(ls_id));

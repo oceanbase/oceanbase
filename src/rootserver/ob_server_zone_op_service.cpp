@@ -733,7 +733,7 @@ int ObServerZoneOpService::construct_rs_list_arg(ObRsListArg &rs_list_arg)
     FOREACH_CNT_X(replica, ls_info.get_replicas(), OB_SUCC(ret)) {
       if (replica->get_server() == GCONF.self_addr_
           || (replica->is_in_service()
-              && ObReplicaTypeCheck::is_paxos_replica_V2(replica->get_replica_type()))) {
+              && ObReplicaTypeCheck::is_paxos_replica(replica->get_replica_type()))) {
         if (OB_FAIL(rs_list_arg.rs_list_.push_back(replica->get_server()))) {
           LOG_WARN("fail to push a server into rs list", KR(ret), K(replica->get_server()));
         }

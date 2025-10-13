@@ -276,7 +276,9 @@ int ObTenantMdsService::for_each_mds_table_in_ls(ObLS &ls, const ObFunction<int(
   int64_t mds_table_total_num = 0;
   MdsTableMgrHandle mgr_handle;
   ObArray<ObTabletID> ids_in_t3m_array;
-  if (MDS_FAIL(ls.get_mds_table_mgr(mgr_handle))) {
+  if (ObReplicaTypeCheck::is_log_replica(ls.get_replica_type())) {
+    MDS_LOG_NONE(TRACE, "skip logonly replica", K(ls));
+  } else if (MDS_FAIL(ls.get_mds_table_mgr(mgr_handle))) {
     MDS_LOG_NONE(WARN, "fail to get mds table mgr");
   } else if (MDS_FAIL(mgr_handle.get_mds_table_mgr()->for_each_in_t3m_mds_table(
     [&mds_table_total_num, &ids_in_t3m_array, &ls](MdsTableBase &mds_table) -> int {// with map's bucket lock protected

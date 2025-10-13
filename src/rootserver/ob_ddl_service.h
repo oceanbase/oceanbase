@@ -2981,6 +2981,10 @@ private:
 
   int check_and_get_aux_table_schema(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const uint64_t aux_table_id,
                                      const uint64_t data_table_id, const ObTableType table_type, const ObTableSchema *&table_schema);
+
+  int check_locality_match_unit_type_(
+      const ObZoneReplicaAttrSet &zone_replica_set,
+      const ObIArray<ObUnitInfo> &unit_infos);
 private:
   bool inited_;
   volatile bool stopped_;

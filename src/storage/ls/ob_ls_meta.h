@@ -111,10 +111,12 @@ public:
       const share::ObLSID &ls_id,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
-      const share::SCN &create_scn);
+      const share::SCN &create_scn,
+      const ObReplicaType &replica_type = REPLICA_TYPE_FULL);
 
   ObReplicaType get_replica_type() const
-  { return unused_replica_type_; }
+  { return replica_type_; }
+
   // IF I have locked with W:
   //    lock with R/W will be succeed do nothing.
   // ELSE:
@@ -154,7 +156,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_create_status),
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
-               K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
+               K_(restore_status), K_(replica_type), K_(replayable_point), K_(tablet_change_checkpoint_scn),
                K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info));
 private:
   int check_can_update_();
@@ -164,7 +166,7 @@ public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
 private:
-  ObReplicaType unused_replica_type_;
+  ObReplicaType replica_type_;
   ObInnerLSStatus ls_create_status_;
   typedef common::ObFunction<int(ObLSMeta &)> WriteSlog;
   // for test

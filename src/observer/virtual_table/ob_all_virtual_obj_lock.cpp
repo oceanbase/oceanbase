@@ -89,27 +89,33 @@ int ObAllVirtualObjLock::get_next_ls()
 {
   int ret = OB_SUCCESS;
 
-  if (!ls_iter_guard_.get_ptr() || OB_FAIL(ls_iter_guard_->get_next(ls_))) {
-    if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "fail to switch tenant", K(ret));
-    }
-    // switch to next tenant
-    ret = OB_ITER_END;
-    SERVER_LOG(DEBUG, "finish iterate this tenant, switch to next tenant then", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(ERROR, "ls is null", K(ret));
-  } else {
-    ls_id_ = ls_->get_ls_id().id();
-    is_iter_tx_ = true;  // iterate tx firstly, then iterate lock_memtable
-    ls_tx_ctx_iter_.reset();
-    obj_lock_iter_.reset();
-    lock_op_iter_.reset();
-    prio_op_iter_.reset();
-    is_iter_priority_list_ = true;
-    if (OB_NOT_NULL(tx_ctx_)) {
-      ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx_);
-      tx_ctx_ = nullptr;
+  while (OB_SUCC(ret)) {
+    if (!ls_iter_guard_.get_ptr() || OB_FAIL(ls_iter_guard_->get_next(ls_))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "fail to switch tenant", K(ret));
+      }
+      // switch to next tenant
+      ret = OB_ITER_END;
+      SERVER_LOG(DEBUG, "finish iterate this tenant, switch to next tenant then", K(ret), K(ls_id_));
+    } else if (OB_ISNULL(ls_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(ERROR, "ls is null", K(ret));
+    } else if (ObReplicaTypeCheck::is_log_replica(ls_->get_replica_type())) {
+      // skip logonly replica
+      SERVER_LOG(INFO, "should skip logonly replica", K(ret), KPC(ls_));
+    } else {
+      ls_id_ = ls_->get_ls_id().id();
+      is_iter_tx_ = true;  // iterate tx firstly, then iterate lock_memtable
+      ls_tx_ctx_iter_.reset();
+      obj_lock_iter_.reset();
+      lock_op_iter_.reset();
+      prio_op_iter_.reset();
+      is_iter_priority_list_ = true;
+      if (OB_NOT_NULL(tx_ctx_)) {
+        ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx_);
+        tx_ctx_ = nullptr;
+      }
+      break;
     }
   }
 

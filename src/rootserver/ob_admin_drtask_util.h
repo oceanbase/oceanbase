@@ -79,6 +79,7 @@ private:
   // params[out] new_paxos_replica_number, new paxos_replica_number
   // params[out] ret_comment, failed reason
   // params[out] remove_paxos_arg, arg for remove-F task
+  // params[in]  replica_type, the type of replica to remove
   static int construct_remove_paxos_task_arg_(
          const uint64_t &tenant_id,
          const share::ObLSID &ls_id,
@@ -86,18 +87,25 @@ private:
          int64_t &orig_paxos_replica_number,
          int64_t &new_paxos_replica_number,
          ObAdminDRTaskRetComment &ret_comment,
-         ObLSDropPaxosReplicaArg &remove_paxos_arg);
+         ObLSDropPaxosReplicaArg &remove_paxos_arg,
+         const ObReplicaType &replica_type);
+
+  static int check_replica_type_matched_with_flag_(
+         const ObReplicaType &replica_type,
+         const common::ObMember &member);
 
   // construct remove non-paxos replica task arg
   // params[in]  tenant_id, specified tenant_id
   // params[in]  ls_id, specified ls_id
   // params[in]  target_server, the replica to remove on which server
+  // params[in]  replica_type, the replica type to remove, could be R or C
   // params[out] ret_comment, failed reason
   // params[out] remove_non_paxos_arg, arg for remove-R task
   static int construct_remove_nonpaxos_task_arg_(
          const uint64_t &tenant_id,
          const share::ObLSID &ls_id,
          const common::ObAddr &target_server,
+         const ObReplicaType &replica_type,
          ObAdminDRTaskRetComment &ret_comment,
          ObLSDropNonPaxosReplicaArg &remove_nonpaxos_arg);
 
@@ -155,7 +163,9 @@ private:
          const uint64_t &tenant_id,
          const share::ObLSID &ls_id,
          int64_t &orig_paxos_replica_number,
-         common::ObAddr &leader_server);
+         common::ObAddr &leader_server,
+         const common::ObAddr &data_source_server,
+         ObReplicaType &data_source_type);
 
   // execute remove task
   // params[in]  command_arg, arg which contains admin_command

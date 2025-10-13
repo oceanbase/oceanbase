@@ -314,7 +314,9 @@ int ObTenantFreezer::ls_freeze_all_unit_(ObLS *ls, const int64_t abs_timeout_ts)
   do {
     need_retry = false;
     retry_times++;
-    if (OB_SUCC(ls->advance_checkpoint_by_flush(SCN::max_scn(), abs_timeout_ts, true /* is_tenant_freeze */))) {
+    if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip LOGONLY replica
+    } else if (OB_SUCC(ls->advance_checkpoint_by_flush(SCN::max_scn(), abs_timeout_ts, true /* is_tenant_freeze */))) {
     } else {
       current_ts = ObTimeUtil::current_time();
       is_timeout = (current_ts >= abs_timeout_ts);

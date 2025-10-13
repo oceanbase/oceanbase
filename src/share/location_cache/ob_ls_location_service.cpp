@@ -1043,6 +1043,10 @@ int ObLSLocationService::fill_location_(
       if (!replicas.at(i).is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("replica is not valid", KR(ret), "replica", replicas.at(i));
+      } else if (replicas.at(i).is_logonly_replica()) {
+        // logonly replica do not have read/write request
+        // should not exist in location cache
+        LOG_TRACE("replica type is logonly, just skip", KR(ret), "replica", replicas.at(i));
       } else {
         replica_location.reset();
         if(OB_FAIL(replica_location.init(

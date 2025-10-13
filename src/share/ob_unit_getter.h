@@ -16,6 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_unit_table_operator.h"
 #include "share/ob_unit_stat.h"
+#include "share/ob_share_util.h"
 #include "share/ob_check_stop_provider.h"
 #include "share/rc/ob_tenant_base.h"
 
@@ -69,7 +70,8 @@ public:
              lib::Worker::CompatMode compat_mode,
              const int64_t create_timestamp,
              const bool has_memstore,
-             const bool is_remove);
+             const bool is_remove,
+             const common::ObReplicaType &replica_type);
 
     int divide_meta_tenant(ObTenantConfig& meta_tenant_config);
 
@@ -79,14 +81,16 @@ public:
 
     TO_STRING_KV(K_(tenant_id), K_(unit_id), K_(has_memstore),
                  "unit_status", get_unit_status_str(unit_status_),
-                 K_(config), K_(mode), K_(create_timestamp), K_(is_removed));
+                 K_(config), K_(mode), K_(create_timestamp), K_(is_removed),
+                 K_(hidden_sys_data_disk_config_size), K_(actual_data_disk_size), K_(replica_type));
 
     bool is_valid() const
     {
       return tenant_id_ != common::OB_INVALID_TENANT_ID &&
           unit_id_ != common::OB_INVALID_ID && 
           unit_status_ != UNIT_ERROR_STAT &&
-          config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID;
+          config_.is_valid() && mode_ != lib::Worker::CompatMode::INVALID &&
+          ObShareUtil::is_valid_replica_type_for_unit(replica_type_);
     }
 
     uint64_t tenant_id_;
@@ -97,6 +101,9 @@ public:
     int64_t create_timestamp_;
     bool has_memstore_;  // make if the unit contains replicas have memstore(Logonly replicas have no memstore)
     bool is_removed_;
+    int64_t hidden_sys_data_disk_config_size_;
+    int64_t actual_data_disk_size_;
+    common::ObReplicaType replica_type_;
   };
 
   struct ObServerConfig

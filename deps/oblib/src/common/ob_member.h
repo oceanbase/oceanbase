@@ -30,7 +30,8 @@ class ObMember
 public:
   ObMember();
   ObMember(const common::ObAddr &server,
-           const int64_t timestamp);
+           const int64_t timestamp,
+           const int64_t flag = 0);
   virtual ~ObMember() = default;
 public:
   const common::ObAddr &get_server() const;
@@ -49,11 +50,16 @@ public:
   void set_migrating();
   void reset_migrating();
 
+  bool is_logonly() const;
+  void set_logonly();
+  void reset_logonly();
+
   TO_STRING_KV(K_(server), K_(timestamp), K_(flag));
   TO_YSON_KV(OB_Y_(server), OB_ID(t), timestamp_, OB_Y_(flag));
   OB_UNIS_VERSION(1);
 protected:
   static const int64_t MIGRATING_FLAG_BIT = 1;
+  static const int64_t LOGONLY_FLAG_BIT = 2;
   common::ObAddr server_;
   int64_t timestamp_;
   int64_t flag_;
@@ -90,61 +96,47 @@ inline int member_to_string(const common::ObMember &member, ObSqlString &member_
 class ObReplicaMember : public ObMember
 {
 public:
+  // default constructor
   ObReplicaMember()
     : ObMember(),
       replica_type_(REPLICA_TYPE_FULL),
-      region_(DEFAULT_REGION_NAME),
       memstore_percent_(100)
   {}
+  // construct with only server and timestamp, when we don't know or care about replica_type
   ObReplicaMember(const common::ObAddr &server,
                   const int64_t timestamp)
-    : ObMember(server, timestamp),
+    : ObMember(ObMember(server, timestamp)),
       replica_type_(REPLICA_TYPE_FULL),
-      region_(DEFAULT_REGION_NAME),
       memstore_percent_(100)
   {}
-  ObReplicaMember(const ObMember &member)
-    : ObMember(member),
-      replica_type_(REPLICA_TYPE_FULL),
-      region_(DEFAULT_REGION_NAME),
-      memstore_percent_(100)
-  {}
-  /* After the subsequent type conversion code is completed, remove the constructor */
-  ObReplicaMember(const common::ObAddr &server,
-                  const int64_t timestamp,
-                  const common::ObReplicaType replica_type)
-    : ObMember(server, timestamp),
-      replica_type_(replica_type),
-      region_(DEFAULT_REGION_NAME),
-      memstore_percent_(100)
-  {}
+  // construct with server, timestamp and replica_type,
+  //   this func will set logonly flag if replica_type is L.
   ObReplicaMember(const common::ObAddr &server,
                   const int64_t timestamp,
                   const common::ObReplicaType replica_type,
-                  const int64_t memstore_percent)
-    : ObMember(server, timestamp),
+                  const int64_t memstore_percent = 100,
+                  const int64_t flag = 0)
+    : ObMember(ObMember(server, timestamp, flag)),
       replica_type_(replica_type),
-      region_(DEFAULT_REGION_NAME),
       memstore_percent_(memstore_percent)
-  {}
-  ObReplicaMember(const common::ObAddr &server,
-                  const int64_t timestamp,
-                  const common::ObReplicaType replica_type,
-                  const common::ObRegion &region,
-                  const int64_t memstore_percent)
-    : ObMember(server, timestamp),
-      replica_type_(replica_type),
-      region_(region),
-      memstore_percent_(memstore_percent)
-  {}
+  {
+    if (REPLICA_TYPE_LOGONLY == replica_type) {
+      ObMember::set_logonly();
+    }
+  }
 public:
+  // init with server, timestamp, replica_type.
+  // this func will set logonly flag if replica_type is L.
+  int init(const common::ObAddr &server,
+           const int64_t timestamp,
+           const common::ObReplicaType replica_type);
+  // init with existing member whose flag_ may have been set.
+  // this function will check whether flag_ is consistent with replica_type.
+  int init(const ObMember &member,
+           const common::ObReplicaType replica_type);
   common::ObReplicaType get_replica_type() const;
-  int set_replica_type(const common::ObReplicaType replica_type);
   const common::ObRegion &get_region() const;
-  int set_region(const common::ObRegion &region);
-  int set_member(const ObMember &member);
   int64_t get_memstore_percent() const { return memstore_percent_; }
-  void set_memstore_percent(const int64_t memstore_percent) { memstore_percent_ = memstore_percent; }
   virtual void reset();
   virtual bool is_valid() const;
   virtual bool is_readonly_replica() const;
@@ -154,8 +146,8 @@ public:
   OB_UNIS_VERSION(1);
 private:
   common::ObReplicaType replica_type_;
-  common::ObRegion region_;
-  int64_t memstore_percent_;
+  int64_t memstore_percent_;                       // obsolate, only as placeholder
+  common::ObRegion region_ = DEFAULT_REGION_NAME;  // obsolate, only as placeholder
 };
 } // namespace common
 } // namespace oceanbase

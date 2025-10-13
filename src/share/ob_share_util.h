@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #define OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #include "lib/utility/ob_sort.h" // for ob_sort
+#include "common/ob_member_list.h" // for ObMemberList
 #include "share/ob_define.h"
 #include "share/scn.h"
 #include "share/ob_tenant_role.h"
@@ -25,7 +26,11 @@ class ObISQLClient;
 }
 namespace share
 {
-
+class ObUnit;
+namespace schema
+{
+class ObTenantSchema;
+}
 // available range is [start_id, end_id]
 class ObIDGenerator
 {
@@ -130,6 +135,23 @@ public:
   static int table_check_if_tenant_role_is_primary(const uint64_t tenant_id, bool &is_primary);
   static int table_check_if_tenant_role_is_standby(const uint64_t tenant_id, bool &is_standby);
   static int table_check_if_tenant_role_is_restore(const uint64_t tenant_id, bool &is_restore);
+  static int check_compat_version_for_logonly_replica(bool &is_compatible);
+  static int check_replica_type_with_version(
+             const common::ObReplicaType &replica_type,
+             const bool &check_for_unit);
+  static int check_replica_type_in_locality(const share::schema::ObTenantSchema &tenant_schema);
+  static int check_unit_type_match_replica_type(
+             const common::ObReplicaType &replica_type,
+             const share::ObUnit &unit);
+  static int get_full_replica_number(
+         const common::ObMemberList &member_list,
+         int64_t &full_replica_number);
+  static bool is_valid_replica_type_for_unit(
+         const common::ObReplicaType &replica_type);
+private:
+  static bool is_supported_replica_type_(
+         const common::ObReplicaType &replica_type,
+         const bool &check_for_unit);
 };
 
 template <typename T>

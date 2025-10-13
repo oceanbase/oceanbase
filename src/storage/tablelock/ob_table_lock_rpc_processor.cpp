@@ -64,6 +64,9 @@ int check_exist(const ObLockTaskBatchRequest &arg,
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no tablet", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_tablet(tablet_id,
                                     tablet_handle,
                                     0,
@@ -415,6 +418,9 @@ int ObAdminRemoveLockP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", K(ret), K(arg_));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica should not has lock on memtable", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->admin_remove_lock_op(arg_.lock_op_))) {
       LOG_WARN("admin remove lock op failed", KR(ret), K(arg_));
     }
@@ -446,6 +452,9 @@ int ObAdminUpdateLockP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", K(ret), K(arg_));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica should not has lock on memtable", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->admin_update_lock_op(arg_.lock_op_,
                                                 arg_.commit_version_,
                                                 arg_.commit_scn_,

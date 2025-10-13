@@ -155,6 +155,24 @@ int64_t ObMemberListBase<MAX_MEMBER_NUM>::get_member_number() const
 }
 
 template <int64_t MAX_MEMBER_NUM>
+int64_t ObMemberListBase<MAX_MEMBER_NUM>::get_full_replica_member_number() const
+{
+  return get_member_number() - get_logonly_replica_member_number();
+}
+
+template <int64_t MAX_MEMBER_NUM>
+int64_t ObMemberListBase<MAX_MEMBER_NUM>::get_logonly_replica_member_number() const
+{
+  int64_t count = 0;
+  for (int64_t i = 0; i < member_number_; i++) {
+    if (member_[i].is_logonly()) {
+      count++;
+    }
+  }
+  return count;
+}
+
+template <int64_t MAX_MEMBER_NUM>
 uint64_t ObMemberListBase<MAX_MEMBER_NUM>::hash() const
 {
   uint64_t hash_val = 0;

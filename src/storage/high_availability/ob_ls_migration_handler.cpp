@@ -1200,6 +1200,9 @@ int ObLSMigrationHandler::check_can_skip_prepare_status_(bool &can_skip)
     LOG_WARN("ls migration handler do not init", K(ret));
   } else if (OB_FAIL(get_ls_migration_task_(task))) {
     LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(task.arg_.dst_.get_replica_type())) {
+    can_skip = true;
+    LOG_INFO("replica without ssstore, skip prepare status", K(task));
   } else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
     if (OB_FAIL(ls_->get_migration_status(status))) {
       LOG_WARN("failed to get migration status", K(ret), K(status));

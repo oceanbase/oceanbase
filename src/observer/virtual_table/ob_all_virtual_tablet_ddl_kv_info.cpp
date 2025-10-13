@@ -95,18 +95,25 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mg
 {
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret)) {
+    bool is_logonly_replica = false;
     if (!ls_tablet_iter_.is_valid()) {
       ObLS *ls = nullptr;
       if (OB_FAIL(get_next_ls(ls))) {
         if (OB_ITER_END != ret) {
           SERVER_LOG(WARN, "fail to get next ls", K(ret));
         }
+      } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+        // skip log only replica
+        is_logonly_replica = true;
+        ls_tablet_iter_.reset();
       } else if (OB_FAIL(ls->build_tablet_iter(ls_tablet_iter_))) {
         SERVER_LOG(WARN, "fail to build tablet iter", K(ret));
       }
     }
 
     if (OB_FAIL(ret)) {
+    } else if (is_logonly_replica) {
+      // skip logonly replica
     } else if (OB_FAIL(ls_tablet_iter_.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       if (OB_ITER_END == ret) {
         ls_tablet_iter_.reset();

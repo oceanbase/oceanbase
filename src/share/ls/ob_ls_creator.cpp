@@ -577,6 +577,7 @@ int ObLSCreator::check_create_ls_result_(
              K(return_code_array.count()), K(create_ls_proxy_.get_results().count()));
   } else {
     const int64_t timestamp = 1;
+    int64_t full_replica_count = 0;
     // don't use arg/dest here because call() may has failure.
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
       if (OB_SUCCESS != return_code_array.at(i)) {
@@ -602,9 +603,16 @@ int ObLSCreator::check_create_ls_result_(
           } else if (OB_UNLIKELY(!addr.is_valid())) {
             ret = OB_NEED_RETRY;
             LOG_WARN("addr is invalid, ls create failed", KR(ret), K(addr));
-          } else if (result->get_replica_type() == REPLICA_TYPE_FULL) {
-            if (OB_FAIL(member_list.add_member(ObMember(addr, timestamp)))) {
-              LOG_WARN("failed to add member", KR(ret), K(addr));
+          } else if (result->get_replica_type() == REPLICA_TYPE_FULL
+                     || result->get_replica_type() == REPLICA_TYPE_LOGONLY) {
+            ObMember member(addr, timestamp);
+            if (result->get_replica_type() == REPLICA_TYPE_LOGONLY) {
+              member.set_logonly();
+            }
+            if (OB_FAIL(member_list.add_member(member))) {
+              LOG_WARN("failed to add member", KR(ret), K(member));
+            } else if (result->get_replica_type() == REPLICA_TYPE_FULL) {
+              full_replica_count++;
             }
           } else if (result->get_replica_type() == REPLICA_TYPE_READONLY) {
             if (OB_FAIL(learner_list.add_learner(ObMember(addr, timestamp)))) {
@@ -616,6 +624,10 @@ int ObLSCreator::check_create_ls_result_(
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (1 > full_replica_count) {
+      ret = OB_REPLICA_NUM_NOT_ENOUGH;
+      LOG_WARN("should have at least one successfully created full replica",
+               KR(ret), K(full_replica_count), K(member_list));
     } else if (!id_.is_sys_ls() && with_arbitration_service) {
       if (rootserver::majority(paxos_replica_num/*F-replica*/ + 1/*A-replica*/) > member_list.get_member_number() + arb_replica_num) {
         ret = OB_REPLICA_NUM_NOT_ENOUGH;
@@ -1093,6 +1105,8 @@ int ObLSCreator::compensate_zone_readonly_replica_(
   if (OB_UNLIKELY(0 >= unit_info_array.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit_info_array));
+  } else if (0 != zlocality.get_logonly_replica_num()) {
+    LOG_INFO("skip L-zone for duplicate log stream");
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_info_array.count(); ++i) {
       const share::ObUnit &unit = unit_info_array.at(i);

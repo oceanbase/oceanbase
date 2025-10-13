@@ -321,7 +321,7 @@ int ObRootService::ObOfflineServerTask::process()
     FOREACH_CNT_X(replica, ls_info.get_replicas(), OB_SUCCESS == ret) {
       if (replica->get_server() == GCONF.self_addr_
           || (replica->is_in_service()
-          && ObReplicaTypeCheck::is_paxos_replica_V2(replica->get_replica_type()))) {
+          && ObReplicaTypeCheck::is_paxos_replica(replica->get_replica_type()))) {
         if (OB_FAIL(arg.rs_list_.push_back(replica->get_server()))) {
           LOG_WARN("fail to push back", KR(ret));
         }
@@ -2500,18 +2500,8 @@ int ObRootService::create_resource_pool(const obrpc::ObCreateResourcePoolArg &ar
       LOG_USER_ERROR(OB_MISS_ARGUMENT, "unit_num");
     }
     LOG_WARN("missing arg to create resource pool", K(arg), K(ret));
-  } else if (REPLICA_TYPE_LOGONLY != arg.replica_type_
-             && REPLICA_TYPE_FULL != arg.replica_type_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("only full/logonly pool are supported", K(ret), K(arg));
-  } else if (REPLICA_TYPE_LOGONLY == arg.replica_type_
-             && arg.unit_num_> 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("logonly resource pool should only have one unit on one zone", K(ret), K(arg));
-  } else if (0 == arg.unit_.case_compare(OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can not create resource pool use standby unit config template", K(ret), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create resource pool use stanby unit config template");
+  } else if (OB_FAIL(ObShareUtil::check_replica_type_with_version(arg.replica_type_, true/*check_for_unit*/))) {
+    LOG_WARN("fail to check replica type for resource pool", KR(ret), K(arg));
   } else {
     LOG_INFO("receive create_resource_pool request", K(arg));
     share::ObResourcePool pool;
@@ -2656,10 +2646,6 @@ int ObRootService::alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg)
       LOG_USER_ERROR(OB_MISS_ARGUMENT, "resource pool name");
     }
     LOG_WARN("missing arg to alter resource pool", K(arg), K(ret));
-  } else if (0 == arg.unit_.case_compare(OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can not alter resource pool use standby unit config template", K(ret), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter resource pool use stanby unit config template");
   } else {
     LOG_INFO("receive alter_resource_pool request", K(arg));
     share::ObResourcePool pool;
@@ -8553,6 +8539,51 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   return ret;
 }
 
+int ObRootService::check_locality_for_restore_tenant_(
+    const ObString &locality_str,
+    const ObIArray<ObResourcePoolName> &pools,
+    const ObIArray<ObZone> &zones)
+{
+  int ret = OB_SUCCESS;
+  ObLocalityDistribution locality_dist;
+  common::ObArray<share::ObZoneReplicaAttrSet> zone_replica_num_array;
+  ObUnitTableOperator unit_operator;
+  bool has_logonly_pools = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("fail to init unit table operator", KR(ret));
+  } else if (OB_FAIL(unit_operator.check_has_logonly_pools(pools, has_logonly_pools))) {
+    LOG_WARN("fail to check pool for restore tenant", KR(ret), K(pools));
+  } else if (has_logonly_pools) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("restore tenant with LOGONLY pools not allowed", KR(ret), K(pools));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant with LOGONLY pools");
+  } else if (!locality_str.empty()) {
+    // locality should have no L-replica
+    if (OB_FAIL(locality_dist.init())) {
+      LOG_WARN("fail to init locality distribution", KR(ret));
+    } else if (OB_FAIL(locality_dist.parse_locality(locality_str, zones))) {
+      LOG_WARN("fail to parse restore tenant locality", KR(ret), K(locality_str), K(zones));
+    } else if (OB_FAIL(locality_dist.get_zone_replica_attr_array(zone_replica_num_array))) {
+      LOG_WARN("fail to get zone replica attr", KR(ret));
+    } else {
+      for (int64_t index = 0; index < zone_replica_num_array.count() && OB_SUCC(ret); ++index) {
+        if (0 != zone_replica_num_array.at(index).get_logonly_replica_num()) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("restore tenant can not have L-replica in locality", KR(ret));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant with LOGONLY replica in locality");
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRootService::check_restore_tenant_valid(const share::ObPhysicalRestoreJob &job_info,
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
@@ -8587,6 +8618,8 @@ int ObRootService::check_restore_tenant_valid(const share::ObPhysicalRestoreJob 
          LOG_WARN("fail to convert pools", KR(ret), K(pool_list));
       } else if (OB_FAIL(unit_manager_.get_zones_of_pools(pools, zones))) {
         LOG_WARN("fail to get zones of pools", KR(ret), K(pools));
+      } else if (OB_FAIL(check_locality_for_restore_tenant_(job_info.get_locality(), pools, zones))) {
+        LOG_WARN("fail to check locality for restore_tenant", KR(ret), K(job_info), K(pools), K(zones));
       } else {
         HEAP_VAR(ObZoneInfo, info) {
           for (int64_t i = 0; OB_SUCC(ret) && i < zones.count(); i++) {
@@ -9502,6 +9535,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_zone_deploy_mode_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), ENABLE_GTS_STANDALONE)) {
       ret = check_enable_gts_standalone_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_LOGONLY_REPLICA)) {
+      ret = check_enable_logonly_replica_(*item);
     }
   }
   return ret;
@@ -10953,6 +10988,63 @@ int ObRootService::check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSet
   return ret;
 }
 
+int ObRootService::check_enable_logonly_replica_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_compatible = true;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root service not inited", KR(ret), K(inited_));
+  } else {
+    ARRAY_FOREACH(item.tenant_ids_, i) {
+      const uint64_t tenant_id = item.tenant_ids_.at(i);
+      const bool is_seed_tenant = ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id;
+      uint64_t meta_tenant_data_version = 0;
+      uint64_t sys_tenant_data_version = 0;
+      uint64_t user_tenant_data_version = 0;
+      bool is_valid = false;
+      bool enable_logonly_replica = ObConfigBoolParser::get(item.value_.ptr(), is_valid);
+      if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
+        LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+      } else if (DATA_VERSION_4_2_5_7 > sys_tenant_data_version) {
+        is_compatible = false;
+      } else if (!is_seed_tenant && !common::is_sys_tenant(tenant_id)) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_tenant_data_version))) {
+          LOG_WARN("fail to get user min data version", KR(ret), K(tenant_id));
+        } else if (DATA_VERSION_4_2_5_7 > meta_tenant_data_version) {
+          is_compatible = false;
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_user_tenant_id(tenant_id), user_tenant_data_version))) {
+          LOG_WARN("fail to get user min data version", KR(ret), K(tenant_id));
+        } else if (DATA_VERSION_4_2_5_7 > user_tenant_data_version) {
+          is_compatible = false;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!is_compatible) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "data_version lower than 4.2.5.7, set enable_logonly_replica");
+        LOG_WARN("data version below 4.2.5.7, can not modify enable_logonly_replica", KR(ret), K(tenant_id));
+      } else if (!is_seed_tenant && !enable_logonly_replica) {
+        ObUnitTableOperator unit_operator;
+        bool has_logonly_pool = false;
+        if (OB_ISNULL(GCTX.sql_proxy_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+        } else if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
+          LOG_WARN("fail to init unit table operator", KR(ret));
+        } else if (OB_FAIL(unit_operator.check_tenant_has_logonly_pools(tenant_id, has_logonly_pool))) {
+          LOG_WARN("fail to check whether tenant has logonly pools", KR(ret), K(tenant_id));
+        } else if (has_logonly_pool) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("can not set enable_logonly_replica to false when tenant with LOGONLY pools", KR(ret));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Alter enable_logonly_replica to false for Tenant with LOGONLY pools");
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRootService::check_zone_deploy_mode_(obrpc::ObAdminSetConfigItem &item)
 {
   int ret = OB_SUCCESS;
@@ -11018,6 +11110,7 @@ int ObRootService::check_enable_gts_standalone_(obrpc::ObAdminSetConfigItem &ite
     } else {
       FOREACH_CNT_X(pool, pools, OB_SUCC(ret)) {
         if (pool->is_granted_to_tenant() && pool->unit_count_ < 2
+            && ObReplicaTypeCheck::gts_standalone_applicable(pool->replica_type_)
             && has_exist_in_array(item.tenant_ids_, pool->tenant_id_)) {
           ret = OB_OP_NOT_ALLOW;
           LOG_WARN("pool unit num < 2, can not enable gts_standalone", KR(ret), KPC(pool), K(item));

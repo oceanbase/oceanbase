@@ -803,7 +803,7 @@ int ObTxFinishTransfer::get_ls_member_list_(
   } else if (!is_leader) {
     ret = OB_IS_CHANGING_LEADER;
     LOG_WARN("self is not leader", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_paxos_member_list(member_list, quorum))) {
+  } else if (OB_FAIL(ls->get_paxos_member_list(member_list, quorum, true/*filter_logonly_replica*/))) {
     LOG_WARN("failed to get paxos member list", K(ret));
   } else if (OB_FAIL(check_self_ls_leader_(ls_id, is_leader))) {
     LOG_WARN("failed to check self ls leader", K(ret), K(ls_id));

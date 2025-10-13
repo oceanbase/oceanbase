@@ -29,10 +29,10 @@ int ObReconfigCheckerAdapter::init(const uint64_t tenant_id,
   return guard_.init(tenant_id, ls_id, timeout);
 }
 
-int ObReconfigCheckerAdapter::check_can_add_member(const ObAddr &server,
+int ObReconfigCheckerAdapter::check_can_add_member(const ObMember &member,
                                                    const int64_t timeout_us)
 {
-  return guard_.check_can_add_member(server, timeout_us);
+  return guard_.check_can_add_member(member, timeout_us);
 }
 
 int ObReconfigCheckerAdapter::check_can_change_memberlist(const ObMemberList &new_member_list,

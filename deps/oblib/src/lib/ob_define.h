@@ -914,8 +914,6 @@ const uint64_t OB_USER_UNIT_CONFIG_ID = 1000;
 const uint64_t OB_USER_RESOURCE_POOL_ID = 1000;
 const uint64_t OB_USER_UNIT_ID = 1000;
 const uint64_t OB_USER_UNIT_GROUP_ID = 1000;
-//standby unit config tmplate
-const char * const OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME = "standby_unit_config_template";
 const char* const OB_MYSQL50_TABLE_NAME_PREFIX = "#mysql50#";
 
 const int64_t OB_SCHEMA_CODE_VERSION = 1;
@@ -2132,11 +2130,12 @@ public:
   static bool is_replica_type_valid(const int32_t replica_type)
   {
     return REPLICA_TYPE_FULL == replica_type
-           || REPLICA_TYPE_READONLY == replica_type;
+           || REPLICA_TYPE_READONLY == replica_type
+           || REPLICA_TYPE_LOGONLY == replica_type;
   }
   static bool is_can_elected_replica(const int32_t replica_type)
   {
-    return is_paxos_replica_V2(replica_type);
+    return is_paxos_replica(replica_type);
   }
   static bool is_full_replica(const int32_t replica_type)
   {
@@ -2150,15 +2149,14 @@ public:
   {
     return (REPLICA_TYPE_LOGONLY == replica_type || REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type);
   }
-  static bool is_paxos_replica_V2(const int32_t replica_type)
-  {
-    return (replica_type >= REPLICA_TYPE_FULL && replica_type <= REPLICA_TYPE_LOGONLY)
-           || (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type);
-  }
   static bool is_paxos_replica(const int32_t replica_type)
   {
     return (replica_type >= REPLICA_TYPE_FULL && replica_type <= REPLICA_TYPE_LOGONLY)
             || (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type);
+  }
+  static bool is_non_paxos_replica(const int32_t replica_type)
+  {
+    return REPLICA_TYPE_READONLY == replica_type;
   }
   static bool is_writable_replica(const int32_t replica_type)
   {
@@ -2203,6 +2201,19 @@ public:
       bool_ret = true;
     }
     return bool_ret;
+  }
+
+  // For replica type of resource pool, whether gts standalone applicable
+  static bool gts_standalone_applicable(const ObReplicaType replica_type)
+  {
+    return REPLICA_TYPE_LOGONLY != replica_type;
+  }
+
+  // For replica type of resource pool, whether ls unit_list need to
+  // align to and be organized by unit groups
+  static bool need_to_align_to_ug(const ObReplicaType replica_type)
+  {
+    return REPLICA_TYPE_LOGONLY != replica_type;
   }
 };
 

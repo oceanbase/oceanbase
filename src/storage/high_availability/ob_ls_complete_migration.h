@@ -218,6 +218,14 @@ private:
   int init_timeout_ctx_(
       const int64_t timeout,
       ObTimeoutCtx &timeout_ctx);
+  int check_need_wait_log_sync_(
+      ObLS *ls,
+      bool &need_wait);
+  int check_need_wait_log_replay_(
+      ObLS *ls,
+      bool &need_wait);
+  int check_need_wait_all_tablet_ready_(
+      bool &need_wait);
 
 private:
   static const int64_t IS_REPLAY_DONE_THRESHOLD_US = 3L * 1000 * 1000L;

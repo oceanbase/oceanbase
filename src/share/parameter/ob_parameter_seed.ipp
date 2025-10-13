@@ -2286,6 +2286,11 @@ DEF_STR_WITH_CHECKER(zone_deploy_mode, OB_TENANT_PARAMETER, "homo",
         "hetero: the unit count in each zone of tenant resource pools can be different.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "homo, hetero");
+DEF_BOOL(_standby_readable_scn_all, OB_TENANT_PARAMETER, "False",
+    "Controls whether the readable SCN of log stream is calculated using all replicas. Can be 'True' or 'False'. "
+    "'False': set the log stream's readable SCN to the minimum readable SCN among a majority of replicas. "
+    "'True': set the log stream's readable SCN to the minimum readable SCN among all replicas that satisfy the constraint: replica_readable_scn >= (majority_readable_scn − max_stale_time_for_weak_consistency).",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
          "control the switch determining whether the UPDATE statement always updates all columns when the table contains a row-level BEFORE UPDATE trigger.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2300,6 +2305,10 @@ DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ls_leader_balance, OB_TENANT_PARAMETER, "True",
          "controls whether LS leaders balance is turned on."
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_logonly_replica, OB_TENANT_PARAMETER, "False",
+         "controls whether logonly replica is enabled."
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(errsim_rebuild_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",

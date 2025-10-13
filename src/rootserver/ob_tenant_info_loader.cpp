@@ -21,6 +21,7 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "storage/tx/ob_ts_mgr.h" // OB_TS_MGR
+#include "rootserver/ob_ls_recovery_reportor.h"
 
 namespace oceanbase
 {
@@ -61,11 +62,11 @@ int ObTenantInfoLoader::init()
     ATOMIC_STORE(&sql_update_times_, 0);
     ATOMIC_STORE(&last_rpc_update_time_us_, OB_INVALID_TIMESTAMP);
 
-    if (!is_user_tenant(tenant_id_)) {
-    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret));
-    } else if (OB_FAIL(service_names_cache_.init(tenant_id_))) {
+      // meta and sys tenant do not need service_name
+    } else if (is_user_tenant(tenant_id_) && OB_FAIL(service_names_cache_.init(tenant_id_))) {
       LOG_WARN("fail to init service_name_cache_", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(create(thread_cnt, "TenantInf"))) {
       LOG_WARN("failed to create tenant info loader thread", KR(ret), K(thread_cnt));
@@ -103,7 +104,8 @@ int ObTenantInfoLoader::start()
     //meta and sys tenant is primary
     MTL_SET_TENANT_ROLE_CACHE(ObTenantRole::PRIMARY_TENANT);
     LOG_INFO("not user tenant no need load", K(tenant_id_));
-  } else if (OB_FAIL(logical_start())) {
+  }
+  if (FAILEDx(logical_start())) {
     LOG_WARN("failed to start", KR(ret));
   } else {
     LOG_INFO("tenant info loader start", KPC(this));
@@ -132,6 +134,7 @@ void ObTenantInfoLoader::wakeup()
   }
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SPEED_UP_TENANT_INFO_LOADER);
 void ObTenantInfoLoader::run2()
 {
   int ret = OB_SUCCESS;
@@ -148,14 +151,32 @@ void ObTenantInfoLoader::run2()
       share::ObAllTenantInfo tenant_info;
       bool content_changed = false;
       bool is_sys_ls_leader = is_sys_ls_leader_();
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-      const int64_t STANDBY_REFRESH_TIME_US = tenant_config.is_valid() ?
+      const int64_t STANDBY_REFRESH_TIME_US = ({
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+        tenant_config.is_valid() ?
           tenant_config->_keepalive_interval :
           ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US;
-      const int64_t refresh_time_interval_us = act_as_standby_() && is_sys_ls_leader ?
+      });
+      const int64_t USER_REFRESH_TIME_US = act_as_standby_() && is_sys_ls_leader ?
                 STANDBY_REFRESH_TIME_US :
                 ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US;
+      const int64_t refresh_time_interval_us = is_user_tenant(tenant_id_) ? USER_REFRESH_TIME_US :
+        ObTenantRoleTransitionConstants::META_TENANT_INFO_REFRESH_TIME_US;
+      // user tenant
+      // meta/sys tenant with l replica enabled
       bool need_refresh_tenant_info = need_refresh(refresh_time_interval_us);
+      if (!is_user_tenant(tenant_id_)) {
+        bool has_logonly_replica = false;
+        if (OB_FAIL(check_server_has_logonly_replica_(tenant_id_, has_logonly_replica))) {
+          LOG_WARN("failed to check tenant enable l replica", KR(ret), K(tenant_id_));
+        } else if (!has_logonly_replica) {
+          if (REACH_TIME_INTERVAL(1_min)) {
+            LOG_INFO("server has no logonly replica, no need to refresh tenant info", KR(ret),
+                K(need_refresh_tenant_info), K(tenant_id_), K(has_logonly_replica));
+          }
+          need_refresh_tenant_info = false;
+        }
+      }
       if (need_refresh_tenant_info
           && OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, content_changed))) {
         LOG_WARN("failed to update tenant info", KR(ret), K_(tenant_id), KP(sql_proxy_));
@@ -179,7 +200,7 @@ void ObTenantInfoLoader::run2()
       // Positioned last to reduce the impact on tenant_info_cache.
       int tmp_ret = OB_SUCCESS;
       const int64_t start_time_us_service_name = ObTimeUtility::current_time();
-      bool need_refresh_service_name = service_names_cache_.need_refresh();
+      bool need_refresh_service_name = is_user_tenant(tenant_id_) && service_names_cache_.need_refresh();
       if (need_refresh_service_name
           && OB_TMP_FAIL(service_names_cache_.refresh_service_name())) {
         LOG_WARN("failed to refresh service_names", KR(ret), KR(tmp_ret), K_(tenant_id), KP(sql_proxy_));
@@ -192,10 +213,48 @@ void ObTenantInfoLoader::run2()
       const int64_t idle_time = max(10 * 1000, refresh_time_interval_us - cost_time_us - cost_time_us_service_name);
       //At least sleep 10ms, allowing the thread to release the lock
       if (!stop_) {
-        idle_wait_us(idle_time);
+        if (ERRSIM_SPEED_UP_TENANT_INFO_LOADER) {
+          idle_wait_us(abs(ERRSIM_SPEED_UP_TENANT_INFO_LOADER) * 100_ms);
+        } else {
+          idle_wait_us(idle_time);
+        }
       }
     }//end while
   }
+}
+
+int ObTenantInfoLoader::check_server_has_logonly_replica_(const uint64_t tenant_id,
+    bool &has_logonly_replica)
+{
+  int ret = OB_SUCCESS;
+  has_logonly_replica = false;
+  bool logonly_enabled = false;
+  if (OB_FAIL(ObLSRecoveryReportor::check_tenant_enable_logonly_replica(tenant_id, logonly_enabled))) {
+    LOG_WARN("failed to check tenant enable logonly replica", KR(ret), K(tenant_id));
+  } else if (!logonly_enabled) {
+    has_logonly_replica = false;
+  } else {
+    ObLSService *ls_svr = MTL(ObLSService *);
+    ObLSHandle handle;
+    if (OB_ISNULL(ls_svr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
+    } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, storage::ObLSGetMod::RS_MOD))) {
+      LOG_WARN("failed to get ls", KR(ret));
+    } else if (OB_UNLIKELY(!handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("handle is invalid", KR(ret));
+    } else {
+      ObLS *ls = handle.get_ls();
+      if (OB_ISNULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("ls is null", KR(ret), KP(ls));
+      } else if (REPLICA_TYPE_LOGONLY == ls->get_replica_type()) {
+        has_logonly_replica = true;
+      }
+    }
+  }
+  return ret;
 }
 
 void ObTenantInfoLoader::dump_tenant_info_(
@@ -253,8 +312,13 @@ bool ObTenantInfoLoader::need_refresh(const int64_t refresh_time_interval_us)
   int64_t last_sql_update_time = OB_INVALID_TIMESTAMP;
   int64_t ora_rowscn = 0;
 
-  if (ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US < refresh_time_interval_us) {
-    LOG_WARN("unexpected refresh_time_interval_us");
+  if (is_user_tenant(tenant_id_) &&
+      ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US < refresh_time_interval_us) {
+    LOG_WARN("unexpected refresh_time_interval_us", K(refresh_time_interval_us));
+    need_refresh = true;
+  } else if (!is_user_tenant(tenant_id_) &&
+      ObTenantRoleTransitionConstants::META_TENANT_INFO_REFRESH_TIME_US < refresh_time_interval_us) {
+    LOG_WARN("unexpected refresh_time_interval_us", K(refresh_time_interval_us));
     need_refresh = true;
   } else if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn))) {
     LOG_WARN("failed to get tenant info", KR(ret));
@@ -316,6 +380,8 @@ bool ObTenantInfoLoader::act_as_standby_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (!is_user_tenant(tenant_id_)) {
+    act_as_standby = false;
   } else if (OB_FAIL(get_tenant_info(tenant_info))) {
     LOG_WARN("failed to get tenant_info", KR(ret));
   } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
@@ -464,6 +530,19 @@ int ObTenantInfoLoader::get_readable_scn(share::SCN &readable_scn)
   return ret;
 }
 
+int ObTenantInfoLoader::get_pure_readable_scn(share::SCN &readable_scn)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  readable_scn.set_invalid();
+  if (OB_FAIL(get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else {
+    readable_scn = tenant_info.get_readable_scn();
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::get_switchover_epoch(int64_t &switchover_epoch)
 {
   int ret = OB_SUCCESS;
@@ -545,9 +624,8 @@ int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
   replayable_scn.set_min();
 
   if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
-    // there isn't replayable_scn for SYS/META tenant
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("there isn't replayable_scn for SYS/META tenant", KR(ret));
+    LOG_ERROR("meta and sys has no replayable_scn", KR(ret), K(MTL_ID()), K(lbt()));
   } else if (ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR) {
     ret = ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR;
     LOG_WARN("failed to get replayable scn for errsim", KR(ret));
@@ -593,18 +671,9 @@ int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
   tenant_info.reset();
-
-  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
-    // there isn't tenant info for SYS/META tenant
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("there isn't tenant info for SYS/META tenant", KR(ret));
-  } else {
-    // user tenant
-    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
-      LOG_WARN("failed to get tenant info", KR(ret));
-    }
+  if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
   }
-
   return ret;
 }
 
@@ -683,15 +752,21 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
   int64_t ora_rowscn = 0;
   const int64_t new_refresh_time_us = ObClockGenerator::getClock();
   content_changed = false;
-  if (OB_ISNULL(sql_proxy) || !is_user_tenant(tenant_id)) {
+  if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(sql_proxy));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id,
              sql_proxy, false /* for_update */, ora_rowscn, new_tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
   } else if (INT64_MAX == ora_rowscn || 0 == ora_rowscn) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid ora_rowscn", KR(ret), K(ora_rowscn), K(tenant_id), K(new_tenant_info), K(lbt()));
+    if (is_user_tenant(tenant_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid ora_rowscn", KR(ret), K(ora_rowscn), K(tenant_id), K(new_tenant_info), K(lbt()));
+    } else {
+      if (REACH_TIME_INTERVAL(1_min)) {
+        LOG_WARN("sys and meta tenant info is not ready", KR(ret), K(tenant_id), K(ora_rowscn), K(new_tenant_info));
+      }
+    }
   } else {
     /**
     * Only need to refer to tenant role, no need to refer to switchover status.

@@ -386,7 +386,7 @@ public:
   //    return OB_SUCCESS if success
   //    else return other errno
   virtual int get_curr_member_list(common::ObMemberList &member_list,
-      int64_t &replica_num) const;
+      int64_t &replica_num, const bool &filter_logonly_member = false) const;
   // @brief get the paxos member list which are all alive, including arbitraion member,
   // and excluding degraded members.
   // This list can be used for config change/paxos prepare phase.

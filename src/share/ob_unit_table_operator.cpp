@@ -423,6 +423,19 @@ int ObUnitTableOperator::construct_unit_dml_(
         || OB_FAIL(dml.add_column("manual_migrate", unit.is_manual_migrate()))
         || OB_FAIL(dml.add_column("status", unit_status_str))) {
       LOG_WARN("add column failed", K(ret));
+    } else {
+      // add replica type if needed
+      bool compatible_with_logonly_replica = false;
+      if (OB_FAIL(ObShareUtil::check_compat_version_for_logonly_replica(compatible_with_logonly_replica))) {
+        LOG_WARN("fail to check whether compatible with logonly replica", KR(ret));
+      } else if (compatible_with_logonly_replica) {
+        if (OB_FAIL(dml.add_column("replica_type", unit.replica_type_))) {
+          LOG_WARN("fail to add replica type to dml", KR(ret), K(unit));
+        }
+      } else if (ObReplicaType::REPLICA_TYPE_LOGONLY == unit.replica_type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("logonly replica supported from 4.2.5.7", KR(ret), K(unit));
+      }
     }
   }
   return ret;
@@ -1226,6 +1239,7 @@ int ObUnitTableOperator::read_unit(const ObMySQLResult &result, ObUnit &unit) co
   char migrate_from_svr_ip[OB_IP_STR_BUFF] = "";
   char status[MAX_UNIT_STATUS_LENGTH] = "";
   int64_t migrate_from_svr_port = 0;
+  common::ObReplicaType replica_type_in_table = ObReplicaType::REPLICA_TYPE_FULL;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1241,12 +1255,13 @@ int ObUnitTableOperator::read_unit(const ObMySQLResult &result, ObUnit &unit) co
     EXTRACT_INT_FIELD_MYSQL(result, "migrate_from_svr_port", migrate_from_svr_port, int64_t);
     EXTRACT_BOOL_FIELD_MYSQL(result, "manual_migrate", unit.is_manual_migrate_);
     EXTRACT_STRBUF_FIELD_MYSQL(result, "status", status, MAX_UNIT_STATUS_LENGTH, tmp_real_str_len);
-    EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", unit.replica_type_, common::ObReplicaType);
+    EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", replica_type_in_table, common::ObReplicaType);
     (void) tmp_real_str_len; // make compiler happy
     unit.server_.set_ip_addr(ip, static_cast<int32_t>(port));
     unit.migrate_from_server_.set_ip_addr(
         migrate_from_svr_ip, static_cast<int32_t>(migrate_from_svr_port));
     unit.status_ = ObUnit::str_to_unit_status(status);
+    unit.replica_type_ = replica_type_in_table;
   }
   return ret;
 }
@@ -1256,6 +1271,7 @@ int ObUnitTableOperator::read_resource_pool(const ObMySQLResult &result,
 {
   int ret = OB_SUCCESS;
   int64_t tmp_real_str_len = 0; // used to fill output argument
+  common::ObReplicaType replica_type_in_table = ObReplicaType::REPLICA_TYPE_FULL;
   SMART_VAR(char[MAX_ZONE_LIST_LENGTH], zone_list_str) {
     zone_list_str[0] = '\0';
 
@@ -1272,11 +1288,13 @@ int ObUnitTableOperator::read_resource_pool(const ObMySQLResult &result,
       EXTRACT_STRBUF_FIELD_MYSQL(result, "zone_list", zone_list_str,
                                  MAX_ZONE_LIST_LENGTH, tmp_real_str_len);
       EXTRACT_INT_FIELD_MYSQL(result, "tenant_id", resource_pool.tenant_id_, uint64_t);
-      EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", resource_pool.replica_type_, common::ObReplicaType);
+      EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", replica_type_in_table, common::ObReplicaType);
       (void) tmp_real_str_len; // make compiler happy
       if (OB_SUCC(ret)) {
         if (OB_FAIL(str2zone_list(zone_list_str, resource_pool.zone_list_))) {
           LOG_WARN("str2zone_list failed", K(zone_list_str), K(ret));
+        } else {
+          resource_pool.replica_type_ = replica_type_in_table;
         }
       }
     }
@@ -1469,6 +1487,96 @@ int ObUnitTableOperator::read_tenants(ObSqlString &sql,
   return ret;
 }
 #undef READ_ITEMS
+
+int ObUnitTableOperator::check_tenant_has_logonly_pools(
+    const uint64_t &tenant_id,
+    bool &has_logonly_pools) const
+{
+  int ret = OB_SUCCESS;
+  has_logonly_pools = false;
+  common::ObArray<ObResourcePool> pools;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("unit table operator not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_resource_pools(tenant_id, pools))) {
+    LOG_WARN("fail to get resource pools by tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(inner_check_has_logonly_pool_(pools, has_logonly_pools))) {
+    LOG_WARN("fail to inner check whether has logonly pools", KR(ret), K(pools));
+  }
+  LOG_INFO("finish check whether tenant has logonly resource pool", KR(ret), K(tenant_id),
+           K(pools), K(has_logonly_pools));
+  return ret;
+}
+
+int ObUnitTableOperator::check_has_logonly_pools(
+    const ObIArray<share::ObResourcePoolName> &pools,
+    bool &has_logonly_pools) const
+{
+  int ret = OB_SUCCESS;
+  has_logonly_pools = false;
+  ObSqlString sql;
+  ObSqlString in_condition;
+  common::ObArray<ObResourcePool> resource_pools;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("unit table operator not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(0 >= pools.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(pools));
+  } else {
+    // construct where condition by resource pool names
+    bool need_append_comma = false;
+    for (int64_t index = 0; index < pools.count() && OB_SUCC(ret); ++index) {
+      const ObResourcePoolName &pool_name = pools.at(index);
+      if (need_append_comma && OB_FAIL(in_condition.append(", "))) {
+        LOG_WARN("fail to append comma", KR(ret));
+      } else if (OB_FAIL(in_condition.append_fmt("\"%s\"", pool_name.ptr()))) {
+        LOG_WARN("fail to append resource pool name", KR(ret), K(pool_name));
+      } else {
+        need_append_comma = true;
+      }
+    }
+    // construct whole sql
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql.append_fmt("select * from %s where name in (%s)",
+        OB_ALL_RESOURCE_POOL_TNAME, in_condition.ptr()))) {
+      LOG_WARN("append_fmt failed", KR(ret), K(in_condition));
+    } else if (OB_FAIL(read_resource_pools(sql, resource_pools))) {
+      LOG_WARN("read_resource_pools failed", K(sql), KR(ret));
+    } else if (OB_FAIL(inner_check_has_logonly_pool_(resource_pools, has_logonly_pools))) {
+      LOG_WARN("fail to inner check whether has logonly pools", KR(ret), K(resource_pools));
+    }
+  }
+  LOG_INFO("finish check has logonly pools", KR(ret), K(pools), K(in_condition), K(sql),
+           K(resource_pools), K(has_logonly_pools));
+  return ret;
+}
+
+int ObUnitTableOperator::inner_check_has_logonly_pool_(
+    const common::ObIArray<ObResourcePool> &pools,
+    bool &has_logonly_pools) const
+{
+  int ret = OB_SUCCESS;
+  has_logonly_pools = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("unit table operator not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(0 >= pools.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(pools));
+  } else {
+    for (int64_t index = 0; index < pools.count() && OB_SUCC(ret); ++index) {
+      if (ObReplicaTypeCheck::is_log_replica(pools.at(index).replica_type_)) {
+        has_logonly_pools = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
 
 }//end namespace share
 }//end namespace oceanbase

@@ -3621,7 +3621,7 @@ int ObAdminAlterLSReplicaArg::init_add(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid())
    || OB_UNLIKELY(!server_addr.is_valid())
-   || OB_UNLIKELY(replica_type != REPLICA_TYPE_FULL && replica_type != REPLICA_TYPE_READONLY)
+   || OB_UNLIKELY(REPLICA_TYPE_MAX == replica_type)
    || OB_UNLIKELY(paxos_replica_num < 0)
    || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     //data_source and paxos_replica_num is optional parameter

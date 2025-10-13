@@ -40,6 +40,8 @@ public:
   // This function will not determine the timestamp corresponding to the server when removing_server
   int remove_server(const common::ObAddr &server);
   int64_t get_member_number() const;
+  int64_t get_logonly_replica_member_number() const;
+  int64_t get_full_replica_member_number() const;
   uint64_t hash() const;
   int get_server_by_index(const int64_t index, common::ObAddr &server) const;
   int get_member_by_index(const int64_t index, common::ObMember &server_ex) const;

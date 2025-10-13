@@ -158,7 +158,12 @@ public:
   int get_pool_unit_group_ids(common::ObISQLClient &client,
                               const uint64_t resource_pool_id,
                               ObIArray<uint64_t> &unit_group_ids) const;
-
+  int check_tenant_has_logonly_pools(
+      const uint64_t &tenant_id,
+      bool &has_logonly_pools) const;
+  int check_has_logonly_pools(
+      const ObIArray<share::ObResourcePoolName> &pools,
+      bool &has_logonly_pools) const;
 
   virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
   virtual int check_server_empty(const common::ObAddr &server, bool &is_empty);
@@ -186,6 +191,9 @@ private:
   int read_unit_stat(const common::sqlclient::ObMySQLResult &result, ObUnitStat &unit_stat) const;
   int read_unit_stats(common::ObSqlString &sql,
                  common::ObIArray<ObUnitStat> &unit_stats) const;
+  int inner_check_has_logonly_pool_(
+      const common::ObIArray<ObResourcePool> &pools,
+      bool &has_logonly_pools) const;
 private:
   bool inited_;
   common::ObISQLClient *proxy_;

@@ -653,16 +653,14 @@ int ObLocalityDistribution::RawLocalityIter::get_replica_arrangements(
            && OB_SUCC(get_next_replica_arrangement(
                cursor, end, replica_type, replica_num, memstore_percent))) {
       if (OB_UNLIKELY(FULL_REPLICA != replica_type
-                      && READONLY_REPLICA != replica_type)) {
+                      && READONLY_REPLICA != replica_type
+                      && LOGONLY_REPLICA != replica_type)) {
         // TODO: F-replica is supported since 4.0,
         //       R-replica is supported since 4.2,
+        //       L-replica is supported since 4.2.5.7
         //       other types will be supported later
         INVALID_LOCALITY();
         switch (replica_type) {
-          case LOGONLY_REPLICA:
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "logonly-replica");
-            break;
           case ENCRYPTION_LOGONLY_REPLICA:
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "encryption-logonly-replica");

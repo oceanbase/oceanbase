@@ -29,7 +29,7 @@ public:
   virtual ~ObReconfigCheckerAdapter() { }
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t &timeout = -1);
 public:
-  virtual int check_can_add_member(const ObAddr &server,
+  virtual int check_can_add_member(const ObMember &member,
                                    const int64_t timeout_us) override final;
   virtual int check_can_change_memberlist(const ObMemberList &new_member_list,
                                           const int64_t paxos_replica_num,

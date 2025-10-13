@@ -548,15 +548,16 @@ int PalfHandleImpl::get_global_learner_list(common::GlobalLearnerList &learner_l
 
 int PalfHandleImpl::get_paxos_member_list(
     common::ObMemberList &member_list,
-    int64_t &paxos_replica_num) const
+    int64_t &paxos_replica_num,
+    const bool &filter_logonly_replica) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
-  } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num))) {
-    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this));
+  } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num, filter_logonly_replica))) {
+    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this), K(filter_logonly_replica));
   } else {}
   return ret;
 }
@@ -579,15 +580,16 @@ int PalfHandleImpl::get_config_version(LogConfigVersion &config_version) const
 int PalfHandleImpl::get_paxos_member_list_and_learner_list(
     common::ObMemberList &member_list,
     int64_t &paxos_replica_num,
-    GlobalLearnerList &learner_list) const
+    GlobalLearnerList &learner_list,
+    const bool &filter_logonly_replica) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
-  } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num))) {
-    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this));
+  } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num, filter_logonly_replica))) {
+    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this), K(filter_logonly_replica));
   } else if (OB_FAIL(config_mgr_.get_global_learner_list(learner_list))) {
     PALF_LOG(WARN, "get_global_learner_list failed", K(ret), KPC(this));
   } else {}
@@ -1431,7 +1433,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     // step 3: check whether the reconfiguration is allowed
     if (OB_SUCC(ret) && is_add_log_sync_member_list(args.type_) &&
         UPGRADE_LEARNER_TO_ACCEPTOR != args.type_) {
-      ret = plugins_.check_can_add_member(args.server_.get_server(), timeout_us);
+      ret = plugins_.check_can_add_member(args.server_, timeout_us);
       // reset retcode if the plugin is empty
       ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
     } else if (OB_SUCC(ret) && DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&

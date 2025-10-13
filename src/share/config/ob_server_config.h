@@ -70,6 +70,7 @@ const char* const LOG_DISK_THROTTLING_PERCENTAGE = "log_disk_throttling_percenta
 const char* const ARCHIVE_LAG_TARGET = "archive_lag_target";
 const char* const _TRANSFER_TASK_TABLET_COUNT_THRESHOLD = "_transfer_task_tablet_count_threshold";
 const char* const ZONE_DEPLOY_MODE = "zone_deploy_mode";
+const char* const ENABLE_LOGONLY_REPLICA = "enable_logonly_replica";
 const char* const ENABLE_GTS_STANDALONE = "enable_gts_standalone";
 
 class ObServerMemoryConfig;

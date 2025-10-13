@@ -50,6 +50,7 @@ class ObLSService : public ObIResourceLimitCalculatorHandler
   static const int64_t DEFAULT_LOCK_TIMEOUT = 60_s;
   static const int64_t SMALL_TENANT_MEMORY_LIMIT = 4 * 1024 * 1024 * 1024L; // 4G
   static const int64_t TENANT_MEMORY_PER_LS_NEED = 200 * 1024 * 1024L; // 200MB
+  static const int64_t TENANT_MEMORY_PER_LOGONLY_LS_NEED = 100 * 1024 * 1024L; // 100MB
 public:
   ObLSService();
   virtual ~ObLSService();
@@ -166,11 +167,12 @@ private:
   };
   // the tenant smaller than 5G can only create 8 ls.
   // other tenant can create 100 ls.
-  int check_tenant_ls_num_();
+  int check_tenant_ls_num_(const bool is_check_for_logonly);
   int inner_create_ls_(const share::ObLSID &lsid,
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
                        const share::SCN &create_scn,
+                       const ObReplicaType &replica_type,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
@@ -195,7 +197,8 @@ private:
   // for resource limit calculator
   int cal_min_phy_resource_needed_(const int64_t ls_cnt,
                                    ObMinPhyResourceResult &min_phy_res);
-  int get_resource_constraint_value_(ObResoureConstraintValue &constraint_value);
+  int get_resource_constraint_value_(ObResoureConstraintValue &constraint_value,
+                                     const bool is_check_for_logonly = false);
 
 private:
   bool is_inited_;

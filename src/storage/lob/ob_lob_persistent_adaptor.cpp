@@ -409,7 +409,10 @@ int ObPersistentLobApator::inner_get_tablet(
     ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_handle.get_ls()->get_tablet_with_timeout(tablet_id,
+  if (ls_handle.get_ls()->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no tablet", KR(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_with_timeout(tablet_id,
                                                                  handle,
                                                                  param.timeout_,
                                                                  ObMDSGetTabletMode::READ_READABLE_COMMITED,

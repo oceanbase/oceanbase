@@ -209,7 +209,8 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
                                        unit.compat_mode_,
                                        create_timestamp,
                                        has_memstore,
-                                       false /*is_removed*/))) {
+                                       false /*is_removed*/,
+                                       unit.replica_type_))) {
       LOG_WARN("fail to init user tenant config", KR(ret), K(unit));
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {

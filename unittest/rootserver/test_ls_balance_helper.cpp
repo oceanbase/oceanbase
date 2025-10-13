@@ -182,7 +182,6 @@ TEST_F(TestLSBalanceHelper, unit_ls)
 
 }
 
-
 TEST_F(TestLSBalanceHelper, ls_balance1)
 {
   //同构unit 3：3：3

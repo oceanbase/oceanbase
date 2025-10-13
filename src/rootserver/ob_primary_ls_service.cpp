@@ -508,12 +508,12 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
       uint64_t ls_group_id = OB_INVALID_ID;
       share::ObLSAttr new_ls;
       share::ObLSFlag flag;
-      int64_t unit_group_cnt = 0;
+      int64_t ls_group_cnt = 0;
       const int64_t ls_cnt_in_group = job_desc.get_ls_cnt_in_group();
-      if (OB_FAIL(job_desc.get_unit_lcm_count(unit_group_cnt))) {
+      if (OB_FAIL(job_desc.get_unit_lcm_count(ls_group_cnt))) {
         LOG_WARN("failed to get unit lcm count", KR(ret), K(job_desc));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_cnt; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_group_cnt; ++i) {
         //create ls
         if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_group_id(GCTX.sql_proxy_, tenant_id_, ls_group_id))) {
           LOG_WARN("failed to fetch new LS group id", KR(ret), K(tenant_id_));
@@ -524,7 +524,7 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
             LOG_WARN("failed to execute create_ls_in_user_tenant", KR(ret), K(tenant_id_), K(ls_group_id));
           }
         }//end for each ls group
-      }//end for each unit group
+      }//end for each ls group
     }
     END_TRANSACTION(trans)
   }

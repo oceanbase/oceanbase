@@ -37,6 +37,7 @@ namespace storage
 {
 struct ObFrozenStatus;
 class ObLS;
+class ObLSMeta;
 }
 namespace observer
 {
@@ -300,6 +301,13 @@ private:
   int generate_master_rs_ls_info_(
       const share::ObLSReplica &cur_leader,
       share::ObLSInfo &ls_info);
+  int get_replica_type_(
+      const common::ObAddr &addr,
+      const ObMemberList &ob_member_list,
+      const GlobalLearnerList &learner_list,
+      const ObLSMeta &ls_meta,
+      ObReplicaType &replica_type);
+
 private:
   bool inited_;
   bool in_register_process_;

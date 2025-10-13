@@ -149,6 +149,13 @@ public:
 
  /**
   * @description:
+  *    just for logonly replica, return the readable_scn of ObAllTenantInfoCache
+  * @param[out] readable_scn
+  */
+ int get_pure_readable_scn(share::SCN &readable_scn);
+
+ /**
+  * @description:
   *    get tenant replayable_scn.
   *       for SYS/META tenant: there isn't replayable_scn
   *       for user tenant: get replayable_scn from __all_tenant_info cache
@@ -238,6 +245,7 @@ private:
       const int64_t end_time_us,
       int64_t &last_dump_time_us);
  bool act_as_standby_();
+ int check_server_has_logonly_replica_(const uint64_t tenant_id, bool &has_logonly_replica);
 
 public:
  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(tenant_info_cache), K_(broadcast_times), K_(rpc_update_times), K_(sql_update_times), K_(last_rpc_update_time_us));

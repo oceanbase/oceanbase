@@ -622,6 +622,48 @@ int ObPrimaryZoneUtil::get_tenant_primary_zone_array(
   return ret;
 }
 
+// Divide tenant primary zone into multi level primary zone array.
+// eg. primary_zone string is 'z1,z2;z3,z4', then output multi_level_primary_zone_array is {{z1,z2}, {z3,z4}}
+int ObPrimaryZoneUtil::get_tenant_multi_level_primary_zone_array(
+      const share::schema::ObTenantSchema &tenant_schema,
+      common::ObIArray<common::ObArray<common::ObZone>> &multi_level_primary_zone_array)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<share::schema::ObZoneScore, DEFAULT_ZONE_COUNT> zone_score_list;
+  ObArenaAllocator allocator("PrimaryZone");
+  ObPrimaryZone primary_zone_schema(allocator);
+  ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  if (OB_UNLIKELY(!tenant_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant schema is invalid", KR(ret), K(tenant_schema));
+  } else if (OB_FAIL(get_tenant_primary_zone_score(tenant_schema,
+          primary_zone_schema, zone_locality, zone_score_list))) {
+    LOG_WARN("failed to get tenant primary zone score", KR(ret), K(tenant_schema));
+  } else {
+    int64_t last_score = -1;
+    common::ObArray<common::ObZone> tmp_zone_array;
+    ARRAY_FOREACH(zone_score_list, i) {
+      const share::schema::ObZoneScore &zone_score = zone_score_list.at(i);
+      if (0 == i) {
+        last_score = zone_score.score_;
+      } else if (zone_score.score_ != last_score) {
+        if (OB_FAIL(multi_level_primary_zone_array.push_back(tmp_zone_array))) {
+          LOG_WARN("failed to push back", KR(ret), K(tmp_zone_array));
+        }
+        tmp_zone_array.reuse();
+        last_score = zone_score.score_;
+      }
+      if (FAILEDx(tmp_zone_array.push_back(zone_score.zone_))) {
+        LOG_WARN("failed to push back", KR(ret), K(zone_score));
+      }
+    }
+    if (FAILEDx(multi_level_primary_zone_array.push_back(tmp_zone_array))) {
+      LOG_WARN("failed to push back", KR(ret), K(tmp_zone_array));
+    }
+  }
+  return ret;
+}
+
 int ObPrimaryZoneUtil::get_tenant_primary_zone_score(
       const share::schema::ObTenantSchema &tenant_schema,
       share::schema::ObPrimaryZone &primary_zone_schema,

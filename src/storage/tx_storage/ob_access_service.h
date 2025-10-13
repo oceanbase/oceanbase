@@ -265,7 +265,8 @@ protected:
   {
     return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
   }
-
+  int check_replica_type_accessible_(
+      const common::ObReplicaType &replica_type);
 private:
   bool is_inited_;
   ObLSService *ls_svr_;

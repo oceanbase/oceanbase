@@ -1926,7 +1926,8 @@ int ObUnitManager::batch_determine_altered_pools_op_info_(
       } else if (AUN_NOP == alter_unit_num_type) {
         // no change, skip
       } else {
-        if (OB_FAIL(pool_op_info_array.push_back(PoolOperationInfo(pool->unit_count_, new_unit_num, alter_unit_num_type)))) {
+        if (OB_FAIL(pool_op_info_array.push_back(PoolOperationInfo(pool->unit_count_,
+            new_unit_num, alter_unit_num_type, pool->replica_type_)))) {
           LOG_WARN("fail to push back pool operation info", KR(ret), KPC(pool));
         } else if (OB_FAIL(altered_pools.push_back(pool))) {
           LOG_WARN("fail to push back altered pool", KR(ret), KPC(pool));
@@ -2010,6 +2011,7 @@ int ObUnitManager::alter_homo_resource_tenant_adjust_ug_(
     // do nothing, no need to adjust unit group id
   } else if (AUN_EXPAND == pool_op_info.alter_type_) {
     // only allocate new ug_ids for new added units, ug_ids of which are currently 0
+    // We have assured that in homo mode, all pools have unit group id. So do not need to check pool align to ug.
     ObArray<uint64_t> new_ug_ids;
     if (OB_ISNULL(pools.at(0))) {
       ret = OB_ERR_UNEXPECTED;
@@ -3045,7 +3047,8 @@ int ObUnitManager::check_grant_pools_unit_num_legal_(
       } else if (OB_ISNULL(pool)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool is null", KP(pool), KR(ret));
-      } else if (OB_FAIL(pool_op_info_array.push_back(PoolOperationInfo(0, pool->unit_count_, AUN_EXPAND)))) {
+      } else if (OB_FAIL(pool_op_info_array.push_back(PoolOperationInfo(
+          0, pool->unit_count_, AUN_EXPAND, pool->replica_type_)))) {
         LOG_WARN("push back pool operation info failed", KR(ret));
       }
     }
@@ -3058,12 +3061,58 @@ int ObUnitManager::check_grant_pools_unit_num_legal_(
   return ret;
 }
 
-int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
-    const uint64_t tenant_id, bool &in_hetero_deploy_mode)
+int ObUnitManager::check_grant_pools_replica_type_legal_(
+    const uint64_t tenant_id,
+    const common::ObIArray<share::ObResourcePoolName> &pool_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || pool_names.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pool_names));
+  } else {
+    bool has_logonly_replica = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
+      const share::ObResourcePoolName &pool_name = pool_names.at(i);
+      share::ObResourcePool *pool = nullptr;
+      if (OB_FAIL(inner_get_resource_pool_by_name(pool_names.at(i), pool))) {
+        LOG_WARN("get resource pool by name failed", "pool_name", pool_names.at(i), KR(ret));
+      } else if (OB_ISNULL(pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool is null", KP(pool), KR(ret));
+      } else if (REPLICA_TYPE_LOGONLY == pool->replica_type_) {
+        has_logonly_replica = true;
+      }
+    }
+    if (OB_SUCC(ret) && has_logonly_replica) {
+      bool enable_logonly_replica = false;
+      bool in_hetero_deploy_mode = false;
+      if (OB_FAIL(check_tenant_enable_logonly_replica_(tenant_id, enable_logonly_replica))) {
+        LOG_WARN("fail to check tenant enable logonly replica", KR(ret), K(tenant_id));
+      } else if (!enable_logonly_replica) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "ENABLE_LOGONLY_REPLICA is false, tenant with LOGONLY pools");
+        LOG_WARN("tenant with L-pool is not supported when enable_logonly_replica is false",
+                KR(ret), K(pool_names), K(tenant_id), K(enable_logonly_replica));
+      } else if (OB_FAIL(check_tenant_in_heterogeneous_deploy_mode(tenant_id, in_hetero_deploy_mode))) {
+        LOG_WARN("fail to check tenant in heterogeneous deploy mode", KR(ret), K(tenant_id));
+      } else if (!in_hetero_deploy_mode) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu zone_deploy_mode is 'homo', not 'hetero', "
+            "LOGONLY pool", tenant_id);
+        LOG_WARN("can not grant logonly pool, zone_deploy_mode must be hetero", KR(ret), K(tenant_id), K(pool_names));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_exist_(
+    const uint64_t tenant_id,
+    bool &is_exist)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard guard;
-  bool is_exist = false;
+  is_exist = false;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
@@ -3074,6 +3123,109 @@ int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
     LOG_WARN("fail to get schema guard", KR(ret));
   } else if (OB_FAIL(guard.check_tenant_exist(tenant_id, is_exist))) {
     LOG_WARN("check tenant exist failed", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObUnitManager::read_parameter_from_seed_tenant_(
+    const char * parameter_name,
+    ObString &parameter_value)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  parameter_value.reset();
+  if (OB_ISNULL(parameter_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE name = \"%s\"",
+                         OB_ALL_SEED_PARAMETER_TNAME, parameter_name))) {
+    LOG_WARN("fail to append sql", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next row", KR(ret));
+        }
+      } else {
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", parameter_value);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_enable_logonly_replica_(
+    const uint64_t tenant_id, bool &enable_logonly_replica)
+{
+  int ret = OB_SUCCESS;
+  enable_logonly_replica = false;
+  bool is_exist = false;
+  ObString parameter_value;
+  const char * parameter_name = ENABLE_LOGONLY_REPLICA;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_exist_(tenant_id, is_exist))) {
+    LOG_WARN("fail to check tenant exist", KR(ret), K(tenant_id));
+  } else {
+    if (is_exist) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_UNLIKELY(!tenant_config.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tenant_config is not valid", KR(ret), K(tenant_id));
+      } else {
+        enable_logonly_replica = tenant_config->enable_logonly_replica;
+      }
+    } else {
+      ObSqlString param_value;
+      // tenant not exist yet, it means it's being created and value of seed tenant will be used
+      // as this tenant's initial value. So try to get value from __all_seed_parameter.
+      if (OB_FAIL(read_parameter_from_seed_tenant_(parameter_name , parameter_value))) {
+        LOG_WARN("fail to read enable_logonyl_replica from seed tenant", KR(ret));
+      } else if (parameter_value.empty()) {
+        enable_logonly_replica = false;
+        LOG_INFO("seed not set, use default value", KR(ret));
+      } else if (OB_FAIL(param_value.assign(parameter_value))) {
+        LOG_WARN("fail to assign param value", KR(ret), K(parameter_value));
+      } else {
+        bool is_valid = false;
+        enable_logonly_replica = ObConfigBoolParser::get(param_value.ptr(), is_valid);
+        if (OB_UNLIKELY(!is_valid)) {
+          // defensive check
+          enable_logonly_replica = false;
+          LOG_INFO("parameter value is not expected", K(param_value));
+        }
+        LOG_INFO("tenant does not exist yet, try to get enable_logonly_replica from seed",
+                 KR(ret), K(tenant_id), K(enable_logonly_replica), K(parameter_value), K(is_valid), K(param_value));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
+    const uint64_t tenant_id, bool &in_hetero_deploy_mode)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  ObString parameter_value;
+  const char * parameter_name = ZONE_DEPLOY_MODE;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_exist_(tenant_id, is_exist))) {
+    LOG_WARN("fail to check tenant exist", KR(ret), K(tenant_id));
   } else {
     if (is_exist) {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
@@ -3088,36 +3240,14 @@ int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
     } else {
       // tenant not exist yet, it means it's being created and value of seed tenant will be used
       // as this tenant's initial value. So try to get value from __all_seed_parameter.
-      ObSqlString sql;
-      if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE name = \"%s\"",
-          OB_ALL_SEED_PARAMETER_TNAME, ZONE_DEPLOY_MODE))) {
-        LOG_WARN("fail to append sql", KR(ret));
-      } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql proxy is null", KR(ret));
+      if (OB_FAIL(read_parameter_from_seed_tenant_(parameter_name, parameter_value))) {
+        LOG_WARN("fail to read zone_deploy_mode from seed tenant", KR(ret));
+      } else if (parameter_value.empty()) {
+        in_hetero_deploy_mode = false;
+        LOG_INFO("seed not set, use default value HOMO", KR(ret));
       } else {
-        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-          sqlclient::ObMySQLResult *result = NULL;
-          if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
-            LOG_WARN("fail to execute sql", KR(ret), K(sql));
-          } else if (OB_ISNULL(result = res.get_result())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("result is null", KR(ret));
-          } else if (OB_FAIL(result->next())) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              in_hetero_deploy_mode = false;
-              LOG_INFO("seed not set, use default value HOMO", KR(ret));
-            } else {
-              LOG_WARN("fail to get next row", KR(ret));
-            }
-          } else {
-            ObString value;
-            EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", value);
-            in_hetero_deploy_mode = 0 == value.case_compare(ObConfigZoneDeployModeChecker::HETERO_MODE_STR)
-                ? true : false;
-          }
-        }
+        in_hetero_deploy_mode = 0 == parameter_value.case_compare(ObConfigZoneDeployModeChecker::HETERO_MODE_STR)
+            ? true : false;
       }
       LOG_INFO("tenant does not exist yet, try to get zone_deploy_mode from seed",
           KR(ret), K(tenant_id), K(in_hetero_deploy_mode));
@@ -3189,6 +3319,8 @@ int ObUnitManager::check_unit_num_legal_after_pools_operation_(
         if (OB_UNLIKELY(nullptr == cur_pool_array->at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("pool ptr is null", KR(ret));
+        } else if (!ObReplicaTypeCheck::need_to_align_to_ug(cur_pool_array->at(i)->replica_type_)) {
+          // no need to check unit_num
         } else if (OB_FAIL(unit_num_count_map.inc_unit_num_cnt(cur_pool_array->at(i)->unit_count_))) {
           LOG_WARN("fail to inc_unit_num_cnt", KR(ret));
         }
@@ -3197,10 +3329,13 @@ int ObUnitManager::check_unit_num_legal_after_pools_operation_(
     // stat pool operation diff on unit count
     for (int64_t i = 0; OB_SUCC(ret) && i < pool_op_info_array.count(); ++i) {
       const PoolOperationInfo &pool_op_info = pool_op_info_array.at(i);
-      if (is_gts_standalone && pool_op_info.new_unit_num_ < 2) {
+      if (ObReplicaTypeCheck::gts_standalone_applicable(pool_op_info.replica_type_)
+          && is_gts_standalone && pool_op_info.new_unit_num_ < 2) {
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("tenant enabled gts_standalone, unit_num can not be less than 2", KR(ret), K(tenant_id));
         LOG_USER_ERROR_WITH_ARGS(OB_OP_NOT_ALLOW, "Tenant %lu enabled GTS standalone, unit_num less than 2", tenant_id);
+      } else if (!ObReplicaTypeCheck::need_to_align_to_ug(pool_op_info.replica_type_)) {
+        // no need to check unit_num
       } else if (OB_FAIL(unit_num_count_map.inc_unit_num_cnt(pool_op_info.new_unit_num_))) {
         LOG_WARN("fail to inc_unit_num_cnt", KR(ret), K(pool_op_info));
       } else if (0 == pool_op_info.old_unit_num_)  {
@@ -3264,6 +3399,7 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
   const bool grant = true;
   bool intersect = false;
   bool server_enough = true;
+  bool enable_logonly_replica = false;
   bool is_grant_pool_allowed = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), KR(ret));
@@ -3296,6 +3432,8 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_WARN("fail to check_tenant_pools_unit_num_legal_check grant pools allowed by unit stat", KR(ret));
   } else if (OB_FAIL(check_grant_pools_unit_num_legal_(tenant_id, pool_names))) {
     LOG_WARN("fail to check pools unit num legal", KR(ret), K(tenant_id), K(pool_names));
+  } else if (OB_FAIL(check_grant_pools_replica_type_legal_(tenant_id, pool_names))) {
+    LOG_WARN("fail to check grant pools replica type legal", KR(ret), K(tenant_id), K(pool_names));
   } else if (OB_FAIL(do_grant_pools_(trans, compat_mode, pool_names, tenant_id, check_data_version))) {
     LOG_WARN("do grant pools failed", KR(ret), K(grant), K(pool_names), K(tenant_id), K(compat_mode));
   }
@@ -4536,7 +4674,7 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
                                   unit.unit_id_,
                                   compat_mode,
                                   *unit_config,
-                                  ObReplicaType::REPLICA_TYPE_FULL,
+                                  unit.replica_type_,
                                   if_not_grant,
                                   is_delete
 #ifdef OB_BUILD_TDE_SECURITY
@@ -5978,6 +6116,7 @@ int ObUnitManager::check_shrink_unit_num_zone_condition(
   return ret;
 }
 
+// get by sys ls unit_list. Units that not applicable for gts standalone are excluded, such as L-zone.
 int ObUnitManager::get_tenant_gts_unit_ids(
     const uint64_t tenant_id,
     ObIArray<uint64_t> &unit_ids)
@@ -5993,15 +6132,30 @@ int ObUnitManager::get_tenant_gts_unit_ids(
   } else if (!is_gts_standalone) {
     // gts_standalone disabled, result should be empty
   } else {
+    ObArray<uint64_t> unit_ids_tmp;
     ObLSStatusOperator ls_status_op;
     ObLSStatusInfo sys_ls_info;
+    ObUnitTableOperator ut_operator;
+    ObArray<ObUnit> units_tmp;
     if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
     } else if (OB_FAIL(ls_status_op.get_ls_status_info(tenant_id, SYS_LS, sys_ls_info, *GCTX.sql_proxy_))) {
       LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(sys_ls_info.get_unit_list(unit_ids))) {
+    } else if (OB_FAIL(sys_ls_info.get_unit_list(unit_ids_tmp))) {
       LOG_WARN("fail to get unit list ids", KR(ret), K(sys_ls_info));
+    } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("fail to init unit table operator", KR(ret));
+    } else if (OB_FAIL(ut_operator.get_units_by_unit_ids(unit_ids_tmp, units_tmp))) {
+      LOG_WARN("fail to get unit by ids", KR(ret), K(tenant_id), K(unit_ids_tmp));
+    }
+    // SYS LS L-replicas do not standalone. filter out LOGONLY units in sys ls unit_list.
+    ARRAY_FOREACH(units_tmp, idx) {
+      if (!ObReplicaTypeCheck::gts_standalone_applicable(units_tmp.at(idx).replica_type_)) {
+        // skip
+      } else if (OB_FAIL(unit_ids.push_back(units_tmp.at(idx).unit_id_))) {
+        LOG_WARN("fail to push back", KR(ret), K(units_tmp.at(idx).unit_id_));
+      }
     }
   }
   return ret;
@@ -6771,6 +6925,7 @@ int ObUnitManager::alter_pool_unit_num(
         LOG_WARN("fail to do_alter_pool_unit_num_", KR(ret), KPC(pool),
                 "pool_op_info", pool_op_info_array.at(0), K(delete_unit_id_array));
       } else if (pool->is_granted_to_tenant()
+          && ObReplicaTypeCheck::need_to_align_to_ug(pool->replica_type_)
           && OB_FAIL(adjust_altered_pools_unit_group_id_(trans, pool->tenant_id_, altered_pools))) {
         LOG_WARN("fail to adjust_altered_pools_unit_group_id", KR(ret), K(pool->tenant_id_), K(pool_op_info_array));
       }
@@ -6819,6 +6974,8 @@ int ObUnitManager::adjust_altered_pools_unit_group_id_(
         if (OB_ISNULL(pool)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("pool ptr is null", KR(ret), K(i));
+        } else if (!ObReplicaTypeCheck::need_to_align_to_ug(pool->replica_type_)) {
+          // skip. all ug_ids of pool are 0.
         } else if (!has_exist_in_array(altered_pools, pool)) {
           if (OB_FAIL(ut_operator_.get_pool_unit_group_ids(trans, pool->resource_pool_id_, ref_pool_ug_id_array))) {
             LOG_WARN("fail to get pool unit group ids", KR(ret), K(pool));
@@ -6835,6 +6992,8 @@ int ObUnitManager::adjust_altered_pools_unit_group_id_(
       if (OB_ISNULL(pool)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pool is null", KR(ret));
+      } else if (!ObReplicaTypeCheck::need_to_align_to_ug(pool->replica_type_)) {
+          // skip. all ug_ids of pool are 0. No need to adjust.
       } else if (OB_FAIL(determine_pool_unit_group_id_(trans, pool, ref_pools_ug_id_arrays, unit_group_id_array))) {
         LOG_WARN("fail to determine pool ug_id", KR(ret), KPC(pool), K(ref_pools_ug_id_arrays));
       } else if (OB_FAIL(reallocate_pool_unit_group_id_(trans, pool, unit_group_id_array))) {
@@ -7425,7 +7584,7 @@ int ObUnitManager::increase_units_in_zones_(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!pool.is_granted_to_tenant()) {
+  } else if (!pool.is_granted_to_tenant() || !ObReplicaTypeCheck::need_to_align_to_ug(pool.replica_type_)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < pool.unit_count_; ++i) {
       if (OB_FAIL(new_unit_group_id_array.push_back(0))) {
         LOG_WARN("fail to push back", KR(ret));
@@ -8087,6 +8246,8 @@ int ObUnitManager::do_revoke_pools_(
                   false/*if_not_grant*/, false/*skip_offline_server*/,
                   false /*check_data_version*/))) {
             LOG_WARN("fail to try notify server unit resource", KR(ret));
+          } else if (!ObReplicaTypeCheck::need_to_align_to_ug(unit->replica_type_)) {
+            // no need to update ug_id, because it's always 0
           } else if (OB_FAIL(ut_operator_.update_unit_ug_id(trans, ObUnitUGOp(unit->unit_id_, 0)))) {
             LOG_WARN("fail to update unit", KR(ret), K(ObUnitUGOp(unit->unit_id_, 0)));
           }

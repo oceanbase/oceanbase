@@ -111,22 +111,24 @@ private:
 struct ObDisplayZoneUnitCnt final : public ObDisplayType
 {
 public:
-  ObDisplayZoneUnitCnt() : zone_(), unit_cnt_(0) {}
-  ObDisplayZoneUnitCnt(const ObZone &zone, int64_t unit_cnt) :
-  zone_(zone), unit_cnt_(unit_cnt) {}
+  ObDisplayZoneUnitCnt() : zone_(), unit_cnt_(0), replica_type_(common::ObReplicaType::REPLICA_TYPE_FULL) {}
+  ObDisplayZoneUnitCnt(
+    const ObZone &zone, int64_t unit_cnt, common::ObReplicaType replica_type = common::ObReplicaType::REPLICA_TYPE_FULL) :
+  zone_(zone), unit_cnt_(unit_cnt), replica_type_(replica_type) {}
   ~ObDisplayZoneUnitCnt() {}
   void reset()
   {
     zone_.reset();
     unit_cnt_ = 0;
+    replica_type_ = common::ObReplicaType::REPLICA_TYPE_FULL;
   }
   bool is_valid() const
   {
-    return !zone_.is_empty() && unit_cnt_ > 0;
+    return !zone_.is_empty() && unit_cnt_ > 0 && ObReplicaTypeCheck::is_replica_type_valid(replica_type_);
   }
   int64_t max_display_str_len() const
   {
-    return MAX_ZONE_LENGTH + 17 + 1;
+    return MAX_ZONE_LENGTH + MAX_REPLICA_TYPE_LENGTH + 17 + 2;
   }
   int parse_from_display_str(const common::ObString &str);
   int to_display_str(char *buf, const int64_t len, int64_t &pos) const;
@@ -138,9 +140,13 @@ public:
   {
     return zone_;
   }
+  common::ObReplicaType get_replica_type() const
+  {
+    return replica_type_;
+  }
   bool operator==(const ObDisplayZoneUnitCnt &other) const
   {
-    return zone_ == other.zone_ && unit_cnt_ == other.unit_cnt_;
+    return zone_ == other.zone_ && unit_cnt_ == other.unit_cnt_ && replica_type_ == other.replica_type_;
   }
   bool operator!=(const ObDisplayZoneUnitCnt &other) const { return !(other == *this); }
   bool operator<(const ObDisplayZoneUnitCnt &other) const
@@ -148,10 +154,12 @@ public:
     return (zone_ == other.zone_) ? (unit_cnt_ < other.unit_cnt_) : (zone_ < other.zone_);
   }
 
-  TO_STRING_KV(K_(zone), K_(unit_cnt));
+  TO_STRING_KV(K_(zone), K_(unit_cnt), K_(replica_type));
 private:
   ObZone zone_;
   int64_t unit_cnt_;
+  // replica type of zone units
+  common::ObReplicaType replica_type_;
 };
 
 typedef ObDisplayList<ObDisplayZoneUnitCnt, 9> ObZoneUnitCntList;

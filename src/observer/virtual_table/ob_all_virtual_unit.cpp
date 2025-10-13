@@ -254,6 +254,10 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           }
           break;
         }
+        case DATA_DISK_SIZE: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
         case DATA_DISK_IN_USE: {
           int64_t data_disk_in_use = 0;
           if (OB_FAIL(static_cast<ObDiskUsageReportTask*>(GCTX.disk_reporter_)->get_data_disk_used_size(tenant_meta.unit_.tenant_id_, data_disk_in_use))) {
@@ -261,6 +265,14 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           } else {
             cur_row_.cells_[i].set_int(data_disk_in_use);
           }
+          break;
+        }
+        case MAX_NET_BANDWIDTH: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case NET_BANDWIDTH_WEIGHT: {
+          cur_row_.cells_[i].set_int(0);
           break;
         }
         case STATUS: {
@@ -271,6 +283,9 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
         }
         case CREATE_TIME:
           cur_row_.cells_[i].set_int(tenant_meta.unit_.create_timestamp_);
+          break;
+        case REPLICA_TYPE:
+          cur_row_.cells_[i].set_int(tenant_meta.unit_.replica_type_);
           break;
         default: {
           ret = OB_ERR_UNEXPECTED;

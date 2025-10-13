@@ -595,6 +595,8 @@ int ObAccessService::check_read_allowed_(
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id));
+  } else if (OB_FAIL(check_replica_type_accessible_(ls->get_ls_meta().get_replica_type()))) {
+    LOG_WARN("fail to check replica type is accessible", KR(ret), "replica_type", ls->get_ls_meta().get_replica_type());
   } else {
     ObStoreCtx &ctx = ctx_guard.get_store_ctx();
     ctx.ls_ = ls;
@@ -730,6 +732,8 @@ int ObAccessService::check_write_allowed_(
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id));
+  } else if (OB_FAIL(check_replica_type_accessible_(ls->get_ls_meta().get_replica_type()))) {
+    LOG_WARN("fail to check replica type is accessible", KR(ret), "replica_type", ls->get_ls_meta().get_replica_type());
   } else if (!enable_table_lock) {
     // do nothing
   } else {
@@ -774,6 +778,21 @@ int ObAccessService::check_write_allowed_(
   if (OB_SUCC(ret) && OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, dml_param.timeout_,
       share::SCN::max_scn(), tablet_handle, ctx_guard))) {
     LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObAccessService::check_replica_type_accessible_(
+    const common::ObReplicaType &replica_type)
+{
+  int ret = OB_SUCCESS;
+  // logonly replica is not readable and not writable,
+  // although we filtered logonly replica from location cache,
+  // read/write request may reach logonly replica anyway,
+  // just return OB_REPLICA_NOT_READABLE to trigger das retry
+  if (REPLICA_TYPE_LOGONLY == replica_type) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("logonly replica is not readable or writable, need retry", KR(ret), K(replica_type));
   }
   return ret;
 }

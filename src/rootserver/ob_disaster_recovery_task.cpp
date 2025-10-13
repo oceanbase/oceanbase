@@ -1212,7 +1212,7 @@ int ObAddLSReplicaTask::fill_dml_splicer(
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_ip", src_ip))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_port", get_data_src_member().get_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", get_orig_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("source_replica_type", ob_replica_type_strs(get_dst_replica().get_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("source_replica_type", ob_replica_type_strs(get_data_src_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))) {
     LOG_WARN("add column failed", KR(ret));
@@ -1279,7 +1279,7 @@ int ObAddLSReplicaTask::check_paxos_member(
     ObDRTaskRetComment &ret_comment) const
 {
   int ret = OB_SUCCESS;
-  if (!ObReplicaTypeCheck::is_paxos_replica_V2(dst_replica_.get_replica_type())) {
+  if (!ObReplicaTypeCheck::is_paxos_replica(dst_replica_.get_replica_type())) {
     // no need to check non paxos replica
   } else {
     const ObZone &dst_zone = dst_replica_.get_zone();
@@ -1292,8 +1292,8 @@ int ObAddLSReplicaTask::check_paxos_member(
       } else if ((!is_manual_task() && r->get_zone() == dst_zone)
                  // manual operation allowed mutiple replica in same zone
                  && r->is_in_service()
-                 && ObReplicaTypeCheck::is_paxos_replica_V2(r->get_replica_type())
-                 && ObReplicaTypeCheck::is_paxos_replica_V2(dst_replica_.get_replica_type())) {
+                 && ObReplicaTypeCheck::is_paxos_replica(r->get_replica_type())
+                 && ObReplicaTypeCheck::is_paxos_replica(dst_replica_.get_replica_type())) {
         ret = OB_REBALANCE_TASK_CANT_EXEC;
         LOG_WARN("only one paxos member allowed in a single zone", K(ret),
                  "zone", dst_zone, "task", *this);
@@ -1910,12 +1910,12 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
     } else if (dest_type == common::ObString("READONLY")) {
       dest_type_to_set = REPLICA_TYPE_READONLY;
     }
-    ObReplicaMember src_member(src_server, 0);
-    ObReplicaMember dest_member(dest_server, 0);
-    if (OB_FAIL(src_member.set_replica_type(src_type_to_set))) {
-      LOG_WARN("fail to set src replica type", KR(ret), K(src_type_to_set));
-    } else if (OB_FAIL(dest_member.set_replica_type(dest_type_to_set))) {
-      LOG_WARN("fail to set dest replica type", KR(ret), K(dest_type_to_set));
+    ObReplicaMember src_member;
+    ObReplicaMember dest_member;
+    if (OB_FAIL(src_member.init(src_server, 0, src_type_to_set))) {
+      LOG_WARN("fail to init src member", KR(ret), K(src_type_to_set));
+    } else if (OB_FAIL(dest_member.init(dest_server, common::ObTimeUtility::current_time(), dest_type_to_set))) {
+      LOG_WARN("fail to init dest member", KR(ret), K(dest_type_to_set));
     } else if (OB_FAIL(dst_replica.assign(0/*unit id*/, 0/*unit group id*/, task_key.get_zone(), dest_member))) {
       LOG_WARN("fail to init a ObDstReplica", KR(ret), K(task_key), K(dest_member));
     } else if (OB_FAIL(build(
@@ -2216,7 +2216,7 @@ int ObRemoveLSReplicaTask::simple_build(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(task_id),
              K(leader), K(remove_server), K(orig_paxos_replica_number),
              K(paxos_replica_number), K(replica_type));
-  } else if (ObReplicaTypeCheck::is_paxos_replica_V2(replica_type)) {
+  } else if (ObReplicaTypeCheck::is_paxos_replica(replica_type)) {
     task_type = ObDRTaskType::LS_REMOVE_PAXOS_REPLICA;
   } else {
     task_type = ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;

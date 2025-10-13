@@ -142,7 +142,7 @@ public:
 class PalfReconfigCheckerCb
 {
 public:
-  virtual int check_can_add_member(const ObAddr &server,
+  virtual int check_can_add_member(const ObMember &member,
                                    const int64_t timeout_us) = 0;
   virtual int check_can_change_memberlist(const ObMemberList &new_member_list,
                                           const int64_t paxos_replica_num,

@@ -10157,6 +10157,9 @@ int ObPartTransCtx::get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snaps
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "get ls failed", K(ret));
+  } else if (ls->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no part trans context", KR(ret), KPC(ls));
   } else if (OB_FAIL(ls->get_ls_replica_readable_scn(snapshot_version))) {
     TRANS_LOG(WARN, "get ls replica readable scn failed", K(ret), K(ls_id));
   } else {
@@ -10937,6 +10940,9 @@ int ObPartTransCtx::recover_ls_transfer_status_()
   bool need_recover = false;
   if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("get ls failed", KR(ret), K(ls_id_));
+  } else if (ls_handle.get_ls()->is_logonly_replica()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("logonly replica has no part trans context", KR(ret));
   } else {
      // recover mds type transfer_dest_prepare and move_tx_ctx
      // when MDS replay from middle and not end we need recover this mds operation

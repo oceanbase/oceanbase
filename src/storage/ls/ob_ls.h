@@ -205,6 +205,7 @@ public:
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
            const share::SCN &create_scn,
+           const ObReplicaType &replica_type,
            observer::ObIMetaReport *reporter);
   // I am ready to work now.
   int start();
@@ -231,6 +232,8 @@ public:
   share::ObLSID get_ls_id() const { return ls_meta_.ls_id_; }
   bool is_sys_ls() const { return ls_meta_.ls_id_.is_sys_ls(); }
   int get_replica_status(ObReplicaStatus &replica_status);
+  ObReplicaType get_replica_type() const { return ls_meta_.get_replica_type(); }
+  bool is_logonly_replica() const { return ObReplicaTypeCheck::is_log_replica(ls_meta_.get_replica_type()); }
   uint64_t get_tenant_id() const { return ls_meta_.tenant_id_; }
   ObFreezer *get_freezer() { return &ls_freezer_; }
   common::ObMultiModRefMgr<ObLSGetMod> &get_ref_mgr() { return ref_mgr_; }

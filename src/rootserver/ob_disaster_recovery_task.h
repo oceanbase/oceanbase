@@ -58,7 +58,12 @@ namespace drtask
   const static char * const ALTER_SYSTEM_COMMAND_MIGRATE_REPLICA = "migrate replica by manual";
   const static char * const ALTER_SYSTEM_COMMAND_MODIFY_PAXOS_REPLICA_NUM = "modify paxos_replica_num by manual";
   const static char * const TRANSFORM_DUE_TO_UNIT_DELETING = "transform replica type due to unit deleting";
+  const static char * const REMOVE_DUE_TO_UNIT_DELETING = "remove replica due to unit deleting";
+  const static char * const MIGRATE_DUE_TO_UNIT_DELETING = "migrate replica due to unit deleting";
   const static char * const TRANSFORM_DUE_TO_UNIT_NOT_MATCH = "transform replica type due to unit not match";
+  const static char * const TRANSFORM_DUE_TO_GTS_UNIT = "transform replica type due to gts unit";
+  const static char * const REMOVE_DUE_TO_GTS_UNIT = "remove replica due to gts unit";
+  const static char * const MIGRATE_DUE_TO_GTS_UNIT = "migrate replica due to gts unit";
 };
 
 namespace drtasklog
@@ -837,7 +842,7 @@ public:
   }
 
   virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
+    return ObReplicaTypeCheck::is_paxos_replica(replica_type_)
            ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA
            : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
   }

@@ -54,6 +54,7 @@ protected:
       ObArray<ObUnit> &zone_array);
 };
 
+
 int TestBalanceOperator::construct_unit_array(const ObZoneUnitCntList &unit_list,
     ObArray<ObUnit> &unit_array)
 {
@@ -898,6 +899,21 @@ TEST_F(TestBalanceOperator, ObBalanceJobDesc)
   ObZoneUnitCntList max_zone_unit_list_from_str;
   ASSERT_EQ(OB_SUCCESS, max_zone_unit_list_from_str.parse_from_display_str(max_zone_unit_list_str));
   ASSERT_TRUE(max_zone_unit_list_from_str == max_zone_unit_list);
+
+  // test zone_unit_num_list replica_type
+  // if replica_type is F, formatted str has no replica type
+  // if replica_type is L, formatted str has replica type, format is zone:replia_type:unit_num, e.g. z1:LOGONLY:2
+  ObZoneUnitCntList zone_unit_cnt_list;
+  ObZoneUnitCntList zone_unit_cnt_list_from_str;
+  ObDisplayZoneUnitCnt zone1_replica_type_f(ObZone("zone1"), 3, ObReplicaType::REPLICA_TYPE_FULL);
+  ObDisplayZoneUnitCnt zone2_replica_type_l(ObZone("zone2"), 3, ObReplicaType::REPLICA_TYPE_LOGONLY);
+  ASSERT_EQ(OB_SUCCESS, zone_unit_cnt_list.push_back(zone1_replica_type_f));
+  ASSERT_EQ(OB_SUCCESS, zone_unit_cnt_list.push_back(zone2_replica_type_l));
+  ObString zone_unit_cnt_list_str;
+  ASSERT_EQ(OB_SUCCESS, zone_unit_cnt_list.to_display_str(allocator, zone_unit_cnt_list_str));
+  ASSERT_EQ(OB_SUCCESS, zone_unit_cnt_list_from_str.parse_from_display_str(zone_unit_cnt_list_str));
+  ASSERT_TRUE(zone_unit_cnt_list_from_str == zone_unit_cnt_list);
+  ASSERT_EQ(0, STRNCMP("zone1:3,zone2:LOGONLY:3", zone_unit_cnt_list_str.ptr(), zone_unit_cnt_list_str.length()));
 
   ObString parameter_list_str;
   job_desc.enable_rebalance_ = false;

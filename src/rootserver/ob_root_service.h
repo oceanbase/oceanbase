@@ -950,6 +950,11 @@ private:
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
   int check_zone_deploy_mode_(obrpc::ObAdminSetConfigItem &item);
   int check_enable_gts_standalone_(obrpc::ObAdminSetConfigItem &item);
+  int check_enable_logonly_replica_(obrpc::ObAdminSetConfigItem &item);
+  int check_locality_for_restore_tenant_(
+      const ObString &locality_str,
+      const ObIArray<ObResourcePoolName> &pools,
+      const ObIArray<ObZone> &zones);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

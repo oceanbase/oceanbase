@@ -46,6 +46,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   share::ObLSPrimaryZoneInfoArray primary_zone_infos;
   ObArray<ObZone> ls_primary_zone;
   ObSEArray<uint64_t, 3> count_group_by_zone;
+  const bool is_first_level = true;
 
   //case 1, set primary_zone to 'z1', ls to 'z2'
   ObZone z1("z1");
@@ -61,7 +62,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = primary_zone_array.push_back(z1);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   ASSERT_EQ(ret, OB_SUCCESS);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(z1, ls_primary_zone.at(0));
@@ -78,7 +79,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = primary_zone_array.push_back(z2);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z2, ls_primary_zone.at(0));
@@ -101,7 +102,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = primary_zone_array.push_back(z3);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z1, ls_primary_zone.at(0));
@@ -121,7 +122,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   count_group_by_zone.reset();
   ret = primary_zone_array.push_back(z2);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z2, ls_primary_zone.at(0));
@@ -149,7 +150,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = primary_zone_infos.push_back(info);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z2, ls_primary_zone.at(0));
@@ -188,7 +189,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = primary_zone_infos.push_back(info);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z1, ls_primary_zone.at(0));
@@ -236,7 +237,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = primary_zone_infos.push_back(info);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z1, ls_primary_zone.at(0));
@@ -293,7 +294,7 @@ TEST_F(TestPrimaryLSService, zone_balance)
   ret = primary_zone_infos.push_back(info);
   ASSERT_EQ(ret, OB_SUCCESS);
 
-  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, ls_primary_zone, count_group_by_zone);
+  ret = ObBalanceLSPrimaryZone::set_ls_to_primary_zone_(primary_zone_array, primary_zone_infos, is_first_level, ls_primary_zone, count_group_by_zone);
   LOG_INFO("set ls to primary zone", K(ls_primary_zone), K(count_group_by_zone));
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(z1, ls_primary_zone.at(0));

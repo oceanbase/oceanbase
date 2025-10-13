@@ -441,6 +441,57 @@ int ObLSRecoveryStatOperator::construct_status_sql_(common::ObSqlString &sql)
   return ret;
 }
 
+int ObLSRecoveryStatOperator::get_meta_tenant_recovery_stat(const uint64_t tenant_id,
+    ObISQLClient &client,
+    SCN &sync_scn,
+    SCN &min_wrs,
+    int64_t &ora_rowscn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(tenant_id));
+  } else {
+    common::ObSqlString sql;
+    const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+    ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_GET_META_TENANT_INFO);
+    if (OB_FAIL(sql.assign_fmt("select ORA_ROWSCN, * from %s where tenant_id = %ld and ls_id = %ld",
+            OB_ALL_LS_RECOVERY_STAT_TNAME, tenant_id, ObLSID::SYS_LS_ID))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id));
+    } else {
+      HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(client.read(res, exec_tenant_id, sql.ptr()))) {
+          LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get sql result", KR(ret));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("failed to get tenant info", KR(ret), K(sql));
+        } else {
+          uint64_t sync_scn_val = OB_INVALID_SCN_VAL;
+          uint64_t min_wrs_val = OB_INVALID_SCN_VAL;
+          EXTRACT_UINT_FIELD_MYSQL(*result, "sync_scn", sync_scn_val, uint64_t);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "readable_scn", min_wrs_val, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "ORA_ROWSCN", ora_rowscn, int64_t);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to get tenant stat", KR(ret));
+          } else if (OB_FAIL(sync_scn.convert_for_inner_table_field(sync_scn_val))) {
+            LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(sync_scn_val), K(tenant_id));
+          } else if (OB_FAIL(min_wrs.convert_for_inner_table_field(min_wrs_val))) {
+            LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(min_wrs_val), K(tenant_id));
+          } else {/*do nothing*/}
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to get tenant stat", KR(ret));
+        }
+      }
+
+    }
+  }
+  return ret;
+}
+
 int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
                                                        ObISQLClient &client,
                                                        SCN &sync_scn,
@@ -472,14 +523,15 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
             "select sync_scn, min_wrs from "
             "(select min(greatest(a.create_scn, a.sync_scn)) as sync_scn "
               "from %s as a join %s as b on a.tenant_id = b.tenant_id and a.ls_id = b.ls_id "
-              "where a.drop_scn = %ld and b.%s) p, "
+              "where a.drop_scn = %ld and b.%s and a.tenant_id = %ld) p, "
             "(select min(greatest(c.create_scn, c.readable_scn)) as min_wrs "
               "from %s as c join %s as d on c.tenant_id = d.tenant_id and c.ls_id = d.ls_id "
-              "where (c.drop_scn = %ld or c.drop_scn > c.readable_scn) and d.%s) q",
+              "where (c.drop_scn = %ld or c.drop_scn > c.readable_scn) and d.%s and c.tenant_id = %ld) q",
             OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
-            SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr(),
+            SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr(), tenant_id,
             OB_ALL_LS_RECOVERY_STAT_TNAME, OB_ALL_LS_STATUS_TNAME,
-            SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr()))) {
+            SCN::base_scn().get_val_for_inner_table_field(), status_sql.ptr(), tenant_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(status_sql));
     } else if (OB_FAIL(get_all_ls_recovery_stat_(tenant_id, sql, client, sync_scn, min_wrs))) {
       LOG_WARN("failed to get tenant stat", KR(ret), K(tenant_id), K(sql));
     }

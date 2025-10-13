@@ -24770,7 +24770,6 @@ int ObDDLService::create_tenant(
   palf::PalfBaseInfo user_palf_base_info;
   palf::PalfBaseInfo meta_palf_base_info;
   bool create_ls_with_palf = false;
-  int64_t paxos_replica_number = 0;
   ObSEArray<ObConfigPairs, 2> init_configs;
 
   HEAP_VARS_4((ObTenantSchema, user_tenant_schema),
@@ -24800,14 +24799,8 @@ int ObDDLService::create_tenant(
                meta_tenant_schema, meta_sys_variable,
                init_configs))) {
       LOG_WARN("fail to generate tenant schema", KR(ret), K(arg), K(tenant_role));
-    } else if (user_tenant_schema.get_arbitration_service_status().is_enable_like()
-               && OB_FAIL(user_tenant_schema.get_paxos_replica_num(schema_guard, paxos_replica_number))) {
-      LOG_WARN("fail to get paxos replica number", KR(ret), K(user_tenant_schema));
-    } else if (user_tenant_schema.get_arbitration_service_status().is_enable_like()
-               && paxos_replica_number != 2 && paxos_replica_number != 4) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The number of paxos replicas in locality is neither 2 nor 4, create tenant with arbitration service");
-      LOG_WARN("can not create tenant, because tenant with arb service, locality must be 2F or 4F", KR(ret), K(user_tenant_schema), K(paxos_replica_number));
+    } else if (OB_FAIL(ObShareUtil::check_replica_type_in_locality(user_tenant_schema))) {
+      LOG_WARN("fail to check replica type in locality", KR(ret), K(user_tenant_schema));
     } else if (FALSE_IT(user_tenant_id = user_tenant_schema.get_tenant_id())) {
     } else if (FALSE_IT(meta_tenant_id = meta_tenant_schema.get_tenant_id())) {
     } else if (OB_FAIL(init_schema_status(
@@ -27391,7 +27384,10 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
 #endif
       }
 
-      if (FAILEDx(ObAlterPrimaryZoneChecker::create_alter_tenant_primary_zone_rs_job_if_needed(
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObShareUtil::check_replica_type_in_locality(new_tenant_schema))) {
+        LOG_WARN("fail to check replica type in locality", KR(ret), K(new_tenant_schema));
+      } else if (OB_FAIL(ObAlterPrimaryZoneChecker::create_alter_tenant_primary_zone_rs_job_if_needed(
           arg,
           tenant_id,
           *orig_tenant_schema,
@@ -35860,21 +35856,33 @@ int ObDDLService::set_schema_replica_num_options(
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality");
         LOG_WARN("one zone should only have one paxos replica", K(ret), K(zone_replica_set));
-      } else if (zone_replica_set.get_full_replica_num() == 1
-                 && (zone_replica_set.get_logonly_replica_num() == 1
-                     || zone_replica_set.get_encryption_logonly_replica_num() == 1)) {
-        bool find = false;
-        for (int64_t j = 0; j < unit_infos.count() && OB_SUCC(ret); j++) {
-          if (unit_infos.at(j).unit_.zone_ == zone_replica_set.zone_
-              && REPLICA_TYPE_LOGONLY == unit_infos.at(j).unit_.replica_type_) {
-            find = true;
-            break;
-          }
-        } //end for unit_infos
-        if (!find) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality");
-          LOG_WARN("no logonly unit exist", K(ret), K(zone_replica_set));
+      } else if (OB_FAIL(check_locality_match_unit_type_(zone_replica_set, unit_infos))) {
+        LOG_WARN("fail to check locality match unit type", KR(ret), K(zone_replica_set), K(unit_infos));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_locality_match_unit_type_(
+    const ObZoneReplicaAttrSet &zone_replica_set,
+    const ObIArray<ObUnitInfo> &unit_infos)
+{
+  int ret = OB_SUCCESS;
+  common::ObReplicaType replica_type_to_check = zone_replica_set.get_logonly_replica_num() == 1
+                                              ? ObReplicaType::REPLICA_TYPE_LOGONLY
+                                              : ObReplicaType::REPLICA_TYPE_FULL;
+  if (OB_UNLIKELY(0 >= unit_infos.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(unit_infos));
+  } else {
+    for (int64_t j = 0; j < unit_infos.count() && OB_SUCC(ret); j++) {
+      if (unit_infos.at(j).unit_.zone_ == zone_replica_set.zone_) {
+        if (OB_FAIL(ObShareUtil::check_unit_type_match_replica_type(
+                        replica_type_to_check,
+                        unit_infos.at(j).unit_))) {
+          LOG_WARN("fail to check replica type with unit type", KR(ret),
+                   K(replica_type_to_check), K(unit_infos), K(zone_replica_set), K(j));
         }
       }
     }

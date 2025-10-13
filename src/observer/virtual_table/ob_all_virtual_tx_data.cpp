@@ -24,17 +24,20 @@ using namespace omt;
 int ObAllVirtualTxData::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  bool is_logonly_replica = false;
 
   if (false == start_to_read_) {
     if (OB_FAIL(get_primary_key_())) {
       SERVER_LOG(WARN, "get primary key failed", KR(ret));
-    } else if (OB_FAIL(generate_virtual_tx_data_row_(tx_data_row_))) {
+    } else if (OB_FAIL(generate_virtual_tx_data_row_(tx_data_row_, is_logonly_replica))) {
       if (OB_ITER_END == ret) {
       } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
         ret = OB_ITER_END;
       } else {
         SERVER_LOG(WARN, "generate virtual tx data row failed", KR(ret));
       }
+    } else if (is_logonly_replica) {
+      // skip logonly replica
     } else if (OB_FAIL(fill_in_row_(tx_data_row_, row))) {
       SERVER_LOG(WARN, "fill in row failed", KR(ret));
     } else {
@@ -176,9 +179,10 @@ int ObAllVirtualTxData::handle_key_range_(ObNewRange &key_range)
   return ret;
 }
 
-int ObAllVirtualTxData::generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_row)
+int ObAllVirtualTxData::generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_row, bool &is_logonly_replica)
 {
   int ret = OB_SUCCESS;
+  is_logonly_replica = false;
   MTL_SWITCH(tenant_id_)
   {
     ObLSHandle ls_handle;
@@ -193,6 +197,9 @@ int ObAllVirtualTxData::generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "get ls failed from ls handle", KR(ret), K(ls_handle), K(tenant_id_), K(ls_id_));
+    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
+      // skip logonly replica
+      is_logonly_replica = true;
     } else if (OB_FAIL(ls->generate_virtual_tx_data_row(tx_id_, tx_data_row))) {
       SERVER_LOG(WARN, "ls genenrate virtual tx data row failed", KR(ret), K(ls_handle), K(tenant_id_), K(ls_id_));
     } else {

@@ -181,6 +181,7 @@ public:
   const ServerStatInfoMap &get_server_stat_info_map() const {
     return server_stat_info_map_;
   }
+  int check_zone_is_logonly(const common::ObZone &zone, bool &is_logonly) const;
   int64_t get_schema_replica_cnt() const { return schema_replica_cnt_; }
   int64_t get_schema_full_replica_cnt() const { return schema_full_replica_cnt_; }
   int64_t get_member_list_cnt() const { return member_list_cnt_; }
@@ -221,7 +222,8 @@ public:
   int check_replica_exist_and_get_ls_replica(
       const common::ObAddr& server_addr,
       share::ObLSReplica& ls_replica) const;
-
+  int rectify_replica_type_for_member(
+      ObMember &member) const;
   // get data_source from leader replcia
   // @param [out] data_source, leader replica
   // @param [out] data_size, leader replica data_size
@@ -229,6 +231,7 @@ public:
       ObReplicaMember &data_source,
       int64_t &data_size) const;
   const common::ObArray<share::ObUnit> &get_unit_list() const { return unit_list_; }
+  int get_unit_ids(common::ObIArray<uint64_t> &unit_ids) const;
   const common::ObArray<uint64_t> &get_gts_unit_ids() const { return gts_unit_ids_; }
 private:
   int construct_filtered_ls_info_to_use_(

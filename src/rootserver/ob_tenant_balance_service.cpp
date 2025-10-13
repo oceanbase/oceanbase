@@ -254,14 +254,16 @@ int ObTenantBalanceService::gather_tenant_balance_desc(
         ARRAY_FOREACH(locality_zone_list, idx) {
           ObZone &zone = locality_zone_list.at(idx);
           int64_t unit_num = 0;
-          //统计每个zone的可用的unit个数
+          ObReplicaType replica_type = ObReplicaType::REPLICA_TYPE_MAX;
+          //统计每个zone的可用的unit个数,以及unit的副本类型
           ARRAY_FOREACH(unit_array, j) {
             const ObUnit &unit = unit_array.at(j);
             if (unit.is_active_or_adding_status() && unit.zone_ == zone) {
               unit_num++;
+              replica_type = unit.replica_type_;
             }
           }//end for check unit
-          ObDisplayZoneUnitCnt zone_unit_cnt(zone, unit_num);
+          ObDisplayZoneUnitCnt zone_unit_cnt(zone, unit_num, replica_type);
           if (OB_FAIL(zone_list.push_back(zone_unit_cnt))) {
             LOG_WARN("failed to push back", KR(ret), K(idx));
           }
@@ -867,19 +869,6 @@ int ObTenantBalanceService::try_finish_transfer_partition_(
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job status is not expected", KR(ret), K(job));
-  }
-  return ret;
-}
-
-int ObTenantBalanceService::get_active_unit_num_(int64_t &active_unit_num) const
-{
-  int ret = OB_SUCCESS;
-  active_unit_num = 0;
-  if (OB_UNLIKELY(!inited_ || ! ATOMIC_LOAD(&loaded_))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(inited_), K(loaded_));
-  } else if (OB_FAIL(job_desc_.get_unit_lcm_count(active_unit_num))) {
-    LOG_WARN("failed to get unit num", KR(ret), K(job_desc_));
   }
   return ret;
 }
