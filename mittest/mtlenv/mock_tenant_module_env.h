@@ -929,6 +929,8 @@ int MockTenantModuleEnv::init()
         MTL_BIND2(mtl_new_default, ObSSMetaService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSGarbageCollectorService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSLogGTSService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSLogUIDService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       }
 #else
 #endif
