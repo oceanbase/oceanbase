@@ -639,15 +639,17 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   // ========== Test 5: read meta key =========
   {
+    TRANS_LOG(INFO, "jianyue debug for segment query");
     ObSSLogIteratorGuard iter(false, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                  ObSSMetaReadResultType::READ_ONLY_KEY,
                                  false, /*try read local*/
-                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
+                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn, true, 1);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       share::SCN::invalid_scn(),
                                                       iter));
     ObString key1;
+
     ASSERT_EQ(OB_SUCCESS, iter.get_next_key(row_scn_ret, key1, extra_info_ret));
     ObSSLogMetaKey sslog_meta_key_ret1;
     int64_t pos = 0;
@@ -655,11 +657,11 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     pos = 0;
     ASSERT_EQ(OB_SUCCESS, extra_info_deserialize_ret.deserialize(extra_info_ret.ptr(), extra_info_ret.length(), pos));
     ASSERT_EQ(extra_info1, extra_info_deserialize_ret);
-    TRANS_LOG(INFO, "jianyue debug222", K(sslog_meta_key_ret1));
     ASSERT_EQ(param.tablet_level_param_.ls_id_, sslog_meta_key_ret1.tablet_meta_key_.ls_id_);
     ASSERT_EQ(param.tablet_level_param_.tablet_id_, sslog_meta_key_ret1.tablet_meta_key_.tablet_id_);
     ASSERT_EQ(param.tablet_level_param_.reorganization_scn_, sslog_meta_key_ret1.tablet_meta_key_.reorganization_scn_);
     ObString key2;
+
     ASSERT_EQ(OB_SUCCESS, iter.get_next_key(row_scn_ret, key2, extra_info_ret));
     ObSSLogMetaKey sslog_meta_key_ret2;
     pos = 0;
@@ -667,10 +669,10 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     pos = 0;
     ASSERT_EQ(OB_SUCCESS, extra_info_deserialize_ret.deserialize(extra_info_ret.ptr(), extra_info_ret.length(), pos));
     ASSERT_EQ(extra_info2, extra_info_deserialize_ret);
-    TRANS_LOG(INFO, "jianyue debug333", K(sslog_meta_key_ret2), K(extra_info_deserialize_ret));
     ASSERT_EQ(param2.tablet_level_param_.ls_id_, sslog_meta_key_ret2.tablet_meta_key_.ls_id_);
     ASSERT_EQ(param2.tablet_level_param_.tablet_id_, sslog_meta_key_ret2.tablet_meta_key_.tablet_id_);
     ASSERT_EQ(param2.tablet_level_param_.reorganization_scn_, sslog_meta_key_ret2.tablet_meta_key_.reorganization_scn_);
+
     ASSERT_EQ(OB_ITER_END, iter.get_next_key(row_scn_ret, key2, extra_info_ret));
   }
 
