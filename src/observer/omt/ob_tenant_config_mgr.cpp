@@ -594,13 +594,20 @@ int ObTenantConfigMgr::update_local(uint64_t tenant_id, int64_t expected_version
         LOG_WARN("read config from __tenant_parameter failed",
                  KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
       } else {
-        DRWLock::WRLockGuard guard(rwlock_);
-        ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
-        if (OB_FAIL(ret)) {
-          LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
+        ObSystemConfig temp_config;
+        temp_config.init();
+        if (OB_FAIL(temp_config.update(result))) {
+          LOG_WARN("failed to load tenant config", K(ret));
         } else {
-          ret = config->update_local(expected_version, result);
+          DRWLock::WRLockGuard guard(rwlock_);
+          ret = config_map_.get_refactored(ObTenantID(tenant_id), config);
+          if (OB_FAIL(ret)) {
+            LOG_ERROR("failed to get tenant config", K(tenant_id), K(ret));
+          } else {
+            ret = config->update_local(expected_version, temp_config.get_map());
+          }
         }
+        temp_config.clear();
       }
     }
   }

@@ -86,7 +86,7 @@ public:
   const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
   int64_t get_create_timestamp() const { return create_timestamp_; }
   int got_version(int64_t version, const bool remove_repeat);
-  int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
+  int update_local(int64_t expected_version, const common::ObSystemConfig::hashmap &temp_map,
                    bool save2file = true);
   int add_extra_config(const char *config_str,
                        int64_t version = 0 ,

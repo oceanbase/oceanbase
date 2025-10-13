@@ -276,11 +276,11 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
   return ret;
 }
 
-int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLResult &result,
+int ObTenantConfig::update_local(int64_t expected_version, const common::ObSystemConfig::hashmap &temp_map,
                                  bool save2file /* = true */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(system_config_.update(result))) {
+  if (OB_FAIL(system_config_.update_from_map(temp_map))) {
     LOG_WARN("failed to load system config", K(ret));
   } else if (expected_version != ObSystemConfig::INIT_VERSION && (system_config_.get_version() < current_version_
           || system_config_.get_version() < expected_version)) {
