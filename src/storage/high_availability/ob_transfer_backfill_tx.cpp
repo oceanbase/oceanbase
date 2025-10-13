@@ -1860,6 +1860,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     param.tablet_meta_ = &mig_param;
     param.release_mds_scn_.set_min();
     param.reorg_scn_ = tablet->get_reorganization_scn();
+    ObLS *src_ls = nullptr;
 #ifdef ERRSIM
     param.errsim_point_info_ = ctx_->errsim_point_info_;
     SERVER_EVENT_SYNC_ADD("TRANSFER", "TRANSFER_REPLACE_TABLE_WITH_LOG_REPLAY_SKIP_CHECK",
@@ -1869,9 +1870,11 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "tablet_status", ObTabletStatus::get_str(user_data.tablet_status_),
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
-    if (!ls->is_running()) {
+    if (OB_FAIL(ctx_->get_src_ls(src_ls))) {
+      LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+    } else if (!src_ls->is_running()) {
       ret = OB_LS_OFFLINE;
-      LOG_WARN("ls is not running, should not do transfer replace tables", K(ret), KPC(ls), K(param), K(tablet_info));
+      LOG_WARN("src ls is not running, should not do transfer replace tables", K(ret), KPC(src_ls), K(param), K(tablet_info));
     } else if (OB_FAIL(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));
     } else {
