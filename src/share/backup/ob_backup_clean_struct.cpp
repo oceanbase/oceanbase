@@ -113,6 +113,7 @@ ObNewBackupCleanType::TYPE ObNewBackupCleanType::get_type(const char *type_str)
 static const char *backup_clean_task_type_str[] = {
     "BACKUP SET",
     "BACKUP PIECE",
+    "BACKUP COMPLEMENT LOG",
 };
 
 const char *ObBackupCleanTaskType::get_str(const TYPE &type)
@@ -579,6 +580,7 @@ bool ObBackupCleanLSTaskAttr::is_valid() const
     is_valid = ObBackupCleanTaskType::is_valid(task_type_)
         && job_id_ >= 0
         && ((is_delete_backup_set_task() && backup_set_id_ > 0)
+          || (is_delete_backup_complement_task() && backup_set_id_ > 0)
           || (is_delete_backup_piece_task() && backup_piece_id_ > 0));
   }
   return is_valid; 

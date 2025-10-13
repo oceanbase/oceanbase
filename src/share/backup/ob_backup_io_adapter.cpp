@@ -936,5 +936,57 @@ int ObDirPrefixEntryNameFilter::init(
   return ret;
 }
 
+//*************ObDirPrefixLSIDFilter*************
+int ObDirPrefixLSIDFilter::init(const char *filter_str, const int32_t filter_str_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    OB_LOG(WARN, "init twice", KR(ret));
+  } else if (OB_ISNULL(filter_str) || OB_UNLIKELY(filter_str_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", KR(ret), KP(filter_str), K(filter_str_len));
+  } else if (OB_UNLIKELY(filter_str_len > (sizeof(filter_str_) - 1))) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "the length of dir prefix too long", KR(ret), K(filter_str_len));
+  } else if (OB_FAIL(databuff_printf(filter_str_, sizeof(filter_str_), "%.*s", filter_str_len, filter_str))) {
+    OB_LOG(WARN, "failed to init filter_str", KR(ret), K(filter_str), K(filter_str_len));
+  } else if (OB_FAIL(common::databuff_printf(format_buffer_, sizeof(format_buffer_), pos,  // "logstream_%ld"
+                                              "%s_%%ld", share::OB_STR_LS))) {
+    OB_LOG(WARN, "Failed to construct sscanf format string or buffer too small",
+           KR(ret), "pos", pos, "buffer_size", sizeof(format_buffer_));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDirPrefixLSIDFilter::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "dir prefix filter not init", KR(ret));
+  } else if (OB_ISNULL(entry) || OB_ISNULL(entry->d_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument, entry or d_name is null", KR(ret), K(entry));
+  } else if (STRLEN(entry->d_name) < STRLEN(filter_str_)) {
+    // do nothing, entry name is too short to match filter_str_
+  } else if (0 == STRNCMP(entry->d_name, filter_str_, STRLEN(filter_str_))) {
+    int64_t ls_stream_id;
+    const int sscanf_ret = sscanf(entry->d_name, format_buffer_, &ls_stream_id);
+    if (1 != sscanf_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "failed to parse logstream dir, sscanf returned unexpected count",
+             KR(ret), K(sscanf_ret), "entry", entry->d_name, K(format_buffer_), "expected_count", 1);
+    } else if (OB_FAIL(d_entrys_.push_back(share::ObLSID(ls_stream_id)))) {
+      OB_LOG(WARN, "fail to push back directory entry", KR(ret), K(ls_stream_id), K_(filter_str));
+    }
+  }
+  return ret;
+}
+
+
 }
 }

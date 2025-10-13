@@ -1024,7 +1024,8 @@ int ObBackupCleanLSTaskOperator::fill_dml_with_ls_task_(
   } else if (OB_FAIL(dml.add_column(OB_STR_ROUND_ID, ls_attr.round_id_))) {
     LOG_WARN("failed to add column", K(ret));
   } else {
-    if (ls_attr.is_delete_backup_set_task()) {
+    if (ls_attr.is_delete_backup_set_task() || ls_attr.is_delete_backup_complement_task()) {
+    // A complement log belongs to a backup set, so for a task to delete a complement log, we need to specify the backup set ID
       if (OB_FAIL(dml.add_column(OB_STR_ID, ls_attr.backup_set_id_))) {
         LOG_WARN("failed to add column", K(ret));
       }
@@ -1182,7 +1183,7 @@ int ObBackupCleanLSTaskOperator::do_parse_ls_result_(ObMySQLResult &result, ObBa
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to set server ip and port", K(ret), K(server_str), K(port));
   } else {
-    if (ls_attr.is_delete_backup_set_task()) {
+    if (ls_attr.is_delete_backup_set_task() || ls_attr.is_delete_backup_complement_task()) {
       EXTRACT_INT_FIELD_MYSQL(result, OB_STR_ID, ls_attr.backup_set_id_, int64_t);
     } else if (ls_attr.is_delete_backup_piece_task()) {
       EXTRACT_INT_FIELD_MYSQL(result, OB_STR_ID, ls_attr.backup_piece_id_, int64_t);

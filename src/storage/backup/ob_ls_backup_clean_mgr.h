@@ -129,12 +129,16 @@ protected:
   int check_can_do_task_(bool &can);
   int do_ls_task();
   int delete_backup_piece_ls_files_(const share::ObBackupPath &path);
-  int delete_backup_set_ls_files_(const share::ObBackupPath &path); 
+  int delete_backup_set_ls_files_(const share::ObBackupPath &path);
+  int delete_backup_complement_log_files_();
+  int delete_backup_complement_log_piece_(const share::ObBackupDest &complement_log_dest);
+  int delete_backup_complement_log_ls_(const share::ObBackupPath &piece_dir,
+      const share::ObBackupDest &complement_log_dest, const int64_t dest_id,
+      const int64_t round_id, const int64_t piece_id);
   int get_set_ls_path_(share::ObBackupPath &path);
   int get_piece_ls_path(share::ObBackupPath &path);
   int delete_piece_ls_meta_files_(const share::ObBackupPath &path);
   int delete_piece_log_files_(const share::ObBackupPath &path);
-  int delete_complement_log_(const share::ObBackupPath &path);
   int delete_sys_data_(const share::ObBackupPath &path);
   int delete_major_data_(const share::ObBackupPath &path);
   int delete_minor_data_(const share::ObBackupPath &path);

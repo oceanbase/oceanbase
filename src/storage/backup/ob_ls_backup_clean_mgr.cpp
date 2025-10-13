@@ -19,6 +19,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_clean_util.h"
 #include "share/backup/ob_archive_path.h"
+#include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
@@ -424,7 +425,8 @@ int ObLSBackupCleanTask::init(const ObLSBackupCleanDagNetInitParam &param, commo
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(param));
   } else if (FALSE_IT(sql_proxy_ = &sql_proxy)) {
-  } else if (ObBackupCleanTaskType::BACKUP_SET == param.task_type_) {
+  } else if (ObBackupCleanTaskType::BACKUP_SET == param.task_type_
+             || ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG == param.task_type_) {
     if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(
         *sql_proxy_, false/*need_lock*/, param.id_, param.incarnation_, param.tenant_id_, param.dest_id_, backup_set_desc_))) {
       LOG_WARN("failed to get backup set file", K(ret), K(param));
@@ -581,11 +583,135 @@ int ObLSBackupCleanTask::do_ls_task()
     } else if (OB_FAIL(delete_backup_piece_ls_files_(path))) {
       LOG_WARN("failed to delete backup piece ls", K(ret), K(path));
     }
+  } else if (ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG == task_type_) {
+    if (OB_FAIL(delete_backup_complement_log_files_())) {
+      LOG_WARN("failed to delete backup complement log", K(ret));
+    }
   }
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_BACKUP_DELETE_HANDLE_LS_TASK) OB_SUCCESS;
 #endif
   FLOG_INFO("[BACKUP_CLEAN]finish do ls task", K(ret), K(path), K(*this));
+  return ret;
+}
+
+int ObLSBackupCleanTask::delete_backup_complement_log_files_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath complement_dir;
+  share::ObBackupPath pieces_dir;
+  share::ObBackupPath rounds_dir;
+  share::ObBackupDest complement_log_dest;
+  share::ObBackupSetDesc set_desc;
+  set_desc.backup_set_id_ = backup_set_desc_.backup_set_id_;
+  set_desc.backup_type_ = backup_set_desc_.backup_type_;
+  if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(backup_dest_, set_desc, complement_log_dest))) {
+    LOG_WARN("failed to construct backup complement log dest", K(ret), K(backup_dest_), K(set_desc));
+  } else if (OB_FAIL(delete_backup_complement_log_piece_(complement_log_dest))) { // delete every piece
+    LOG_WARN("failed to delete every piece", K(ret), K(complement_log_dest));
+  } else if (OB_FAIL(ObArchivePathUtil::get_pieces_dir_path(complement_log_dest, pieces_dir))) { // delete the pieces dir
+    LOG_WARN("failed to init pieces dir", K(ret), K(backup_dest_), K(set_desc));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(pieces_dir, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup pieces dir files", K(ret), K(pieces_dir), K(backup_dest_));
+  } else if (OB_FAIL(ObArchivePathUtil::get_rounds_dir_path(complement_log_dest, rounds_dir))) { // delete the rounds dir
+    LOG_WARN("failed to get rounds dir", K(ret), K(backup_dest_), K(set_desc));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(rounds_dir, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup rounds dir", K(ret), K(rounds_dir), K(backup_dest_));
+  } else if (OB_FAIL(complement_dir.init(complement_log_dest.get_root_path()))) { // delete this complement_log dir
+    LOG_WARN("failed to get complement log path", K(ret), K(backup_dest_), K(set_desc));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(complement_dir, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup complement dir files", K(ret), K(complement_dir), K(backup_dest_));
+  } else {
+    LOG_INFO("[BACKUP_CLEAN]success delete complement log", K(complement_dir));
+  }
+  return ret;
+}
+
+int ObLSBackupCleanTask::delete_backup_complement_log_piece_(const share::ObBackupDest &complement_log_dest)
+{
+  int ret = OB_SUCCESS;
+  // list every piece dir
+  ObBackupIoAdapter util;
+  ObArchiveStore archive_store;
+  ObArray<ObPieceKey> piece_array;
+  int64_t start_time_total = ObTimeUtility::current_time();
+  if (OB_FAIL(archive_store.init(complement_log_dest))) {
+    LOG_WARN("failed to init archive store", K(ret), K(complement_log_dest));
+  } else if(OB_FAIL(archive_store.get_all_piece_keys(piece_array))){
+    LOG_WARN("failed to get all piece array", K(ret), K(archive_store));
+  } else {
+    ObBackupPath piece_dir;
+    ObBackupPath checkpoint_dir;
+    for (int64_t i = 0; OB_SUCC(ret) && i < piece_array.count(); ++i) {
+      piece_dir.reset();
+      checkpoint_dir.reset();
+      ObPieceKey &piece = piece_array.at(i);
+      int64_t start_time = ObTimeUtility::current_time();
+      if(OB_FAIL(ObArchivePathUtil::get_piece_dir_path(
+          complement_log_dest, piece.dest_id_, piece.round_id_, piece.piece_id_, piece_dir))){
+        LOG_WARN("failed to get piece dir", K(ret), K(complement_log_dest), "piece", piece);
+      } else if (OB_FAIL(delete_backup_complement_log_ls_(
+          piece_dir, complement_log_dest, piece.dest_id_, piece.round_id_, piece.piece_id_))){ // delete every ls dir is this piece
+        LOG_WARN("failed to delete every piece ls dir", K(ret), K(piece_dir), K(complement_log_dest), "piece", piece);
+      } else if(OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_dir_path(
+          complement_log_dest, piece.dest_id_, piece.round_id_, piece.piece_id_, checkpoint_dir))){ // delete the checkpoint dir in this piece
+        LOG_WARN("failed to get piece checkpoint dir", K(ret), K(complement_log_dest), "piece", piece);
+      } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(checkpoint_dir, backup_dest_.get_storage_info()))) {
+        LOG_WARN("failed to delete backup checkpoint dir files", K(ret), K(checkpoint_dir));
+      } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(piece_dir, backup_dest_.get_storage_info()))) { // delete the piece dir
+        LOG_WARN("failed to delete backup piece dir files", K(ret), K(piece_dir));
+      } else {
+        LOG_INFO("Delete complement log piece", "cost_ts", ObTimeUtility::current_time() - start_time, K(piece_dir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("Deleted all pieces in this complement log ","cost_ts", ObTimeUtility::current_time() - start_time_total,
+                "piece_num", piece_array.count(), K(complement_log_dest));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupCleanTask::delete_backup_complement_log_ls_(const share::ObBackupPath &piece_dir,
+    const share::ObBackupDest &complement_log_dest, const int64_t dest_id,
+    const int64_t round_id, const int64_t piece_id)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObArray<ObLSID> ls_entrys;
+  ObDirPrefixLSIDFilter prefix_lsid_op(ls_entrys);
+  char logstream_prefix[OB_BACKUP_DIR_PREFIX_LENGTH] = { 0 };
+  int64_t logstream_prefix_len = 0;
+  if (OB_FAIL(databuff_printf(logstream_prefix, sizeof(logstream_prefix), logstream_prefix_len, "%s_", share::OB_STR_LS))) {
+    LOG_WARN("failed to set log stream prefix for filter", K(ret), K(share::OB_STR_LS));
+  } else if (OB_FAIL(prefix_lsid_op.init(logstream_prefix, strlen(logstream_prefix)))) {
+    LOG_WARN("failed to init dir prefix operator", K(ret), K(logstream_prefix));
+  } else if (OB_FAIL(util.list_directories(piece_dir.get_ptr(), backup_dest_.get_storage_info(), prefix_lsid_op))) {
+    LOG_WARN("failed to list files", K(ret), "path", piece_dir);
+  } else {
+    // for each ls dir
+    ObBackupPath ls_path;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_entrys.count(); ++i) {
+      int64_t start_time = ObTimeUtility::current_time();
+      ls_path.reset();
+      if (!ls_entrys.at(i).is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ls id", K(ret), "ld_id", ls_entrys.at(i).id());
+      } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(
+                complement_log_dest, dest_id, round_id, piece_id, ls_entrys.at(i), ls_path))){
+        LOG_WARN("failed to get ls dir path", K(ret), K(complement_log_dest),
+                  K(dest_id), K(round_id), K(piece_id), "ld_id", ls_entrys.at(i).id());
+      } else if (OB_FAIL(delete_backup_piece_ls_files_(ls_path))) {
+        LOG_WARN("failed to delete backup piece ls of a complement log", K(ret), K(ls_path));
+      } else {
+        LOG_INFO("Delete complement log ls", "cost_ts", ObTimeUtility::current_time() - start_time,
+                  K(piece_dir), K(ls_path));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("Deleted all ls in this complement log piece", "ls_num", ls_entrys.count(), K(piece_dir));
+    }
+  }
   return ret;
 }
 
@@ -602,21 +728,6 @@ int ObLSBackupCleanTask::delete_backup_piece_ls_files_(const ObBackupPath &path)
   return ret;
 }
 
-int ObLSBackupCleanTask::delete_complement_log_(const ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  ObBackupPath complement_path;
-  if (OB_FAIL(complement_path.init(path.get_ptr()))) {
-    LOG_WARN("failed to init complement log path", K(ret), K(path));
-  } else if (OB_FAIL(complement_path.join("complement_log", ObBackupFileSuffix::NONE))) {
-    LOG_WARN("failed to join complement log", K(ret), K(complement_path));
-  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(complement_path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup log stream dir files", K(ret), K(complement_path));
-  } else {
-    LOG_INFO("[BACKUP_CLEAN]success delete complement log", K(complement_path)); 
-  } 
-  return ret;
-}
 
 int ObLSBackupCleanTask::delete_sys_data_(const ObBackupPath &path)
 {
@@ -777,8 +888,6 @@ int ObLSBackupCleanTask::delete_backup_set_ls_files_(const ObBackupPath &path)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("LS clean task do not init", K(ret));
-  } else if (OB_FAIL(delete_complement_log_(path))) {
-    LOG_WARN("failed to delete complement log", K(ret));
   } else if (OB_FAIL(delete_sys_data_(path))) {
     LOG_WARN("failed to delete complement log", K(ret));
   } else if (OB_FAIL(delete_major_data_(path))) {
