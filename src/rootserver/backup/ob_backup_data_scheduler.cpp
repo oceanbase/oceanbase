@@ -1455,6 +1455,17 @@ int ObUserTenantBackupJobMgr::insert_backup_set_task_(common::ObISQLClient &sql_
     sql_proxy, job_attr_->tenant_id_, true/*start scn*/, backup_set_task.start_scn_))) {
     LOG_WARN("fail t get start scn", K(ret));
   } else {
+#ifdef ERRSIM
+    int64_t errsim_start_gts = GCONF.errsim_backup_override_start_scn;
+    if (errsim_start_gts > 0) {
+      if (OB_FAIL(backup_set_task.start_scn_.convert_for_gts(errsim_start_gts))) {
+        LOG_WARN("failed to convert errsim start scn", K(ret), K(errsim_start_gts));
+      } else {
+        LOG_INFO("errsim override start scn", "start_scn",
+        backup_set_task.start_scn_, "errsim_start_gts", errsim_start_gts);
+      }
+    }
+#endif
     backup_set_task.tenant_id_ = job_attr_->tenant_id_;
     backup_set_task.job_id_ = job_attr_-> job_id_;
     backup_set_task.incarnation_id_ = job_attr_->incarnation_id_;

@@ -3054,3 +3054,8 @@ DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "Tru
 DEF_BOOL(_enable_sql_audit_filter_pushdown, OB_TENANT_PARAMETER, "True",
          "Enable or disable sql audit filter pushdown.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "override backup start scn in errsim"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

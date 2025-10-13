@@ -900,7 +900,7 @@ int ObBackupDeleteSelector::apply_current_path_piece_retention_policy_(
               // check the piece is needed for the oldest full backup
               for (int64_t i = 0; OB_SUCC(ret) && i < candidate_pieces_in_group.count(); ++i) {
                 const ObTenantArchivePieceAttr &piece = candidate_pieces_in_group.at(i);
-                if (piece.end_scn_ >= clog_data_clean_point.start_replay_scn_) {
+                if (piece.end_scn_ > clog_data_clean_point.start_replay_scn_) {
                   ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
                   LOG_WARN("Piece is needed for the oldest full backup",
                             K(piece), K(clog_data_clean_point), K(requested_path));
