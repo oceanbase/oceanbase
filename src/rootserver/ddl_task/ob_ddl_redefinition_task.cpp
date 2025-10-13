@@ -1268,9 +1268,8 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
       }
     }
 
-    alter_autoinc_column_id = alter_table_schema.get_autoinc_column_id();
-    if (OB_SUCC(ret) && is_update_autoinc_end && alter_autoinc_column_id != 0
-        && OB_NOT_NULL(new_table_schema)) {
+    if (OB_SUCC(ret) && is_update_autoinc_end && OB_NOT_NULL(new_table_schema)
+        && (alter_autoinc_column_id = new_table_schema->get_autoinc_column_id()) != 0) {
       const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
       THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + max(GCONF.rpc_timeout, 1000 * 1000 * 20L));
       ObAutoincrementService &auto_inc_service = ObAutoincrementService::get_instance();
