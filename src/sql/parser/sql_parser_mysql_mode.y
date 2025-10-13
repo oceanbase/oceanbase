@@ -130,6 +130,7 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 %left '*' '/' '%' MOD DIV POW
 %left '^'
 %left VECTOR_DISTANCE
+%left VECTOR_SIMILARITY
 %nonassoc LOWER_THAN_NEG SAMPLE/* for simple_expr conflict*/
 %left CNNOP
 %left NEG '~'
@@ -374,7 +375,7 @@ END_P SET_VAR DELIMITER
         UNUSUAL UPGRADE URL USE_BLOOM_FILTER UNKNOWN USE_FRM USER USERNAME USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED URI
 
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
-        VAR_SAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED
+        VAR_SAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED VECTOR_SIMILARITY
 
         WAIT WAREHOUSE WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP WITHOUT
 
@@ -589,6 +590,7 @@ END_P SET_VAR DELIMITER
 %type <node> semistruct_properties_list semistruct_properties semistruct_encoding_type_option
 
 %type <node> algorithm_opt lock_opt
+%type <node> vector_similarity_expr vector_similarity_metric
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -3577,6 +3579,10 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
+| vector_similarity_expr
+{
+  $$ = $1;
+}
 | MAP '(' expr_list ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MAP, 1, $3);
@@ -3667,6 +3673,45 @@ VECTOR_DISTANCE '(' expr ',' expr ',' vector_distance_metric ')'
 ;
 
 vector_distance_metric:
+COSINE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 0;
+}
+| DOT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 1;
+}
+| EUCLIDEAN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 2;
+}
+| MANHATTAN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 3;
+}
+;
+
+vector_similarity_expr:
+VECTOR_SIMILARITY '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_VECTOR_SIMILARITY, 2, $3, $5);
+}
+|
+VECTOR_SIMILARITY '(' expr ',' expr ',' vector_similarity_metric ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_VECTOR_SIMILARITY, 3, $3, $5, $7);
+}
+;
+
+vector_similarity_metric:
 COSINE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
@@ -27060,6 +27105,7 @@ ACCESS_INFO
 |       VERBOSE
 |       VECTOR
 |       VECTOR_DISTANCE
+|       VECTOR_SIMILARITY
 |       VIRTUAL_COLUMN_ID
 |       MATERIALIZED
 |       VIEW

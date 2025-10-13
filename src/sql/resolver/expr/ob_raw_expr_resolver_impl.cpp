@@ -1331,6 +1331,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         OZ (process_vector_func_node(node, expr));
         break;
       }
+      case T_FUN_SYS_VECTOR_SIMILARITY: {
+        OZ (process_vector_similarity_func_node(node, expr));
+        break;
+      }
       case T_FUNC_SYS_ARRAY_FIRST:
       case T_FUNC_SYS_ARRAY_SORTBY:
       case T_FUNC_SYS_ARRAY_FILTER:
@@ -3614,6 +3618,37 @@ int ObRawExprResolverImpl::process_vector_func_node(const ParseNode *node, ObRaw
     LOG_WARN("failed to init param exprs", K(ret));
   } else {
     func_expr->set_func_name(N_VECTOR_DISTANCE);
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      ObRawExpr *para_expr = NULL;
+      if (OB_ISNULL(node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid expr list node children", K(ret), K(i), K(node->children_[i]));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], para_expr)))) {
+        LOG_WARN("fail to recursive resolve expr list item", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
+        LOG_WARN("fail to add param expr to expr", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    expr = func_expr;
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_vector_similarity_func_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_FAIL(func_expr->init_param_exprs(node->num_child_))) {
+    LOG_WARN("failed to init param exprs", K(ret));
+  } else {
+    func_expr->set_func_name(N_VECTOR_SIMILARITY);
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
       ObRawExpr *para_expr = NULL;
       if (OB_ISNULL(node->children_[i])) {

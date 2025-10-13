@@ -267,6 +267,13 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
         LOG_WARN("build search param fail", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_));
       } else {
         LOG_TRACE("search param", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_), K(search_param_));
+
+        if (search_param_.similarity_threshold_ != 0) {
+          if (OB_FAIL(ObDasVecScanUtils::get_distance_threshold_hnsw(
+              *sort_ctdef_->sort_exprs_[0], search_param_.similarity_threshold_, distance_threshold_))) {
+            LOG_WARN("get distance threshold fail", K(ret));
+          }
+        }
       }
     }
   }
@@ -1010,7 +1017,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
     for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
       double distance = distances_inc == nullptr ? distances_snap[i] : distances_inc[i];
       // if distances == -1, means vid not exist
-      if (distance != -1) {
+      if (distance != -1 && distance <= distance_threshold_) {
         max_heap.push(brute_vids[i], distance, is_snap);
       } else {
         need_complete_data = check_need_complete_data ? true : false;
@@ -1021,7 +1028,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
       bool is_snap = distances_inc[i] == -1;
       double distance = distances_inc[i] == -1 ? distances_snap[i] : distances_inc[i];
       // if distances == -1, means vid not exist
-      if (distance != -1) {
+      if (distance != -1 && distance <= distance_threshold_) {
         max_heap.push(brute_vids[i], distance, is_snap);
       } else {
         need_complete_data = check_need_complete_data ? true : false;
@@ -1197,11 +1204,15 @@ int ObDASHNSWScanIter::merge_and_sort_brute_force_results_bq(const DistanceResul
         if (!has_incr && !has_snap) {
           need_complete_data = check_need_complete_data ? true : false;
         } else if (has_incr && has_snap) {
+          if (dist_result.distances_inc[i] <= distance_threshold_) {
+            incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
+          }
+          if (dist_result.distances_snap[i] <= distance_threshold_) {
+            snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
+          }
+        } else if (has_incr && dist_result.distances_inc[i] <= distance_threshold_) {
           incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
-          snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
-        } else if (has_incr) {
-          incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
-        } else if (has_snap) {
+        } else if (has_snap && dist_result.distances_snap[i] <= distance_threshold_) {
           snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
         }
       }
@@ -3037,6 +3048,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     query_cond.rel_count_ = vec_aux_ctdef_->relevance_col_cnt_;
     query_cond.rel_map_ptr_ = &rel_map_;
     query_cond.is_post_with_filter_ = is_iter_filter();
+    query_cond.distance_threshold_ = distance_threshold_;
 
     uint64_t ob_hnsw_ef_search = 0;
     if (OB_FAIL(get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {

@@ -812,6 +812,9 @@ ob_set_subtarget(ob_share vector_type
   vector_type/ob_vector_norm.cpp
   vector_type/ob_vector_common_util.cpp
   vector_type/ob_sparse_vector_ip_distance.cpp
+  vector_type/ob_vector_l2_similarity.cpp
+  vector_type/ob_vector_cosine_similarity.cpp
+  vector_type/ob_vector_ip_similarity.cpp
 )
 
 ob_set_subtarget(ob_share hybrid_search

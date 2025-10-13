@@ -31,6 +31,7 @@ public:
     ef_search_(0),
     refine_k_(0),
     ob_sparse_drop_ratio_search_(0),
+    similarity_threshold_(0),
     ivf_nprobes_(0)
   {}
   virtual ~ObVectorIndexQueryParam() {}

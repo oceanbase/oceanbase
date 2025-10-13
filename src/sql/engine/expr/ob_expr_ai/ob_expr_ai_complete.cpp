@@ -50,13 +50,14 @@ int ObExprAIComplete::calc_result_typeN(ObExprResType &type,
   } else {
     types_stack[MODEL_IDX].set_calc_type(ObVarcharType);
     types_stack[MODEL_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-    if (!ob_is_string_type(types_stack[PROMPT_IDX].get_type())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid param type", K(ret), K(types_stack[PROMPT_IDX]));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "prompt must be string type");
-    } else {
+    if (ob_is_string_type(types_stack[PROMPT_IDX].get_type())) {
       types_stack[PROMPT_IDX].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (ob_is_json(types_stack[PROMPT_IDX].get_type())) {
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid param type", K(ret), K(types_stack[PROMPT_IDX]));
     }
+
     if (OB_FAIL(ret)) {
     } else if (param_num == 3) {
       ObObjType in_type = types_stack[CONFIG_IDX].get_type();
@@ -103,8 +104,37 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
     ObString prompt;
     ObJsonObject *config = nullptr;
     ObString config_str;
-   if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *arg_prompt, expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), prompt))) {
+    ObExpr *arg_expr_prompt = expr.args_[1];
+    if ( OB_ISNULL(arg_expr_prompt) ) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("arg_expr_prompt is null", K(ret));
+    } else if (arg_expr_prompt->datum_meta_.type_ == ObJsonType) {
+      ObIJsonBase *j_base = nullptr;
+      ObJsonObject *prompt_object = nullptr;
+      bool is_null = false;
+      if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, PROMPT_IDX, j_base, is_null))) {
+        LOG_WARN("get_json_doc failed", K(ret));
+      } else if (j_base->json_type() != ObJsonNodeType::J_OBJECT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("j_base is not json object", K(ret));
+      } else if (OB_FALSE_IT(prompt_object = static_cast<ObJsonObject *>(j_base))) {
+      } else if (!ObAIFuncPromptObjectUtils::is_valid_prompt_object(prompt_object)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("prompt is not valid", K(ret));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "prompt is not valid");
+        res.set_null();
+      } else if (!ObAIFuncJsonUtils::ob_is_json_array_all_str(static_cast<ObJsonArray *>(prompt_object->get_value(ObAIFuncPromptObjectUtils::prompt_args_key)))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("prompt object is not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "prompt object is not support");
+      } else if (OB_FAIL(ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(temp_allocator, prompt_object, prompt))) {
+        LOG_WARN("fail to replace all str args in template", K(ret));
+      }
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *arg_prompt, expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), prompt))) {
       LOG_WARN("fail to get real string data", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(arg_config)) {
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *arg_config, expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), config_str))) {
         LOG_WARN("fail to get real string data", K(ret));
@@ -135,6 +165,50 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
       } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
         LOG_WARN("fail to set string result", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObExprAIComplete::get_prompt_object_from_str(ObIAllocator &allocator,
+                                                  const ObDatumMeta &meta,
+                                                  ObArray<ObString> &prompts,
+                                                  ObArray<ObJsonObject *> &prompt_objects,
+                                                  bool& is_all_str)
+{
+  INIT_SUCC(ret);
+  ObObjType val_type = meta.type_;
+  ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
+  ObJsonInType expect_type = ObJsonInType::JSON_TREE;
+  for (int64_t i = 0; OB_SUCC(ret) && i < prompts.count(); ++i) {
+    ObString prompt = prompts.at(i);
+    ObIJsonBase *j_base = nullptr;
+    ObJsonObject *prompt_object = nullptr;
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, prompt, j_in_type,
+                                                    expect_type, j_base, 0))) {
+      LOG_WARN("fail to get json base", K(ret), K(j_in_type));
+    } else if (OB_FALSE_IT(prompt_object = static_cast<ObJsonObject *>(j_base))) {
+    } else if (OB_FAIL(prompt_objects.push_back(prompt_object))) {
+      LOG_WARN("fail to push back prompt object", K(ret));
+    } else if (!is_all_str && ObAIFuncJsonUtils::ob_is_json_array_all_str(static_cast<ObJsonArray *>(prompt_object->get_value(ObAIFuncPromptObjectUtils::prompt_args_key)))) {
+      is_all_str = true;
+    }
+  }
+  return ret;
+}
+
+int ObExprAIComplete::transform_prompt_object_to_str(ObIAllocator &allocator,
+                                                    ObArray<ObJsonObject *> &prompt_objects,
+                                                    ObArray<ObString> &prompts)
+{
+  INIT_SUCC(ret);
+  for (int64_t i = 0; OB_SUCC(ret) && i < prompt_objects.count(); ++i) {
+    ObJsonObject *prompt_object = prompt_objects.at(i);
+    ObString prompt;
+    if (OB_FAIL(ObAIFuncPromptObjectUtils::replace_all_str_args_in_template(allocator, prompt_object, prompt))) {
+      LOG_WARN("fail to replace all str args in template", K(ret));
+    } else if (OB_FAIL(prompts.push_back(prompt))) {
+      LOG_WARN("fail to push back prompt", K(ret), K(i));
     }
   }
   return ret;
@@ -342,6 +416,7 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
   ObArray<ObString> prompts;
   ObJsonObject *config = nullptr;
   ObIVector *res_vec = expr.get_vector(ctx);
+  ObExpr *arg_expr_prompt = expr.args_[1];
   if (OB_FAIL(get_vector_params(expr, ctx, skip, bound, model_id, prompts, config))) {
     LOG_WARN("fail to get vector params", K(ret));
   } else {
@@ -355,7 +430,23 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
     ObJsonObject *body = nullptr;
     ObArray<ObJsonObject *> responses;
     ObAIFuncClient ai_client;
-    if (OB_FAIL(info->init(ctx.exec_ctx_, model_id))) {
+    if (arg_expr_prompt->datum_meta_.type_ == ObJsonType) {
+      ObArray<ObJsonObject *> prompt_objects;
+      bool is_all_str = false;
+      if (OB_FAIL(get_prompt_object_from_str(temp_allocator, arg_expr_prompt->datum_meta_, prompts, prompt_objects, is_all_str))) {
+        LOG_WARN("fail to get prompt object from str", K(ret));
+      } else if (is_all_str) {
+        prompts.reset();
+        if (OB_FAIL(transform_prompt_object_to_str(temp_allocator, prompt_objects, prompts))) {
+          LOG_WARN("fail to transform prompt object to str", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("prompt is not all str", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(info->init(ctx.exec_ctx_, model_id))) {
       LOG_WARN("fail to get model info", K(ret));
     } else if (OB_FAIL(ObAIFuncUtils::check_info_type_completion(info))) {
       LOG_WARN("model type must be COMPLETION", K(ret));

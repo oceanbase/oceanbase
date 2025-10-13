@@ -460,6 +460,8 @@
 #include "ob_expr_local_dynamic_filter.h"
 #include "ob_expr_format_profile.h"
 #include "ob_expr_bucket.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
+#include "ob_expr_vector_similarity.h"
 
 namespace oceanbase
 {
@@ -1438,11 +1440,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
   ObExprBucket::calc_bucket_expr,                                     /* 868 */
   NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
-  NULL, // ObExprAIPrompt::eval_ai_prompt,                             /* 870 */
-  NULL, // ObExprVectorL2Similarity::calc_l2_similarity               /* 871 */
-  NULL, // ObExprVectorCosineSimilarity::calc_cosine_similarity       /* 872 */
-  NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
-  NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
+  ObExprAIPrompt::eval_ai_prompt,                                     /* 870 */
+  ObExprVectorL2Similarity::calc_l2_similarity,                       /* 871 */
+  ObExprVectorCosineSimilarity::calc_cosine_similarity,               /* 872 */
+  ObExprVectorIPSimilarity::calc_ip_similarity,                       /* 873 */
+  ObExprVectorSimilarity::calc_similarity,                            /* 874 */
   NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
 };

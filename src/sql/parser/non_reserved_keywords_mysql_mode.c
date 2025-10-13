@@ -1115,6 +1115,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"varying", VARYING},
   {"vector", VECTOR},
   {"vector_distance", VECTOR_DISTANCE},
+  {"vector_similarity", VECTOR_SIMILARITY},
   {"view", VIEW},
   {"virtual", VIRTUAL},
   {"virtual_column_id", VIRTUAL_COLUMN_ID},

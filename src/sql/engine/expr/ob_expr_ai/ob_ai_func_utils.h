@@ -229,6 +229,7 @@ class ObAIFuncJsonUtils
 public:
   ObAIFuncJsonUtils() {}
   virtual ~ObAIFuncJsonUtils() {}
+  static bool ob_is_json_array_all_str(ObJsonArray* json_array);
   static int transform_array_to_json_array(ObIAllocator &allocator, ObArray<ObString> &contents, ObJsonArray *&array);
   static int get_json_object(ObIAllocator &allocator, ObJsonObject *&obj_node);
   static int get_json_array(ObIAllocator &allocator, ObJsonArray *&array_node);
@@ -413,6 +414,20 @@ public:
    ObIAllocator *allocator_;
    ObAIFuncExprInfo &info_;
    DISALLOW_COPY_AND_ASSIGN(ObAIFuncModel);
+};
+
+class ObAIFuncPromptObjectUtils
+{
+public:
+  ObAIFuncPromptObjectUtils() {}
+  virtual ~ObAIFuncPromptObjectUtils() {}
+  static bool is_valid_prompt_object(ObJsonObject* prompt_object);
+  static int replace_all_str_args_in_template(ObIAllocator &allocator, ObJsonObject* prompt_object, ObString& replaced_prompt_str);
+  static int construct_prompt_object(ObIAllocator &allocator, ObString &template_str, ObJsonArray *args_array, ObJsonObject *&prompt_object);
+  static constexpr char prompt_template_key[20] = "template";
+  static constexpr char prompt_args_key[20] = "args";
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAIFuncPromptObjectUtils);
 };
 
 } // namespace common
