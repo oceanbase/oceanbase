@@ -781,23 +781,15 @@ int ObObjectDevice::inner_scan_dir_(const char *dir_name,
 {
   common::ObString uri(dir_name);
   int ret = OB_SUCCESS;
-  if (op.is_marker_scan() && OB_ISNULL(op.get_marker())) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "marker should not be null for marker scan",
-        K(ret), K(op.is_marker_scan()), K(dir_name), K(op.get_marker()));
+  if (op.is_dir_scan()) {
+    ret = util_.list_directories(uri, is_adaptive, op);
   } else {
-    if (op.is_dir_scan()) {
-      ret = util_.list_directories(uri, is_adaptive, op);
-    } else if (op.is_marker_scan()) {
-      ret = util_.list_files_with_marker(uri, op);
-    } else {
-      ret = util_.list_files(uri, is_adaptive, op);
-    }
+    ret = util_.list_files(uri, is_adaptive, op);
+  }
 
-    if (OB_FAIL(ret)) {
-      OB_LOG(WARN, "fail to do list/dir scan!", K(ret), KCSTRING(dir_name),
-          "is_dir_scan", op.is_dir_scan(), "is_marker_scan", op.is_marker_scan());
-    }
+  if (OB_FAIL(ret)) {
+    OB_LOG(WARN, "fail to do list/dir scan!", K(ret), KCSTRING(dir_name),
+        "is_dir_scan", op.is_dir_scan());
   }
   return ret;
 }

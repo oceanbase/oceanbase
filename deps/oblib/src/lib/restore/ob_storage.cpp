@@ -302,170 +302,6 @@ int DelAppendableObjectFragmentOp::func(const dirent *entry)
 }
 
 /**
- * ------------------------------ObTopNMinimumDirEntryWithMarkerOperator------------------------------
- */
-
-// return true when lsh is smaller than or equal to rhs
-bool less_than(const char *lhs, const char *rhs)
-{
-  bool bool_ret = false;
-  if (OB_NOT_NULL(lhs) && OB_NOT_NULL(rhs)) {
-    int strcmp_ret = strcmp(lhs, rhs);
-    bool_ret = (0 >= strcmp_ret ? true : false);
-  }
-  return bool_ret;
-}
-
-ObTopNMinimumDirEntryWithMarkerOperator::ObTopNMinimumDirEntryWithMarkerOperator(
-    const int64_t num,
-    const char *marker,
-    const bool need_size)
-    : ObBaseDirEntryOperator(), n_(num), marker_(marker), need_size_(need_size),
-      less_than_(), heap_(less_than_), allocator_("TopNDir")
-{
-}
-
-ObTopNMinimumDirEntryWithMarkerOperator::~ObTopNMinimumDirEntryWithMarkerOperator()
-{
-  n_ = -1;
-  heap_.reset();
-  allocator_.reset();
-}
-
-bool ObTopNMinimumDirEntryWithMarkerOperator::TopNCompElement::operator()(const Entry &lhs,
-                                                                          const Entry &rhs)
-{
-  return less_than(lhs.obj_name_, rhs.obj_name_);
-}
-
-int ObTopNMinimumDirEntryWithMarkerOperator::TopNCompElement::get_error_code()
-{
-  return OB_SUCCESS;
-}
-
-bool ObTopNMinimumDirEntryWithMarkerOperator::need_get_file_meta() const
-{
-  return need_size_;
-}
-
-int ObTopNMinimumDirEntryWithMarkerOperator::func(const dirent *entry)
-{
-  int ret = OB_SUCCESS;
-  const char *d_name = nullptr;
-  Entry tmp_entry;
-  if (OB_UNLIKELY(n_ <= 0) || OB_ISNULL(entry) || OB_ISNULL(entry->d_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K_(n), KP(entry));
-  } else if (FALSE_IT(d_name = entry->d_name)) {
-    // filter each dirent whose name is smaller than or equal to marker_
-  } else if (less_than(d_name, marker_)) {
-  } else if (heap_.count() < n_) {
-    if (OB_FAIL(alloc_and_init_(d_name, tmp_entry))) {
-      STORAGE_LOG(WARN, "alloc_and_init_ failed", K(ret), K(d_name));
-    } else if (OB_FAIL(heap_.push(tmp_entry))) {
-      STORAGE_LOG(WARN, "push failed", K(ret), K(d_name), K(tmp_entry));
-    } else {}
-
-    if (OB_FAIL(ret)) {
-      free_memory_(tmp_entry);
-    }
-  } else if (OB_FAIL(try_replace_top_(d_name))) {
-    STORAGE_LOG(WARN, "try_replace_top_ failed", K(ret), K(d_name), K(heap_.top()), K(tmp_entry));
-  }
-
-  return ret;
-}
-
-int ObTopNMinimumDirEntryWithMarkerOperator::handle_each_dir_entry(
-    common::ObBaseDirEntryOperator &op)
-{
-  int ret = OB_SUCCESS;
-  int64_t index = 0;
-  Entry top_data;
-  ObArray<Entry> entry_list;
-  while (!heap_.empty() && OB_SUCC(ret)) {
-    if (OB_FAIL(entry_list.push_back(heap_.top()))) {
-      STORAGE_LOG(WARN, "fail to push entry to entry_list", K(ret), K(entry_list.size()));
-    } else if (OB_FAIL(heap_.pop())) {
-      STORAGE_LOG(WARN, "pop failed", K(ret));
-    }
-  }
-  // Data obtained using a max heap is in descending order.
-  // To maintain consistency with the results returned by object storage,
-  // the obtained data is processed in reverse order.
-  for (int64_t i = entry_list.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-    if (OB_ISNULL(entry_list[i].obj_name_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "obj_name_ is NULL", K(ret), K(entry_list[i]), K(i));
-    } else if (OB_FAIL(handle_listed_object(op, entry_list[i].obj_name_,
-                                            strlen(entry_list[i].obj_name_),
-                                            entry_list[i].obj_size_))) {
-      OB_LOG(WARN, "fail to handle listed object", K(ret), K(entry_list[i]), K(i));
-    } else {
-      free_memory_(entry_list[i]);
-    }
-  }
-  return ret;
-}
-
-int ObTopNMinimumDirEntryWithMarkerOperator::alloc_and_init_(
-    const char *d_name,
-    Entry &out_entry)
-{
-  int ret = OB_SUCCESS;
-  char *out_ptr = nullptr;
-  int64_t buf_size = -1;
-  if (OB_ISNULL(d_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(d_name));
-  } else if (FALSE_IT(buf_size = strlen(d_name) + 1)) {
-  } else if (OB_ISNULL(out_ptr = static_cast<char*>(allocator_.alloc(buf_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "fail to alloc mem for out ptr", K(ret), K(buf_size), K(d_name));
-  } else {
-    strncpy(out_ptr, d_name, buf_size - 1);
-    out_ptr[buf_size - 1] = '\0';
-    out_entry.obj_name_ = out_ptr;
-    if (need_size_) {
-      out_entry.obj_size_ = get_size();
-    }
-  }
-  return ret;
-}
-
-void ObTopNMinimumDirEntryWithMarkerOperator::free_memory_(Entry &out_entry)
-{
-  if (OB_NOT_NULL(out_entry.obj_name_)) {
-    allocator_.free(out_entry.obj_name_);
-    out_entry.obj_name_ = nullptr;
-  }
-  out_entry.obj_size_ = -1;
-}
-
-int ObTopNMinimumDirEntryWithMarkerOperator::try_replace_top_(const char *d_name)
-{
-  int ret = OB_SUCCESS;
-  // inner func, do not check heap_ whether is empty
-  Entry top_data = heap_.top();
-  Entry new_entry;
-  if (OB_ISNULL(d_name)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(d_name));
-  } else if (less_than(top_data.obj_name_, d_name)) {
-  } else if (OB_FAIL(alloc_and_init_(d_name, new_entry))) {
-    STORAGE_LOG(WARN, "alloc_and_cp_ failed", K(ret), K(d_name), K(top_data));
-  } else {
-    free_memory_(top_data);
-    if (OB_FAIL(heap_.replace_top(new_entry))) {
-      free_memory_(new_entry);
-      STORAGE_LOG(WARN, "TopNDir replace_top failed", K(ret), K(new_entry), K(top_data));
-    }
-  }
-
-  return ret;
-}
-
-/**
  * ------------------------------ObStorageGlobalIns------------------------------
  */
 ObStorageGlobalIns::ObStorageGlobalIns()
@@ -1079,43 +915,12 @@ int ObStorageUtil::list_adaptive_files(
   } else if (OB_FAIL(build_bucket_and_object_name(allocator, uri, bucket, dir_path))) {
     OB_LOG(WARN, "fail to build bucket and object name", K(ret), K(uri));
   }
-  const char *marker = op.get_marker();
   if (OB_FAIL(ret)) {
-  } else if (op.is_marker_scan() && OB_ISNULL(marker)) {
-    ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "marker should not be null for marker scan", K(ret), KP(marker));
   } else if (is_obj_storage) {
     if (OB_FAIL(list_obj_ctx.init(allocator, OB_STORAGE_LIST_MAX_NUM, need_meta))) {
       OB_LOG(WARN, "fail to init list_obj_ctx", K(ret), K(need_meta));
     } else {
       list_ctx = &list_obj_ctx;
-    }
-
-    if (op.is_marker_scan()) {
-      if (!is_null_or_end_with_slash(dir_path.ptr())) {
-        ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "dir_path not end with '/'", K(ret), K(uri), K(marker), K(dir_path));
-      } else if (marker[0] != '\0') {
-        int64_t pos = 0;
-        char marker_buf[OB_MAX_URI_LENGTH];
-        // if we want to list bucket, the maker should equal to the original name, else we need to concat dir_path and original marker
-        // e.g. marker = "a/b/c", dir_path = "d/e/", then the next marker should be "d/e/a/b/c"
-        // e.g. maker = "a/b/c", dir_path = "", then the next marker should be "a/b/c"
-        if (!dir_path.empty() && OB_FAIL(databuff_printf(marker_buf, sizeof(marker_buf), pos, "%s%s",
-                                    dir_path.ptr(), marker))) {
-          OB_LOG(WARN, "fail to construct next token", K(ret), K(uri), K(dir_path), K(marker));
-        } else if (dir_path.empty() && OB_FAIL(databuff_printf(marker_buf, sizeof(marker_buf), pos, "%s", marker))) {
-          OB_LOG(WARN, "fail to construct next token", K(ret), K(uri), K(dir_path), K(marker));
-        } else if (OB_FAIL(list_obj_ctx.set_next_token(true/*has_next*/, marker_buf, pos))) {
-          OB_LOG(WARN, "fail to set next token", K(ret), K(uri), K(marker), K(marker_buf));
-        } else if (OB_FAIL(list_obj_ctx.set_marker(marker))) {
-          OB_LOG(WARN, "fail to set list ctx marker", K(ret), K(uri), K(marker));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        list_obj_ctx.set_total_list_limit(op.get_scan_count());
-      }
     }
   } else {
     if (OB_FAIL(list_file_ctx.init(allocator, OB_STORAGE_LIST_MAX_NUM, need_meta))) {
@@ -1256,28 +1061,6 @@ int ObStorageUtil::handle_listed_appendable_obj(
   }
   const int64_t appendable_full_path_len = strlen(list_ctx->cur_appendable_full_obj_path_);
   int64_t appendable_file_len = 0;
-
-  // Assuming the file hierarchy is:
-  // base_dir/
-  // ├── a
-  // ├── b_appendable
-  // │    ├── 0-100
-  // │    └── FORMAT_META
-  // └── c
-  // 'b_appendable' is 'SIMULATE_APPEND' type.
-  // If the marker is 'b_appendable', the expected result is ["c"].
-  // However, fragments of the 'b_appendable' have a greater lexicographical order than the marker.
-  // Therefore, fragments of 'b_appendable' are included in the listed results
-  // and are ultimately aggregated under the logical object name 'b_appendable',
-  // which is necessary to be filtered out.
-  if (op.is_marker_scan() && OB_NOT_NULL(list_ctx->marker_)) {
-    // list_ctx->cur_appendable_full_obj_path_ is equal to full_dir_path + logic_apendable_obj_name + '/'
-    list_ctx->cur_appendable_full_obj_path_[appendable_full_path_len - 1] = '\0';
-    if (less_than(list_ctx->cur_appendable_full_obj_path_ + full_dir_path_len, list_ctx->marker_)) {
-      need_handle_file = false;
-    }
-    list_ctx->cur_appendable_full_obj_path_[appendable_full_path_len - 1] = '/';
-  }
 
   if (need_handle_file && op.need_get_file_meta()) {
     char append_obj_uri[OB_MAX_URI_LENGTH] = {0};
@@ -1862,52 +1645,6 @@ int ObStorageUtil::is_tagging(const common::ObString &uri, bool &is_tagging)
   return ret;
 }
 
-
-int ObStorageUtil::list_files_with_marker(const common::ObString &uri, common::ObBaseDirEntryOperator &op)
-{
-  int ret = OB_SUCCESS;
-  OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
-  const char *marker = op.get_marker();
-  char uri_buf[OB_MAX_URI_LENGTH] = {0};
-  const int64_t start_ts = ObTimeUtility::current_time();
-
-  if (OB_UNLIKELY(!is_init())) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "util is not inited", K(ret), K(uri));
-  } else if (OB_UNLIKELY(uri.empty() || !op.is_marker_scan()) || OB_ISNULL(marker)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "marker ptr should not be nullptr or op type invalid", K(ret), K(uri), K(marker));
-  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
-    ret = OB_BACKUP_IO_PROHIBITED;
-    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
-  } else if (OB_FAIL(validate_uri_type(uri))) {
-    STORAGE_LOG(WARN, "fail to validate uri!", K(uri));
-  } else if (OB_FAIL(build_full_dir_path(uri.ptr(), uri_buf, sizeof(uri_buf)))) {
-    OB_LOG(WARN, "fail to make uri end with '/'", K(ret), K(uri));
-  } else {}
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_STORAGE_FILE != device_type_ && OB_STORAGE_AZBLOB != device_type_) {
-    // azblob does not support list with start after (marker), so a similar compatibility is required for NFS
-    if (OB_FAIL(list_adaptive_files(uri_buf, op))) {
-      STORAGE_LOG(WARN, "failed to list adaptive files with marker",
-          K(ret), K(uri), K(uri_buf), K(marker));
-    }
-  } else {
-    const int64_t scan_count = (op.get_scan_count() <= 0 ? INT64_MAX : op.get_scan_count());
-    ObTopNMinimumDirEntryWithMarkerOperator top_n_op(scan_count, marker, op.need_get_file_meta());
-
-    if (OB_FAIL(list_adaptive_files(uri_buf, top_n_op))) {
-      STORAGE_LOG(WARN, "failed to list adaptive files with marker",
-          K(ret), K(uri), K(uri_buf), K(marker), K(scan_count));
-    } else if (OB_FAIL(top_n_op.handle_each_dir_entry(op))) {
-      STORAGE_LOG(WARN, "failed to handle_each_dir_entry", K(ret), K(uri), K(scan_count));
-    }
-  }
-
-
-  return ret;
-}
 
 int ObStorageUtil::del_unmerged_parts(const common::ObString &uri)
 {
