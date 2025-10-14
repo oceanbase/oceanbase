@@ -569,7 +569,8 @@ int ObEncodeBlockGetReader::init_by_read_info(
       row_count_ = header_->row_count_;
       original_data_length_ = header_->original_length_;
       read_info_ = &read_info;
-      block_addr_ = block_addr;
+      // TODO: fenggu.yh, fix the logic of reuse block addr
+      // block_addr_ = block_addr;
     }
   }
   return ret;
@@ -580,14 +581,10 @@ int ObEncodeBlockGetReader::init_if_need(const ObMicroBlockAddr &block_addr,
                                          const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
-  if (header == header_ && block_addr == block_addr_ && read_info_ == &read_info) {
-    // skip init
-  } else {
-    reuse();
-    if (OB_FAIL(init_by_read_info(block_addr, block_data, read_info))) {
-      LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
-    }
+  // TODO: fenggu.yh, fix the logic of reuse read info
+  reuse();
+  if (OB_FAIL(init_by_read_info(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   }
   return ret;
 }
