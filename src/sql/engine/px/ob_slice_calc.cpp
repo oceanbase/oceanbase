@@ -1737,7 +1737,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
       } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
         const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
         int64_t hash_idx = 0;
-        if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx, part_ch_array.count(), hash_idx))) {
+        if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx, part_ch_array.count(), hash_idx, skip))) {
           LOG_WARN("fail calc hash value", K(ret));
         } else if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == hash_idx) {
           slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
