@@ -160,6 +160,10 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
   is_in_retry_ = false;
   is_route_miss_ = false;
   is_plan_cache_hit_ = false;
+  is_muti_query_ = false;
+  is_muti_query_batch_ = false;
+  is_full_table_scan_ = false;
+  is_failed_ = false;
 #define DEF_SQL_STAT_ITEM_INIT(def_name)           \
   def_name##_start_ = 0;                           \
   def_name##_end_ = 0;
@@ -216,6 +220,10 @@ void ObExecutingSqlStatRecord::reset()
   is_in_retry_ = false;
   is_route_miss_ = false;
   is_plan_cache_hit_ = false;
+  is_muti_query_ = false;
+  is_muti_query_batch_ = false;
+  is_full_table_scan_ = false;
+  is_failed_ = false;
 #define DEF_SQL_STAT_ITEM_INIT(def_name)           \
   def_name##_start_ = 0;                             \
   def_name##_end_ = 0;
@@ -245,6 +253,10 @@ int ObExecutingSqlStatRecord::assign(const ObExecutingSqlStatRecord& other)
   is_in_retry_ = other.get_is_in_retry();
   is_route_miss_ = other.is_route_miss();
   is_plan_cache_hit_ = other.is_plan_cache_hit();
+  is_muti_query_ = other.is_muti_query();
+  is_muti_query_batch_ = other.is_muti_query_batch();
+  is_full_table_scan_ = other.is_full_table_scan();
+  is_failed_ = other.is_failed();
 #define DEF_SQL_STAT_ITEM_COPY(def_name)           \
   def_name##_start_ = other.def_name##_start_;     \
   def_name##_end_ = other.def_name##_end_;  
@@ -364,6 +376,10 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutingSqlStatRecord& executing_
   (void)ATOMIC_AAF(&nested_sql_total_, executing_record.get_nested_sql_delta());
   (void)ATOMIC_AAF(&route_miss_total_, executing_record.is_route_miss()? 1:0);
   (void)ATOMIC_AAF(&plan_cache_hit_total_, executing_record.is_plan_cache_hit());
+  (void)ATOMIC_AAF(&muti_query_total_, executing_record.is_muti_query());
+  (void)ATOMIC_AAF(&muti_query_batch_total_, executing_record.is_muti_query_batch());
+  (void)ATOMIC_AAF(&full_table_scan_total_, executing_record.is_full_table_scan());
+  (void)ATOMIC_AAF(&error_count_total_, executing_record.is_failed());
   return OB_SUCCESS;
 }
 
@@ -392,6 +408,10 @@ int ObExecutedSqlStatRecord::sum_stat_value(ObExecutedSqlStatRecord& executed_re
   (void)ATOMIC_AAF(&partition_total_, executed_record.get_partition_total());
   (void)ATOMIC_AAF(&nested_sql_total_, executed_record.get_nested_sql_total());
   (void)ATOMIC_AAF(&route_miss_total_, executed_record.get_route_miss_total());
+  (void)ATOMIC_AAF(&muti_query_total_, executed_record.get_muti_query_total());
+  (void)ATOMIC_AAF(&muti_query_batch_total_, executed_record.get_muti_query_batch_total());
+  (void)ATOMIC_AAF(&full_table_scan_total_, executed_record.get_full_table_scan_total());
+  (void)ATOMIC_AAF(&error_count_total_, executed_record.get_error_count_total());
   return OB_SUCCESS;
 }
 int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
@@ -425,6 +445,10 @@ int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
     DEF_ASSIGN_FUNC(nested_sql);
     DEF_ASSIGN_FUNC(route_miss);
     DEF_ASSIGN_FUNC(plan_cache_hit);
+    DEF_ASSIGN_FUNC(muti_query);
+    DEF_ASSIGN_FUNC(muti_query_batch);
+    DEF_ASSIGN_FUNC(full_table_scan);
+    DEF_ASSIGN_FUNC(error_count);
 #undef DEF_ASSIGN_FUNC
   }
   return ret;
@@ -459,6 +483,10 @@ int ObExecutedSqlStatRecord::reset()
     DEF_RESET_FUNC(nested_sql);
     DEF_RESET_FUNC(route_miss);
     DEF_RESET_FUNC(plan_cache_hit);
+    DEF_RESET_FUNC(muti_query);
+    DEF_RESET_FUNC(muti_query_batch);
+    DEF_RESET_FUNC(full_table_scan);
+    DEF_RESET_FUNC(error_count);
 #undef DEF_RESET_FUNC
 
   return ret;
@@ -491,6 +519,10 @@ int ObExecutedSqlStatRecord::update_last_snap_record_value()
     DEF_UPDATE_LAST_SNAP_FUNC(nested_sql);
     DEF_UPDATE_LAST_SNAP_FUNC(route_miss);
     DEF_UPDATE_LAST_SNAP_FUNC(plan_cache_hit);
+    DEF_UPDATE_LAST_SNAP_FUNC(muti_query);
+    DEF_UPDATE_LAST_SNAP_FUNC(muti_query_batch);
+    DEF_UPDATE_LAST_SNAP_FUNC(full_table_scan);
+    DEF_UPDATE_LAST_SNAP_FUNC(error_count);
   #undef DEF_UPDATE_LAST_SNAP_FUNC
   return ret;
 }

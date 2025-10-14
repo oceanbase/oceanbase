@@ -1120,7 +1120,7 @@ int WorkloadRepositoryTask::get_init_wr_control_sql_string(
         OB_WR_CONTROL_TNAME))) {
     LOG_WARN("sql append failed", K(ret));
   } else if (OB_FAIL(sql.append_fmt("(%ld, '%s', %ld, '%s', %ld, %ld)", tenant_id, 
-                                      default_interval_char, default_snap_interval_mins*60L, 
+                                      default_interval_char, default_snap_interval_mins*60L,
                                       default_retention_char, default_snap_retention_mins*60L,
                                       default_topnsql))) {
     LOG_WARN("sql append failed", K(ret));

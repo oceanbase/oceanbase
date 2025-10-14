@@ -138,6 +138,14 @@ public:
   void set_is_route_miss(const bool is_route_miss) { is_route_miss_ = is_route_miss; }
   bool is_plan_cache_hit() const { return is_plan_cache_hit_;}
   void set_is_plan_cache_hit(const bool is_plan_cache_hit) { is_plan_cache_hit_ = is_plan_cache_hit; }
+  bool is_muti_query() const { return is_muti_query_; }
+  void set_is_muti_query(const bool is_muti_query) { is_muti_query_ = is_muti_query; }
+  bool is_muti_query_batch() const { return is_muti_query_batch_; }
+  void set_is_muti_query_batch(const bool is_muti_query_batch) { is_muti_query_batch_ = is_muti_query_batch; }
+  bool is_full_table_scan() const { return is_full_table_scan_; }
+  void set_is_full_table_scan(const bool is_full_table_scan) { is_full_table_scan_ = is_full_table_scan; }
+  bool is_failed() const { return is_failed_; }
+  void set_is_failed(const bool failed) { is_failed_ = failed; }
 #define DEF_SQL_STAT_ITEM_DELTA_FUNC(def_name)                 \
     int64_t get_##def_name##_delta() const {                   \
       int64_t delta = def_name##_end_ - def_name##_start_;     \
@@ -166,6 +174,10 @@ public:
   bool is_in_retry_;
   bool is_route_miss_;
   bool is_plan_cache_hit_;
+  bool is_muti_query_;
+  bool is_muti_query_batch_;
+  bool is_full_table_scan_;
+  bool is_failed_;
 #define DEF_SQL_STAT_ITEM(def_name)           \
   int64_t def_name##_start_;                  \
   int64_t def_name##_end_;
@@ -220,6 +232,10 @@ public:
     DEF_SQL_STAT_ITEM_CONSTRUCT(nested_sql);
     DEF_SQL_STAT_ITEM_CONSTRUCT(route_miss);
     DEF_SQL_STAT_ITEM_CONSTRUCT(plan_cache_hit);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(muti_query);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(muti_query_batch);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(full_table_scan);
+    DEF_SQL_STAT_ITEM_CONSTRUCT(error_count);
 #undef DEF_SQL_STAT_ITEM_CONSTRUCT
   }
   
@@ -263,6 +279,10 @@ public:
     DEF_SQL_STAT_ITEM_DELTA_FUNC(nested_sql);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(route_miss);
     DEF_SQL_STAT_ITEM_DELTA_FUNC(plan_cache_hit);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(muti_query);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(muti_query_batch);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(full_table_scan);
+    DEF_SQL_STAT_ITEM_DELTA_FUNC(error_count);
   #undef DEF_SQL_STAT_ITEM_DELTA_FUNC
   
   TO_STRING_KV(K_(sql_stat_info));
@@ -293,6 +313,10 @@ private:
     DEF_SQL_STAT_ITEM(nested_sql);
     DEF_SQL_STAT_ITEM(route_miss);
     DEF_SQL_STAT_ITEM(plan_cache_hit);
+    DEF_SQL_STAT_ITEM(muti_query);
+    DEF_SQL_STAT_ITEM(muti_query_batch);
+    DEF_SQL_STAT_ITEM(full_table_scan);
+    DEF_SQL_STAT_ITEM(error_count);
   #undef DEF_SQL_STAT_ITEM
 };
 

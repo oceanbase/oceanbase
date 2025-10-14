@@ -391,6 +391,38 @@ int ObAllVirtualSqlStat::fill_row(
         cells[cell_idx].set_int(sql_stat_record->get_plan_cache_hit_delta());
         break;
       }
+      case MUTI_QUERY_TOTAL: {
+        cells[cell_idx].set_int(sql_stat_record->get_muti_query_total());
+        break;
+      }
+      case MUTI_QUERY_DELTA: {
+        cells[cell_idx].set_int(sql_stat_record->get_muti_query_delta());
+        break;
+      }
+      case MUTI_QUERY_BATCH_TOTAL: {
+        cells[cell_idx].set_int(sql_stat_record->get_muti_query_batch_total());
+        break;
+      }
+      case MUTI_QUERY_BATCH_DELTA: {
+        cells[cell_idx].set_int(sql_stat_record->get_muti_query_batch_delta());
+        break;
+      }
+      case FULL_TABLE_SCAN_TOTAL: {
+        cells[cell_idx].set_int(sql_stat_record->get_full_table_scan_total());
+        break;
+      }
+      case FULL_TABLE_SCAN_DELTA: {
+        cells[cell_idx].set_int(sql_stat_record->get_full_table_scan_delta());
+        break;
+      }
+      case ERROR_COUNT_TOTAL: {
+        cells[cell_idx].set_int(sql_stat_record->get_error_count_total());
+        break;
+      }
+      case ERROR_COUNT_DELTA: {
+        cells[cell_idx].set_int(sql_stat_record->get_error_count_delta());
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));

@@ -77,6 +77,14 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
   if (enable_sql_stat_ && OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(spi_result_.get_result_set())) {
     sqlstat_record_.record_sqlstat_end_value();
     sqlstat_record_.set_is_plan_cache_hit(exec_ctx_.get_sql_ctx()->plan_cache_hit_);
+    sqlstat_record_.set_is_muti_query(session_info_.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+    if (OB_NOT_NULL(exec_ctx_.get_sql_ctx()) && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
+      sqlstat_record_.set_is_muti_query_batch(exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt());
+    }
+    if (OB_NOT_NULL(spi_result_.get_result_set()) && OB_NOT_NULL(spi_result_.get_result_set()->get_physical_plan())) {
+      sqlstat_record_.set_is_full_table_scan(spi_result_.get_result_set()->get_physical_plan()->contain_table_scan());
+    }
+    sqlstat_record_.set_is_failed(0 != ret && OB_ITER_END != ret);
     sqlstat_record_.move_to_sqlstat_cache(
       session_info_, exec_ctx_.get_sql_ctx()->cur_sql_, spi_result_.get_result_set()->get_physical_plan());
   }

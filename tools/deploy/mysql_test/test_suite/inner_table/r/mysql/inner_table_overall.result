@@ -341,6 +341,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 559	__all_sensitive_column_history	0	201001	1
 560	__all_sensitive_rule_privilege	0	201001	1
 561	__all_sensitive_rule_privilege_history	0	201001	1
+573	__wr_active_session_history_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -857,6 +858,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12559	__all_virtual_sensitive_rule_privilege	2	201001	1
 12560	__all_virtual_sensitive_rule_privilege_history	2	201001	1
 12571	__all_virtual_source	2	201001	1
+12576	__all_virtual_wr_active_session_history_v2	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

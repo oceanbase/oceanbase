@@ -8777,6 +8777,14 @@ ROUTE_MISS_DELTA	bigint(20)	NO
 FIRST_LOAD_TIME	timestamp(6)	YES		NULL	
 PLAN_CACHE_HIT_TOTAL	bigint(20)	NO			
 PLAN_CACHE_HIT_DELTA	bigint(20)	NO			
+MUTI_QUERY_TOTAL	bigint(20)	NO			
+MUTI_QUERY_DELTA	bigint(20)	NO			
+MUTI_QUERY_BATCH_TOTAL	bigint(20)	NO			
+MUTI_QUERY_BATCH_DELTA	bigint(20)	NO			
+FULL_TABLE_SCAN_TOTAL	bigint(20)	NO			
+FULL_TABLE_SCAN_DELTA	bigint(20)	NO			
+ERROR_COUNT_TOTAL	bigint(20)	NO			
+ERROR_COUNT_DELTA	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQLSTAT limit 1);
 cnt
 1
@@ -8843,6 +8851,14 @@ ROUTE_MISS_DELTA	bigint(20)	NO
 FIRST_LOAD_TIME	timestamp(6)	NO			
 PLAN_CACHE_HIT_TOTAL	bigint(20)	NO			
 PLAN_CACHE_HIT_DELTA	bigint(20)	NO			
+MUTI_QUERY_TOTAL	bigint(20)	NO			
+MUTI_QUERY_DELTA	bigint(20)	NO			
+MUTI_QUERY_BATCH_TOTAL	bigint(20)	NO			
+MUTI_QUERY_BATCH_DELTA	bigint(20)	NO			
+FULL_TABLE_SCAN_TOTAL	bigint(20)	NO			
+FULL_TABLE_SCAN_DELTA	bigint(20)	NO			
+ERROR_COUNT_TOTAL	bigint(20)	NO			
+ERROR_COUNT_DELTA	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQLSTAT limit 1);
 cnt
 1
@@ -8906,6 +8922,14 @@ ROUTE_MISS_DELTA	bigint(20)	NO
 FIRST_LOAD_TIME	timestamp(6)	YES		NULL	
 PLAN_CACHE_HIT_TOTAL	bigint(20)	NO			
 PLAN_CACHE_HIT_DELTA	bigint(20)	NO			
+MUTI_QUERY_TOTAL	bigint(20)	NO			
+MUTI_QUERY_DELTA	bigint(20)	NO			
+MUTI_QUERY_BATCH_TOTAL	bigint(20)	NO			
+MUTI_QUERY_BATCH_DELTA	bigint(20)	NO			
+FULL_TABLE_SCAN_TOTAL	bigint(20)	NO			
+FULL_TABLE_SCAN_DELTA	bigint(20)	NO			
+ERROR_COUNT_TOTAL	bigint(20)	NO			
+ERROR_COUNT_DELTA	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SQLSTAT limit 1);
 cnt
 1
@@ -8970,6 +8994,14 @@ ROUTE_MISS_DELTA	bigint(20)	NO
 FIRST_LOAD_TIME	timestamp(6)	YES		NULL	
 PLAN_CACHE_HIT_TOTAL	bigint(20)	NO			
 PLAN_CACHE_HIT_DELTA	bigint(20)	NO			
+MUTI_QUERY_TOTAL	bigint(20)	NO			
+MUTI_QUERY_DELTA	bigint(20)	NO			
+MUTI_QUERY_BATCH_TOTAL	bigint(20)	NO			
+MUTI_QUERY_BATCH_DELTA	bigint(20)	NO			
+FULL_TABLE_SCAN_TOTAL	bigint(20)	NO			
+FULL_TABLE_SCAN_DELTA	bigint(20)	NO			
+ERROR_COUNT_TOTAL	bigint(20)	NO			
+ERROR_COUNT_DELTA	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_WR_SQLSTAT limit 1);
 cnt
 1
