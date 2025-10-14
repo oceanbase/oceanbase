@@ -279,7 +279,7 @@ int ObFunctionTableOp::reset_udtf_ctx()
     if (OB_SUCC(ret)) {
       udtf_ctx->reset();
     }
-  } else {  // generator function
+  } else if (T_FUN_SYS_GENERATOR == MY_SPEC.value_expr_->type_) {  // generator function
     if (OB_FAIL(ObExprGeneratorFunc::reset_curr_value(*MY_SPEC.value_expr_, eval_ctx_))) {
       LOG_WARN("failed to reset curr_value", K(ret));
     }
