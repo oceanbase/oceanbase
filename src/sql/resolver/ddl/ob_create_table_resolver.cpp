@@ -3071,8 +3071,12 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                   ObColumnNameHashWrapper column_name_key(column_schema->get_column_name_str());
                   sort_item.column_name_ = column_schema->get_column_name_str();
                   sort_item.is_func_index_ = false;
-                  if (OB_FAIL(column_name_set_.set_refactored(column_name_key))) {
-                    LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                  if (OB_HASH_EXIST  == column_name_set_.exist_refactored(column_name_key)) {
+                    // do nothing
+                  } else {
+                    if (OB_FAIL(column_name_set_.set_refactored(column_name_key))) {
+                      LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                    }
                   }
                 }
               } else if (is_oracle_mode) {
