@@ -1923,7 +1923,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             if (OB_SUCC(ret) && !ObStmt::is_diagnostic_stmt(stmt_type) && lib::is_mysql_mode()) {
               ob_reset_tsi_warning_buffer();
             }
-
             OZ (inner_open(ctx,
                            allocator,
                            sql,
@@ -4079,7 +4078,9 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                         (for_update && !is_server_cursor && !is_dbms_cursor),
                                         &session_info), K(size));
           CK (OB_NOT_NULL(spi_result.get_result_set()));
-          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), orc_max_ret_rows));
+          OZ (fill_cursor(
+            spi_result.get_memory_ctx(),
+            *spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), orc_max_ret_rows));
           OZ (spi_cursor->row_store_.finish_add_row());
           if (OB_FAIL(ret)) {
           } else if (is_dbms_cursor) {
@@ -8914,6 +8915,26 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
     if (OB_SUCC(ret)) {
       new (cur_obj)ObObj(obj);
       current_addr += sizeof(ObObj);
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::fill_cursor(lib::MemoryContext entity,
+                              ObResultSet &result_set,
+                              ObSPICursor *cursor,
+                              int64_t new_query_start_time,
+                              int64_t orc_max_ret_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entity)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    WITH_CONTEXT(entity) {
+      if (OB_FAIL(fill_cursor(result_set, cursor, new_query_start_time, orc_max_ret_rows))) {
+        LOG_WARN("failed to fill cursor", K(ret));
+      }
     }
   }
   return ret;
