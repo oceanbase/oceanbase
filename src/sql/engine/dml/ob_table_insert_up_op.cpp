@@ -374,6 +374,7 @@ int ObTableInsertUpOp::inner_close()
   if (tmp_rowkey_ != nullptr) {
     ctx_.get_allocator().free(tmp_rowkey_);
     tmp_rowkey_ = nullptr;
+    tmp_shadow_rowkey_ = 0;
   }
 
   if (OB_FAIL(conflict_checker_.close())) {
@@ -423,6 +424,7 @@ int ObTableInsertUpOp::inner_rescan()
       LOG_WARN("reuse op fail", K(ret));
     } else {
       found_rows_ = 0;
+      tmp_shadow_rowkey_ = 0;
     }
   }
   return ret;
@@ -1286,13 +1288,17 @@ int ObTableInsertUpOp::do_opt_insert_up_cache(int64_t &update_row_cnt, int64_t &
           LOG_WARN("fail to get next rows from data table", K(ret));
         }
       } else {
+        bool has_null = false;
         ObConflictValue *constraint_value = nullptr;
 
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*conflict_checker_.batch_eval_ctx_);
         batch_info_guard.set_batch_size(1);
         batch_info_guard.set_batch_idx(0);
-        if (OB_FAIL(build_tmp_conflict_rowkey(*conflict_checker_.batch_eval_ctx_, constraint_key, rowkey_cst_ctdef))) {
+        if (OB_FAIL(build_tmp_conflict_rowkey(*conflict_checker_.batch_eval_ctx_, constraint_key, rowkey_cst_ctdef, has_null))) {
           LOG_WARN("fail to build constraint key", K(ret));
+        } else if (OB_UNLIKELY(has_null)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret), K(has_null), KPC(constraint_key));
         } else if (OB_ISNULL(constraint_value = const_cast<ObConflictValue*>(conflict_map_.get(*constraint_key)))) {
           // do nothing
           LOG_TRACE("lookup unexpected update row", KPC(constraint_key));
@@ -1305,10 +1311,14 @@ int ObTableInsertUpOp::do_opt_insert_up_cache(int64_t &update_row_cnt, int64_t &
   } else {
     while (OB_SUCC(ret) && OB_SUCC(conflict_checker_.get_next_row_from_data_table(result_iter, conflict_row, false))) {
       // got row
+      bool has_null = false;
       ObConflictValue *constraint_value = nullptr;
 
-      if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, constraint_key, rowkey_cst_ctdef))) {
+      if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, constraint_key, rowkey_cst_ctdef, has_null))) {
         LOG_WARN("fail to build constraint key", K(ret));
+      } else if (OB_UNLIKELY(has_null)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(has_null), KPC(constraint_key));
       } else if (OB_ISNULL(constraint_value = const_cast<ObConflictValue*>(conflict_map_.get(*constraint_key)))) {
         // must be here
         ret = OB_ERR_UNEXPECTED;
@@ -1471,6 +1481,7 @@ int ObTableInsertUpOp::build_index_table_check_exist_task()
 {
   int ret = OB_SUCCESS;
   bool duped = false;
+  bool has_null = false;
   ObChunkDatumStore::StoredRow *row = nullptr;
   ObChunkDatumStore::StoredRow *unique_rowkey = nullptr;
   ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
@@ -1540,11 +1551,11 @@ int ObTableInsertUpOp::build_index_table_check_exist_task()
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(add_new_row_to_conflict_map(row, rowkey_cst_ctdef, duped))) {
+  } else if (OB_FAIL(add_new_row_to_conflict_map(row, rowkey_cst_ctdef, duped, has_null))) {
     LOG_WARN("fail to add new row to conflict map", K(ret), KPC(row));
   } else if (duped) {
     ++ upd_rtdef.found_rows_;
-  } else {
+  } else if (!has_null) {
     // build index table lookup task
     ObDASScanOp *das_scan_op = nullptr;
     ObDASTabletLoc *tablet_loc = nullptr;
@@ -1701,6 +1712,7 @@ int ObTableInsertUpOp::build_primary_table_check_exist_task()
 {
   int ret = OB_SUCCESS;
   bool duped = false;
+  bool has_null = false;
   ObChunkDatumStore::StoredRow *row = nullptr;
   ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
   ObUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(0).upd_rtdef_;
@@ -1726,11 +1738,11 @@ int ObTableInsertUpOp::build_primary_table_check_exist_task()
                                   conflict_checker_.checker_ctdef_.data_table_rowkey_expr_.count()))) {
     // rowkey exprs are always in front of all_saved_exprs_
     LOG_WARN("fail to convert row to expr", K(ret));
-  } else if (OB_FAIL(add_new_row_to_conflict_map(row, rowkey_cst_ctdef, duped))) {
+  } else if (OB_FAIL(add_new_row_to_conflict_map(row, rowkey_cst_ctdef, duped, has_null))) {
     LOG_WARN("fail to add new row to conflict map", K(ret), KPC(row));
   } else if (duped) {
     ++ upd_rtdef.found_rows_;
-  } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task(*conflict_checker_.batch_eval_ctx_))) {
+  } else if (!has_null && OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task(*conflict_checker_.batch_eval_ctx_))) {
     LOG_WARN("fail to build das task", K(ret), KPC(row));
   }
   return ret;
@@ -2229,6 +2241,7 @@ int ObTableInsertUpOp::reset_das_env()
 int ObTableInsertUpOp::reuse()
 {
   int ret = OB_SUCCESS;
+  tmp_shadow_rowkey_ = 0;
   if (dml_rtctx_.das_ref_.has_task()) {
     if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
       LOG_WARN("close all insert das task failed", K(ret));
@@ -2477,7 +2490,10 @@ int ObTableInsertUpOp::get_opt_rowkey_cst_ctdef(ObRowkeyCstCtdef *&rowkey_info)
   return ret;
 }
 
-int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow *new_row, ObRowkeyCstCtdef *rowkey_info, bool &duped)
+int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow *new_row,
+                                                   ObRowkeyCstCtdef *rowkey_info,
+                                                   bool &duped,
+                                                   bool &has_null)
 {
   int ret = OB_SUCCESS;
   ObConflictValue *value = nullptr;
@@ -2488,14 +2504,14 @@ int ObTableInsertUpOp::add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow 
   } else if (OB_ISNULL(tmp_rowkey_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tmp_rowkey_ is null", K(ret));
-  } else if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, tmp_rowkey_, rowkey_info))) {
+  } else if (OB_FAIL(build_tmp_conflict_rowkey(eval_ctx_, tmp_rowkey_, rowkey_info, has_null))) {
     LOG_WARN("fail to build rowkey", K(ret), KPC(tmp_rowkey_), KPC(rowkey_info));
-  } else if (OB_ISNULL(value = const_cast<ObConflictValue*>(conflict_map_.get(*tmp_rowkey_)))) {
+  } else if (has_null || OB_ISNULL(value = const_cast<ObConflictValue*>(conflict_map_.get(*tmp_rowkey_)))) {
     ObRowkey *new_rowkey = nullptr;
     ObConflictValue new_value;
     new_value.current_datum_row_ = new_row;
     new_value.new_row_source_ = ObNewRowSource::FROM_INSERT;
-    if (OB_FAIL(build_conflict_rowkey(eval_ctx_, new_rowkey, rowkey_info))) {
+    if (OB_FAIL(build_conflict_rowkey(eval_ctx_, new_rowkey, rowkey_info, has_null))) {
       LOG_WARN("fail to build new_rowkey", K(ret), KPC(rowkey_info));
     } else if (OB_ISNULL(new_rowkey)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2541,9 +2557,10 @@ int ObTableInsertUpOp::post_all_check_exist_das_task(ObDASRef &das_ref)
   return ret;
 }
 
-int ObTableInsertUpOp::build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info)
+int ObTableInsertUpOp::build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info, bool &has_null)
 {
   int ret = OB_SUCCESS;
+  has_null = false;
   if (OB_ISNULL(rowkey) || OB_ISNULL(rowkey_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null", K(ret), K(rowkey), K(rowkey_info));
@@ -2571,7 +2588,17 @@ int ObTableInsertUpOp::build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *
           LOG_WARN("expr is null", K(ret), K(i));
         } else if (OB_FAIL(expr->eval(eval_ctx, datum))) {
           LOG_WARN("expr eval fail", K(ret), K(i), KPC(expr));
-        } else if (OB_ISNULL(datum) || OB_ISNULL(datum->ptr_)) {
+        } else if (OB_ISNULL(datum)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(i));
+        } else if (expr->type_ == ObItemType::T_OP_SHADOW_UK_PROJECT) {
+          datum->set_null();
+        } else if (datum->is_null()) {
+          has_null = true;
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(!datum->is_null() && datum->ptr_ == nullptr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(i));
         } else if (OB_FAIL(datum->to_obj(obj_ptr[i], col_obj_meta))) {
@@ -2590,7 +2617,7 @@ int ObTableInsertUpOp::build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *
   return ret;
 }
 
-int ObTableInsertUpOp::build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_info)
+int ObTableInsertUpOp::build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_info, bool has_null)
 {
   int ret = OB_SUCCESS;
   ObObj *objs = nullptr;
@@ -2625,16 +2652,26 @@ int ObTableInsertUpOp::build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&row
         LOG_WARN("expr is null", K(ret), K(i));
       } else if (OB_FAIL(expr->eval(eval_ctx, datum))) {
         LOG_WARN("expr eval fail", K(ret), K(i), KPC(expr));
-      } else if (OB_ISNULL(datum) || OB_ISNULL(datum->ptr_)) {
+      } else if (OB_ISNULL(datum)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(i));
+      } else if (has_null && expr->type_ == ObItemType::T_OP_SHADOW_UK_PROJECT) {
+        tmp_obj.set_meta_type(col_obj_meta);
+        tmp_obj.set_uint64(tmp_shadow_rowkey_);
+        ++ tmp_shadow_rowkey_;
+      } else if (OB_UNLIKELY(!datum->is_null() && datum->ptr_ == nullptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i));
       } else if (OB_FAIL(datum->to_obj(tmp_obj, col_obj_meta))) {
         LOG_WARN("datum to obj fail", K(ret), K(i), KPC(expr), KPC(datum));
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (col_accuracy != nullptr &&
-                 OB_FAIL(ObDASUtils::reshape_storage_value(col_obj_meta,
-                                                           *col_accuracy,
-                                                           alloc,
-                                                           tmp_obj))) {
+          OB_FAIL(ObDASUtils::reshape_storage_value(col_obj_meta,
+                                                    *col_accuracy,
+                                                    alloc,
+                                                    tmp_obj))) {
         LOG_WARN("reshape storage value failed", K(ret));
       } else if (OB_FAIL(ob_write_obj(alloc, tmp_obj, objs[i]))) {
         LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));

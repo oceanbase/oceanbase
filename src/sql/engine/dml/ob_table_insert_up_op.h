@@ -91,6 +91,7 @@ public:
       back_to_old_path_(false),
       conflict_map_(),
       tmp_rowkey_(nullptr),
+      tmp_shadow_rowkey_(0),
       conflict_mem_ctx_(),
       das_index_scan_rtdef_(nullptr),
       // opt_batch_info_guard_(eval_ctx_),
@@ -263,7 +264,7 @@ private:
 
   int mock_hidden_pk(ObExpr *auto_inc_expr);
 
-  int add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow *new_row, ObRowkeyCstCtdef *rowkey_info, bool &duped);
+  int add_new_row_to_conflict_map(ObChunkDatumStore::StoredRow *new_row, ObRowkeyCstCtdef *rowkey_info, bool &duped, bool &has_null);
 
   int build_primary_table_lookup_task();
 
@@ -271,9 +272,9 @@ private:
 
   int build_index_table_check_exist_task();
 
-  int build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info);
+  int build_tmp_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *rowkey, ObRowkeyCstCtdef *rowkey_info, bool &has_null);
 
-  int build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_info);
+  int build_conflict_rowkey(ObEvalCtx &eval_ctx, ObRowkey *&rowkey, ObRowkeyCstCtdef *rowkey_info, bool has_null);
 
   int post_all_check_exist_das_task(ObDASRef &das_ref);
 
@@ -293,6 +294,7 @@ protected:
   bool back_to_old_path_;
   ObConflictRowMap conflict_map_;        // for opt path
   ObRowkey *tmp_rowkey_;                 // for opt path
+  uint64_t tmp_shadow_rowkey_;           // for opt path
   lib::MemoryContext conflict_mem_ctx_;  // for opt path
   ObDASScanRtDef *das_index_scan_rtdef_; // for opt path
   common::ObArrayWrap<ObInsertUpRtDef> insert_up_rtdefs_;
