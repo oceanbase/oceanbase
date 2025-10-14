@@ -220,7 +220,8 @@ int ObTextBMWIter::do_total_doc_cnt()
 
   if (OB_SUCC(ret)) {
     int64_t total_doc_cnt = 0;
-    if (is_valid_format(total_doc_cnt_expr_->get_format(*iter_param_->eval_ctx_))) {
+    if (total_doc_cnt_expr_->enable_rich_format()
+        && is_valid_format(total_doc_cnt_expr_->get_format(*iter_param_->eval_ctx_))) {
       total_doc_cnt = total_doc_cnt_expr_->get_vector(*iter_param_->eval_ctx_)->get_int(0);
     } else {
       total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_).get_int();
