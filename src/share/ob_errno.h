@@ -2051,6 +2051,7 @@ constexpr int OB_AI_FUNC_PARAM_TYPE_INVALID = -11117;
 constexpr int OB_AI_FUNC_MODEL_NOT_FOUND = -11118;
 constexpr int OB_AI_FUNC_MODEL_EXISTS = -11119;
 constexpr int OB_ERROR_DURING_COMMIT = -11120;
+constexpr int OB_ERR_TABLE_SNAPSHOT_NOT_EXIST = -11121;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4555,6 +4556,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_AI_FUNC_MODEL_NOT_FOUND__USER_ERROR_MSG "This ai model \'%.*s\' not found in the tenant"
 #define OB_AI_FUNC_MODEL_EXISTS__USER_ERROR_MSG "This ai model \'%.*s\' is already exists"
 #define OB_ERROR_DURING_COMMIT__USER_ERROR_MSG "Got error during COMMIT: %s"
+#define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Table snapshot '%.*s' does not exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9552,6 +9554,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_AI_FUNC_MODEL_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11119, This ai model \'%.*s\' is already exists"
 #define OB_ERROR_DURING_COMMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11120, Got error during COMMIT: %s"
 #define OB_ERROR_DURING_COMMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11120, Got error during COMMIT: %s"
+#define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11121, Table snapshot '%.*s' does not exist"
+#define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11121, Table snapshot '%.*s' does not exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9571,7 +9575,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2500];
+extern int g_all_ob_errnos[2501];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
