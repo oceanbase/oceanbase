@@ -1787,7 +1787,12 @@ int ObDDLUtil::get_data_format_version(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), KP(result));
       } else if (OB_FAIL(result->next())) {
-        LOG_WARN("get next row failed", K(ret));
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row failed", K(ret), K(task_id));
+        } else {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("ddl task record not exist", K(ret), K(task_id));
+        }
       } else {
         int64_t pos = 0;
         int cur_task_status = 0;
