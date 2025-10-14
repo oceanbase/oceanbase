@@ -948,6 +948,12 @@ public:
                         bool is_dynamic_sql = false);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
+  static int fill_cursor(lib::MemoryContext entity,
+                         ObResultSet &result_set,
+                         ObSPICursor *cursor,
+                         int64_t new_query_start_time,
+                         bool &is_iter_end,
+                         int64_t orc_max_ret_rows = INT64_MAX);
   static int fill_cursor(ObResultSet &result_set,
                          ObSPICursor *cursor,
                          int64_t new_query_start_time,
