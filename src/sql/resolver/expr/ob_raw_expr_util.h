@@ -1372,6 +1372,7 @@ public:
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
+  static bool is_invalid_type_for_compare(const ObRawExprResType &type);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

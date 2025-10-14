@@ -1937,8 +1937,8 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
         LOG_WARN("invalid expr", K(ret));
       } else if (!child_expr->is_const_expr()) {
         // do nothing
-      } else if (child_expr->get_result_type().is_ext() ||
-                 real_parent_expr->get_result_type().is_ext()) {
+      } else if (ObRawExprUtils::is_invalid_type_for_compare(child_expr->get_result_type()) ||
+                 ObRawExprUtils::is_invalid_type_for_compare(real_parent_expr->get_result_type())) {
         // OP_EQ between udt not supported
       } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(
                            ctx_, child_stmt, child_expr, NULLABLE_SCOPE::NS_TOP, is_not_null))) {

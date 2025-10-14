@@ -3048,11 +3048,7 @@ int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null expr", K(ret), K(select_items.at(i)));
       } else {
-        has_lob = ObLongTextType == select_expr->get_data_type() ||
-                  ObLobType == select_expr->get_data_type() ||
-                  (is_oracle_mode() && ObJsonType == select_expr->get_data_type()) ||
-                  ObRoaringBitmapType == select_expr->get_data_type() ||
-                  ObCollectionSQLType == select_expr->get_data_type();
+        has_lob = ObRawExprUtils::is_invalid_type_for_compare(select_expr->get_result_type());
       }
     }
   } else if (!stmt.is_update_stmt() && !stmt.is_delete_stmt()) {
@@ -3066,11 +3062,7 @@ int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null expr", K(ret), K(column_items.at(i)));
       } else {
-        has_lob = ObLongTextType == column_expr->get_data_type() ||
-                  ObLobType == column_expr->get_data_type() ||
-                  (is_oracle_mode() && ObJsonType == column_expr->get_data_type()) ||
-                  ObRoaringBitmapType == column_expr->get_data_type() ||
-                  ObCollectionSQLType == column_expr->get_data_type();
+        has_lob = ObRawExprUtils::is_invalid_type_for_compare(column_expr->get_result_type());
       }
     }
   }
