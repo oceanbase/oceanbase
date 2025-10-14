@@ -20,11 +20,11 @@ devdeps-libaio-0.3.112-42024092715.al8.x86_64.rpm
 devdeps-relaxed-rapidjson-1.0.0-132024092715.al8.x86_64.rpm
 devdeps-openssl-static-1.1.1u-132024092718.al8.x86_64.rpm
 devdeps-libxml2-2.10.4-52024102517.al8.x86_64.rpm
-devdeps-mxml-2.12.0-52024092715.al8.x86_64.rpm
+devdeps-mxml-3.3.1-22025092517.al8.x86_64.rpm
 devdeps-apr-1.6.5-342024100911.al8.x86_64.rpm
 devdeps-xz-5.2.2-112024092715.al8.x86_64.rpm
 devdeps-lua-5.4.3-162024092718.al8.x86_64.rpm
-devdeps-oss-c-sdk-3.11.2-42024100915.al8.x86_64.rpm
+devdeps-oss-c-sdk-3.11.2-142025100915.al8.x86_64.rpm
 devdeps-zlib-static-1.2.13-82024102414.al8.x86_64.rpm
 devdeps-ncurses-static-6.2-112024092810.al8.x86_64.rpm
 devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
