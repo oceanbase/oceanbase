@@ -3411,7 +3411,7 @@ int ObTableSqlService::gen_table_dml(
         "when tenant's data version is below 4.3.5.1", KP(ret), K(table));
   } else if (data_version < DATA_VERSION_4_3_4_0 &&
       (table.get_part_option().get_auto_part() == true ||
-       table.get_part_option().get_auto_part_size() >= ObPartitionOption::get_min_auto_part_size())) {
+       table.get_part_option().get_auto_part_size() >= ObPartitionOption::MIN_AUTO_PART_SIZE)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("auto partition is not supported "
         "when tenant's data version is below 4.4.0.0", KR(ret), K(table));
@@ -3533,7 +3533,7 @@ int ObTableSqlService::gen_partition_option_dml(const ObTableSchema &table, ObDM
              K(table));
   } else if (data_version < DATA_VERSION_4_3_4_0 &&
                (table.get_part_option().get_auto_part() == true ||
-                table.get_part_option().get_auto_part_size() >= ObPartitionOption::get_min_auto_part_size())) {
+                table.get_part_option().get_auto_part_size() >= ObPartitionOption::MIN_AUTO_PART_SIZE)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("auto partition is not supported "
              "when tenant's data version is below 4.4.0.0", KR(ret), K(table));

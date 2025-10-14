@@ -2473,21 +2473,21 @@ public:
   int64_t get_convert_size() const ;
   virtual bool is_valid() const;
   inline bool is_valid_auto_part_size() const {
-    return auto_part_size_ >= get_min_auto_part_size();
+    return auto_part_size_ >= MIN_AUTO_PART_SIZE;
   }
   void assign_auto_partition_attr(const ObPartitionOption & src);
   int enable_auto_partition(const int64_t auto_part_size);
   int enable_auto_partition(const int64_t auto_part_size, const ObPartitionFuncType part_func_type);
   void forbid_auto_partition(const bool is_partitioned_table);
-  bool is_enable_auto_part() const { return auto_part_ &&  auto_part_size_ >= get_min_auto_part_size(); }
-  static int64_t get_min_auto_part_size() { return EVENT_CALL(common::EventTable::EN_AUTO_SPLIT_TABLET_SIZE) ? 1 : MIN_AUTO_PART_SIZE; }
+  bool is_enable_auto_part() const { return auto_part_ &&  auto_part_size_ >= MIN_AUTO_PART_SIZE; }
   TO_STRING_KV(K_(part_func_type), K_(part_func_expr), K_(part_num),
                K_(auto_part), K_(auto_part_size));
 private:
   int enable_auto_partition_(const int64_t auto_part_size);
 
 public:
-  static const int64_t MIN_AUTO_PART_SIZE = 128LL * 1024 * 1024; // 128M
+  static const int64_t MIN_AUTO_PART_SIZE = 1LL; // 1
+  static const int64_t MIN_AUTO_PART_SIZE_BY_USER = 128LL * 1024 * 1024; // 128M
 
 private:
   ObPartitionFuncType part_func_type_;
