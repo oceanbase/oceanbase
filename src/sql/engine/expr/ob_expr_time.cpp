@@ -284,14 +284,14 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         int idx = ot.parts_[type] - 1;
         if (0 <= idx  && idx < 7) {
           if (OB_FAIL(session->get_locale_name(locale_name))) {
-              LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
+              LOG_WARN("failed to get locale time name", K(expr));
           } else {
             OB_LOCALE *ob_cur_locale = ob_locale_by_name(locale_name);
             OB_LOCALE_TYPE *locale_type = ob_cur_locale->day_names_;
             const char ** locale_daynames = locale_type->type_names_;
             const ObString &name = locale_daynames[idx];
             if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, name))) {
-              LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(expr_datum), K(name));
+              LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(name));
             }
           }
         } else {
@@ -306,14 +306,14 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         int idx = ot.parts_[type] - 1;
         if(0 <= idx  && idx < 12) {
           if (OB_FAIL(session->get_locale_name(locale_name))) {
-              LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
+              LOG_WARN("failed to get locale time name", K(expr));
           } else {
             OB_LOCALE *ob_cur_locale = ob_locale_by_name(locale_name);
             OB_LOCALE_TYPE *locale_type = ob_cur_locale->month_names_;
             const char ** locale_monthnames = locale_type->type_names_;
             const ObString &month_name = locale_monthnames[idx];
             if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, month_name))) {
-              LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(expr_datum), K(month_name));
+              LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(month_name));
             }
           }          
         } else {
