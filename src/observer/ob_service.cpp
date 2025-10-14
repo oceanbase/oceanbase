@@ -2260,13 +2260,23 @@ int ObService::trigger_tenant_config(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(ret));
   } else {
+    common::ObSEArray<std::pair<uint64_t, int64_t>, 10> versions;
+    std::pair<uint64_t, int64_t> pair;
     // ignore ret in for condition
     for (int64_t i = 0; i < wms_in_sync_arg.tenant_config_version_.count(); ++i) {
       const uint64_t tenant_id = wms_in_sync_arg.tenant_config_version_.at(i).first;
       const int64_t version = wms_in_sync_arg.tenant_config_version_.at(i).second;
       OTC_MGR.add_tenant_config(tenant_id); // ignore ret
-      OTC_MGR.got_version(tenant_id, version); // ignore ret
+      pair.first = tenant_id;
+      pair.second = version;
+      if (OB_FAIL(versions.push_back(pair))) {
+        LOG_WARN("push back tenant config fail",
+                "tenant_id", pair.first, "version", pair.second, K(ret));
+        OTC_MGR.got_version(tenant_id, version); // ignore ret
+        ret = OB_SUCCESS;
+      }
     }
+    OTC_MGR.got_versions(versions); // ignore ret
   }
   return ret;
 }

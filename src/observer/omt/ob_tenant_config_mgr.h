@@ -107,6 +107,31 @@ class ObTenantConfigMgr
 {
   friend class ObTenantConfig;
 public:
+  class TenantConfigUpdateTask : public common::ObTimerTask
+  {
+  public:
+    TenantConfigUpdateTask() : config_mgr_(nullptr),
+                               scheduled_time_(0),
+                               update_local_(false),
+                               running_task_count_(0) {}
+    int init(ObTenantConfigMgr *config_mgr)
+    {
+      config_mgr_ = config_mgr;
+      return common::OB_SUCCESS;
+    }
+    virtual ~TenantConfigUpdateTask() {}
+    TenantConfigUpdateTask(const TenantConfigUpdateTask &) = delete;
+    TenantConfigUpdateTask &operator=(const TenantConfigUpdateTask &) = delete;
+    void update_local_configs(const common::ObIArray<std::pair<uint64_t, ObTenantConfig*>> &configs, bool &need_retry);
+    void dump_and_publish_configs(const common::ObIArray<std::pair<uint64_t, ObTenantConfig*>> &configs, bool &need_retry);
+    int schedule();
+    void runTimerTask(void) override;
+    ObTenantConfigMgr *config_mgr_;
+    volatile int64_t scheduled_time_;
+    bool update_local_;
+    volatile int64_t running_task_count_;
+  };
+public:
   static ObTenantConfigMgr &get_instance();
   virtual ~ObTenantConfigMgr();
   ObTenantConfigMgr(const ObTenantConfigMgr &config) = delete;
@@ -150,14 +175,13 @@ public:
   int get_all_tenant_id(common::ObArray<ObTenantID> &tenant_ids);
   int got_versions(const common::ObIArray<std::pair<uint64_t, int64_t> > &versions);
   int got_version(uint64_t tenant_id, int64_t version, const bool remove_repeat = true);
-  int update_local(uint64_t tenant_id, int64_t expected_version);
+  int update_local(uint64_t tenant_id, ObTenantConfig *config, int64_t expected_version);
   void notify_tenant_config_changed(uint64_t tenatn_id);
   int add_config_to_existing_tenant(const char *config_str);
   int add_extra_config(const obrpc::ObTenantConfigArg &arg);
-  int schedule(ObTenantConfig::TenantConfigUpdateTask &task, const int64_t delay);
-  int cancel(const ObTenantConfig::TenantConfigUpdateTask &task);
-  int wait(const ObTenantConfig::TenantConfigUpdateTask &task, const int64_t abs_timeout_us);
+  int schedule(ObTenantConfigMgr::TenantConfigUpdateTask &task, const int64_t delay);
   bool inited() { return inited_; }
+  const TenantConfigUpdateTask &get_update_task() const { return update_task_; }
 
   static uint64_t default_fallback_tenant_id()
   {
@@ -189,6 +213,7 @@ private:
   common::ObConfigManager *sys_config_mgr_;
   bool version_has_refreshed_;
   UpdateTenantConfigCb update_tenant_config_cb_;
+  TenantConfigUpdateTask update_task_;
   // reload cb
 
 };
