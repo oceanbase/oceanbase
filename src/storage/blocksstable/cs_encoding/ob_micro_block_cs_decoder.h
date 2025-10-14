@@ -114,7 +114,6 @@ protected:
 
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
-  ObMicroBlockAddr block_addr_;
   int64_t request_cnt_;  // request column count
   const ObBlockCachedCSDecoderHeader *cached_decoder_;
   ObColumnCSDecoder *decoders_;

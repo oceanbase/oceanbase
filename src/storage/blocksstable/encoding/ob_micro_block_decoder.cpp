@@ -214,7 +214,7 @@ int new_decoder_with_allocated_buf(char *buf,
 ObNoneExistColumnDecoder ObIEncodeBlockReader::none_exist_column_decoder_;
 ObColumnDecoderCtx ObIEncodeBlockReader::none_exist_column_decoder_ctx_;
 ObIEncodeBlockReader::ObIEncodeBlockReader()
-  : block_addr_(), request_cnt_(0),
+  : request_cnt_(0),
     header_(NULL), col_header_(NULL), cached_decoder_(NULL), meta_data_(NULL), row_data_(NULL),
     var_row_index_(), fix_row_index_(), row_index_(&var_row_index_),
     decoders_(nullptr),
@@ -569,7 +569,6 @@ int ObEncodeBlockGetReader::init_by_read_info(
       row_count_ = header_->row_count_;
       original_data_length_ = header_->original_length_;
       read_info_ = &read_info;
-      block_addr_ = block_addr;
     }
   }
   return ret;
@@ -580,14 +579,9 @@ int ObEncodeBlockGetReader::init_if_need(const ObMicroBlockAddr &block_addr,
                                          const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
-  if (header == header_ && block_addr == block_addr_ && read_info_ == &read_info) {
-    // skip init
-  } else {
-    reuse();
-    if (OB_FAIL(init_by_read_info(block_addr, block_data, read_info))) {
-      LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
-    }
+  reuse();
+  if (OB_FAIL(init_by_read_info(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   }
   return ret;
 }

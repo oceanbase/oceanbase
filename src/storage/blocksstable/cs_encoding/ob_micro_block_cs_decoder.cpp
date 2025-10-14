@@ -175,7 +175,7 @@ ObNoneExistColumnCSDecoder ObICSEncodeBlockReader::none_exist_column_decoder_;
 ObColumnCSDecoderCtx ObICSEncodeBlockReader::none_exist_column_decoder_ctx_;
 
 ObICSEncodeBlockReader::ObICSEncodeBlockReader()
-  : block_addr_(), request_cnt_(0), cached_decoder_(NULL), decoders_(nullptr),
+  : request_cnt_(0), cached_decoder_(NULL), decoders_(nullptr),
     transform_helper_(), column_count_(0), default_decoders_(),
     ctxs_(NULL),
     decoder_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), common::ObModIds::OB_DECODER_CTX)), OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -436,7 +436,6 @@ int ObCSEncodeBlockGetReader::init(
     if (OB_FAIL(do_init(block_data, request_cnt))) {
       LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
     } else {
-      block_addr_ = block_addr;
       read_info_ = &read_info;
     }
   }
@@ -449,16 +448,9 @@ int ObCSEncodeBlockGetReader::init_if_need(const ObMicroBlockAddr &block_addr,
                                           const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
-  const ObMicroBlockHeader *curr_header = transform_helper_.get_micro_block_header();
-
-  if (header == curr_header && block_addr == block_addr_ && read_info_ == &read_info) {
-    // skip init
-  } else {
-    reuse();
-    if (OB_FAIL(init(block_addr, block_data, read_info))) {
-      LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
-    }
+  reuse();
+  if (OB_FAIL(init(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
   }
   return ret;
 }
