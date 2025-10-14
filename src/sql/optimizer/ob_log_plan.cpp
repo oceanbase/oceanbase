@@ -2152,6 +2152,10 @@ int ObLogPlan::pushdown_semi_conditions(SemiInfo *info,
         if (OB_FAIL(push_back_join_cond_if_needed(semi_conds, qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
+      } else if (!qual->is_deterministic()) {
+        if (OB_FAIL(push_back_join_cond_if_needed(semi_conds, qual))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
       } else if (qual->get_relation_ids().is_subset(right_rel_ids)) {
         if (OB_FAIL(right_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
