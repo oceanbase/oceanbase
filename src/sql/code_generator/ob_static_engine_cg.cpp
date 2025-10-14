@@ -4231,7 +4231,8 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
           }
         }
         if (OB_SUCC(ret)) {
-          spec.rf_max_wait_time_ms_ = op.get_rf_max_wait_time();
+          spec.rf_max_wait_time_ms_ = 10;//for compaction, at least 10ms
+          spec.basic_table_row_count_ = op.get_basic_table_row_count();
         }
       }
     }

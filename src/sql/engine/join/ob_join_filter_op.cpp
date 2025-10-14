@@ -75,7 +75,8 @@ OB_SERIALIZE_MEMBER((ObJoinFilterSpec, ObOpSpec),
                     hash_join_is_ns_equal_cond_,
                     rf_max_wait_time_ms_, // FARM COMPAT WHITELIST
                     use_ndv_runtime_bloom_filter_size_, // FARM COMPAT WHITELIST
-                    enable_runtime_filter_adaptive_apply_
+                    enable_runtime_filter_adaptive_apply_,
+                    basic_table_row_count_
                     );
 
 OB_SERIALIZE_MEMBER(ObJoinFilterOpInput,
@@ -199,14 +200,6 @@ int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExe
     config_.bf_piece_size_ = spec.send_bloom_filter_size_ * 128;
   }
   config_.each_group_size_ = spec.each_group_size_;
-  int64_t sess_wait_time_ms = ctx.get_my_session()->get_runtime_filter_wait_time_ms();
-  if (sess_wait_time_ms != 0) {
-    config_.runtime_filter_wait_time_ms_ = sess_wait_time_ms;
-  } else {
-    // use adaptive max wait time if session variable is 0
-    int64_t sqc_count = ctx.get_sqc_handler()->get_sqc_init_arg().sqc_.get_sqc_count();
-    config_.runtime_filter_wait_time_ms_ = spec.rf_max_wait_time_ms_ / sqc_count;
-  }
 
   config_.runtime_filter_max_in_num_ = ctx.get_my_session()->
       get_runtime_filter_max_in_num();
@@ -217,6 +210,29 @@ int ObJoinFilterOpInput::load_runtime_config(const ObJoinFilterSpec &spec, ObExe
   config_.build_send_opt_ =
       (spec.get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_5_0
        && spec.use_realistic_runtime_bloom_filter_size() && JF_BS_OPT == OB_SUCCESS);
+
+  int64_t sess_wait_time_ms = ctx.get_my_session()->get_runtime_filter_wait_time_ms();
+  if (MY_SPEC.is_create_mode()) {
+  } else if (sess_wait_time_ms != 0) {
+    config_.runtime_filter_wait_time_ms_ = sess_wait_time_ms;
+  } else {
+    // use adaptive max wait time if session variable is 0
+    int64_t row_count = 0;
+    if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(&ctx, MY_SPEC.px_est_size_factor_,
+                                                  MY_SPEC.basic_table_row_count_, row_count))) {
+      LOG_WARN("failed to get px size", K(ret));
+    } else {
+      int64_t total_size = row_count * spec_.width_;
+      // Assuming a 16-core CPU can achieve the NIC's max speed, each thread's max speed is 64MB/s.
+      static constexpr int64_t network_speed = 64 * 1000L;
+      static constexpr int64_t wait_time_lower_limit = 10; // at least 10ms
+      static constexpr int64_t wait_time_upper_limit = INT64_MAX >> 10; // in case of overflow
+      config_.runtime_filter_wait_time_ms_ =
+          std::min(wait_time_upper_limit, std::max(wait_time_lower_limit, total_size / network_speed));
+      LOG_TRACE("calc rf wait time", K(MY_SPEC.basic_table_row_count_), K(row_count),
+                K(spec_.width_), K(config_.runtime_filter_wait_time_ms_));
+    }
+  }
 
   LOG_TRACE("load runtime filter config", K(spec.get_id()), K(config_));
   return ret;
