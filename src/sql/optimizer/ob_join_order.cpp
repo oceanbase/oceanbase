@@ -8878,7 +8878,21 @@ int JoinPath::compute_join_path_ordering()
                             join_dist_algo_ == DIST_ALL_NONE;
         }
       }
-    } else { /*do nothing*/ }
+    } else if (RIGHT_OUTER_JOIN == join_type_) {
+      int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
+      if (OB_FAIL(append(ordering_, right_sort_keys_))) {
+        LOG_WARN("failed to append join ordering", K(ret));
+      } else if (OB_FAIL(parent_->check_all_interesting_order(get_ordering(),
+                                                              parent_->get_plan()->get_stmt(),
+                                                              interesting_order_info))) {
+        LOG_WARN("failed to check all interesting order", K(ret));
+      } else {
+        add_interesting_order_flag(interesting_order_info);
+        is_local_order_ = is_fully_partition_wise() || 
+                          join_dist_algo_ == DIST_NONE_ALL ||
+                          join_dist_algo_ == DIST_ALL_NONE;
+      }
+    }
   } else if (JoinAlgo::NESTED_LOOP_JOIN == join_algo_ && !left_path_->ordering_.empty()
              && CONNECT_BY_JOIN != join_type_) {
     set_interesting_order_info(left_path_->get_interesting_order_info());
