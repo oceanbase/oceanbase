@@ -2945,6 +2945,7 @@ typedef enum ObItemType
   T_FUN_ES_SCORE = 4913, // fulltext index for ES SQL
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_HYBRID_SEARCH_EXPRESSION = 4915,
+  T_DEFAULT_CATALOG = 4917, // for hive metastore side default catalog
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -278,6 +278,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"dynamic", DYNAMIC},
   {"dynamic_partition_policy", DYNAMIC_PARTITION_POLICY},
   {"default_tablegroup", DEFAULT_TABLEGROUP},
+  {"default_catalog", DEFAULT_CATALOG},
   {"each", EACH},
   {"effective", EFFECTIVE},
   {"empty", EMPTY},
