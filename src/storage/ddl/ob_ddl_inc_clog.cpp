@@ -163,7 +163,7 @@ int ObDDLIncStartLog::deserialize(const char *buf, const int64_t data_len, int64
 }
 
 ObDDLIncCommitLog::ObDDLIncCommitLog()
-  : log_basic_()
+  : log_basic_(), is_rollback_(false)
 {
 }
 
@@ -180,7 +180,7 @@ int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLIncCommitLog, log_basic_);
+OB_SERIALIZE_MEMBER(ObDDLIncCommitLog, log_basic_, is_rollback_);
 
 } // namespace storage
 } // namespace oceanbase
