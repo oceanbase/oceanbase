@@ -272,7 +272,7 @@ void ObPLObjectKey::reset()
   db_id_ = common::OB_INVALID_ID;
   key_id_ = common::OB_INVALID_ID;
   sessid_ = 0;
-  mode_ = ObjectMode::NORMAL;
+  mode_ = static_cast<uint64_t>(ObjectMode::NORMAL);
   name_.reset();
   namespace_ = ObLibCacheNameSpace::NS_INVALID;
   sys_vars_str_.reset();
@@ -311,7 +311,7 @@ uint64_t ObPLObjectKey::hash() const
   uint64_t hash_ret = murmurhash(&db_id_, sizeof(uint64_t), 0);
   hash_ret = murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
   hash_ret = murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
-  hash_ret = murmurhash(&mode_, sizeof(mode_), hash_ret);
+  hash_ret = murmurhash(&mode_, sizeof(uint64_t), hash_ret);
   hash_ret = name_.hash(hash_ret);
   hash_ret = murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
   hash_ret = sys_vars_str_.hash(hash_ret);

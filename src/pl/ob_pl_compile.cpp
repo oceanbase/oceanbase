@@ -563,10 +563,9 @@ int ObPLCompiler::compile(
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                && func_ast.get_can_cached()
                                && !func_ast.has_incomplete_rt_dep_error()
-                               && !cg.get_debug_mode()
-                               && !cg.get_profile_mode()
                                && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
       FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
+      OZ (routine_storage.mask_special_compile_mode(session_info_));
       OZ (cg.init());
       OZ (read_dll_from_disk(enable_persistent, routine_storage, func_ast, cg, routine, func, op));
       if (OB_SUCC(ret) && 0 == func.get_action()) { // not in disk
@@ -839,16 +838,8 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
                                         package.get_id(),
                                         get_tenant_id_by_object_id(package.get_id()));
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
-      bool exist_same_name_obj_with_public_synonym = false;
-      OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_, 
-                                                                            package_ast.get_dependency_table(), 
-                                                                            exist_same_name_obj_with_public_synonym,
-                                                                            session_info_));
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
-                                 && package_ast.get_can_cached()
-                                 && session_info_.get_pl_profiler() == nullptr
-                                 && !exist_same_name_obj_with_public_synonym
-                                 && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID);
+                                 && package_ast.get_can_cached();
       FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));

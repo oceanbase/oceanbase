@@ -102,7 +102,8 @@ public:
     arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
     allocator_(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), GET_PL_MOD_STRING(OB_PL_JIT))),
-    tenant_id_belongs_(OB_INVALID_ID)
+    tenant_id_belongs_(OB_INVALID_ID),
+    special_compile_mode_(0)
   {}
   ObRoutinePersistentInfo(uint64_t tenant_id,
                       uint64_t database_id,
@@ -119,7 +120,8 @@ public:
     arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
     allocator_(ObMemAttr(tenant_id_, GET_PL_MOD_STRING(OB_PL_JIT))),
-    tenant_id_belongs_(tenant_id_belongs)
+    tenant_id_belongs_(tenant_id_belongs),
+    special_compile_mode_(0)
   {}
 
   int64_t get_head_size() { return 1 + 1 + 2 + 2;/* 8bit flags + 8bit level + 8bit id + 8bit nums*/ }
@@ -156,7 +158,8 @@ public:
   static int check_dep_schema(ObSchemaGetterGuard &schema_guard,
                               const DependencyTable &dep_schema_objs,
                               int64_t merge_version,
-                              bool &match);
+                              bool &match,
+                              bool is_check_package_state = false);
 
   int read_dll_from_disk(ObSQLSessionInfo *session_info,
                           schema::ObSchemaGetterGuard &schema_guard,
@@ -176,6 +179,8 @@ public:
                             ObPLCompileUnit &unit,
                             const ObRoutinePersistentInfo::ObPLOperation op);
 
+  int mask_special_compile_mode(ObSQLSessionInfo &session_info);                          
+
   static int has_same_name_dependency_with_public_synonym(
                             schema::ObSchemaGetterGuard &schema_guard,
                             const ObPLDependencyTable &dep_schema_objs,
@@ -194,16 +199,21 @@ public:
   static int encode_pl_extra_info(char *buf, 
                                const int64_t len,
                                int64_t &pos,
-                               const sql::DependenyTableStore &dep_table);
+                               const sql::DependenyTableStore &dep_table,
+                               schema::ObSchemaGetterGuard &schema_guard);
 
   static int decode_and_check_extra_info(char *buf,
                                          const int64_t len,
                                          const ObPLDependencyTable &dep_table,
-                                         bool &match);
+                                         bool &match,
+                                         schema::ObSchemaGetterGuard &schema_guard);
                                        
   template<typename DependencyTable>                                     
   static int get_pl_extra_info(const DependencyTable &dep_table, 
-                               ObPLExtraInfo& extra_info);                                   
+                               ObPLExtraInfo& extra_info,
+                               schema::ObSchemaGetterGuard &schema_guard);       
+  static bool is_extra_info_column_exist(const uint64_t data_version);
+  static bool is_stack_size_column_exist(const uint64_t data_version);
   
 private:
   uint64_t tenant_id_;
@@ -214,6 +224,7 @@ private:
 
   ObArenaAllocator allocator_;
   uint64_t tenant_id_belongs_;
+  uint64_t special_compile_mode_;
 };
 
 }
