@@ -349,6 +349,13 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_restart_read_super_blk_error)
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+
+  persist_meta_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  blk_ckpt_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
+
   const uint64_t tenant_id = MTL_ID();
   const int64_t write_blk_cnt = blk_cnt_info.data_blk_.free_blk_cnt() / 2;
   const int64_t micro_size = 15 * 1024;
@@ -375,12 +382,10 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_restart_read_super_blk_error)
   }
 
   // 2. execute blk_ckpt and micro_ckpt
-  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
 
-  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
   persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());

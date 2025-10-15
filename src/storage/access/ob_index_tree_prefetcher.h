@@ -26,6 +26,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
 #endif
 
 namespace oceanbase {
@@ -849,6 +850,7 @@ protected:
       int ret = OB_SUCCESS;
       bool is_exist = false;
       ObTenantFileManager *tnt_file_manager = nullptr;
+      ObSSMemMacroCache *mem_macro_cache = nullptr;
       ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
       if (!GCTX.is_shared_storage_mode()) {
         // do nothing
@@ -856,10 +858,15 @@ protected:
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "get unexpected invalid macro id", K(ret), K(macro_id));
       } else if (OB_ISNULL(tnt_file_manager = MTL(ObTenantFileManager *)) ||
-                 OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+                 OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *)) ||
+                 OB_ISNULL(mem_macro_cache = MTL(ObSSMemMacroCache *))) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "tenant file manager or macro cache mgr is null", KR(ret), K(macro_id),
-                    KP(tnt_file_manager), KP(macro_cache_mgr));
+        STORAGE_LOG(WARN, "tnt_file_mgr/mem_macro_cache/macro_cache_mgr is null", KR(ret), K(macro_id),
+                    KP(tnt_file_manager), KP(mem_macro_cache), KP(macro_cache_mgr));
+      } else if (OB_FAIL(mem_macro_cache->check_exist(macro_id, is_exist))) {
+        STORAGE_LOG(WARN, "fail to check if exist", KR(ret), K(macro_id));
+      } else if (is_exist) {
+        STORAGE_LOG(DEBUG, "already exists in mem_macro_cache, no need to prefetch", K(macro_id));
       } else if (OB_FAIL(macro_cache_mgr->exist(macro_id, is_exist))) {
         STORAGE_LOG(WARN, "fail to check if exist", KR(ret), K(macro_id));
       } else if (is_exist) {
