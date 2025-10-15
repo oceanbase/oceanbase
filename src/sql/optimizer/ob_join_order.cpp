@@ -9971,7 +9971,10 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
         } else { /*do nothing*/ }
       }
     }
-  } else if ((has_non_nl_path && !left_tree->get_is_at_most_one_row()) || path_info.force_inner_nl_) {
+  } else if ((has_non_nl_path &&
+              !(left_tree->get_is_at_most_one_row() &&
+                CONNECT_BY_JOIN != path_info.join_type_)) ||
+             path_info.force_inner_nl_) {
     /*do nothing*/
     OPT_TRACE("ignore normal NL join");
   } else {
