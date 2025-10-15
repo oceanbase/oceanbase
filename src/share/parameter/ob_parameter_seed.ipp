@@ -926,6 +926,8 @@ DEF_CAP(_parallel_redo_logging_trigger, OB_CLUSTER_PARAMETER, "16M", "[0B,)",
 DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 100ms]",
          "get gts ahead interval. Range: [0s, 100ms]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_enable_log_replica_strict_recycle_mode, OB_CLUSTER_PARAMETER, "True", "enable log replica strict recycle mode",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_keepalive_interval, OB_TENANT_PARAMETER, "100ms", "[10ms, 10s]",
         "This configuration item is used to control the write interval of the keepalive log, "

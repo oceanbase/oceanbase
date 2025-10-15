@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/oblog/ob_log.h"
+#include "rootserver/ob_ls_service_helper.h" // ObLSServiceHelper
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_thread_mgr.h"
 #include "storage/checkpoint/ob_data_checkpoint.h"
@@ -160,11 +161,28 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
       } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
         rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
         share::SCN checkpoint_scn;
+        // When clog recycle mode is strict (which is default value), we set clog recycle
+        // point at pure_readable_scn. But pure_readable_scn can not promoted when
+        // majority of F-replicas are down, thus making clog can not be recycled
+        // In this case, we can set clog strict recycle mode to false.
+        // When clog recycle mode is not strict, we set clog recycle point at sync_scn
+        // sync_scn can promoted when majority of F-replicas are down
+        bool is_strict_clog_recycle_mode = ObServerConfig::get_instance()._ob_enable_log_replica_strict_recycle_mode;
         if (OB_ISNULL(tenant_info_loader)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tenant_info_loader is null", KR(ret), KP(tenant_info_loader));
-        } else if (OB_FAIL(tenant_info_loader->get_pure_readable_scn(checkpoint_scn))) {
-          LOG_WARN("fail to get tenant readable scn", KR(ret));
+        } else if (!is_strict_clog_recycle_mode) {
+          // not strict recycle mode, recycle clog based on sync_scn
+          if (OB_FAIL(tenant_info_loader->get_sync_scn(checkpoint_scn))) {
+            LOG_WARN("fail to get tenant sync scn", KR(ret));
+          }
+        } else {
+          // is strict recycle mode, recycle clog based on pure_readable_scn
+          if (OB_FAIL(tenant_info_loader->get_pure_readable_scn(checkpoint_scn))) {
+            LOG_WARN("fail to get tenant readable scn", KR(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ls->get_log_handler()->locate_by_scn_coarsely(checkpoint_scn, checkpoint_lsn))) {
           LOG_WARN("fail to convert scn to lsn", KR(ret), K(checkpoint_scn));
         } else if (OB_FAIL(ls->set_clog_checkpoint(checkpoint_lsn, checkpoint_scn))) {
@@ -172,8 +190,8 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
         } else if (OB_FAIL(ls->get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
           LOG_WARN("fail to advance base lsn", KR(ret), K(checkpoint_lsn));
         }
-        FLOG_INFO("[CHECKPOINT] log replica update checkpoint", KR(ret), K(ls->get_ls_id()),
-                  K(checkpoint_lsn), K(checkpoint_scn));
+        FLOG_INFO("[CHECKPOINT] log replica update checkpoint", KR(ret), "tenant_id", MTL_ID(), K(ls->get_ls_id()),
+                  K(checkpoint_lsn), K(checkpoint_scn), K(is_strict_clog_recycle_mode));
       } else {
         if (OB_ISNULL(data_checkpoint = ls->get_data_checkpoint())) {
           ret = OB_ERR_UNEXPECTED;
