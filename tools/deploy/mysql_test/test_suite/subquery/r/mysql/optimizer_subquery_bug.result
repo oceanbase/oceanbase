@@ -1243,17 +1243,17 @@ create table t1 (pk int);
 create table t2 (pk int, c1 char(20));
 EXPLAIN select (select SUM(     (select SUM(c1)      from t1)     )      from t1      ) from t2;
 Query Plan
-=====================================================
-|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
------------------------------------------------------
-|0 |SUBPLAN FILTER       |    |1       |39          |
-|1 |├─SCALAR GROUP BY    |    |1       |3           |
-|2 |│ └─TABLE FULL SCAN  |t2  |2       |3           |
-|3 |└─SCALAR GROUP BY    |    |1       |36          |
-|4 |  └─SUBPLAN FILTER   |    |1       |36          |
-|5 |    ├─TABLE FULL SCAN|t1  |1       |18          |
-|6 |    └─TABLE FULL SCAN|t1  |1       |18          |
-=====================================================
+=================================================================
+|ID|OPERATOR                         |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SUBPLAN FILTER                   |    |1       |39          |
+|1 |├─SCALAR GROUP BY                |    |1       |3           |
+|2 |│ └─TABLE FULL SCAN              |t2  |2       |3           |
+|3 |└─SCALAR GROUP BY                |    |1       |36          |
+|4 |  └─SUBPLAN FILTER               |    |1       |36          |
+|5 |    ├─DISTRIBUTED TABLE FULL SCAN|t1  |1       |18          |
+|6 |    └─DISTRIBUTED TABLE FULL SCAN|t1  |1       |18          |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([subquery(1)]), filter(nil), rowset=16
