@@ -141,5 +141,16 @@ ObGlobalContext &ObGlobalContext::operator=(const ObGlobalContext &other)
   return *this;
 }
 
+int ObGlobalContext::set_server_id(const uint64_t new_server_id, const uint64_t &origin_server_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t final_server_id = ATOMIC_CAS(&server_id_, origin_server_id, new_server_id);
+  if (final_server_id != origin_server_id) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("server_id not match", KR(ret), K(final_server_id), K(origin_server_id));
+  }
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

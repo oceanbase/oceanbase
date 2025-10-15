@@ -148,7 +148,7 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
           .timeout(timeout)
           .check_server_for_adding_server(rpc_arg, rpc_result))) {
         LOG_WARN("fail to check whether the server is empty", KR(ret), K(addr));
-      } else if (!rpc_result.get_is_server_empty()) {
+      } else if (!is_bootstrap && !rpc_result.get_is_server_empty()) {
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("adding non-empty server is not allowed", KR(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, non_empty_server_err_msg);

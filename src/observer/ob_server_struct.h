@@ -307,6 +307,7 @@ struct ObGlobalContext
   // instead of self_addr_
   const ObAddr &self_addr() const { return self_addr_seq_.get_addr(); }
   const int64_t &self_seq() const { return self_addr_seq_.get_seq(); }
+  int set_server_id(const uint64_t new_server_id, const uint64_t &origin_server_id);
 private:
   volatile int64_t server_status_;
   bool has_start_service() const { return 0 < start_service_time_; }

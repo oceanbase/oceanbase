@@ -7319,7 +7319,32 @@ OB_SERIALIZE_MEMBER((ObLabelSePolicyDDLArg, ObDDLArg), ddl_type_, schema_);
 OB_SERIALIZE_MEMBER((ObLabelSeComponentDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeLabelDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeUserLevelDDLArg, ObDDLArg), ddl_type_, level_schema_, policy_name_);
-OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_);
+OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_, server_id_);
+int ObCheckServerEmptyArg::init(const Mode mode, const uint64_t sys_data_version, const uint64_t server_id)
+{
+  mode_ = mode;
+  sys_data_version_ = sys_data_version;
+  server_id_ = server_id;
+  return OB_SUCCESS;
+}
+// for bootstrap, we set sever_id in the first rpc of check server empty. this rpc is used to set server_id
+// for add_server, to ensure max_server_id not increased when server is not empty, we need to check server empty before increase max_server_id. this rpc is used to check server empty.
+bool ObCheckServerEmptyArg::is_valid() const
+{
+  bool valid = true;
+  if (sys_data_version_ == 0 || sys_data_version_ == OB_INVALID_VERSION) {
+    valid = false;
+  } else if (mode_ == BOOTSTRAP) {
+    if (!is_valid_server_id(server_id_)) {
+      valid = false;
+    }
+  } else if (mode_ == ADD_SERVER) {
+  } else {
+    // invalid mode;
+    valid = false;
+  }
+  return valid;
+}
 OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_, server_id_);
 int ObCheckServerForAddingServerArg::init(
     const Mode &mode,

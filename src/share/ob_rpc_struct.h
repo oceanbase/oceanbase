@@ -8936,13 +8936,19 @@ public:
     ADD_SERVER
   };
 
-  ObCheckServerEmptyArg(): mode_(BOOTSTRAP), sys_data_version_(0) {}
-  ObCheckServerEmptyArg(const Mode mode,
-                        const uint64_t sys_data_version)
-    : mode_(mode), sys_data_version_(sys_data_version) {}
-  TO_STRING_KV(K_(mode), K_(sys_data_version));
+  ObCheckServerEmptyArg(): mode_(BOOTSTRAP), sys_data_version_(0), server_id_(OB_INVALID_ID) {}
+  ObCheckServerEmptyArg(const Mode mode, const uint64_t sys_data_version): mode_(mode),
+    sys_data_version_(sys_data_version), server_id_(OB_INVALID_ID) {}
+  TO_STRING_KV(K_(mode), K_(sys_data_version), K_(server_id));
+  int init(const Mode mode, const uint64_t sys_data_version, const uint64_t server_id);
+  Mode get_mode() const { return mode_; }
+  uint64_t get_sys_data_version() const { return sys_data_version_; }
+  uint64_t get_server_id() const { return server_id_; }
+  bool is_valid() const;
+private:
   Mode mode_;
   uint64_t sys_data_version_;
+  uint64_t server_id_;
 };
 struct ObCheckServerForAddingServerArg
 {

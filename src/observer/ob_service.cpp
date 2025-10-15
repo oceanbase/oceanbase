@@ -91,6 +91,7 @@
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn
+#include "src/share/ob_debug_sync.h"
 
 namespace oceanbase
 {
@@ -1477,10 +1478,8 @@ int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
                                  *gctx_.rs_rpc_proxy_);
     ObAddr master_rs;
     bool server_empty = false;
-    ObCheckServerEmptyArg new_arg;
-    new_arg.mode_ = ObCheckServerEmptyArg::BOOTSTRAP;
     if (OB_FAIL(check_server_empty(server_empty))) {
-      BOOTSTRAP_LOG(WARN, "check_server_empty failed", K(ret), K(new_arg));
+      BOOTSTRAP_LOG(WARN, "check_server_empty failed", KR(ret));
     } else if (!server_empty) {
       ret = OB_ERR_SYS;
       BOOTSTRAP_LOG(WARN, "this observer is not empty", KR(ret), K(GCTX.self_addr()));
@@ -1549,17 +1548,28 @@ int ObService::is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::B
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
     LOG_WARN("fail to get sys data version", KR(ret));
-  } else if (arg.sys_data_version_ > 0
-             && sys_data_version > arg.sys_data_version_) {
+  } else if (arg.get_sys_data_version() > 0
+             && sys_data_version > arg.get_sys_data_version()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("add server with larger sys data version is not supported",
              KR(ret), K(arg), K(sys_data_version));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
   } else {
     bool server_empty = false;
     if (OB_FAIL(check_server_empty(server_empty))) {
       LOG_WARN("check_server_empty failed", K(ret));
     } else {
       is_empty = server_empty;
+    }
+    if (OB_FAIL(ret) || !server_empty) {
+    } else if (ObCheckServerEmptyArg::BOOTSTRAP == arg.get_mode()) {
+      // for rs_list nodes, set server_id for the first time here
+      const uint64_t server_id = arg.get_server_id();
+      if (OB_FAIL(set_server_id_(server_id))) {
+        LOG_WARN("failed to set server_id", KR(ret), K(server_id));
+      }
     }
   }
   return ret;
@@ -1597,14 +1607,8 @@ int ObService::check_server_for_adding_server(
 
       if (OB_SUCC(ret) && server_empty) {
         uint64_t server_id = arg.get_server_id();
-        GCTX.server_id_ = server_id;
-        GCONF.observer_id = server_id;
-        if (OB_ISNULL(GCTX.config_mgr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("GCTX.config_mgr_ is null", KR(ret));
-        } else if (OB_FAIL(GCTX.config_mgr_->dump2file())) {
-          LOG_ERROR("fail to execute dump2file, this server cannot be added, "
-              "please clear it and try again", KR(ret));
+        if (OB_FAIL(set_server_id_(server_id))) {
+          LOG_WARN("failed to set server id", KR(ret), K(server_id));
         }
       }
       if (FAILEDx(zone.assign(GCONF.zone.str()))) {
@@ -1622,6 +1626,33 @@ int ObService::check_server_for_adding_server(
     }
   }
   FLOG_INFO("[CHECK_SERVER_EMPTY] generate result", KR(ret), K(arg), K(result));
+  return ret;
+}
+
+int ObService::set_server_id_(const int64_t server_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t gctx_server_id = GCTX.server_id_;
+  if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server_id", KR(ret), K(server_id));
+  } else if (is_valid_server_id(gctx_server_id) || is_valid_server_id(GCONF.observer_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    uint64_t server_id_in_gconf = GCONF.observer_id;
+    LOG_WARN("server_id is only expected to be set once", KR(ret),
+             K(server_id), K(gctx_server_id), K(server_id_in_gconf));
+  } else {
+    if (OB_FAIL(GCTX.set_server_id(server_id, gctx_server_id))) {
+      LOG_WARN("failed to set server_id", KR(ret), K(server_id), K(gctx_server_id), K(GCTX.server_id_));
+    } else if (FALSE_IT(GCONF.observer_id = server_id)) {
+    } else if (OB_ISNULL(GCTX.config_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.config_mgr_ is null", KR(ret));
+    } else if (OB_FAIL(GCTX.config_mgr_->dump2file())) {
+      LOG_WARN("fail to execute dump2file, this server cannot be added, "
+          "please clear it and try again", KR(ret));
+    }
+  }
   return ret;
 }
 

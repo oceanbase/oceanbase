@@ -183,9 +183,13 @@ void ObHeartBeatProcess::check_and_update_server_id_(const uint64_t server_id)
     // in upgrade period 4.1 -> 4.2, we need to persist the server_id via heartbeat
     const int64_t delay = 0;
     const bool repeat = false;
-    if (0 == GCTX.server_id_) {
-      GCTX.server_id_ = server_id;
-      LOG_INFO("receive new server id in GCTX", K(server_id));
+    const uint64_t gctx_server_id = GCTX.server_id_;
+    if (0 == gctx_server_id) {
+      if (OB_FAIL(GCTX.set_server_id(server_id, gctx_server_id))) {
+        LOG_WARN("failed to set server id", KR(ret), K(server_id), K(gctx_server_id), K(GCTX.server_id_));
+      } else {
+        LOG_INFO("receive new server id in GCTX", K(server_id));
+      }
     } else if (server_id != GCTX.server_id_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("GCTX.server_id_ is not the same as server_id in RS", KR(ret),

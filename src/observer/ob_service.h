@@ -308,6 +308,7 @@ private:
       const ObLSMeta &ls_meta,
       ObReplicaType &replica_type);
 
+  int set_server_id_(const int64_t server_id);
 private:
   bool inited_;
   bool in_register_process_;

@@ -482,14 +482,16 @@ int ObPreBootstrap::check_is_all_server_empty(bool &is_empty)
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else {
-    ObCheckServerEmptyArg arg(ObCheckServerEmptyArg::BOOTSTRAP,
-                              DATA_CURRENT_VERSION);
+    ObCheckServerEmptyArg arg;
     for (int64_t i = 0; OB_SUCC(ret) && is_empty && i < rs_list_.count(); ++i) {
       int64_t rpc_timeout = obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+      uint64_t server_id = OB_INIT_SERVER_ID + i;
       if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
         rpc_timeout = max(rpc_timeout, THIS_WORKER.get_timeout_remain());
       }
-      if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
+      if (OB_FAIL(arg.init(ObCheckServerEmptyArg::BOOTSTRAP, DATA_CURRENT_VERSION, server_id))) {
+        LOG_WARN("failed to init arg", KR(ret), K(server_id));
+      } else if (OB_FAIL(rpc_proxy_.to(rs_list_[i].server_)
                             .timeout(rpc_timeout)
                             .is_empty_server(arg, is_server_empty))) {
         LOG_WARN("failed to check if server is empty",
