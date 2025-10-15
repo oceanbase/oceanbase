@@ -902,7 +902,8 @@ STAT_EVENT_SET_DEF(ASYNC_DATA_MAINTAIN_LOG_DROPPED_COUNT, "async data maintain l
 STAT_EVENT_SET_DEF(ASYNC_ROOT_SERVICE_LOG_DROPPED_COUNT, "async root service log dropped count", ObStatClassIds::DEBUG, 160034, false, true, true)
 STAT_EVENT_SET_DEF(ASYNC_SCHEMA_LOG_DROPPED_COUNT, "async schema log dropped count", ObStatClassIds::DEBUG, 160035, false, true, true)
 STAT_EVENT_SET_DEF(ASYNC_FORCE_ALLOW_LOG_DROPPED_COUNT, "async force allow log dropped count", ObStatClassIds::DEBUG, 160036, false, true, true)
-
+STAT_EVENT_SET_DEF(OB_LOGGER_ALLOC_FROM_CACHE_COUNT, "logger allocate log item from cache count", ObStatClassIds::DEBUG, 160037, false, true, true)
+STAT_EVENT_SET_DEF(OB_LOGGER_ALLOC_FROM_ALLCATOR_COUNT, "logger allocate log item from allocator count", ObStatClassIds::DEBUG, 160038, false, true, true)
 
 //OBSERVER
 STAT_EVENT_SET_DEF(OBSERVER_PARTITION_TABLE_UPATER_USER_QUEUE_SIZE, "observer partition table updater user table queue size", ObStatClassIds::OBSERVER, 170001, false, true, true)

@@ -143,7 +143,10 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDi
         (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_dropped_debug_log_count() : 0;
     stat_events.get(ObStatEventIds::ASYNC_LOG_FLUSH_SPEED - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
         (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_async_flush_log_speed() : 0;
-
+    stat_events.get(ObStatEventIds::OB_LOGGER_ALLOC_FROM_CACHE_COUNT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_alloc_item_from_cache_count() : 0;
+    stat_events.get(ObStatEventIds::OB_LOGGER_ALLOC_FROM_ALLCATOR_COUNT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_alloc_item_from_allocator_count() : 0;
 
     stat_events.get(ObStatEventIds::ASYNC_GENERIC_LOG_WRITE_COUNT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
         (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_generic_log_write_count() : 0;

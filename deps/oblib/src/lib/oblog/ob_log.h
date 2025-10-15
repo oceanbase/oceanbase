@@ -45,6 +45,8 @@
 #include "lib/signal/ob_signal_handlers.h"
 #include "common/ob_common_utility.h"
 #include "lib/oblog/ob_log_dba_event.h"
+#include "lib/ob_abort.h"
+#include "lib/queue/ob_fixed_queue.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 64
 #define OB_LOG_MAX_SUB_MOD_SIZE 64
@@ -255,6 +257,7 @@ enum class ProbeAction
 //named DuoLong.
 class ObLogger : public ObBaseLogWriter
 {
+typedef common::ObFixedQueue<void> LogItemPool;
 private:
   static constexpr int LOG_ITEM_SIZE = sizeof(ObPLogItem);
 public:
@@ -274,6 +277,7 @@ public:
   static const int32_t MAX_LOG_FILE_COUNT = 10 * 1024;
 
   static const int64_t MAX_LOG_HEAD_SIZE = 256;
+  static const int64_t BASE_LOG_SIZE = 4 * 1024; //4kb
   static const int64_t MAX_LOG_SIZE = 64 * 1024; //64kb
   static const int64_t LOCAL_BUF_SIZE = 65 * 1024; //64kb
 
@@ -282,6 +286,8 @@ public:
   static const int64_t GROUP_COMMIT_MAX_ITEM_COUNT = 4;
   static const char *PERF_LEVEL;
   static const int64_t NORMAL_LOG_SIZE = 1 << 10;
+  static const int64_t LOG_POOL_N_WAY = 16;
+  static const int64_t LARGE_LOG_POOL_N_WAY = 4;
 
   static const char *const SECURITY_AUDIT_FILE_NAME_FORMAT;
 
@@ -338,7 +344,7 @@ public:
   ObLogger();
   virtual ~ObLogger();
   virtual int init(const ObBaseLogWriterCfg &log_cfg,
-                   const bool is_arb_replica);
+                   const bool is_arb_replica, int64_t memory_limit = (4L << 30));
   virtual void stop();
   virtual void wait();
   virtual void destroy();
@@ -416,6 +422,8 @@ public:
   int64_t get_elec_total_write_count() const { return log_file_[FD_ELEC_FILE].write_count_; }
   int64_t get_trace_total_write_count() const { return log_file_[FD_TRACE_FILE].write_count_; }
   int64_t get_alert_total_write_count() const { return log_file_[FD_ALERT_FILE].write_count_; }
+  int64_t get_alloc_item_from_cache_count() const { return alloc_from_cache_count_; }
+  int64_t get_alloc_item_from_allocator_count() const { return alloc_from_allocator_count_; }
 
   ObPLogFileStruct &get_elec_log() { return *(log_file_ + FD_ELEC_FILE); }
 
@@ -711,6 +719,15 @@ public:
 
   bool is_svr_file_opened();
 
+  struct PreparePlogConfig {
+    int n_way_;
+    int prealloc_count_;
+    int log_size_;
+    void **prealloc_items_;
+    LogItemPool *log_item_pool_;
+  };
+
+  int prepare_prealloc_plog_items_impl(PreparePlogConfig& config);
 private:
   //@brief If version <= 0, return true.
   //If version > 0, return version > level_version_ and if true, update level_version_.
@@ -901,6 +918,12 @@ private:
   bool info_as_wdiag_;
   std::deque<std::string> file_list_;//to store the names of log-files
   std::deque<std::string> wf_file_list_;//to store the names of warning log-files
+  LogItemPool log_item_pool_[LOG_POOL_N_WAY];
+  void *prealloc_plog_items_[LOG_POOL_N_WAY];
+  LogItemPool large_log_item_pool_[LARGE_LOG_POOL_N_WAY];
+  void *large_prealloc_plog_items_[LARGE_LOG_POOL_N_WAY];
+  int64_t alloc_from_cache_count_;
+  int64_t alloc_from_allocator_count_;
 };
 
 inline ObLogger& ObLogger::get_logger()
@@ -1302,7 +1325,16 @@ _Pragma("GCC diagnostic push")
 #ifdef __clang__
 _Pragma("GCC diagnostic ignored \"-Wdynamic-class-memaccess\"")
 #endif
-          MEMCPY((void *)new_log_item, (void *)log_item, LOG_ITEM_SIZE + log_item->get_data_len());
+          if (OB_LIKELY(new_log_item->is_cached_item())) {
+            MEMCPY((void *)new_log_item->get_buf(), (void *)log_item->get_buf(), log_item->get_data_len());
+            new_log_item->set_timestamp(start_ts);
+            new_log_item->set_tl_type(tl_type_);
+            new_log_item->set_force_allow(is_force_allows());
+            new_log_item->set_fd_type(fd_type);
+            new_log_item->set_data_len(log_item->get_data_len());
+          } else {
+            MEMCPY((void *)new_log_item, (void *)log_item, LOG_ITEM_SIZE + log_item->get_data_len());
+          }
 _Pragma("GCC diagnostic pop")
             // update buf_size
           new_log_item->set_buf_size(log_item->get_data_len());

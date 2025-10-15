@@ -263,7 +263,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (is_arbitration_mode()) {
 #ifdef OB_BUILD_ARBITRATION
     FLOG_INFO("begin init observer in arbitration mode", KR(ret));
-    if (FAILEDx(OB_LOGGER.init(log_cfg, true))) {
+    if (FAILEDx(OB_LOGGER.init(log_cfg, true, GMEMCONF.get_server_memory_limit()))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
@@ -285,7 +285,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     FLOG_INFO("end init observer in arbitration mode", KR(ret));
 #endif
   } else {
-    if (FAILEDx(OB_LOGGER.init(log_cfg, false))) {
+    if (FAILEDx(OB_LOGGER.init(log_cfg, false, GMEMCONF.get_server_memory_limit()))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
