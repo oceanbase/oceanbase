@@ -201,7 +201,7 @@ int ObBackupDeleteSelector::get_delete_backup_set_infos(
                         ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA))) {
     LOG_WARN("failed to check dest connectivity", K(ret));
     failure_info.failure_id = candidate_data.candidates_.at(0).backup_set_id_;
-    failure_info.failure_reason = "dest_connectivity_check_failed";
+    failure_info.failure_reason = "dest connectivity check failed";
   } else if (OB_FAIL(apply_current_path_retention_policy_(candidate_data, failure_info))) {
     LOG_WARN("failed to apply current path retention policy", K(ret));
   } else if (OB_FAIL(perform_dependency_check_(all_user_requested_ids_set, candidate_data,
@@ -261,7 +261,7 @@ int ObBackupDeleteSelector::get_candidate_backups_(
         ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
         LOG_WARN("failed to get backup set file for request ID, stopping processing", K(ret), K(current_id));
         failure_info.failure_id = current_id;
-        failure_info.failure_reason = "get_set_failed";
+        failure_info.failure_reason = "get set failed";
       } else if (!current_backup_set_info.is_valid()) {
         ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
         LOG_WARN("backup set info is invalid, cannot delete, stopping job", K(ret), K(current_backup_set_info));
@@ -276,7 +276,7 @@ int ObBackupDeleteSelector::get_candidate_backups_(
         ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
         LOG_WARN("backup set has already been marked as DELETED, cannot delete again", K(ret), K(current_backup_set_info));
         failure_info.failure_id = current_id;
-        failure_info.failure_reason = "already_deleted";
+        failure_info.failure_reason = "already deleted";
       }
       // if backup set status is FAILED or file status is DELETING, allow delete
 
@@ -382,7 +382,7 @@ int ObBackupDeleteSelector::apply_current_path_retention_policy_(
         ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
         LOG_WARN("cannot delete set in current path when delete policy(recovery_window) is set", K(ret), K(clean_point));
         failure_info.failure_id = INVALID_CLEAN_ID;
-        failure_info.failure_reason = "cannot_delete_backup_set_in_current_path_when_delete_policy_is_set";
+        failure_info.failure_reason = "cannot delete backup set in current path when delete policy is set";
       } else {
         // get the latest full backup set for the current path
         if (OB_FAIL(data_provider_->get_latest_valid_full_backup_set(
@@ -391,7 +391,7 @@ int ObBackupDeleteSelector::apply_current_path_retention_policy_(
             ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
             LOG_WARN("No full backup exists in this dest. No sets will be deleted", K(ret), K(candidate_path));
             failure_info.failure_id = INVALID_CLEAN_ID;
-            failure_info.failure_reason = "no_full_backup_exists";
+            failure_info.failure_reason = "no full backup exists";
           } else {
             LOG_WARN("failed to get latest full backup set", K(ret));
           }
@@ -403,7 +403,7 @@ int ObBackupDeleteSelector::apply_current_path_retention_policy_(
               K(ret), "candidate_set_id", largest_desc.backup_set_id_, "latest_full_set_id", clean_point.backup_set_id_,
               K(candidate_path));
             failure_info.failure_id = largest_desc.backup_set_id_;
-            failure_info.failure_reason = "newer_than_latest_full_backupset";
+            failure_info.failure_reason = "newer than latest full backupset";
             failure_info.related_id = clean_point.backup_set_id_;
           }
         }
@@ -449,7 +449,7 @@ int ObBackupDeleteSelector::perform_dependency_check_(
             LOG_WARN("Backup set cannot be deleted due to dependency, stopping job", K(ret),
                 "candidate_backup_set_id", candidate_desc.backup_set_id_, K(current_dest_id), K(dependent_id));
             failure_info.failure_id = candidate_desc.backup_set_id_;
-            failure_info.failure_reason = "dependent_by_backup_set";
+            failure_info.failure_reason = "dependent by backup set";
             failure_info.related_id = dependent_id;
           } else if (OB_FAIL(set_list.push_back(candidate_desc))) {
             LOG_WARN("failed to push back set desc", K(ret), K(candidate_desc));
@@ -535,7 +535,7 @@ int ObBackupDeleteSelector::get_delete_backup_piece_infos(
                         ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG))) {
     LOG_WARN("failed to check piece path valid", K(ret));
     failure_info.failure_id = candidate_data.candidates_.at(0).key_.piece_id_;
-    failure_info.failure_reason = "piece_path_valid_check_failed";
+    failure_info.failure_reason = "piece path valid check failed";
   } else if (OB_FAIL(apply_current_path_piece_retention_policy_(candidate_data, failure_info))) {
     LOG_WARN("failed to apply current path piece retention policy", K(ret));
   } else if (OB_FAIL(perform_piece_sequential_check_(candidate_data, piece_list, failure_info))) {
@@ -578,7 +578,7 @@ int ObBackupDeleteSelector::get_candidate_pieces_(
           ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
           LOG_WARN("archivelog piece with ID does not exist, stopping job", K(ret), K(current_id));
           failure_info.failure_id = current_id;
-          failure_info.failure_reason = "not_exist";
+          failure_info.failure_reason = "not exist";
         } else {
           LOG_WARN("failed to get archivelog piece file for ID, stopping processing", K(ret), K(current_id));
         }
@@ -592,12 +592,12 @@ int ObBackupDeleteSelector::get_candidate_pieces_(
         LOG_WARN("archivelog piece has already been marked as DELETED, cannot delete again, stopping job",
                   K(ret), K(current_piece_info));
         failure_info.failure_id = current_id;
-        failure_info.failure_reason = "already_deleted";
+        failure_info.failure_reason = "already deleted";
       } else if (current_piece_info.status_.is_active()) {
         ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
         LOG_WARN("archivelog piece is active, cannot delete, stopping job", K(ret), K(current_piece_info));
         failure_info.failure_id = current_id;
-        failure_info.failure_reason = "is_active_piece";
+        failure_info.failure_reason = "is active piece";
       } else {
         if (INVALID_CLEAN_ID == dest_id) {
           dest_id = current_piece_info.key_.dest_id_;
@@ -891,7 +891,7 @@ int ObBackupDeleteSelector::apply_current_path_piece_retention_policy_(
             LOG_WARN("cannot delete backup piece in current path when delete policy(recovery_window) is set",
                           K(ret), K(requested_path));
             failure_info.failure_id = INVALID_CLEAN_ID;
-            failure_info.failure_reason = "cannot_delete_backup_piece_in_current_path_when_delete_policy_is_set";
+            failure_info.failure_reason = "cannot delete backup piece in current path when delete policy is set";
           } else {
             // get the oldest full backup set on the current writing backup path
             if (OB_FAIL(get_oldest_full_backup_set_(clog_data_clean_point, failure_info))) {
@@ -905,7 +905,7 @@ int ObBackupDeleteSelector::apply_current_path_piece_retention_policy_(
                   LOG_WARN("Piece is needed for the oldest full backup",
                             K(piece), K(clog_data_clean_point), K(requested_path));
                   failure_info.failure_id = piece.key_.piece_id_;
-                  failure_info.failure_reason = "needed_for_oldest_full_backup";
+                  failure_info.failure_reason = "needed for oldest full backup";
                   failure_info.related_id = clog_data_clean_point.backup_set_id_;
                 }
               }
@@ -936,7 +936,7 @@ int ObBackupDeleteSelector::get_oldest_full_backup_set_(
     ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
     LOG_WARN("failed to get backup set dest", K(ret), K(current_backup_path_str));
     failure_info.failure_id = -1;
-    failure_info.failure_reason = "no_backup_set_dest";
+    failure_info.failure_reason = "no backup set dest";
   } else if (OB_FAIL(backup_dest.set(current_backup_dest_str))) {
     LOG_WARN("fail to set backup dest", K(ret), K(current_backup_dest_str));
   } else if (OB_FAIL(backup_dest.get_backup_path_str(
@@ -945,12 +945,12 @@ int ObBackupDeleteSelector::get_oldest_full_backup_set_(
   } else if (current_backup_path_str.is_empty()) {
     ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
     failure_info.failure_id = -1;
-    failure_info.failure_reason = "no_backup_set_dest";
+    failure_info.failure_reason = "no backup set dest";
   } else if (OB_FAIL(data_provider_->get_oldest_full_backup_set(
                       job_attr_->tenant_id_, current_backup_path_str, oldest_full_backup_desc))) {
     LOG_WARN("failed to get oldest full backup set", K(ret), K(current_backup_path_str));
     failure_info.failure_id = -1;
-    failure_info.failure_reason = "no_full_backup_exists";
+    failure_info.failure_reason = "no full backup exists";
   }
   return ret;
 }
@@ -1018,7 +1018,7 @@ int ObBackupDeleteSelector::check_previous_pieces_are_deleted_(
                "smaller_piece_id", current_piece.key_.piece_id_,
                "first_requested_piece_id", first_candidate_piece_id);
       failure_info.failure_id = first_candidate_piece_id;
-      failure_info.failure_reason = "smaller_piece_exists";
+      failure_info.failure_reason = "smaller piece exists";
       failure_info.related_id = current_piece.key_.piece_id_;
       break;
     }
@@ -1057,7 +1057,7 @@ int ObBackupDeleteSelector::check_candidate_pieces_are_continuous_(
                "existing_piece_id", db_piece.key_.piece_id_,
                "expected_candidate_piece_id", cand_piece.key_.piece_id_);
       failure_info.failure_id = cand_piece.key_.piece_id_;
-      failure_info.failure_reason = "smaller_piece_exists";
+      failure_info.failure_reason = "smaller piece exists";
       failure_info.related_id = db_piece.key_.piece_id_;
     }
   }
@@ -1069,7 +1069,7 @@ int ObBackupDeleteSelector::check_candidate_pieces_are_continuous_(
              "total_candidates", candidate_pieces.count(),
              "unmatched_candidate_id", candidate_pieces.at(idx_of_candidate_piece).key_.piece_id_);
     failure_info.failure_id = candidate_pieces.at(idx_of_candidate_piece).key_.piece_id_;
-    failure_info.failure_reason = "candidate_not_found";
+    failure_info.failure_reason = "candidate not found";
   }
 
   return ret;
@@ -1156,7 +1156,7 @@ int ObBackupDeleteSelector::check_current_backup_dest_(BackupCleanFailureInfo &f
       LOG_WARN("current writing dest does not support deletion",
                 K(ret), "current_dest_id", current_dest_id, "dest_id", job_attr_->dest_id_);
       failure_info.failure_id = job_attr_->dest_id_;
-      failure_info.failure_reason = "cannot_delete_current_writing_backup_dest";
+      failure_info.failure_reason = "cannot delete current writing backup dest";
     }
   }
   return ret;
@@ -1183,7 +1183,7 @@ int ObBackupDeleteSelector::check_current_archive_dest_(BackupCleanFailureInfo &
       LOG_WARN("current writing dest does not support deletion",
                 K(ret), "archive_dest_id", archive_dest.second, "dest_id", job_attr_->dest_id_);
       failure_info.failure_id = job_attr_->dest_id_;
-      failure_info.failure_reason = "cannot_delete_current_writing_archive_dest";
+      failure_info.failure_reason = "cannot delete current writing archive dest";
     }
   }
   return ret;
