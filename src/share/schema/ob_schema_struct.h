@@ -66,6 +66,7 @@ namespace sql
 class ObSQLSessionInfo;
 class ObPartitionExecutorUtils;
 class ObLocalSessionVar;
+class ObRawExprFactory;
 }
 namespace rootserver
 {
@@ -84,6 +85,28 @@ namespace schema
         LOG_WARN("placement new return nullptr", K(ret));\
       }\
     }\
+
+#define BUILD_EXPR_WITH_CONTEXT(tenant_id, tenant_name, FUNC, args...) \
+  CREATE_WITH_TEMP_CONTEXT(lib::ContextParam().set_mem_attr(OB_SERVER_TENANT_ID, "BuildExpr", ObCtxIds::DEFAULT_CTX_ID)) { \
+    ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator(); \
+    SMART_VARS_2((ObSQLSessionInfo, session_info), \
+                  (ObExecContext, exec_ctx, allocator)) { \
+      exec_ctx.set_my_session(&session_info); \
+      ObSQLSessionInfo::ExecCtxSessionRegister ctx_register(session_info, &exec_ctx); \
+      ObRawExprFactory expr_factory(allocator); \
+      if (FAILEDx(session_info.init(0, 0, &allocator, NULL))) { \
+        LOG_WARN("fail to init session info", KR(ret)); \
+      }  else if (OB_NOT_NULL(tenant_name) && OB_FAIL(session_info.init_tenant(tenant_name, tenant_id))) { \
+        LOG_WARN("fail to init tenant", KR(ret), K(tenant_id)); \
+      } else if (OB_FAIL(session_info.load_all_sys_vars_default())) { \
+        LOG_WARN("fail to load all sys vars", KR(ret)); \
+      } else if (OB_FAIL(session_info.load_default_configs_in_pc())) { \
+        LOG_WARN("fail to load default configs in pc", KR(ret)); \
+      } else if (OB_FAIL(FUNC(args, expr_factory, exec_ctx, allocator))) { \
+        LOG_WARN("fail to build expr", KR(ret)); \
+      } \
+    } \
+  }
 
 typedef common::ObSEArray<uint64_t, 8>  EnableRoleIdArray;
 typedef common::ParamStore ParamStore;
@@ -3204,6 +3227,8 @@ public:
   // only used for generate part_name
   int get_max_part_id(int64_t &part_id) const;
   int get_max_part_idx(int64_t &part_idx, bool skip_external_table_default_partition = false) const;
+  int get_max_range_part_idx_for_interval_part_table(int64_t &part_idx) const;
+  int get_base_part_idx_for_add_part(int64_t &base_part_idx) const;
   //@param[in] name: the partition name which you want to get partition by
   //@param[out] part: the partition get by the name, when this function could not find the partition
   //            by the name, this param would be nullptr
@@ -3513,13 +3538,29 @@ public:
               const common::ObObjType &typ1,
               const common::ObObjType &type2);
 
-  static int set_low_bound_val_by_interval_range_by_innersql(
-      const bool is_oracle_mode,
-      ObPartition &p,
-      const ObRowkey &interval_range);
+  static int set_low_bound_val_by_interval_range(
+             ObPartition &p,
+             const ObRowkey &interval_range);
 
-  static int check_interval_partition_table(const ObRowkey &transition_point,
-                                            const ObRowkey &interval_range);
+  static int set_low_bound_val_by_interval_range_with_context(
+             const ObObj &high_bound_val_obj,
+             const ObObj &interval_range_obj,
+             ObPartition &p,
+             sql::ObRawExprFactory &expr_factory,
+             sql::ObExecContext &exec_ctx,
+             ObIAllocator &allocator);
+
+  static int check_interval_partition_table(
+             const uint64_t tenant_id,
+             const ObRowkey &transition_point,
+             const ObRowkey &interval_range);
+
+  static int check_interval_partition_table_with_context(
+             const ObRowkey &transition_point_obj,
+             const ObRowkey &interval_range_obj,
+            sql::ObRawExprFactory &expr_factory,
+             sql::ObExecContext &exec_ctx,
+             ObIAllocator &allocator);
 
   /* --- calc tablet_ids/part_ids/sub_part_ids by partition columns --- */
 
@@ -9973,6 +10014,11 @@ typedef common::hash::ObPointerHashMap<ObIndexSchemaHashWrapper, ObIndexNameInfo
 bool check_can_drop_column_instant(const uint64_t tenant_id,
                                    const bool is_oracle_mode,
                                    const uint64_t tenant_data_version);
+int filter_out_duplicate_interval_part(const share::schema::ObSimpleTableSchemaV2 &orig_table_schema,
+                                       share::schema::ObTableSchema &alter_table_schema);
+int check_is_interval_table(const int64_t tenant_id,
+                            const int64_t table_id,
+                            bool &is_interval_table);
 
 }//namespace schema
 }//namespace share

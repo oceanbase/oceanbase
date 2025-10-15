@@ -287,6 +287,7 @@ class ObBackupDestIOPermissionMgr;
 namespace schema
 {
   class ObTenantSchemaService;
+  class ObAddIntervalPartitionController;
 }
 namespace detector
 {
@@ -526,7 +527,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*,           \
-      share::ObHMSClientPoolMgr*                     \
+      share::ObHMSClientPoolMgr*,                     \
+      share::schema::ObAddIntervalPartitionController* \
   )
 
 

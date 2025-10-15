@@ -2086,10 +2086,13 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   return ret;
 }
 
-static int print_partition_func(const ObTableSchema &table_schema,
-                                ObSqlString &disp_part_str,
-                                bool is_subpart,
-                                bool strict_compat)
+int ObSchemaPrinter::print_partition_func(const ObTableSchema &table_schema,
+                                          char* buf,
+                                          const int64_t& buf_len,
+                                          int64_t& pos,
+                                          bool is_subpart,
+                                          bool strict_compat,
+                                          const ObTimeZoneInfo *tz_info) const
 {
   int ret = OB_SUCCESS;
   const ObPartitionOption &part_opt = table_schema.get_part_option();
@@ -2113,39 +2116,41 @@ static int print_partition_func(const ObTableSchema &table_schema,
       if (!strict_compat) {
         int64_t auto_split_size = part_opt.get_auto_part_size();
         auto_split_size = auto_split_size >> 20; // MB
-        if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s) size (\'%ldMB\')",
-                                            type_str.length(),
-                                            type_str.ptr(),
-                                            func_expr.length(),
-                                            func_expr.ptr(),
-                                            auto_split_size))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by %.*s(%.*s) size (\'%ldMB\')",
+                                    type_str.length(),
+                                    type_str.ptr(),
+                                    func_expr.length(),
+                                    func_expr.ptr(),
+                                    auto_split_size))) {
           SHARE_SCHEMA_LOG(WARN, "fail to append display auto split expr", K(ret));
         }
-      } else if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
-                                              type_str.length(),
-                                              type_str.ptr(),
-                                              func_expr.length(),
-                                              func_expr.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by %.*s(%.*s)",
+                                         type_str.length(),
+                                         type_str.ptr(),
+                                         func_expr.length(),
+                                         func_expr.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr", K(ret), K(type_str), K(func_expr));
       }
     } else {
       if (OB_ISNULL(table_schema.get_part_array())) {
         // do not show partition func expr of auto split none partition table
-      } else if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
-                                              type_str.length(),
-                                              type_str.ptr(),
-                                              func_expr.length(),
-                                              func_expr.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by %.*s(%.*s)",
+                                         type_str.length(),
+                                         type_str.ptr(),
+                                         func_expr.length(),
+                                         func_expr.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr", K(ret), K(type_str), K(func_expr));
       }
     }
   } else {
-    if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
-                                              type_str.length(),
-                                              type_str.ptr(),
-                                              func_expr.length(),
-                                              func_expr.ptr()))) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by %.*s(%.*s)",
+                                type_str.length(),
+                                type_str.ptr(),
+                                func_expr.length(),
+                                func_expr.ptr()))) {
       SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr", K(ret), K(type_str), K(func_expr));
+    } else if (OB_FAIL(print_interval_if_ness(table_schema, buf, buf_len, pos, tz_info))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print interval", K(ret));
     } else if (is_subpart) { // sub part
       const ObPartitionOption &sub_part_opt = table_schema.get_sub_part_option();
       ObString sub_type_str;
@@ -2154,11 +2159,11 @@ static int print_partition_func(const ObTableSchema &table_schema,
       const ObString &sub_func_expr = sub_part_opt.get_part_func_expr_str();
       if (OB_FAIL(get_part_type_str(is_oracle_mode, sub_type, sub_type_str))) {
         SHARE_SCHEMA_LOG(WARN, "failed to get part type string", K(ret));
-      } else if (OB_FAIL(disp_part_str.append_fmt(" subpartition by %.*s(%.*s)",
-                                                  sub_type_str.length(),
-                                                  sub_type_str.ptr(),
-                                                  sub_func_expr.length(),
-                                                  sub_func_expr.ptr()))) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " subpartition by %.*s(%.*s)",
+                                         sub_type_str.length(),
+                                         sub_type_str.ptr(),
+                                         sub_func_expr.length(),
+                                         sub_func_expr.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to append display partition expr",
           K(ret), K(sub_type_str), K(sub_func_expr));
       }
@@ -2269,8 +2274,6 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
   if ((table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
       && !table_schema.is_index_local_storage()
       && !table_schema.is_oracle_tmp_table()) {
-    ObString disp_part_fun_expr_str;
-    ObSqlString disp_part_str;
     bool is_subpart = false;
     const ObPartitionSchema *partition_schema = &table_schema;
     if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
@@ -2279,19 +2282,11 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
         is_subpart &= is_subpartition_valid_in_mysql(table_schema);
       }
     }
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n"))) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print enter", K(ret));
-    } else if (OB_FAIL(print_partition_func(table_schema, disp_part_str, is_subpart, strict_compat_))) {
+    } else if (OB_FAIL(print_partition_func(table_schema, buf, buf_len, pos, is_subpart, strict_compat_, tz_info))) {
       SHARE_SCHEMA_LOG(WARN, "failed to print part func", K(ret));
-    } else if (FALSE_IT(disp_part_fun_expr_str = disp_part_str.string())) {
-      // will not reach here
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " %.*s",
-                                       disp_part_fun_expr_str.length(),
-                                       disp_part_fun_expr_str.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to printf partition expr", K(ret), K(disp_part_fun_expr_str));
-    } else if (OB_FAIL(print_interval_if_ness(table_schema, buf, buf_len, pos, tz_info))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print interval", K(ret));
-     } else if (!strict_compat_ && is_subpart && partition_schema->sub_part_template_def_valid()) {
+    } else if (!strict_compat_ && is_subpart && partition_schema->sub_part_template_def_valid()) {
       if (OB_FAIL(print_template_sub_partition_elements(partition_schema, buf, buf_len, pos, tz_info, false))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print sub partition elements", K(ret));
       }

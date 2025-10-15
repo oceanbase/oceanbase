@@ -625,6 +625,7 @@ _rowsets_target_maxsize
 _rpc_checksum
 _schema_memory_recycle_interval
 _send_bloom_filter_size
+_server_full_schema_refresh_parallelism
 _server_standby_fetch_log_bandwidth_limit
 _session_context_size
 _session_temp_table_clean_interval

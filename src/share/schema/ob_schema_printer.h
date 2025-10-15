@@ -273,6 +273,13 @@ public:
                                                   char* buf,
                                                   const int64_t& buf_len,
                                                   int64_t& pos) const;
+  int print_partition_func(const ObTableSchema &table_schema,
+                           char* buf,
+                           const int64_t& buf_len,
+                           int64_t& pos,
+                           bool is_subpart,
+                           bool strict_compat,
+                           const ObTimeZoneInfo *tz_info) const;
   int print_interval_if_ness(const ObTableSchema &table_schema,
                              char* buf,
                              const int64_t& buf_len,

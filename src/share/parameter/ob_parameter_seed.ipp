@@ -2964,6 +2964,12 @@ DEF_CAP(load_data_diagnosis_log_max_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "it will be renamed and a new diagnosis log file using is opened, range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "REQUEST",
+                     common::ObConfigServerFullSchemaRefreshParallelismChecker,
+                     "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
+                     "values: REQUEST, OBJECT",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
                     common::ObHNSWIterFilterScanNumChecker,
                     "The upper limit of hnsw iter-filter search nums. Range: [0,)",

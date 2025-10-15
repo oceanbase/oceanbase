@@ -2235,6 +2235,11 @@ int ObDataFragMgr::init(ObExecContext &ctx, uint64_t table_id)
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
+  } else if (table_schema->is_interval_part()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("direct-load does not support table with interval part", KR(ret),
+             K(ctx.get_my_session()->get_effective_tenant_id()), K(table_id));
+    FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with interval part");
   } else if (OB_FAIL(table_schema->get_all_tablet_and_object_ids(tablet_ids_, part_ids))) {
     LOG_WARN("failed to get partition ids", K(ret));
   } else {

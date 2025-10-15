@@ -224,6 +224,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
           && static_cast<ObTruncateTableStmt*>(&cmd)->is_truncate_oracle_temp_table()) {
         //truncate oracle temp table by delete inner sql, which is not a ddl
         //do not need adjust _ob_ddl_timeout
+      } else if (cmd.get_cmd_type() == stmt::T_ALTER_TABLE
+                 && static_cast<ObAlterTableStmt*>(&cmd)->is_add_interval_partition()) {
+        //alter interval partition need to use query_timeout_hint,
+        //do not need adjust _ob_ddl_timeout
       } else if (OB_FAIL(my_session->update_sys_variable(
                          share::SYS_VAR_OB_QUERY_TIMEOUT, val))) {
         LOG_WARN("set sys variable failed", K(ret), K(val.get_int()));

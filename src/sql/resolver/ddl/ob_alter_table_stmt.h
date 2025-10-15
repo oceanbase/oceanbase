@@ -67,11 +67,15 @@ public:
   inline void set_alter_mview_attributes(){alter_table_arg_.is_alter_mview_attributes_ = true;}
   inline void set_alter_mlog_attributes(){alter_table_arg_.is_alter_mlog_attributes_ = true;}
   /* to do: interval */
-  inline void set_interval_expr(ObRawExpr *expr) {interval_expr_ = expr;}
-  inline void set_transition_expr(ObRawExpr *expr) {transition_expr_ = expr;}
+  inline void set_interval_expr_for_set_interval(ObRawExpr *expr) {interval_expr_for_set_interval_ = expr;}
+  inline void set_transition_expr_for_set_interval(ObRawExpr *expr) {transition_expr_for_set_interval_ = expr;}
+  inline void set_interval_expr_for_add_partition(ObRawExpr *expr) {interval_expr_for_add_partition_ = expr;}
+  inline void set_transition_expr_for_add_partition(ObRawExpr *expr) {transition_expr_for_add_partition_ = expr;}
 
-  inline ObRawExpr *get_transition_expr() { return transition_expr_; }
-  inline ObRawExpr *get_interval_expr() { return interval_expr_; }
+  inline ObRawExpr *get_transition_expr_for_set_interval() { return transition_expr_for_set_interval_; }
+  inline ObRawExpr *get_interval_expr_for_set_interval() { return interval_expr_for_set_interval_; }
+  inline ObRawExpr *get_transition_expr_for_add_partition() { return transition_expr_for_add_partition_; }
+  inline ObRawExpr *get_interval_expr_for_add_partition() { return interval_expr_for_add_partition_; }
 
   const common::ObString &get_org_database_name() const
   { return alter_table_arg_.alter_table_schema_.get_origin_database_name(); }
@@ -124,6 +128,8 @@ public:
     alter_table_arg_.client_session_create_ts_ = create_ts;
   }
   int set_lock_priority(sql::ObSQLSessionInfo *session);
+  bool is_add_interval_partition() { return is_add_interval_partition_; }
+  void set_add_interval_partition(bool is_add_interval_partition) { is_add_interval_partition_ = is_add_interval_partition; }
 private:
   obrpc::ObAlterTableArg alter_table_arg_;
   bool is_comment_table_;
@@ -132,11 +138,14 @@ private:
   common::ObIAllocator *fts_arg_allocator_;
   bool is_alter_triggers_;
   obrpc::ObAlterTriggerArg tg_arg_;
-  ObRawExpr *interval_expr_;
-  ObRawExpr *transition_expr_;
+  ObRawExpr *interval_expr_for_set_interval_;
+  ObRawExpr *transition_expr_for_set_interval_;
+  ObRawExpr *interval_expr_for_add_partition_;
+  ObRawExpr *transition_expr_for_add_partition_;
   uint64_t alter_table_action_count_;
   int64_t alter_external_table_type_;
   obrpc::ObExchangePartitionArg exchange_partition_arg_;
+  bool is_add_interval_partition_;
 };
 
 inline int ObAlterTableStmt::set_tz_info_wrap(const common::ObTimeZoneInfoWrap &tz_info_wrap)

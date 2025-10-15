@@ -587,6 +587,12 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_idx_batch_inner(const ObIArray<ObExpr
         if (OB_HASH_NOT_EXIST == ret) {
           if (tablet_ids_[i] <= 0) {
             ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+            // interval partition is not supported to add partition by pdml, so change error code here
+            if (OB_UNLIKELY(table_schema_.is_interval_part())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("add partition by pdml in interval partition table is not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "add partition by pdml in interval partition table is");
+            }
           } else {
             ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
           }

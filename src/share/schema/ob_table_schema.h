@@ -2241,6 +2241,10 @@ public:
   }
   int get_part_key_column_type(const int64_t index, ObObjType &type) const;
   int get_part_key_column_name(const int64_t index, ObString &name) const;
+
+  int check_support_interval_part() const;
+  int check_identity_column_for_interval_part() const;
+
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:

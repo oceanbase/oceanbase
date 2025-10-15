@@ -13361,13 +13361,13 @@ int ObTransformUtils::rebuild_win_compare_range_expr(ObRawExprFactory* expr_fact
   ObOpRawExpr* upper_expr = NULL;
   ObOpRawExpr* lower_expr = NULL;
   if (OB_NOT_NULL(win_expr.upper_.exprs_[upper_idx]) 
-      && OB_FAIL(ObRawExprUtils::build_less_than_expr(*expr_factory, 
+      && OB_FAIL(ObRawExprUtils::build_less_than_or_equal_expr(*expr_factory,
                                                       win_expr.upper_.exprs_[upper_idx],
                                                       order_expr,
                                                       upper_expr))) {
     LOG_WARN("failed to build less than expr", K(ret));
   } else if (OB_NOT_NULL(win_expr.lower_.exprs_[lower_idx])
-              && OB_FAIL(ObRawExprUtils::build_less_than_expr(*expr_factory,
+              && OB_FAIL(ObRawExprUtils::build_less_than_or_equal_expr(*expr_factory,
                                                               order_expr,
                                                               win_expr.lower_.exprs_[lower_idx],
                                                               lower_expr))) {

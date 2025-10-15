@@ -5869,7 +5869,7 @@ int ObRawExprUtils::build_month_expr_from_interval_ym(
 
 int ObRawExprUtils::build_interval_ym_diff_exprs(
     ObRawExprFactory &raw_expr_factory,
-    ObObj &const_val,
+    const ObObj &const_val,
     const ObObj &transition_val,
     const ObObj &interval_val,
     ObRawExpr *&diff_1_out,
@@ -5906,7 +5906,7 @@ int ObRawExprUtils::build_interval_ym_diff_exprs(
 
 int ObRawExprUtils::build_interval_ds_diff_exprs(
     ObRawExprFactory &raw_expr_factory,
-    ObObj &const_val,
+    const ObObj &const_val,
     const ObObj &transition_val,
     const ObObj &interval_val,
     ObRawExpr *&diff_1_out,
@@ -5954,7 +5954,7 @@ int ObRawExprUtils::build_interval_ds_diff_exprs(
 
 int ObRawExprUtils::build_common_diff_exprs(
   ObRawExprFactory &raw_expr_factory,
-  ObObj &const_val,
+  const ObObj &const_val,
   const ObObj &transition_val,
   const ObObj &interval_val,
   ObRawExpr *&diff_1_out,
@@ -5988,85 +5988,122 @@ int ObRawExprUtils::build_common_diff_exprs(
   return ret;
 }
 
+
+//  val_interval_pos = (val - transition_point) / interval_range
+int ObRawExprUtils::build_val_interval_pos_expr(
+  ObRawExprFactory &raw_expr_factory,
+  const ObObj &val,
+  const ObObj &transition_point_val,
+  const ObObj &interval_range_val,
+  ObRawExpr *&val_interval_pos_expr,
+  ObConstRawExpr *&transition_point_expr,
+  ObConstRawExpr *&interval_range_expr)
+{
+  int ret = OB_SUCCESS;
+
+  // diff1 = val - transition_point
+  ObRawExpr *diff1_expr = NULL;
+  // diff2 = interval_range
+  ObRawExpr *diff2_expr = NULL;
+
+  if (interval_range_val.is_interval_ym()) {
+    OZ (build_interval_ym_diff_exprs(raw_expr_factory,
+                                     val,
+                                     transition_point_val,
+                                     interval_range_val,
+                                     diff1_expr,
+                                     diff2_expr,
+                                     transition_point_expr,
+                                     interval_range_expr));
+  } else if (interval_range_val.is_interval_ds()) {
+    OZ (build_interval_ds_diff_exprs(raw_expr_factory,
+                                     val,
+                                     transition_point_val,
+                                     interval_range_val,
+                                     diff1_expr,
+                                     diff2_expr,
+                                     transition_point_expr,
+                                     interval_range_expr));
+  } else {
+    OZ (build_common_diff_exprs(raw_expr_factory,
+                                 val,
+                                 transition_point_val,
+                                 interval_range_val,
+                                 diff1_expr,
+                                 diff2_expr,
+                                 transition_point_expr,
+                                 interval_range_expr));
+  }
+
+  // div_expr = val - transition_point / interval_range
+  ObOpRawExpr *div_expr = NULL;
+  OZ (build_div_expr(raw_expr_factory,
+                     diff1_expr,
+                     diff2_expr,
+                     div_expr));
+  OX (val_interval_pos_expr = div_expr);
+
+  return ret;
+}
+
 int ObRawExprUtils::build_high_bound_raw_expr(
     ObRawExprFactory &raw_expr_factory,
     ObSQLSessionInfo* session,
     ObObj &const_val,
     const ObObj &transition_val,
     const ObObj &interval_val,
+    const ColumnType &col_dt,
     ObRawExpr *&result_expr_out,
     ObRawExpr *&n_part_expr)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *transition_expr = NULL;
-  ObOpRawExpr *div_expr = NULL;
+  ObConstRawExpr *interval_expr = NULL;
+  ObRawExpr *div_expr = NULL;
   ObOpRawExpr *mul_expr = NULL;
   ObOpRawExpr *add_expr = NULL;
   ObOpRawExpr *trunc_expr = NULL;
   ObOpRawExpr *result_expr = NULL;
-  ObConstRawExpr *interval_expr = NULL;
-  ObRawExpr *diff_1 = NULL;
-  ObRawExpr *diff_2 = NULL;
   ObConstRawExpr *int_expr = NULL;
   ObOpRawExpr *interval_round_expr = NULL;
 
   CK (OB_NOT_NULL(session));
-  if (interval_val.is_interval_ym()) {
-    OZ (build_interval_ym_diff_exprs(raw_expr_factory,
-                                      const_val,
-                                      transition_val,
-                                      interval_val,
-                                      diff_1,
-                                      diff_2,
-                                      transition_expr,
-                                      interval_expr));
-  } else if (interval_val.is_interval_ds()) {
-    OZ (build_interval_ds_diff_exprs(raw_expr_factory,
-                                     const_val,
-                                     transition_val,
-                                     interval_val,
-                                     diff_1,
-                                     diff_2,
-                                     transition_expr,
-                                     interval_expr));
-  } else {
-    OZ (build_common_diff_exprs(raw_expr_factory,
-                                const_val,
-                                transition_val,
-                                interval_val,
-                                diff_1,
-                                diff_2,
-                                transition_expr,
-                                interval_expr));
-  }
-
-  /* build v1 / v2 */
-  OZ (build_div_expr(raw_expr_factory, diff_1, diff_2, div_expr));
+  OZ (build_val_interval_pos_expr(raw_expr_factory,
+                                  const_val,
+                                  transition_val,
+                                  interval_val,
+                                  div_expr,
+                                  transition_expr,
+                                  interval_expr));
 
   /* build trunc(v) */
   OZ (raw_expr_factory.create_raw_expr(T_FUN_SYS_ORA_TRUNC, trunc_expr));
+  CK (OB_NOT_NULL(trunc_expr));
   OZ (trunc_expr->set_param_expr(div_expr));
 
   /* build v1 + 1*/
-  OZ (build_const_int_expr(raw_expr_factory,
-                                           ObIntType, 1, int_expr));
+  OZ (build_const_int_expr(raw_expr_factory, ObIntType, 1, int_expr));
   OZ (build_add_expr(raw_expr_factory, trunc_expr, int_expr, add_expr));
 
-  /* build round(v) */
-  if (interval_expr->get_result_type().is_interval_ym()
-     || interval_expr->get_result_type().is_interval_ds()) {
-    /* build interval * n */
-    OZ (build_mul_expr(raw_expr_factory, interval_expr, add_expr, mul_expr));
-  } else {
+  if (ObIntType == col_dt) {
+    // if partition key is int, we need to round interval range to int
+    // e.g. interval range is 1.8, partition key is int, directly treat interval range as 2
+
+    /* build round(v) */
     OZ (raw_expr_factory.create_raw_expr(T_FUN_SYS_ROUND, interval_round_expr));
+    CK (OB_NOT_NULL(interval_round_expr));
     OZ (interval_round_expr->set_param_expr(interval_expr));
     /* build interval * n */
     OZ (build_mul_expr(raw_expr_factory, interval_round_expr, add_expr, mul_expr));
+  } else {
+    /* build interval * n */
+    OZ (build_mul_expr(raw_expr_factory, interval_expr, add_expr, mul_expr));
   }
 
   /* build transiton + interval * n  */
   OZ (build_add_expr(raw_expr_factory, transition_expr, mul_expr, result_expr));
 
+  CK (OB_NOT_NULL(result_expr));
   OZ (result_expr->formalize(session));
   OX (result_expr_out = result_expr);
   OX (n_part_expr = add_expr);
@@ -6109,15 +6146,28 @@ int ObRawExprUtils::build_sign_expr(ObRawExprFactory &expr_factory,
 }
 
 int ObRawExprUtils::build_less_than_expr(ObRawExprFactory &expr_factory,
-                                         ObRawExpr *left,
-                                         ObRawExpr *right,
-                                         ObOpRawExpr *&less_than_expr)
+                                                  ObRawExpr *left,
+                                                  ObRawExpr *right,
+                                                  ObOpRawExpr *&less_than_expr)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(left));
   CK (OB_NOT_NULL(right));
-  OZ (expr_factory.create_raw_expr(T_OP_LE, less_than_expr));
+  OZ (expr_factory.create_raw_expr(T_OP_LT, less_than_expr));
   OZ (less_than_expr->set_param_exprs(left, right));
+  return ret;
+}
+
+int ObRawExprUtils::build_less_than_or_equal_expr(ObRawExprFactory &expr_factory,
+                                                  ObRawExpr *left,
+                                                  ObRawExpr *right,
+                                                  ObOpRawExpr *&less_than_or_equal_expr)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(left));
+  CK (OB_NOT_NULL(right));
+  OZ (expr_factory.create_raw_expr(T_OP_LE, less_than_or_equal_expr));
+  OZ (less_than_or_equal_expr->set_param_exprs(left, right));
   return ret;
 }
 

@@ -97,7 +97,6 @@ public:
   ObAlterTableStmt *get_alter_table_stmt() { return static_cast<ObAlterTableStmt*>(stmt_); };
   int resolve_column_index(const common::ObString &column_name);
   int resolve_modify_all_trigger(const ParseNode &node);
-  int resolve_set_interval(ObAlterTableStmt *stmt, const ParseNode &node);
 
   int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
   int check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);

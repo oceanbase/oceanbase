@@ -106,6 +106,50 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaVersionUpdater);
 };
 
+static const char *SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_REQUEST = "REQUEST";
+static const char *SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT = "OBJECT";
+
+class ObSchemaGetterController
+{
+public:
+  ObSchemaGetterController()
+    : inited_(false) {}
+  ~ObSchemaGetterController() {}
+  int init(share::schema::ObMultiVersionSchemaService *schema_service);
+  int get_schema(const ObSchemaMgr *mgr,
+                const ObRefreshSchemaStatus &schema_status,
+                const ObSchemaType schema_type,
+                const uint64_t schema_id,
+                const int64_t schema_version,
+                common::ObKVCacheHandle &handle,
+                const ObSchema *&schema);
+private:
+  int check_inner_stat_() const;
+  int construct_schema_(const ObSchemaMgr *mgr,
+                        const ObRefreshSchemaStatus &schema_status,
+                        const ObSchemaType schema_type,
+                        const uint64_t schema_id,
+                        const int64_t schema_version,
+                        common::ObKVCacheHandle &handle,
+                        const ObSchema *&schema);
+  int check_and_set_key_(const ObSchemaCacheKey &key, bool &is_set);
+  int erase_key_(const ObSchemaCacheKey &key);
+  bool is_object_level_parallelism_(const uint64_t tenant_id, const ObSchemaMgr *mgr, const int64_t start_time) const;
+private:
+  static const int64_t COND_SLOT_NUM = 256;
+  static const int64_t CONSTRUCTING_KEY_SET_SIZE = 256;
+  static const int64_t MAX_SCHEMA_CONSTRUCT_WAIT_TIME_US = 10000000; // 10s
+  static const int64_t WAIT_TIME_MS = 500; // 0.5s
+private:
+  bool inited_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  ObThreadCond cond_slot_[COND_SLOT_NUM];
+  common::hash::ObHashSet<ObSchemaCacheKey> constructing_keys_;
+  ObSpinLock lock_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSchemaGetterController);
+};
+
 // singleton class
 class ObMultiVersionSchemaService;
 
@@ -383,6 +427,7 @@ public:
 friend class tools::ObAgentTaskGenerator;
 friend class tools::ObAgentTaskWorker;
 friend class ObDDLEpochMgr;
+friend class ObSchemaGetterController;
   virtual void stop();
   virtual void wait();
   virtual int destroy();
@@ -514,6 +559,7 @@ private:
   ObSchemaStoreMap schema_store_map_;
   ObDDLTransController ddl_trans_controller_;
   ObDDLEpochMgr ddl_epoch_mgr_;
+  ObSchemaGetterController schema_getter_controller_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMultiVersionSchemaService);
 };

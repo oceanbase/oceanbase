@@ -99,8 +99,6 @@ protected:
                        common::ObString &list_val_str,
                        common::ObString &b_list_val_str,
                        uint64_t tenant_id);
-  int gen_interval_part_name(int64_t part_id,
-                             ObString &part_name);
 
 private:
   char high_bound_val_[common::OB_MAX_B_HIGH_BOUND_VAL_LENGTH];

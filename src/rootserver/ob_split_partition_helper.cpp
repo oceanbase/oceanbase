@@ -150,6 +150,11 @@ int ObSplitPartitionHelper::check_allow_split(
   } else if (lob_col_idxs.empty() && table_schema.has_lob_aux_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can not support split table with lob aux table on gen column", K(ret), K(table_schema));
+  } else if (table_schema.is_interval_part()) {
+    // interval partition table is already defended in ObTableSchema::check_enable_split_partition
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("interval part table split partition is not supported", K(ret), K(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval part table split partition is");
   }
 
   if (OB_FAIL(ret)) {

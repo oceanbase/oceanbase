@@ -529,6 +529,12 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table required by materialized view", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table required by materialized view", tmp_prefix);
     }
+    // check if table is interval part
+    else if (table_schema->is_interval_part()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table with interval part", KR(ret), K(tenant_id), K(table_schema->get_table_id()));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table with interval part", tmp_prefix);
+    }
     // check for full text search index
     else if (OB_FAIL(check_support_direct_load_for_fts_index(schema_guard, table_schema, method, load_mode))) {
       LOG_WARN("fail to check support direct load for fts index", KR(ret));
