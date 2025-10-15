@@ -111,7 +111,7 @@ int ObDDLIncStartLog::init(const ObDDLIncLogBasic &log_basic)
   return ret;
 }
 
-int64_t ObDDLIncStartLog::get_serialize_size() const
+OB_DEF_SERIALIZE_SIZE(ObDDLIncStartLog)
 {
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, log_basic_, has_cs_replica_);
@@ -123,7 +123,7 @@ int64_t ObDDLIncStartLog::get_serialize_size() const
   return len;
 }
 
-int ObDDLIncStartLog::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+OB_DEF_SERIALIZE(ObDDLIncStartLog)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE, log_basic_, has_cs_replica_);
@@ -139,7 +139,7 @@ int ObDDLIncStartLog::serialize(char *buf, const int64_t buf_len, int64_t &pos) 
   return ret;
 }
 
-int ObDDLIncStartLog::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+OB_DEF_DESERIALIZE(ObDDLIncStartLog)
 {
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE, log_basic_, has_cs_replica_);
