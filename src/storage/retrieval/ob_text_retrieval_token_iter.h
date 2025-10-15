@@ -198,8 +198,7 @@ public:
   virtual int get_curr_block_max_info(const ObMaxScoreTuple *&max_score_tuple) override;
   virtual bool in_shallow_status() const override;
   // currently, for text retrieval, total_doc_cnt and token_doc_cnt is required before block max calculation
-  int init_block_max_iter();
-  void set_total_doc_cnt(const int64_t total_doc_cnt) { ranking_param_.total_doc_cnt_ = total_doc_cnt; }
+  int init_block_max_iter(const int64_t total_doc_cnt, const double avg_doc_token_cnt);
 private:
   int calc_dim_max_score(
       const ObBlockMaxScoreIterParam &block_max_iter_param,

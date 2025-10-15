@@ -32,12 +32,10 @@ int ObTextTaaTIter::init(const ObTextTaaTParam &param)
     LOG_WARN("failed to create text taat iter memory context", K(ret));
   } else if (OB_FAIL(ObSRTaaTIterImpl::init(*param.base_param_, *param.dim_iter_, *param.allocator_))) {
     LOG_WARN("failed to init sr taat iter", K(ret));
+  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
+    LOG_WARN("failed to init bm25 param estimator", K(ret));
   } else {
     query_tokens_ = param.query_tokens_;
-    total_doc_cnt_scan_param_ = param.total_doc_cnt_scan_param_;
-    estimated_total_doc_cnt_ = param.estimated_total_doc_cnt_;
-    total_doc_cnt_iter_ = param.total_doc_cnt_iter_;
-    total_doc_cnt_expr_ = param.total_doc_cnt_expr_;
     mode_flag_ = param.mode_flag_;
     function_lookup_mode_ = param.function_lookup_mode_;
   }
@@ -47,81 +45,35 @@ int ObTextTaaTIter::init(const ObTextTaaTParam &param)
 void ObTextTaaTIter::reset()
 {
   query_tokens_ = nullptr;
-  total_doc_cnt_calculated_ = false;
-  estimated_total_doc_cnt_ = 0;
+  bm25_param_estimator_.reset();
   if (OB_NOT_NULL(dim_iter_)) {
     static_cast<ObTextRetrievalTokenIter *>(dim_iter_)->reset();
   }
   ObSRTaaTIterImpl::reset();
 }
 
-void ObTextTaaTIter::reuse()
+void ObTextTaaTIter::reuse(const bool switch_tablet)
 {
-  if (estimated_total_doc_cnt_ > 0) {
-    // do nothing
-  } else if (function_lookup_mode_ && OB_NOT_NULL(total_doc_cnt_scan_param_)
-      && !total_doc_cnt_scan_param_->need_switch_param_) {
-    // do nothing
-  } else {
-    total_doc_cnt_calculated_ = false;
-  }
+  bm25_param_estimator_.reuse(switch_tablet);
   if (OB_NOT_NULL(dim_iter_)) {
     static_cast<ObTextRetrievalTokenIter *>(dim_iter_)->reuse();
   }
-  ObSRTaaTIterImpl::reuse();
+  ObSRTaaTIterImpl::reuse(switch_tablet);
 }
 
 int ObTextTaaTIter::pre_process()
 {
   int ret = OB_SUCCESS;
   if (iter_param_->need_project_relevance()) {
-    if (total_doc_cnt_calculated_) {
-    } else if (OB_FAIL(do_total_doc_cnt())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to do total document count", K(ret));
-      }
+    const bool is_first_estimation = !bm25_param_estimator_.is_estimated();
+    if (!is_first_estimation) {
+      // skip
+    } else if (OB_FAIL(bm25_param_estimator_.do_estimation(*iter_param_->eval_ctx_))) {
+      LOG_WARN("failed to do bm25 param estimation", K(ret));
     } else {
-      total_doc_cnt_calculated_ = true;
+      const int64_t total_doc_cnt = bm25_param_estimator_.get_total_doc_cnt();
+      partition_cnt_ = MIN((total_doc_cnt-1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
     }
-  }
-  return ret;
-}
-
-int ObTextTaaTIter::do_total_doc_cnt()
-{
-  int ret = OB_SUCCESS;
-  ObEvalCtx::BatchInfoScopeGuard guard(*iter_param_->eval_ctx_);
-  guard.set_batch_idx(0);
-  int64_t total_doc_cnt = 0;
-  if (OB_ISNULL(total_doc_cnt_expr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null total doc cnt expr", K(ret));
-  } else if (estimated_total_doc_cnt_ <= 0) {
-    if (OB_ISNULL(total_doc_cnt_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null total doc cnt iter", K(ret));
-    } else if (OB_FAIL(total_doc_cnt_iter_->get_next_row())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to get aggregated row from iter", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (total_doc_cnt_expr_->enable_rich_format()
-          && is_valid_format(total_doc_cnt_expr_->get_format(*iter_param_->eval_ctx_))) {
-        total_doc_cnt = total_doc_cnt_expr_->get_vector(*iter_param_->eval_ctx_)->get_int(0);
-      } else {
-        total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_).get_int();
-      }
-    }
-  } else {
-    ObDatum &total_doc_cnt_datum = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
-    total_doc_cnt_datum.set_int(estimated_total_doc_cnt_);
-    total_doc_cnt = estimated_total_doc_cnt_;
-    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt_datum));
-  }
-  if (OB_SUCC(ret)) {
-    partition_cnt_ = MIN((total_doc_cnt-1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
-    total_doc_cnt_calculated_ = true;
   }
   return ret;
 }

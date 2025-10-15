@@ -97,6 +97,9 @@ public:
     int ret = OB_SUCCESS;
     ls_id_ = ls_id;
     total_doc_cnt_tablet_id_ = related_tablet_ids.domain_id_idx_tablet_id_;
+    if (inv_idx_tablet_id_.is_valid() && inv_idx_tablet_id_ != related_tablet_ids.inv_idx_tablet_id_) {
+      inv_idx_tablet_switched_ = true;
+    }
     inv_idx_tablet_id_ = related_tablet_ids.inv_idx_tablet_id_;
     fwd_idx_tablet_id_ = related_tablet_ids.fwd_idx_tablet_id_;
     return ret;
@@ -140,6 +143,7 @@ private:
   int gen_fwd_idx_scan_feak_range(ObNewRange &scan_range);
   int init_topk_limit();
   int init_block_max_iter_param();
+  int init_doc_length_est_param();
 private:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
@@ -165,6 +169,8 @@ private:
   ObFtsEvalNode *boolean_compute_node_;
   ObFixedArray<ObTableScanParam *, ObIAllocator> block_max_scan_params_;
   ObBlockMaxScoreIterParam block_max_iter_param_;
+  ObBlockStatScanParam doc_length_est_param_;
+  ObFixedArray<ObSkipIndexColMeta, ObIAllocator> doc_length_est_stat_cols_;
   int64_t topk_limit_;
   ObLSID ls_id_;
   ObTabletID total_doc_cnt_tablet_id_;
@@ -181,6 +187,7 @@ private:
     uint32_t flags_;
   };
   bool check_rangekey_inited_;
+  bool inv_idx_tablet_switched_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObDASTRMergeIter);
 };

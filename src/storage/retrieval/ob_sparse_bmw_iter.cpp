@@ -64,14 +64,14 @@ int ObSRBMWIterImpl::init(
   return ret;
 }
 
-void ObSRBMWIterImpl::reuse()
+void ObSRBMWIterImpl::reuse(const bool switch_tablet)
 {
 
   while (!top_k_heap_.empty()) {
     top_k_heap_.pop();
   }
   status_ = BMWStatus::MAX_STATUS;
-  ObSRDaaTIterImpl::reuse();
+  ObSRDaaTIterImpl::reuse(switch_tablet);
 }
 
 void ObSRBMWIterImpl::reset()

@@ -146,7 +146,7 @@ public:
   virtual int inner_init(const ObSPIVDaaTParam &param);
   int set_valid_docid_set(const common::hash::ObHashSet<ObDocIdExt> &valid_docid_set);
   void reset();
-  virtual void reuse() override;
+  virtual void reuse(const bool switch_tablet = false) override;
   virtual void inner_reuse()
   {}
   virtual void inner_reset(){}
@@ -202,7 +202,7 @@ public:
     result_docids_.set_attr(ObMemAttr(MTL_ID(), "SPIVResultDocid"));
   }
   virtual ~ObSPIVBMWIter() { reset(); }
-  virtual void reuse() override;
+  virtual void reuse(const bool switch_tablet = false) override;
   void reset();
   int init(const ObSPIVDaaTParam &param);
   virtual int get_next_row() override;

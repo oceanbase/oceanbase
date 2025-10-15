@@ -10165,15 +10165,17 @@ int ObRawExprUtils::build_bm25_expr(ObRawExprFactory &expr_factory,
                                     ObRawExpr *related_token_cnt,
                                     ObRawExpr *total_doc_cnt,
                                     ObRawExpr *doc_token_cnt,
+                                    ObRawExpr *avg_doc_token_cnt,
                                     ObOpRawExpr *&bm25,
+                                    const bool use_avg_doc_token_cnt_pseudo_column,
                                     const ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *approx_avg_token_cnt = nullptr;
   ObOpRawExpr *bm25_expr = nullptr;
-  // TODO: @Salton implement approx avg token cnt storage in fulltext index and rm this mock
   constexpr double mock_approx_avg_cnt = 10;
-  if (OB_FAIL(build_const_double_expr(expr_factory, ObDoubleType, mock_approx_avg_cnt, approx_avg_token_cnt))) {
+  if (!use_avg_doc_token_cnt_pseudo_column &&
+      OB_FAIL(build_const_double_expr(expr_factory, ObDoubleType, mock_approx_avg_cnt, approx_avg_token_cnt))) {
     LOG_WARN("create approx average token count failed", K(ret));
   } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_BM25, bm25_expr))) {
     LOG_WARN("create bm25 func failed", K(ret));
@@ -10181,12 +10183,16 @@ int ObRawExprUtils::build_bm25_expr(ObRawExprFactory &expr_factory,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer to created bm25 related exprs", K(ret), KP(bm25));
   } else {
-    OZ(approx_avg_token_cnt->formalize(session));
     OZ(bm25_expr->init_param_exprs(5));
     OZ(bm25_expr->add_param_expr(related_doc_cnt));
     OZ(bm25_expr->add_param_expr(total_doc_cnt));
     OZ(bm25_expr->add_param_expr(doc_token_cnt));
-    OZ(bm25_expr->add_param_expr(approx_avg_token_cnt));
+    if (use_avg_doc_token_cnt_pseudo_column) {
+      OZ(bm25_expr->add_param_expr(avg_doc_token_cnt));
+    } else {
+      OZ(approx_avg_token_cnt->formalize(session));
+      OZ(bm25_expr->add_param_expr(approx_avg_token_cnt));
+    }
     OZ(bm25_expr->add_param_expr(related_token_cnt));
     OZ(bm25_expr->formalize(session));
     OX(bm25 = bm25_expr);

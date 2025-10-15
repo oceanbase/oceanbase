@@ -33,7 +33,7 @@ public:
       ObISparseRetrievalMergeIter &merge_iter,
       ObIAllocator &iter_allocator,
       const int64_t cache_capacity);
-  virtual void reuse() override;
+  virtual void reuse(const bool switch_tablet = false) override;
   virtual void reset() override;
   INHERIT_TO_STRING_KV("ObISparseRetrievalMergeIter", ObISparseRetrievalMergeIter,
       K_(cache_capacity), K_(rangekey_size));
