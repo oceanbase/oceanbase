@@ -2507,7 +2507,7 @@ int ObTableSqlService::create_table(ObTableSchema &table,
   lib::CompatModeGuard compat_mode_guard(compat_mode);
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(table.check_valid(true/*count by byte*/))) {
+  } else if (OB_FAIL(table.check_valid(true/*for_create*/))) {
     LOG_WARN("invalid create table argument, ", K(table));
   } else if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));

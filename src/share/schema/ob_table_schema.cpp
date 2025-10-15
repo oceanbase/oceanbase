@@ -2275,7 +2275,7 @@ void ObTableSchema::forbid_auto_partition()
   part_option_.forbid_auto_partition(is_partitioned_table());
 }
 
-int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
+int ObTableSchema::check_valid(const bool for_create) const
 {
   int ret = OB_SUCCESS;
 
@@ -2358,7 +2358,7 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
             varchar_col_total_length += OB_MAX_OBJECT_NAME_LENGTH;
           } else {
             int64_t varchar_col_len = 0;
-            if (ObVarcharType == column->get_data_type()) {
+            if (ObVarcharType == column->get_data_type() || (for_create && ob_is_string_tc(column->get_data_type()))) {
               if (OB_MAX_VARCHAR_LENGTH < column->get_data_length()) {
                 ret = OB_INVALID_ERROR;
                 LOG_WARN_RET(OB_INVALID_ERROR, "length of varchar column is larger than the max allowed length, ",
@@ -2366,7 +2366,7 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
                     "column_name", column->get_column_name(),
                     K(OB_MAX_VARCHAR_LENGTH));
               } else {
-                if (count_varchar_size_by_byte) {
+                if (for_create) {
                   if (OB_FAIL(column->get_byte_length(varchar_col_len, lib::is_oracle_mode(), false))) {
                     LOG_WARN("get_byte_length failed ", K(ret));
                   }
@@ -2472,7 +2472,7 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
 
 bool ObTableSchema::is_valid() const
 {
-  return OB_SUCCESS == check_valid(false/*count varchar by byte size == false*/);
+  return OB_SUCCESS == check_valid(false/*for_create*/);
 }
 
 int ObTableSchema::set_compress_func_name(const char *compressor)
