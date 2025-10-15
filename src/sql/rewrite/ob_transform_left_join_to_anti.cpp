@@ -547,6 +547,11 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
              OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid joined table", K(ret), K(joined_table));
+  } else if (stmt->is_select_stmt() &&
+             (static_cast<ObSelectStmt*>(stmt)->has_rollup() ||
+             static_cast<ObSelectStmt*>(stmt)->has_grouping_sets())) {
+    is_table_valid = false;
+    OPT_TRACE("contain rollup/grouping sets, cannot do left to anti");
   } else if (OB_FAIL(ObTransformUtils::check_contain_correlated_table(joined_table, contain_correlated_table))) {
     LOG_WARN("failed to check contain correlated table", K(ret));
   } else if (contain_correlated_table) {

@@ -9464,6 +9464,8 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
         LOG_WARN("failed to formalize", K(ret));
       } else if (OB_FAIL(multiset_expr->get_column_types().push_back(object_expr->get_result_type()))) {
         LOG_WARN("failed to add result type", K(ret));
+      } else if (OB_FAIL(object_expr->pull_relation_id())) {
+        LOG_WARN("failed to pull relation id", K(ret));
       }
     }
   }

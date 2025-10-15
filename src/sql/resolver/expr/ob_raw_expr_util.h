@@ -1234,6 +1234,7 @@ public:
                                           const ObExprResType &dst_type,
                                           const ObSQLSessionInfo *session,
                                           ObCastMode &cm);
+  static bool is_invalid_type_for_compare(const ObExprResType &type);
 private:
   static int need_extra_cast_for_enumset(const ObExprResType &src_type,
                                          const ObExprResType &dst_type,

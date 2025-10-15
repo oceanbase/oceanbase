@@ -802,6 +802,8 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                          ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
+  } else if (OB_FAIL(stmt->pull_all_expr_relation_id())) {
+    LOG_WARN("failed to pull all expr relation id", K(ret));
   } else if (OB_FAIL(update_max_table_num(stmt))) {
       LOG_WARN("failed to update max table num", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())

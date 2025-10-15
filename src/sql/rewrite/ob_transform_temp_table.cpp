@@ -591,6 +591,9 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
       } else if (OB_FAIL(compare_infos.push_back(new_helper))) {
         LOG_WARN("failed to push back compare info", K(ret));
       }
+      if (OB_FAIL(ret) && OB_NOT_NULL(new_helper)) {
+        new_helper->~StmtCompareHelper();
+      }
     }
   }
   //对每组相似stmt创建temp table
@@ -615,6 +618,9 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
         trans_happened |= is_happened;
       }
     }
+  }
+  // always destruct StmtCompareHelper regardless of ret code to avoid memory leak
+  for (int64_t i = 0; i < compare_infos.count(); ++i) {
     if (NULL != compare_infos.at(i)) {
       compare_infos.at(i)->~StmtCompareHelper();
       compare_infos.at(i) = NULL;
