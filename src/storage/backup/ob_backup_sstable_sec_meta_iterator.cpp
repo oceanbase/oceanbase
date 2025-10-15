@@ -163,17 +163,12 @@ int ObBackupSSTableSecMetaIterator::deep_copy_query_range_(const blocksstable::O
   int ret = OB_SUCCESS;
 
   // deep copy start/end key
-  if (OB_FAIL(query_range.start_key_.deep_copy(datum_range_.start_key_, allocator_))) {
-    LOG_WARN("failed to deep copy start key", K(ret), K(query_range));
+  if (OB_FAIL(datum_range_.deep_copy(query_range, allocator_))) {
+    LOG_WARN("failed to deep copy datum range", K(ret), K(query_range));
   } else if (OB_FAIL(query_range.start_key_.store_rowkey_.deep_copy(datum_range_.start_key_.store_rowkey_, allocator_))) {
-    LOG_WARN("failed to deep copy start store row key", K(ret), K(query_range));
-  } else if (OB_FAIL(query_range.end_key_.deep_copy(datum_range_.end_key_, allocator_))) {
-    LOG_WARN("failed to deep copy start key", K(ret), K(query_range));
+    LOG_WARN("failed to deep copy start key store rowkey", K(ret), K(query_range));
   } else if (OB_FAIL(query_range.end_key_.store_rowkey_.deep_copy(datum_range_.end_key_.store_rowkey_, allocator_))) {
-    LOG_WARN("failed to deep copy start store row key", K(ret), K(query_range));
-  } else {
-    datum_range_.group_idx_ = query_range.group_idx_;
-    datum_range_.border_flag_ = query_range.border_flag_;
+    LOG_WARN("failed to deep copy end key store rowkey", K(ret), K(query_range));
   }
 
   return ret;

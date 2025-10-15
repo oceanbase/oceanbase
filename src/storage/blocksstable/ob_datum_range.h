@@ -73,6 +73,7 @@ public:
   ObDatumRowkey start_key_;
   ObDatumRowkey end_key_;
   int64_t table_id_;
+private:
   union {
     int64_t flag_;
     struct {
@@ -82,6 +83,7 @@ public:
       int64_t reserved_: 15;
     };
   };
+public:
   //TODO maybe we should use a new border flag
   common::ObBorderFlag border_flag_;
 };
