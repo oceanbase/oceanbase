@@ -221,6 +221,8 @@ public:
   bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
   bool is_remove() const { return ATOMIC_LOAD(&is_remove_); }
   void set_is_remove() { return ATOMIC_STORE(&is_remove_, true); }
+  bool is_running() const { return !is_offline() && !is_remove() && !is_stopped(); }
+
   int64_t get_switch_epoch() const { return ATOMIC_LOAD(&switch_epoch_); }
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
