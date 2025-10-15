@@ -26,18 +26,18 @@ class ObAIFuncClient: public ObAIFuncHandle
 public:
   ObAIFuncClient();
   virtual ~ObAIFuncClient();
-  int init(common::ObIAllocator &allocator, ObString &url, ObArray<ObString> &headers);
+  int init(common::ObIAllocator &allocator, const ObString &url, ObArray<ObString> &headers);
   void clean_up();
   void reset();
   void set_timeout_sec(int64_t timeout_sec) { timeout_sec_ = timeout_sec; }
   // ai function interface
   virtual int send_post(common::ObIAllocator &allocator,
-                        ObString &url,
+                        const ObString &url,
                         ObArray<ObString> &headers,
                         ObJsonObject *data,
                         ObJsonObject *&response) override;
   virtual int send_post_batch(common::ObIAllocator &allocator,
-                              ObString &url,
+                              const ObString &url,
                               ObArray<ObString> &headers,
                               ObArray<ObJsonObject *> &data_array,
                               ObArray<ObJsonObject *> &responses) override;
@@ -53,6 +53,8 @@ private:
   static size_t write_callback(void *contents, size_t size, size_t nmemb, void *userp);
   bool is_retryable_status_code(int64_t http_code);
   bool is_timeout();
+private:
+  static const int64_t CURL_MAX_TIMEOUT_SEC;
   common::ObIAllocator *allocator_;
   char *url_;
   struct curl_slist *header_list_;

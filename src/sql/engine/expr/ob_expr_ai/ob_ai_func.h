@@ -32,9 +32,7 @@ struct ObAIFuncExprInfo : public ObIExprExtraInfo
 public:
   ObAIFuncExprInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
-      name_(), type_(), url_(), api_key_(), model_(), provider_(),
-      parameters_(), request_transform_fn_(),
-      response_transform_fn_()
+        name_(), type_(), model_()
   {
   }
   virtual ~ObAIFuncExprInfo() {}
@@ -42,31 +40,15 @@ public:
   {
     name_.reset();
     type_ = share::EndpointType::MAX_TYPE;
-    url_.reset();
-    api_key_.reset();
     model_.reset();
-    provider_.reset();
-    parameters_.reset();
-    request_transform_fn_.reset();
-    response_transform_fn_.reset();
   }
   virtual int deep_copy(common::ObIAllocator &allocator,
                         const ObExprOperatorType type,
                         ObIExprExtraInfo *&copied_info) const override;
-  int init(ObExecContext &exec_ctx, ObString &model_id);
-  int init(ObIAllocator &allocator, ObString &model_id);
-  int get_model_info(ObIAllocator &allocator, ObString &model_id);
-  int init_by_endpoint_info(common::ObIAllocator &allocator,
-                            share::ObAiModelEndpointInfo *endpoint_info);
+  int init(ObIAllocator &allocator, const ObString &model_id, share::schema::ObSchemaGetterGuard &schema_guard);
   common::ObString name_;
   share::EndpointType::TYPE type_;
-  common::ObString url_;
-  common::ObString api_key_;
   common::ObString model_;
-  common::ObString provider_;
-  common::ObString parameters_;
-  common::ObString request_transform_fn_;
-  common::ObString response_transform_fn_;
 };
 
 class ObAIFuncBase
@@ -135,12 +117,12 @@ public:
   ObAIFuncHandle() {}
   virtual ~ObAIFuncHandle() {}
   virtual int send_post(common::ObIAllocator &allocator,
-                        ObString &url,
+                        const ObString &url,
                         ObArray<ObString> &headers,
                         ObJsonObject *data,
                         ObJsonObject *&response) = 0;
   virtual int send_post_batch(common::ObIAllocator &allocator,
-                              ObString &url,
+                              const ObString &url,
                               ObArray<ObString> &headers,
                               ObArray<ObJsonObject *> &data_array,
                               ObArray<ObJsonObject *> &responses) = 0;

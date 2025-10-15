@@ -116,7 +116,7 @@ int ObAiServiceGuard::check_access_privilege()
   return ret;
 }
 
-int ObAiServiceGuard::get_ai_endpoint(const common::ObString &name, share::ObAiModelEndpointInfo *&endpoint_info)
+int ObAiServiceGuard::get_ai_endpoint(const common::ObString &name, const share::ObAiModelEndpointInfo *&endpoint_info)
 {
   int ret = OB_SUCCESS;
   ObAiModelEndpointInfo *tmp_endpoint_info = nullptr;
@@ -134,7 +134,7 @@ int ObAiServiceGuard::get_ai_endpoint(const common::ObString &name, share::ObAiM
   return ret;
 }
 
-int ObAiServiceGuard::get_ai_endpoint_by_ai_model_name(const common::ObString &ai_model_name, share::ObAiModelEndpointInfo *&endpoint_info)
+int ObAiServiceGuard::get_ai_endpoint_by_ai_model_name(const common::ObString &ai_model_name, const share::ObAiModelEndpointInfo *&endpoint_info)
 {
   int ret = OB_SUCCESS;
   ObAiModelEndpointInfo *tmp_endpoint_info = nullptr;

@@ -70,6 +70,7 @@ private:
                                       ObArray<ObJsonObject *> &responses,
                                       const ObBitVector &skip,
                                       const EvalBound &bound,
+                                      const ObAiModelEndpointInfo &endpoint_info,
                                       ObIVector *res_vec);
   static int pack_json_string_to_res_vector(const ObExpr &expr,
                                             ObEvalCtx &ctx,
