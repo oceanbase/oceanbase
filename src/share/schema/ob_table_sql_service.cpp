@@ -2425,8 +2425,15 @@ int ObTableSqlService::create_table(ObTableSchema &table,
   int64_t cost_usec = 0;
   const uint64_t tenant_id = table.get_tenant_id();
 
-  if (OB_FAIL(table.check_valid(true/*count by byte*/))) {
-    LOG_WARN("invalid create table argument, ", K(ret), K(table));
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(tenant_id, table.get_table_id(), compat_mode))) {
+      LOG_WARN("fail to get table compat mode", K(ret));
+  }
+  lib::CompatModeGuard compat_mode_guard(compat_mode);
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table.check_valid(true/*count by byte*/))) {
+    LOG_WARN("invalid create table argument, ", K(table));
   } else if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
   }
