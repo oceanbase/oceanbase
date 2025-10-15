@@ -162,13 +162,8 @@ int ObBackupCleanScheduler::drop_delete_policy_(const ObDeletePolicyAttr &policy
     // lock policy table and check if policy exists
     if (OB_FAIL(ObBackupCleanUtil::lock_policy_table_then_check(trans, policy_attr.tenant_id_, false/*log_only*/, exists))) {
       LOG_WARN("failed to lock and check policy exists", K(ret));
-    } else if (exists) {
-      if (OB_FAIL(ObDeletePolicyOperator::drop_delete_policy(trans, policy_attr))) {
-        LOG_WARN("failed to drop delete policy", K(ret), K(policy_attr));
-      }
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("policy does not exist, cannot drop", K(ret), K(policy_attr));
+    } else if (OB_FAIL(ObDeletePolicyOperator::drop_delete_policy(trans, policy_attr))) {
+      LOG_WARN("failed to drop delete policy", K(ret), K(policy_attr));
     }
 
     if (OB_SUCC(ret)) {
