@@ -12210,11 +12210,12 @@ struct ObRpcRemoteWriteDDLIncCommitLogRes final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObRpcRemoteWriteDDLIncCommitLogRes() : tx_result_() {}
+  ObRpcRemoteWriteDDLIncCommitLogRes() : tx_result_(), commit_scn_() {}
   ~ObRpcRemoteWriteDDLIncCommitLogRes() {}
-  TO_STRING_KV(K_(tx_result));
+  TO_STRING_KV(K_(tx_result), K_(commit_scn));
 public:
   transaction::ObTxExecResult tx_result_;
+  share::SCN commit_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogRes);
 };

@@ -12054,7 +12054,7 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
   return len;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLIncCommitLogRes, tx_result_);
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLIncCommitLogRes, tx_result_, commit_scn_);
 
 bool ObCheckLSCanOfflineArg::is_valid() const
 {
