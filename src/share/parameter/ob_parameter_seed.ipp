@@ -2992,7 +2992,7 @@ DEF_STR(_object_storage_condition_put_mode, OB_CLUSTER_PARAMETER, "none",
         "\"if-match\": conditional put with if-match.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE), "none, if-match");
 
-DEF_INT_WITH_CHECKER(default_micro_block_format_version, OB_TENANT_PARAMETER, "1",
+DEF_INT_WITH_CHECKER(default_micro_block_format_version, OB_TENANT_PARAMETER, "2",
                      common::ObConfigDefaultMicroBlockFormatVersionChecker,
                      "specify the default micro block format version when create table",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
