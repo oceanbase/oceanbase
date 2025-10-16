@@ -97,6 +97,7 @@ ObIndexSkipScanner::ObIndexSkipScanner(const bool is_for_memtable, const ObStora
     prefix_range_(),
     range_datums_(nullptr),
     read_info_(nullptr),
+    skip_scan_factory_(nullptr),
     stmt_alloc_(nullptr)
 {}
 
@@ -147,6 +148,7 @@ void ObIndexSkipScanner::reset()
   }
   range_datums_ = nullptr;
   read_info_ = nullptr;
+  skip_scan_factory_ = nullptr;
   stmt_alloc_ = nullptr;
   range_alloc_.reset();
   prefix_alloc_.reset();
@@ -459,6 +461,7 @@ int ObIndexSkipScanner::skip(ObMemtableSkipScanIterator &mem_iter, bool &is_end,
       LOG_WARN("failed to check scan range", KR(ret));
     } else if (OB_FAIL(update_complete_range(store_row, true /* is_for_memtable */, is_start_equal, is_end_equal))) {
       LOG_WARN("failed to update complete range", KR(ret));
+    } else if (FALSE_IT(is_prefix_filled_ = true)) {
     } else if (OB_FAIL(mem_iter.skip_to_range(complete_range_))) {
       LOG_WARN("failed to skip to range", KR(ret));
     }
@@ -477,14 +480,6 @@ int ObIndexSkipScanner::skip(ObMemtableSkipScanIterator &mem_iter, bool &is_end,
     LOG_WARN("failed to check scan range", KR(ret));
   } else if (OB_FAIL(update_complete_range(store_row, true /* is_for_memtable */, is_start_equal, is_end_equal))) {
     LOG_WARN("failed to update complete range", KR(ret));
-  } else if (OB_FAIL(check_disabled())) {
-    LOG_WARN("failed to check disabled", KR(ret));
-  } else if (is_disabled_) {
-    if (is_reverse_scan_) {
-      SET_ROWKEY_TO_SCAN_ROWKEY(start, left);
-    } else {
-      SET_ROWKEY_TO_SCAN_ROWKEY(end, right);
-    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(mem_iter.skip_to_range(complete_range_))) {
@@ -492,8 +487,6 @@ int ObIndexSkipScanner::skip(ObMemtableSkipScanIterator &mem_iter, bool &is_end,
   }
   return ret;
 }
-
-#undef SET_ROWKEY_TO_SCAN_ROWKEY
 
 int ObIndexSkipScanner::check_and_preprocess(
     const bool first,
@@ -506,11 +499,7 @@ int ObIndexSkipScanner::check_and_preprocess(
     LOG_WARN("unexpected scanner state", KR(ret), K(state), K(micro_scanner));
   } else if (first) {
     index_skip_strategy_.add_total_row_count(micro_scanner.get_access_cnt());
-    if (OB_FAIL(check_disabled())) {
-      LOG_WARN("failed to check disabled", KR(ret));
-    } else if (is_disabled_) {
-      LOG_DEBUG("[INDEX SKIP SCAN] is disabled", K(state), K(first), K_(is_prefix_filled));
-    } else if (OB_FAIL(micro_scanner.end_of_block())) {
+    if (OB_FAIL(micro_scanner.end_of_block())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("failed to check end of block", KR(ret), K(micro_scanner));
       } else {
@@ -795,6 +784,9 @@ int ObIndexSkipScanner::update_complete_range(
           K(is_start_equal), K(is_end_equal), KPC(this));
     }
   }
+  if (FAILEDx(check_disabled())) {
+    LOG_WARN("failed to check disabled", KR(ret));
+  }
   return ret;
 }
 
@@ -909,11 +901,47 @@ int ObIndexSkipScanner::update_state_and_strategy(
 int ObIndexSkipScanner::check_disabled()
 {
   int ret = OB_SUCCESS;
-  if (!is_disabled_ && OB_FAIL(index_skip_strategy_.check_disabled(index_skip_state_, is_disabled_))) {
+  bool should_disabled = false;
+  if (OB_UNLIKELY(is_disabled_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("skip scanner is already disabled, should not happen", KR(ret), KPC(this), K(lbt()));
+  } else if (OB_ISNULL(skip_scan_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("skip scanner mgr is null", KR(ret), KPC(this), K(lbt()));
+  } else if (skip_scan_factory_->is_pending_disabled()) {
+    const ObDatumRowkey &cur_prefix_key = complete_range_.start_key_;
+    const ObDatumRowkey *newest_prefix_key = nullptr;
+    int cmp_ret = 0;
+    if (OB_FAIL(skip_scan_factory_->get_newest_prefix_key(newest_prefix_key))) {
+      LOG_WARN("failed to get max prefix key", KR(ret));
+    } else if (OB_ISNULL(newest_prefix_key)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("max prefix key is null", KR(ret));
+    } else if (OB_FAIL(cur_prefix_key.compare(*newest_prefix_key, datum_utils_, cmp_ret, prefix_cnt_))) {
+      LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_prefix_key), K_(complete_range), KPC(this));
+    } else if ((!is_reverse_scan_ && cmp_ret > 0) || (is_reverse_scan_ && cmp_ret < 0)) {
+      // current prefix is behind the max prefix, so we can disable this index skip scanner now
+      is_disabled_ = true;
+      if (is_reverse_scan_) {
+        SET_ROWKEY_TO_SCAN_ROWKEY(start, left);
+      } else {
+        SET_ROWKEY_TO_SCAN_ROWKEY(end, right);
+      }
+      LOG_INFO("[INDEX SKIP SCAN] disabled", K_(is_disabled), K_(complete_range), KPC(this), KPC_(skip_scan_factory), K(lbt()));
+    }
+  } else if (OB_FAIL(index_skip_strategy_.check_disabled(index_skip_state_, should_disabled))) {
     LOG_WARN("failed to check disabled", KR(ret));
+  } else if (should_disabled) {
+    if (OB_FAIL(skip_scan_factory_->set_pending_disabled(is_reverse_scan_,prefix_cnt_, datum_utils_))) {
+      LOG_WARN("failed to set pending disabled", KR(ret), KPC(this), K_(complete_range), K(lbt()));
+    } else {
+      LOG_INFO("[INDEX SKIP SCAN] pending disabled", K(should_disabled), K_(complete_range), KPC_(skip_scan_factory), KPC(this), K(lbt()));
+    }
   }
   return ret;
 }
+
+#undef SET_ROWKEY_TO_SCAN_ROWKEY
 
 int ObIndexSkipScanFactory::build_index_skip_scanner(
     const ObTableIterParam &iter_param,
@@ -929,8 +957,12 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
   const ObITableReadInfo *read_info = iter_param.get_read_info();
   ObIAllocator &stmt_allocator = *access_ctx.stmt_allocator_;
 
-  if (OB_UNLIKELY(prefix_cnt <= 0 || nullptr == range || !range->is_valid() ||
-                  nullptr == skip_range || !skip_range->is_valid() || nullptr == read_info)) {
+  ObIndexSkipScanFactory *skip_scan_factory = access_ctx.get_skip_scan_factory();
+  if (OB_ISNULL(skip_scan_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("skip scanner mgr is null", KR(ret));
+  } else if (OB_UNLIKELY(prefix_cnt <= 0 || nullptr == range || !range->is_valid() ||
+                         nullptr == skip_range || !skip_range->is_valid() || nullptr == read_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument to build index skip scanner", K(prefix_cnt), KP(range),
              KP(skip_range), KP(skip_scanner));
@@ -945,6 +977,9 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
   } else if (OB_FAIL(skip_scanner->init(is_reverse_scan, prefix_cnt, *range,  *skip_range,
                                         *read_info, stmt_allocator))) {
     LOG_WARN("failed to init index skip scanner", KR(ret));
+  }
+  if (FAILEDx(skip_scan_factory->add_skip_scanner(skip_scanner))) {
+    LOG_WARN("failed to add skip scanner", KR(ret));
   }
   if (OB_FAIL(ret) && nullptr != skip_scanner) {
     skip_scanner->~ObIndexSkipScanner();
@@ -964,6 +999,103 @@ void ObIndexSkipScanFactory::destroy_index_skip_scanner(ObIndexSkipScanner *&ski
     }
     skip_scanner = nullptr;
   }
+}
+
+ObIndexSkipScanFactory::ObIndexSkipScanFactory()
+  : alloc_("SS_FACTORY", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    is_pending_disabled_(false),
+    newest_prefix_key_()
+{
+  skip_scanners_.set_attr(ObMemAttr(MTL_ID(), "SS_FACTORY"));
+}
+
+ObIndexSkipScanFactory::~ObIndexSkipScanFactory()
+{
+  reset();
+}
+
+void ObIndexSkipScanFactory::reuse()
+{
+  is_pending_disabled_ = false;
+  newest_prefix_key_.reset();
+  skip_scanners_.reuse();
+  alloc_.reuse();
+}
+
+void ObIndexSkipScanFactory::reset()
+{
+  is_pending_disabled_ = false;
+  newest_prefix_key_.reset();
+  skip_scanners_.reset();
+  alloc_.reset();
+}
+
+int ObIndexSkipScanFactory::add_skip_scanner(ObIndexSkipScanner *skip_scanner)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(skip_scanner)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null skip scanner", KR(ret));
+  } else if (OB_FAIL(skip_scanners_.push_back(skip_scanner))) {
+    LOG_WARN("failed to push back skip scanner", KR(ret));
+  } else {
+    skip_scanner->set_skip_scan_factory(this);
+  }
+  return ret;
+}
+
+int ObIndexSkipScanFactory::set_pending_disabled(
+    const bool is_reverse_scan,
+    const int64_t prefix_cnt,
+    const ObStorageDatumUtils &datum_utils)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_pending_disabled_ || newest_prefix_key_.is_valid() || skip_scanners_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid state to set pending disabled", KR(ret), KPC(this), K(lbt()));
+  } else {
+    const ObDatumRowkey *newest_key = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < skip_scanners_.count(); ++i) {
+      ObIndexSkipScanner *skip_scanner = skip_scanners_.at(i);
+      if (OB_ISNULL(skip_scanner)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null skip scanner", KR(ret), K(i), KPC(this));
+      } else if (!skip_scanner->is_prefix_filled()) {
+      } else if (!is_pending_disabled_) {
+        newest_key = &skip_scanner->get_complete_range().start_key_;
+        is_pending_disabled_ = true;
+      } else {
+        int cmp_ret = 0;
+        const ObDatumRowkey &cur_prefix_key = skip_scanner->get_complete_range().start_key_;
+        LOG_INFO("[INDEX SKIP SCAN] compare prefix", K(i), K(skip_scanners_.count()), K(cur_prefix_key), KPC(newest_key));
+        if (OB_FAIL(cur_prefix_key.compare(*newest_key, datum_utils, cmp_ret, prefix_cnt))) {
+          LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_key));
+        } else if ((!is_reverse_scan && cmp_ret > 0) || (is_reverse_scan && cmp_ret < 0)) {
+          newest_key = &cur_prefix_key;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(!is_pending_disabled_ || nullptr == newest_key || !newest_key->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid state to set pending disabled", KR(ret), KPC(newest_key), KPC(this), K(lbt()));
+    } else if (OB_FAIL(newest_key->deep_copy(newest_prefix_key_, alloc_))) {
+      LOG_WARN("failed to deep copy newest prefix key", KR(ret), KPC(newest_key));
+    }
+  }
+  return ret;
+}
+
+int ObIndexSkipScanFactory::get_newest_prefix_key(const ObDatumRowkey *&newest_prefix_key) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!newest_prefix_key_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("newest prefix key is invalid", KR(ret), K_(newest_prefix_key));
+  } else {
+    newest_prefix_key = &newest_prefix_key_;
+  }
+  return ret;
 }
 
 }

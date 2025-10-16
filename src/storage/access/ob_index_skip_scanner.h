@@ -33,6 +33,7 @@ class ObMemtableSkipScanIterator;
 namespace storage
 {
 class ObITableReadInfo;
+class ObIndexSkipScanFactory;
 enum class ObIndexSkipNodeState : int8_t
 {
   INVALID_STATE = 0,
@@ -198,6 +199,18 @@ public:
   {
     return is_disabled_;
   }
+  OB_INLINE bool is_prefix_filled() const
+  {
+    return is_prefix_filled_;
+  }
+  OB_INLINE const blocksstable::ObDatumRange &get_complete_range() const
+  {
+    return complete_range_;
+  }
+  OB_INLINE void set_skip_scan_factory(ObIndexSkipScanFactory *skip_scan_factory)
+  {
+    skip_scan_factory_ = skip_scan_factory;
+  }
   TO_STRING_KV(K_(is_inited),
                K_(is_disabled),
                K_(is_reverse_scan),
@@ -212,7 +225,10 @@ public:
                K_(index_skip_strategy),
                KP_(scan_range),
                KP_(skip_range),
-               KP_(range_datums));
+               KP_(range_datums),
+               KP_(read_info),
+               KP_(skip_scan_factory),
+               KP_(stmt_alloc));
 private:
   int check_and_preprocess(
       const bool first,
@@ -286,11 +302,13 @@ private:
   blocksstable::ObDatumRange prefix_range_;
   blocksstable::ObStorageDatum *range_datums_;
   const ObITableReadInfo *read_info_;
+  ObIndexSkipScanFactory *skip_scan_factory_;
   common::ObIAllocator *stmt_alloc_;
 };
 
-struct ObIndexSkipScanFactory
+class ObIndexSkipScanFactory
 {
+public:
   static int build_index_skip_scanner(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
@@ -298,6 +316,27 @@ struct ObIndexSkipScanFactory
       ObIndexSkipScanner *&skip_scanner,
       const bool is_for_memtable = false);
   static void destroy_index_skip_scanner(ObIndexSkipScanner *&skip_scanner);
+
+  ObIndexSkipScanFactory();
+  ~ObIndexSkipScanFactory();
+  void reuse();
+  void reset();
+  int add_skip_scanner(ObIndexSkipScanner *skip_scanner);
+  int set_pending_disabled(
+      const bool is_reverse_scan,
+      const int64_t prefix_cnt,
+      const blocksstable::ObStorageDatumUtils &datum_utils);
+  int get_newest_prefix_key(const blocksstable::ObDatumRowkey *&newest_prefix_key) const;
+  OB_INLINE bool is_pending_disabled() const
+  {
+    return is_pending_disabled_;
+  }
+  TO_STRING_KV(K_(is_pending_disabled), K_(newest_prefix_key), K_(skip_scanners));
+private:
+  common::ObArenaAllocator alloc_;
+  bool is_pending_disabled_;
+  blocksstable::ObDatumRowkey newest_prefix_key_;
+  common::ObSEArray<ObIndexSkipScanner*, 8> skip_scanners_;
 };
 
 } // namespace storage

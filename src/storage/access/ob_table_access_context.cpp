@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_access_context.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/access/ob_index_skip_scanner.h"
 
 namespace oceanbase
 {
@@ -81,7 +82,8 @@ ObTableAccessContext::ObTableAccessContext()
     mview_scan_info_(nullptr),
     truncate_part_filter_(nullptr),
     mds_collector_(nullptr),
-    row_scan_cnt_(nullptr)
+    row_scan_cnt_(nullptr),
+    skip_scan_factory_(nullptr)
 {
   merge_scn_.set_max();
 }
@@ -117,6 +119,13 @@ ObTableAccessContext::~ObTableAccessContext()
     ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
   } else {
     truncate_part_filter_ = nullptr;
+  }
+  if (OB_UNLIKELY(nullptr != skip_scan_factory_)) {
+    skip_scan_factory_->~ObIndexSkipScanFactory();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(skip_scan_factory_);
+    }
+    skip_scan_factory_ = nullptr;
   }
 }
 
@@ -244,6 +253,8 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
           query_flag_.is_reverse_scan(),
           scan_param.allocator_))) {
       LOG_WARN("Failed to build sample filter", K(ret), K(scan_param));
+    } else if (scan_param.use_index_skip_scan() && OB_FAIL(alloc_skip_scan_factory())) {
+      LOG_WARN("Failed to alloc skip scan factory", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -472,6 +483,13 @@ void ObTableAccessContext::reset()
     }
     cg_iter_pool_ = nullptr;
   }
+  if (OB_UNLIKELY(nullptr != skip_scan_factory_)) {
+    skip_scan_factory_->~ObIndexSkipScanFactory();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(skip_scan_factory_);
+    }
+    skip_scan_factory_ = nullptr;
+  }
   is_inited_ = false;
   timeout_ = 0;
   ls_id_.reset();
@@ -547,6 +565,7 @@ void ObTableAccessContext::reuse()
   if (nullptr != sample_filter_) {
     sample_filter_->reuse();
   }
+  reuse_skip_scan_factory();
   row_scan_cnt_ = nullptr;
 }
 
@@ -589,6 +608,24 @@ int ObTableAccessContext::check_filtered_by_base_version(ObDatumRow &row)
       row.row_flag_.reset();
       row.row_flag_.set_flag(DF_NOT_EXIST);
     }
+  }
+  return ret;
+}
+
+int ObTableAccessContext::alloc_skip_scan_factory()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (nullptr != skip_scan_factory_) {
+    skip_scan_factory_->reuse();
+  } else if (OB_ISNULL(stmt_allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt allocator is null", K(ret));
+  } else if (OB_ISNULL(buf = stmt_allocator_->alloc(sizeof(ObIndexSkipScanFactory)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to alloc memory for ObIndexSkipScanFactory", K(ret));
+  } else {
+    skip_scan_factory_ = new (buf) ObIndexSkipScanFactory();
   }
   return ret;
 }

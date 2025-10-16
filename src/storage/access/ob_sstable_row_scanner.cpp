@@ -448,10 +448,11 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
       if (OB_FAIL(micro_scanner_->get_next_row(store_row))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next row", K(ret));
+        } else if (FALSE_IT(preprocess_skip_scanner(prefetcher_.current_micro_info()))) {
         } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()) &&
                    OB_FAIL(skip_scanner_->skip(*micro_scanner_, prefetcher_.current_micro_info())))) {
           LOG_WARN("Fail to switch prefix", K(ret));
-        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()))) {
+        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info(), true))) {
           LOG_DEBUG("[INDEX SKIP SCAN] skip to next prefix and it has data, continue get row");
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
           ret = OB_ITER_END;
@@ -576,10 +577,11 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
       } else if (OB_FAIL(micro_scanner_->get_next_rows())) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next row", K(ret));
+        } else if (FALSE_IT(preprocess_skip_scanner(prefetcher_.current_micro_info()))) {
         } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()) &&
                    OB_FAIL(skip_scanner_->skip(*micro_scanner_, prefetcher_.current_micro_info())))) {
           LOG_WARN("Fail to switch prefix", K(ret));
-        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info()))) {
+        } else if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(prefetcher_.current_micro_info(), true))) {
           LOG_DEBUG("[INDEX SKIP SCAN] skip to next prefix and it has data, continue get rows");
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
           ret = OB_ITER_END;

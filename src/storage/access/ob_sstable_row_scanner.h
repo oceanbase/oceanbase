@@ -96,9 +96,17 @@ private:
   {
     return nullptr != skip_scanner_ && !skip_scanner_->is_disabled();
   }
-  OB_INLINE bool has_skip_scanner_and_not_skipped(const ObMicroIndexInfo &index_info) const
+  OB_INLINE bool has_skip_scanner_and_not_skipped(const ObMicroIndexInfo &index_info, const bool ignore_disabled = false) const
   {
-    return has_skip_scanner() && !index_info.skip_state_.is_skipped();
+    return nullptr != skip_scanner_ &&
+           (ignore_disabled || !skip_scanner_->is_disabled()) &&
+           !index_info.skip_state_.is_skipped();
+  }
+  OB_INLINE void preprocess_skip_scanner(ObMicroIndexInfo &index_info)
+  {
+    if (nullptr != skip_scanner_ && skip_scanner_->is_disabled()) {
+      index_info.skip_state_.set_state(0, ObIndexSkipNodeState::PREFIX_SKIPPED_LEFT);
+    }
   }
 
 protected:

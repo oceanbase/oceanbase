@@ -39,6 +39,7 @@ class ObBlockRowStore;
 class ObCGIterParamPool;
 struct ObTableScanRange;
 class ObTruncatePartitionFilter;
+class ObIndexSkipScanFactory;
 
 #define REALTIME_MONITOR_ADD_IO_READ_BYTES(CTX, SIZE) \
   if (OB_NOT_NULL(CTX)) CTX->add_io_read_bytes(SIZE)  \
@@ -228,6 +229,7 @@ struct ObTableAccessContext
   int init_scan_allocator(ObTableScanParam &scan_param);
   int init_mview_scan_info(const int64_t multi_version_start, const sql::ObExprPtrIArray *op_filters, sql::ObEvalCtx &eval_ctx);
   int check_filtered_by_base_version(ObDatumRow &row);
+  int alloc_skip_scan_factory();
   OB_INLINE bool has_truncate_filter() const
   {
     return nullptr != truncate_part_filter_;
@@ -299,7 +301,8 @@ struct ObTableAccessContext
     K_(table_store_stat),
     KP_(truncate_part_filter),
     KP_(mds_collector),
-    KP_(row_scan_cnt));
+    KP_(row_scan_cnt),
+    KP_(skip_scan_factory));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -326,6 +329,16 @@ public:
   ObMdsReadInfoCollector * get_mds_collector()
   {
     return mds_collector_;
+  }
+  OB_INLINE ObIndexSkipScanFactory *get_skip_scan_factory()
+  {
+    return skip_scan_factory_;
+  }
+  OB_INLINE void reuse_skip_scan_factory()
+  {
+    if (OB_UNLIKELY(nullptr != skip_scan_factory_)) {
+      skip_scan_factory_->reuse();
+    }
   }
   bool is_inited_;
   bool use_fuse_row_cache_; // temporary code
@@ -365,6 +378,7 @@ public:
   ObTruncatePartitionFilter *truncate_part_filter_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;
+  ObIndexSkipScanFactory *skip_scan_factory_;
 };
 
 } // namespace storage

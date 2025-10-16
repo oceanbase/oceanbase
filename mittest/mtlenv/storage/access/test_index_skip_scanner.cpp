@@ -374,6 +374,7 @@ void TestIndexSkipScanner::test_one_case()
   ASSERT_EQ(OB_SUCCESS, scanner.init(iter_param_, context_, &sstable_, &scan_range_));
   iter_param_.set_skip_scan_range(skip_range_);
   iter_param_.ss_rowkey_prefix_cnt_ = prefix_cnt_;
+  context_.alloc_skip_scan_factory();
   ASSERT_EQ(OB_SUCCESS, skip_scanner.init(iter_param_, context_, &sstable_, &scan_range_));
 
 

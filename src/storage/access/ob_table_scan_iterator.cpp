@@ -266,6 +266,7 @@ void ObTableScanIterator::reuse()
   reuse_row_iters();
   sample_ranges_.reuse();
   main_table_param_.reuse();
+  main_table_ctx_.reuse_skip_scan_factory();
 }
 
 void ObTableScanIterator::reset_for_switch()
