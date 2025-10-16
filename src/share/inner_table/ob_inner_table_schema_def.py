@@ -330,6 +330,7 @@ all_table_def = dict(
       ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'),
       ('semistruct_properties', 'longtext', 'false', ''),
+      ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
     ],
 )
 

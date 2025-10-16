@@ -2753,6 +2753,7 @@ DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_DUPLICATE, -9831, -1, "HY000", "Attribute
 DEFINE_ERROR(OB_ERR_ALTER_INVALID_UDT, -9832, -1, "HY000", "cannot alter a type that is not valid");
 DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_TYPE_ILLEGAL, -9833, -1, "HY000", "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute", 718, "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute");
 DEFINE_ERROR(OB_ERR_ALTER_HAS_DEPENDENT, -9834, -1, "HY000", "must specify either CASCADE or INVALIDATE option");
+DEFINE_ERROR(OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD, -9835, -1, "HY000", "materialized view can not use direct load");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

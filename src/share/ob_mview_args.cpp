@@ -54,6 +54,7 @@ void ObMViewCompleteRefreshArg::reset()
   required_columns_infos_.reset();
   allocator_.reset();
   ObDDLArg::reset();
+  use_direct_load_for_complete_refresh_ = true;
 }
 
 int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
@@ -71,7 +72,7 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
       last_refresh_scn_ = other.last_refresh_scn_;
       parent_task_id_ = other.parent_task_id_;
       target_data_sync_scn_ = other.target_data_sync_scn_;
-      select_sql_ = other.select_sql_;
+      use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
       if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
         LOG_WARN("fail to assign tz info", KR(ret), "tz_info", other.tz_info_);
       } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
@@ -85,6 +86,8 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(required_columns_infos_.assign(other.required_columns_infos_))) {
         LOG_WARN("fail to assign required columns infos", KR(ret), K(other.required_columns_infos_));
+      } else if (OB_FAIL(ob_write_string(allocator_, other.select_sql_, select_sql_))) {
+        LOG_WARN("fail to assign use direct load for complete refresh", KR(ret), K(other.select_sql_));
       }
     }
   }
@@ -114,6 +117,7 @@ OB_DEF_SERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ENCODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_ENCODE, select_sql_);
     LST_DO_CODE(OB_UNIS_ENCODE, required_columns_infos_);
+    LST_DO_CODE(OB_UNIS_ENCODE, use_direct_load_for_complete_refresh_);
   }
   return ret;
 }
@@ -151,6 +155,7 @@ OB_DEF_DESERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_DECODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_DECODE, select_sql_);
     LST_DO_CODE(OB_UNIS_DECODE, required_columns_infos_);
+    LST_DO_CODE(OB_UNIS_DECODE, use_direct_load_for_complete_refresh_);
   }
   return ret;
 }
@@ -179,6 +184,7 @@ OB_DEF_SERIALIZE_SIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ADD_LEN, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, select_sql_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, required_columns_infos_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, use_direct_load_for_complete_refresh_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -207,6 +213,7 @@ void ObMViewRefreshInfo::reset()
   is_mview_complete_refresh_ = false;
   mview_target_data_sync_scn_.reset();
   select_sql_.reset();
+  use_direct_load_for_complete_refresh_ = true;
 }
 
 int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
@@ -220,6 +227,7 @@ int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
     is_mview_complete_refresh_ = other.is_mview_complete_refresh_;
     mview_target_data_sync_scn_ = other.mview_target_data_sync_scn_;
     select_sql_ = other.select_sql_;
+    use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
   }
   return ret;
 }
@@ -231,7 +239,8 @@ OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     start_time_,
                     is_mview_complete_refresh_,
                     mview_target_data_sync_scn_,
-                    select_sql_);
+                    select_sql_,
+                    use_direct_load_for_complete_refresh_);
 
 OB_SERIALIZE_MEMBER(ObMVRequiredColumnsInfo,
                     base_table_id_,
