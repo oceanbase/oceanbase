@@ -1146,6 +1146,7 @@ struct ObUDFInfo
     is_contain_self_param_(false),
     is_udt_udf_inside_pkg_(false),
     is_new_keyword_used_(false),
+    is_associative_array_with_param_assign_op_(false),
     flag_(0) {}
 
   void set_is_udf_udt_static() {
@@ -1193,6 +1194,7 @@ struct ObUDFInfo
                K_(is_contain_self_param),
                K_(is_udt_udf_inside_pkg),
                K_(is_new_keyword_used),
+               K_(is_associative_array_with_param_assign_op),
                K_(flag));
 
   common::ObString udf_name_;
@@ -1207,6 +1209,7 @@ struct ObUDFInfo
   bool is_contain_self_param_; // self param is mocked.
   bool is_udt_udf_inside_pkg_;
   bool is_new_keyword_used_;  // if in NEW obj(...) form
+  bool is_associative_array_with_param_assign_op_; // check for associative arrray
   uint64_t flag_;
 };
 
@@ -4267,16 +4270,20 @@ class ObCollectionConstructRawExpr : public ObSysFunRawExpr
 public:
   ObCollectionConstructRawExpr(common::ObIAllocator &alloc)
     : ObSysFunRawExpr(alloc),
+      is_associative_array_with_param_assign_op_(false),
       type_(pl::ObPLType::PL_INVALID_TYPE),
       elem_type_(),
+      index_type_(),
       capacity_(OB_INVALID_SIZE),
       udt_id_(OB_INVALID_ID),
       database_id_(OB_INVALID_ID),
       coll_schema_version_(common::OB_INVALID_VERSION) {}
   ObCollectionConstructRawExpr()
     : ObSysFunRawExpr(),
+      is_associative_array_with_param_assign_op_(false),
       type_(pl::ObPLType::PL_INVALID_TYPE),
       elem_type_(),
+      index_type_(),
       capacity_(OB_INVALID_SIZE),
       udt_id_(OB_INVALID_ID),
       database_id_(OB_INVALID_ID),
@@ -4285,6 +4292,7 @@ public:
 
   inline void set_type(pl::ObPLType type) { type_ = type; }
   inline void set_elem_type(const pl::ObPLDataType &type) { new(&elem_type_)pl::ObPLDataType(type); }
+  inline void set_index_type(const pl::ObPLDataType &type) { new(&index_type_)pl::ObPLDataType(type); }
   inline void set_capacity(int64_t capacity) { capacity_ = capacity; }
   inline void set_udt_id(uint64_t udt_id) { udt_id_ = udt_id; }
 
@@ -4294,11 +4302,13 @@ public:
   pl::ObPLType get_type() const { return type_; }
   bool is_not_null() const { return elem_type_.is_not_null(); }
   const pl::ObPLDataType& get_elem_type() const { return elem_type_; }
+  const pl::ObPLDataType& get_index_type() const { return index_type_; }
   int64_t get_capacity() const { return capacity_; }
   uint64_t get_udt_id() const { return udt_id_; }
   int64_t get_udt_version() const { return coll_schema_version_; }
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
+  bool is_associative_array_with_param_assign_op_;
 
   virtual ObExprOperator *get_op() override;
 
@@ -4332,6 +4342,7 @@ public:
 private:
   pl::ObPLType type_; // PL_NESTED_TABLE_TYPE|PL_ASSOCIATIVE_ARRAY_TYPE|PL_VARRAY_TYPE
   pl::ObPLDataType elem_type_; // 记录复杂数据类型的元素类型
+  pl::ObPLDataType index_type_;
   int64_t capacity_; //记录VArray的容量，对于NestedTable为-1
   uint64_t udt_id_; // 记录复杂类型的ID
   // 用于打印构造函数的名字
