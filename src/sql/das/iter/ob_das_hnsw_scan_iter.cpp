@@ -585,6 +585,20 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row, int64_t size)
   return ret;
 }
 
+bool ObDASHNSWScanIter::is_parallel()
+{
+  int64_t expected_worker_cnt = 0;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  if (OB_NOT_NULL(exec_ctx_)) {
+    task_exec_ctx = exec_ctx_->get_task_executor_ctx();
+    if (OB_NOT_NULL(task_exec_ctx)) {
+      expected_worker_cnt = task_exec_ctx->get_expected_worker_cnt();
+    }
+  }
+  LOG_DEBUG("print worker cnt", K(expected_worker_cnt), K(exec_ctx_), K(task_exec_ctx));
+  return expected_worker_cnt > 1;
+}
+
 int ObDASHNSWScanIter::check_iter_filter_need_retry()
 {
   int ret = OB_SUCCESS;
@@ -609,7 +623,8 @@ int ObDASHNSWScanIter::check_pre_filter_need_retry()
 {
   int ret = OB_SUCCESS;
   double pre_selectivity = double(adaptive_ctx_.pre_scan_row_cnt_) / double(adaptive_ctx_.row_count_);
-  if (adaptive_ctx_.pre_scan_row_cnt_ <= MAX_HNSW_BRUTE_FORCE_SIZE) {
+  // when is parallel, cannot trans to post flter 
+  if (adaptive_ctx_.pre_scan_row_cnt_ <= MAX_HNSW_BRUTE_FORCE_SIZE || is_parallel()) {
     /*do nothing*/
   } else if (!adaptive_ctx_.is_primary_index_ && pre_selectivity > ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
     ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
