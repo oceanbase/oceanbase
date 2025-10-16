@@ -279,7 +279,7 @@ int ObSelectIntoOp::inner_close()
   int ret = OB_SUCCESS;
   int old_errcode = ctx_.get_errcode();
   bool need_retry = true;
-  if (OB_SUCCESS == old_errcode) {
+  if (OB_SUCCESS == old_errcode || OB_ITER_END == old_errcode) {
     need_retry = false;
     if (file_location_ == IntoFileLocation::REMOTE_OSS) {
       if (OB_FAIL(data_writer_.flush(get_flush_function()))) {
@@ -290,19 +290,25 @@ int ObSelectIntoOp::inner_close()
   // delete oss file before close_file
   if (OB_SUCC(ret) && need_retry
       && IntoFileLocation::REMOTE_OSS == file_location_) {
+    int delete_cnt = 0;
     for (int i = 0; i < created_files_.count() && OB_SUCC(ret); i++) {
-      LOG_TRACE("delete oss file", K(created_files_.at(i)));
+      LOG_TRACE("delete oss file", K(created_files_.at(i)), K(old_errcode));
       OZ(device_handle_->unlink(created_files_.at(i).ptr()));
+      ++delete_cnt;
     }
+    LOG_WARN("delete oss file cnt", K(delete_cnt), K(created_files_), K(old_errcode));
   }
   OZ(close_file());
   // delete disk file after close_file
   if (OB_SUCC(ret) && need_retry
       && IntoFileLocation::SERVER_DISK == file_location_) {
+    int delete_cnt = 0;
     for (int i = 0; i < created_files_.count() && OB_SUCC(ret); i++) {
-      LOG_TRACE("delete disk file", K(created_files_.at(i)));
+      LOG_TRACE("delete disk file", K(created_files_.at(i)), K(old_errcode));
       OZ(common::FileDirectoryUtils::delete_file(created_files_.at(i).ptr()));
+      ++delete_cnt;
     }
+    LOG_WARN("delete disk file cnt", K(delete_cnt), K(created_files_), K(old_errcode));
   }
   return ret;
 }
@@ -362,6 +368,7 @@ int ObSelectIntoOp::get_row_str(const int64_t buf_len,
 int ObSelectIntoOp::open_file()
 {
   int ret = OB_SUCCESS;
+  ObString copied_url;
   if (IntoFileLocation::REMOTE_OSS == file_location_) {
     ObIODOpt opt;
     ObIODOpts iod_opts;
@@ -372,7 +379,6 @@ int ObSelectIntoOp::open_file()
 
     ObSqlString url_with_suffix;
     bool is_exist = false;
-
     if (OB_FAIL(url_with_suffix.assign(url_))) {
       LOG_WARN("fail to assign string", K(ret));
     } else if (0 != split_file_id_  //using origin file name, assuming file do not need split
@@ -385,21 +391,19 @@ int ObSelectIntoOp::open_file()
       LOG_WARN("fail already exist", K(ret), K(url_));
     } else if (OB_FAIL(device_handle_->open(url_with_suffix.ptr(), -1, 0, fd_, &iod_opts))) {
       LOG_WARN("fail to open file", K(ret));
-    } else {
-      ObString url_with_suffix_str;
-      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), url_with_suffix.string(), url_with_suffix_str))) {
-        LOG_WARN("fail to write string", K(ret));
-      } else if (OB_FAIL(created_files_.push_back(url_with_suffix_str))) {
-        LOG_WARN("fail to push back string", K(ret));
-      }
+    } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), url_with_suffix.string(), copied_url, true))) {
+      LOG_WARN("fail to write string", K(ret));
     }
   } else {
     if (OB_FAIL(file_appender_.create(url_, true))) {
       LOG_WARN("create dumpfile failed", K(ret), K(url_));
-    } else if (OB_FAIL(created_files_.push_back(url_))) {
-      LOG_WARN("fail to push back string", K(ret));
+    } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), url_, copied_url, true))) {
+      LOG_WARN("fail to write string", K(ret));
     }
     file_location_ = IntoFileLocation::SERVER_DISK;
+  }
+  if (OB_SUCC(ret) && OB_FAIL(created_files_.push_back(copied_url))) {
+    LOG_WARN("fail to push back string", K(ret));
   }
   return ret;
 }
