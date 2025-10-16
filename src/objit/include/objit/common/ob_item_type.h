@@ -2951,6 +2951,7 @@ typedef enum ObItemType
   T_DEFAULT_CATALOG = 4917, // for hive metastore side default catalog
   T_TABLE_VERSION_QUERY = 4918,
   T_TABLE_VERSION_QUERY_TIMESTAMP = 4919,
+  T_TABLE_LOCK_MODE_HINT = 4920,  // to lock table before execute dml
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
