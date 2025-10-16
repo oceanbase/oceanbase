@@ -108,6 +108,9 @@ cmake-build-release
 *.iml
 ## OSX dir files
 .DS_Store
+## CMakeCache
+CMakeCache.txt
+CMakeFiles/
 
 ############# src #############
 src/.settings/
