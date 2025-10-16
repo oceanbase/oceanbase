@@ -17,7 +17,7 @@
 | ObSysFunRawExpr | 248 |
 | ObSequenceRawExpr | 328 |
 | ObNormalDllUdfRawExpr | 712 |
-| ObCollectionConstructRawExpr | 584 |
+| ObCollectionConstructRawExpr | 672 |
 | ObObjectConstructRawExpr | 712 |
 | ObUDFRawExpr | 1544 |
 | ObPLIntegerCheckerRawExpr | 248 |
