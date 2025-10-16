@@ -109,6 +109,8 @@ int ObBackupTaskSchedulerQueue::init(
     LOG_WARN("init server stat failed", K(ret));
   } else if (OB_FAIL(task_map_.create(bucket_num, attr))) {
     LOG_WARN("fail to init task map", K(ret), K(bucket_num));
+  } else if (OB_FAIL(overflow_task_types_.create(static_cast<int64_t>(BackupJobType::BACKUP_JOB_MAX), attr))) {
+    LOG_WARN("fail to init hashset of overflow task types", K(ret));
   } else if (OB_FAIL(task_allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
     LOG_WARN("fail to init task allocator", K(ret));
   } else {
@@ -122,12 +124,33 @@ int ObBackupTaskSchedulerQueue::init(
   return ret;
 }
 
+int ObBackupTaskSchedulerQueue::add_overflow_task_type_(const BackupJobType &job_type) {
+  // mutex guard by caller
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(overflow_task_types_.set_refactored(static_cast<int64_t>(job_type)))) {
+    if (OB_HASH_EXIST == ret) { // already in overflow_task_types_
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to add overflow task type", K(ret), K(job_type));
+    }
+  } else {
+    LOG_INFO("overflow task type added", K(job_type));
+  }
+  return ret;
+}
+
 int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
   if (OB_FAIL(push_task_without_lock_(task))) {
     LOG_WARN("failed to push task", K(ret));
+    if (OB_SIZE_OVERFLOW == ret) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = add_overflow_task_type_(task.get_type()))) {
+        LOG_WARN("failed to add overflow task type", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }
@@ -135,13 +158,18 @@ int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
 int ObBackupTaskSchedulerQueue::push_task_without_lock_(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
+  int64_t queue_capacity = max_size_;
+#ifdef ERRSIM
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(gen_user_tenant_id(MTL_ID())));
+  queue_capacity = tenant_config->backup_task_scheduler_queue_size;
+#endif
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not inited", K(ret));
   } else if (task_scheduler_->has_set_stop()) {
-  } else if (get_task_cnt_() >= max_size_) {
+  } else if (get_task_cnt_() >= queue_capacity) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("task scheduler queue is full, cant't push task", K(ret), K(get_task_cnt_()));
+    LOG_WARN("task scheduler queue is full, can't push task", K(ret), K(get_task_cnt_()), K(queue_capacity));
   } else if (OB_FAIL(check_push_unique_task_(task))) {
     LOG_WARN("fail to check unique task", K(ret), K(task));
   } else {
@@ -1148,6 +1176,23 @@ int ObBackupTaskSchedulerQueue::remove_task_(ObBackupScheduleTask *task, const b
     task->~ObBackupScheduleTask();
     task_allocator_.free(task);
     task = nullptr;
+    // wakeup services that have overflow task type
+    if (OB_SUCCESS != (tmp_ret = wakeup_overflowed_services_())) {
+      LOG_ERROR("failed to reset and wakeup overflowed services", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::wakeup_overflowed_services_()
+{
+  // mutex guard by caller
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> overflow_task_types;
+  if (OB_FAIL(get_and_clear_overflow_types_(overflow_task_types))) {
+    LOG_ERROR("failed to get and clear overflow types", K(ret));
+  } else if (OB_FAIL(task_scheduler_->wakeup_services_by_type(overflow_task_types))) {
+    LOG_ERROR("fail to wakeup services that have overflow task", K(ret));
   }
   return ret;
 }
@@ -1175,6 +1220,22 @@ int ObBackupTaskSchedulerQueue::get_schedule_tasks(
         LOG_WARN("push back fail", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::get_and_clear_overflow_types_(common::ObIArray<int64_t> &overflow_task_types)
+{
+  int ret = OB_SUCCESS;
+  for (common::hash::ObHashSet<int64_t>::iterator iter = overflow_task_types_.begin();
+       OB_SUCC(ret) && iter != overflow_task_types_.end(); ++iter) {
+    if (OB_FAIL(overflow_task_types.push_back(iter->first))) {
+      LOG_WARN("failed to copy overflow type", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(overflow_task_types_.clear())) {
+    LOG_WARN("failed to clear overflow task types", K(ret));
   }
   return ret;
 }
@@ -1643,27 +1704,41 @@ int ObBackupTaskScheduler::reuse()
   return ret;
 }
 
-int ObBackupTaskScheduler::get_backup_job(const BackupJobType &type, ObIBackupJobScheduler *&job)
+int ObBackupTaskScheduler::get_type_matched_service_(const BackupJobType &type, ObBackupService *&srv)
 {
   int ret = OB_SUCCESS;
-  ObMutexGuard guard(scheduler_mtx_);
+  srv = nullptr;
+  ObIBackupJobScheduler *job = nullptr;
   ARRAY_FOREACH(backup_srv_array_, i) {
-    ObBackupService *srv = backup_srv_array_.at(i);
-    if (OB_ISNULL(srv)) {
+    ObBackupService *cur_srv = backup_srv_array_.at(i);
+    if (OB_ISNULL(cur_srv)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup service must not be null", K(ret));
-    } else if (OB_NOT_NULL(job = srv->get_scheduler(type))) {
+    } else if (OB_NOT_NULL(job = cur_srv->get_scheduler(type))) { // matched
       if (job->get_job_type() != type) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("backup job not match job type", K(ret));
       } else {
+        srv = cur_srv;
         break;
       }
     }
   }
+  return ret;
+}
 
-  if (OB_FAIL(ret)) {
+int ObBackupTaskScheduler::get_backup_job(const BackupJobType &type, ObIBackupJobScheduler *&job)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(scheduler_mtx_);
+  ObBackupService *srv = nullptr;
+  if (OB_FAIL(get_type_matched_service_(type, srv))) {
+    LOG_WARN("failed to get backup job", K(ret), K(type));
+  } else if (OB_ISNULL(srv)) {
     job = nullptr;
+  } else if (OB_ISNULL(job = srv->get_scheduler(type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup job not found", K(ret), K(type));
   }
   return ret;
 }
@@ -1680,6 +1755,27 @@ int ObBackupTaskScheduler::register_backup_srv(ObBackupService &srv)
   }
   if (OB_SUCC(ret) && OB_FAIL(backup_srv_array_.push_back(&srv))) {
     LOG_WARN("failed to push backup backup service", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupTaskScheduler::wakeup_services_by_type(const ObIArray<int64_t> &overflow_task_types)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(scheduler_mtx_);
+  ObIBackupJobScheduler *job = nullptr;
+  ObBackupService *srv = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < overflow_task_types.count(); ++i) {
+    srv = nullptr;
+    const BackupJobType &job_type = static_cast<BackupJobType>(overflow_task_types.at(i));
+    if (OB_FAIL(get_type_matched_service_(job_type, srv))) {
+      LOG_WARN("failed to get backup job", K(ret), K(job_type));
+    } else if (OB_ISNULL(srv)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("backup job not found", K(ret), K(job_type));
+    } else {
+      srv->wakeup();
+    }
   }
   return ret;
 }

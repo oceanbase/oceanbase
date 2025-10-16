@@ -1195,7 +1195,12 @@ int ObBackupCleanTaskMgr::do_backup_clean_ls_tasks_(
       } else if (OB_FAIL(ls_task_mgr.init(task_attr_, ls_attr, *task_scheduler_, *sql_proxy_, *backup_service_))) {
         LOG_WARN("failed to init task advancer", K(ret), K(ls_attr));
       } else if (OB_FAIL(ls_task_mgr.process(finish_cnt))) {
-        LOG_WARN("failed to process log stream task", K(ret));
+        if (OB_SIZE_OVERFLOW != ret) {
+          LOG_WARN("failed to process log stream task", K(ret));
+        } else {
+          LOG_INFO("log stream task queue is overflow, just ignore", K(ls_attr));
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
