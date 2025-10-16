@@ -10193,8 +10193,7 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
             max_cnt = pre_store_size;
           }
         }
-        if (FAILEDx((fill_cursor(ps_cursor.get_cursor_entity(),
-				*rs,
+        if (FAILEDx((fill_cursor(*rs,
                                 spi_cursor,
                                 ObTimeUtility::current_time(),
                                 is_iter_end,
@@ -10232,8 +10231,7 @@ int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
     LOG_INFO("sync fill ps cursor", K(ret), K(ps_cursor.get_id()), K(session.get_server_sid()),
              K(session.get_effective_tenant_id()));
     CHECK_CURSOR_HANDLER;
-    if (FAILEDx(fill_cursor(ps_cursor.get_cursor_entity(),
-		            *rs,
+    if (FAILEDx(fill_cursor(*rs,
                             spi_cursor,
                             ObTimeUtility::current_time(),
                             is_iter_end,
