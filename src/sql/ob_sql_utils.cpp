@@ -3418,6 +3418,82 @@ int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx &expr_ctx, ObCastCtx &co
   return ret;
 }
 
+int ObSQLUtils::convert_number_to_int_with_trunc(const number::ObNumber &nmb,
+                                                  int64_t &int_value,
+                                                  int &cmp)
+{
+  int ret = OB_SUCCESS;
+  bool is_neg = nmb.is_negative();
+  cmp = 0;
+  if (OB_FAIL(nmb.extract_valid_int64_with_trunc(int_value))) {
+    if (ret == OB_DATA_OUT_OF_RANGE) {
+      ret = OB_SUCCESS;
+      int_value = is_neg ? INT64_MIN : INT64_MAX;
+    } else {
+      LOG_WARN("extract_valid_int64_with_trunc failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    cmp = nmb.compare(int_value);
+  }
+  return ret;
+}
+
+int ObSQLUtils::adjust_key_border_for_number_convert(const int cmp,
+                                                      const bool is_start_key,
+                                                      const bool is_last_obj,
+                                                      int64_t &nth_obj,
+                                                      const int64_t obj_cnt,
+                                                      common::ObObj *new_key_obj,
+                                                      common::ObBorderFlag &border_flag)
+{
+  int ret = OB_SUCCESS;
+  if (cmp != 0) {
+    if (is_start_key) {
+      if (cmp < 0) {
+        if (is_last_obj) {
+          border_flag.set_inclusive_start();
+        } else {
+          for (nth_obj = nth_obj + 1; nth_obj < obj_cnt; ++nth_obj) {
+            new_key_obj[nth_obj].set_min_value();
+          }
+          border_flag.unset_inclusive_start();
+        }
+      } else {
+        if (is_last_obj) {
+          border_flag.unset_inclusive_start();
+        } else {
+          for (nth_obj = nth_obj + 1; nth_obj < obj_cnt; ++nth_obj) {
+            new_key_obj[nth_obj].set_max_value();
+          }
+          border_flag.unset_inclusive_start();
+        }
+      }
+    } else {
+      if (cmp < 0) {
+        if (is_last_obj) {
+          border_flag.unset_inclusive_end();
+        } else {
+          for (nth_obj = nth_obj + 1; nth_obj < obj_cnt; ++nth_obj) {
+            new_key_obj[nth_obj].set_min_value();
+          }
+          border_flag.unset_inclusive_end();
+        }
+      } else {
+        if (is_last_obj) {
+          border_flag.set_inclusive_end();
+        } else {
+          for (nth_obj = nth_obj + 1; nth_obj < obj_cnt; ++nth_obj) {
+            new_key_obj[nth_obj].set_max_value();
+          }
+          border_flag.unset_inclusive_end();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSQLUtils::merge_solidified_var_into_collation(const ObLocalSessionVar &session_vars_snapshot,
                                                      ObCollationType &cs_type) {
   int ret = OB_SUCCESS;
@@ -4208,10 +4284,10 @@ int ObVirtualTableResultConverter::convert_key_ranges(ObIArray<ObNewRange> &key_
       if (OB_FAIL(get_need_convert_key_ranges_pos(key_ranges.at(i), pos))) {
         LOG_WARN("failed to get convert key range pos", K(ret));
       } else if (OB_FAIL(convert_key(key_ranges.at(i).start_key_, new_range.start_key_, true,
-                                     pos))) {
+                                     pos, new_range.border_flag_))) {
         LOG_WARN("fail to convert start key", K(ret));
       } else if (OB_FAIL(convert_key(key_ranges.at(i).end_key_, new_range.end_key_, false,
-                                     pos))) {
+                                     pos, new_range.border_flag_))) {
         LOG_WARN("fail to convert end key", K(ret));
       } else if (!has_exist_in_array(tmp_range, new_range) && OB_FAIL(tmp_range.push_back(new_range))) {
         LOG_WARN("fail to push back new range", K(ret));
@@ -4435,7 +4511,8 @@ int ObVirtualTableResultConverter::convert_output_row(
 }
 
 int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &dst,
-                                               bool is_start_key, int64_t pos)
+                                               bool is_start_key, int64_t pos,
+                                               ObBorderFlag &border_flag)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_start_key);
@@ -4515,6 +4592,31 @@ int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &ds
       } else if (src_obj.is_null()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected key range", K(src), K(ret));
+      } else if (ObIntType == key_types_->at(nth_obj).get_type() &&
+                 src_key_objs[nth_obj].is_number()) {
+        const number::ObNumber &nmb = src_key_objs[nth_obj].get_number();
+        int64_t int_value = 0;
+        int cmp = 0;
+        if (nmb.is_valid_int64(int_value)) {
+          new_key_obj[nth_obj].set_int(int_value);
+          if (has_tenant_id_col_ && tenant_id_col_idx_ == nth_obj) {
+            if (new_key_obj[nth_obj].get_type() == ObIntType) {
+              new_key_obj[nth_obj].set_int(new_key_obj[nth_obj].get_int() - cur_tenant_id_);
+            }
+          }
+        } else {
+          if (OB_FAIL(ObSQLUtils::convert_number_to_int_with_trunc(nmb, int_value, cmp))) {
+            LOG_WARN("fail to convert number to int", K(ret), K(nmb));
+          } else {
+            new_key_obj[nth_obj].set_int(int_value);
+            if (OB_FAIL(ObSQLUtils::adjust_key_border_for_number_convert(cmp, is_start_key,
+                                                                          nth_obj == src.get_obj_cnt() - 1,
+                                                                          nth_obj, src.get_obj_cnt(),
+                                                                          new_key_obj, border_flag))) {
+              LOG_WARN("fail to adjust key border", K(ret), K(cmp), K(is_start_key));
+            }
+          }
+        }
       } else {
         const ObObjMeta &obj_meta = key_types_->at(nth_obj);
         if (OB_FAIL(ObObjCaster::to_type(obj_meta.get_type(),
