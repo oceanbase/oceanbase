@@ -156,6 +156,8 @@ public:
   virtual int check_cancel() override;
 private:
   const obrpc::ObCheckSysTableSchemaArg &arg_;
+  // to make hotfix can check epoch_id, we record the epoch_id when receiving the RPC
+  int64_t origin_rs_epoch_id_;
 };
 
 class ObSysTableInspection

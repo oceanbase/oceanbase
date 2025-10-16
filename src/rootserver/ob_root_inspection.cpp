@@ -17,6 +17,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
 #include "share/location_cache/ob_location_service.h"
+#include "share/ob_heartbeat_handler.h"
 
 namespace oceanbase
 {
@@ -1064,13 +1065,20 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
 }
 
 ObInspectionCheckRemoteRS::ObInspectionCheckRemoteRS(const obrpc::ObCheckSysTableSchemaArg &arg)
-  : arg_(arg) {}
+  : arg_(arg)
+{
+  origin_rs_epoch_id_ = ObHeartbeatHandler::get_rs_epoch_id();
+}
+
+ERRSIM_POINT_DEF(ERRSIM_SKIP_CHECK_LEADER);
 
 int ObInspectionCheckRemoteRS::check_cancel()
 {
   int ret = OB_SUCCESS;
   ObAddr rs_addr;
   ObAddr leader_addr;
+  DEBUG_SYNC(BEFORE_INSPECTION_CHECK_CANCEL);
+  int64_t current_rs_epoch_id = ObHeartbeatHandler::get_rs_epoch_id();
   if (OB_ISNULL(GCTX.rs_mgr_) || OB_ISNULL(GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", KR(ret), KP(GCTX.rs_mgr_), KP(GCTX.location_service_));
@@ -1085,6 +1093,19 @@ int ObInspectionCheckRemoteRS::check_cancel()
   } else if (leader_addr != GCONF.self_addr_) {
     ret = OB_NOT_MASTER;
     LOG_WARN("leader changed", KR(ret), K(arg_), K(leader_addr));
+  }
+  if (ERRSIM_SKIP_CHECK_LEADER) {
+    ret = OB_SUCCESS;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (current_rs_epoch_id != palf::INVALID_PROPOSAL_ID) {
+    // origin_rs_epoch_id_ is used to check rs not changed since receiving RPC which is used for hotfix commit
+    // arg_.get_rs_epoch_id is used to check rs not changed since rs send RPC
+    if ((origin_rs_epoch_id_ != palf::INVALID_PROPOSAL_ID && origin_rs_epoch_id_ != current_rs_epoch_id)
+        || (arg_.get_rs_epoch_id() != palf::INVALID_PROPOSAL_ID && arg_.get_rs_epoch_id() != current_rs_epoch_id)) {
+      ret = OB_RS_SHUTDOWN;
+      LOG_WARN("leader changed", KR(ret), K(arg_), K(current_rs_epoch_id), K_(origin_rs_epoch_id));
+    }
   }
   return ret;
 }

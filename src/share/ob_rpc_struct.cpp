@@ -14,6 +14,7 @@
 
 #include "ob_rpc_struct.h"
 #include "storage/tx/ob_trans_service.h"
+#include "share/ob_heartbeat_handler.h"
 
 namespace oceanbase
 {
@@ -1029,14 +1030,15 @@ int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaArg, tenant_id_, data_current_version_, rs_addr_);
+OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaArg, tenant_id_, data_current_version_, rs_addr_, rs_epoch_id_);
 
 ObCheckSysTableSchemaArg::ObCheckSysTableSchemaArg() :
   tenant_id_(OB_INVALID_TENANT_ID),
   data_current_version_(OB_INVALID_VERSION),
-  rs_addr_() {}
+  rs_addr_(),
+  rs_epoch_id_(palf::INVALID_PROPOSAL_ID) {}
 
-int ObCheckSysTableSchemaArg::init(uint64_t tenant_id)
+int ObCheckSysTableSchemaArg::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)) {
@@ -1046,6 +1048,7 @@ int ObCheckSysTableSchemaArg::init(uint64_t tenant_id)
     tenant_id_ = tenant_id;
     data_current_version_ = DATA_CURRENT_VERSION;
     rs_addr_ = GCONF.self_addr_;
+    rs_epoch_id_ = ObHeartbeatHandler::get_rs_epoch_id();
   }
   return ret;
 }
@@ -1057,6 +1060,7 @@ int ObCheckSysTableSchemaArg::assign(const ObCheckSysTableSchemaArg &other)
     tenant_id_ = other.tenant_id_;
     data_current_version_ = other.data_current_version_;
     rs_addr_ = other.rs_addr_;
+    rs_epoch_id_ = other.rs_epoch_id_;
   }
   return ret;
 }
@@ -1071,6 +1075,7 @@ bool ObCheckSysTableSchemaArg::is_valid() const
   } else if (!rs_addr_.is_valid()) {
     valid = false;
   }
+  // for compat reason, do not check rs_epoch_id_
   return valid;
 }
 
