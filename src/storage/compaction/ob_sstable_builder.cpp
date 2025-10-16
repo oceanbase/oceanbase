@@ -340,7 +340,7 @@ int ObSSTableRebuilder::check_need_rebuild(const ObStaticMergeParam &merge_param
   int ret = OB_SUCCESS;
   macro_id_array.reset();
   multiplexed_macro_block_count = 0;
-  const int64_t snapshot_version = merge_param.scn_range_.end_scn_.get_val_for_tx();
+  const int64_t snapshot_version = merge_param.get_compaction_scn();
   blocksstable::ObDataMacroBlockMeta macro_meta;
   blocksstable::MacroBlockId last_macro_id;
   int64_t last_macro_block_sum = 0;
