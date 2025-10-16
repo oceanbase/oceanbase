@@ -3212,6 +3212,10 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(params),
         K(stmt), K(ret));
+  } else if (OB_FAIL(get_generated_col_index_qual(table_id,
+                                                  helper.filters_,
+                                                  helper))) {
+    LOG_WARN("get prefix index qual failed", K(ret));
   } else if (OB_FAIL(init_basic_text_retrieval_info(table_id,
                                                     ref_table_id,
                                                     helper))) {
@@ -3224,10 +3228,6 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
     LOG_WARN("failed to create index merge access paths", K(ret));
   } else if (ignore_normal_access_path) {
     // do nothing
-  } else if (OB_FAIL(get_generated_col_index_qual(table_id,
-                                                  helper.filters_,
-                                                  helper))) {
-    LOG_WARN("get prefix index qual failed", K(ret));
   } else if (OB_FAIL(get_valid_index_ids(table_id,
                                          ref_table_id,
                                          helper,
@@ -3590,12 +3590,28 @@ int ObJoinOrder::generate_candi_index_merge_tree(const uint64_t ref_table_id,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate index merge node", K(ret));
   } else {
+    ObSEArray<ObRawExpr*, 8> valid_ori_filters;
+    ObSEArray<DeducedExprInfo, 4> deduced_filters;
     candi_index_tree->node_type_ = INDEX_MERGE_INTERSECT;
+    // handle original filters
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       ObRawExpr *filter = filters.at(i);
       ObIndexMergeNode *candi_node = NULL;
+      bool is_deduced_expr = false;
       bool is_valid = false;
-      if (OB_ISNULL(filter)) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < deduced_exprs_info_.count(); ++j) {
+        if (deduced_exprs_info_.at(j).deduced_expr_ == filter) {
+          if (OB_FAIL(deduced_filters.push_back(deduced_exprs_info_.at(j)))) {
+            LOG_WARN("failed to push back deduced filter", K(ret));
+          } else {
+            is_deduced_expr = true;
+            break;
+          }
+        }
+      }
+      if (is_deduced_expr) {
+        // do nothing
+      } else if (OB_ISNULL(filter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null filter", K(ret), K(i));
       } else if (OB_FAIL(try_merge_intersect_child(candi_index_tree,
@@ -3603,7 +3619,9 @@ int ObJoinOrder::generate_candi_index_merge_tree(const uint64_t ref_table_id,
                                                    is_valid))) {
         LOG_WARN("failed to try merge intersect child", K(ret));
       } else if (is_valid) {
-        // do nothing, filter has already merged into candi index tree
+        if (OB_FAIL(valid_ori_filters.push_back(filter))) {
+          LOG_WARN("failed to push back valid ori filter", K(ret));
+        }
       } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
                                                          filter,
                                                          valid_index_ids,
@@ -3615,6 +3633,42 @@ int ObJoinOrder::generate_candi_index_merge_tree(const uint64_t ref_table_id,
         // do nothing
       } else if (OB_FAIL(candi_index_tree->children_.push_back(candi_node))) {
         LOG_WARN("failed to push back candi node", K(ret));
+      } else if (OB_FAIL(valid_ori_filters.push_back(filter))) {
+        LOG_WARN("failed to push back valid ori filter", K(ret));
+      }
+    }
+    // handle deduced filters
+    for (int64_t i = 0; OB_SUCC(ret) && i < deduced_filters.count(); ++i) {
+      ObRawExpr *filter = deduced_filters.at(i).deduced_expr_;
+      ObRawExpr *from_filter = deduced_filters.at(i).deduced_from_expr_;
+      ObIndexMergeNode *candi_node = NULL;
+      bool is_valid = false;
+      if (OB_ISNULL(filter) || OB_ISNULL(from_filter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null filter", K(ret), K(i), K(deduced_filters.at(i)));
+      } else if (ObOptimizerUtil::find_item(valid_ori_filters, from_filter)) {
+        // do nothing, original filter already exists in candi index tree
+      } else if (OB_FAIL(try_merge_intersect_child(candi_index_tree,
+                                                   filter,
+                                                   is_valid))) {
+        LOG_WARN("failed to try merge intersect child", K(ret));
+      } else if (is_valid) {
+        if (OB_FAIL(valid_ori_filters.push_back(from_filter))) {
+          LOG_WARN("failed to push back valid ori filter", K(ret));
+        }
+      } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
+                                                         filter,
+                                                         valid_index_ids,
+                                                         valid_index_cols,
+                                                         candi_node,
+                                                         is_valid))) {
+        LOG_WARN("failed to generate one index merge tree for filter", K(ret), KPC(filter));
+      } else if (!is_valid) {
+        // do nothing
+      } else if (OB_FAIL(candi_index_tree->children_.push_back(candi_node))) {
+        LOG_WARN("failed to push back candi node", K(ret));
+      } else if (OB_FAIL(valid_ori_filters.push_back(from_filter))) {
+        LOG_WARN("failed to push back valid ori filter", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
