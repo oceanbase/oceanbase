@@ -308,12 +308,12 @@ int ObBlockStatIterator::refresh_scan_table_on_demand()
   int ret = OB_SUCCESS;
   const bool need_refresh = get_table_param_.tablet_iter_.table_iter()->check_store_expire();
   if (OB_UNLIKELY(need_refresh)) {
-    reset_iters();
     scan_tables_.reuse();
-    if (OB_FAIL(refresh_tablet_iter())) {
-      LOG_WARN("failed to refresh tablet iter", K(ret));
-    } else if (nullptr != curr_endkey_ && OB_FAIL(shrink_scan_range(*curr_endkey_))) {
+    if (nullptr != curr_endkey_ && OB_FAIL(shrink_scan_range(*curr_endkey_))) {
       LOG_WARN("failed to shrink scan range", K(ret));
+    } else if (FALSE_IT(reset_iters())) {
+    } else if (OB_FAIL(refresh_tablet_iter())) {
+      LOG_WARN("failed to refresh tablet iter", K(ret));
     } else if (OB_FAIL(prepare_scan_tables())) {
       LOG_WARN("failed to prepare scan tables", K(ret));
     } else if (OB_FAIL(construct_iters())) {
