@@ -1481,18 +1481,18 @@ int ObExecContext::add_lake_table_file(uint64_t table_loc_id,
       LOG_WARN("failed to init lake table file array");
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < candi_tablet_loc.get_opt_lake_table_files().count(); ++i) {
-        ObILakeTableFile *das_file = nullptr;
+        ObFileScanTask *das_file = nullptr;
         ObIOptLakeTableFile *opt_file = candi_tablet_loc.get_opt_lake_table_files().at(i);
         if (OB_ISNULL(opt_file)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null opt lake table file");
-        } else if (OB_FAIL(ObILakeTableFile::create_lake_table_file_by_type(allocator_,
-                                                                            opt_file->get_file_type(),
-                                                                            das_file))) {
+        } else if (OB_FAIL(ObFileScanTask::create_lake_table_file_by_type(allocator_,
+                                                                          opt_file->get_file_type(),
+                                                                          das_file))) {
           LOG_WARN("failed to create lake table file by type", K(opt_file->get_file_type()));
         } else if (OB_ISNULL(das_file)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory for ObLakeTableFile");
+          LOG_WARN("failed to allocate memory for ObFileScanTask");
         } else if (OB_FAIL(das_file->init_with_opt_lake_table_file(allocator_, *opt_file))) {
           LOG_WARN("failed to deep copt file task");
         } else if (OB_FAIL(files->push_back(das_file))) {

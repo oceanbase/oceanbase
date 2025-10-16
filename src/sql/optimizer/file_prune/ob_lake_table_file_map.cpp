@@ -121,14 +121,14 @@ OB_DEF_DESERIALIZE(ObLakeTableFileDesc)
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < value_count; ++i) {
     LakeFileType type = LakeFileType::INVALID;
-    ObILakeTableFile *table_file = nullptr;
+    ObFileScanTask *table_file = nullptr;
     OB_UNIS_DECODE(type);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObILakeTableFile::create_lake_table_file_by_type(allocator_, type, table_file))) {
+    } else if (OB_FAIL(ObFileScanTask::create_lake_table_file_by_type(allocator_, type, table_file))) {
       LOG_WARN("failed to create lake table file by type", K(type));
     } else if (OB_ISNULL(table_file)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObILakeTableFile");
+      LOG_WARN("failed to allocate memory for ObFileScanTask");
     } else {
       OB_UNIS_DECODE(*table_file);
     }
@@ -168,7 +168,7 @@ int ObLakeTableFileDesc::assign(const ObLakeTableFileDesc &other)
 }
 
 int ObLakeTableFileDesc::add_lake_table_file_desc(const ObLakeTableFileMapKey &key,
-                                                  const ObIArray<sql::ObILakeTableFile *> *files)
+                                                  const ObIArray<sql::ObFileScanTask *> *files)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(keys_.push_back(key))) {

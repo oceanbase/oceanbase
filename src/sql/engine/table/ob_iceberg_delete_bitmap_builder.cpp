@@ -107,14 +107,16 @@ int ObIcebergDeleteBitmapBuilder::build_delete_bitmap(const ObString &data_file_
     delete_bitmap->set_empty();
   }
 
-  // 获取删除文件URL列表
-  ObArray<ObLakeDeleteFile> delete_files;
-  OZ(get_delete_files(delete_files, task_idx));
+  ObIcebergScanTask *scan_task = static_cast<ObIcebergScanTask *>(scan_param_->scan_tasks_.at(task_idx));
+  if (OB_ISNULL(scan_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file is null", K(ret));
+  }
 
   // 处理每个删除文件
   IDeleteFileReader *reader = nullptr;
-  for (int64_t i = 0; OB_SUCC(ret) && i < delete_files.count(); ++i) {
-    const ObLakeDeleteFile &delete_file = delete_files.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < scan_task->delete_files_.count(); ++i) {
+    const ObLakeDeleteFile &delete_file = scan_task->delete_files_.at(i);
     if (OB_FAIL(get_delete_file_reader(delete_file.file_format_, reader))) {
       LOG_WARN("failed to get delete file reader", K(ret), K(delete_file.file_url_));
     } else if (OB_FAIL(process_single_delete_file(delete_file, data_file_path,
@@ -138,83 +140,6 @@ int ObIcebergDeleteBitmapBuilder::get_delete_file_reader(const iceberg::DataFile
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unsupported delete file format", K(file_format), K(ret));
   }
-  return ret;
-}
-
-int ObIcebergDeleteBitmapBuilder::get_delete_files(ObIArray<ObLakeDeleteFile> &delete_files,
-                                                      const int64_t task_idx)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
-
-  if (OB_ISNULL(scan_param_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("scan param is null", K(ret));
-  } else {
-    if (task_idx >= scan_param_->key_ranges_.count() || task_idx < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("file index out of range", K(ret), K(task_idx), K(scan_param_->key_ranges_.count()));
-    } else {
-      const ObObj *obj_ptr = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr();
-      const ObObj &delete_file_obj = obj_ptr[ObExternalTableUtils::DELETE_FILE_URLS];
-      const ObObj &size_obj = obj_ptr[ObExternalTableUtils::DELETE_FILE_SIZES];
-      const ObObj &modify_time_obj = obj_ptr[ObExternalTableUtils::DELETE_FILE_MODIFY_TIMES];
-      const ObObj &delete_file_format_obj = obj_ptr[ObExternalTableUtils::DELETE_FILE_FORMATS];
-      if (!delete_file_obj.is_null() && !size_obj.is_null() && !modify_time_obj.is_null() &&
-          !delete_file_format_obj.is_null()) {
-        ObString buf;
-        ObSqlArrayObj *delete_file_array_obj = nullptr;
-        ObSqlArrayObj *size_array_obj = nullptr;
-        ObSqlArrayObj *modify_time_array_obj = nullptr;
-        ObSqlArrayObj *delete_file_format_array_obj = nullptr;
-        if (OB_FAIL(delete_file_obj.get_string(buf))) {
-          LOG_WARN("failed to get string from obj", K(ret), K(delete_file_obj));
-        } else if (OB_FAIL(ObSqlArrayObj::do_real_deserialize(allocator, buf.ptr(),
-                                                            buf.length(), delete_file_array_obj))) {
-          LOG_WARN("failed to deserialize ObSqlArrayObj", K(ret), K(buf));
-        } else if (OB_FAIL(size_obj.get_string(buf))) {
-          LOG_WARN("failed to get string from obj", K(ret), K(size_obj));
-        } else if (OB_FAIL(ObSqlArrayObj::do_real_deserialize(allocator, buf.ptr(),
-                                                            buf.length(), size_array_obj))) {
-          LOG_WARN("failed to deserialize ObSqlArrayObj", K(ret), K(buf));
-        } else if (OB_FAIL(modify_time_obj.get_string(buf))) {
-          LOG_WARN("failed to get string from obj", K(ret), K(modify_time_obj));
-        } else if (OB_FAIL(ObSqlArrayObj::do_real_deserialize(allocator, buf.ptr(),
-                                                            buf.length(), modify_time_array_obj))) {
-          LOG_WARN("failed to deserialize ObSqlArrayObj", K(ret), K(buf));
-        } else if (OB_FAIL(delete_file_format_obj.get_string(buf))) {
-          LOG_WARN("failed to get string from obj", K(ret), K(delete_file_format_obj));
-        } else if (OB_FAIL(ObSqlArrayObj::do_real_deserialize(allocator, buf.ptr(),
-                                                    buf.length(), delete_file_format_array_obj))) {
-          LOG_WARN("failed to deserialize ObSqlArrayObj", K(ret), K(buf));
-        } else if (OB_ISNULL(delete_file_array_obj) || OB_ISNULL(size_array_obj) ||
-                  OB_ISNULL(modify_time_array_obj) || OB_ISNULL(delete_file_format_array_obj)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("delete file urls obj is null", K(ret));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < delete_file_array_obj->count_; ++i) {
-            ObLakeDeleteFile delete_file;
-            int64_t delete_file_format_int = 0;
-            if (OB_FAIL(delete_file_array_obj->data_[i].get_varchar(delete_file.file_url_))) {
-              LOG_WARN("failed to get varchar from obj", K(ret), K(i));
-            } else if (OB_FAIL(size_array_obj->data_[i].get_int(delete_file.file_size_))) {
-              LOG_WARN("failed to get int from obj", K(ret), K(i));
-            } else if (OB_FAIL(modify_time_array_obj->data_[i].get_int(
-                                                                delete_file.modification_time_))) {
-              LOG_WARN("failed to get int from obj", K(ret), K(i));
-            } else if (OB_FAIL(delete_file_format_array_obj->data_[i].get_int(
-                                                                        delete_file_format_int))) {
-              LOG_WARN("failed to get int from obj", K(ret), K(i));
-            } else {
-              delete_file.file_format_ = static_cast<iceberg::DataFileFormat>(delete_file_format_int);
-            }
-            OZ(delete_files.push_back(delete_file));
-          }
-        }
-      }
-    }
-  }
-
   return ret;
 }
 

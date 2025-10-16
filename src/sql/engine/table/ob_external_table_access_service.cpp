@@ -476,12 +476,11 @@ int ObExternalTableAccessService::table_scan(
   ObExternalTableRowIterator* row_iter = NULL;
 
   auto &scan_param = static_cast<storage::ObTableScanParam&>(param);
-  if (scan_param.key_ranges_.empty()) {
+  if (scan_param.scan_tasks_.empty() || OB_ISNULL(scan_param.scan_tasks_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret));
   } else {
-    const ObObj *obj_ptr = scan_param.key_ranges_.at(0).get_start_key().get_obj_ptr();
-    ObString file_path = obj_ptr[ObExternalTableUtils::FILE_URL].get_string();
+    ObString file_path = scan_param.scan_tasks_.at(0)->file_url_;
     // ODPS外表会在每个SQC中加一个DUMMY_FILE，因此ODPS_FORMAT遇到DUMMY_FILE依然要用ObODPSTableRowIterator处理
     if (param.external_file_format_.format_type_ != ObExternalFileFormat::ODPS_FORMAT &&
         file_path.compare_equal(ObExternalTableUtils::dummy_file_name())) {
@@ -492,13 +491,15 @@ int ObExternalTableAccessService::table_scan(
     } else {
       ObExternalFileFormat::FormatType format_type = param.external_file_format_.format_type_;
       if (param.lake_table_format_ == ObLakeTableFormat::ICEBERG) {
-        if (scan_param.key_ranges_.empty()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error", K(ret));
+        ObIcebergScanTask *scan_task = static_cast<ObIcebergScanTask *>(scan_param.scan_tasks_.at(0));
+        iceberg::DataFileFormat file_format = scan_task->file_format_;
+        if (file_format == iceberg::DataFileFormat::PARQUET) {
+          format_type = ObExternalFileFormat::PARQUET_FORMAT;
+        } else if (file_format == iceberg::DataFileFormat::ORC) {
+          format_type = ObExternalFileFormat::ORC_FORMAT;
         } else {
-          const ObObj *obj_ptr = scan_param.key_ranges_.at(0).get_start_key().get_obj_ptr();
-          int64_t file_format_int = obj_ptr[ObExternalTableUtils::DATA_FILE_FORMAT].get_int();
-          format_type = static_cast<ObExternalFileFormat::FormatType>(file_format_int);
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported iceberg file format", K(file_format), K(ret));
         }
       }
 

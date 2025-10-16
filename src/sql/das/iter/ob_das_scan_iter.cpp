@@ -51,6 +51,7 @@ int ObDASScanIter::inner_reuse()
     scan_param_->key_ranges_.reuse();
     scan_param_->ss_key_ranges_.reuse();
     scan_param_->mbr_filters_.reuse();
+    scan_param_->scan_tasks_.reuse();
   }
   return ret;
 }

@@ -468,8 +468,8 @@ int ObPluginExternalTableRowIterator::init_external_scan_param(const storage::Ob
   }
 
   if (OB_FAIL(ret)) {
-  } else if (scan_param->key_ranges_.count() > 0) {
-    ObString task_info = scan_param->key_ranges_.at(0).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
+  } else if (scan_param->scan_tasks_.count() > 0) {
+    ObString task_info = scan_param->scan_tasks_.at(0)->file_url_;
     external_scan_param_.set_task(task_info);
     LOG_TRACE("get a task", K(task_info));
   } else {

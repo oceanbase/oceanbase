@@ -545,6 +545,7 @@ int ObDASIndexMergeIter::init_scan_param(const share::ObLSID &ls_id,
     scan_param.tenant_id_ = tenant_id;
     scan_param.key_ranges_.set_attr(ObMemAttr(tenant_id, "ScanParamKR"));
     scan_param.ss_key_ranges_.set_attr(ObMemAttr(tenant_id, "ScanParamSSKR"));
+    scan_param.scan_tasks_.set_attr(ObMemAttr(tenant_id, "ScanParamET"));
     scan_param.tx_lock_timeout_ = rtdef->tx_lock_timeout_;
     scan_param.index_id_ = ctdef->ref_table_id_;
     scan_param.is_get_ = ctdef->is_get_;
@@ -748,6 +749,7 @@ int ObDASIndexMergeIter::inner_reuse()
         scan_param->key_ranges_.reuse();
         scan_param->ss_key_ranges_.reuse();
         scan_param->mbr_filters_.reuse();
+        scan_param->scan_tasks_.reuse();
         if (OB_FAIL(iter->reuse())) {
           LOG_WARN("child iter failed to reuse", K(ret));
         }

@@ -316,6 +316,7 @@ protected:
   common::ObSEArray<common::ObNewRange, 1> key_ranges_;
   common::ObSEArray<common::ObNewRange, 1> ss_key_ranges_;
   common::ObSEArray<common::ObSpatialMBR, 1> mbr_filters_;
+  common::ObSEArray<sql::ObIExtTblScanTask*, 1> scan_tasks_;
   common::ObPosArray range_array_pos_;
   // if the query range was extracted before(include whole range), tsc not need to extract every time
   bool not_need_extract_query_range_;

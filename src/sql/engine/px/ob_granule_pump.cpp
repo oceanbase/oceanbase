@@ -40,6 +40,7 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
     int64_t cur_idx = gi_task_set_.at(pos).idx_;
     info.tablet_loc_ = const_cast<ObDASTabletLoc *>(gi_task_set_.at(pos).tablet_loc_);
     info.ranges_.reset();
+    info.scan_tasks_.reset();
     info.ss_ranges_.reset();
     for (int64_t i = pos; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
@@ -48,6 +49,9 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
             LOG_WARN("push back ranges failed", K(ret));
           } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
             LOG_WARN("push back skip scan ranges failed", K(ret));
+          } else if (OB_NOT_NULL(gi_task_set_.at(i).scan_task_) &&
+                    OB_FAIL(info.scan_tasks_.push_back(gi_task_set_.at(i).scan_task_))) {
+            LOG_WARN("push back external table scan tasks failed", K(ret));
           }
         }
       } else {
@@ -108,6 +112,7 @@ int ObGITaskSet::get_next_gi_task(ObGranuleTaskInfo &info)
     int64_t cur_idx = gi_task_set_.at(cur_pos_).idx_;
     info.tablet_loc_ = gi_task_set_.at(cur_pos_).tablet_loc_;
     info.ranges_.reset();
+    info.scan_tasks_.reset();
     info.ss_ranges_.reset();
     for (int64_t i = cur_pos_; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
@@ -116,6 +121,9 @@ int ObGITaskSet::get_next_gi_task(ObGranuleTaskInfo &info)
             LOG_WARN("push back ranges failed", K(ret));
           } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
             LOG_WARN("push back skip scan ranges failed", K(ret));
+          } else if (OB_NOT_NULL(gi_task_set_.at(i).scan_task_) &&
+                    OB_FAIL(info.scan_tasks_.push_back(gi_task_set_.at(i).scan_task_))) {
+            LOG_WARN("push back external table scan tasks failed", K(ret));
           }
         }
         if (i == (gi_task_set_.count() - 1)) {
@@ -227,18 +235,22 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
                                    ObIArray<ObNewRange> &taskset_ranges,
                                    ObIArray<ObNewRange> &ss_ranges,
                                    ObIArray<int64_t> &taskset_idxs,
+                                   ObIArray<sql::ObIExtTblScanTask*> &scan_tasks,
                                    ObGIRandomType random_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(taskset_tablets.count() != taskset_idxs.count() ||
                   (!taskset_ranges.empty() &&
                     taskset_tablets.count() != taskset_ranges.count()) ||
+                  (!scan_tasks.empty() &&
+                    taskset_tablets.count() != scan_tasks.count()) ||
                   taskset_tablets.empty() ||
                   ss_ranges.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("taskset count err", K(taskset_tablets.count()),
                                   K(taskset_ranges),
                                   K(taskset_idxs),
+                                  K(scan_tasks.count()),
                                   K(ss_ranges.count()));
   } else if (!(GI_RANDOM_NONE <= random_type && random_type <= GI_RANDOM_RANGE)) {
     ret = OB_ERR_UNEXPECTED;
@@ -250,16 +262,17 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
     whole_range.set_whole_range();
     ObNewRange false_range;
     false_range.set_false_range();
-    bool is_false_range = taskset_ranges.empty();
+    bool is_false_range = taskset_ranges.empty() && scan_tasks.empty();
     ObNewRange &ss_range = ss_ranges.empty() ? whole_range : ss_ranges.at(0);
     int64_t max_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < taskset_tablets.count(); i++) {
       max_idx = max(max_idx, taskset_idxs.at(i));
       ObGITaskInfo task_info(taskset_tablets.at(i),
-                             is_false_range ? false_range : taskset_ranges.at(i),
+                             taskset_ranges.empty() ? false_range : taskset_ranges.at(i),
                              ss_range,
                              taskset_idxs.at(i),
-                             is_false_range);
+                             is_false_range,
+                             scan_tasks.empty() ? nullptr : scan_tasks.at(i));
       if (random_type != ObGITaskSet::GI_RANDOM_NONE) {
         task_info.hash_value_ = common::murmurhash(&task_info.idx_, sizeof(task_info.idx_), 0);
       }
@@ -850,6 +863,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
   ObSEArray<ObNewRange, 16> ss_ranges;
   DASTabletLocSEArray taskset_tablets;
   ObSEArray<ObNewRange, 16> taskset_ranges;
+  ObSEArray<ObIExtTblScanTask*, 16> scan_tasks;
   ObSEArray<int64_t, 16> taskset_idxs;
   bool range_independent = random_type == ObGITaskSet::GI_RANDOM_RANGE;
   if (0 > args.parallelism_ || OB_ISNULL(tsc)) {
@@ -881,7 +895,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                                           args.external_table_files_,
                                                           args.parallelism_,
                                                           taskset_tablets,
-                                                          taskset_ranges,
+                                                          scan_tasks,
                                                           taskset_idxs);
   } else if (tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()) {
     ret = ObGranuleUtil::split_granule_for_lake_table(*args.ctx_,
@@ -890,7 +904,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                                       tablets,
                                                       partition_granule,
                                                       taskset_tablets,
-                                                      taskset_ranges,
+                                                      scan_tasks,
                                                       taskset_idxs);
   } else {
     ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
@@ -914,6 +928,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                                 taskset_ranges,
                                                 ss_ranges,
                                                 taskset_idxs,
+                                                scan_tasks,
                                                 random_type))) {
     LOG_WARN("construct taskset failed", K(ret), K(taskset_tablets),
                                                  K(taskset_ranges),
@@ -1513,6 +1528,7 @@ int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args
   // insert的每一个partition对应的区间默认是[min_rowkey,max_rowkey]
   ObNewRange each_partition_range;
   ObSEArray<ObNewRange, 4> ranges;
+  ObSEArray<sql::ObIExtTblScanTask*, 16> scan_tasks;
   ObSEArray<ObNewRange, 1> empty_ss_ranges;
   DASTabletLocSEArray taskset_tablets;
   ObSEArray<ObNewRange, 4> taskset_ranges;
@@ -1542,7 +1558,8 @@ int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args
                                                        range_independent))) {
     LOG_WARN("failed to get insert granule task", K(ret), K(each_partition_range), K(tablets));
   } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets, taskset_ranges,
-                                                empty_ss_ranges, taskset_idxs, random_type))) {
+                                                empty_ss_ranges, taskset_idxs,
+                                                scan_tasks, random_type))) {
     // INSERT的任务划分一定是 partition wise的，并且INSERT算子每次rescan仅仅需要每一个task对应的partition key，
     // `ranges`,`idx`等任务参数是不需要
     LOG_WARN("construct taskset failed", K(ret), K(taskset_tablets),

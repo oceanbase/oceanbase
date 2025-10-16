@@ -352,24 +352,26 @@ int ObODPSTableRowIterator::next_task()
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   int64_t task_idx = state_.task_idx_;
-  LOG_TRACE("going to get new task", K(ret), K(batch_size_), K(state_), K(total_count_), K(task_idx), K(scan_param_->key_ranges_.count()));
+  LOG_TRACE("going to get new task", K(ret), K(batch_size_), K(state_), K(total_count_), K(task_idx), K(scan_param_->scan_tasks_.count()));
   int64_t start = 0;
   int64_t step = 0;
-  if (++task_idx >= scan_param_->key_ranges_.count()) {
+  if (++task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
     LOG_WARN("odps table iter end", K(total_count_), K(state_), K(task_idx), K(ret));
   } else {
     ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
     ObPxSqcHandler *sqc = ctx.exec_ctx_.get_sqc_handler();// if sqc is not NULL, odps read is in px plan
-    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
-                                                              ObExternalTableUtils::LINE_NUMBER,
-                                                              start,
-                                                              step))) {
+    ObIExtTblScanTask *scan_task = scan_param_->scan_tasks_.at(task_idx);
+    const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
+    if (OB_ISNULL(odps_scan_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
+    } else if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
       LOG_WARN("failed to resolve range in external table", K(ret));
     } else {
       try {
-        const ObString &part_spec = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
-        int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+        const ObString &part_spec = odps_scan_task->file_url_;
+        int64_t part_id = odps_scan_task->part_id_;
         bool is_part_table = scan_param_->table_param_->is_partition_table();
         bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
         if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
@@ -499,7 +501,7 @@ int ObODPSTableRowIterator::next_task()
                                                 K(state_.part_list_val_),
                                                 K(total_count_),
                                                 K(task_idx),
-                                                K(scan_param_->key_ranges_.count()),
+                                                K(scan_param_->scan_tasks_.count()),
                                                 K(NULL == state_.record_reader_handle_.get()));
           }
           if (OB_SUCC(ret) && -1 == batch_size_ && column_names_.size()) { // exec once only

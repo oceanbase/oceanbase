@@ -120,7 +120,6 @@ public:
 private:
   int get_delete_file_reader(const iceberg::DataFileFormat file_format, IDeleteFileReader *&reader);
 
-  int get_delete_files(ObIArray<ObLakeDeleteFile> &delete_files, const int64_t task_idx);
 
   int process_single_delete_file(const ObLakeDeleteFile &delete_file,
                                 const ObString &data_file_path,

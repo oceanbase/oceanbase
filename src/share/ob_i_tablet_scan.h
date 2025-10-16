@@ -25,6 +25,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "share/catalog/ob_catalog_properties.h"
+#include "sql/optimizer/file_prune/ob_lake_table_fwd.h"
 namespace oceanbase
 {
 namespace share
@@ -441,7 +442,7 @@ typedef ObSEArray<ObNewRange, OB_DEFAULT_RANGE_COUNT, ModulePageAllocator> ObRan
 typedef ObSEArray<int64_t, OB_DEFAULT_RANGE_COUNT, ModulePageAllocator> ObPosArray;
 typedef ObSEArray<uint64_t, OB_PREALLOCATED_COL_ID_NUM, ModulePageAllocator> ObColumnIdArray;
 typedef common::ObSEArray<common::ObSpatialMBR, OB_DEFAULT_MBR_FILTER_COUNT> ObMbrFilterArray;
-
+typedef ObSEArray<sql::ObIExtTblScanTask*, OB_DEFAULT_RANGE_COUNT, ModulePageAllocator> ObIExtTblScanTaskArray;
 /**
  *  This is the common interface for storage service.
  *
@@ -510,6 +511,9 @@ ObVTableScanParam() :
     if (OB_UNLIKELY(key_ranges_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
       key_ranges_.destroy();
     }
+    if (OB_UNLIKELY(scan_tasks_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
+      scan_tasks_.destroy();
+    }
     if (OB_UNLIKELY(range_array_pos_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
       range_array_pos_.destroy();
     }
@@ -526,6 +530,7 @@ ObVTableScanParam() :
   uint64_t index_id_;           // index to be used
   //ranges of all range array, no index key range means full partition scan
   ObRangeArray key_ranges_;
+  ObIExtTblScanTaskArray scan_tasks_;
   ObMbrFilterArray mbr_filters_;
   // remember the end position of each range array, array size of (0 or 1) represents there is only one range array(for most cases except blocked nested loop join)
   ObPosArray range_array_pos_;

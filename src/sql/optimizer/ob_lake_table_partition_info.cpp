@@ -533,6 +533,7 @@ int ObLakeTablePartitionInfo::add_table_file(ObCandiTabletLoc &tablet_loc,
     iceberg_file->file_size_ = file_desc->entry_->data_file.file_size_in_bytes;
     iceberg_file->modification_time_ = file_desc->entry_->snapshot_id;
     iceberg_file->file_format_ = file_desc->entry_->data_file.file_format;
+    iceberg_file->record_count_ = file_desc->entry_->data_file.record_count;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_desc->delete_files_.size(); i++) {
       const iceberg::ManifestEntry *delete_entry = file_desc->delete_files_.at(i);
       ObLakeDeleteFile *delete_file = NULL;
