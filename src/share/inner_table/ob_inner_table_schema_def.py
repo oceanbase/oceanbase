@@ -62515,7 +62515,12 @@ def_table_schema(
            LOG_DISK_IN_USE,
            DATA_DISK_IN_USE,
            STATUS,
-           CREATE_TIME
+           CREATE_TIME,
+           CASE replica_type
+               WHEN 0 THEN 'FULL'
+               WHEN 5 THEN 'LOGONLY'
+               ELSE NULL
+           END AS REPLICA_TYPE
     FROM SYS.ALL_VIRTUAL_UNIT
 """.replace("\n", " ")
 )
@@ -62549,7 +62554,8 @@ def_table_schema(
            LOG_DISK_IN_USE,
            DATA_DISK_IN_USE,
            STATUS,
-           CREATE_TIME
+           CREATE_TIME,
+           REPLICA_TYPE
     FROM SYS.GV$OB_UNITS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
