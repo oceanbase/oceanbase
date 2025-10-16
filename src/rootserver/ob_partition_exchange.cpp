@@ -241,13 +241,13 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
         LOG_WARN("partition not found", K(ret), K(base_table_schema), K(partition_name));
       } else {
         share::schema::ObPartitionFuncType part_type = base_table_schema.get_part_option().get_part_func_type();
-        if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_5_5 &&
+        if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_5_3 &&
                         PARTITION_FUNC_TYPE_RANGE != part_type &&
                         PARTITION_FUNC_TYPE_RANGE_COLUMNS != part_type)) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Version lower than 4.3.5.5 only support exchanging range/range columns partitions "
+          LOG_WARN("Version lower than 4.3.5.3 only support exchanging range/range columns partitions "
             "currently", K(ret), K(part_type));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Version lower than 4.3.5.5 exchange partition except range/range columns");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Version lower than 4.3.5.3 exchange partition except range/range columns");
         } else if (OB_UNLIKELY(PARTITION_FUNC_TYPE_RANGE != part_type &&
                                 PARTITION_FUNC_TYPE_RANGE_COLUMNS != part_type &&
                                 PARTITION_FUNC_TYPE_LIST != part_type &&
@@ -268,17 +268,17 @@ int ObPartitionExchange::check_partition_exchange_schema_for_user(
             LOG_WARN("partition not found", K(ret), K(OB_ISNULL(part)), K(OB_ISNULL(subpart)));
           } else {
             share::schema::ObPartitionFuncType subpart_type = base_table_schema.get_sub_part_option().get_part_func_type();
-            if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_5_5 &&
+            if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_5_3 &&
                             PARTITION_FUNC_TYPE_RANGE != subpart_type &&
                             PARTITION_FUNC_TYPE_RANGE_COLUMNS != subpart_type)) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN(
-                "version lower than 4.3.5.5 Only support exchanging range/range columns partitions "
+                "version lower than 4.3.5.3 Only support exchanging range/range columns partitions "
                 "currently",
                 K(ret), K(subpart_type));
               LOG_USER_ERROR(
                 OB_NOT_SUPPORTED,
-                "Version lower than 4.3.5.5 exchange partition except range/range columns");
+                "Version lower than 4.3.5.3 exchange partition except range/range columns");
             } else if (OB_UNLIKELY(PARTITION_FUNC_TYPE_RANGE != subpart_type &&
                                    PARTITION_FUNC_TYPE_RANGE_COLUMNS != subpart_type &&
                                    PARTITION_FUNC_TYPE_LIST != subpart_type &&
