@@ -18,6 +18,8 @@
 #include "sql/ob_sql_trans_control.h"
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_end_trans_cb.h"
+#include "src/share/table/ob_table_util.h"
+
 
 
 namespace oceanbase
@@ -53,6 +55,7 @@ public:
     did_async_commit_ = false;
     require_rerouting_ = false;
     require_refresh_kv_meta_ = false;
+    trace_info_ = &ObTableUtils::get_kv_normal_trace_info();
     if (OB_NOT_NULL(trans_state_ptr_)) {
       trans_state_ptr_->reset();
     }
@@ -68,7 +71,8 @@ public:
                K_(use_sync),
                K_(is_rollback),
                K_(did_async_commit),
-               K_(create_cb_functor));
+               K_(create_cb_functor),
+               KPC_(trace_info));
   int init(const ObTableConsistencyLevel consistency_level,
            const share::ObLSID &ls_id,
            int64_t timeout_ts,
@@ -97,6 +101,7 @@ public:
   bool did_async_commit_;
   bool require_rerouting_;
   bool require_refresh_kv_meta_;
+  const ObString *trace_info_;
 };
 
 class ObTableTransUtils final

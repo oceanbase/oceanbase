@@ -361,6 +361,7 @@ int ObTableTTLDeleteTask::process_one()
       && trans_param.trans_state_ptr_->is_start_trans_success()) {
     int tmp_ret = ret;
     trans_param.is_rollback_ = (OB_SUCCESS != ret);
+    trans_param.trace_info_ = &ObTableUtils::get_kv_ttl_trace_info();
     if (OB_FAIL(ObTableTransUtils::sync_end_trans(trans_param))) {
       LOG_WARN("fail to end trans", KR(ret), K(trans_param));
     }
