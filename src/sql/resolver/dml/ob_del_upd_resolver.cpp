@@ -4833,7 +4833,7 @@ int ObDelUpdResolver::get_label_se_columns(ObInsertTableInfo& table_info,
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
-    } else if (table_schema->has_label_se_column()) {
+    } else if (stmt::T_CREATE_INDEX != del_upd_stmt->get_stmt_type() && table_schema->has_label_se_column()) {
       const ObIArray<uint64_t> &label_se_column_ids = table_schema->get_label_se_column_ids();
       for (int64_t i = 0; OB_SUCC(ret) && i < label_se_column_ids.count(); ++i) {
         bool label_se_column_already_handled = false;
