@@ -86,7 +86,7 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
   ObRawExprResType avg_doc_token_cnt_res_type;
   avg_doc_token_cnt_res_type.set_type(ObDoubleType);
   avg_doc_token_cnt_res_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObDoubleType]);
-  const bool need_est_avg_doc_token_cnt = ctx.get_cur_cluster_version() >= CLUSTER_VERSION_4_5_0_0;
+  const bool need_est_avg_doc_token_cnt = false; // obkv fulltext index can not support avg doc token count estimation yet
   ObMatchFunRawExpr *match_expr = nullptr;
   ObRawExpr *pushdown_match_filter = nullptr;
   if (OB_ISNULL(schema_guard) || OB_ISNULL(table_schema) || OB_ISNULL(fts_ctx)) {

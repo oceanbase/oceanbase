@@ -132,7 +132,7 @@ ObBM25ParamEstCtx::ObBM25ParamEstCtx()
 bool ObBM25ParamEstCtx::is_valid() const
 {
   bool bret = (estimated_total_doc_cnt_ > 0 || total_doc_cnt_expr_ != nullptr)
-      && (need_est_avg_doc_token_cnt_ || avg_doc_token_cnt_expr_ != nullptr)
+      && (!need_est_avg_doc_token_cnt_ || avg_doc_token_cnt_expr_ != nullptr)
       && doc_length_est_param_ != nullptr;
   return bret;
 }

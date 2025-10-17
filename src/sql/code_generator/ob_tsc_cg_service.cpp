@@ -4171,6 +4171,9 @@ int ObTscCgService::generate_text_ir_spec_exprs(const ObTextRetrievalInfo &tr_in
       LOG_WARN("unexpected null relevance expr", K(ret));
     } else if (OB_FAIL(cg_.generate_rt_expr(*tr_info.relevance_expr_, text_ir_scan_ctdef.relevance_expr_))) {
       LOG_WARN("cg rt expr for relevance expr failed", K(ret));
+    } else if (nullptr == tr_info.avg_doc_token_cnt_) {
+      // compatible with privious versions (before 4.5.0.0) which have not support avg doc token count estimation
+      text_ir_scan_ctdef.has_avg_doc_len_est_ = false;
     } else if (OB_FAIL(generate_text_avg_doc_len_est_ctdef(tr_info, text_ir_scan_ctdef))) {
       LOG_WARN("failed to generate text avg doc len est ctdef", K(ret));
     } else {

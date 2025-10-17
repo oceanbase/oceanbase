@@ -5380,7 +5380,7 @@ int ObLogTableScan::prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_inf
       tr_info.related_doc_cnt_ = related_doc_cnt;
       tr_info.doc_token_cnt_ = doc_token_cnt;
       tr_info.total_doc_cnt_ = total_doc_cnt;
-      tr_info.avg_doc_token_cnt_ = avg_doc_token_cnt_expr;
+      tr_info.avg_doc_token_cnt_ = need_est_avg_doc_token_cnt ? avg_doc_token_cnt_expr : nullptr;
       tr_info.relevance_expr_ = relevance_expr;
     }
   }
