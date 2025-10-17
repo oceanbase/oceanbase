@@ -68,7 +68,11 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
   external_errno = abs(external_errno);
   if (OB_SUCCESS != external_errno) {
     const char *oracle_msg_prefix = "ORA";
-    if (external_errno >= 2000 && // google "Client Error Message Reference"
+    if (-external_errno == OB_ALLOCATE_MEMORY_FAILED &&
+        (NULL == external_errmsg || 0 == STRLEN(external_errmsg))) {
+      ob_errno = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (external_errno >= 2000 && // google "Client Error Message Reference"
         external_errno <= 2075 && // you will known errno in [2000, 2075] is client error at dev.mysql.com
         (!is_oracle_err ||
         (is_oracle_err &&
@@ -92,10 +96,10 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
       if (1 != match_count) {
         // default ob_errno, if external_errno can not map to any valid ob_errno
         ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
-	const char *errmsg = external_errmsg;
-	if (NULL == errmsg) {
-		errmsg = "empty error message";
-	}
+        const char *errmsg = external_errmsg;
+        if (NULL == errmsg) {
+          errmsg = "empty error message";
+        }
         int msg_len = STRLEN(errmsg);
         LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, external_errno, msg_len, errmsg);
       } else if (1 == match_count) {
