@@ -14783,11 +14783,11 @@ int ObTransformUtils::adjust_col_and_sel_for_expand_mview(ObTransformerCtx *ctx,
         LOG_WARN("failed to push back column item", K(ret));
       }
     } else if (FALSE_IT(pos = uppper_col_items.at(i).expr_->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+    } else if (pos < 0 || uppper_col_items.at(i).expr_->is_virtual_generated_column()) {
+      // do nothing, it is hidden column or generated column of mview
     } else if (OB_UNLIKELY(pos >= view_sel_items.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid array pos", K(pos), K(view_sel_items.count()), K(ret));
-    } else if (pos < 0) {
-      // do nothing, it is hidden column of mview
     } else if (OB_FAIL(new_col_items.push_back(uppper_col_items.at(i)))) {
       LOG_WARN("failed to push back column item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx->expr_factory_,
