@@ -37,19 +37,13 @@ protected:
   virtual int inner_release() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
+  virtual bool can_limit_pushdown(const ObDASPushDownTopN &push_down_topn) override;
 
 private:
-  int bitmap_get_next_row();
-  int bitmap_get_next_rows(int64_t &count, int64_t capacity);
   int sort_get_next_row();
   int sort_get_next_rows(int64_t &count, int64_t capacity);
-  // directly output an iter, it must be guaranteed that the range of
-  // the iter with the smallest rowkey or largest rowkey(if reverse) does not intersect other ranges
-  int direct_get_next_row(int64_t output_idx);
-  int direct_get_next_rows(int64_t &count, int64_t capacity, int64_t output_idx);
 
 private:
-  int check_direct(bool &can_derect, int64_t &output_idx) const;
   int fill_default_values(const common::ObIArray<ObExpr*> &exprs) const;
   int extract_match_against_exprs(const common::ObIArray<ObExpr*> &exprs, common::ObIArray<ObExpr*> &match_against_exprs) const;
 

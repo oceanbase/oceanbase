@@ -16,6 +16,7 @@
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "sql/das/iter/ob_das_index_merge_fts_and_iter.h"
 #include "sql/optimizer/ob_storage_estimator.h"
 #include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 
@@ -612,6 +613,9 @@ int ObDASScanOp::open_op()
                                                                  op_alloc_,
                                                                  result))) {
       LOG_WARN("failed to create das scan iter tree", K(get_iter_tree_type()), K(ret));
+    } else if (scan_rtdef_->topn_param_.is_valid() &&
+               OB_FAIL(result->prepare_limit_pushdown_param(scan_ctdef_->push_down_topn_, scan_rtdef_->topn_param_))) {
+      LOG_WARN("failed to prepare limit pushdown param", K(ret));
     } else {
       result_ = result;
       if (OB_FAIL(result->do_table_scan())) {
@@ -983,6 +987,22 @@ int ObDASScanOp::reuse_iter()
             if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(
                 attach_ctdef_, attach_rtdef_, tablet_ids_, ls_id_, result_iter))) {
               LOG_WARN("failed to set index merge related ids", K(ret));
+            } else {
+              ObDASIndexMergeFTSAndIter *fts_and_iter = dynamic_cast<ObDASIndexMergeFTSAndIter *>(result_iter);
+              if (OB_NOT_NULL(fts_and_iter)) {
+                int64_t first_fts_idx = fts_and_iter->get_first_fts_idx();
+                const ObDASBaseCtDef *child_attach_ctdef = attach_ctdef_->children_[first_fts_idx];
+                ObDASBaseRtDef *child_attach_rtdef = attach_rtdef_->children_[first_fts_idx];
+
+                if (OB_FAIL(ObDASIterUtils::set_index_merge_related_ids(child_attach_ctdef,
+                                                        child_attach_rtdef,
+                                                        tablet_ids_,
+                                                        ls_id_,
+                                                        fts_and_iter->get_pushdown_topk_iter_tree()))) {
+                  LOG_WARN("failed to set index merge related ids", K(ret));
+                }
+
+              }
             }
             break;
           }

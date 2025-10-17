@@ -463,7 +463,7 @@ public:
   }
   inline bool need_continuous_update()
   {
-    return DynamicFilterType::PD_TOPN_FILTER == dynamic_filter_type_;
+    return DynamicFilterType::PD_TOPN_FILTER == dynamic_filter_type_ || DynamicFilterType::LOCAL_FILTER == dynamic_filter_type_;
   }
   virtual bool is_topn_filter() const override
   {

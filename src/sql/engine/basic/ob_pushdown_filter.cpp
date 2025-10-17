@@ -832,7 +832,8 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
     LOG_WARN("Invalid null parameter", K(ret), KP(raw_expr), KP(alloc_));
   // join runtime filter only in column store can be pushdown as white filter
   // topn runtime filter can be pushdown as white filter both in row store and column store
-  } else if ((use_column_store_ || T_OP_PUSHDOWN_TOPN_FILTER == raw_expr->get_expr_type())
+  // local dynamic filter now used for single column, can be pushdown as white filter both in row store and column store
+  } else if ((use_column_store_ || T_OP_PUSHDOWN_TOPN_FILTER == raw_expr->get_expr_type() || T_OP_LOCAL_DYNAMIC_FILTER == raw_expr->get_expr_type())
              && raw_expr->is_white_runtime_filter_expr() && !is_external_table) {
     // only in column store, the runtime filter can be pushdown as white filter
     ObOpRawExpr *op_raw_expr = static_cast<ObOpRawExpr *>(raw_expr);

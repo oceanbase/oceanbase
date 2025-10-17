@@ -793,15 +793,12 @@ int ObSortOpImpl::init(
       op_monitor_info_->otherstat_10_value_ = static_cast<int64_t>(compress_type_);
       ObPhysicalPlanCtx *plan_ctx = NULL;
       const ObPhysicalPlan *phy_plan = nullptr;
-      if (!exec_ctx->get_my_session()->get_ddl_info().is_ddl()) {
+      const ObSQLSessionInfo *session = exec_ctx->get_my_session();
+      if (nullptr != session && !session->get_ddl_info().is_ddl()) {
         // not ddl
-      } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("deserialized exec ctx without phy plan ctx set. Unexpected", K(ret));
-      } else if (OB_ISNULL(phy_plan = plan_ctx->get_phy_plan())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error unexpected, phy plan must not be nullptr", K(ret));
-      } else if (phy_plan->get_ddl_task_id() > 0) {
+      } else if (OB_NOT_NULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx)) &&
+                 OB_NOT_NULL(phy_plan = plan_ctx->get_phy_plan()) &&
+                 phy_plan->get_ddl_task_id() > 0) {
         op_monitor_info_->otherstat_5_id_ = ObSqlMonitorStatIds::DDL_TASK_ID;
         op_monitor_info_->otherstat_5_value_ = phy_plan->get_ddl_task_id();
       }

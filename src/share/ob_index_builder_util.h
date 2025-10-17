@@ -121,6 +121,9 @@ private:
     share::schema::ObColumnSchemaV2 &col_schema,
     share::schema::ObTableSchema &data_schema,
     share::schema::ObColumnSchemaV2 *&mbr_col);
+  static int add_skip_index_for_hidden_pk(const share::schema::ObColumnSchemaV2 &original_column,
+                                          share::schema::ObColumnSchemaV2 &modified_column,
+                                          const share::schema::ObColumnSchemaV2* &output_column);
 };
 }//end namespace rootserver
 }//end namespace oceanbase

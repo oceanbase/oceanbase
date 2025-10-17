@@ -282,6 +282,14 @@ int ObDASAttachSpec::set_calc_exprs_tree(ObDASAttachCtDef *root,
       }
     }
   }
+  if (OB_SUCC(ret) && root->op_type_ == DAS_OP_INDEX_MERGE) {
+    ObDASScanCtDef *main_scan_ctdef = static_cast<ObDASIndexMergeCtDef *>(root)->main_scan_ctdef_;
+    if (main_scan_ctdef != nullptr) {
+      if (OB_FAIL(main_scan_ctdef->pd_expr_spec_.set_calc_exprs(calc_exprs, max_batch_size))) {
+        LOG_WARN("failed to set main scan calc exprs", K(ret), KPC(main_scan_ctdef));
+      }
+    }
+  }
   return ret;
 }
 

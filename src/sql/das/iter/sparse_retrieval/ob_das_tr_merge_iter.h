@@ -114,9 +114,30 @@ public:
       bool &has_duplicate_boolean_tokens);
   int set_children_iter_rangekey(const common::ObIArray<std::pair<ObDocIdExt, int>> &virtual_rangekeys, const int64_t batch_size);
   bool is_taat_mode() { return taat_mode_; }
-  int get_query_max_score(double &score) {
-    return sparse_retrieval_iter_->get_query_max_score(score);
+  int get_query_max_score(double &score)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(sparse_retrieval_iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else {
+      ret = sparse_retrieval_iter_->get_query_max_score(score);
+    }
+    return ret;
   }
+  int preset_top_k_threshold(const double threshold)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(sparse_retrieval_iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else {
+      ret = sparse_retrieval_iter_->preset_top_k_threshold(threshold);
+    }
+    return ret;
+  }
+  int is_topk_mode() const { return topk_mode_; }
+  void set_topk_limit(const int64_t limit) { topk_limit_ = limit; }
 private:
   int init_das_iter_scan_params();
   static int init_das_iter_scan_param(

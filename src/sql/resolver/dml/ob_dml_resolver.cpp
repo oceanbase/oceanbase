@@ -49,6 +49,7 @@
 #include "share/catalog/ob_catalog_utils.h"
 #include "share/ob_license_utils.h"
 #include "share/schema/ob_external_table_column_schema_helper.h"
+#include "src/share/hybrid_search/ob_hybrid_search_exector.h"
 
 namespace oceanbase
 {
@@ -5957,6 +5958,18 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         }
         break;
       }
+      case T_HYBRID_SEARCH_EXPRESSION: {
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        } else if (lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_4_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("hybrid_search not support before 4.4.1.0", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+        } else if (OB_FAIL(resolve_hybrid_search_item(*table_node, table_item))) {
+          LOG_WARN("failed to resolve hybrid search item", K(ret));
+        }
+        break;
+      }
       case T_VALUES_TABLE_EXPRESSION: {
         if (OB_FAIL(resolve_values_table_item(*table_node, table_item))) {
           LOG_WARN("failed to resolve values table item", K(ret));
@@ -7356,6 +7369,105 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
 
   return ret;
 }
+int ObDMLResolver::resolve_hybrid_search_item(const ParseNode &parse_tree, TableItem *&table_item)
+{
+  INIT_SUCC(ret);
+  ObDMLStmt *dml_stmt = get_stmt();
+  ObArenaAllocator tmp_allocator;
+  const ParseNode* table_name_node = NULL;
+  const ParseNode* param_node = NULL;
+  ObString table_name;
+  ObString param;
+  ObString hybrid_search_sql;
+  ParseNode *hs_sql_node = nullptr;
+  ParseNode *sub_query_wrapper = nullptr;
+
+  if (T_HYBRID_SEARCH_EXPRESSION != parse_tree.type_ || 3 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parse_tree type or num child is not correct", K(ret), K(parse_tree.type_), K(parse_tree.num_child_));
+  } else if (OB_ISNULL(table_name_node = parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table name node is null", K(ret));
+  } else if (OB_ISNULL(param_node = parse_tree.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param node is null", K(ret));
+  } else if (OB_FALSE_IT(table_name.assign_ptr(table_name_node->str_value_, static_cast<int32_t>(table_name_node->str_len_)))) {
+  } else if (T_USER_VARIABLE_IDENTIFIER == param_node->type_) {
+    // read param from user variable
+    ObString var_name = ObString(static_cast<int32_t>(param_node->str_len_), param_node->str_value_);
+    ObSessionVariable osv;
+    if (OB_FAIL(session_info_->get_user_variable(var_name, osv))) {
+      LOG_WARN("failed to get user variable", K(ret), K(var_name));
+    } else {
+      param = osv.value_.get_string();
+    }
+  } else {
+    param.assign_ptr(param_node->str_value_, static_cast<int32_t>(param_node->str_len_));
+  }
+
+  // parse param to sql
+  if (OB_SUCC(ret)) {
+    oceanbase::share::ObHybridSearchExecutor executor;
+    oceanbase::share::ObHybridSearchArg arg;
+    arg.table_name_ = table_name;
+    arg.search_params_ = param;
+    arg.search_type_ = oceanbase::share::ObHybridSearchArg::SearchType::GET_SQL;
+    if (OB_FAIL(executor.init(session_info_->get_cur_exec_ctx(), arg))) {
+      LOG_WARN("fail to init executor", K(ret));
+    } else if (OB_FAIL(executor.execute_get_sql(hybrid_search_sql))) {
+      LOG_WARN("fail to execute get sql", K(ret));
+    }
+  }
+
+  // parse hybrid search sql
+  if (OB_SUCC(ret)) {
+    ParseResult parse_result;
+    ObParser parser(*allocator_, session_info_->get_sql_mode(), session_info_->get_charsets4parser());
+    if (OB_FAIL(parser.parse(hybrid_search_sql, parse_result))) {
+      LOG_WARN("failed to parse hybrid search sql", K(hybrid_search_sql), K(ret));
+    } else {
+      hs_sql_node = parse_result.result_tree_;
+    }
+  }
+
+  // set HIDDEN_COLUMN_VISIBLE hint
+  if (OB_SUCC(ret)) {
+    ObQueryCtx *query_ctx = get_stmt()->get_query_ctx();
+    ObQueryHint &query_hint = query_ctx->get_query_hint_for_update();
+    ObGlobalHint &global_hint = const_cast<ObGlobalHint&>(query_hint.get_global_hint());
+    bool has_enable_param = false;
+    global_hint.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param);
+    if (!has_enable_param) {
+      ObObj true_val;
+      true_val.set_varchar("true");
+      if (OB_FAIL(global_hint.opt_params_.add_opt_param_hint(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, true_val))) {
+        LOG_WARN("failed to add hidden column visible hint", K(ret));
+      }
+    }
+  }
+
+  // create sub query wrapper
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(sub_query_wrapper = new_node(allocator_, T_ALIAS, 2))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      sub_query_wrapper->children_[0] = hs_sql_node->children_[0];
+      sub_query_wrapper->children_[1] = parse_tree.children_[2];
+    }
+  }
+
+  // resolve table
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDMLResolver::resolve_table(*sub_query_wrapper, table_item))) {
+    LOG_WARN("failed to resolve table", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(params_.query_ctx_)) {
+    params_.query_ctx_->has_hybrid_search_ = true;
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableItem *&tbl_item)
 {
   int ret = OB_SUCCESS;

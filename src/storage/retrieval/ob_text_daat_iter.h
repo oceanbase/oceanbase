@@ -14,6 +14,7 @@
 #define OB_TEXT_DAAT_ITER_H_
 
 #include "ob_inv_idx_param_estimator.h"
+#include "ob_sparse_bmm_iter.h"
 #include "ob_sparse_bmw_iter.h"
 #include "ob_sparse_daat_iter.h"
 #include "ob_text_retrieval_token_iter.h"
@@ -67,7 +68,7 @@ private:
 };
 
 
-class ObTextBMWIter final : public ObSRBMWIterImpl
+class ObTextBMWIter final : public ObSRBMMIterImpl
 {
 public:
   ObTextBMWIter();
@@ -77,7 +78,7 @@ public:
   int init(const ObTextDaaTParam &param);
 protected:
   virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
-  virtual int init_before_wand_process() override;
+  virtual int init_before_topk_search() override;
 protected:
   ObBM25ParamEstimator bm25_param_estimator_;
 private:

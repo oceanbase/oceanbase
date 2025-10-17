@@ -1229,6 +1229,25 @@ int ObTableScanOp::init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef,
         }
       }
     }
+    if (attach_ctdef->op_type_ == DAS_OP_INDEX_MERGE) {
+      const ObDASIndexMergeCtDef *index_merge_ctdef = static_cast<const ObDASIndexMergeCtDef*>(attach_ctdef);
+      if (index_merge_ctdef->main_scan_ctdef_ != nullptr) {
+        ObDASScanRtDef *main_scan_rtdef = nullptr;
+        ObDASIndexMergeRtDef *index_merge_rtdef = static_cast<ObDASIndexMergeRtDef*>(attach_rtdef);
+        if (OB_ISNULL(main_scan_rtdef = OB_NEWx(ObDASScanRtDef, &ctx_.get_allocator()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate main scan rtdef failed", K(ret));
+        } else {
+          const ObDASTableLocMeta *attach_loc_meta = MY_CTDEF.attach_spec_.get_attach_loc_meta(
+            MY_SPEC.table_loc_id_, index_merge_ctdef->main_scan_ctdef_->ref_table_id_);
+          if (OB_FAIL(init_das_scan_rtdef(*index_merge_ctdef->main_scan_ctdef_, *main_scan_rtdef, attach_loc_meta))) {
+            LOG_WARN("init das scan rtdef failed", K(ret));
+          } else {
+            index_merge_rtdef->main_scan_rtdef_ = main_scan_rtdef;
+          }
+        }
+      }
+    }
   } else {
     tsc_rtdef_.attach_rtinfo_->related_scan_cnt_++;
     if (attach_ctdef == &MY_CTDEF.scan_ctdef_) {
@@ -1313,6 +1332,17 @@ int ObTableScanOp::init_table_scan_rtdef()
       if (OB_FAIL(tsc_rtdef_.attach_rtinfo_->pushdown_tasks_.push_back(
           tsc_rtdef_.attach_rtinfo_->attach_rtdef_))) {
         LOG_WARN("store pushdown das rtdef failed", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (MY_CTDEF.scan_ctdef_.push_down_topn_.is_valid()) {
+      if (OB_FAIL(ObDASPushDownTopN::prepare_limit_param(eval_ctx_,
+                                                         MY_CTDEF.scan_ctdef_.push_down_topn_,
+                                                         tsc_rtdef_.scan_rtdef_.topn_param_))) {
+        LOG_WARN("failed to prepare limit param", K(ret));
+      } else {
+        LOG_TRACE("topn param", K(tsc_rtdef_.scan_rtdef_.topn_param_), K(MY_CTDEF.scan_ctdef_.push_down_topn_));
       }
     }
   }

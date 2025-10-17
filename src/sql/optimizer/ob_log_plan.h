@@ -933,6 +933,8 @@ public:
                                      ObIArray<ObDistinctAggrBatch> &distinct_aggr_batch,
                                      ObIArray<ObRawExpr *> &distinct_params);
 
+  bool enable_two_phase_fts_index_merge();
+
   bool disable_hash_groupby_in_second_stage();
   int create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
                                     const ObIArray<ObRawExpr*> &having_exprs,
@@ -1845,6 +1847,14 @@ public:
                                              bool need_exchange,
                                              const ObIArray<OrderItem> &sort_keys,
                                              bool &need_further_sort);
+  int try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
+                                          ObRawExpr *topn_expr,
+                                          ObRawExpr *limit_expr,
+                                          ObRawExpr *offset_expr,
+                                          bool is_fetch_with_ties,
+                                          bool need_exchange,
+                                          const ObIArray<OrderItem> &sort_keys,
+                                          bool &need_further_sort);
   static int adjust_dup_table_replica_by_cons(
     const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
     common::ObIArray<ObCandiTableLoc> &phy_tbl_info_list);

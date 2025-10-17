@@ -212,7 +212,7 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
             OB_UNLIKELY(1 > param.need_parallel_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(est_cost_info_), K(param));
-  } else if (OB_FAIL(get_limit_offset_value(NULL, limit_count_expr_, limit_offset_expr_,
+  } else if (OB_FAIL(get_limit_offset_value(NULL, get_limit_expr(), get_offset_expr(),
                                             limit_percent, limit_count, offset_count))) {
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
@@ -287,11 +287,11 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (NULL != auto_split_filter_ &&
              OB_FAIL(all_exprs.push_back(auto_split_filter_))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (NULL != limit_count_expr_ &&
-             OB_FAIL(all_exprs.push_back(limit_count_expr_))) {
+  } else if (NULL != get_limit_expr() &&
+             OB_FAIL(all_exprs.push_back(get_limit_expr()))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (NULL != limit_offset_expr_ &&
-             OB_FAIL(all_exprs.push_back(limit_offset_expr_))) {
+  } else if (NULL != get_offset_expr() &&
+             OB_FAIL(all_exprs.push_back(get_offset_expr()))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (NULL != fq_expr_ && OB_FAIL(all_exprs.push_back(fq_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
@@ -342,6 +342,8 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get filter assist expr", K(ret));
   } else if (use_index_merge() && OB_FAIL(append_array_no_dup(all_exprs, full_filters_))) {
     LOG_WARN("failed to append index merge full filters", K(ret));
+  } else if (use_index_merge() && OB_FAIL(append_array_no_dup(all_exprs, dynamic_id_filter_exprs_))) {
+    LOG_WARN("failed to append dynamic id filter exprs", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get exprs", K(ret));
   } else { /*do nothing*/ }
@@ -787,11 +789,11 @@ int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
     } else if (is_index_scan() && !get_index_back() &&
                OB_FAIL(remove_access_exprs_in_replacer(replacer, get_access_exprs()))) {
       LOG_WARN("failed to remove redundant access expr", K(ret));
-    } else if (NULL != limit_offset_expr_ &&
-        OB_FAIL(replace_expr_action(replacer, limit_count_expr_))) {
+    } else if (NULL != get_limit_expr() &&
+        OB_FAIL(replace_expr_action(replacer, get_limit_expr()))) {
       LOG_WARN("failed to replace limit count expr", K(ret));
-    } else if (NULL != limit_offset_expr_  &&
-              OB_FAIL(replace_expr_action(replacer, limit_offset_expr_))) {
+    } else if (NULL != get_offset_expr()  &&
+              OB_FAIL(replace_expr_action(replacer, get_offset_expr()))) {
       LOG_WARN("failed to replace limit offset expr ", K(ret));
     } else if (NULL != part_expr_  && OB_FAIL(replace_expr_action(replacer, part_expr_))) {
       LOG_WARN("failed to replace part expr ", K(ret));
@@ -1747,12 +1749,12 @@ int ObLogTableScan::set_index_merge_scan_filters(const AccessPath *path)
       LOG_WARN("get unexpected null index merge node", K(ret), KPC(index_merge_path));
     } else if (OB_FAIL(get_filter_exprs().assign(index_merge_path->filter_))) {
       LOG_WARN("failed to assign filters array", K(ret));
-    } else if (OB_FAIL(full_filters_.assign(index_merge_path->filter_))) {
-      LOG_WARN("failed to assign filters array", K(ret));
+    } else if (OB_FAIL(full_filters_.assign(index_merge_path->est_cost_info_.table_filters_))) {
+      LOG_WARN("failed to assign full filters", K(ret));
     } else if (OB_FAIL(index_range_conds_.prepare_allocate(index_merge_path->index_cnt_)) ||
                OB_FAIL(index_filters_.prepare_allocate(index_merge_path->index_cnt_))) {
       LOG_WARN("failed to prepare allocate index range filters", K(ret));
-    } else if (OB_FAIL(set_index_table_scan_filters(index_merge_path->root_))) {
+    } else if (OB_FAIL(set_index_table_scan_filters(index_merge_path->root_, false))) {
       LOG_WARN("failed to set index table scan filters", K(ret));
     }
   }
@@ -1760,7 +1762,7 @@ int ObLogTableScan::set_index_merge_scan_filters(const AccessPath *path)
   return ret;
 }
 
-int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node)
+int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node, bool is_intersect_child)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -1825,6 +1827,14 @@ int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node)
           }
         }
       }
+
+      int64_t skip_id_threshold = - EVENT_CALL(EventTable::EN_INDEX_MERGE_SKIP_ID_THRESHOLD);
+      if (OB_FAIL(ret)) {
+      } else if (is_intersect_child && skip_id_threshold > 0) {
+        if (OB_FAIL(generate_dynamic_id_filter(node, scan_pushdown_filters))) {
+          LOG_WARN("failed to generate dynamic id filter", K(ret));
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < scan_pushdown_filters.count(); i++) {
         bool found_expr = false;
         for (int64_t j = 0; OB_SUCC(ret) && !found_expr && j < range_exprs.count(); j++) {
@@ -1848,11 +1858,60 @@ int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node)
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
-      if (OB_FAIL(SMART_CALL(set_index_table_scan_filters(node->children_.at(i))))) {
+      is_intersect_child |= (node->node_type_ == INDEX_MERGE_INTERSECT);
+      if (OB_FAIL(SMART_CALL(set_index_table_scan_filters(node->children_.at(i), is_intersect_child)))) {
         LOG_WARN("failed to set index table filters", K(ret));
       }
     }
   }
+  return ret;
+}
+
+int ObLogTableScan::generate_dynamic_id_filter(ObIndexMergeNode *node, ObIArray<ObRawExpr*> &scan_pushdown_filters)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  ObSQLSessionInfo *session_info = nullptr;
+  ObArray<ObRawExpr*> rowkey_exprs;
+  ObOpRawExpr *id_filter_expr = nullptr;
+  ObRawExpr *pk_increment = nullptr;
+  ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard()) ||
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+      ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), ref_table_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(ref_table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(ref_table_id_));
+  } else if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs))) {
+      LOG_WARN("get rowkey exprs failed", K(ret), K(table_id_), K(ref_table_id_));
+  } else if (rowkey_exprs.count() == 1
+             && OB_NOT_NULL(rowkey_exprs.at(0))
+             && rowkey_exprs.at(0)->get_result_type().is_uint64()) {
+    pk_increment = rowkey_exprs.at(0);
+    if (OB_FAIL(expr_factory.create_raw_expr(T_OP_LOCAL_DYNAMIC_FILTER, id_filter_expr))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_ISNULL(id_filter_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(id_filter_expr));
+    } else if (OB_FAIL(id_filter_expr->set_param_expr(pk_increment))) {
+      LOG_WARN("failed to set param expr", K(ret));
+    } else if (OB_FAIL(id_filter_expr->formalize(session_info))) {
+      LOG_WARN("fail to formalize expr", K(ret));
+    } else if (FALSE_IT(id_filter_expr->set_runtime_filter_type(RuntimeFilterType::RANGE))) {
+    } else if (OB_FAIL(scan_pushdown_filters.push_back(id_filter_expr))) {
+      LOG_WARN("failed to push back filter", K(ret));
+    } else if (OB_FAIL(dynamic_id_filter_exprs_.push_back(id_filter_expr))) {
+      LOG_WARN("failed to push back filter", K(ret));
+    } else {
+      node->has_dynamic_id_filter_ = true;
+    }
+  }
+  LOG_TRACE("generate dynamic id filter", K(ret), K(ref_table_id_), K(dynamic_id_filter_exprs_));
   return ret;
 }
 
@@ -2747,7 +2806,7 @@ int ObLogTableScan::print_range_annotation(char *buf,
           } else { /* Do nothing */ }
         }
       }
-      const ObIArray<ObRawExpr*> &lookup_filter = full_filters_;
+      const ObIArray<ObRawExpr*> &lookup_filter = get_filter_exprs();
       EXPLAIN_PRINT_EXPRS(lookup_filter, type);
     }
   } else {
@@ -2842,9 +2901,9 @@ int ObLogTableScan::print_limit_offset_annotation(char *buf,
                                                   ExplainType type)
 {
   int ret = OB_SUCCESS;
-  if (NULL != limit_count_expr_ || NULL != limit_offset_expr_) {
-    ObRawExpr *limit = limit_count_expr_;
-    ObRawExpr *offset = limit_offset_expr_;
+  if (NULL != get_limit_expr() || NULL != get_offset_expr()) {
+    ObRawExpr *limit = get_limit_expr();
+    ObRawExpr *offset = get_offset_expr();
     EXPLAIN_PRINT_EXPR(limit, type);
     BUF_PRINTF(", ");
     EXPLAIN_PRINT_EXPR(offset, type);
@@ -3086,8 +3145,8 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
   double card = 0.0;
   double op_cost = 0.0;
   double cost = 0.0;
-  limit_count_expr_ = limit;
-  limit_offset_expr_ = offset;
+  get_limit_expr() = limit;
+  get_offset_expr() = offset;
   EstimateCostInfo param;
   param.need_parallel_ = get_parallel();
 

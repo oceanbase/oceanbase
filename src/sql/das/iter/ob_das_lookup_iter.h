@@ -15,6 +15,7 @@
 
 #include "sql/das/iter/ob_das_iter.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "share/ob_i_tablet_scan.h"
 namespace oceanbase
 {
 using namespace common;
@@ -95,7 +96,7 @@ protected:
   virtual int add_rowkeys(int64_t count) = 0;
   virtual int do_index_lookup() = 0;
   virtual int check_index_lookup() = 0;
-
+  virtual bool can_limit_pushdown(const ObDASPushDownTopN &push_down_topn) override { return true; }
 protected:
   enum LookupState : uint32_t
   {

@@ -1962,8 +1962,9 @@ int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
   } else {
-    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0
-                                           && store_desc.is_major_or_meta_merge_type();
+    const bool can_aggregate = store_desc.get_major_working_cluster_version() > DATA_VERSION_4_4_1_0 ?
+        true : store_desc.is_major_or_meta_merge_type();
+    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 && can_aggregate;
     if (!need_data_aggregate_) {
     } else if (OB_FAIL(skip_index_aggregator_.init(
         store_desc.is_major_or_meta_merge_type(),

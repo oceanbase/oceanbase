@@ -152,9 +152,12 @@ int ObSSTableIndexBlockLevelScanner::get_next_row(ObMicroIndexInfo &index_row)
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(iter_end_)) {
     ret = OB_ITER_END;
-  } else if (!block_opened_ && !is_prefetch_queue_empty()) {
-    ++read_idx_;
-    if (OB_FAIL(open_current_read_index_block())) {
+  } else if (!block_opened_) {
+    if (is_prefetch_queue_empty()) {
+      iter_end_ = true;
+      ret = OB_ITER_END;
+    } else if (FALSE_IT(++read_idx_)) {
+    } else if (OB_FAIL(open_current_read_index_block())) {
       LOG_WARN("fail to open current read index block", K(ret));
     }
   }
@@ -313,9 +316,11 @@ int ObSSTableIndexBlockLevelScanner::advance_to(const ObDatumRowkey &rowkey, con
   }
 #endif
   bool prefetched = false;
-  if (FAILEDx(last_prefetch_key_.compare(rowkey, *datum_utils_, cmp_ret))) {
+  const bool has_valid_prefetched_key = last_prefetch_key_.is_valid();
+  if (OB_FAIL(ret)) {
+  } else if (has_valid_prefetched_key && OB_FAIL(last_prefetch_key_.compare(rowkey, *datum_utils_, cmp_ret))) {
     LOG_WARN("failed to compare advance key with last prefetch key", K(ret));
-  } else if (cmp_ret > 0 || (cmp_ret == 0 && inclusive)) {
+  } else if (has_valid_prefetched_key && (cmp_ret > 0 || (cmp_ret == 0 && inclusive))) {
     prefetched = true;
     // advance to key is in block already prefetched
     query_range_.start_key_ = rowkey;

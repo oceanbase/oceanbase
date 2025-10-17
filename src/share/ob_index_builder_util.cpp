@@ -521,9 +521,12 @@ int ObIndexBuilderUtil::set_index_table_columns(
         is_index_column = false;
         const ObColumnSchemaV2 *data_column = NULL;
         const ObRowkeyInfo &rowkey_info = data_schema.get_rowkey_info();
+        const ObColumnSchemaV2 *output_column = nullptr;
+        uint64_t tenant_data_version = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
           uint64_t column_id = OB_INVALID_ID;
           const bool is_rowkey = !index_schema.is_unique_index();
+          ObColumnSchemaV2 modified_column;
           if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
             LOG_WARN("get_column_id failed", "index", i, K(ret));
           } else if (NULL == (data_column = data_schema.get_column_schema(column_id))) {
@@ -550,7 +553,14 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("JSON column cannot be used in key specification.", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
                 K(row_desc), K(ret));
-          } else if (OB_FAIL(add_column(data_column, is_index_column, is_rowkey,
+          } else if (FALSE_IT(output_column = data_column)) {
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret), K(data_schema.get_tenant_id()));
+          } else if (tenant_data_version >= DATA_VERSION_4_5_0_0 && data_schema.is_table_without_pk()
+                     && share::schema::is_index_local_storage(arg.index_type_)
+                     && OB_FAIL(add_skip_index_for_hidden_pk(*data_column, modified_column, output_column))) {
+            LOG_WARN("add skip index for auto inc pk failed", K(ret));
+          } else if (OB_FAIL(add_column(output_column, is_index_column, is_rowkey,
               data_column->get_order_in_rowkey(), row_desc, index_schema,
               false /* is_hidden */, false /* is_specified_storing_col */))) {
             LOG_WARN("add column failed", K(ret));
@@ -702,6 +712,28 @@ int ObIndexBuilderUtil::set_index_table_columns(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObIndexBuilderUtil::add_skip_index_for_hidden_pk(const ObColumnSchemaV2 &original_column,
+                                                     ObColumnSchemaV2 &modified_column,
+                                                     const ObColumnSchemaV2* &output_column)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ObColumnSchemaV2::is_hidden_pk_column_id(original_column.get_column_id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("column is not hidden pk column", K(original_column), K(ret));
+  } else if (OB_UNLIKELY(!original_column.is_rowkey_column())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("column is not primary key column", K(original_column), K(ret));
+  } else if (OB_FAIL(modified_column.assign(original_column))) {
+    LOG_WARN("assign column schema failed", K(ret));
+  } else {
+    ObSkipIndexColumnAttr skip_index_attr = modified_column.get_skip_index_attr();
+    skip_index_attr.set_min_max();
+    modified_column.set_skip_index_attr(skip_index_attr.get_packed_value());
+    output_column = &modified_column;
   }
   return ret;
 }

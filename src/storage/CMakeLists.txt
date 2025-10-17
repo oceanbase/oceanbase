@@ -1090,6 +1090,7 @@ ob_set_subtarget(ob_storage retrieval
   retrieval/ob_block_max_iter.cpp
   retrieval/ob_block_stat_collector.cpp
   retrieval/ob_block_stat_iter.cpp
+  retrieval/ob_sparse_bmm_iter.cpp
   retrieval/ob_inv_idx_param_estimator.cpp
   retrieval/ob_sparse_bmw_iter.cpp
   retrieval/ob_sparse_daat_iter.cpp

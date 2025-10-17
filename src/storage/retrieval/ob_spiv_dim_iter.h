@@ -84,7 +84,8 @@ public:
         query_value_(0.0),
         dim_(-1),
         max_score_(0.0),
-        max_score_cached_(false)
+        max_score_cached_(false),
+        iter_end_(false)
   {}
   virtual ~ObSPIVDaaTDimIter()
   {}
@@ -106,6 +107,7 @@ public:
   virtual int get_curr_id(const ObDatum *&datum) const override;
   // interface for plain dynamic pruning algorithms such as WAND and MaxScore
   virtual int get_dim_max_score(double &score) override;
+  virtual bool iter_end() const override { return iter_end_; }
 
 private:
   int save_docids();
@@ -142,6 +144,7 @@ private:
   common::ObDatumCmpFuncType cmp_func_;
   float max_score_;
   bool max_score_cached_;
+  bool iter_end_;
   DISALLOW_COPY_AND_ASSIGN(ObSPIVDaaTDimIter);
 };
 
@@ -159,6 +162,7 @@ public:
         max_score_tuple_(nullptr),
         dim_max_score_(0),
         block_max_inited_(false),
+        block_max_iter_end_(false),
         in_shallow_status_(false),
         is_inited_(false)
   {}
@@ -181,6 +185,7 @@ public:
   virtual int get_curr_block_max_info(const ObMaxScoreTuple *&max_score_tuple) override;
   virtual bool in_shallow_status() const override;
   // currently, for text retrieval, total_doc_cnt and token_doc_cnt is required before block max calculation
+  virtual bool iter_end() const override { return block_max_iter_end_ || dim_iter_.iter_end(); }
   int init_block_max_iter();
 
 private:
@@ -198,6 +203,7 @@ private:
   const ObMaxScoreTuple *max_score_tuple_;
   double dim_max_score_;
   bool block_max_inited_;
+  bool block_max_iter_end_;
   bool in_shallow_status_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSPIVBlockMaxDimIter);

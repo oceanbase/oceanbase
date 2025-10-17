@@ -207,7 +207,7 @@ public:
   int init(const ObSPIVDaaTParam &param);
   virtual int get_next_row() override;
   virtual int get_next_rows(const int64_t capacity, int64_t &count) override;
-  virtual int init_before_wand_process() override;
+  virtual int init_before_topk_search() override;
   // do pre-filter
   virtual int process_collected_row(const ObDatum &id_datum, const double relevance) override;
   int project_rows_from_result_docids(const int64_t capacity, int64_t &count);

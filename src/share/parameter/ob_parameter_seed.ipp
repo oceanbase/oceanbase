@@ -3061,6 +3061,12 @@ DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "True",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(default_skip_index_level, OB_TENANT_PARAMETER, "0", "[0, 1]",
+         "Specify the default skip_index_level when creating table.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_two_phase_fts_index_merge, OB_TENANT_PARAMETER, "False",
+         "Control whether to enable two-phase execution for index-merge-and with full-text index and scalar index",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_sql_audit_filter_pushdown, OB_TENANT_PARAMETER, "True",
          "Enable or disable sql audit filter pushdown.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

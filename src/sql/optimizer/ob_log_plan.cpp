@@ -5180,6 +5180,27 @@ int ObLogPlan::generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+bool ObLogPlan::enable_two_phase_fts_index_merge()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  bool enable_two_phase_fts_index_merge = false;
+  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info get unexpected null", K(ret), K(lbt()));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      enable_two_phase_fts_index_merge = tenant_config->_enable_two_phase_fts_index_merge;
+      LOG_TRACE("trace enable two phase fts index merge",K(enable_two_phase_fts_index_merge));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to init tenant config", K(lbt()));
+    }
+  }
+  return enable_two_phase_fts_index_merge;
+}
+
 bool ObLogPlan::disable_hash_groupby_in_second_stage()
 {
   int ret = OB_SUCCESS;
@@ -19361,24 +19382,37 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
   // when fts is pre-filter of vec scan, push limit n into vec scan and order by distance_expr
   } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_ivf_pq_scan() || table_scan->is_hnsw_vec_scan()) {
     if (OB_FAIL(try_push_topn_into_vector_index_scan(top,
+                                                     topn_expr,
+                                                     limit_expr,
+                                                     offset_expr,
+                                                     is_fetch_with_ties,
+                                                     need_exchange,
+                                                     sort_keys,
+                                                     need_further_sort))) {
+      LOG_WARN("failed to push topn into vector index scan", K(ret));
+    }
+  } else if (table_scan->use_index_merge()) {
+    if (!enable_two_phase_fts_index_merge()) {
+      // do nothing
+    } else if (OB_FAIL(try_push_topn_into_index_merge_scan(top,
                                                     topn_expr,
-                                                    get_stmt()->get_limit_expr(),
-                                                    get_stmt()->get_offset_expr(),
+                                                    limit_expr,
+                                                    offset_expr,
                                                     is_fetch_with_ties,
                                                     need_exchange,
                                                     sort_keys,
                                                     need_further_sort))) {
-      LOG_WARN("failed to push topn into vector index scan", K(ret));
+      LOG_WARN("failed to push topn into index merge scan", K(ret));
     }
   } else if (table_scan->is_text_retrieval_scan()) {
     if (OB_FAIL(try_push_topn_into_text_retrieval_scan(top,
-                                                      topn_expr,
-                                                      get_stmt()->get_limit_expr(),
-                                                      get_stmt()->get_offset_expr(),
-                                                      is_fetch_with_ties,
-                                                      need_exchange,
-                                                      sort_keys,
-                                                      need_further_sort))) {
+                                                       topn_expr,
+                                                       limit_expr,
+                                                       offset_expr,
+                                                       is_fetch_with_ties,
+                                                       need_exchange,
+                                                       sort_keys,
+                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
   } // if not full tex or vector index, do noting
@@ -19482,6 +19516,71 @@ int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
     table_scan->get_text_retrieval_info().sort_key_.expr_ = sort_keys.at(0).expr_;
     table_scan->get_text_retrieval_info().sort_key_.order_type_ = sort_keys.at(0).order_type_;
     table_scan->get_text_retrieval_info().with_ties_ = (has_multi_sort_keys || is_fetch_with_ties);
+    if (OB_FAIL(tmp_sort_keys.push_back(sort_keys.at(0)))) {
+      LOG_WARN("failed to push back order item", K(ret));
+    } else if (OB_FAIL(table_scan->set_op_ordering(tmp_sort_keys))) {
+      LOG_WARN("failed to set op ordering", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
+                                                   ObRawExpr *topn_expr,
+                                                   ObRawExpr *limit_expr,
+                                                   ObRawExpr *offset_expr,
+                                                   bool is_fetch_with_ties,
+                                                   bool need_exchange,
+                                                   const ObIArray<OrderItem> &sort_keys,
+                                                   bool &need_further_sort)
+{
+  int ret = OB_SUCCESS;
+  need_further_sort = true;
+  ObLogTableScan *table_scan = NULL;
+  const AccessPath *ap = NULL;
+  bool has_multi_sort_keys = false;
+  ObRawExpr *pushed_limit_expr = NULL;
+  ObRawExpr *pushed_offset_expr = NULL;
+  ObSEArray<ObRawExpr*, 4> merge_match_exprs;
+  ObSEArray<uint64_t, 4> merge_index_ids;
+  if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN != top->get_type()) {
+    // do nothing
+  } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
+  } else if (!table_scan->use_index_merge()) {
+    // do nothing
+  } else if (OB_ISNULL(ap = table_scan->get_access_path())
+             || OB_UNLIKELY(!ap->is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected access path", K(ret), KPC(table_scan->get_access_path()));
+  } else if (table_scan->get_filter_exprs().count() != 0 ||
+             table_scan->get_pushdown_filter_exprs().count() != 0 ||
+             !ObJoinOrder::is_one_layer_intersect_with_fts(static_cast<const IndexMergePath *>(ap)->root_)) {
+    // do nothing, topn pushdown requires that only match filter exists on the base table.
+  } else if (OB_FAIL(static_cast<const IndexMergePath*>(ap)->get_all_match_exprs(merge_match_exprs,
+                                                                                 merge_index_ids))) {
+    LOG_WARN("failed to get all match exprs", K(ret));
+  } else if (sort_keys.count() != 1
+             || OB_ISNULL(sort_keys.at(0).expr_)
+             || !sort_keys.at(0).expr_->has_flag(CNT_MATCH_EXPR)
+             || !sort_keys.at(0).is_descending()
+             || !ObOptimizerUtil::find_item(merge_match_exprs, sort_keys.at(0).expr_)) {
+    // do nothing, sort key is not descending or not exists in the index merge scan node
+  } else {
+    // only accept match expr as prefix sort key.
+    has_multi_sort_keys = sort_keys.count() == 1 ? false : true;
+    need_further_sort = has_multi_sort_keys || table_scan->use_das() || need_exchange;
+    pushed_limit_expr = need_further_sort ? topn_expr : limit_expr;
+    pushed_offset_expr = need_further_sort ? NULL : offset_expr;
+    ObSEArray<OrderItem, 1> tmp_sort_keys;
+    table_scan->get_push_down_top_n_info().is_push_into_index_ = true;
+    table_scan->get_push_down_top_n_info().limit_count_expr_ = pushed_limit_expr;
+    table_scan->get_push_down_top_n_info().limit_offset_expr_ = pushed_offset_expr;
+    table_scan->get_push_down_top_n_info().sort_key_.expr_ = sort_keys.at(0).expr_;
+    table_scan->get_push_down_top_n_info().sort_key_.order_type_ = sort_keys.at(0).order_type_;
+    table_scan->get_push_down_top_n_info().with_ties_ = (has_multi_sort_keys || is_fetch_with_ties);
     if (OB_FAIL(tmp_sort_keys.push_back(sort_keys.at(0)))) {
       LOG_WARN("failed to push back order item", K(ret));
     } else if (OB_FAIL(table_scan->set_op_ordering(tmp_sort_keys))) {

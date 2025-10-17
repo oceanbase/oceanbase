@@ -75,6 +75,7 @@ int ObSPIVDaaTDimIter::init(const ObSPIVDimIterParam &iter_param)
       inv_idx_scan_iter_->set_scan_param(*inv_idx_scan_param_);
       max_score_cached_ = false;
       is_inited_ = true;
+      iter_end_ = false;
     }
   }
   return ret;
@@ -92,6 +93,7 @@ void ObSPIVDaaTDimIter::reset()
   if (OB_NOT_NULL(inv_idx_agg_iter_)) {
     inv_idx_agg_iter_->reset();
   }
+  iter_end_ = false;
 }
 
 void ObSPIVDaaTDimIter::reuse()
@@ -99,6 +101,7 @@ void ObSPIVDaaTDimIter::reuse()
   count_ = 0;
   cur_idx_ = -1;
   // inv_idx_scan_iter_->reuse() in ob_das_spiv_merge_iter.cpp
+  iter_end_ = false;
 }
 
 int ObSPIVDaaTDimIter::save_docids()
@@ -125,7 +128,9 @@ int ObSPIVDaaTDimIter::get_next_row()
   int ret = OB_SUCCESS;
   bool need_save = false;
   cur_idx_++;
-  if (OB_LIKELY(cur_idx_ < count_)) {
+  if (iter_end_) {
+    ret = OB_ITER_END;
+  } else if (OB_LIKELY(cur_idx_ < count_)) {
   } else if (OB_ISNULL(inv_idx_scan_iter_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inv_idx_scan_iter is null", K(ret));
@@ -137,6 +142,8 @@ int ObSPIVDaaTDimIter::get_next_row()
         } else if (count_ != 0) {
           ret = OB_SUCCESS;
           need_save = true;
+        } else {
+          iter_end_ = true;
         }
       } else {
         need_save = true;
@@ -145,6 +152,8 @@ int ObSPIVDaaTDimIter::get_next_row()
       if (OB_FAIL(inv_idx_scan_iter_->get_next_row())) {
         if (ret != OB_ITER_END) {
           LOG_WARN("failed to get next row", K(ret));
+        } else {
+          iter_end_ = true;
         }
       } else {
         need_save = true;
@@ -331,6 +340,7 @@ void ObSPIVBlockMaxDimIter::reset()
   dim_max_score_ = 0;
   in_shallow_status_ = false;
   block_max_inited_ = false;
+  block_max_iter_end_ = false;
   is_inited_ = false;
 }
 
@@ -344,6 +354,7 @@ void ObSPIVBlockMaxDimIter::reuse()
   max_score_tuple_ = nullptr;
   in_shallow_status_ = false;
   block_max_inited_ = false;
+  block_max_iter_end_ = false;
   dim_max_score_ = 0;
 }
 
@@ -353,6 +364,8 @@ int ObSPIVBlockMaxDimIter::get_next_row()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
+  } else if (iter_end()) {
+    ret = OB_ITER_END;
   } else if (OB_UNLIKELY(in_shallow_status_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected iter status, can not get next row after shallow advance",
@@ -378,6 +391,8 @@ int ObSPIVBlockMaxDimIter::advance_to(const ObDatum &id_datum)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
+  } else if (iter_end()) {
+    ret = OB_ITER_END;
   } else if (OB_FAIL(dim_iter_.advance_to(id_datum))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to advance to id datum", K(ret));
@@ -396,12 +411,16 @@ int ObSPIVBlockMaxDimIter::advance_shallow(const ObDatum &id_datum, const bool i
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
+  } else if (iter_end()) {
+    ret = OB_ITER_END;
   } else if (OB_UNLIKELY(!block_max_inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected block max iter not calculated", K(ret), K_(block_max_inited));
   } else if (OB_FAIL(block_max_iter_.advance_to(id_datum, inclusive))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to advance to id datum", K(ret));
+    } else {
+      block_max_iter_end_ = true;
     }
   } else if (OB_FAIL(block_max_iter_.get_curr_max_score_tuple(max_score_tuple_))) {
     LOG_WARN("failed to get next max score tuple", K(ret));

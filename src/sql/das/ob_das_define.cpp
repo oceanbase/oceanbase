@@ -375,6 +375,5 @@ int ObDASPushDownTopN::prepare_limit_param(ObEvalCtx &eval_ctx,
   }
   return ret;
 }
-
 }  // namespace sql
 }  // namespace oceanbase

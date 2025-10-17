@@ -361,7 +361,7 @@ int ObSPIVBMWIter::get_next_rows(const int64_t capacity, int64_t &count){
   } else if (OB_UNLIKELY(capacity <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(capacity));
-  } else if (BMWStatus::FINISHED == status_) {
+  } else if (BMSearchStatus::FINISHED == status_) {
     // skip
   } else if (OB_FAIL(top_k_search())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -484,7 +484,7 @@ int ObSPIVBMWIter::process_collected_row(const ObDatum &id_datum, const double r
   return ret;
 }
 
-int ObSPIVBMWIter::init_before_wand_process()
+int ObSPIVBMWIter::init_before_topk_search()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {

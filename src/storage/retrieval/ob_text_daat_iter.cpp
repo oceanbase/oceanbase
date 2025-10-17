@@ -79,7 +79,7 @@ int ObTextDaaTIter::pre_process()
 }
 
 ObTextBMWIter::ObTextBMWIter()
-  : ObSRBMWIterImpl(),
+  : ObSRBMMIterImpl(),
     bm25_param_estimator_() {}
 
 void ObTextBMWIter::reuse(const bool switch_tablet)
@@ -90,7 +90,7 @@ void ObTextBMWIter::reuse(const bool switch_tablet)
       static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->reuse();
     }
   }
-  ObSRBMWIterImpl::reuse(switch_tablet);
+  ObSRBMMIterImpl::reuse(switch_tablet);
 }
 
 void ObTextBMWIter::reset()
@@ -101,7 +101,7 @@ void ObTextBMWIter::reset()
       static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->reset();
     }
   }
-  ObSRBMWIterImpl::reset();
+  ObSRBMMIterImpl::reset();
 }
 
 int ObTextBMWIter::init(const ObTextDaaTParam &param)
@@ -112,7 +112,7 @@ int ObTextBMWIter::init(const ObTextDaaTParam &param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null pointer in param", K(ret), KP_(param.base_param),
              KP_(param.dim_iters), KP_(param.allocator), KP_(param.relevance_collector));
-  } else if (OB_FAIL(ObSRBMWIterImpl::init(*param.base_param_, *param.dim_iters_,
+  } else if (OB_FAIL(ObSRBMMIterImpl::init(*param.base_param_, *param.dim_iters_,
                                            *param.allocator_, *param.relevance_collector_))) {
     LOG_WARN("failed to init sr bmw iter", K(ret));
   } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
@@ -133,7 +133,7 @@ int ObTextBMWIter::get_next_rows(const int64_t capacity, int64_t &count)
     LOG_WARN("failed to do bm25 param estimation", K(ret));
   }
 
-  if (FAILEDx(ObSRBMWIterImpl::get_next_rows(capacity, count))) {
+  if (FAILEDx(ObSRBMMIterImpl::get_next_rows(capacity, count))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get next rows", K(ret));
     }
@@ -141,7 +141,7 @@ int ObTextBMWIter::get_next_rows(const int64_t capacity, int64_t &count)
   return ret;
 }
 
-int ObTextBMWIter::init_before_wand_process()
+int ObTextBMWIter::init_before_topk_search()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!bm25_param_estimator_.is_estimated())) {

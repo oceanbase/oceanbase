@@ -5695,7 +5695,6 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       LOG_WARN("extract the query range whether get failed", K(ret));
     }
   }
-  OZ(generate_tsc_flags(op, spec));
   OX(spec.set_est_cost_simple_info(op.get_est_cost_simple_info()));
 
   // bool is_equal_and = true;
@@ -5770,7 +5769,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
     if (OB_NOT_NULL(op.get_table_partition_info())) {
       op.get_table_partition_info()->get_table_location().set_use_das(spec.use_dist_das_);
     }
-    if (NULL != op.get_limit_expr()) {
+    if (NULL != op.get_limit_expr() && !op.is_push_down_limit_into_index()) {
       CK(op.get_limit_expr()->get_result_type().is_integer_type());
       OZ(generate_rt_expr(*op.get_limit_expr(), spec.limit_));
     }
@@ -6043,7 +6042,7 @@ int ObStaticEngineCG::get_pushdown_storage_level(ObOptimizerContext &optimizer_c
   return ret;
 }
 
-int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec)
+int ObStaticEngineCG::generate_tsc_flags(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef)
 {
   int ret = OB_SUCCESS;
   bool pd_blockscan = false;
@@ -6053,7 +6052,7 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
   bool enable_column_store = false;
   bool enable_filter_reordering = false;
   ObBasicSessionInfo *session_info = NULL;
-  ObLogPlan *log_plan = op.get_plan();
+  const ObLogPlan *log_plan = op.get_plan();
   if (OB_ISNULL(log_plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(log_plan));
@@ -6104,23 +6103,12 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       enable_skip_index = tenant_config->_enable_skip_index;
       enable_prefetch_limit = tenant_config->_enable_prefetch_limiting;
       enable_column_store = op.use_column_store();
-      ObDASScanCtDef &scan_ctdef = spec.tsc_ctdef_.scan_ctdef_;
-      ObDASScanCtDef *lookup_ctdef = spec.tsc_ctdef_.lookup_ctdef_;
       enable_filter_reordering = tenant_config->_enable_filter_reordering;
       scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
                                                           enable_column_store, enable_prefetch_limit, enable_filter_reordering);
       scan_ctdef.table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
       scan_ctdef.table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
-      scan_ctdef.enable_new_false_range_ = spec.tsc_ctdef_.enable_new_false_range_;
-      if (nullptr != lookup_ctdef) {
-        lookup_ctdef->pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
-                                                              enable_column_store, enable_prefetch_limit, enable_filter_reordering);
-        lookup_ctdef->table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
-        lookup_ctdef->table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
-        lookup_ctdef->table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
-        lookup_ctdef->enable_new_false_range_ = spec.tsc_ctdef_.enable_new_false_range_;
-      }
     }
   }
   return ret;

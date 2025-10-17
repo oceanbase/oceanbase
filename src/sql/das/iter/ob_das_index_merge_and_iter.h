@@ -28,10 +28,16 @@ public:
   ObDASIndexMergeAndIter()
     : ObDASIndexMergeIter(),
       can_be_shorted_(false),
-      shorted_child_idx_(OB_INVALID_INDEX)
+      shorted_child_idx_(OB_INVALID_INDEX),
+      main_scan_param_(nullptr),
+      main_scan_iter_(nullptr),
+      first_main_scan_(true),
+      lookup_memctx_()
   {}
 
   virtual ~ObDASIndexMergeAndIter() {}
+
+  OB_INLINE ObTableScanParam *get_main_scan_param() const { return main_scan_param_; }
 
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
@@ -41,8 +47,8 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 
 private:
-  int bitmap_get_next_row();
-  int bitmap_get_next_rows(int64_t &count, int64_t capacity);
+  int prepare_main_scan_param(ObDASScanIter *main_scan_iter);
+  int get_next_merge_rows(int64_t &count, int64_t capacity);
   int sort_get_next_row();
   int sort_get_next_rows(int64_t &count, int64_t capacity);
   // short circuit path
@@ -50,12 +56,14 @@ private:
   int shorted_get_next_rows(int64_t &count, int64_t capacity);
 
   int check_can_be_shorted();
-  int get_child_stores_last_valid_rowkey(uint64_t &last_valid_rowkey) const;
-  int locate_child_stores_to_valid_rowkey(uint64_t rowkey);
 
 private:
   bool can_be_shorted_;
   int64_t shorted_child_idx_;
+  ObTableScanParam *main_scan_param_;
+  ObDASScanIter *main_scan_iter_;
+  bool first_main_scan_;
+  lib::MemoryContext lookup_memctx_;
 };
 
 }  // namespace sql

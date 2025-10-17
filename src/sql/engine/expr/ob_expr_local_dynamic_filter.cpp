@@ -86,6 +86,11 @@ int ObExprLocalDynamicFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr 
   return ret;
 }
 
+// Local dynamic filter should only be pushdown white filter, and it is not expected to call the eval function.
+// However, there is currently a special case: when performs SINGLE_SCAN, the filter will be executed in expression,
+// for this scenario, we do not apply the merge range optimization. Therefore, the current implementation simply
+// returns 1 directly, which means the row will not be filtered.
+// TODO: introduce expr context to support filter calcauted in expression.
 int ObExprLocalDynamicFilter::eval_local_dynamic_filter(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -156,7 +161,25 @@ int ObExprLocalDynamicFilter::update_storage_white_filter_data(const ObExpr &exp
                                                                LocalDynamicFilterParams &params,
                                                                bool &is_update)
 {
-  return OB_NOT_IMPLEMENT;
+  int ret = OB_SUCCESS;
+  params.reuse();
+  is_update = false;
+  const common::ObIArray<common::ObDatum> *filter_params = dynamic_filter.get_op().get_local_dynamic_filter_params();
+  if (OB_NOT_NULL(filter_params) && !filter_params->empty()) {
+    if (OB_FAIL(params.assign(*filter_params))) {
+      LOG_WARN("failed to assign local dynamic filter params", K(ret));
+    } else {
+      dynamic_filter.get_filter_node().set_op_type(WHITE_OP_GE);
+      dynamic_filter.set_filter_action(DynamicFilterAction::DO_FILTER);
+      dynamic_filter.set_filter_val_meta(expr.args_[0]->obj_meta_);
+      dynamic_filter.hash_func_ = &pk_increment_hash_func;
+      is_update = true;
+    }
+  } else {
+    dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
+  }
+  LOG_TRACE("local dynamic filter update filter params", K(expr), KPC(filter_params));
+  return ret;
 }
 
 // just use pk increment value as hash val to leverage current logic of dynamic in filter
