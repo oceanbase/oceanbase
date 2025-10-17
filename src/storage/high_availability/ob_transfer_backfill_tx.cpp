@@ -521,19 +521,141 @@ void ObTransferWorkerMgr::set_errsim_backfill_point_()
 #endif
 }
 
-/******************ObTransferBackfillTXCtx*********************/
-ObTransferBackfillTXCtx::ObTransferBackfillTXCtx()
+/******************ObTransferBackfillTXBaseCtx*********************/
+ObTransferBackfillTXBaseCtx::ObTransferBackfillTXBaseCtx()
   : ObIHADagNetCtx(),
     tenant_id_(OB_INVALID_TENANT_ID),
-#ifdef ERRSIM
-    errsim_point_info_(),
-#endif
     task_id_(),
     src_ls_id_(),
     dest_ls_id_(),
-    backfill_scn_(),
+    src_ls_handle_(),
+    dest_ls_handle_(),
     tablet_infos_(),
     tablets_table_mgr_()
+{
+}
+
+ObTransferBackfillTXBaseCtx::~ObTransferBackfillTXBaseCtx()
+{
+}
+
+bool ObTransferBackfillTXBaseCtx::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+      && !task_id_.is_invalid()
+      && src_ls_id_.is_valid()
+      && dest_ls_id_.is_valid()
+      && !tablet_infos_.empty();
+}
+
+int ObTransferBackfillTXBaseCtx::get_src_ls(ObLS *&src_ls)
+{
+  int ret = OB_SUCCESS;
+  src_ls = nullptr;
+  if (!src_ls_handle_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src ls handle is invalid", K(ret), K(src_ls_handle_));
+  } else if (OB_ISNULL(src_ls = src_ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), K(src_ls_handle_));
+  }
+  return ret;
+}
+
+int ObTransferBackfillTXBaseCtx::get_dest_ls(ObLS *&dest_ls)
+{
+  int ret = OB_SUCCESS;
+  dest_ls = nullptr;
+  if (!dest_ls_handle_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dest ls handle is invalid", K(ret), K(dest_ls_handle_));
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be NULL", K(ret), K(dest_ls_handle_));
+  }
+  return ret;
+}
+
+int ObTransferBackfillTXBaseCtx::get_src_ls_handle(ObLSHandle &src_ls_handle)
+{
+  int ret = OB_SUCCESS;
+  src_ls_handle.reset();
+  if (!src_ls_handle_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src ls handle is invalid", K(ret), K(src_ls_handle_));
+  } else {
+    src_ls_handle = src_ls_handle_;
+  }
+  return ret;
+}
+
+int ObTransferBackfillTXBaseCtx::get_dest_ls_handle(ObLSHandle &dest_ls_handle)
+{
+  int ret = OB_SUCCESS;
+  dest_ls_handle.reset();
+  if (!dest_ls_handle_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dest ls handle is invalid", K(ret), K(dest_ls_handle_));
+  } else {
+    dest_ls_handle = dest_ls_handle_;
+  }
+  return ret;
+}
+
+int ObTransferBackfillTXBaseCtx::convert_from_ha_ctx(
+    ObIHADagNetCtx *ha_dag_net_ctx, ObTransferBackfillTXBaseCtx *&ctx)
+{
+  int ret = OB_SUCCESS;
+  ctx = nullptr;
+
+  if (OB_ISNULL(ha_dag_net_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ha dag net ctx is nullptr", K(ret), KP(ha_dag_net_ctx));
+  } else if (ha_dag_net_ctx->get_dag_net_ctx_type() != ObIHADagNetCtx::TRANSFER_BACKFILL_TX
+          && ha_dag_net_ctx->get_dag_net_ctx_type() != ObIHADagNetCtx::SS_TRANSFER_BACKFILL_TX) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx));
+  } else if (OB_ISNULL(ctx = static_cast<ObTransferBackfillTXBaseCtx *>(ha_dag_net_ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to cast ha dag net ctx", K(ret), KPC(ha_dag_net_ctx), KPC(ctx));
+  }
+
+  return ret;
+}
+
+void ObTransferBackfillTXBaseCtx::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  task_id_.reset();
+  src_ls_id_.reset();
+  dest_ls_id_.reset();
+  src_ls_handle_.reset();
+  dest_ls_handle_.reset();
+  tablet_infos_.reset();
+  tablets_table_mgr_.reuse();
+  ObIHADagNetCtx::reset();
+}
+
+void ObTransferBackfillTXBaseCtx::reuse()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  task_id_.reset();
+  src_ls_id_.reset();
+  dest_ls_id_.reset();
+  src_ls_handle_.reset();
+  dest_ls_handle_.reset();
+  tablet_infos_.reset();
+  tablets_table_mgr_.reuse();
+  ObIHADagNetCtx::reuse();
+}
+
+/******************ObTransferBackfillTXCtx*********************/
+ObTransferBackfillTXCtx::ObTransferBackfillTXCtx()
+  : ObTransferBackfillTXBaseCtx(),
+#ifdef ERRSIM
+    errsim_point_info_(),
+#endif
+    backfill_scn_()
 {
 }
 
@@ -541,26 +663,16 @@ ObTransferBackfillTXCtx::~ObTransferBackfillTXCtx()
 {
 }
 
-bool ObTransferBackfillTXCtx::is_valid() const
-{
-  return OB_INVALID_TENANT_ID != tenant_id_
-      && !task_id_.is_invalid()
-      && src_ls_id_.is_valid()
-      && dest_ls_id_.is_valid()
-      && backfill_scn_.is_valid()
-      && !tablet_infos_.empty();
-}
-
 void ObTransferBackfillTXCtx::reset()
 {
-  tenant_id_ = OB_INVALID_TENANT_ID;
-  task_id_.reset();
-  src_ls_id_.reset();
-  dest_ls_id_.reset();
   backfill_scn_.reset();
-  tablet_infos_.reset();
-  tablets_table_mgr_.reuse();
-  ObIHADagNetCtx::reset();
+  ObTransferBackfillTXBaseCtx::reset();
+}
+
+void ObTransferBackfillTXCtx::reuse()
+{
+  backfill_scn_.reset();
+  ObTransferBackfillTXBaseCtx::reuse();
 }
 
 int ObTransferBackfillTXCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -591,12 +703,37 @@ int ObTransferBackfillTXCtx::fill_comment(char *buf, const int64_t buf_len) cons
   return ret;
 }
 
-void ObTransferBackfillTXCtx::reuse()
+bool ObTransferBackfillTXCtx::is_valid() const
 {
-  ObIHADagNetCtx::reuse();
-  backfill_scn_.reset();
-  tablet_infos_.reset();
-  tablets_table_mgr_.reuse();
+  return ObTransferBackfillTXBaseCtx::is_valid()
+      && backfill_scn_.is_valid();
+}
+
+int ObTransferBackfillTXCtx::init_ls_handle()
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  ObLS *src_ls = nullptr;
+  ObLS *dest_ls = nullptr;
+
+  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret));
+  } else if (OB_FAIL(ls_service->get_ls(src_ls_id_, src_ls_handle_, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get src ls", K(ret), K(src_ls_id_));
+  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id_, dest_ls_handle_, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get dest ls", K(ret), K(dest_ls_id_));
+  } else if (OB_ISNULL(src_ls = src_ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), K(src_ls_handle_));
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be NULL", K(ret), K(dest_ls_handle_));
+  } else if (!src_ls->is_running() || !dest_ls->is_running()) {
+    ret = OB_LS_OFFLINE;
+    LOG_WARN("src or dest ls is not running, should not do transfer backfill tx", K(ret), KPC(src_ls), KPC(dest_ls));
+  }
+  return ret;
 }
 
 /******************ObTransferBackfillTXParam*********************/
@@ -652,10 +789,8 @@ int ObTransferBackfillTXDagNet::init_by_param(const ObIDagInitParam *param)
 {
   int ret = OB_SUCCESS;
   const ObTransferBackfillTXParam* init_param = static_cast<const ObTransferBackfillTXParam*>(param);
-  int64_t rebuild_seq = 0;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
+  int64_t rebuild_seq = 0;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -663,21 +798,10 @@ int ObTransferBackfillTXDagNet::init_by_param(const ObIDagInitParam *param)
   } else if (OB_ISNULL(param) || !param->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param is null or invalid", K(ret), KPC(init_param));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(init_param->src_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), "ls_id", init_param->src_ls_id_);
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), "ls_id", init_param->src_ls_id_);
-  } else if (FALSE_IT(rebuild_seq = ls->get_ls_meta().get_rebuild_seq())) {
   } else if (OB_FAIL(this->set_dag_id(init_param->task_id_))) {
     LOG_WARN("failed to set dag id", K(ret), KPC(init_param));
   } else if (OB_FAIL(ctx_.tablet_infos_.assign(init_param->tablet_infos_))) {
     LOG_WARN("failed to set transfer tablet list", K(ret), KPC(init_param));
-  } else if (OB_FAIL(ctx_.tablets_table_mgr_.init(rebuild_seq, init_param->backfill_scn_))) {
-    LOG_WARN("failed to init tablets table mgr", K(ret), KPC(init_param));
   } else {
     ctx_.tenant_id_ = init_param->tenant_id_;
     ctx_.task_id_ = init_param->task_id_;
@@ -687,7 +811,17 @@ int ObTransferBackfillTXDagNet::init_by_param(const ObIDagInitParam *param)
 #ifdef ERRSIM
     ctx_.errsim_point_info_ = init_param->errsim_point_info_;
 #endif
-    is_inited_ = true;
+
+    if (OB_FAIL(ctx_.init_ls_handle())) {
+      LOG_WARN("failed to init ls handle", K(ret), K(ctx_));
+    } else if (OB_FAIL(ctx_.get_src_ls(ls))) {
+      LOG_WARN("failed to get src ls", K(ret), K(ctx_));
+    } else if (FALSE_IT(rebuild_seq = ls->get_rebuild_seq())) {
+    } else if (OB_FAIL(ctx_.tablets_table_mgr_.init(rebuild_seq, init_param->backfill_scn_))) {
+      LOG_WARN("failed to init tablets table mgr", K(ret), KPC(init_param));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -920,7 +1054,8 @@ bool ObBaseTransferBackfillTXDag::operator == (const ObIDag &other) const
       ObTransferBackfillTXCtx *self_ctx = static_cast<ObTransferBackfillTXCtx *>(ha_dag_net_ctx_);
       ObTransferBackfillTXCtx *other_ctx = static_cast<ObTransferBackfillTXCtx *>(ha_dag.get_ha_dag_net_ctx());
       if (self_ctx->tenant_id_ != other_ctx->tenant_id_
-          || self_ctx->dest_ls_id_ != other_ctx->dest_ls_id_) {
+          || self_ctx->dest_ls_id_ != other_ctx->dest_ls_id_
+          || self_ctx->src_ls_id_ != other_ctx->src_ls_id_) {
         is_same = false;
       }
     }
@@ -1520,8 +1655,6 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
   ObTablet *tablet = nullptr;
   tables_handle.reset();
   ObTabletCreateDeleteMdsUserData src_user_data;
@@ -1541,14 +1674,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     LOG_WARN("tablet info is invalid", K(ret), K(tablet_info));
   } else if (OB_FAIL(ctx_->tablets_table_mgr_.get_transfer_scn(transfer_scn))) {
     LOG_WARN("failed to get transfer scn", K(ret), K(tablet_info));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), "ls_id", ctx_->src_ls_id_);
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), "ls_id", ctx_->src_ls_id_);
+  } else if (OB_FAIL(ctx_->get_src_ls(ls))) {
+    LOG_WARN("failed to get src ls", K(ret), KP(ctx_));
   } else if (OB_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
@@ -1733,6 +1860,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     param.tablet_meta_ = &mig_param;
     param.release_mds_scn_.set_min();
     param.reorg_scn_ = tablet->get_reorganization_scn();
+    ObLS *src_ls = nullptr;
 #ifdef ERRSIM
     param.errsim_point_info_ = ctx_->errsim_point_info_;
     SERVER_EVENT_SYNC_ADD("TRANSFER", "TRANSFER_REPLACE_TABLE_WITH_LOG_REPLAY_SKIP_CHECK",
@@ -1742,7 +1870,12 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "tablet_status", ObTabletStatus::get_str(user_data.tablet_status_),
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
-    if (FAILEDx(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
+    if (OB_FAIL(ctx_->get_src_ls(src_ls))) {
+      LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+    } else if (!src_ls->is_running()) {
+      ret = OB_LS_OFFLINE;
+      LOG_WARN("src ls is not running, should not do transfer replace tables", K(ret), KPC(src_ls), K(param), K(tablet_info));
+    } else if (OB_FAIL(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));
     } else {
       LOG_INFO("[TRANSFER_BACKFILL]succ transfer replace tables", K(ret), K(param), K(tablet_info), KPC_(ctx));
@@ -1772,21 +1905,15 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData user_data;
-  ObLSHandle src_ls_handle;
   ObLS *src_ls = nullptr;
   ObTabletHandle src_tablet_handle;
-  ObTablet *src_tablet = nullptr;
   ObTabletCreateDeleteMdsUserData src_user_data;
-  ObLSService *ls_service = nullptr;
 
   DEBUG_SYNC(TRANSFER_REPLACE_TABLE_BEFORE);
   share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::TRANSFER_REPLACE_BEGIN;
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls is nullptr", K(ret));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
   } else {
     const ObTabletBackfillInfo &tablet_info = tablet_info_;
     bool in_migration = false;
@@ -1821,11 +1948,8 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet));
-    } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
-      LOG_WARN("failed to get ls", K(ret), "ls_id", ctx_->src_ls_id_);
-    } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls should not be NULL", K(ret), KP(src_ls), "ls_id", ctx_->src_ls_id_);
+    } else if (OB_FAIL(ctx_->get_src_ls(src_ls))) {
+      LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(src_ls->get_tablet(tablet_info.tablet_id_, src_tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
     } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, src_tablet_handle, src_user_data))) {
@@ -1871,21 +1995,13 @@ int ObTransferReplaceTableTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer replace tables task do not init", K(ret));
   } else if (ctx_->is_failed()) {
     LOG_INFO("[TRANSFER_BACKFILL]ctx already failed", KPC(ctx_), "tablet_list", ctx_->tablet_infos_);
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
+  } else if (OB_FAIL(ctx_->get_dest_ls(ls))) {
+    LOG_WARN("failed to get dest ls", K(ret), KP(ctx_));
   } else if (OB_FAIL(do_replace_logical_tables_(ls))) {
     LOG_WARN("failed to repalce logical tables", K(ret), KP(ls), KPC(ctx_), "tablet_list", ctx_->tablet_infos_);
   } else {
@@ -2104,25 +2220,13 @@ void ObTransferReplaceTableTask::transfer_tablet_restore_stat_() const
 {
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle src_ls_handle;
-  ObLSHandle dest_ls_handle;
   ObLS *src_ls = nullptr;
   ObLS *dest_ls = nullptr;
   common::ObMySQLProxy *sql_proxy = nullptr;
-  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, dest_ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dest ls should not be NULL", K(ret), KP(dest_ls), KPC(ctx_));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("src ls should not be NULL", K(ret), KP(src_ls), KPC(ctx_));
+  if (OB_FAIL(ctx_->get_dest_ls(dest_ls))) {
+    LOG_WARN("failed to get dest ls", K(ret), KP(ctx_));
+  } else if (OB_FAIL(ctx_->get_src_ls(src_ls))) {
+    LOG_WARN("failed to get src ls", K(ret), KP(ctx_));
   } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql prxoy must not be null", K(ret));

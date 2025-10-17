@@ -78,7 +78,42 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferWorkerMgr);
 };
 
-struct ObTransferBackfillTXCtx : public ObIHADagNetCtx
+struct ObTransferBackfillTXBaseCtx : public ObIHADagNetCtx
+{
+public:
+  ObTransferBackfillTXBaseCtx();
+  virtual ~ObTransferBackfillTXBaseCtx();
+  virtual bool is_valid() const;
+  virtual int init_ls_handle() = 0;
+  virtual int get_src_ls(ObLS *&src_ls);
+  virtual int get_dest_ls(ObLS *&dest_ls);
+  virtual int get_src_ls_handle(ObLSHandle &src_ls_handle);
+  virtual int get_dest_ls_handle(ObLSHandle &dest_ls_handle);
+
+  static int convert_from_ha_ctx(ObIHADagNetCtx *ha_dag_net_ctx, ObTransferBackfillTXBaseCtx *&ctx);
+protected:
+  void reset();
+  void reuse();
+public:
+  uint64_t tenant_id_;
+  share::ObTaskId task_id_;
+  share::ObLSID src_ls_id_;
+  share::ObLSID dest_ls_id_;
+  ObLSHandle src_ls_handle_;
+  ObLSHandle dest_ls_handle_;
+  common::ObArray<ObTabletBackfillInfo> tablet_infos_;
+  ObBackfillTabletsTableMgr tablets_table_mgr_;
+  INHERIT_TO_STRING_KV(
+      "ObIHADagNetCtx", ObIHADagNetCtx,
+      K_(tenant_id),
+      K_(task_id),
+      K_(src_ls_id),
+      K_(dest_ls_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTransferBackfillTXBaseCtx);
+};
+
+struct ObTransferBackfillTXCtx : public ObTransferBackfillTXBaseCtx
 {
 public:
   ObTransferBackfillTXCtx();
@@ -88,23 +123,15 @@ public:
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual bool is_valid() const;
   virtual DagNetCtxType get_dag_net_ctx_type() { return ObIHADagNetCtx::TRANSFER_BACKFILL_TX; }
+  virtual int init_ls_handle() override;
   const share::ObLSID &get_ls_id() const { return dest_ls_id_; }
 public:
-  uint64_t tenant_id_;
 #ifdef ERRSIM
   ObErrsimTransferBackfillPoint errsim_point_info_;
 #endif
-  share::ObTaskId task_id_;
-  share::ObLSID src_ls_id_;
-  share::ObLSID dest_ls_id_;
   share::SCN backfill_scn_;
-  common::ObArray<ObTabletBackfillInfo> tablet_infos_;
-  ObBackfillTabletsTableMgr tablets_table_mgr_;
   INHERIT_TO_STRING_KV(
-      "ObIHADagNetCtx", ObIHADagNetCtx,
-      K_(tenant_id),
-      K_(task_id),
-      K_(src_ls_id),
+      "ObTransferBackfillTXBaseCtx", ObTransferBackfillTXBaseCtx,
       K_(backfill_scn));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferBackfillTXCtx);
