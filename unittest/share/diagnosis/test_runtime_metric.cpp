@@ -114,6 +114,29 @@ TEST_F(ObRuntimeMetricTest, test_gauge)
   ASSERT_STREQ("{\"bucket size\":20}", json);
 }
 
+TEST_F(ObRuntimeMetricTest, test_pretty_print)
+{
+  ObArenaAllocator alloc;
+  int64_t buf_len = 1024;
+  int64_t pos = 0;
+  char *buf = static_cast<char *>(alloc.alloc(buf_len));
+  const ObString prefix = "│  ";
+  ObMetric gauge;
+  gauge.id_ = ObMetricId::JOIN_FILTER_FILTERED_COUNT;
+  gauge.value_ = 10;
+  gauge.pretty_print(buf, buf_len, pos, prefix);
+  cout << buf << endl;
+  ASSERT_STREQ("│  filtered row count:10", buf);
+
+  ObMergeMetric merged_gauge;
+  merged_gauge.id_ = ObMetricId::JOIN_FILTER_FILTERED_COUNT;
+  merged_gauge.update(gauge.value());
+  pos = 0;
+  merged_gauge.pretty_print(buf, buf_len, pos, prefix);
+  cout << buf << endl;
+  ASSERT_STREQ("│  filtered row count:10 [min=10, max=10]", buf);
+}
+
 int main(int argc, char **argv)
 {
   int ret = OB_SUCCESS;

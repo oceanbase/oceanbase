@@ -124,6 +124,7 @@ public:
   int64_t get_format_size(bool with_braces = true);
   int to_format_json(ObIAllocator *alloc, const char *&result, bool with_braces = true);
   int to_format_json(char *buf, const int64_t buf_len, int64_t &pos, bool with_braces = true);
+  int pretty_print(char *buf, const int64_t buf_len, int64_t &pos, const ObString &prefix) const;
   int32_t get_metric_id() { return id_; }
   TO_STRING_KV(K(id_), K(value_));
 
@@ -139,7 +140,8 @@ public:
   void update(uint64_t value);
   int64_t get_format_size(bool with_braces = true);
   int to_format_json(char *buf, const int64_t buf_len, int64_t &pos, bool with_braces);
-  ObMetricId get_metric_id() { return id_; }
+  int pretty_print(char *buf, const int64_t buf_len, int64_t &pos, const ObString &prefix) const;
+  ObMetricId get_metric_id() const { return id_; }
   uint64_t value() const;
   uint64_t get_sum_value() const { return sum_value_; }
   uint64_t get_avg_value() const {
