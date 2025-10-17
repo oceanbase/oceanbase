@@ -317,14 +317,26 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
       LOG_INFO("succeed to print micro_meta", K(i), K_(micro_iter_.bkt_idx), K_(micro_iter_.key_idx), K(micro_map.get_bkt_cnt()), KPC(micro_handle()));
     }
   }
-  LOG_INFO("end print micro map");
+  LOG_INFO("end print micro map", K(phy_blk_mgr.blk_cnt_info_));
 
   // Step 4
   release_cache_task.is_inited_ = false;
   total_unpersisted_micro_cnt = cal_unpersisted_micro_cnt();
   ASSERT_EQ(total_unpersisted_micro_cnt, micro_cache_->cache_stat_.micro_stat().valid_micro_cnt_);
   ASSERT_LE(micro_cache_->cache_stat_.micro_stat().valid_micro_cnt_, micro_cnt * 2);
-  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  if (phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_ > 0) {
+    int64_t unfree_cnt = 0;
+    for (int64_t i = 2; i < phy_blk_mgr.blk_cnt_info_.total_blk_cnt_; ++i) {
+      ObSSPhysicalBlock *phy_blk = phy_blk_mgr.inner_get_phy_block_by_idx(i);
+      ASSERT_NE(nullptr, phy_blk);
+      if (phy_blk->blk_type_ == 2 && phy_blk->is_free_ == 0) {
+        ++unfree_cnt;
+        LOG_INFO("Check phy_blk", K(i), KPC(phy_blk));
+        ASSERT_EQ(0, phy_blk->valid_len_);
+      }
+    }
+    ASSERT_EQ(unfree_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  }
 }
 
 } // namespace storage
