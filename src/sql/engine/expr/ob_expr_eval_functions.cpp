@@ -216,6 +216,7 @@
 #include "ob_expr_dml_event.h"
 #include "ob_expr_to_base64.h"
 #include "ob_expr_from_base64.h"
+#include "ob_expr_whitespace_tokenize.h"
 #include "ob_expr_random_bytes.h"
 #include "ob_pl_expr_subquery.h"
 #include "ob_expr_encode_sortkey.h"
@@ -1444,6 +1445,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVectorIPSimilarity::calc_ip_similarity               /* 873 */
   NULL, // ObExprVectorSimilarity::calc_similarity                    /* 874 */
   NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
+  ObExprWhitespaceTokenize::eval_tokenize,                            /* 876 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
