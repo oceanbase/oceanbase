@@ -11578,7 +11578,8 @@ int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &ds
     LOG_WARN("invalid src", K(src.length()), K(ret));
   } else {
     char encrypted_password_not_hex[common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH] = {0};
-    char plain_string[common::OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; // need +1 to reserve space for \0
+    const int64_t max_buff_len = common::OB_MAX_PASSWORD_LENGTH + ObBlockCipher::OB_CIPHER_BLOCK_LENGTH + 1;
+    char plain_string[max_buff_len] = { 0 }; // need +1 to reserve space for \, and need to reserve space for pad
     int64_t plain_string_len = -1;
     if (OB_FAIL(hex_to_cstr(src.ptr(),
                             src.length(),
@@ -11587,10 +11588,9 @@ int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &ds
       LOG_WARN("failed to hex to cstr", K(src.length()), K(ret));
     } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(tenant_id_,
                                                           encrypted_password_not_hex,
-
                                                           src.length() / 2,
                                                           plain_string,
-                                                          common::OB_MAX_PASSWORD_LENGTH + 1,
+                                                          max_buff_len,
                                                           plain_string_len))) {
       LOG_WARN("failed to decrypt_sys_data", K(ret), K(src.length()));
     } else if (0 >= plain_string_len) {
