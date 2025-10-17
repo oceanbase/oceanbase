@@ -44,10 +44,10 @@ ObDtlLocalChannel::~ObDtlLocalChannel()
     KP(id_), KP(peer_id_));
 }
 
-int ObDtlLocalChannel::init()
+int ObDtlLocalChannel::init(ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDtlBasicChannel::init())) {
+  if (OB_FAIL(ObDtlBasicChannel::init(dfc))) {
     LOG_WARN("Initialize fifo allocator fail", K(ret));
   }
   return ret;

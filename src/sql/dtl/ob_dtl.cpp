@@ -505,7 +505,7 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
   if (nullptr == chan) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
-  } else if (OB_FAIL(chan->init())) {
+  } else if (OB_FAIL(chan->init(dfc))) {
     LOG_WARN("init channel fail", K(tenant_id), KP(chid), K(ret));
   } else {
     if (nullptr != dfc) {

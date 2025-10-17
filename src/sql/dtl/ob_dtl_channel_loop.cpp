@@ -409,7 +409,7 @@ int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
         LOG_WARN("worker interrupt", K(tmp_ret), K(ret));
         break;
       }
-      ob_usleep<ObWaitEventIds::DTL_PROCESS_CHANNEL_SLEEP>(1);
+      ob_usleep(1, cond_.get_event_no(), 0, 0, 0);
     }
     ++loop_times_;
     if (ignore_interrupt_) {

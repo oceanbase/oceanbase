@@ -31,19 +31,23 @@ SendMsgResponse::~SendMsgResponse()
 {
   int ret = OB_SUCCESS;
   if (in_process_) {
-    if (OB_FAIL(wait())) {
+    if (OB_FAIL(wait(ObDtlChannel::DtlChannelType::BASIC_CHANNEL))) {
       LOG_DEBUG("send dtl message failed", K(ret));
     }
   }
 }
 
-int SendMsgResponse::init()
+int SendMsgResponse::init(bool is_transmit)
 {
   int ret = OB_SUCCESS;
+  int32_t event_no = common::ObWaitEventIds::DTL_RECEIVE_MSG_WAIT;
+  if (is_transmit) {
+    event_no = common::ObWaitEventIds::DTL_TRANSMIT_MSG_WAIT;
+  }
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice");
-  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(cond_.init(event_no))) {
     LOG_WARN("thread condition init failed", K(ret));
   } else {
     inited_ = true;
@@ -98,7 +102,7 @@ int SendMsgResponse::on_finish(const bool is_block, const int return_code)
   return ret;
 }
 
-int SendMsgResponse::wait()
+int SendMsgResponse::wait(ObDtlLocalChannel::DtlChannelType channel_type)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -113,7 +117,7 @@ int SendMsgResponse::wait()
     while (!finish_ && OB_SUCC(ret)) {
       // 这里为什么是while true等待，因为callback引用了当前线程一些变量，
       // 如果采用中断，提前退出，会导致callback如果晚于线程退出，则引用非法东西而core掉
-      cond_.wait(1);
+      cond_.wait(1, static_cast<int64_t>(channel_type));
       ++count_v;
       // 60s
       if (count_v > interval) {
@@ -147,6 +151,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
       peer_id_(id ^ 1),
       write_buffer_(nullptr),
       process_buffer_(nullptr),
+      send_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_SEND_WAIT),
+      recv_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_RECEIVE_WAIT),
       alloc_new_buf_(false),
       seq_no_(0),
       send_buffer_cnt_(0),
@@ -214,10 +220,14 @@ ObDtlBasicChannel::~ObDtlBasicChannel()
   LOG_TRACE("dtl use time", KP(id_), K(times_), K(write_buf_use_time_), K(send_use_time_), K(msg_count_));
 }
 
-int ObDtlBasicChannel::init()
+int ObDtlBasicChannel::init(ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(msg_response_.init())) {
+  bool is_transmit = false;
+  if (dfc) {
+    is_transmit = dfc->is_transmit();
+  }
+  if (OB_FAIL(msg_response_.init(is_transmit))) {
     LOG_WARN("int message response failed", K(ret));
   } else {
     is_inited_ = true;
@@ -229,7 +239,7 @@ int ObDtlBasicChannel::wait_response()
 {
   int ret = OB_SUCCESS;
   if (msg_response_.is_in_process()) {
-    if (OB_FAIL(msg_response_.wait())) {
+    if (OB_FAIL(msg_response_.wait(get_channel_type()))) {
       LOG_WARN("send previous message fail", K(ret));
     }
     if (OB_HASH_NOT_EXIST == ret) {

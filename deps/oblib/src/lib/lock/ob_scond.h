@@ -31,6 +31,8 @@ public:
 
   void init(int32_t event_no) { event_no_ = event_no; }
   uint32_t get_key() { return ATOMIC_LOAD(&futex_.uval()); }
+  void set_event_no(int32_t event_no) { event_no_ = event_no; }
+  int64_t get_event_no() const { return event_no_; };
   int wait(uint32_t key, int64_t timeout) {
     int ret = OB_SUCCESS;
     if (timeout > 0 && get_key() == key) {

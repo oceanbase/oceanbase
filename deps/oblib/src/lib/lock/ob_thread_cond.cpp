@@ -69,7 +69,7 @@ void ObThreadCond::destroy()
   is_inited_ = false;
 }
 
-int ObThreadCond::wait_us(const uint64_t time_us)
+int ObThreadCond::wait_us(const uint64_t time_us, const int64_t p2, const int64_t p3)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -77,7 +77,7 @@ int ObThreadCond::wait_us(const uint64_t time_us)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The thread cond has not been inited, ", K(ret), KCSTRING(lbt()));
   } else {
-    ObWaitEventGuard guard(event_no_, time_us / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
+    ObWaitEventGuard guard(event_no_, time_us / 1000, reinterpret_cast<int64_t>(this), p2, p3, true);
     if (0 == time_us) {
       if (OB_UNLIKELY(0 != (tmp_ret = ob_pthread_cond_wait(&cond_, &mutex_)))) {
         ret = OB_ERR_SYS;

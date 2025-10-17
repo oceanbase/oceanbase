@@ -57,6 +57,13 @@ WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", 
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait in request queue", "pcode", "level", "priority", CONFIGURATION, true, true)
+WAIT_EVENT_DEF(DTL_TRANSMIT_MSG_WAIT, 13005, "wait dtl transmit message response", "address", "channel type", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DTL_RECEIVE_MSG_WAIT, 13006, "wait dtl receive message response", "address", "channel type", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DTL_PROCESS_BUFFER_RECEIVE_WAIT, 13007, "dtl process buffer receive wait", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DTL_PROCESS_BUFFER_SEND_WAIT, 13008, "wait dtl process receive wait", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(WAIT_DTL_TRANSMIT_RESPONSE, 13009, "wait dtl data transmit response", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(WAIT_DTL_RECEIVE_RESPONSE, 13010, "wait dtl data receive response", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(WAIT_SQC_PROXY, 13011, "wait sqc proxy message", "address", "", "", NETWORK, true, true)
 
 // APPLICATION 14001-14999
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)
