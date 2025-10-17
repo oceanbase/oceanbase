@@ -2335,7 +2335,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
       } else {
         scan_iter->set_scan_param(scan_param);
         child_iter = scan_iter;
-        rowkey_scan_output_exprs = &static_cast<const ObDASScanCtDef *>(rowkey_scan_ctdef)->pd_expr_spec_.access_exprs_;
+        rowkey_scan_output_exprs = &scan_ctdef->pd_expr_spec_.access_exprs_;
       }
     }
 
