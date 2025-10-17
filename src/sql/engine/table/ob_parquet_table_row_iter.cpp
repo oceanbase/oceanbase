@@ -3555,13 +3555,15 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
             eager_page_reader->set_data_page_filter(r2);
             column_readers_.at(i) = parquet::ColumnReader::Make(
                                     rg_reader->metadata()->schema()->Column(column_indexs_.at(i)),
-                                    std::move(page_reader));
+                                    std::move(page_reader),
+                                    &arrow_alloc_);
             record_readers_.at(i) = rg_reader->RecordReader(column_indexs_.at(i));
             if (has_eager_columns() && eager_column_cnt < get_eager_count()
                                     && eager_columns_.at(eager_column_cnt) == i) {
               eager_column_readers_.at(eager_column_cnt) = parquet::ColumnReader::Make(
                                     eager_rg_reader->metadata()->schema()->Column(column_indexs_.at(i)),
-                                    std::move(eager_page_reader));
+                                    std::move(eager_page_reader),
+                                    &arrow_alloc_);
               eager_record_readers_.at(eager_column_cnt) = eager_rg_reader->RecordReader(column_indexs_.at(i));
               eager_column_cnt++;
             }
