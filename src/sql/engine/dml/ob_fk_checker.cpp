@@ -207,6 +207,11 @@ int ObForeignKeyChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc)
     if (OB_NO_PARTITION_FOR_GIVEN_VALUE == ret) {
       //NOTE: no partition means no referenced value in parent table, change the ret_code to OB_ERR_NO_REFERENCED_ROW
       ret = OB_ERR_NO_REFERENCED_ROW;
+      LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW,
+                     foreign_key_database_name_.length(), 
+                     foreign_key_database_name_.ptr(),
+                     foreign_key_name_.length(), 
+                     foreign_key_name_.ptr());
       LOG_WARN("No referenced value in parent table and no partition for given value", K(ret));
     } else {
       LOG_WARN("fail to calc part id", K(ret), KPC(part_id_expr));
@@ -236,6 +241,8 @@ int ObForeignKeyChecker::init_foreign_key_checker(int64_t estimate_row,
                                                   const ObExprFrameInfo *expr_frame_info,
                                                   ObForeignKeyCheckerCtdef &fk_ctdef,
                                                   const ObExprPtrIArray &row,
+                                                  const common::ObString &foreign_key_database_name,
+                                                  const common::ObString &foreign_key_name,
                                                   common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -263,6 +270,10 @@ int ObForeignKeyChecker::init_foreign_key_checker(int64_t estimate_row,
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator used to init foreign key checker is null", K(ret));
+  } else if (OB_FAIL(deep_copy_ob_string(*allocator, foreign_key_database_name, foreign_key_database_name_))) {
+    LOG_WARN("failed to deep copy foreign key database name", K(ret));
+  } else if (OB_FAIL(deep_copy_ob_string(*allocator, foreign_key_name, foreign_key_name_))) {
+    LOG_WARN("failed to deep copy foreign key name", K(ret));
   } else {
     allocator_ = allocator;
     table_loc_->is_fk_check_ = true; //mark the table location with fk checking action
@@ -442,6 +453,12 @@ int ObForeignKeyChecker::build_primary_table_range(const ObIArray<ObForeignKeyCo
           // To compatible with MySQL. 
           // Also, if the value is not in the range, then it means that there's no referenced row.
           ret = OB_ERR_NO_REFERENCED_ROW;
+          LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW, 
+                         foreign_key_database_name_.length(),
+                         foreign_key_database_name_.ptr(),
+                         foreign_key_name_.length(),
+                         foreign_key_name_.ptr());
+          LOG_WARN("referenced row doesn't exist", K(ret), K(foreign_key_name_));
         }
       }
     }
@@ -536,6 +553,12 @@ int ObForeignKeyChecker::build_index_table_range(const ObIArray<ObForeignKeyColu
             // To compatible with MySQL. 
             // Also, if the value is not in the range, then it means that there's no referenced row.
             ret = OB_ERR_NO_REFERENCED_ROW;
+            LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW, 
+                           foreign_key_database_name_.length(),
+                           foreign_key_database_name_.ptr(),
+                           foreign_key_name_.length(),
+                           foreign_key_name_.ptr());
+            LOG_WARN("referenced row doesn't exist", K(ret), K(foreign_key_name_));
           }
         }
       }
@@ -642,6 +665,12 @@ int ObForeignKeyChecker::build_index_table_range_need_shadow_column(const ObIArr
             // To compatible with MySQL. 
             // Also, if the value is not in the range, then it means that there's no referenced row.
             ret = OB_ERR_NO_REFERENCED_ROW;
+            LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW, 
+                           foreign_key_database_name_.length(),
+                           foreign_key_database_name_.ptr(),
+                           foreign_key_name_.length(),
+                           foreign_key_name_.ptr());
+            LOG_WARN("referenced row doesn't exist", K(ret), K(foreign_key_name_));
           }
         }
       }

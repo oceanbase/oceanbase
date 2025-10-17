@@ -152,6 +152,8 @@ OB_DEF_SERIALIZE(ObForeignKeyArg)
   if (OB_NOT_NULL(fk_ctdef_)) {
     OB_UNIS_ENCODE(*fk_ctdef_);
   }
+  OB_UNIS_ENCODE(foreign_key_database_name_);
+  OB_UNIS_ENCODE(foreign_key_name_);
   return ret;
 }
 
@@ -169,6 +171,8 @@ OB_DEF_DESERIALIZE(ObForeignKeyArg)
   if (OB_NOT_NULL(fk_ctdef_)) {
     OB_UNIS_DECODE(*fk_ctdef_);
   }
+  OB_UNIS_DECODE(foreign_key_database_name_);
+  OB_UNIS_DECODE(foreign_key_name_);
   return ret;
 }
 
@@ -186,6 +190,8 @@ OB_DEF_SERIALIZE_SIZE(ObForeignKeyArg)
   if (OB_NOT_NULL(fk_ctdef_)) {
     OB_UNIS_ADD_LEN(*fk_ctdef_);
   }
+  OB_UNIS_ADD_LEN(foreign_key_database_name_);
+  OB_UNIS_ADD_LEN(foreign_key_name_);
   return len;
 }
 

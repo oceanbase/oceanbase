@@ -711,7 +711,7 @@ create table t2(pk int, a int, b int, primary key (pk), unique key uk_a_b (a, b)
 insert into t1 values (10, 11, 12), (20, 21, 22);
 insert into t2 values (10, 12, 11), (20, 22, 21);
 insert into t2 values (30, 32, 31);
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+ERROR 23000: Cannot add or update a child row: a foreign key constraint (test.cst_name) fails
 drop table t1;
 ERROR HY000: Cannot drop table 't1' referenced by a foreign key constraint 'cst_name' on table 't2'
 alter table t2 drop foreign key cst_name;
@@ -725,7 +725,7 @@ pk	a	b
 drop table if exists jx_t1;
 create table jx_t1(pk int, a int, b int, primary key (pk), unique key uk_b (b), foreign key (a) references jx_t1 (b) on update RESTRICT on delete RESTRICT);
 insert into jx_t1 values (1, 2, 3);
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+ERROR 23000: Cannot add or update a child row: a foreign key constraint (test.jx_t1_OBFK_FK) fails
 replace into jx_t1 values (1, NULL, 1);
 insert into jx_t1 values (2, NULL, 2);
 update jx_t1 set b=22 where pk=2;
@@ -775,9 +775,9 @@ c1
 pk
 pk
 insert into B values ("error");
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+ERROR 23000: Cannot add or update a child row: a foreign key constraint (test.b_OBFK_FK) fails
 update B set c1 = "error" where c1 = "pk";
-ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+ERROR 23000: Cannot add or update a child row: a foreign key constraint (test.b_OBFK_FK) fails
 insert into A values("pk", "insert up stmt") on duplicate key update c2 = values(c2);
 select * from A order by c1;
 c1	c2

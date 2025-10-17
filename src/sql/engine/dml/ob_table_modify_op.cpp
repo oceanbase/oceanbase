@@ -197,6 +197,12 @@ int ForeignKeyHandle::check_exist_scan_task(ObTableModifyOp &modify_op, const Ob
   } else {
     if (!has_result) {
       ret = OB_ERR_NO_REFERENCED_ROW;
+      LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW, 
+                     fk_arg.foreign_key_database_name_.length(),
+                     fk_arg.foreign_key_database_name_.ptr(),
+                     fk_arg.foreign_key_name_.length(),
+                     fk_arg.foreign_key_name_.ptr());
+      LOG_WARN("referenced row doesn't exist", K(ret), K(fk_arg.foreign_key_name_));
     } else {
       ret = OB_SUCCESS;
     }
@@ -304,6 +310,11 @@ int ForeignKeyHandle::check_exist_inner_sql(ObTableModifyOp &op,
                   LOG_WARN("is_self_ref_row failed", K(ret), K(row), K(fk_arg));
                 } else if (is_zero && !is_self_ref) {
                   ret = OB_ERR_NO_REFERENCED_ROW;
+                  LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW, 
+                                 fk_arg.foreign_key_database_name_.length(),
+                                 fk_arg.foreign_key_database_name_.ptr(),
+                                 fk_arg.foreign_key_name_.length(),
+                                 fk_arg.foreign_key_name_.ptr());
                   LOG_WARN("parent row is not exist", K(ret), K(fk_arg), K(row));
                 } else if (!is_zero) {
                   ret = OB_ERR_ROW_IS_REFERENCED;
@@ -1305,6 +1316,12 @@ int ObTableModifyOp::perform_batch_fk_check()
       LOG_WARN("failed to perform batch foreign key check", K(ret));
     } else if (!all_has_result) {
       ret = OB_ERR_NO_REFERENCED_ROW;
+      LOG_USER_ERROR(OB_ERR_NO_REFERENCED_ROW, 
+                     fk_checker->foreign_key_database_name_.length(),
+                     fk_checker->foreign_key_database_name_.ptr(),
+                     fk_checker->foreign_key_name_.length(),
+                     fk_checker->foreign_key_name_.ptr());
+      LOG_WARN("referenced row doesn't exist", K(ret), K(fk_checker->foreign_key_name_));
     }
   }
   return ret;
