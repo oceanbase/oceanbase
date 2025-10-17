@@ -68,37 +68,38 @@ int ObAlterTableConstraintChecker::check_can_change_cst_column_name(
   return ret;
 }
 
-int ObAlterTableConstraintChecker::check_can_add_cst_on_two_column(
+int ObAlterTableConstraintChecker::check_can_add_cst_on_multi_column(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const uint64_t tenant_data_version,
-    bool &can_add_cst_on_two_column) {
+    bool &can_add_cst_on_multi_column) {
   int ret = OB_SUCCESS;
-  can_add_cst_on_two_column = false;
+  can_add_cst_on_multi_column = false;
   const share::schema::AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
-
+  int64_t allow_change_cst_column_count =  DATA_VERSION_4_4_1_0 <= tenant_data_version ? INT64_MAX : 2;
   if (DATA_VERSION_4_3_5_2 <= tenant_data_version
   && ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
   && alter_table_arg.is_only_alter_column()
-  && 2 == alter_table_schema.get_constraint_count()
-  && 2 == alter_table_schema.get_column_count()) {
-    can_add_cst_on_two_column = true;
+  && alter_table_schema.get_constraint_count() <= allow_change_cst_column_count
+  && alter_table_schema.get_column_count() <= allow_change_cst_column_count) {
+    can_add_cst_on_multi_column = true;
     ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin();
-    for (; OB_SUCC(ret) && can_add_cst_on_two_column && iter != alter_table_schema.constraint_end(); iter++) {
+    for (; OB_SUCC(ret) && can_add_cst_on_multi_column && iter != alter_table_schema.constraint_end(); iter++) {
       if (OB_ISNULL(iter) || OB_ISNULL(*iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("constraint iter is null", K(ret));
       } else if (CONSTRAINT_TYPE_NOT_NULL != (*iter)->get_constraint_type()) {
-        can_add_cst_on_two_column = false;
+        can_add_cst_on_multi_column = false;
       } else if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
       } else if (OB_INVALID_ID == *(*iter)->cst_col_begin()) {
-        can_add_cst_on_two_column = false;
+        can_add_cst_on_multi_column = false;
       }
     }
   }
   return ret;
 }
+
 
 int ObAlterTableConstraintChecker::check_is_change_cst_column_name(const ObTableSchema &table_schema,
                                                   const AlterTableSchema &alter_table_schema,
@@ -136,7 +137,7 @@ int ObAlterTableConstraintChecker::check_alter_table_constraint(
   bool is_alter_decimal_int_offline = false;
   bool is_column_group_store = false;
   bool can_change_cst_column_name = false;
-  bool can_add_cst_on_two_column = false;
+  bool can_add_cst_on_multi_column = false;
   switch(type) {
     case obrpc::ObAlterTableArg::ADD_CONSTRAINT:
     case obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE: {
@@ -158,9 +159,9 @@ int ObAlterTableConstraintChecker::check_alter_table_constraint(
         ddl_type = share::ObDDLType::DDL_CHANGE_COLUMN_NAME;
         ret = OB_NOT_SUPPORTED;
       } else if (alter_table_arg.alter_table_schema_.get_constraint_count() > 1
-              && OB_FAIL(check_can_add_cst_on_two_column(alter_table_arg, tenant_data_version, can_add_cst_on_two_column))) {
+              && OB_FAIL(check_can_add_cst_on_multi_column(alter_table_arg, tenant_data_version, can_add_cst_on_multi_column))) {
         LOG_WARN("failed to check can modify column name and constraint", K(ret), K(alter_table_arg));
-      } else if (can_add_cst_on_two_column) {
+      } else if (can_add_cst_on_multi_column) {
         ddl_type = share::ObDDLType::DDL_TABLE_REDEFINITION;
       } else {
         ddl_type = share::ObDDLType::DDL_NORMAL_TYPE;
@@ -215,7 +216,7 @@ int ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
   int ret = OB_SUCCESS;
   need_modify = false;
   is_add_not_null_col = false;
-  bool can_add_cst_on_two_column = false;
+  bool can_add_cst_on_multi_column = false;
   ObSchemaGetterGuard schema_guard;
   schema_guard.set_session_id(alter_table_arg.session_id_);
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
@@ -274,9 +275,9 @@ int ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected column count of not null constraint", K(ret), KPC(*iter));
         } else if (OB_UNLIKELY(OB_INVALID_ID != *(*iter)->cst_col_begin())) {
-          if (OB_FAIL(check_can_add_cst_on_two_column(alter_table_arg, tenant_data_version, can_add_cst_on_two_column))) {
-            LOG_WARN("failed to check can add cst on two column", K(ret), K(alter_table_arg));
-          } else if (can_add_cst_on_two_column) {
+          if (OB_FAIL(check_can_add_cst_on_multi_column(alter_table_arg, tenant_data_version, can_add_cst_on_multi_column))) {
+            LOG_WARN("failed to check can add cst on multi column", K(ret), K(alter_table_arg));
+          } else if (can_add_cst_on_multi_column) {
             need_modify = true;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -286,7 +287,7 @@ int ObAlterTableConstraintChecker::need_modify_not_null_constraint_validate(
         }
       }
     }
-    is_add_not_null_col = can_add_cst_on_two_column ? false : true;
+    is_add_not_null_col = can_add_cst_on_multi_column ? false : true;
   }
   return ret;
 }

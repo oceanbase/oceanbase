@@ -22,6 +22,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
+#include <type_traits>
 
 namespace oceanbase
 {
@@ -70,10 +71,6 @@ const char *const HOST = "host=";
 const char *const APPID = "appid=";
 const char *const DELETE_MODE = "delete_mode=";
 const char *const REGION = "s3_region=";
-const char* const PRINCIPAL = "principal=";
-const char* const KEYTAB = "keytab=";
-const char* const KRB5CONF= "krb5conf=";
-const char* const CONFIGS= "configs=";
 const char* const SEPERATE_SYMBOL = "&";
 const char *const MAX_IOPS = "max_iops=";
 const char *const MAX_BANDWIDTH = "max_bandwidth=";
@@ -119,7 +116,7 @@ enum ObStorageChecksumType : uint8_t
 
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
-bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type);
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 bool is_use_obdal();
 // [Extensions]
@@ -189,6 +186,10 @@ public:
   {
     return OB_SUCCESS;
   };
+  virtual int is_supported_azblob_version() const
+  {
+    return OB_SUCCESS;
+  }
   virtual bool is_shared_storage_mode() const
   {
     return false;
@@ -260,8 +261,10 @@ public:
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
+  const char *get_extension() const { return extension_; }
 
   bool is_hdfs_storage() const { return OB_STORAGE_HDFS == device_type_; }
+  virtual bool is_backup_storage_info() const { return false; }
   bool is_enable_worm() const;
   bool is_assume_role_mode() const;
   virtual bool is_valid() const;
@@ -293,6 +296,28 @@ protected:
   int set_delete_mode_(const char *delete_mode);
   int set_addressing_model_(const char *addressing_model);
   int set_checksum_type_(const char *checksum_type_str);
+
+  template <typename T>
+  static int clone_impl_(ObIAllocator &allocator, const T &src, T *&dst)
+  {
+    static_assert(
+        std::is_base_of<ObObjectStorageInfo, T>::value,
+        "T must be ObObjectStorageInfo or its derived class");
+    int ret = OB_SUCCESS;
+    dst = nullptr;
+    if (OB_UNLIKELY(!src.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "src info is invalid", K(ret), K(src));
+    } else if (OB_ISNULL(dst = OB_NEWx(T, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "fail to alloc dst", K(ret), K(src));
+    } else if (OB_FAIL(dst->assign(src))) {
+      OB_LOG(WARN, "fail to assign storage info", K(ret), K(src));
+      OB_DELETEx(T, &allocator, dst);
+      dst = nullptr;
+    }
+    return ret;
+  }
 
 public:
   // TODO: Rename device_type_ to storage_protocol_type_ for better clarity

@@ -458,6 +458,20 @@ public:
     return ret;
   };
 
+  static int string_to_templob_result(const ObExpr &expr, ObEvalCtx &ctx, const ObString &str, int64_t batch_idx)
+  {
+    int ret = OB_SUCCESS;
+    ObTextStringDatumResult tmp_lob_res(expr.datum_meta_.type_, &expr, &ctx, expr.get_vector(ctx), batch_idx);
+    if (OB_FAIL(tmp_lob_res.init_with_batch_idx(str.length(), batch_idx))) {
+      COMMON_LOG(WARN, "Lob: init lob result failed");
+    } else if (OB_FAIL(tmp_lob_res.append(str.ptr(), str.length()))) {
+      COMMON_LOG(WARN, "Lob: append lob result failed");
+    } else {
+      tmp_lob_res.set_result();
+    }
+    return ret;
+  };
+
   static int str_to_lob_storage_obj(ObIAllocator &allocator, const ObString& input, common::ObObj& output)
   {
     INIT_SUCC(ret);
@@ -523,6 +537,23 @@ public:
       ObLobCommon *lob_data = new(buf)ObLobCommon();
       MEMCPY(lob_data->buffer_, data.ptr(), data.length());
       result.assign_ptr(buf, total_len);
+    }
+    return ret;
+  }
+
+  static int pack_to_disk_inrow_lob(const ObExpr &expr, ObEvalCtx &ctx, const ObString data, ObDatum &res)
+  {
+    int ret = OB_SUCCESS;
+    int64_t total_len = data.length() + sizeof(ObLobCommon);
+    char* buf = nullptr;
+    if (OB_ISNULL(buf = (char*)expr.get_str_res_mem(ctx, total_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(WARN, "alloc memory for lob fail", K(ret), K(total_len));
+    } else {
+      // default is inrow
+      ObLobCommon *lob_data = new(buf)ObLobCommon();
+      MEMCPY(lob_data->buffer_, data.ptr(), data.length());
+      res.set_string(buf, total_len);
     }
     return ret;
   }

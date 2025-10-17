@@ -153,6 +153,7 @@ private:
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const bool is_parent_task_dropping_fts,
       const bool is_parent_task_dropping_multivalue,
+      const bool is_parent_task_dropping_spiv,
       int64_t &index_ith,
       int64_t &aux_doc_word_ith,
       int64_t &aux_rowkey_doc_ith,
@@ -191,6 +192,17 @@ private:
   int set_index_table_column_store_if_need(share::schema::ObTableSchema &table_schema);
   int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
                                 share::schema::ObTableSchema &index_table_schema);
+
+  bool rowkey_doc_index_valid(const bool has_docid_col,
+                              const int64_t aux_rowkey_doc_ith,
+                              const int64_t aux_doc_rowkey_ith,
+                              const int64_t schema_count);
+
+  int check_index_for_if_not_exist_(const uint64_t tenant_id,
+                                    const ObString database_name,
+                                    const ObString index_name,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    obrpc::ObAlterTableRes &res);
 
 private:
   ObDDLService &ddl_service_;

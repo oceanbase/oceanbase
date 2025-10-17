@@ -113,7 +113,6 @@ int ObSysDispatchCallExecutor::init_session(sql::ObSQLSessionInfo &session,
   ObPCMemPctConf pc_mem_conf;
   ObObj compatibility_mode;
   ObObj sql_mode;
-  ObSEArray<const ObUserInfo *, 1> user_infos;
   const ObUserInfo *user_info = nullptr;
 
   CK (OB_NOT_NULL(GCTX.schema_service_));
@@ -144,16 +143,13 @@ int ObSysDispatchCallExecutor::init_session(sql::ObSQLSessionInfo &session,
   if (ObCompatibilityMode::ORACLE_MODE == compat_mode) {
     OX (session.set_database_id(OB_ORA_SYS_DATABASE_ID));
     OZ (session.set_default_database(OB_ORA_SYS_SCHEMA_NAME));
-    OZ (schema_guard.get_user_info(tenant_id, OB_ORA_SYS_USER_NAME, user_infos));
+    OZ (schema_guard.get_user_info(tenant_id, OB_ORA_SYS_USER_ID, user_info));
   } else {
     OX (session.set_database_id(OB_SYS_DATABASE_ID));
     OZ (session.set_default_database(OB_SYS_DATABASE_NAME));
-    OZ (schema_guard.get_user_info(tenant_id, OB_SYS_USER_NAME, user_infos));
+    OZ (schema_guard.get_user_info(tenant_id, OB_SYS_USER_ID, user_info));
   }
-  OV (1 == user_infos.count(),
-      0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED,
-      K(user_infos));
-  CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+  CK (OB_NOT_NULL(user_info));
   OZ (session.set_user(
           user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
   OX (session.set_priv_user_id(user_info->get_user_id()));

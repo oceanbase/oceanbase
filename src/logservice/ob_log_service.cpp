@@ -533,6 +533,8 @@ int ObLogService::add_ls(const ObLSID &id,
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
   } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
     CLOG_LOG(WARN, "register_role_change_cb failed", K(ret));
+  } else if (OB_FAIL(log_handler_palf_handle->set_location_cache_cb(loc_cache_cb))) {
+    CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else if (!enable_logservice_ && OB_FAIL(do_set_shared_nothing_cbs_(id, log_handler_palf_handle))) {
     CLOG_LOG(WARN, "do_set_shared_nothing_cbs_ failed", K(ret), K(id));
   } else {
@@ -551,7 +553,6 @@ int ObLogService::do_set_shared_nothing_cbs_(const ObLSID &id, ipalf::IPalfHandl
 {
   int ret = OB_SUCCESS;
   palf::PalfHandle *sn_palf_handle = static_cast<palf::PalfHandle*>(palf_handle);
-  PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
   PalfLocalityInfoCb *locality_cb = &locality_adapter_;
   if (enable_logservice_) {
     ret = OB_ERR_UNEXPECTED;
@@ -559,8 +560,6 @@ int ObLogService::do_set_shared_nothing_cbs_(const ObLSID &id, ipalf::IPalfHandl
   } else if (OB_ISNULL(sn_palf_handle)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "palf_handle is null", K(ret));
-  } else if (OB_FAIL(sn_palf_handle->set_location_cache_cb(loc_cache_cb))) {
-    CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else if (OB_FAIL(sn_palf_handle->set_locality_cb(locality_cb))) {
     CLOG_LOG(WARN, "set_locality_cb failed", K(ret), K(id));
   } else {
@@ -857,6 +856,8 @@ int ObLogService::create_ls_(const share::ObLSID &id,
       CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
     } else if (OB_FAIL(log_handler_palf_handle->register_role_change_cb(rc_cb))) {
       CLOG_LOG(WARN, "register_role_change_cb failed", K(ret), K(id));
+    } else if (OB_FAIL(log_handler_palf_handle->set_location_cache_cb(loc_cache_cb))) {
+      CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
     } else if (!enable_logservice_ && OB_FAIL(do_set_shared_nothing_cbs_(id, log_handler_palf_handle))) {
       CLOG_LOG(WARN, "do_set_shared_nothing_cbs_ failed", K(ret), K(id));
     } else {
@@ -968,7 +969,13 @@ int ObLogService::diagnose_arb_srv(const share::ObLSID &id,
 }
 #endif
 
-int ObLogService::get_io_start_time(int64_t &last_working_time)
+int ObLogService::get_io_statistic_info(int64_t &last_working_time,
+                                        int64_t &pending_write_size,
+                                        int64_t &pending_write_count,
+                                        int64_t &pending_write_rt,
+                                        int64_t &accum_write_size,
+                                        int64_t &accum_write_count,
+                                        int64_t &accum_write_rt)
 {
   int ret = OB_SUCCESS;
   palf::PalfEnv *palf_env = static_cast<palf::PalfEnv*>(palf_env_);
@@ -977,8 +984,16 @@ int ObLogService::get_io_start_time(int64_t &last_working_time)
     CLOG_LOG(WARN, "log_service is not inited", K(ret));
   } else if (enable_logservice_) {
     last_working_time = OB_INVALID_TIMESTAMP;
-  } else if (OB_FAIL(palf_env->get_io_start_time(last_working_time))) {
-    CLOG_LOG(WARN, "palf_env get_io_start_time failed", K(ret));
+    pending_write_size = 0;
+    pending_write_count = 0;
+    pending_write_rt = 0;
+    accum_write_size = 0;
+    accum_write_count = 0;
+    accum_write_rt = 0;
+  } else if (OB_FAIL(palf_env->get_io_statistic_info(last_working_time,
+      pending_write_size, pending_write_count, pending_write_rt,
+      accum_write_size, accum_write_count, accum_write_rt))) {
+    CLOG_LOG(WARN, "palf_env get_io_statistic_info failed", K(ret));
   } else {
     // do nothing
   }

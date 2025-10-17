@@ -63,18 +63,14 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::rpc;
 
 frame::ObReqDeliver* global_deliver;
-int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t sz, ObRequest*& req)
+int ObPocServerHandleContext::create(int64_t resp_id, const ObRpcPacket &tmp_pkt, int64_t sz, ObRequest*& req)
 {
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
-  ObRpcPacket tmp_pkt;
   char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
   ObTimeGuard timeguard("rpc_request_create", 200 * 1000);
   const int64_t alloc_payload_sz = sz;
-  if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
-    RPC_LOG(ERROR, "decode packet fail", K(ret));
-  } else {
-    ObCurTraceId::set(tmp_pkt.get_trace_id());
+  {
     obrpc::ObRpcPacketCode pcode = tmp_pkt.get_pcode();
     if (OB_UNLIKELY(ussl_check_pcode_mismatch_connection(pn_get_fd(resp_id), pcode))) {
       ret = OB_UNKNOWN_CONNECTION;
@@ -85,7 +81,10 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       const int64_t pool_size = sizeof(ObPocServerHandleContext) + sizeof(ObRequest) + sizeof(ObRpcPacket) + alloc_payload_sz;
       int64_t tenant_id = tmp_pkt.get_tenant_id();
       pn_set_trace_info(resp_id, tenant_id, pcode, tmp_pkt.get_trace_id());
-      if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
+      bool is_stream = tmp_pkt.is_stream();
+      bool is_ddl_rpc = (ORPR_DDL == tmp_pkt.get_priority());
+      if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION
+                       || is_stream || is_ddl_rpc) ) { // avoid tenant memory leak error when deleting tenant
         tenant_id = OB_SERVER_TENANT_ID;
       }
       IGNORE_RETURN snprintf(rpc_timeguard_str, sizeof(rpc_timeguard_str), "sz=%ld,pcode=%x,id=%ld", sz, pcode, tenant_id);
@@ -114,7 +113,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
           RPC_LOG(WARN, "pool allocate rpc packet memory failed", K(tenant_id), K(pcode_label));
           ret = common::OB_ALLOCATE_MEMORY_FAILED;
         } else {
-          MEMCPY(reinterpret_cast<void *>(pkt), reinterpret_cast<void *>(&tmp_pkt), sizeof(ObRpcPacket));
+          MEMCPY(reinterpret_cast<void *>(pkt), reinterpret_cast<const void *>(&tmp_pkt), sizeof(ObRpcPacket));
           const char* packet_data = NULL;
           if (alloc_payload_sz > 0) {
             packet_data = reinterpret_cast<char *>(pkt + 1);
@@ -277,11 +276,33 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
     b = b + easy_head_size;
     sz = sz - easy_head_size;
     ObRequest* req = NULL;
-    if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, b, sz, req))) {
-      RPC_LOG(WARN, "created req is null", K(tmp_ret), K(sz), K(resp_id));
+    ObRpcPacket tmp_pkt;
+    if (OB_FAIL(OB_FAIL(tmp_pkt.decode(b, sz)))) {
+      RPC_LOG(ERROR, "decode packet fail");
     } else {
-      timeguard.click();
-      global_deliver->deliver(*req);
+      ObCurTraceId::set(tmp_pkt.get_trace_id());
+      bool is_stream = tmp_pkt.is_stream();
+      bool is_ddl_rpc = (ORPR_DDL == tmp_pkt.get_priority());
+      bool is_lease = (OB_RENEW_LEASE == tmp_pkt.get_pcode());
+      bool is_to_tenant_queue = (!is_stream && !is_ddl_rpc && !is_lease);
+
+      int lock_ret = OB_SUCCESS;
+      if (is_to_tenant_queue) {
+        lock_ret = global_deliver->lock_tenant_list();
+      }
+      if (OB_TMP_FAIL(lock_ret)) {
+        RPC_LOG_RET(WARN, tmp_ret, "lock_tenant_list failed");
+      } else if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, tmp_pkt, sz, req))) {
+        RPC_LOG_RET(WARN, tmp_ret, "created req is null", K(tmp_ret), K(sz), K(resp_id));
+      } else {
+        timeguard.click();
+        global_deliver->deliver(*req);
+      }
+      if (OB_LIKELY(is_to_tenant_queue && OB_SUCCESS == lock_ret)) {
+        if (OB_UNLIKELY(OB_SUCCESS != global_deliver->unlock_tenant_list())) {
+          RPC_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unlock tenant_list failed");
+        }
+      }
     }
   }
   if (OB_SUCCESS != tmp_ret) {

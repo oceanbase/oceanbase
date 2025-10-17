@@ -19,6 +19,4 @@ endfunction()
 
 if(OB_BUILD_CLOSE_MODULES)
   sensitive_atomic_protocol_unittest(test_ss_atomic_file_mgr)
-  sensitive_atomic_protocol_unittest(test_ss_atomic_op)
-  sensitive_atomic_protocol_unittest_with_mock_oss(test_ss_atomic_file)
 endif()

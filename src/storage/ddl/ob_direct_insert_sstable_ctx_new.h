@@ -381,7 +381,7 @@ public:
   virtual void unlock(const uint32_t lock_tid);
   virtual int prepare_index_builder_if_need(const ObTableSchema &table_schema);
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const int64_t context_id, const share::SCN &start_scn);
-  virtual int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
+  virtual int fill_column_group(const int64_t thread_cnt, const int64_t thread_id, ObInsertMonitor *insert_monitor=nullptr);
   virtual int notify_all();
   virtual int calc_range(const int64_t context_id, const int64_t thread_cnt);
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
@@ -431,7 +431,8 @@ protected:
       const ObStorageSchema *storage_schema,
       ObCOSliceWriter *cur_writer,
       int64_t &fill_cg_finish_count,
-      int64_t &fill_row_cnt);
+      int64_t &fill_row_cnt,
+      ObInsertMonitor *insert_monitor=nullptr);
 // private:
   /* +++++ online column stat collect +++++ */
   // virtual int init_sql_statistics_if_needed();

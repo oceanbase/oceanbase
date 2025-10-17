@@ -27,26 +27,43 @@ class ObMySQLProxy;
 }
 namespace rootserver
 {
-class ObTransferPartGroup;
 
 class ObLSDesc
 {
 public:
   ObLSDesc(share::ObLSID ls_id, uint64_t ls_group_id)
-      : ls_id_(ls_id), ls_group_id_(ls_group_id), partgroup_cnt_(0), data_size_(0) {}
+      : ls_id_(ls_id),
+        ls_group_id_(ls_group_id),
+        unweighted_partgroup_cnt_(0),
+        weighted_partgroup_cnt_(0),
+        data_size_(0),
+        balance_weight_(0) {}
   ~ObLSDesc() {}
   share::ObLSID get_ls_id() const { return ls_id_; }
-  uint64_t get_partgroup_cnt() const { return partgroup_cnt_; }
-  uint64_t get_data_size() const { return data_size_; }
+  int64_t get_partgroup_cnt() const { return unweighted_partgroup_cnt_ + weighted_partgroup_cnt_; }
+  int64_t get_unweighted_partgroup_cnt() const { return unweighted_partgroup_cnt_; }
+  int64_t get_data_size() const { return data_size_; }
   uint64_t get_ls_group_id() const { return ls_group_id_; }
+  int64_t get_balance_weight() const { return balance_weight_; }
   void add_data_size(int64_t size) { data_size_ += size; }
-  void add_partgroup(int64_t count, int64_t size) { partgroup_cnt_ += count; add_data_size(size); }
-  TO_STRING_KV(K_(ls_id), K_(partgroup_cnt), K_(data_size));
+  void add_partgroup(int64_t count, int64_t size, int64_t balance_weight) {
+    data_size_ += size;
+    balance_weight_ += balance_weight;
+    if (0 == balance_weight) {
+      unweighted_partgroup_cnt_ += count;
+    } else {
+      weighted_partgroup_cnt_ += count;
+    }
+  }
+  TO_STRING_KV(K_(ls_id), K_(ls_group_id), K_(unweighted_partgroup_cnt),
+      K_(weighted_partgroup_cnt), K_(data_size), K_(balance_weight));
 private:
   share::ObLSID ls_id_;
   uint64_t ls_group_id_;
-  uint64_t partgroup_cnt_;
-  uint64_t data_size_;
+  int64_t unweighted_partgroup_cnt_;
+  int64_t weighted_partgroup_cnt_;
+  int64_t data_size_;
+  int64_t balance_weight_;
 };
 
 typedef common::hash::ObHashMap<share::ObLSID, uint64_t> ObLSGroupIDMap;
@@ -79,9 +96,12 @@ public:
         || !normal_to_normal_part_map_.empty();
   }
 
+  // new balance job will be generated when job_id is not specified
   int gen_balance_job_and_tasks(
       const share::ObBalanceJobType &job_type,
-      const ObString &balance_strategy);
+      const share::ObBalanceStrategy &balance_strategy,
+      const share::ObBalanceJobID &job_id = share::ObBalanceJobID(),
+      const int64_t balance_timeout = 0);
 
   TO_STRING_KV(K_(tenant_id), K_(primary_zone_num), K_(unit_group_num),
       K_(dup_ls_ids), K_(balance_job), K_(balance_tasks));
@@ -102,6 +122,14 @@ private:
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id,
       uint64_t &ls_group_id);
+  int optimize_transfer_path_for_weight_balance();
+  int gen_part_map_by_transfer_map_(
+      hash::ObHashMap<share::ObTransferPartInfo, ObArray<share::ObTransferTaskKey>> &part_map);
+  int merge_transfer_task_for_each_part_(
+      hash::ObHashMap<share::ObTransferPartInfo, ObArray<share::ObTransferTaskKey>> &part_map);
+
+private:
+  static const int64_t HASH_MAP_SIZE = 128;
 
 private:
   bool inited_;

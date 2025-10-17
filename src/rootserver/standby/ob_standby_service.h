@@ -133,7 +133,7 @@ public:
    * @param[out] status tenant status from all_tenant
    * @return return code
    */
-  int get_tenant_status(
+  static int get_tenant_status(
       const uint64_t tenant_id,
       ObTenantStatus &status);
 

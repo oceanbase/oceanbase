@@ -78,7 +78,7 @@ public:
 };
 
 
-class ObMajorMergeProgressChecker : public ObBasicMergeProgressChecker
+class ObMajorMergeProgressChecker final : public ObBasicMergeProgressChecker
 {
 public:
   ObMajorMergeProgressChecker(
@@ -136,12 +136,13 @@ private:
   int loop_index_ckm_validate_array();
   int update_finish_index_cnt_for_data_table(
     const uint64_t data_table_id,
-    const uint64_t finish_index_cnt,
+    const int64_t finish_index_cnt,
     bool &idx_validate_finish);
   int deal_with_validated_table(
     const uint64_t data_table_id,
     const int64_t finish_index_cnt,
     const compaction::ObTableCkmItems &data_table_ckm);
+  int rebuild_table_compaction_map(const int64_t table_id_count);
   bool should_ignore_cur_table(const ObSimpleTableSchemaV2 *simple_schema);
   int deal_with_rest_data_table();
   bool is_extra_check_round() const { return 0 == (loop_cnt_ % 8); } // check every 8 rounds
@@ -151,7 +152,7 @@ private:
     const uint64_t table_id,
     bool &is_table_valid,
     ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
-  int rebuild_map_by_tablet_cnt();
+  int rebuild_tablet_status_map();
   int prepare_fts_group(
     const int64_t table_id,
     const ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);

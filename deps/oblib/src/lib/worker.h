@@ -51,6 +51,7 @@ public:
   // query immediately.
   virtual bool need_retry() const { return false; }
   virtual void resume() {}
+  virtual int try_add_stream_rpc_session_wait_cnt(int cnt) { return OB_SUCCESS; }
 
   // This function is called before worker waiting for some resources
   // and starting to give cpu out so that Multi-Tenancy would be aware
@@ -311,6 +312,22 @@ public:
 
 private:
   Worker::CompatMode last_compat_mode_;
+};
+
+class WorkerTimeoutGuard
+{
+public:
+  WorkerTimeoutGuard(int64_t abs_timeout_ts)
+  {
+    prev_abs_timeout_ = THIS_WORKER.get_timeout_ts();
+    THIS_WORKER.set_timeout_ts(abs_timeout_ts);
+  }
+  ~WorkerTimeoutGuard()
+  {
+    THIS_WORKER.set_timeout_ts(prev_abs_timeout_);
+  }
+private:
+  int64_t prev_abs_timeout_;
 };
 
 

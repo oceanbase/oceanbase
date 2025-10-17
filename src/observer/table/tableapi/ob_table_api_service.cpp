@@ -128,7 +128,9 @@ int ObTableApiService::get(ObTableCtx &ctx, const ObITableEntity &entity, ObTabl
 }
 
 // ======================== batch opertion ==========================
-int ObTableApiService::multi_insert(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_insert(ObTableCtx &ctx,
+                                    const ObIArray<const ObITableEntity*> &entities,
+                                    ObIArray<ObTableOperationResult> *results)
 {
   int ret = OB_SUCCESS;
   if (!ctx.is_init()) {
@@ -142,12 +144,16 @@ int ObTableApiService::multi_insert(ObTableCtx &ctx, const ObIArray<ObITableEnti
   return ret;
 }
 
-int ObTableApiService::multi_update(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_update(ObTableCtx &ctx,
+                                    const ObIArray<const ObITableEntity*> &entities,
+                                    ObIArray<ObTableOperationResult> *results)
 {
   return process_batch_with_same_spec<TABLE_API_EXEC_UPDATE, ObTableOperationType::UPDATE, StmtType::T_KV_MULTI_UPDATE>(ctx, entities, results);
 }
 
-int ObTableApiService::multi_insert_or_update(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_insert_or_update(ObTableCtx &ctx,
+                                              const ObIArray<const ObITableEntity*> &entities,
+                                              ObIArray<ObTableOperationResult> *results)
 {
   int ret = OB_SUCCESS;
   if (!ctx.is_init()) {
@@ -161,12 +167,16 @@ int ObTableApiService::multi_insert_or_update(ObTableCtx &ctx, const ObIArray<Ob
   return ret;
 }
 
-int ObTableApiService::multi_put(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_put(ObTableCtx &ctx,
+                                 const ObIArray<const ObITableEntity*> &entities,
+                                 ObIArray<ObTableOperationResult> *results)
 {
   return process_batch_in_executor<TABLE_API_EXEC_INSERT, ObTableOperationType::INSERT, StmtType::T_KV_MULTI_PUT>(ctx, entities, results);
 }
 
-int ObTableApiService::multi_get(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_get(ObTableCtx &ctx,
+                                 const ObIArray<const ObITableEntity*> &entities,
+                                 ObIArray<ObTableOperationResult> *results)
 {
   int ret = OB_SUCCESS;
   ObTableApiCacheGuard cache_guard;
@@ -213,14 +223,148 @@ int ObTableApiService::multi_get(ObTableCtx &ctx, const ObIArray<ObITableEntity*
   return ret;
 }
 
-int ObTableApiService::multi_delete(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_delete(ObTableCtx &ctx,
+                                    const ObIArray<const ObITableEntity*> &entities,
+                                    ObIArray<ObTableOperationResult> *results)
 {
   return process_batch_with_same_spec<TABLE_API_EXEC_DELETE, ObTableOperationType::DEL, StmtType::T_KV_MULTI_DELETE>(ctx, entities, results);
 }
 
-int ObTableApiService::multi_replace(ObTableCtx &ctx, const ObIArray<ObITableEntity*> &entities, ObIArray<ObTableOperationResult> *results)
+int ObTableApiService::multi_replace(ObTableCtx &ctx,
+                                     const ObIArray<const ObITableEntity*> &entities,
+                                     ObIArray<ObTableOperationResult> *results)
 {
   return process_batch_with_same_spec<TABLE_API_EXEC_REPLACE, ObTableOperationType::REPLACE, StmtType::T_KV_MULTI_REPLACE>(ctx, entities, results);
+}
+
+int ObTableApiService::get_appropriate_spec(ObTableCtx &ctx,
+                                           ObTableApiCacheGuard &cache_guard,
+                                           ObTableApiSpec *&spec)
+{
+  int ret = OB_SUCCESS;
+  bool use_put = ctx.get_opertion_type() == ObTableOperationType::PUT;
+  if (use_put) { // for ttl table: we can use put directly
+    ret = get_spec<TABLE_API_EXEC_INSERT>(ctx, cache_guard, spec);
+  } else if (ctx.is_ttl_table()) {
+    ret = get_spec<TABLE_API_EXEC_TTL>(ctx, cache_guard, spec);
+  } else {
+    ret = get_spec<TABLE_API_EXEC_INSERT_UP>(ctx, cache_guard, spec);
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fail to get spec", K(ret));
+  } else if (OB_ISNULL(spec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("spec is NULL", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTableApiService::execute_batch_put(ObTableCtx &ctx, ObTableApiSpec *spec)
+{
+  int ret = OB_SUCCESS;
+  ObTableAuditMultiOp multi_op(ctx.get_opertion_type(), ctx.get_batch_entities());
+  OB_TABLE_START_AUDIT(*ctx.get_credential(),
+                       *ctx.get_sess_guard(),
+                       ctx.get_table_name(),
+                       ctx.get_audit_ctx(), multi_op);
+  ctx.set_need_dist_das(true);
+  if (OB_ISNULL(spec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("spec is NULL", K(ret));
+  } else {
+    bool use_put = ctx.get_opertion_type() == ObTableOperationType::PUT;
+    if (use_put) {
+      ret = execute_multi_put_within_executor(ctx, spec);
+    } else {
+      ret = execute_multi_put_with_same_spec(ctx, spec);
+    }
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_MULTI_PUT);
+  return ret;
+}
+
+int ObTableApiService::execute_multi_put_within_executor(ObTableCtx &ctx, ObTableApiSpec *spec)
+{
+  int ret = OB_SUCCESS;
+  ObTableApiExecutor *executor = nullptr;
+
+  if (OB_FAIL(spec->create_executor(ctx, executor))) {
+    LOG_WARN("fail to create executor", K(ret));
+  } else if (OB_ISNULL(executor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("executor is NULL", K(ret));
+  } else if (OB_FAIL(execute_and_cleanup_executor(ctx, spec, executor))) {
+    LOG_WARN("fail to execute and cleanup executor", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTableApiService::execute_multi_put_with_same_spec(ObTableCtx &ctx,
+                                                        ObTableApiSpec *spec)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<const ObITableEntity*> *entities = ctx.get_batch_entities();
+  if (OB_ISNULL(entities)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entities is NULL", K(ret));
+  }
+  for (int64_t i = 0; i < entities->count() && OB_SUCC(ret); i++) {
+    ObTableApiExecutor *executor = nullptr;
+    const ObITableEntity *entity = entities->at(i);
+    if (OB_ISNULL(entity)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("entity is NULL", K(ret));
+    } else if (OB_FAIL(spec->create_executor(ctx, executor))) {
+      LOG_WARN("fail to create executor", K(ret));
+    } else {
+      ctx.set_entity(const_cast<ObITableEntity*>(entity));
+      ctx.set_tablet_id(entity->get_tablet_id());
+      if (OB_FAIL(execute_and_cleanup_executor(ctx, spec, executor))) {
+        LOG_WARN("fail to execute and cleanup executor", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableApiService::execute_and_cleanup_executor(ObTableCtx &ctx,
+                                                   ObTableApiSpec *spec,
+                                                   ObTableApiExecutor *executor)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(executor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("executor is NULL", K(ret));
+  } else if (OB_FAIL(executor->open())) {
+    LOG_WARN("fail to open executor", K(ret));
+  } else if (OB_FAIL(executor->get_next_row())) {
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  }
+
+  // Cleanup executor
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(executor) && OB_TMP_FAIL(executor->close())) {
+    LOG_WARN("fail to close executor", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+
+  if (OB_NOT_NULL(executor)) {
+    spec->destroy_executor(executor);
+    executor = nullptr;
+  }
+
+  return ret;
 }
 
 // ======================== query interface ==========================
@@ -294,7 +438,6 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
                                       *ctx.get_sess_guard(),
                                       *ctx.get_schema_cache_guard(),
                                       *ctx.get_schema_guard(),
-                                      nullptr,/*simple_schema*/
                                       clip_type);
       if (OB_FAIL(part_calc.calc(ctx.get_index_table_id(), ranges, *tablet_ids))) {
         LOG_WARN("fail to calc tablet_ids", K(ret), K(ctx.get_table_id()));
@@ -307,7 +450,7 @@ int ObTableApiService::calc_tablet_ids(ObTableCtx &ctx,
 }
 
 int ObTableApiService::check_batch_args(ObTableCtx &ctx,
-                                       const ObIArray<ObITableEntity*> &entities,
+                                       const ObIArray<const ObITableEntity*> &entities,
                                        ObIArray<ObTableOperationResult> *results)
 {
   int ret = OB_SUCCESS;
@@ -346,7 +489,7 @@ int ObTableApiService::check_batch_args(ObTableCtx &ctx,
 }
 
 bool ObTableApiService::need_calc_tablet_id(const common::ObIArray<ObTabletID> *tablet_ids,
-                                            const common::ObIArray<ObITableEntity *> &entities)
+                                            const common::ObIArray<const ObITableEntity *> &entities)
 {
   bool bret = false;
   if (OB_ISNULL(tablet_ids) || tablet_ids->empty()) {
@@ -378,11 +521,11 @@ bool ObTableApiService::need_calc_tablet_id(const common::ObIArray<ObTabletID> *
   return bret;
 }
 
-int ObTableApiService::adjust_entities(ObTableCtx &ctx, const common::ObIArray<ObITableEntity *> &entities)
+int ObTableApiService::adjust_entities(ObTableCtx &ctx, const common::ObIArray<const ObITableEntity *> &entities)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < entities.count() && OB_SUCC(ret); i++) {
-    ObITableEntity *entity = entities.at(i);
+    const ObITableEntity *entity = entities.at(i);
     if (OB_ISNULL(entity)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("entity is NULL", K(ret), K(i));
@@ -400,13 +543,14 @@ int ObTableApiService::adjust_entities(ObTableCtx &ctx, const common::ObIArray<O
 }
 
 bool ObTableApiService::is_same_plan(ObTableOperationType::Type op_type,
-                                    ObITableEntity &src_i_entity, ObITableEntity &dest_i_entity)
+                                    const ObITableEntity &src_i_entity,
+                                    const ObITableEntity &dest_i_entity)
 {
   bool bret = true;
   if (op_type == ObTableOperationType::Type::UPDATE ||
       op_type == ObTableOperationType::Type::INSERT_OR_UPDATE) {
-    ObTableEntity &src_entity = static_cast<ObTableEntity &>(src_i_entity);
-    ObTableEntity &dst_entity = static_cast<ObTableEntity &>(dest_i_entity);
+    const ObTableEntity &src_entity = static_cast<const ObTableEntity &>(src_i_entity);
+    const ObTableEntity &dst_entity = static_cast<const ObTableEntity &>(dest_i_entity);
     const ObIArray<ObString> &src_prop_names = src_entity.get_properties_names();
     const ObIArray<ObString> &dest_prop_names = dst_entity.get_properties_names();
     if (src_prop_names.count() != dest_prop_names.count()) {
@@ -469,7 +613,7 @@ int ObTableApiService::process_dml_result(ObTableCtx &ctx, ObTableApiExecutor &e
 int ObTableApiService::construct_entities_from_row(ObIAllocator &allocator,
                                                    ObKvSchemaCacheGuard &schema_cache_guard,
                                                    ObNewRow &row,
-                                                   const ObIArray<ObITableEntity*> &entities,
+                                                   const ObIArray<const ObITableEntity*> &entities,
                                                    ObIArray<ObTableOperationResult> &results)
 {
   int ret = OB_SUCCESS;
@@ -527,13 +671,13 @@ int ObTableApiService::construct_entities_from_row(ObIAllocator &allocator,
 }
 
 int ObTableApiService::generate_scan_ranges_by_entities(const uint64_t table_id,
-                                                        const ObIArray<ObITableEntity*> &entities,
+                                                        const ObIArray<const ObITableEntity*> &entities,
                                                         ObIArray<common::ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < entities.count(); ++i) {
-    ObITableEntity *entity = entities.at(i);
+    const ObITableEntity *entity = entities.at(i);
     if (OB_ISNULL(entity)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("entity is NULL", K(ret), K(i));
@@ -553,7 +697,7 @@ int ObTableApiService::generate_scan_ranges_by_entities(const uint64_t table_id,
 
 
 int ObTableApiService::get_result_index(const ObNewRow &row,
-                                        const ObIArray<ObITableEntity*> &entities,
+                                        const ObIArray<const ObITableEntity*> &entities,
                                         const ObIArray<uint64_t> &rowkey_ids,
                                         ObObj *rowkey_cells,
                                         ObIArray<int64_t> &indexs)

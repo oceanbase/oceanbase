@@ -19,29 +19,9 @@ namespace oceanbase
 {
 namespace observer
 {
-
-ObAllVirtualSessionWaitHistory::ObAllVirtualSessionWaitHistory()
-    : ObVirtualTableScannerIterator(),
-    alloc_wrapper_(),
-    session_status_(OB_MALLOC_NORMAL_BLOCK_SIZE, alloc_wrapper_),
-    addr_(NULL),
-    ipstr_(),
-    port_(0),
-    session_iter_(0),
-    event_iter_(0),
-    history_iter_(),
-    collect_(NULL)
-{
-}
-
-ObAllVirtualSessionWaitHistory::~ObAllVirtualSessionWaitHistory()
-{
-  reset();
-}
-
 void ObAllVirtualSessionWaitHistory::reset()
 {
-  ObVirtualTableScannerIterator::reset();
+  omt::ObMultiTenantOperator::reset();
   addr_ = NULL;
   session_iter_ = 0;
   event_iter_ = 0;
@@ -50,6 +30,7 @@ void ObAllVirtualSessionWaitHistory::reset()
   session_status_.reset();
   history_iter_.reset();
   collect_ = NULL;
+  ObVirtualTableScannerIterator::reset();
 }
 
 int ObAllVirtualSessionWaitHistory::set_ip(common::ObAddr *addr)
@@ -75,15 +56,33 @@ int ObAllVirtualSessionWaitHistory::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(alloc_wrapper_.get_alloc())) {
-    alloc_wrapper_.set_alloc(allocator_);
+    alloc_wrapper_.set_alloc(&alloc_);
   }
-  if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_all_diag_info(session_status_, effective_tenant_id_))) {
+  if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_all_diag_info(session_status_, MTL_ID()))) {
     SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
   }
   return ret;
 }
 
 int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(execute(row))) {
+    SERVER_LOG(WARN, "execute fail", K(ret));
+  }
+  return ret;
+}
+
+void ObAllVirtualSessionWaitHistory::release_last_tenant()
+{
+  session_iter_ = 0;
+  event_iter_ = 0;
+  session_status_.reset();
+  history_iter_.reset();
+  collect_ = NULL;
+}
+
+int ObAllVirtualSessionWaitHistory::process_curr_tenant(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   int iter_ret = OB_SUCCESS;
@@ -107,8 +106,7 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow *&row)
           collect_ = &session_status_.at(session_iter_).second;
           if (NULL != collect_ && OB_SUCCESS == collect_->lock_.try_rdlock()) {
             const uint64_t tenant_id = collect_->base_value_.get_tenant_id();
-            if (session_status_.at(session_iter_).first == collect_->session_id_
-                && (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)) {
+            if (session_status_.at(session_iter_).first == collect_->session_id_) {
               collect_->base_value_.get_event_history().curr_pos_ = 1;
               collect_->base_value_.get_event_history().item_cnt_ = 1;
               collect_->base_value_.get_event_history().items_[0] = collect_->base_value_.get_curr_wait();
@@ -291,7 +289,7 @@ int ObAllVirtualSessionWaitHistoryI1::get_all_diag_info()
   uint64_t key = 0;
   typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
   if (OB_ISNULL(alloc_wrapper_.get_alloc())) {
-    alloc_wrapper_.set_alloc(allocator_);
+    alloc_wrapper_.set_alloc(&alloc_);
   }
   HEAP_VAR(DiPair, pair) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_index_ids().count(); ++i) {

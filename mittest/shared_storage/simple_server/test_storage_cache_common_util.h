@@ -30,6 +30,9 @@
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
 
+#ifdef __cplusplus
+extern "C" const char *get_per_file_test_name();
+#endif
 namespace oceanbase
 {
 char *shared_storage_info = nullptr;
@@ -55,7 +58,7 @@ class ObStorageCachePolicyPrewarmerTest : public ObSimpleClusterTestBase
 {
 public:
   ObStorageCachePolicyPrewarmerTest()
-      : ObSimpleClusterTestBase("test_storage_cache_policy_prewarmer_", "50G", "50G", "50G")
+      : ObSimpleClusterTestBase(get_per_file_test_name(), "50G", "50G", "50G")
   {}
   virtual void SetUp() override
   {
@@ -67,6 +70,7 @@ public:
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
     }
+    storage::ObSSBasePrewarmer::OB_SS_PREWARM_CACHE_THRESHOLD = 0;
   }
 
   static void TearDownTestCase()

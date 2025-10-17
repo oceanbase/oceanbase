@@ -172,6 +172,7 @@ struct ObTableOp : public ObITableOp
 public:
   ObTableOp()
       : ObITableOp(ObTableGroupType::TYPE_TABLE_GROUP),
+        allocator_("ObTableOp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         result_(),
         op_(),
         request_entity_(),
@@ -203,6 +204,10 @@ public:
   }
   OB_INLINE bool is_get() const { return op_.type() == ObTableOperationType::Type::GET; }
   OB_INLINE bool is_insup_use_put() const { return is_insup_use_put_; }
+  OB_INLINE common::ObIAllocator& get_allocator()
+  {
+    return allocator_;
+  }
   virtual void reset()
   {
     ObITableOp::reset();
@@ -215,6 +220,9 @@ public:
     is_insup_use_put_ = false;
     result_.set_entity(nullptr);
     result_.reset();
+    if (allocator_.used() > 0) {
+      allocator_.reset();
+    }
   }
   void reuse()
   {
@@ -225,6 +233,8 @@ public:
     result_.reset();
     result_entity_.reset();
   }
+private:
+  common::ObArenaAllocator allocator_;
 public:
   ObTableOperationResult result_;
   ObTableOperation op_; // single operation

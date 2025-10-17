@@ -837,6 +837,11 @@ private:
       const common::ObZone &dest_zone,
       int64_t &ls_acc_dr_task);
 
+  int check_corresponding_sslog_ls_ready_(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObZone &dest_zone);
+
   int generate_single_replica_task_(
       const bool only_for_display,
       const palf::LogConfigVersion &config_version,

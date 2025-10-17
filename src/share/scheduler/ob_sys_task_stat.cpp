@@ -48,7 +48,8 @@ const static char *ObSysTaskTypeStr[] = {
     "REBUILD_TABLET_TASK",
     "VECTOR_INDEX_ASYNC_TASK",
     "INC_SSTABLE_UPLOAD_TASK",
-    "ATTACH_SHARED_SSTABLE_TASK"
+    "ATTACH_SHARED_SSTABLE_TASK",
+    "UPDATE_SS_INC_MAJOR_TASK"
 };
 
 const char *sys_task_type_to_str(const ObSysTaskType &type)

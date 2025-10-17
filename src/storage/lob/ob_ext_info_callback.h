@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_EXT_INFO_CALLBACK_
 #define OCEANBASE_STORAGE_OB_EXT_INFO_CALLBACK_
 
+#include "share/allocator/ob_lob_ext_info_log_allocator.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "lib/json_type/ob_json_diff.h"
 
@@ -49,6 +50,7 @@ struct ObExtInfoLogHeader
 
   ObExtInfoLogType get_type() const { return static_cast<ObExtInfoLogType>(type_); }
   bool is_json_diff() const { return get_type() == OB_JSON_DIFF_EXT_INFO_LOG; }
+  void init(const ObObjType data_type, const bool is_update);
 
   uint8_t type_;
 
@@ -154,6 +156,7 @@ public:
       header_(),
       ext_info_data_(),
       lob_param_(nullptr),
+      lob_locator_(),
       data_iter_(nullptr),
       data_buffer_(),
       timeout_(0),
@@ -167,21 +170,55 @@ public:
 
   int register_cb(
     memtable::ObIMvccCtx *ctx,
+    storage::ObStoreCtx &store_ctx,
     const int64_t timeout,
     const blocksstable::ObDmlFlag dml_flag,
     const transaction::ObTxSEQ &seq_no_st,
     const int64_t seq_no_cnt,
     const ObString &index_data,
     const ObObjType index_data_type,
+    const transaction::ObTxReadSnapshot &snapshot,
     const ObExtInfoLogHeader &header,
+    const ObTabletID &tabelt_id,
     ObObj &ext_info_data);
 
 private:
 
-  int build_data_iter(ObObj &ext_info_data);
+  int build_data_iter(
+      ObObj &ext_info_data,
+      transaction::ObTxDesc *tx_desc,
+      const transaction::ObTxSEQ &tx_scn,
+      const transaction::ObTxReadSnapshot &snapshot,
+      const share::ObLSID &ls_id,
+      const ObTabletID &tabelt_id);
 
   int get_data(ObString &data);
   int get_lob_id(const ObString &index_data, const ObObjType index_data_type, ObLobId &lob_id);
+
+  int append_callback_light(
+      storage::ObStoreCtx &store_ctx,
+      const blocksstable::ObDmlFlag dml_flag,
+      const ObLobId &lob_id,
+      int64_t &cb_cnt);
+  int append_callbacks(
+      storage::ObStoreCtx &store_ctx,
+      const int64_t timeout,
+      const blocksstable::ObDmlFlag dml_flag,
+      const ObLobId &lob_id,
+      int64_t &cb_cnt);
+  int append_callback_with_retry(
+      storage::ObStoreCtx &store_ctx,
+      const blocksstable::ObDmlFlag dml_flag,
+      const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
+      ObString &data);
+  int append_callback(
+      storage::ObStoreCtx &store_ctx,
+      const blocksstable::ObDmlFlag dml_flag,
+      const transaction::ObTxSEQ &seq_no_cur,
+      const ObLobId &lob_id,
+      ObString &data);
+  int check_is_during_freeze(bool &is_during_freeze);
 
 public:
   TO_STRING_KV(K(timeout_), K(data_size_), K(seq_no_st_), K(seq_no_cnt_), K(header_writed_));
@@ -192,6 +229,7 @@ private:
   ObExtInfoLogHeader header_;
   ObObj ext_info_data_;
   ObLobAccessParam *lob_param_;
+  ObLobLocatorV2 lob_locator_;
   ObLobQueryIter *data_iter_;
   ObString data_buffer_;
   int64_t timeout_;

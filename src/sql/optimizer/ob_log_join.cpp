@@ -851,7 +851,11 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
   char *buf = plan_text.buf_;
   int64_t &buf_len = plan_text.buf_len_;
   int64_t &pos = plan_text.pos_;
-  if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ", ObQueryHint::get_outline_indent(plan_text.is_oneline_),
+  ObOptimizerContext *opt_ctx = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(opt_ctx));
+  } else if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ", ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                             ObHint::get_hint_name(print_type, is_enable_hint),
                                             qb_name.length(), qb_name.ptr()))) {
     LOG_WARN("fail to print pq map hint head", K(ret));
@@ -859,6 +863,10 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
     LOG_WARN("fail to print join tables", K(ret));
   } else if (NULL != algo_str && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("fail to print distribute method", K(ret));
+  } else if (NULL != algo_str &&
+             opt_ctx->is_use_auto_dop() &&
+             OB_FAIL(BUF_PRINTF(" %ld", parallel_))) {
+    LOG_WARN("fail to print join prallel", K(ret));
   } else if (OB_FAIL(BUF_PRINTF(")"))) {
   } else { /* do nothing */ }
   return ret;

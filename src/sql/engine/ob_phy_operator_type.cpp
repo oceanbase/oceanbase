@@ -94,5 +94,28 @@ const char *ob_phy_operator_type_str(ObPhyOperatorType type, bool enable_rich_fo
   return PHY_OP_TYPE_DESC_SET.get_type_str(type, enable_rich_format);
 }
 
+ObPhyOperatorType get_phy_type_from_name(const char *name, uint64_t length,
+                                         bool &enable_rich_format)
+{
+  enable_rich_format = false;
+  ObPhyOperatorType ret_type = PHY_INVALID;
+  if (!name) {
+    return PHY_INVALID;
+  } else if (length < 7) {
+    enable_rich_format = false;
+  } else if (strncmp(name, "PHY_VEC_", 7) == 0) {
+    enable_rich_format = true;
+  }
+  for (int type = PHY_INVALID; type < PHY_END; ++type) {
+    const char *phy_name = ob_phy_operator_type_str((ObPhyOperatorType)type, enable_rich_format);
+    uint64_t cmp_len = std::min(length, strlen(phy_name));
+    if (strncmp(phy_name, name, cmp_len) == 0) {
+      ret_type = (ObPhyOperatorType)type;
+      break;
+    }
+  }
+  return ret_type;
+}
+
 }
 }

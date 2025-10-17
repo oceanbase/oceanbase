@@ -97,6 +97,10 @@ int ObPxMSReceiveVecOp::init_merge_sort_input(int64_t n_channel)
           msi->compressor_type_ = MY_SPEC.compress_type_;
           if (OB_FAIL(merge_inputs_.push_back(msi))) {
             LOG_WARN("push back merge sort input fail", K(idx), K(ret));
+            msi->clean_row_store(ctx_);
+            msi->destroy();
+            msi->~MergeSortInput();
+            mem_context_->get_malloc_allocator().free(msi);
           }
         }
       }
@@ -823,6 +827,9 @@ int ObPxMSReceiveVecOp::new_local_order_input(MergeSortInput *&out_msi)
       LOG_WARN("failed to allocate dir id for temp row store", K(ret));
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
+      local_input->clean_row_store(ctx_);
+      local_input->destroy();
+      mem_context_->get_malloc_allocator().free(local_input);
     } else {
       out_msi = local_input;
     }

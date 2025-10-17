@@ -221,7 +221,11 @@ public:
     } else {
       MEMSET(skip_buf, 0, skip_size);
       ObBitVector *tmp_skip = to_bit_vector(skip_buf);
-      tmp_skip->deep_copy(skip, agg_ctx.eval_ctx_.max_batch_size_);
+      // if row_sel is empty, use `skip` && `bound` to iterate data
+      // else use just use `row_sel`, `skip` may contain incorrect data!!!
+      if (row_sel.is_empty()) {
+        tmp_skip->deep_copy(skip, bound.start(), bound.end());
+      }
       for (int param_id = 0; OB_SUCC(ret) && param_id < param_exprs.count(); param_id++) {
         ObIVector *param_vec = param_exprs.at(param_id)->get_vector(agg_ctx.eval_ctx_);
         VectorFormat param_fmt = param_exprs.at(param_id)->get_format(agg_ctx.eval_ctx_);

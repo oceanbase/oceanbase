@@ -46,7 +46,7 @@ ObRebuildTabletCtx::ObRebuildTabletCtx()
     finish_ts_(0),
     task_id_(),
     src_(),
-    tablet_group_ctx_(),
+    tablet_group_ctx_(ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE),
     src_ls_rebuild_seq_(-1)
 {
 }
@@ -349,7 +349,7 @@ bool ObRebuildTabletDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObRebuildTabletDagNet::hash() const
+uint64_t ObRebuildTabletDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
@@ -394,10 +394,10 @@ int ObRebuildTabletDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) co
 int ObRebuildTabletDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
   ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
   LOG_INFO("start clear dag net ctx", KPC(ctx_));
 
   if (!is_inited_) {
@@ -408,16 +408,23 @@ int ObRebuildTabletDagNet::clear_dag_net_ctx()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_), KP(ls));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), KPC(ctx_));
   } else {
     if (OB_FAIL(ctx_->get_result(result))) {
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->get_ls_migration_handler()->set_result(result))) {
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
     }
 
     ctx_->finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_->finish_ts_ - ctx_->start_ts_;
     FLOG_INFO("finish rebuild tablet dag net", "ls id", ctx_->arg_.ls_id_, "type", ctx_->arg_.type_, K(cost_ts), K(result));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -497,7 +504,7 @@ bool ObInitialRebuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObInitialRebuildTabletDag::hash() const
+uint64_t ObInitialRebuildTabletDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx * ctx = get_rebuild_tablet_ctx();
@@ -818,7 +825,7 @@ bool ObStartRebuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObStartRebuildTabletDag::hash() const
+uint64_t ObStartRebuildTabletDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx *ctx = get_rebuild_tablet_ctx();
@@ -1092,7 +1099,7 @@ bool ObTabletRebuildMajorDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletRebuildMajorDag::hash() const
+uint64_t ObTabletRebuildMajorDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx *ctx = get_rebuild_tablet_ctx();
@@ -1823,7 +1830,7 @@ bool ObFinishRebuildTabletDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObFinishRebuildTabletDag::hash() const
+uint64_t ObFinishRebuildTabletDag::hash() const
 {
   int64_t hash_value = 0;
   ObRebuildTabletCtx *ctx = get_rebuild_tablet_ctx();

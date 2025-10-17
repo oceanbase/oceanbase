@@ -110,6 +110,7 @@ private:
 #endif
 #ifdef OB_BUILD_SHARED_STORAGE
   virtual int check_and_notify_shared_storage_info();
+  virtual int wirte_ss_format_and_cluster_info_(const ObBackupDest &storage_dest);
 #endif
   virtual int notify_sys_tenant_server_unit_resource();
   int create_sslog_ls_(const common::ObArray<share::ObUnit> &unit_array);
@@ -154,6 +155,9 @@ private:
   static int create_all_schema(
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas);
+  int load_all_schema(
+      ObDDLService &ddl_service,
+      common::ObIArray<share::schema::ObTableSchema> &table_schemas);
   int construct_all_schema(
       common::ObSArray<share::schema::ObTableSchema> &table_schemas,
       ObIAllocator &allocator);
@@ -180,6 +184,7 @@ private:
       const int64_t begin, const int64_t end);
   virtual int check_is_already_bootstrap(bool &is_bootstrap);
   virtual int init_global_stat();
+  virtual int init_palf_kv_system_data_();
   virtual int init_system_data();
   virtual int init_all_zone_table();
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient &sql_client);

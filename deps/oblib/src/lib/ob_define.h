@@ -385,7 +385,7 @@ const int64_t OB_MAX_PASSWORD_LENGTH = 128;
 const int64_t OB_MAX_PASSWORD_BUF_LENGTH = OB_MAX_PASSWORD_LENGTH + 1;
 // After each sha1 is 41 characters, the incremental backup is up to 64 times, and the maximum password required for recovery is 64*(41+1)=2,688
 const int64_t OB_MAX_ENCRYPTED_PASSWORD_LENGTH = OB_MAX_PASSWORD_LENGTH * 4;
-const int64_t OB_MAX_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH = 128;
+const int64_t OB_MAX_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH = 1024;
 const int64_t OB_MAX_ENCRYPTED_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH = OB_MAX_EXTERNAL_TABLE_PROPERTIES_ITEM_LENGTH * 4;
 const int64_t OB_MAX_PASSWORD_ARRAY_LENGTH = 4096;
 const int64_t OB_MAX_ERROR_MSG_LEN = 512;
@@ -794,7 +794,10 @@ const char *const OB_OSS_PREFIX = "oss://";
 const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
 const char *const OB_S3_PREFIX = "s3://";
+const char *const OB_S3A_PREFIX = "s3a://";
+const char *const OB_S3N_PREFIX = "s3n://";
 const char *const OB_HDFS_PREFIX= "hdfs://";
+const char *const OB_AZBLOB_PREFIX = "azblob://";
 const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";
@@ -1800,6 +1803,7 @@ const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
 const int64_t WARMUP_MAX_KEY_SET_SIZE_IN_RPC = (1LL << 22);                    // 4M
 const int64_t OB_DEFAULT_STACK_SIZE = (1L << 19);                              // 512K
+const int64_t OB_MAX_CSV_BATCHLINE_BUF_SIZE = (1LL << 23); // 8M
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 
@@ -1974,7 +1978,7 @@ const int64_t OB_DEFAULT_MAX_TABLET_SIZE = 256 * 1024 * 1024; // 256MB
 const int64_t OB_MAX_MACRO_BLOCK_TYPE = 16;
 const int32_t OB_DEFAULT_CHARACTER_SET = 33; //UTF8
 const int64_t OB_MYSQL_PACKET_BUFF_SIZE = 6 * 1024; //6KB
-const int64_t OB_MAX_THREAD_NUM = 4096;
+const int64_t OB_MAX_THREAD_NUM_DO_NOT_USE = 4096;
 const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthread_create, such as easy
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 #if __x86_64__
@@ -2066,6 +2070,9 @@ const int16_t DEFAULT_SCALE_FOR_ORACLE_FRACTIONAL_SECONDS = 6;  //SEE : https://
 const int16_t DEFUALT_PRECISION_FOR_INTERVAL = 2;
 
 const int64_t OB_ORACLE_SCALE_FOR_NUMBER = -127;
+
+// load inner table schema
+const int64_t HARD_CODE_SCHEMA_VERSION_BEGIN = 1 << 17;
 
 #define NUMBER_SCALE_UNKNOWN_YET (lib::is_oracle_mode() ? ORA_NUMBER_SCALE_UNKNOWN_YET: SCALE_UNKNOWN_YET)
 //TDE相关参数

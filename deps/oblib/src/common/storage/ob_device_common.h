@@ -37,6 +37,44 @@ namespace common
 
 const static int DEFAULT_OPT_ARG_NUM = 4;
 
+// ObFileExtraInfo do not hold etag memory
+struct ObFileExtraInfo
+{
+  ObFileExtraInfo() { reset(); }
+  ~ObFileExtraInfo() { reset(); }
+  void reset()
+  {
+    last_modified_time_ms_ = 0;
+    etag_ = nullptr;
+    etag_len_ = 0;
+  }
+
+  OB_INLINE ObFileExtraInfo &operator=(const ObFileExtraInfo &other)
+  {
+    if (this != &other) {
+      last_modified_time_ms_ = other.last_modified_time_ms_;
+      etag_ = other.etag_;
+      etag_len_ = other.etag_len_;
+    }
+    return *this;
+  }
+  bool is_last_modify_time_valid() const
+  {
+    return last_modified_time_ms_ > 0;
+  }
+  bool is_etag_valid() const
+  {
+    return OB_NOT_NULL(etag_) && etag_len_ > 0;
+  }
+
+  // ObFileExtraInfo do not hold etag memory,
+  // so do not print etag content to avoid invalid memory access
+  TO_STRING_KV(K(last_modified_time_ms_), KP(etag_), K(etag_len_));
+  int64_t last_modified_time_ms_;
+  const char *etag_;
+  int64_t etag_len_;
+};
+
 class ObBaseDirEntryOperator
 {
 public:
@@ -49,10 +87,13 @@ public:
     DOF_REG_WITH_MARKER = 2,
     DOF_MAX_FLAG
   };
-  ObBaseDirEntryOperator() : op_flag_(DOF_REG), size_(0), scan_count_(INT64_MAX), marker_(nullptr) {}
+  ObBaseDirEntryOperator()
+      : op_flag_(DOF_REG), size_(0), scan_count_(INT64_MAX),
+        marker_(nullptr), dir_(nullptr), extra_info_()
+  {}
   virtual ~ObBaseDirEntryOperator() = default;
   virtual int func(const dirent *entry) = 0;
-  virtual bool need_get_file_size() const { return false; }
+  virtual bool need_get_file_meta() const { return false; }
   void set_dir_flag() {op_flag_ = DOF_DIR;}
   bool is_dir_scan() {return (op_flag_ == DOF_DIR) ? true : false;}
   void set_size(const int64_t size) { size_ = size; }
@@ -91,13 +132,18 @@ public:
     return ret;
   }
   const char *get_dir() const { return dir_; }
-  TO_STRING_KV(K_(op_flag), K_(size), K_(scan_count));
+  void set_extra_info(const ObFileExtraInfo &extra_info) { extra_info_ = extra_info; }
+  const ObFileExtraInfo &get_extra_info() const { return extra_info_; }
+  void reset_extra_info() { extra_info_.reset(); }
+
+  TO_STRING_KV(K_(op_flag), K_(size), K_(scan_count), K(extra_info_));
 private:
   int op_flag_;
   int64_t size_; // Always set 0 for directory.
   int64_t scan_count_; // Default value is INT64_MAX.
   const char *marker_;        // Default value is nullptr
   const char *dir_;
+  ObFileExtraInfo extra_info_;
 };
 
 /*ObStorageType and OB_STORAGE_TYPES_STR should be mapped one by one*/
@@ -109,6 +155,7 @@ enum ObStorageType : uint8_t
   OB_STORAGE_S3 = 3,
   OB_STORAGE_LOCAL_CACHE = 4,
   OB_STORAGE_HDFS = 5,
+  OB_STORAGE_AZBLOB = 6,
   OB_STORAGE_MAX_TYPE
 };
 

@@ -160,6 +160,7 @@ private:
   int get_old_session(uint64_t sessid, table::ObTableQueryAsyncSession *&query_session);
   int query_scan_with_init(ObIAllocator* allocator, table::ObTableQueryAsyncCtx &query_ctx, table::ObTableQuery &origin_query);
   int query_scan_without_init(table::ObTableCtx &tb_ctx);
+  int modify_ret_for_session_not_exist(const table::ObQueryOperationType &query_type);
 
 private:
   int execute_query();
@@ -183,12 +184,6 @@ private:
                             const ObArray<std::pair<ObString, bool>>& family_addfamily_flag_pairs,
                             const ObArray<ObString>& real_columns,
                             const std::pair<ObString, bool>& family_addfamily_flag);
-
-  static int check_family_existence_with_base_name(const ObString& table_name,
-                                                   const ObString& base_tablegroup_name,
-                                                   table::ObTableEntityType entity_type,
-                                                   const ObArray<std::pair<ObString, bool>>& family_clear_flags,
-                                                   std::pair<ObString, bool> &flag, bool &exist);
 
   static int process_table_info(table::ObTableSingleQueryInfo* table_info,
                       const ObArray<std::pair<ObString, bool>>& family_clear_flags,

@@ -10,8 +10,12 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX SQL
 #include <gtest/gtest.h>
+#include "sql/test_sql_utils.h"
+#define private public
 #include "sql/resolver/expr/ob_raw_expr.h"
+#undef private
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;
@@ -24,9 +28,32 @@ public:
   virtual ~TestSqlBitSet();
   virtual void SetUp();
   virtual void TearDown();
-private:
+
+  template<int64_t N, typename FlagType, bool auto_free,
+           int64_t M, typename FlagType2, bool auto_free2>
+  bool is_same_sql_bitset(const ObSqlBitSet<N, FlagType, auto_free> &bs1,
+                          const ObSqlBitSet<M, FlagType2, auto_free2> &bs2);
   DISALLOW_COPY_AND_ASSIGN(TestSqlBitSet);
 };
+
+template<int64_t N, typename FlagType, bool auto_free,
+         int64_t M, typename FlagType2, bool auto_free2>
+bool TestSqlBitSet::is_same_sql_bitset(const ObSqlBitSet<N, FlagType, auto_free> &bs1,
+                                       const ObSqlBitSet<M, FlagType2, auto_free2> &bs2)
+{
+  bool bret = true;
+  int64_t word_count = MIN(bs1.bitset_word_count(), bs2.bitset_word_count());
+  for (int64_t i = 0; bret && i < word_count; ++i) {
+    bret = bs1.get_bitset_word(i) == bs2.get_bitset_word(i);
+  }
+  for (int64_t i = word_count; bret && i < bs1.bitset_word_count(); ++i) {
+    bret = 0 == bs1.get_bitset_word(i);
+  }
+  for (int64_t i = word_count; bret && i < bs2.bitset_word_count(); ++i) {
+    bret = 0 == bs2.get_bitset_word(i);
+  }
+  return bret;
+}
 
 TEST_F(TestSqlBitSet, baisc_interfaces)
 {
@@ -140,6 +167,53 @@ TEST_F(TestSqlBitSet, add_and_del_members)
 
 //   ASSERT_EQ(6, bs.num_members());
 // }
+
+TEST_F(TestSqlBitSet, add_members_with_mask)
+{
+  ObSqlBitSet<16> bs1;
+  for (int64_t i = 0; i < 64; i += 3) {
+    ASSERT_TRUE(OB_SUCCESS == bs1.add_member(i));
+  }
+
+  ObSqlBitSet<16> bs2;
+  for (int64_t i = 0; i < 256; i += 2) {
+    ASSERT_TRUE(OB_SUCCESS == bs2.add_member(i));
+  }
+  int64_t max_bit_count = MAX(bs1.bit_count(), bs2.bit_count());
+
+  for (int64_t begin = 0; begin < max_bit_count; ++begin) {
+    for (int64_t end = begin; end < max_bit_count; ++end) {
+      ObSqlBitSet<16> bs3_fast(bs1);
+      ObSqlBitSet<16> bs3_slow(bs1);
+      ObSqlBitSet<16> tmp(bs2);
+      ASSERT_TRUE(OB_SUCCESS == bs3_fast.add_members_with_mask(bs2, begin, end));
+      ASSERT_TRUE(OB_SUCCESS == tmp.do_mask(begin, end));
+      ASSERT_TRUE(OB_SUCCESS == bs3_slow.add_members(tmp));
+      bool is_same = is_same_sql_bitset(bs3_fast, bs3_slow);
+      if (!is_same) {
+        SQL_RESV_LOG(INFO, "bitset mismatch", K(begin), K(end), K(bs3_fast), K(bs3_slow), K(tmp));
+      }
+      ASSERT_TRUE(is_same);
+    }
+  }
+  for (int64_t begin = 0; begin < max_bit_count; ++begin) {
+    for (int64_t end = begin; end < max_bit_count; ++end) {
+      ObSqlBitSet<16> bs3_fast(bs2);
+      ObSqlBitSet<16> bs3_slow(bs2);
+      ObSqlBitSet<16> tmp(bs1);
+      ASSERT_TRUE(OB_SUCCESS == tmp.add_member(max_bit_count));
+      ASSERT_TRUE(OB_SUCCESS == tmp.del_member(max_bit_count));
+      ASSERT_TRUE(OB_SUCCESS == bs3_fast.add_members_with_mask(bs1, begin, end));
+      ASSERT_TRUE(OB_SUCCESS == tmp.do_mask(begin, end));
+      ASSERT_TRUE(OB_SUCCESS == bs3_slow.add_members(tmp));
+      bool is_same = is_same_sql_bitset(bs3_fast, bs3_slow);
+      if (!is_same) {
+        SQL_RESV_LOG(INFO, "bitset mismatch", K(begin), K(end), K(bs3_fast), K(bs3_slow), K(tmp));
+      }
+      ASSERT_TRUE(is_same);
+    }
+  }
+}
 
 TEST_F(TestSqlBitSet, do_mask)
 {
@@ -355,6 +429,31 @@ TEST_F(TestSqlBitSet, to_array)
   ASSERT_EQ(111, arr.at(3));
 }
 
+TEST_F(TestSqlBitSet, big_bitset)
+{
+  ObSqlBitSet<> bs1(40000);
+  ObSqlBitSet<> bs2;
+  ObSqlBitSet<> bs3((1 << 20) - 32);
+  ObSqlBitSet<> bs4((1 << 20) - 31);
+  ObSqlBitSet<> bs5;
+  EXPECT_GT(bs1.desc_.cap_, 0);
+  EXPECT_GT(bs2.desc_.cap_, 0);
+  EXPECT_TRUE(bs1.is_valid());
+  EXPECT_TRUE(bs2.is_valid());
+  EXPECT_TRUE(bs3.is_valid());
+  EXPECT_EQ(INT16_MAX, bs3.desc_.cap_);
+  EXPECT_FALSE(bs4.is_valid());
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bs1.add_member(1 << 19));
+  EXPECT_EQ(OB_SUCCESS, bs1.add_member((1 << 19) - 1));
+  EXPECT_EQ(INT16_MAX - 1, bs1.desc_.cap_);
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bs2.add_member(1 << 19));
+  EXPECT_EQ(OB_SUCCESS, bs2.add_member((1 << 19) - 1));
+  EXPECT_EQ(INT16_MAX - 1, bs2.desc_.cap_);
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bs5.init_mask((1 << 20) - 32));
+  EXPECT_EQ(OB_SUCCESS, bs5.init_mask((1 << 20) - 33));
+  EXPECT_EQ(INT16_MAX, bs5.desc_.cap_);
+}
+
 TestSqlBitSet::TestSqlBitSet() {}
 TestSqlBitSet::~TestSqlBitSet() {}
 void TestSqlBitSet::SetUp() {}
@@ -366,6 +465,9 @@ int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   int ret = 0;
+  system("rm -rf test_sql_bitset.log*");
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_sql_bitset.log", true);
   ContextParam param;
   param.set_mem_attr(1001, "SqlBitset", ObCtxIds::WORK_AREA)
     .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);

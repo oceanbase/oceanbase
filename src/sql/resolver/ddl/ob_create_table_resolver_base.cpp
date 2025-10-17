@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver_base.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -226,6 +227,7 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
           OB_FAIL(table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }
+      storage_cache_policy_.reset();
     }
 
     if (OB_SUCC(ret) && table_schema.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
@@ -280,13 +282,15 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
       table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     }
     if (OB_SUCC(ret)) {
-      if (table_schema.get_row_store_type() != CS_ENCODING_ROW_STORE
-          && semistruct_encoding_type_.is_enable_semistruct_encoding()) {
+      if (semistruct_encoding_type_.is_enable_semistruct_encoding() && table_schema.get_row_store_type() != CS_ENCODING_ROW_STORE) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("semistruct_encoding is not support if cs encoding is not set", K(ret), K(table_schema.get_row_store_type()), K(semistruct_encoding_type_));
+        LOG_WARN("semistruct_encoding is not support if cs encoding is not set", K(ret),
+                                                                                  K(table_schema.get_row_store_type()),
+                                                                                  K(semistruct_encoding_type_));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding is not support if cs encoding is not set");
-      } else {
-        table_schema.set_semistruct_encoding_type(semistruct_encoding_type_);
+      } else if (OB_FALSE_IT(table_schema.set_semistruct_encoding_type(semistruct_encoding_type_))) {
+      } else if (OB_FAIL(table_schema.set_semistruct_properties(semistruct_properties_))) {
+        LOG_WARN("failed to set semistruct properties", K(ret));
       }
     }
   }
@@ -394,7 +398,13 @@ int ObCreateTableResolverBase::resolve_column_group_helper(const ParseNode *cg_n
         LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
       } else if (ObTableStoreFormat::is_with_column(table_store_type)) {
         /* for default is column store, must add each column group*/
-        if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
+        if (OB_FAIL(ObLicenseUtils::check_olap_allowed(tenant_id))) {
+          ret = OB_LICENSE_SCOPE_EXCEEDED;
+          LOG_WARN("default column group is not allowed", KR(ret));
+          LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                         "Default column group is not supported due to the absence of the OLAP module. Please check "
+                         "'default_table_store_format' config");
+        } else if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
           LOG_WARN("fail to add each column group", K(ret));
         }
       }
@@ -470,6 +480,15 @@ int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGua
       table_organization_ =
         (0 == ObString::make_string("HEAP").case_compare(ptr)) ?
           ObTableOrganizationType::OB_HEAP_ORGANIZATION : ObTableOrganizationType::OB_INDEX_ORGANIZATION;
+
+      if (ObTableOrganizationType::OB_HEAP_ORGANIZATION == table_organization_ &&
+          OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+        ret = OB_LICENSE_SCOPE_EXCEEDED;
+        LOG_WARN("default heap organization is not allowed", KR(ret));
+        LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                       "Default heap organization is not supported due to the absence of the OLAP module. Please check "
+                       "'default_table_store_format' config");
+      }
     }
   }
 

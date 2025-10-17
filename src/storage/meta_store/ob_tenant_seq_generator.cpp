@@ -133,7 +133,7 @@ int ObTenantSeqGenerator::get_tmp_file_seq(uint64_t &seq)
   while (OB_SUCC(ret) &&
       (seq = ATOMIC_AAF(&curr_seqs_.tmp_file_seq_, 1)) > ATOMIC_LOAD(&preallocated_seqs_.tmp_file_seq_)) {
     if (retry_times < MAX_RETRY_TIME) {
-      usleep(TRY_PREALLOACTE_INTERVAL);
+      ob_usleep(TRY_PREALLOACTE_INTERVAL);
       retry_times++;
     } else {
       ret = OB_ERR_UNEXPECTED;

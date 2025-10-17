@@ -20,6 +20,7 @@
 #include "storage/lob/ob_lob_manager.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/expr/ob_json_param_type.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -758,6 +759,27 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
                                                                   HAS_FLAG(parse_flag, ObJsonParser::JSN_RELAXED_FLAG),
                                                                   format_json)))) {
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
+    }
+  } else if (val_type == ObCollectionSQLType) {
+    ObString val_str = json_datum->get_string();
+    ObString res_str;
+    void *buf = NULL;
+    if (OB_FAIL(ObArrayExprUtils::convert_to_string(*allocator, ctx, json_arg->obj_meta_.get_subschema_id(),
+                                                    val_str, res_str))) {
+      LOG_WARN("failed to convert collection to string", K(ret), K(val_type));
+    } else if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonString)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate json string", K(ret));
+    } else {
+      ObIJsonBase* json_node = NULL;
+      json_node = (ObJsonString*)new(buf)ObJsonString(res_str.ptr(), res_str.length());
+      if (to_bin) {
+        if (OB_FAIL(ObJsonBaseFactory::transform(allocator, json_node, ObJsonInType::JSON_BIN, j_base))) {
+          LOG_WARN("failed: json tree to bin", K(ret));
+        }
+      } else {
+        j_base = json_node;
+      }
     }
   } else {
     ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();
@@ -2665,6 +2687,50 @@ int ObJsonExprHelper::get_json_max_depth_config()
     }
   }
   return json_max_depth;
+}
+
+bool ObJsonExprHelper::is_json_special_same_as_expr(ObItemType type, int64_t index)
+{
+  bool is_special = false;
+  if ((T_FUN_SYS_JSON_VALUE == type &&
+        (JSN_VAL_EMPTY == index || JSN_VAL_ERROR == index)) ||
+      (T_FUN_SYS_JSON_QUERY == type &&
+        (JSN_QUE_EMPTY == index || JSN_QUE_ERROR == index || JSN_QUE_MISMATCH == index))) {
+    is_special = true;
+  }
+  return is_special;
+}
+
+bool ObJsonExprHelper::check_json_inner_same_as(const ObSysFunRawExpr *expr1,
+                                                const ObSysFunRawExpr *expr2,
+                                                int64_t index,
+                                                ObExprEqualCheckContext *check_context)
+{
+  bool bool_ret = true;
+  if (!expr1->get_param_expr(index)->same_as(*expr2->get_param_expr(index), check_context)) {
+    if (T_INT == expr1->get_param_expr(index)->get_expr_type()
+        && T_INT == expr2->get_param_expr(index)->get_expr_type()) {
+      const ObConstRawExpr* val1 = static_cast<const ObConstRawExpr*>(expr1->get_param_expr(index));
+      const ObConstRawExpr* val2 = static_cast<const ObConstRawExpr*>(expr2->get_param_expr(index));
+      int64_t int_value1 = val1->get_value().get_int();
+      int64_t int_value2 = val2->get_value().get_int();
+      if (T_FUN_SYS_JSON_VALUE == expr1->get_expr_type()) {
+        if (!((int_value1 == 1 && int_value2 == 3) || (int_value1 == 3 && int_value2 == 1))) {
+          bool_ret = false;
+        }
+      } else if (T_FUN_SYS_JSON_QUERY == expr1->get_expr_type()) {
+        if ((JSN_QUE_ERROR == index || JSN_QUE_EMPTY == index) && !((int_value1 == 1 && int_value2 == 5) || (int_value1 == 5 && int_value2 == 1))) {
+          bool_ret = false;
+        } else if (JSN_QUE_MISMATCH == index && !((int_value1 == 1 && int_value2 == 2) || (int_value1 == 2 && int_value2 == 1)))   {
+          bool_ret = false;
+        }
+      }
+    } else {
+      bool_ret = false;
+    }
+  }
+
+  return bool_ret;
 }
 
 /********** ObJsonExprHelper for json partial update  ****************/

@@ -168,9 +168,9 @@ Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |LIMIT               |           |1       |8           |
-|1 |└─MERGE GROUP BY    |           |1       |8           |
-|2 |  └─TABLE RANGE SCAN|t1(idx_b_c)|1       |7           |
+|0 |LIMIT               |           |1       |5           |
+|1 |└─MERGE GROUP BY    |           |1       |5           |
+|2 |  └─TABLE RANGE SCAN|t1(idx_b_c)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -253,9 +253,9 @@ Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |LIMIT               |           |1       |8           |
-|1 |└─HASH DISTINCT     |           |1       |8           |
-|2 |  └─TABLE RANGE SCAN|t1(idx_b_c)|1       |7           |
+|0 |LIMIT               |           |1       |5           |
+|1 |└─HASH DISTINCT     |           |1       |5           |
+|2 |  └─TABLE RANGE SCAN|t1(idx_b_c)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -312,7 +312,7 @@ Query Plan
 =========================================================
 |ID|OPERATOR        |NAME         |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b_c_a)|1       |12          |
+|0 |TABLE RANGE SCAN|t1(idx_b_c_a)|1       |9           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -368,7 +368,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR        |NAME     |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(idx_b)|1       |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -393,17 +393,17 @@ Outputs & filters:
       range_cond([t1.b = 100], [t1.c = 200])
 explain select b, c from t1 where b = 100 or c = 200;
 Query Plan
-======================================================
-|ID|OPERATOR       |NAME       |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_b_c)|1       |3           |
-======================================================
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |3           |
+===============================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.b], [t1.c]), filter([t1.b = 100 OR t1.c = 200]), rowset=16
       access([t1.b], [t1.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.b], [t1.c], [t1.pk1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+      range_key([t1.pk1]), range(MIN ; MAX)always true
 explain select b, c from t1 where b + c = 100;
 Query Plan
 ===============================================
@@ -465,7 +465,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR        |NAME     |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b)|1       |16          |
+|0 |TABLE RANGE SCAN|t1(idx_b)|1       |13          |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -521,7 +521,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR        |NAME     |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(idx_b)|1       |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -577,7 +577,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR        |NAME     |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(idx_b)|1       |5           |
 =====================================================
 Outputs & filters:
 -------------------------------------
@@ -605,7 +605,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR        |NAME       |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b_c)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(idx_b_c)|1       |5           |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -695,7 +695,7 @@ Query Plan
 =========================================================
 |ID|OPERATOR        |NAME         |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b_c_a)|1       |7           |
+|0 |TABLE RANGE SCAN|t1(idx_b_c_a)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -983,7 +983,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |2       |5           |
+|0 |MERGE UNION DISTINCT|             |1       |5           |
 |1 |├─TABLE RANGE SCAN  |t1(idx_b_c_a)|1       |3           |
 |2 |└─TABLE RANGE SCAN  |t2(idx_x_y_z)|1       |3           |
 =============================================================
@@ -1005,7 +1005,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |2       |5           |
+|0 |MERGE UNION DISTINCT|             |1       |5           |
 |1 |├─TABLE RANGE SCAN  |t1(idx_b_c_a)|1       |3           |
 |2 |└─TABLE RANGE SCAN  |t2(idx_x_y_z)|1       |3           |
 =============================================================
@@ -1127,9 +1127,9 @@ Query Plan
 ==================================================================
 |ID|OPERATOR           |NAME               |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |MERGE DISTINCT     |                   |1       |8           |
-|1 |└─SORT             |                   |1       |8           |
-|2 |  └─TABLE FULL SCAN|t1(idx_b_c,Reverse)|1       |7           |
+|0 |MERGE DISTINCT     |                   |1       |5           |
+|1 |└─SORT             |                   |1       |5           |
+|2 |  └─TABLE FULL SCAN|t1(idx_b_c,Reverse)|1       |5           |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -1595,38 +1595,38 @@ Outputs & filters:
       range_key([t4.a1], [t4.a2], [t4.b], [t4.c], [t4.__pk_increment]), range(MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX)always true
 explain select v1, pk from t5 where pk = 100 and v1 = 100 order by v1 desc;
 Query Plan
-===============================================
-|ID|OPERATOR |NAME      |EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE GET|t5(idx_v1)|1       |5           |
-===============================================
+=========================================
+|ID|OPERATOR |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------
+|0 |TABLE GET|t5  |1       |5           |
+=========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t5.v1], [t5.pk]), filter(nil), rowset=16
+  0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 100]), rowset=16
       access([t5.pk], [t5.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t5.v1], [t5.pk]), range[100,100 ; 100,100], 
-      range_cond([t5.pk = 100], [t5.v1 = 100])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.pk]), range[100 ; 100], 
+      range_cond([t5.pk = 100])
 explain select v1, pk from t5 where pk = 100 and v1 = 200 order by v1 desc;
 Query Plan
-===============================================
-|ID|OPERATOR |NAME      |EST.ROWS|EST.TIME(us)|
------------------------------------------------
-|0 |TABLE GET|t5(idx_v1)|1       |5           |
-===============================================
+=========================================
+|ID|OPERATOR |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------
+|0 |TABLE GET|t5  |1       |5           |
+=========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t5.v1], [t5.pk]), filter(nil), rowset=16
+  0 - output([t5.v1], [t5.pk]), filter([t5.v1 = 200]), rowset=16
       access([t5.pk], [t5.v1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t5.v1], [t5.pk]), range[200,100 ; 200,100], 
-      range_cond([t5.pk = 100], [t5.v1 = 200])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.pk]), range[100 ; 100], 
+      range_cond([t5.pk = 100])
 explain select a from t6 where b = 1 order by c desc limit 9;
 Query Plan
 ===============================================================
 |ID|OPERATOR        |NAME               |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |TABLE RANGE SCAN|t6(idx_b_c,Reverse)|1       |7           |
+|0 |TABLE RANGE SCAN|t6(idx_b_c,Reverse)|1       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1640,7 +1640,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR        |NAME               |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |TABLE RANGE SCAN|t6(idx_b_c,Reverse)|1       |7           |
+|0 |TABLE RANGE SCAN|t6(idx_b_c,Reverse)|1       |5           |
 ===============================================================
 Outputs & filters:
 -------------------------------------
@@ -1724,7 +1724,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR        |NAME       |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =======================================================
 Outputs & filters:
 -------------------------------------
@@ -1783,8 +1783,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT              |           |1       |7           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |SORT              |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1831,8 +1831,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT              |           |1       |7           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |SORT              |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -1909,8 +1909,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR         |NAME       |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT             |           |1       |8           |
-|1 |└─TABLE FULL SCAN|t6(idx_b_c)|1       |8           |
+|0 |SORT             |           |1       |5           |
+|1 |└─TABLE FULL SCAN|t6(idx_b_c)|1       |5           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -1955,9 +1955,9 @@ Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |LIMIT               |           |1       |7           |
-|1 |└─MERGE GROUP BY    |           |1       |7           |
-|2 |  └─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |LIMIT               |           |1       |5           |
+|1 |└─MERGE GROUP BY    |           |1       |5           |
+|2 |  └─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1975,9 +1975,9 @@ Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |LIMIT               |           |1       |7           |
-|1 |└─MERGE GROUP BY    |           |1       |7           |
-|2 |  └─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |LIMIT               |           |1       |5           |
+|1 |└─MERGE GROUP BY    |           |1       |5           |
+|2 |  └─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -2080,8 +2080,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |MERGE GROUP BY    |           |1       |7           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |MERGE GROUP BY    |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2148,8 +2148,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |HASH DISTINCT     |           |1       |8           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |HASH DISTINCT     |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2199,8 +2199,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |HASH GROUP BY     |           |1       |8           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |HASH GROUP BY     |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2286,8 +2286,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR         |NAME       |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |HASH GROUP BY    |           |1       |8           |
-|1 |└─TABLE FULL SCAN|t6(idx_b_c)|1       |8           |
+|0 |HASH GROUP BY    |           |1       |5           |
+|1 |└─TABLE FULL SCAN|t6(idx_b_c)|1       |5           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -2460,8 +2460,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |MERGE DISTINCT    |           |1       |7           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |MERGE DISTINCT    |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2528,8 +2528,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |HASH DISTINCT     |           |1       |8           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |HASH DISTINCT     |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2579,8 +2579,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR          |NAME       |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |HASH DISTINCT     |           |1       |8           |
-|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|0 |HASH DISTINCT     |           |1       |5           |
+|1 |└─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 =========================================================
 Outputs & filters:
 -------------------------------------
@@ -2663,8 +2663,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR         |NAME       |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |HASH DISTINCT    |           |1       |8           |
-|1 |└─TABLE FULL SCAN|t6(idx_b_c)|1       |8           |
+|0 |HASH DISTINCT    |           |1       |5           |
+|1 |└─TABLE FULL SCAN|t6(idx_b_c)|1       |5           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -2679,8 +2679,8 @@ Query Plan
 ==========================================================
 |ID|OPERATOR         |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |HASH DISTINCT    |             |1       |8           |
-|1 |└─TABLE FULL SCAN|t6(idx_b_a_c)|1       |8           |
+|0 |HASH DISTINCT    |             |1       |5           |
+|1 |└─TABLE FULL SCAN|t6(idx_b_a_c)|1       |5           |
 ==========================================================
 Outputs & filters:
 -------------------------------------
@@ -2814,7 +2814,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR            |NAME          |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|              |2       |10          |
+|0 |MERGE UNION DISTINCT|              |2       |9           |
 |1 |├─TABLE FULL SCAN   |t6(idx_b_c)   |1       |7           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2)|1       |3           |
 ==============================================================
@@ -2875,8 +2875,8 @@ Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |MERGE UNION DISTINCT|           |2       |10          |
-|1 |├─TABLE RANGE SCAN  |t6(idx_b_c)|1       |7           |
+|0 |MERGE UNION DISTINCT|           |2       |7           |
+|1 |├─TABLE RANGE SCAN  |t6(idx_b_c)|1       |5           |
 |2 |└─TABLE FULL SCAN   |tmp        |1       |3           |
 ===========================================================
 Outputs & filters:
@@ -2962,10 +2962,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |MERGE UNION DISTINCT|           |2       |10          |
+|0 |MERGE UNION DISTINCT|           |2       |7           |
 |1 |├─TABLE FULL SCAN   |tmp        |1       |3           |
-|2 |└─SORT              |           |1       |7           |
-|3 |  └─TABLE RANGE SCAN|t6(idx_b_c)|1       |7           |
+|2 |└─SORT              |           |1       |5           |
+|3 |  └─TABLE RANGE SCAN|t6(idx_b_c)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -3028,10 +3028,10 @@ Query Plan
 ==============================================================
 |ID|OPERATOR            |NAME          |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|              |2       |10          |
+|0 |MERGE UNION DISTINCT|              |2       |7           |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2)|1       |3           |
-|2 |└─SORT              |              |1       |7           |
-|3 |  └─TABLE RANGE SCAN|t6(idx_b_c)   |1       |7           |
+|2 |└─SORT              |              |1       |5           |
+|3 |  └─TABLE RANGE SCAN|t6(idx_b_c)   |1       |5           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -3138,10 +3138,10 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |10          |
+|0 |MERGE UNION DISTINCT|                 |2       |7           |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
-|2 |└─SORT              |                 |1       |8           |
-|3 |  └─TABLE FULL SCAN |t6(idx_b_c)      |1       |8           |
+|2 |└─SORT              |                 |1       |5           |
+|3 |  └─TABLE FULL SCAN |t6(idx_b_c)      |1       |5           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -3161,10 +3161,10 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |2       |10          |
+|0 |MERGE UNION DISTINCT|                 |2       |7           |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
-|2 |└─SORT              |                 |1       |8           |
-|3 |  └─TABLE FULL SCAN |t6(idx_b_a_c)    |1       |8           |
+|2 |└─SORT              |                 |1       |5           |
+|3 |  └─TABLE FULL SCAN |t6(idx_b_a_c)    |1       |5           |
 =================================================================
 Outputs & filters:
 -------------------------------------
@@ -3228,7 +3228,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR        |NAME  |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |TABLE RANGE SCAN|t7(k1)|1       |8           |
+|0 |TABLE RANGE SCAN|t7(k1)|1       |5           |
 ==================================================
 Outputs & filters:
 -------------------------------------
@@ -3353,8 +3353,8 @@ Query Plan
 ================================================================
 |ID|OPERATOR            |NAME            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SORT                |                |1       |4           |
-|1 |└─WINDOW FUNCTION   |                |1       |4           |
+|0 |SORT                |                |1       |3           |
+|1 |└─WINDOW FUNCTION   |                |1       |3           |
 |2 |  └─TABLE RANGE SCAN|t9(idx_c2_c3_c5)|1       |3           |
 ================================================================
 Outputs & filters:
@@ -3443,8 +3443,8 @@ Query Plan
 ================================================================
 |ID|OPERATOR            |NAME            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SORT                |                |1       |4           |
-|1 |└─WINDOW FUNCTION   |                |1       |4           |
+|0 |SORT                |                |1       |3           |
+|1 |└─WINDOW FUNCTION   |                |1       |3           |
 |2 |  └─TABLE RANGE SCAN|t9(idx_c2_c3_c5)|1       |3           |
 ================================================================
 Outputs & filters:
@@ -3531,8 +3531,8 @@ Query Plan
 ================================================================
 |ID|OPERATOR            |NAME            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |SORT                |                |1       |4           |
-|1 |└─WINDOW FUNCTION   |                |1       |4           |
+|0 |SORT                |                |1       |3           |
+|1 |└─WINDOW FUNCTION   |                |1       |3           |
 |2 |  └─TABLE RANGE SCAN|t9(idx_c2_c3_c5)|1       |3           |
 ================================================================
 Outputs & filters:
@@ -3770,9 +3770,8 @@ Optimization Info:
 -------------------------------------
   t10:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -3826,9 +3825,8 @@ Optimization Info:
 -------------------------------------
   t10:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -3881,9 +3879,8 @@ Optimization Info:
 -------------------------------------
   t10:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -3910,7 +3907,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t10.c2 < 0], [t10.c2 > 0], [t10.c4 = 2]), rowset=16
+  0 - output([1]), filter([t10.c4 = 2], [t10.c2 < 0], [t10.c2 > 0]), rowset=16
       access([t10.c2], [t10.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t10.pk]), range(MIN ; MAX)always true
@@ -3937,7 +3934,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -3964,7 +3960,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c4 = 2]), rowset=16
+  0 - output([1]), filter([t10.c4 = 2], [t10.c3 < 0], [t10.c3 > 0]), rowset=16
       access([t10.c3], [t10.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t10.pk]), range(MIN ; MAX)always true
@@ -3991,7 +3987,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4043,9 +4038,8 @@ Optimization Info:
 -------------------------------------
   t10:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4099,9 +4093,8 @@ Optimization Info:
 -------------------------------------
   t10:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4131,7 +4124,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=16
       sort_keys([t10.c1, ASC])
-  1 - output([t10.c1]), filter([t10.c2 < 0], [t10.c2 > 0], [t10.c4 = 2]), rowset=16
+  1 - output([t10.c1]), filter([t10.c4 = 2], [t10.c2 < 0], [t10.c2 > 0]), rowset=16
       access([t10.c2], [t10.c4], [t10.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t10.pk]), range(MIN ; MAX)always true
@@ -4158,7 +4151,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4188,7 +4180,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=16
       sort_keys([t10.c2, ASC])
-  1 - output([t10.c2]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c4 = 2]), rowset=16
+  1 - output([t10.c2]), filter([t10.c4 = 2], [t10.c3 < 0], [t10.c3 > 0]), rowset=16
       access([t10.c3], [t10.c4], [t10.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t10.pk]), range(MIN ; MAX)always true
@@ -4215,7 +4207,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4245,7 +4236,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=16
       sort_keys([t10.c3, ASC])
-  1 - output([t10.c3]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c4 = 2]), rowset=16
+  1 - output([t10.c3]), filter([t10.c4 = 2], [t10.c3 < 0], [t10.c3 > 0]), rowset=16
       access([t10.c3], [t10.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t10.pk]), range(MIN ; MAX)always true
@@ -4272,7 +4263,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4325,9 +4315,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4378,9 +4367,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4431,9 +4419,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4486,9 +4473,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4544,9 +4530,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4599,9 +4584,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4656,9 +4640,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4710,9 +4693,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4766,9 +4748,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4825,9 +4806,8 @@ Optimization Info:
 -------------------------------------
   t11:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4880,9 +4860,8 @@ Optimization Info:
 -------------------------------------
   t12:
       table_rows:1
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
+      physical_range_rows:0
+      logical_range_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4934,7 +4913,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -4952,17 +4930,18 @@ Optimization Info:
       Degree of Parallelisim is 1 because of table property
 explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0 and c3 = 1;
 Query Plan
-================================================
-|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
-------------------------------------------------
-|0 |TABLE RANGE SCAN|t12 |0       |3           |
-================================================
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t12(t12i2)|0       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
-      access([t12.c2], [t12.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
-      range_key([t12.c1], [t12.c2]), range(MAX,MAX ; MIN,MIN)always false
+  0 - output([1]), filter([t12.c2 < 0], [t12.c2 > 0]), rowset=16
+      access([t12.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t12.c3], [t12.c1], [t12.c2]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t12.c3 = 1])
 Used Hint:
 -------------------------------------
   /*+
@@ -4976,7 +4955,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      INDEX(@"SEL$1" "hualong"."t12"@"SEL$1" "primary")
+      INDEX(@"SEL$1" "hualong"."t12"@"SEL$1" "t12i2")
       OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
@@ -4986,7 +4965,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP
@@ -5013,7 +4991,7 @@ Query Plan
 ================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
+  0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c3 = 1], [t12.c2 < 0], [t12.c2 > 0]), rowset=16
       access([t12.c1], [t12.c2], [t12.c3], [t12.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t12.c1], [t12.c2]), range(MAX,MAX ; MIN,MIN)always false
@@ -5040,7 +5018,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:0
       table_dop:1
       dop_method:Table DOP

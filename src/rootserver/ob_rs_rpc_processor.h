@@ -36,7 +36,9 @@ inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PARALLEL_SET_COMMENT == pcode
          || obrpc::OB_PARALLEL_CREATE_INDEX == pcode
          || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode
-         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode;
+         || obrpc::OB_PARALLEL_DROP_TABLE == pcode
+         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode
+         || obrpc::OB_PARALLEL_HTABLE_DDL == pcode;
 }
 
 inline bool need_ddl_lock(const obrpc::ObRpcPacketCode pcode)
@@ -73,6 +75,7 @@ inline bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const 
   } else if (obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY == pcode
              || obrpc::OB_SCHEMA_REVISE == pcode // for upgrade
              || obrpc::OB_UPGRADE_TABLE_SCHEMA == pcode
+             || obrpc::OB_BATCH_UPGRADE_TABLE_SCHEMA == pcode
              || ((obrpc::OB_MODIFY_TENANT == pcode
                   || obrpc::OB_MODIFY_SYSVAR == pcode
                   || obrpc::OB_DO_KEYSTORE_DDL == pcode
@@ -237,6 +240,14 @@ protected:
         ret = OB_OP_NOT_ALLOW;
         RS_LOG(WARN, "ddl operation not allow, can not process this request", K(ret), K(pcode));
       } else {
+        int64_t consumer_group_id = share::OBCG_DEFAULT;
+        if (is_ddl_like_ && OB_NOT_NULL(ddl_arg_)) {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ddl_arg_->exec_tenant_id_));
+          if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
+            consumer_group_id = share::OBCG_DDL;
+          }
+        }
+        CONSUMER_GROUP_ID_GUARD(consumer_group_id);
         if (is_ddl_like_) {
           if (OB_ISNULL(ddl_arg_)) {
             ret = OB_MISS_ARGUMENT;
@@ -308,6 +319,7 @@ protected:
           int64_t start_ts = ObTimeUtility::current_time();
           bool with_ddl_lock = false;
           if (is_ddl_like_ && need_ddl_lock(pcode)) {
+            RS_LOG(INFO, "[DDL] try to get ddl lock");
             if (is_parallel_ddl(pcode)) {
               if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
                 RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
@@ -319,6 +331,7 @@ protected:
             }
             if (OB_SUCC(ret)) {
               with_ddl_lock = true;
+              RS_LOG(INFO, "[DDL] get ddl lock", "cost", ObTimeUtility::current_time() - start_ts);
             }
           }
           if (OB_FAIL(ret)) {
@@ -502,6 +515,7 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_EXCHANGE_PARTITION, ObRpcExchangePartitionP, exchange_partition(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_SPLIT_GLOBAL_INDEX_TABLET, ObSplitGlobalIndexTabletTaskP, split_global_index_tablet(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_DROP_TABLE, ObRpcParallelDropTableP, parallel_drop_table(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));
@@ -600,6 +614,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_ROUTINE_WITH_RES, ObRpcAlterRoutineW
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_UDT, ObRpcCreateUDTP, create_udt(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_UDT_WITH_RES, ObRpcCreateUDTWithResP, create_udt_with_res(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_UDT, ObRpcDropUDTP, drop_udt(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_UDT_WITH_RES, ObRpcAlterUDTWithResP, alter_udt_with_res(arg_, result_));
 
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_CREATE_SYNONYM, ObRpcCreateSynonymP, create_synonym(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_DROP_SYNONYM, ObRpcDropSynonymP, drop_synonym(arg_));
@@ -695,6 +710,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_SCHEMA, ObBroadcastSchemaP, broadcas
 // only for upgrade
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_RECYCLE_SCHEMA_VERSIONS, ObGetRecycleSchemaVersionsP, get_recycle_schema_versions(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPGRADE_TABLE_SCHEMA, ObRpcUpgradeTableSchemaP, upgrade_table_schema(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_BATCH_UPGRADE_TABLE_SCHEMA, ObRpcBatchUpgradeTableSchemaP, batch_upgrade_table_schema(arg_));
 //label security ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_LABEL_SE_POLICY_DDL, ObRpcHandleLabelSePolicyDDLP, handle_label_se_policy_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_LABEL_SE_COMPONENT_DDL, ObRpcHandleLabelSeComponentDDLP, handle_label_se_component_ddl(arg_));
@@ -742,6 +758,9 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_SYNC_REWRITE_RULES, ObRpcAdminSyncRewrit
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_POLICY_DDL, ObRpcHandleRlsPolicyDDLP, handle_rls_policy_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_GROUP_DDL, ObRpcHandleRlsGroupDDLP, handle_rls_group_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_CONTEXT_DDL, ObRpcHandleRlsContextDDLP, handle_rls_context_ddl(arg_));
+// row level security ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_CCL_RULE, ObRpcCreateCCLRuleDDLP, create_ccl_rule_ddl(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_CCL_RULE, ObRpcDropCCLRuleDDLP, drop_ccl_rule_ddl(arg_));
 #ifdef OB_BUILD_TDE_SECURITY
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_ROOT_KEY, ObGetRootKeyP, handle_get_root_key(arg_, result_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RELOAD_MASTER_KEY, ObReloadMasterKeyP, reload_master_key(arg_, result_));
@@ -760,6 +779,12 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDr
 // external resource ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_EXTERNAL_RESOURCE, ObRpcCreateExternalResourceP, create_external_resource(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_EXTERNAL_RESOURCE, ObRpcDropExternalResourceP, drop_external_resource(arg_, result_));
+// htable ddl
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTableDDLP, parallel_htable_ddl(arg_, result_));
+
+// ai endpoint ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_AI_MODEL, ObRpcCreateAiModelP, create_ai_model(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_MODEL, ObRpcDropAiModelP, drop_ai_model(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

@@ -391,6 +391,11 @@ int ObTxCtxTable::release_ref_()
   return ret;
 }
 
+void ObTxData::dec_ref()
+{
+  return;
+}
+
 } // namespace storage
 
 namespace transaction

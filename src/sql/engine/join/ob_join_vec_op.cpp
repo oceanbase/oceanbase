@@ -23,15 +23,6 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObJoinVecSpec, ObOpSpec),
                     join_type_, other_join_conds_);
 
-#define VEC_FORMAT_SWITCH_CASE(VEC_FORMAT, vec_ptr, brs)          \
-  case VEC_FORMAT: {                                              \
-    for (int64_t i = 0; i < brs.size_; ++i) {                     \
-        if (vec_ptr->is_null(i) || !vec_ptr->get_bool(i)) {       \
-          brs.set_skip(i);                                        \
-        }                                                         \
-      }                                                           \
-    break;                                                        \
-  }
 
 int ObJoinVecOp::inner_rescan()
 {
@@ -103,21 +94,38 @@ int ObJoinVecOp::batch_calc_other_conds(ObBatchRows &brs)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
+  bool all_skip = false;
   ARRAY_FOREACH(conds, i) {
-    if (OB_FAIL(conds.at(i)->eval_vector(eval_ctx_, brs))) {
+    if (all_skip) {
+      break;
+    } else if (OB_FAIL(conds.at(i)->eval_vector(eval_ctx_, brs))) {
       LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
     } else {
       VectorHeader &vec_header = conds.at(i)->get_vector_header(eval_ctx_);
       common::ObIVector *vec = conds.at(i)->get_vector(eval_ctx_);
-      switch(vec_header.format_) {
-        VEC_FORMAT_SWITCH_CASE(VEC_FIXED, static_cast<ObFixedLengthBase *>(vec), brs);
-        VEC_FORMAT_SWITCH_CASE(VEC_UNIFORM, static_cast<ObUniformFormat<false> *>(vec), brs);
-        VEC_FORMAT_SWITCH_CASE(VEC_UNIFORM_CONST, static_cast<ObUniformFormat<true> *>(vec), brs);
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", K(ret), K(vec_header.format_));
+      if (vec_header.format_ == VEC_FIXED) {
+        if (OB_UNLIKELY(static_cast<ObFixedLengthBase *>(vec)->get_length() != sizeof(int64_t))) {
+          ob_abort();
+        }
+        ObFixedLengthFormat<int64_t> *vec_ptr = static_cast<ObFixedLengthFormat<int64_t> *>(vec);
+        if (vec_ptr->has_null()) {
+          brs.merge_skip(vec_ptr->get_nulls(), brs.size_);
+          brs.all_rows_active_ = false;
+        }
+        brs.apply_filter(reinterpret_cast<const int64_t *>(vec_ptr->get_data()));
+      } else if (vec_header.format_ == VEC_UNIFORM_CONST) {
+        if (vec->is_null(0) || !vec->get_bool(0)) {
+          brs.skip_->set_all(brs.size_);
+          brs.all_rows_active_ = false;
+        }
+      } else {
+        for (int64_t i = 0; i < brs.size_; ++i) {
+          if (vec->is_null(i) || !vec->get_bool(i)) {
+            brs.set_skip(i);
+          }
+        }
       }
-      }
+      all_skip = brs.size_ == brs.skip_->accumulate_bit_cnt(brs.size_);
     }
   }
   return ret;

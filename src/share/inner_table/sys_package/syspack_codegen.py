@@ -260,7 +260,12 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "dbms_ddl", "dbms_ddl.sql", "dbms_ddl_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "utl_tcp", "utl_tcp.sql", "utl_tcp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "utl_smtp", "utl_smtp.sql", "utl_smtp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "utl_http", "utl_http.sql", "utl_http_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_partition", "dbms_partition.sql", "dbms_partition_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_xprofile", "dbms_xprofile.sql", "dbms_xprofile_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_balance", "dbms_balance.sql", "dbms_balance_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_data_dict", "dbms_data_dict.sql", "dbms_data_dict_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_plsql_code_coverage", "dbms_plsql_code_coverage.sql", "dbms_plsql_code_coverage_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),
@@ -280,9 +285,15 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_external_table", "dbms_external_table_mysql.sql", "dbms_external_table_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "external_table_alert_log", "external_table_alert_log.sql", None),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_vector", "dbms_vector_mysql.sql", "dbms_vector_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_hybrid_search", "dbms_hybrid_vector_mysql.sql", "dbms_hybrid_vector_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_partition", "dbms_partition_mysql.sql", "dbms_partition_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_java", "dbms_java_mysql.sql", "dbms_java_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_ai_service", "dbms_ai_service_mysql.sql", "dbms_ai_service_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_xprofile", "dbms_xprofile_mysql.sql", "dbms_xprofile_mysql_body.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_data_dict", "dbms_data_dict_mysql.sql", "dbms_data_dict_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_python", "dbms_python_mysql.sql", "dbms_python_body_mysql.sql"),
     # Oracle Special
     SysPackConfig(SysPackGroup.ORACLE_SPECIAL, "__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql", orc_build_req=True),
     # MySQL Special

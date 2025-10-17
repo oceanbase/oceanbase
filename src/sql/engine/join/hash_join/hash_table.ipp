@@ -191,7 +191,10 @@ template <typename Bucket, typename Prober>
 int HashTable<Bucket, Prober>::probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info)
 {
   int ret = OB_SUCCESS;
-  if (!std::is_same<Bucket, GenericBucket>::value && !std::is_same<Bucket, RobinBucket>::value) {
+  if (std::is_same<Bucket, NormalizedBucket<Int64Key>>::value
+      || std::is_same<Bucket, NormalizedBucket<Int128Key>>::value
+      || std::is_same<Bucket, NormalizedRobinBucket<Int64Key>>::value
+      || std::is_same<Bucket, NormalizedRobinBucket<Int128Key>>::value) {
     if (OB_FAIL(ctx.probe_batch_rows_->set_key_data(ctx.probe_keys_, ctx.eval_ctx_, output_info))) {
       LOG_WARN("fail to init probe keys", K(ret));
     }
@@ -701,35 +704,6 @@ int HashTable<Bucket, Prober>::project_matched_rows(JoinTableCtx &ctx, OutputInf
   return ret;
 }
 
-template <typename Bucket, typename Prober>
-int HashTable<Bucket, Prober>::get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info)
-{
-  int ret = OB_SUCCESS;
-  ObHJStoredRow *row_ptr = reinterpret_cast<ObHJStoredRow *>(ctx.cur_tuple_);
-  int64_t batch_idx = 0;
-  while (OB_SUCC(ret) && batch_idx < *ctx.max_output_cnt_) {
-    if (END_ROW_PTR != reinterpret_cast<uint64_t>(row_ptr)) {
-      if (!row_ptr->is_match(ctx.build_row_meta_)) {
-        output_info.left_result_rows_[batch_idx] = row_ptr;
-        batch_idx++;
-      }
-      row_ptr = row_ptr->get_next(ctx.build_row_meta_);
-    } else {
-      int64_t bucket_id = ctx.cur_bkid_ + 1;
-      if (bucket_id < nbuckets_) {
-        Bucket &bkt = buckets_->at(bucket_id);
-        row_ptr = bkt.used() ? bkt.get_stored_row() : reinterpret_cast<ObHJStoredRow *>(END_ROW_PTR);
-        ctx.cur_bkid_ = bucket_id;
-      } else {
-        ret = OB_ITER_END;
-      }
-    }
-  }
-  output_info.selector_cnt_ = batch_idx;
-  ctx.cur_tuple_ = row_ptr;
-  return ret;
-}
-
 template<typename Bucket>
 int ProberBase<Bucket>::calc_join_conditions(JoinTableCtx &ctx,
                                            ObHJStoredRow *left_row,
@@ -941,6 +915,7 @@ int NormalizedSharedHashTable<T>::insert_batch(JoinTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const RowMeta &row_meta = ctx.build_row_meta_;
+  OB_ASSERT(ctx.build_key_proj_->count() == 1);
   for (auto i = 0; i < size; i++) {
     __builtin_prefetch(&(this->buckets_->at(stored_rows[i]->get_hash_value(row_meta) & this->bucket_mask_)),
                         1 , 3);
@@ -965,8 +940,6 @@ inline int NormalizedSharedHashTable<T>::atomic_set(JoinTableCtx &ctx, const uin
   uint64_t pos = hash_val & this->bucket_mask_;
   Bucket *bucket;
   Bucket old_bucket, new_bucket;
-  // new_bucket.set_salt(salt);
-  // new_bucket.set_row_ptr(row_ptr);
   new_bucket.init(ctx, salt, row_ptr);
   bool equal = false;
   bool added = false;
@@ -977,20 +950,22 @@ inline int NormalizedSharedHashTable<T>::atomic_set(JoinTableCtx &ctx, const uin
       if (!old_bucket.used()) {
         row_ptr->set_next(row_meta, reinterpret_cast<ObHJStoredRow *>(END_ROW_PTR));
         if (ATOMIC_BCAS(&bucket->val_, old_bucket.val_, new_bucket.val_)) {
+          MEMCPY(&bucket->key_, &new_bucket.key_, sizeof(T));
           added = true;
-          new_bucket.init_data(ctx, row_ptr);
           used_buckets++;
         }
       } else if (salt == old_bucket.get_salt()) {
         ObHJStoredRow *left_ptr = old_bucket.get_stored_row();
         if (OB_FAIL(this->key_equal(ctx, left_ptr, row_ptr, equal))) {
           LOG_WARN("key equal error", K(ret));
-        } else if (!equal) {
-          break;
-        }
-        row_ptr->set_next(row_meta, left_ptr);
-        if (ATOMIC_BCAS(&bucket->val_, old_bucket.val_, new_bucket.val_)) {
-          added = true;
+        } else {
+          if (!equal) {
+            break;
+          }
+          row_ptr->set_next(row_meta, left_ptr);
+          if (ATOMIC_BCAS(&bucket->val_, old_bucket.val_, new_bucket.val_)) {
+            added = true;
+          }
         }
       } else {
         break;

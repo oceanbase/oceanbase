@@ -204,11 +204,8 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
           LOG_WARN("failed to flush opt stat monitoring info caused by unknow error",
                                                 K(ret), K(all_server_arr.at(i).get_addr()), K(arg));
           //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later.
-          if (ignore_failed) {
-            LOG_USER_WARN(OB_ERR_DBMS_STATS_PL, "failed to flush opt stat monitoring info");
-            if (OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
-              LOG_WARN("failed to push back", K(ret));
-            }
+          if (ignore_failed && OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
@@ -374,9 +371,7 @@ int ObOptStatMonitorManager::update_dml_stat_info()
     if (OB_SUCC(ret)) {
       bool no_check = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
       uint64_t data_version = 0;
-      if (OB_FAIL(clean_useless_dml_stat_info())) {
-        LOG_WARN("failed to clean useless dml stat info", K(ret));
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
        LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(data_version));
       } else if (data_version < MOCK_DATA_VERSION_4_2_4_0 ||
                  (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_3_0) ||
@@ -645,46 +640,6 @@ int ObOptStatMonitorManager::generate_opt_stat_monitoring_info_rows(observer::Ob
   return ret;
 }
 
-int ObOptStatMonitorManager::clean_useless_dml_stat_info()
-{
-  int ret = OB_SUCCESS;
-  ObSqlString delete_table_sql;
-  ObSqlString delete_part_sql;
-  int64_t affected_rows1 = 0;
-  int64_t affected_rows2 = 0;
-  const char* all_table_name = NULL;
-  if (OB_FAIL(ObSchemaUtils::get_all_table_name(tenant_id_, all_table_name))) {
-    LOG_WARN("failed to get all table name", K(ret));
-  } else if (OB_FAIL(delete_table_sql.append_fmt("DELETE FROM %s m WHERE (NOT EXISTS (SELECT 1 " \
-            "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
-            "AND t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND db.database_name != '__recyclebin')) "\
-            "AND table_id > %ld;",
-            share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_DATABASE_TNAME,
-            OB_MAX_INNER_TABLE_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(delete_part_sql.append_fmt("DELETE /*+leading(view3, m1) use_nl(view3, m1)*/FROM %s m1 WHERE (tenant_id, table_id, tablet_id) IN ( "\
-            "SELECT /*+leading(m, view1, view2, t, db) use_hash(m,view1) use_hash((m,view1),view2) use_nl((m,view1,view2),t), use_nl((m,view1,view2,t),db)*/ "\
-            "m.tenant_id, m.table_id, m.tablet_id FROM %s m, %s t, %s db WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
-            "AND t.tenant_id = db.tenant_id AND t.database_id = db.database_id AND db.database_name != '__recyclebin' "\
-            "AND NOT EXISTS (SELECT 1 FROM %s p WHERE  p.table_id = m.table_id AND p.tenant_id = m.tenant_id AND p.tablet_id = m.tablet_id) "\
-            "AND NOT EXISTS (SELECT 1 FROM %s sp WHERE  sp.table_id = m.table_id AND sp.tenant_id = m.tenant_id AND sp.tablet_id = m.tablet_id)) "\
-            "AND table_id > %ld;",
-            share::OB_ALL_MONITOR_MODIFIED_TNAME, share::OB_ALL_MONITOR_MODIFIED_TNAME,
-            all_table_name, share::OB_ALL_DATABASE_TNAME, share::OB_ALL_PART_TNAME,
-            share::OB_ALL_SUB_PART_TNAME, OB_MAX_INNER_TABLE_ID))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, delete_table_sql.ptr(), affected_rows1))) {
-    LOG_WARN("failed to execute sql", K(ret), K(delete_table_sql));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, delete_part_sql.ptr(), affected_rows2))) {
-    LOG_WARN("failed to execute sql", K(ret), K(delete_part_sql));
-  } else {
-    LOG_TRACE("succeed to clean useless monitor modified_data", K(tenant_id_), K(delete_table_sql),
-                                                                K(affected_rows1), K(delete_part_sql),
-                                                                K(affected_rows2));
-  }
-  return ret;
-}
-
 int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(
     const ObIArray<ObOptDmlStat *> &dml_stats,
     ObISQLConnection *conn)
@@ -747,9 +702,7 @@ int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *>
                (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_3_0) ||
                no_check) {
       //do nothing
-    } else if (OB_FAIL(check_opt_stats_expired(tmp_dml_stats, true/*is_from_direct_load*/))) {
-      LOG_WARN("failed to check opt stats expired", K(ret));
-    } else {/*do nohting*/}
+    }
   }
   return ret;
 }
@@ -857,7 +810,7 @@ int ObOptStatMonitorManager::check_opt_stats_expired(ObIArray<ObOptDmlStat> &dml
                                                global_async_stale_max_table_size))) {
       LOG_WARN("failed to get async stale max table size", K(ret));
     } else if (OB_UNLIKELY(global_async_stale_max_table_size <= 0)) {
-      LOG_INFO("skip to check opt stats expired", K(global_async_stale_max_table_size));
+      LOG_WARN("skip to check opt stats expired", K(global_async_stale_max_table_size));
     } else if (OB_FAIL(get_opt_stats_expired_table_info(dml_stats, stale_infos, is_from_direct_load))) {
       LOG_WARN("failed to get opt stats expired table info", K(ret));
     } else {
@@ -871,7 +824,7 @@ int ObOptStatMonitorManager::check_opt_stats_expired(ObIArray<ObOptDmlStat> &dml
       }
     }
     if (ObTimeUtility::current_time() - begin_ts > ObOptStatMonitorCheckTask::CHECK_INTERVAL) {
-      LOG_INFO("check opt stats expired cost too much time", K(begin_ts), K(ObTimeUtility::current_time() - begin_ts), K(dml_stats));
+      LOG_WARN("check opt stats expired cost too much time", K(begin_ts), K(ObTimeUtility::current_time() - begin_ts), K(dml_stats));
     }
   }
   return ret;
@@ -1208,7 +1161,7 @@ int ObOptStatMonitorManager::get_need_check_opt_stat_partition_ids(const OptStat
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   }
-  LOG_INFO("get need check opt stat partition ids", K(expired_table_info), K(part_infos),
+  LOG_TRACE("get need check opt stat partition ids", K(expired_table_info), K(part_infos),
                                                      K(subpart_infos), K(partition_ids));
   return ret;
 }
@@ -1315,7 +1268,7 @@ int ObOptStatMonitorManager::get_need_mark_opt_stats_expired(const ObIArray<ObOp
       no_table_stats.reset();
     }
   }
-  LOG_INFO("get need mark opt stats expired", K(expired_table_stats), K(no_table_stats));
+  LOG_TRACE("get need mark opt stats expired", K(expired_table_stats), K(no_table_stats));
   return ret;
 }
 
@@ -1426,7 +1379,7 @@ int ObOptStatMonitorManager::do_mark_the_opt_stat_missing(const uint64_t tenant_
           LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
         } else {
           begin_idx = end_idx;
-          LOG_INFO("Succeed to do mark the opt stat expired", K(insert_sql), K(no_table_stats), K(affected_rows));
+          LOG_TRACE("Succeed to do mark the opt stat expired", K(insert_sql), K(no_table_stats), K(affected_rows));
         }
       }
       //end gather trans
@@ -1477,7 +1430,7 @@ int ObOptStatMonitorManager::do_mark_the_opt_stat_expired(const uint64_t tenant_
       LOG_WARN("fail to exec sql", K(update_sql), K(ret));
     } else {
       begin_idx = end_idx;
-      LOG_INFO("Succeed to do mark the opt stat expired", K(update_sql), K(expired_table_stats), K(affected_rows));
+      LOG_TRACE("Succeed to do mark the opt stat expired", K(update_sql), K(expired_table_stats), K(affected_rows));
     }
   }
   return ret;

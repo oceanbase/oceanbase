@@ -15,6 +15,7 @@
 #include "ob_backup_task_scheduler.h"
 #include "share/ob_zone_table_operation.h"
 #include "share/backup/ob_backup_server_mgr.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 namespace oceanbase
 
@@ -266,55 +267,29 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
   int ret = OB_SUCCESS;
   ObBackupScheduleTask *task = nullptr;
   output_task = nullptr;
-  ObArray<ObBackupZone> backup_zone;
-  ObArray<ObBackupRegion> backup_region;
   ObArray<ObBackupServer> all_servers;
+  ObArray<ObBackupServer> connectivity_servers;
   ObAddr dst;
+
   bool can_schedule = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not init", K(ret));
-  } else if (OB_FAIL(get_backup_region_and_zone_(backup_zone, backup_region))) { 
-    LOG_WARN("fail to get backup region and zone", K(ret));
-  } else if (OB_FAIL(get_all_servers_(backup_zone, backup_region, all_servers))) {
-    LOG_WARN("fail to get zone servers", K(ret), K(backup_zone), K(backup_region));
+  } else if (OB_FAIL(get_all_servers_(all_servers))) {
+    LOG_WARN("fail to get zone servers", K(ret));
   } else {
+
     ObMutexGuard guard(mutex_);
     DLIST_FOREACH(t, wait_list_)
     {
-      if (!backup_zone.empty() || !backup_region.empty()) {
-  // TODO(zeyong): when backup zone and backup region scheme is ready, adjust this code in 4.3
-  // only backup ls task need the defensive operation
-        ObArray<common::ObAddr> empty_block_server;
-        if (!t->can_execute_on_any_server() && BackupJobType::BACKUP_BACKUP_DATA_JOB == t->get_type()) {
-          ObBackupDataLSTask *tmp_task = static_cast<ObBackupDataLSTask *>(t);
-          tmp_task->set_optional_servers_(empty_block_server);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(choose_dst_(*t, all_servers, dst, can_schedule))) {
-          LOG_WARN("fail to choose servers from backup zone or backup region", K(ret), KPC(t));
-        }
-      } else {
-        if (!t->can_execute_on_any_server()) {
-          const ObIArray<ObBackupServer> &optional_servers =t->get_optional_servers();
-          if (optional_servers.empty()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("optional servers is empty", K(ret), KPC(t));
-          } else if (OB_FAIL(choose_dst_(*t, optional_servers, dst, can_schedule))) {
-            LOG_WARN("fail to choose servers from optional servers", K(ret), KPC(t));
-          }
-        } else {
-          if (OB_FAIL(choose_dst_(*t, all_servers, dst, can_schedule))) {
-            LOG_WARN("fail to choose servers from all servers", K(ret), KPC(t));
-          }
-        }
+      if (OB_FAIL(choose_dst_(t, all_servers, dst, can_schedule))) {
+        LOG_WARN("fail to choose servers from all servers", K(ret), KPC(t));
       }
       if (OB_SUCC(ret) && can_schedule) {
         task = t;
         break;
       }
     }
-
     if (OB_SUCC(ret) && nullptr != task) {
       if (!dst.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
@@ -363,28 +338,51 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::get_backup_region_and_zone_(
-    ObIArray<ObBackupZone> &backup_zone,
-    ObIArray<ObBackupRegion> &backup_region)
+int ObBackupTaskSchedulerQueue::get_backup_zone_idc_region_(
+    ObIArray<share::ObBackupZone> &backup_zone,
+    ObIArray<share::ObBackupRegion> &backup_region,
+    ObIArray<share::ObBackupIdc> &backup_idc)
 {
   int ret = OB_SUCCESS;
-  // TODO(zeyong) redefine backup region and backup zone in 4.3
+  char src_info[OB_MAX_BACKUP_SRC_INFO_LENGTH] = {0};
+  ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+  share::ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
+
+  if (!backup_zone.empty() || !backup_region.empty() || !backup_idc.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(backup_zone), K(backup_region), K(backup_idc));
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest io permission mgr is null", K(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->get_backup_path_src_info(src_info, sizeof(src_info), src_type))) {
+    LOG_WARN("fail to get backup path src info", K(ret));
+  } else if (ObBackupSrcType::EMPTY >= src_type || ObBackupSrcType::MAX <= src_type || '\0' == src_info[0]) {
+    LOG_INFO("do not need get backup zone idc region", K(src_info), K(src_type));
+  } else if (ObBackupSrcType::ZONE == src_type && OB_FAIL(ObBackupUtils::parse_backup_format_input(ObString(src_info),
+                                                                              backup_zone))) {
+    LOG_WARN("fail to parse backup format input", K(ret), K(src_info), K(src_type));
+  } else if (ObBackupSrcType::REGION == src_type && OB_FAIL(ObBackupUtils::parse_backup_format_input(ObString(src_info),
+                                                                              backup_region))) {
+    LOG_WARN("fail to parse backup format input", K(ret), K(src_info), K(src_type));
+  } else if (ObBackupSrcType::IDC == src_type && OB_FAIL(ObBackupUtils::parse_backup_format_input(ObString(src_info),
+                                                                              backup_idc))) {
+    LOG_WARN("fail to parse backup format input", K(ret), K(src_info), K(src_type));
+  }
+
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::get_all_servers_(
-    const ObIArray<ObBackupZone> &backup_zone,
-    const ObIArray<ObBackupRegion> &backup_region,
-    ObIArray<ObBackupServer> &servers)
+int ObBackupTaskSchedulerQueue::get_all_servers_(ObIArray<ObBackupServer> &servers)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupZone> all_zones;
   share::ObBackupServerMgr server_mgr;
+
   if (!servers.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(servers));
-  } else if (OB_FAIL(get_all_zones_(backup_zone, backup_region, all_zones))) {
-    LOG_WARN("failed to get all zones", K(ret), K(backup_zone), K(backup_region));
+  } else if (OB_FAIL(get_all_zones_(all_zones))) {
+    LOG_WARN("failed to get all zones", K(ret));
   } else if (OB_FAIL(server_mgr.init(task_scheduler_->get_exec_tenant_id(), *sql_proxy_))) {
     LOG_WARN("fail to init server operator", K(ret));
   } else {
@@ -408,15 +406,13 @@ int ObBackupTaskSchedulerQueue::get_all_servers_(
         }
       }
     }
-    LOG_DEBUG("get all alternative servers", K(backup_zone), K(backup_region), K(servers));
+    LOG_DEBUG("get all alternative servers", K(servers));
   }
+
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::get_all_zones_(
-    const ObIArray<ObBackupZone> &backup_zone,
-    const ObIArray<ObBackupRegion> &backup_region,
-    ObIArray<ObBackupZone> &zones)
+int ObBackupTaskSchedulerQueue::get_all_zones_(ObIArray<ObBackupZone> &zones)
 {
   int ret = OB_SUCCESS;
   ObArray<common::ObZone> zone_list;
@@ -424,28 +420,6 @@ int ObBackupTaskSchedulerQueue::get_all_zones_(
   if (!zones.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(zones));
-  } else if (!backup_zone.empty()) {
-    if (OB_FAIL(append(zones, backup_zone))) {
-      LOG_WARN("failed to append backup zone to zones", K(ret), K(backup_zone));
-    }
-  } else if (!backup_region.empty()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < backup_region.count(); ++i) {
-      const ObRegion &region = backup_region.at(i).region_;
-      const int64_t priority = backup_region.at(i).priority_;
-      if (OB_FAIL(get_zone_list_from_region_(region, tmp_zones))) {
-        LOG_WARN("fail to get zones", K(ret), K(region));
-      } else {
-        for (int j = 0; OB_SUCC(ret) && j < tmp_zones.count(); ++j) {
-          const ObZone &zone = tmp_zones.at(j);
-          ObBackupZone tmp_zone;
-          if (OB_FAIL(tmp_zone.set(zone.str(), priority))) {
-            LOG_WARN("failed to set zone", K(ret), K(zone), K(priority));
-          } else if (OB_FAIL(zones.push_back(tmp_zone))) {
-            LOG_WARN("failed to push zone", K(ret), K(tmp_zone));
-          }
-        }
-      }
-    }
   } else {
     if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zones))) {
       LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
@@ -499,6 +473,39 @@ int ObBackupTaskSchedulerQueue::get_zone_list_from_region_(const common::ObRegio
   return ret;
 }
 
+int ObBackupTaskSchedulerQueue::get_zone_list_from_idc_(const ObIDC &idc, ObIArray<common::ObZone> &zone_list)
+{
+  int ret = OB_SUCCESS;
+  ObArray<common::ObZone> tmp_zone_list;
+  common::ObIDC tmp_idc;
+  if (idc.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("idc is empty", K(idc), K(ret));
+  } else if (OB_FAIL(get_tenant_zone_list_(task_scheduler_->get_exec_tenant_id(), tmp_zone_list))) {
+    LOG_WARN("fail to get zone list of tenant", K(ret), "tenant_id", task_scheduler_->get_exec_tenant_id());
+  }
+  SMART_VAR(share::ObZoneInfo, info) {
+    ARRAY_FOREACH_X(tmp_zone_list, i, cur, OB_SUCC(ret)) {
+      const common::ObZone &zone = tmp_zone_list.at(i);
+      info.reset();
+      info.zone_ = zone;
+      if (OB_FAIL(share::ObZoneTableOperation::load_zone_info(*sql_proxy_, info))) {
+        LOG_WARN("fail to load zone info", K(ret));
+      } else if (!info.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid zone info", K(ret), K(info));
+      } else if (OB_FAIL(info.get_idc(tmp_idc))) {
+        LOG_WARN("fail to get idc", K(ret));
+      } else if (idc == tmp_idc) {
+        if (OB_FAIL(zone_list.push_back(zone))) {
+          LOG_WARN("fail to push backup zone", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupTaskSchedulerQueue::get_tenant_zone_list_(const uint64_t tenant_id, ObIArray<common::ObZone> &zone_list)
 {
   int ret = OB_SUCCESS;
@@ -522,7 +529,7 @@ int ObBackupTaskSchedulerQueue::get_tenant_zone_list_(const uint64_t tenant_id, 
 }
 
 int ObBackupTaskSchedulerQueue::choose_dst_(
-    const ObBackupScheduleTask &task, 
+    ObBackupScheduleTask *task,
     const ObIArray<ObBackupServer> &servers,
     ObAddr &dst,
     bool &can_schedule)
@@ -531,20 +538,68 @@ int ObBackupTaskSchedulerQueue::choose_dst_(
   can_schedule = false;
   dst.reset();
   ObArray<ObAddr> alternative_servers;
-  if(servers.empty()) {
+  ObArray<ObBackupServer> tmp_optional_servers;
+
+  if(servers.empty() || OB_ISNULL(task)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("servers is empty", K(ret), K(servers));
-  } else if (OB_FAIL(get_alternative_servers_(task, servers, alternative_servers))) {
-    LOG_WARN("failed to get alternative servers", K(ret), K(task), K(alternative_servers));
-  } else if (alternative_servers.empty()) { // servers are busy, wait for next turn
-  } else if (OB_FAIL(get_dst_(alternative_servers, dst))) {
-    LOG_WARN("failed to get a dst", K(ret), K(alternative_servers));
-  } else if (!dst.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dst is error", K(ret), K(dst), K(task));
+    LOG_WARN("servers is empty", K(ret), K(servers), KP(task));
   } else {
-    can_schedule = true;
+    ObBackupSrcInfo src_info;
+    char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
+    const int64_t dest_id = task->get_dest_id();
+    const uint64_t tenant_id = task->get_tenant_id();
+    ObArray<ObBackupServer> connectivity_servers;
+    src_info.reset();
+    MEMSET(extension, 0, sizeof(extension));
+    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_extension(tenant_id, dest_id,
+                                                                          extension, sizeof(extension)))) {
+      LOG_WARN("fail to get backup dest extension", K(ret), K(dest_id), K(tenant_id));
+    } else if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(extension, src_info))) {
+      LOG_WARN("failed to check locality info valid", K(ret), K(extension));
+    } else if (!src_info.is_empty()) {
+      ObArray<common::ObAddr> empty_block_server;
+      // Only backup data job has black server need set empty block server when backup zone/idc/region set
+      if (!task->can_execute_on_any_server() && BackupJobType::BACKUP_DATA_JOB == task->get_type()) {
+        ObBackupDataLSTask *tmp_task = static_cast<ObBackupDataLSTask *>(task);
+        if (OB_FAIL(tmp_task->set_optional_servers_(empty_block_server))) {
+          LOG_WARN("failed to set optional servers", K(ret), KPC(tmp_task));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObBackupDestIOPermissionMgr::filter_server_list_by_src_info(servers, extension,
+                                                                                        tmp_optional_servers))) {
+        LOG_WARN("failed to filter server list by src info", K(ret), K(extension), K(servers));
+      } else if (FALSE_IT(ob_sort(tmp_optional_servers.begin(), tmp_optional_servers.end(), ObBackupServerPriorityCmp()))) {
+      } else if (OB_FAIL(get_alternative_servers_(*task, tmp_optional_servers, alternative_servers))) {
+        LOG_WARN("failed to get alternative servers", K(ret), K(task), K(tmp_optional_servers));
+      }
+    } else if (!task->can_execute_on_any_server()) {
+        const ObIArray<ObBackupServer> &optional_servers =task->get_optional_servers();
+        if (optional_servers.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("optional servers is empty", K(ret), KPC(task));
+        } else if (OB_FAIL(get_alternative_servers_(*task, optional_servers, alternative_servers))) {
+          LOG_WARN("failed to get alternative servers", K(ret), K(task), K(optional_servers));
+        }
+    } else {
+      if (OB_FAIL(get_alternative_servers_(*task, servers, alternative_servers))) {
+        LOG_WARN("failed to get alternative servers", K(ret), K(task), K(servers));
+      }
+    }
+
+
+    if (OB_FAIL(ret)) {
+    } else if (alternative_servers.empty()) { // servers are busy, wait for next turn
+    } else if (OB_FAIL(get_dst_(alternative_servers, dst))) {
+      LOG_WARN("failed to get a dst", K(ret), K(alternative_servers));
+    } else if (!dst.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dst is error", K(ret), K(dst), K(task));
+    } else {
+      can_schedule = true;
+    }
   }
+
   return ret;
 }
 
@@ -554,7 +609,10 @@ int ObBackupTaskSchedulerQueue::get_alternative_servers_(
     ObArray<ObAddr> &alternative_servers) 
 {
   int ret = OB_SUCCESS;
-  int64_t tmp_priority = OB_INVALID_ID;
+  int64_t replica_priority = OB_INVALID_ID;
+  int64_t server_priority = OB_INVALID_ID;
+  ObArray<ObBackupServer> tmp_alternative_servers;
+
   if (servers.empty() || !alternative_servers.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task), K(servers), K(alternative_servers));
@@ -562,23 +620,42 @@ int ObBackupTaskSchedulerQueue::get_alternative_servers_(
     bool has_intersection = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       const ObAddr &server = servers.at(i).server_;
-      const int64_t &priority = servers.at(i).priority_;
-      for (int64_t j = 0; OB_SUCC(ret) && j < task.get_optional_servers().count(); ++j) {
-        const ObAddr &task_server = task.get_optional_servers().at(j).server_;
-        if (server == task_server) {
-          has_intersection = true;
-          bool can_dst = false;
-          if (OB_FAIL(check_server_can_become_dst_(server, task.get_type(), can_dst))) {
-            LOG_WARN("fail to check server can become dst", K(ret), K(server));
-          } else if (!can_dst) {
-          } else if (OB_INVALID_ID == tmp_priority || tmp_priority == priority) {
-            if (OB_FAIL(alternative_servers.push_back(server))) {
-              LOG_WARN("failed to push server into choosed server list", K(ret), K(server));
-            } else {
-              tmp_priority = priority;
-              break;
+      const int64_t &src_server_priority = servers.at(i).priority_;
+      if (OB_INVALID_ID == server_priority || server_priority == src_server_priority) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < task.get_optional_servers().count(); ++j) {
+          const ObAddr &task_server = task.get_optional_servers().at(j).server_;
+          const int64_t &priority = task.get_optional_servers().at(j).priority_;
+          if (server == task_server) {
+            has_intersection = true;
+            if (OB_INVALID_ID == server_priority || server_priority == src_server_priority) {
+              ObBackupServer backup_server;
+              if (OB_FAIL(backup_server.set(task_server, priority))) {
+                LOG_WARN("failed to set backup server", K(ret), K(task_server), K(priority));
+              } else {
+                bool can_dst = false;
+                server_priority = src_server_priority;
+                if (OB_FAIL(check_server_can_become_dst_(server, task.get_type(), can_dst))) {
+                  LOG_WARN("fail to check server can become dst", K(ret), K(server));
+                } else if (can_dst && (OB_INVALID_ID == replica_priority || replica_priority >= priority)) {
+                  if (OB_FAIL(tmp_alternative_servers.push_back(backup_server))) {
+                    LOG_WARN("failed to push server", K(ret), K(backup_server));
+                  } else {
+                    replica_priority = priority;
+                  }
+                }
+                break;
+              }
             }
           }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_alternative_servers.count(); ++i) {
+      const ObAddr &task_server = tmp_alternative_servers.at(i).server_;
+      const int64_t &priority = tmp_alternative_servers.at(i).priority_;
+      if (priority == replica_priority) {
+        if (OB_FAIL(alternative_servers.push_back(task_server))) {
+          LOG_WARN("failed to push server into alternative server list", K(ret), K(task_server));
         }
       }
     }
@@ -594,15 +671,16 @@ int ObBackupTaskSchedulerQueue::get_alternative_servers_(
       if (OB_FAIL(check_server_can_become_dst_(server, task.get_type(), can_dst))) {
         LOG_WARN("fail to check server can become dst", K(ret), K(server));
       } else if (!can_dst) {
-      } else if (OB_INVALID_ID == tmp_priority || tmp_priority == priority) {
+      } else if (OB_INVALID_ID == replica_priority || replica_priority == priority) {
         if (OB_FAIL(alternative_servers.push_back(server))) {
           LOG_WARN("failed to push server into choosed server list", K(ret), K(server));
         } else {
-          tmp_priority = priority;
+          replica_priority = priority;
         }
       } 
     }
   }
+
   return ret;
 }
 

@@ -240,14 +240,17 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                ? share::schema::ObUDTObjectType::mask_object_id(package_id) : package_id;
       const ObRoutineInfo *dblink_routine_info = NULL;
       uint64_t dblink_id = OB_INVALID_ID;
-      ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
       if (OB_NOT_NULL(stmt.get_dblink_routine_info())) {
         dblink_routine_info = stmt.get_dblink_routine_info();
         pkg_id = dblink_routine_info->get_package_id();
         routine_id = dblink_routine_info->get_routine_id();
         dblink_id = dblink_routine_info->get_dblink_id();
       }
-      if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
+      pl::ObPLExecuteArg pl_execute_arg;
+      if (!is_valid_id(dblink_id) &&
+          OB_FAIL(pl_execute_arg.obtain_routine(ctx, pkg_id, routine_id, path))) {
+        LOG_WARN("failed to obtain routine", K(ret), K(pkg_id), K(routine_id), K(path));
+      } else if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
                                               ctx.get_allocator(),
                                               pkg_id,
                                               routine_id,
@@ -255,7 +258,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                                               params,
                                               nocopy_params,
                                               result,
-                                              cacheobj_guard,
+                                              pl_execute_arg,
                                               NULL,
                                               false,
                                               false,
@@ -283,7 +286,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
           int64_t out_idx = -1;    // index for out params
           int64_t c_out_idx = -1;  // index for out params which would be returned to client
           for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
-            ObObj out_value;
+            ObObjParam out_value;
+            out_value.reset();
             if (call_proc_info->is_out_param(i)) {
               OX (out_idx++);
               if (ob_is_enum_or_set_type(params.at(i).get_type())) {

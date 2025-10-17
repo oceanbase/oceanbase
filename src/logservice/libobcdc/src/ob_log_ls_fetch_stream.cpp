@@ -811,14 +811,15 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
   return ret;
 }
 
-int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
+int FetchStream::read_group_entry_(ipalf::IGroupEntry &group_entry,
     palf::LSN &group_start_lsn,
     volatile bool &stop_flag,
     KickOutInfo &kick_out_info,
     logfetcher::TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
-  palf::MemPalfBufferIterator entry_iter;
+  bool enable_logservice = ls_fetch_ctx_->get_logservice_model();
+  ipalf::IPalfIterator<ipalf::ILogEntry> entry_iter(enable_logservice);
   logfetcher::TransStatInfo local_tsi;
 
   if (group_entry.get_header().is_padding_log()) {
@@ -826,10 +827,9 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
   } else if (OB_FAIL(ls_fetch_ctx_->get_log_entry_iterator(group_entry, group_start_lsn, entry_iter))) {
     LOG_ERROR("get_log_entry_iterator failed", KR(ret), K(group_entry), K_(ls_fetch_ctx));
   } else {
-    LOG_DEBUG("get_next_group_entry succ", K(group_entry), K(group_start_lsn));
     // iterate log_entry in log_group and handle it
     while (OB_SUCC(ret)) {
-      palf::LogEntry log_entry;
+      ipalf::ILogEntry log_entry(enable_logservice);
       palf::LSN entry_lsn;
       IObCDCPartTransResolver::MissingLogInfo missing_info;
       log_entry.reset();
@@ -954,7 +954,8 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
     int64_t fetch_remote_time = 0;
 
     while (OB_SUCC(ret) && need_fetch_log) {
-      palf::LogGroupEntry log_group_entry;
+      bool enable_logservice = ls_fetch_ctx_->get_logservice_model();
+      ipalf::IGroupEntry log_group_entry(enable_logservice);
       palf::LSN lsn;
       const char *buf = NULL;
       int64_t buf_size = 0;
@@ -1010,7 +1011,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
         if (submit_ts > upper_limit_) {
           check_need_fetch_log_with_upper_limit_(need_fetch_log);
         }
-        fetched_group_entry_size += log_group_entry.get_serialize_size();
+        fetched_group_entry_size += log_group_entry.get_serialize_size(lsn);
         // update fetch state every 100 group entries
         if ((++fetched_group_entry_cnt % UPDATE_FETCH_STATE_INTERVAL) == 0) {
           int64_t flush_time = 0;
@@ -1411,8 +1412,9 @@ int FetchStream::read_log_(
     for (int64_t idx = 0; OB_SUCC(ret) && (idx < log_cnt); ++idx) {
       int64_t begin_time = get_timestamp();
       palf::LSN group_start_lsn;
-      palf::LogGroupEntry group_entry;
-      palf::MemPalfBufferIterator entry_iter;
+      bool enable_logservice = ls_fetch_ctx_->get_logservice_model();
+      ipalf::IGroupEntry group_entry(enable_logservice);
+      ipalf::IPalfIterator<ipalf::ILogEntry> entry_iter(enable_logservice);
 
       if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn))) {
         if (OB_ITER_END != ret) {

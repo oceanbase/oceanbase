@@ -97,6 +97,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   }
   if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (FALSE_IT(create_index_arg.data_version_ = data_version)) {
   } else {
     bool is_parallel_ddl = true;
     if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
@@ -136,6 +137,8 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   }
   if (FAILEDx(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
     LOG_WARN("Failed to check sync_dll_user", K(ret));
+  } else if (DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(data_version)
+          && 0 == res.task_id_) {
   } else if (!is_sys_index && !is_sync_ddl_user) {
     // 只考虑非系统表和非备份恢复时的索引同步检查
     bool build_index_need_retry_at_executor = false;
@@ -149,9 +152,9 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
         LOG_WARN("index table id is invalid", KR(ret));
       }
     } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
-      LOG_WARN("failed to wait ddl finish", K(ret));
+       LOG_WARN("failed to wait ddl finish", K(ret));
+       }
     }
-  }
   SERVER_EVENT_ADD("ddl", "create index execute finish",
     "tenant_id", MTL_ID(),
     "ret", ret,
@@ -211,7 +214,7 @@ int ObCreateIndexExecutor::set_drop_index_stmt_str(
 int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_session,
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
     const obrpc::ObCreateIndexArg &create_index_arg,
-    const obrpc::ObAlterTableRes &res,
+    const int64_t ddl_task_id,
     common::ObIAllocator &allocator,
     bool is_update_global_indexes)
 {
@@ -307,8 +310,8 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_ses
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLExecutorUtil::wait_build_index_finish(tenant_id, res.task_id_, is_finish))) {
-      LOG_WARN("wait build index finish failed", K(ret), K(tenant_id), K(res.task_id_));
+    } else if (OB_FAIL(ObDDLExecutorUtil::wait_build_index_finish(tenant_id, ddl_task_id, is_finish))) {
+      LOG_WARN("wait build index finish failed", K(ret), K(tenant_id), K(ddl_task_id));
     } else if (!is_finish) {
       ob_usleep(CHECK_INTERVAL);
       LOG_INFO("index status is not final", K(index_table_id));

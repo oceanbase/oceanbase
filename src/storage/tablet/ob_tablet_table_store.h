@@ -234,11 +234,13 @@ public:
   int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
   int get_need_to_cache_sstables(
+      const int64_t limit_size,
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
   int get_need_to_cache_sstables(
       const ObSSTableArray &sstable_array,
+      int64_t &remain_size,
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
@@ -456,13 +458,11 @@ private:
       const ObTabletTableStore &old_store,
       const share::SCN &split_start_scn);
   int build_split_minor_tables_(
-      const bool is_shared_storage_mode,
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,
       const ObIArray<ObITable *> &tables_array,
       const int64_t inc_base_snapshot_version,
-      const ObTabletHAStatus &ha_status,
-      const share::SCN &split_start_scn);
+      const ObTabletHAStatus &ha_status);
 
   int inner_replace_sstables(
       common::ObArenaAllocator &allocator,
@@ -497,11 +497,22 @@ private:
       ObSSTable *&copied_sstable);
 #ifdef OB_BUILD_SHARED_STORAGE
   int process_minor_sstables_for_ss_(
-    ObArenaAllocator &allocator,
-    const UpdateUpperTransParam &upper_trans_param,
-    ObArray<ObITable *> &sstables,
-    const int64_t inc_base_snapshot_version,
-    int64_t &inc_pos);
+      ObArenaAllocator &allocator,
+      const UpdateUpperTransParam &upper_trans_param,
+      ObArray<ObITable *> &sstables,
+      const int64_t inc_base_snapshot_version,
+      int64_t &inc_pos);
+  int cut_minor_sstables_for_ss_(
+      ObArenaAllocator &allocator,
+      const share::SCN &cut_scn,
+      ObArray<ObITable *> &sstables,
+      int64_t &inc_pos);
+  int process_minor_sstables_upper_trans_for_ss_(
+      ObArenaAllocator &allocator,
+      const ObIArray<UpdateUpperTransParam::SCNAndVersion> &new_upper_trans,
+      ObArray<ObITable *> &sstables,
+      const int64_t inc_base_snapshot_version,
+      int64_t &inc_pos);
 #endif
 
 public:

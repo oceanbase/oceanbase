@@ -310,8 +310,13 @@ int ObMajorPartitionMergeFuser::end_fuse_row(const storage::ObNopPos &nop_pos, b
     }
   }
   if (OB_SUCC(ret) && result_row.row_flag_.is_exist_without_delete()) {
-    result_row.row_flag_.reset();
-    result_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    if (nop_pos_.count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "exist nop column", K(ret), K(nop_pos), K(result_row));
+    } else {
+      result_row.row_flag_.reset();
+      result_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+    }
   }
   return ret;
 }

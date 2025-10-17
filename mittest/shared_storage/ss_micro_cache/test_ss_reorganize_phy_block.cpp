@@ -137,6 +137,128 @@ void TestSSReorganizePhyBlock::add_batch_micro_block(
   }
 }
 
+// test the result of once reorganization task
+TEST_F(TestSSReorganizePhyBlock, test_once_reorganization_result)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_once_reorganization_result");
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache_->phy_blk_mgr_;
+  ObSSMemBlockManager &mem_blk_mgr = micro_cache_->mem_blk_mgr_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache_->micro_meta_mgr_;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache_->task_runner_.release_cache_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache_->task_runner_.blk_ckpt_task_;
+  ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
+  ASSERT_EQ(0, cache_stat.mem_stat().get_micro_alloc_cnt());
+  const int32_t block_size = phy_blk_mgr.get_block_size();
+
+  release_cache_task.is_inited_ = false;
+  blk_ckpt_task.is_inited_ = false;
+  usleep(1000 * 1000);
+  const int64_t available_block_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt();
+  const int64_t write_blk_cnt = 100;
+  ASSERT_LT(write_blk_cnt, available_block_cnt);
+
+  // 1. write 100 fulfilled phy_block and persist them
+  const int64_t micro_cnt = 20;
+  const int64_t start_macro_id = 1;
+  ObArray<ReorganSSMicroDataInfo> micro_data_info_arr;
+  add_batch_micro_block(start_macro_id, write_blk_cnt, micro_cnt, 0, micro_data_info_arr);
+  ASSERT_EQ(OB_SUCCESS, mem_blk_mgr.inner_seal_and_alloc_mem_block(true /* is_fg */));
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task()); // 等待所有的sealed_mem_blk都持久化到磁盘
+  ASSERT_EQ(write_blk_cnt, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  const int64_t ori_micro_pool_cnt = cache_stat.mem_stat().get_micro_alloc_cnt();
+
+  // 2. evict 50% micro_block from some phy_blocks
+  int32_t evict_pct = 50;
+  const int64_t expected_sparse_blk_cnt = write_blk_cnt / 2;
+  const int32_t evict_cnt = micro_cnt * evict_pct / 100;
+  for (int64_t i = 0; i < expected_sparse_blk_cnt; ++i) {
+    // const int32_t evict_cnt = micro_cnt * evict_pct[i / 10] / 100;
+    MacroBlockId macro_id = micro_data_info_arr[i].macro_id_;
+    for (int32_t j = 0; j < evict_cnt; ++j) {
+      const int32_t micro_size = micro_data_info_arr.at(i).micro_index_arr_.at(j).size_;
+      const ObSSMicroBlockCacheKey &micro_key = micro_data_info_arr.at(i).micro_index_arr_.at(j).micro_key_;
+      ObSSMicroBlockMetaHandle micro_handle;
+      ObSSMicroBlockMeta *micro_meta = nullptr;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, micro_handle));
+      micro_meta = micro_handle.get_ptr();
+      ASSERT_EQ(true, micro_meta->is_in_l1_);
+      ASSERT_EQ(false, micro_meta->is_in_ghost_);
+      ASSERT_EQ(true, micro_meta->is_data_persisted_);
+      micro_handle.reset();
+      ASSERT_EQ(1, micro_meta->ref_cnt_);
+
+      int64_t phy_blk_idx = -1;
+      phy_blk_idx = micro_meta->get_phy_blk_idx(block_size);
+      uint64_t cur_data_loc = micro_meta->data_loc_;
+      uint64_t cur_reuse_version = micro_meta->reuse_version_;
+      uint64_t cur_micro_size = micro_meta->size_;
+      ASSERT_LT(1, phy_blk_idx);
+
+      ObSSMicroBlockMetaInfo evict_micro_info;
+      micro_meta->get_micro_meta_info(evict_micro_info);
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(evict_micro_info));
+      ASSERT_EQ(1, micro_meta->ref_cnt_);
+      ASSERT_EQ(true, micro_meta->is_in_l1_);
+      ASSERT_EQ(true, micro_meta->is_in_ghost_);
+      ASSERT_EQ(false, micro_meta->is_valid_field());
+      ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_block_valid_length(cur_data_loc, cur_reuse_version, cur_micro_size * -1, phy_blk_idx));
+    }
+  }
+  ASSERT_EQ(ori_micro_pool_cnt, cache_stat.mem_stat().get_micro_alloc_cnt());
+  ASSERT_EQ(expected_sparse_blk_cnt, phy_blk_mgr.get_sparse_block_cnt());
+  const ObSSPhyBlockCountInfo &phy_blk_info = phy_blk_mgr.blk_cnt_info_;
+  LOG_INFO("phy_blk info when start", K(phy_blk_info));
+  const int64_t &fg_blk_max = micro_cache_->cache_stat_.mem_blk_stat_.mem_blk_fg_max_cnt_;
+  const int64_t &fg_blk_used = micro_cache_->cache_stat_.mem_blk_stat_.mem_blk_fg_used_cnt_;
+  const int64_t &bg_blk_max = micro_cache_->cache_stat_.mem_blk_stat_.mem_blk_bg_max_cnt_;
+  const int64_t &bg_blk_used = micro_cache_->cache_stat_.mem_blk_stat_.mem_blk_bg_used_cnt_;
+  LOG_INFO("mem_blk info before reorganzation", K(fg_blk_max), K(fg_blk_used), K(bg_blk_max), K(bg_blk_used));
+
+  // 3. get some low usage phy_blocks to reorganize.
+  const int64_t candidate_cnt = expected_sparse_blk_cnt;
+  ObSSReorganizeMicroOp &reorgan_op = release_cache_task.reorganize_op_;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.get_batch_sparse_blocks(reorgan_op.candidate_phy_blks_, candidate_cnt));
+  ASSERT_EQ(candidate_cnt, reorgan_op.candidate_phy_blks_.count());
+
+  ObArray<int64_t> candidate_idx_arr;
+  for (int64_t i = 0; i < candidate_cnt; ++i) {
+    const ObSSPhyBlockHandle &phy_blk_handle = reorgan_op.candidate_phy_blks_.at(i).phy_blk_handle_;
+    const int64_t phy_blk_idx = reorgan_op.candidate_phy_blks_.at(i).phy_blk_idx_;
+    ASSERT_EQ(OB_SUCCESS, candidate_idx_arr.push_back(phy_blk_idx));
+  }
+
+  // 4. read and handle selectd phy_blocks to reorganize
+  const int64_t start_us = ObTimeUtility::current_time_us();
+  ASSERT_EQ(OB_SUCCESS, reorgan_op.read_sparse_phy_blocks());
+  ASSERT_EQ(OB_SUCCESS, reorgan_op.handle_sparse_phy_blocks());
+  ASSERT_EQ(OB_SUCCESS, reorgan_op.reaggregate_micro_blocks());
+  const int64_t end_us = ObTimeUtility::current_time_us();
+  LOG_INFO("phy_blk info when finish reorganize", K(phy_blk_info));
+  ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+
+  // 5. check reorganization result, candidate phy_blocks were added into reusable_set.
+  ASSERT_EQ(candidate_cnt, phy_blk_mgr.reusable_blks_.size());
+  LOG_INFO("phy_blk info when finish persistance", K(phy_blk_info));
+  LOG_INFO("mem_blk info when finish persistance", K(fg_blk_max), K(fg_blk_used), K(bg_blk_max), K(bg_blk_used));
+  ObArray<int64_t> reusable_idx_arr;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.get_batch_reusable_blocks(reusable_idx_arr, candidate_cnt));
+  ASSERT_EQ(candidate_cnt, reusable_idx_arr.count());
+  for (int64_t i = 0; i < candidate_cnt; ++i) {
+    bool is_exist = false;
+    for (int64_t j = 0; !is_exist && j < candidate_cnt; ++j) {
+      if (reusable_idx_arr.at(i) == candidate_idx_arr.at(j)) {
+        is_exist = true;
+      }
+    }
+    ASSERT_EQ(true, is_exist);
+  }
+  const int64_t avg_reorganize_time_us = (end_us - start_us) / candidate_cnt;
+  LOG_INFO("reorganization task time cost", K(candidate_cnt), K(avg_reorganize_time_us));
+
+  LOG_INFO("TEST_CASE: finish test_once_reorganization_result");
+}
+
 /* This case tests the basic logic of the reorganize task. */
 TEST_F(TestSSReorganizePhyBlock, test_reorganize_phy_block_task)
 {
@@ -349,19 +471,20 @@ TEST_F(TestSSReorganizePhyBlock, test_estimate_reorgan_blk_cnt)
       SS_REORGAN_MIN_MICRO_SIZE + (max_reorgan_task_reserve_cnt - SS_MIN_REORGAN_BLK_CNT) * SS_REORGAN_BLK_SCALING_FACTOR;
   ASSERT_LT(max_micro_size, cache_stat.micro_stat().get_avg_micro_size());
   phy_blk_mgr.reserve_reorganize_block(available_cnt);
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, available_cnt);
+  ASSERT_EQ(max_reorgan_task_reserve_cnt / 2, available_cnt);
 
   // test reserve blk for reorganize_task from shared_block
   blk_cnt_info.data_blk_.used_cnt_ = blk_cnt_info.data_blk_.hold_cnt_; // mock data_blk used up.
-  cache_stat.phy_blk_stat().update_data_block_used_cnt(blk_cnt_info.data_blk_.used_cnt_);
+  cache_stat.phy_blk_stat().data_blk_used_cnt_ = blk_cnt_info.data_blk_.used_cnt_;
   ASSERT_EQ(0, blk_cnt_info.data_blk_.free_blk_cnt());
 
   phy_blk_mgr.reserve_reorganize_block(available_cnt);
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, available_cnt);
+  ASSERT_EQ(max_reorgan_task_reserve_cnt / 2, available_cnt);
 
   const int64_t data_blk_free_cnt = cache_stat.phy_blk_stat().data_blk_cnt_ - cache_stat.phy_blk_stat().data_blk_used_cnt_;
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, blk_cnt_info.data_blk_.free_blk_cnt());
-  ASSERT_EQ(max_reorgan_task_reserve_cnt, data_blk_free_cnt);
+  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT / 2, blk_cnt_info.data_blk_.free_blk_cnt());
+  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT / 2, data_blk_free_cnt);
+  ASSERT_EQ(SS_MAX_REORGAN_BLK_CNT, max_reorgan_task_reserve_cnt);
   const int64_t shared_blk_used_cnt = blk_cnt_info.data_blk_.hold_cnt_ + blk_cnt_info.meta_blk_.hold_cnt_;
   ASSERT_EQ(shared_blk_used_cnt, blk_cnt_info.shared_blk_used_cnt_);
   ASSERT_EQ(shared_blk_used_cnt, cache_stat.phy_blk_stat().shared_blk_used_cnt_);
@@ -719,6 +842,8 @@ int main(int argc, char **argv)
   system("rm -f test_ss_reorganize_phy_block.log*");
   OB_LOGGER.set_file_name("test_ss_reorganize_phy_block.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -311,15 +311,21 @@ struct ObIntegerStreamEncoderCtx
     bool is_valid = meta_.is_valid();
     return is_valid;
   }
-  int build_signed_stream_meta(const int64_t min, const int64_t max,
-      const bool is_replace_null, const int64_t replace_value,
-      const int64_t precision_width_size,
-      const bool force_raw,
-      const int64_t major_working_cluster_version,
-      uint64_t &range);
-  int build_unsigned_stream_meta(const uint64_t min, const uint64_t max,
-      const bool is_replace_null, const uint64_t replace_value,
-      const bool force_raw, const int64_t major_working_cluster_version, uint64_t &range);
+  int build_signed_stream_meta(const int64_t min,
+                               const int64_t max,
+                               const bool is_replace_null,
+                               const int64_t replace_value,
+                               const int64_t precision_width_size,
+                               const bool force_raw,
+                               const int64_t major_working_cluster_version,
+                               uint64_t &range);
+  int build_unsigned_stream_meta(const uint64_t min,
+                                 const uint64_t max,
+                                 const bool is_replace_null,
+                                 const uint64_t replace_value,
+                                 const bool force_raw,
+                                 const int64_t major_working_cluster_version,
+                                 uint64_t &range);
   int build_offset_array_stream_meta(const uint64_t end_offset, const bool force_raw,
       const int64_t major_working_cluster_version);
   int build_stream_encoder_info(const bool has_null,
@@ -380,6 +386,7 @@ struct ObStringStreamMeta
   uint8_t attr_;
   uint32_t uncompressed_len_;
   uint32_t fixed_str_len_;
+  uint32_t padding_; // pad sizeof(ObStringStreamMeta) to 16 bytes
 };
 
 struct ObStringStreamEncoderInfo

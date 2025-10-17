@@ -79,7 +79,6 @@ public:
     }
   }
 };
-
 TEST_F(TestSSMacroCacheStat, test_tablet_stat)
 {
   ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
@@ -111,7 +110,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   ASSERT_EQ(1, macro_cache_mgr->tablet_stat_map_.size());
   const ObSSMacroCacheTabletStat *tablet_stat = macro_cache_mgr->tablet_stat_map_.get(tablet_id);
   ASSERT_NE(nullptr, tablet_stat);
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(0, tablet_stat->cache_hit_cnt_);
   ASSERT_EQ(0, tablet_stat->cache_hit_bytes_);
   ASSERT_EQ(0, tablet_stat->cache_miss_cnt_);
@@ -126,7 +125,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   ASSERT_FALSE(is_hit_cache);
   fd_handle.reset();
 
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(0, tablet_stat->cache_hit_cnt_);
   ASSERT_EQ(0, tablet_stat->cache_hit_bytes_);
   ASSERT_EQ(1, tablet_stat->cache_miss_cnt_);
@@ -156,7 +155,7 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   ASSERT_TRUE(is_hit_cache);
   fd_handle.reset();
 
-  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->cached_size_);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
   ASSERT_EQ(1, tablet_stat->cache_hit_cnt_);
   ASSERT_EQ(access_size * 2, tablet_stat->cache_hit_bytes_);
   ASSERT_EQ(1, tablet_stat->cache_miss_cnt_);
@@ -171,6 +170,66 @@ TEST_F(TestSSMacroCacheStat, test_tablet_stat)
   macro_cache_mgr->clean_deleted_tablet_();
   ASSERT_TRUE(macro_cache_mgr->tablet_stat_map_.empty());
   ASSERT_TRUE(macro_cache_mgr->meta_map_.empty());
+}
+
+TEST_F(TestSSMacroCacheStat, test_tablet_stat_after_evict)
+{
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  const int64_t WRITE_IO_SIZE = DIO_READ_ALIGN_SIZE * 256; // 1MB
+
+  // 1. put a macro into mgr
+  const uint64_t tablet_id = 212345;
+  const uint64_t server_id = 1;
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id.set_second_id(tablet_id);
+  macro_id.set_third_id(server_id);
+  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_tenant_seq(100); // tenant_seq
+  ASSERT_TRUE(macro_id.is_valid());
+
+  ObSSMacroCacheInfo macro_cache_info(
+      tablet_id, WRITE_IO_SIZE, ObSSMacroCacheType::MACRO_BLOCK, false/*is_write_cache*/);
+  ASSERT_TRUE(macro_cache_info.is_valid());
+
+  OK(macro_cache_mgr->put(macro_id, macro_cache_info));
+  ASSERT_EQ(1, macro_cache_mgr->meta_map_.size());
+  ASSERT_NE(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
+
+  // 2. write to disk
+  ObStorageObjectWriteInfo write_info;
+  char write_buf[WRITE_IO_SIZE];
+  write_buf[0] = '\0';
+  const int64_t mid_offset = WRITE_IO_SIZE / 2;
+  memset(write_buf, 'a', mid_offset);
+  memset(write_buf + mid_offset, 'b', WRITE_IO_SIZE - mid_offset);
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = WRITE_IO_SIZE;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  write_object_handle.reset();
+
+  // 3. evict the read macro cache
+  macro_cache_mgr->tablet_stat_task_.runTimerTask();
+  const ObSSMacroCacheTabletStat *tablet_stat = macro_cache_mgr->tablet_stat_map_.get(tablet_id);
+  ASSERT_NE(nullptr, tablet_stat);
+  ASSERT_EQ(WRITE_IO_SIZE, tablet_stat->get_total_cached_size());
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->force_evict_by_macro_id(macro_id));
+  ASSERT_EQ(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
+  macro_cache_mgr->tablet_stat_task_.runTimerTask();
+  ASSERT_EQ(1, macro_cache_mgr->tablet_stat_map_.size());
+  tablet_stat = macro_cache_mgr->tablet_stat_map_.get(tablet_id);
+  ASSERT_EQ(0, tablet_stat->get_total_cached_size());
 }
 
 } // namespace storage

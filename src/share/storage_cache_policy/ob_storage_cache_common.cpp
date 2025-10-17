@@ -19,17 +19,85 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+int set_default_storage_cache_policy_for_table(const int64_t tenant_id, share::schema::ObTableSchema &table)
+{
+  int ret = OB_SUCCESS;
+  if (table.get_table_type() == share::schema::ObTableType::USER_TABLE ||
+        table.get_table_type() == share::schema::ObTableType::MATERIALIZED_VIEW) {
+    if (table.get_storage_cache_policy().empty()) {
+      ObStorageCachePolicy default_policy;
+      if (OB_FAIL(get_default_storage_cache_policy_for_create_table(tenant_id, default_policy))) {
+        LOG_WARN("fail to set default storage cache policy", K(ret), K(default_policy));
+      } else {
+        char cache_policy_str[OB_MAX_STORAGE_CACHE_POLICY_LENGTH] = {0};
+        int64_t pos = 0;
+        if (OB_FAIL(default_policy.to_json_string(cache_policy_str, OB_MAX_STORAGE_CACHE_POLICY_LENGTH, pos))) {
+          LOG_WARN("failed to convert storage cache policy to string", K(ret), K(pos), K(default_policy));
+        } else if (OB_UNLIKELY(pos == 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("covert pos for storage cache policy is invalid", K(ret), K(pos), K(default_policy));
+        } else if (OB_FAIL(table.set_storage_cache_policy(cache_policy_str))) {
+          LOG_WARN("fail to set table default storage_cache_policy", K(ret), K(default_policy), K(cache_policy_str));
+        }
+      }
+    }
+  } else if (table.get_table_type() == share::schema::ObTableType::USER_INDEX) {
+    const int64_t data_table_id = table.get_data_table_id();
+    if (data_table_id >= OB_MIN_USER_OBJECT_ID && table.get_storage_cache_policy().empty()) {
+      if (OB_FAIL(table.set_storage_cache_policy(OB_NONE_STORAGE_CACHE_POLICY_STR))) {
+        LOG_WARN("fail to set index default storage_cache_policy", K(ret), K(OB_NONE_STORAGE_CACHE_POLICY_STR));
+      }
+    }
+  } else {
+    // do nothing, no need to handle other table types
+  }
+  return ret;
+}
+
+int get_default_storage_cache_policy_for_create_table(const int64_t tenant_id, ObStorageCachePolicy &storage_cache_policy)
+{
+  int ret = OB_SUCCESS;
+  ObString default_storage_cache_policy;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "tenant config is invalid", K(ret));
+  } else if (FALSE_IT(default_storage_cache_policy = tenant_config->default_storage_cache_policy.str())) {
+  } else if (default_storage_cache_policy.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "tenant config is invalid", K(ret), K(default_storage_cache_policy));
+  } else if (default_storage_cache_policy.case_compare("AUTO") == 0) {
+    storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::AUTO_POLICY);
+  } else if (default_storage_cache_policy.case_compare("HOT") == 0) {
+    storage_cache_policy.set_global_policy(ObStorageCacheGlobalPolicy::PolicyType::HOT_POLICY);
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid default storage cache policy", K(ret), K(default_storage_cache_policy));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "default storage cache policy");
+  }
+
+  return ret;
+}
 
 bool is_storage_cache_policy_default(const common::ObString &storage_cache_policy_str)
 {
   return (storage_cache_policy_str.empty() ||
           0 == storage_cache_policy_str.case_compare(OB_DEFAULT_STORAGE_CACHE_POLICY_STR) ||
           0 == storage_cache_policy_str.case_compare(OB_NONE_STORAGE_CACHE_POLICY_STR));
+}
+bool is_storage_cache_policy_auto(const common::ObString &storage_cache_policy_str)
+{
+  return 0 == storage_cache_policy_str.case_compare(OB_DEFAULT_STORAGE_CACHE_POLICY_STR);
+}
+bool is_storage_cache_policy_none(const common::ObString &storage_cache_policy_str)
+{
+  return 0 == storage_cache_policy_str.case_compare(OB_NONE_STORAGE_CACHE_POLICY_STR);
 }
 
 bool is_part_storage_cache_policy_type_default(const ObStorageCachePolicyType &part_storage_cache_policy_type)
@@ -95,8 +163,21 @@ int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid storage cache policy", KR(ret), K(storage_cache_policy_part_str));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "storage_cache_policy, storage_cache_policy for partition must be 'HOT', 'AUTO' or 'NONE'");
   }
   return ret;
+}
+
+bool is_valid_part_storage_cache_policy(const ObStorageCachePolicyType &part_policy)
+{
+  return !(storage::ObStorageCachePolicyType::MAX_POLICY == part_policy ||
+          storage::ObStorageCachePolicyType::TIME_POLICY == part_policy);
+}
+
+bool is_hot_or_auto_policy(const ObStorageCachePolicyType &part_policy)
+{
+  return storage::ObStorageCachePolicyType::HOT_POLICY == part_policy ||
+         storage::ObStorageCachePolicyType::AUTO_POLICY == part_policy;
 }
 
 //*************************ObStorageCacheGlobalPolicy*************************/

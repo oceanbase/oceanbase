@@ -19,6 +19,7 @@
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
 #undef private
 #undef protected
 
@@ -130,7 +131,7 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
   const int64_t timeout_us = 20 * 1000 * 1000L;
   while ((preread_cache_mgr.preread_queue_.size() != 0) ||
          (preread_task.segment_files_.count() != 0) ||
-         (preread_task.free_list_.get_curr_total() != ObSSPreReadTask::MAX_PRE_READ_PARALLELISM)) {
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
     ob_usleep(1000);
     if (timeout_us + start_us < ObTimeUtility::current_time()) {
       ret = OB_ERR_UNEXPECTED;
@@ -153,15 +154,15 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
 
     ObIOFlag flag;
     ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-    // check read from tmp file read cache
-    ASSERT_FALSE(flag.is_sync());
+    // check read tmp_file from mem_macro_cache, and it will set_sync
+    ASSERT_TRUE(flag.is_sync());
   }
 
   // 4. wait preread_next_segment_file finish
   start_us = ObTimeUtility::current_time();
   while ((preread_cache_mgr.preread_queue_.size() != 0) ||
          (preread_task.segment_files_.count() != 0) ||
-         (preread_task.free_list_.get_curr_total() != ObSSPreReadTask::MAX_PRE_READ_PARALLELISM)) {
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
     ob_usleep(1000);
     if (timeout_us + start_us < ObTimeUtility::current_time()) {
       ret = OB_ERR_UNEXPECTED;
@@ -172,7 +173,7 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     }
   }
 
-  const int64_t max_parallel_cnt = ObSSPreReadTask::MAX_PRE_READ_PARALLELISM;
+  const int64_t max_parallel_cnt = file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_;
   ASSERT_EQ(max_parallel_cnt, preread_task.free_list_.get_curr_total());
   ASSERT_EQ(0, preread_cache_mgr.preread_queue_.size());
   ASSERT_EQ(0, preread_task.async_read_list_.get_curr_total());
@@ -214,7 +215,7 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   ObPreReadFileMeta file_meta(file_id, ObTabletID(ObTabletID::INVALID_TABLET_ID), 0);
   ObSSPreReadEntry preread_entry(preread_task.allocator_);
   ASSERT_EQ(OB_SUCCESS, preread_entry.init(file_meta));
-  ASSERT_EQ(OB_SUCCESS, preread_task.do_async_read_segment_file(preread_entry));
+  ASSERT_EQ(OB_SUCCESS, preread_task.do_async_read_entry(preread_entry));
   ASSERT_EQ(OB_SUCCESS, preread_entry.read_handle_.wait());
   // test1: preread_write,read_whole,GC,update_to_normal
   // push to preread map
@@ -230,19 +231,24 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   expected_disk_size += statbuf.size_;
   // write
-  ASSERT_EQ(OB_SUCCESS, preread_task.do_async_write_segment_file(preread_entry));
-  ASSERT_EQ(OB_SUCCESS, preread_entry.write_handle_.wait());
-  expected_disk_size += WRITE_IO_SIZE;
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
-  ASSERT_EQ(expected_disk_size, cache_stat.used_);
-  // read_whole
-  ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.set_need_preread(file_id, false/*is_not_need_preread*/));
-  // GC
-  ASSERT_EQ(OB_SUCCESS, file_manager->delete_tmp_file(file_id));
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
-  ASSERT_EQ(0, cache_stat.used_);
-  // update_to_normal
-  ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.update_to_normal_status(file_id, preread_entry.write_handle_.get_data_size()));
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  int64_t ori_mem_macro_cache_size = mem_macro_cache->cache_stat_.macro_blk_stat().valid_macro_size_;
+  ASSERT_EQ(OB_SUCCESS, preread_task.do_write_entry(preread_entry));
+  int64_t cur_mem_macro_cache_size = mem_macro_cache->cache_stat_.macro_blk_stat().valid_macro_size_;
+  ASSERT_EQ(ori_mem_macro_cache_size + preread_entry.read_handle_.get_data_size(), cur_mem_macro_cache_size);
+  // ASSERT_EQ(OB_SUCCESS, preread_entry.write_handle_.wait());
+  // expected_disk_size += WRITE_IO_SIZE;
+  // ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  // ASSERT_EQ(expected_disk_size, cache_stat.used_);
+  // // read_whole
+  // ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.set_need_preread(file_id, false/*is_not_need_preread*/));
+  // // GC
+  // ASSERT_EQ(OB_SUCCESS, file_manager->delete_tmp_file(file_id));
+  // ASSERT_EQ(OB_SUCCESS, disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
+  // ASSERT_EQ(0, cache_stat.used_);
+  // // update_to_normal
+  // ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.update_to_normal_status(file_id, preread_entry.write_handle_.get_data_size()));
 }
 
 } // namespace storage

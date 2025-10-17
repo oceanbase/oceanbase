@@ -13,11 +13,7 @@
 #define USING_LOG_PREFIX PL
 #include "core/ob_orc_jit.h"
 
-#ifdef CPP_STANDARD_20
 #include "llvm/ExecutionEngine/JITSymbol.h"
-#else
-#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
-#endif
 #include "core/ob_pl_ir_compiler.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 
@@ -139,11 +135,7 @@ int ObOrcJit::lookup(const std::string &name, ObJITSymbol &symbol)
         "name", name.c_str(),
         "msg", msg.c_str());
     } else {
-#ifdef CPP_STANDARD_20
       symbol = JITEvaluatedSymbol(value->getValue(), JITSymbolFlags::Exported);
-#else
-      symbol = *value;
-#endif
     }
   }
 
@@ -325,11 +317,7 @@ int ObOrcJit::set_optimize_level(ObPLOptLevel level)
 
   if (OB_SUCC(ret) && level == ObPLOptLevel::O0) {
     auto &tm_builder = ObEngineBuilder.getJITTargetMachineBuilder();
-#ifdef CPP_STANDARD_20
     if (!tm_builder.has_value()) {
-#else
-    if (!tm_builder.hasValue()) {
-#endif
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL JITTargetMachineBuilder", K(ret), K(lbt()));
     } else {

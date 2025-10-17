@@ -61,6 +61,7 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
 #include "close_modules/shared_storage/storage/incremental/share/ob_shared_ls_meta.h"
 #endif
+#include "observer/table/common/ob_table_query_session_id_service.h"
 
 namespace oceanbase
 {
@@ -446,11 +447,11 @@ int ObLS::set_finish_ha_state()
   return ret;
 }
 
-int ObLS::set_remove_state()
+int ObLS::set_remove_state(const bool write_slog)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_meta_.set_remove_state())) {
-    LOG_WARN("set remove state failed", K(ret), K_(ls_meta));
+  if (OB_FAIL(ls_meta_.set_remove_state(write_slog))) {
+    LOG_WARN("set remove state failed", K(ret), K_(ls_meta), K(write_slog));
   } else {
     update_state_seq_();
   }
@@ -1080,6 +1081,7 @@ int ObLS::register_common_service()
     REGISTER_TO_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
   }
   if (ls_id == IDS_LS) {
+    REGISTER_TO_LOGSERVICE(TABLE_SESS_ID_LOG_BASE_TYPE, MTL(observer::ObTableSessIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
       // REGISTER_TO_LOGSERVICE(SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE, MTL(ObPublicBlockGCService *));
@@ -1141,12 +1143,25 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler *));
       REGISTER_TO_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher *));
+#ifdef OB_BUILD_SYS_VEC_IDX
+      REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+          LOG_WARN("fail to init tablet ttl manager", KR(ret));
+        } else {
+          REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+          REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
+        }
+      }
+#endif
     }
     if (is_meta_tenant(tenant_id)) {
       REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
     }
   }
+
   return ret;
 }
 
@@ -1255,6 +1270,8 @@ void ObLS::unregister_common_service_()
   if (ls_meta_.ls_id_ == IDS_LS) {
     // temporary fix of
     MTL(sql::ObDASIDService *)->reset_ls();
+    MTL(observer::ObTableSessIDService*)->reset_ls();
+    UNREGISTER_FROM_LOGSERVICE(TABLE_SESS_ID_LOG_BASE_TYPE, MTL(observer::ObTableSessIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
       // UNREGISTER_FROM_LOGSERVICE(SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE, MTL(ObPublicBlockGCService *));
@@ -1321,6 +1338,13 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
       UNREGISTER_FROM_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler*));
       UNREGISTER_FROM_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher*));
+#ifdef OB_BUILD_SYS_VEC_IDX
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
+      UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+      tablet_ttl_mgr_.destroy();
+#endif
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);

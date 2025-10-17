@@ -85,6 +85,8 @@ int ObInitSqcP::process()
     LOG_WARN("pre setup op input failed", K(ret));
   } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
     LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
+  } else if (OB_FAIL(sqc_handler->prepare_tablets_info())) {
+    LOG_WARN("failed to prepare tablets_info");
   } else if (result_.reserved_thread_count_ <= 0) {
     ret = OB_ERR_INSUFFICIENT_PX_WORKER;
     ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());
@@ -146,6 +148,9 @@ int ObInitSqcP::pre_setup_op_input(ObPxSqcHandler &sqc_handler)
   if (sqc.is_single_tsc_leaf_dfo() &&
       OB_FAIL(sub_coord.rebuild_sqc_access_table_locations())) {
     LOG_WARN("fail to rebuild sqc access location", K(ret));
+  } else if (sqc.is_single_tsc_leaf_dfo() &&
+             OB_FAIL(sub_coord.rebuild_sqc_lake_table_file_map())) {
+    LOG_WARN("failed to rebuild sqc lake table file map");
   } else if (OB_FAIL(sub_coord.pre_setup_op_input(*ctx, *root, sub_coord.get_sqc_ctx(),
       sqc.get_access_table_locations(),
       sqc.get_access_table_location_keys()))) {
@@ -170,6 +175,14 @@ int ObInitSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
+    /*
+       Sometimes, PX workers may evaluate temporary expressions which alter the execution context's
+       frames, while other workers are still in the process of deserializing task args. This
+       could lead to a crash, so we retain the original frames to assist with
+       deserialization for PX.
+    */
+    arg.exec_ctx_->set_ori_frames(arg.exec_ctx_->get_frames());
+    arg.exec_ctx_->set_ori_frame_cnt(arg.exec_ctx_->get_frame_cnt());
     if (OB_FAIL(session->store_query_string(ObString::make_string("PX SUB COORDINATOR")))) {
       LOG_WARN("store query string to session failed", K(ret));
     } else if (OB_FAIL(sub_coord.pre_process())) {

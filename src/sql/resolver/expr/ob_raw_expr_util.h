@@ -106,6 +106,30 @@ private:
   ObIAllocator *allocator_;
 };
 
+class ObExecParamExtractor
+{
+public:
+ObExecParamExtractor();
+  ObExecParamExtractor(ObRawExprFactory &expr_factory)
+                     : expr_factory_(expr_factory),
+                       current_exec_params_(NULL) {}
+  virtual ~ObExecParamExtractor() {}
+
+  int extract(ObRawExpr *outer_val_expr);
+
+  inline void set_current_exec_params(ObQueryRefRawExpr * query_ref)
+  { current_exec_params_ = query_ref; }
+
+  int is_existed(const ObRawExpr *target, bool &found);
+
+  int create_new_exec_param(ObRawExpr *target);
+  DISALLOW_COPY_AND_ASSIGN(ObExecParamExtractor);
+private:
+  ObRawExprFactory &expr_factory_;
+  ObQueryRefRawExpr *current_exec_params_;
+};
+
+
 class ObRawExprUniqueSet
 {
 public:
@@ -433,10 +457,8 @@ public:
                                 ObIArray<ObRawExpr *> &from,
                                 ObIArray<ObRawExpr *> &to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
-  static int contain_virtual_generated_column(ObRawExpr *&expr,
-                                  bool &is_contain_vir_gen_column);
-  static int extract_virtual_generated_column_parents(
-  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs);
+  static int extract_virtual_generated_columns(ObRawExpr *&expr,
+                                               ObIArray<ObRawExpr *> &vir_gen_columns);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
@@ -636,14 +658,17 @@ public:
                                                const ObSQLSessionInfo *session_info,
                                                ObIArray<common::ObString> &type_info_value);
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
-                                 ObQueryRefRawExpr *query_ref,
-                                 ObRawExpr *correlated_expr,
-                                 ObRawExpr *&exec_param);
-
-  static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params,
                                  ObRawExpr *correlated_expr,
                                  ObRawExpr *&exec_param);
+  static int get_exec_param_expr(ObRawExprFactory &expr_factory,
+                                 ObQueryRefRawExpr *query_ref,
+                                 ObRawExpr *correlated_expr,
+                                 ObRawExpr *&exec_param);
+  static int extract_exec_param_exprs(ObRawExprFactory &expr_factory,
+                                      ObQueryRefRawExpr *query_ref,
+                                      ObRawExpr *correlated_expr,
+                                      ObRawExpr *&param_expr);
   static int create_new_exec_param(ObQueryCtx *query_ctx,
                                    ObRawExprFactory &expr_factory,
                                    ObRawExpr *&expr,
@@ -971,11 +996,11 @@ public:
                                      ObUDFInfo &udf_info,
                                      uint64_t dblink_id,
                                      const ObString &dblink_name,
-                                     ObExternalRoutineType external_routine_type);
+                                     ObExternalRoutineType external_routine_type,
+                                     bool is_mysql_udtf);
   static int resolve_udf_param_types(const share::schema::ObIRoutineInfo* func_info,
                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                      sql::ObSQLSessionInfo &session_info,
-                                     common::ObIAllocator &allocator,
                                      common::ObMySQLProxy &sql_proxy,
                                      ObUDFInfo &udf_info,
                                      pl::ObPLDbLinkGuard &dblink_guard,
@@ -1182,6 +1207,7 @@ public:
                               const ObIArray<ObRawExpr *> &rowkey_exprs,
                               ObRawExpr *part_expr,
                               ObRawExpr *subpart_expr,
+                              bool copy_part_expr,
                               ObSysFunRawExpr *&rowid_expr);
   static int build_empty_rowid_expr(ObRawExprFactory &expr_factory,
                                     const TableItem &table_item,
@@ -1271,6 +1297,15 @@ public:
 
   static int extract_params(const common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
+
+  static int extract_dynamic_params(ObRawExpr* expr,
+                                    common::ObIArray<ObRawExpr*> &params,
+                                    const bool without_const_expr = false);
+
+  static int extract_dynamic_params(const common::ObIArray<ObRawExpr*> &exprs,
+                                    common::ObIArray<ObRawExpr*> &params,
+                                    const bool without_const_expr = false);
+
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,
@@ -1372,6 +1407,20 @@ public:
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
+  static bool is_auxiliary_generated_column(const ObColumnRefRawExpr &col_ref);
+  static int resolve_identifier(ObIAllocator &allocator,
+      sql::ObSQLSessionInfo &session,
+      const common::ObObj &param,
+      const char* const param_name,
+      ObString &value,
+      bool nullable = true,
+      bool check_length = true);
+  static int resolve_qualified_names(ObIAllocator &allocator,
+      sql::ObSQLSessionInfo &session,
+      const common::ObObj &param,
+      const char* const param_name,
+      common::ObIArray<sql::ObQualifiedName> &q_name,
+      bool nullable);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

@@ -419,7 +419,8 @@ int ObBackupDataScheduler::get_all_tenants_(const bool with_backup_dest, ObIArra
         LOG_INFO("log archive is not doing, no need to backup", K(tenant_id));
       } else if (OB_SUCCESS != (tmp_ret = check_initiate_twice_by_same_tenant_(tenant_id, OB_SYS_TENANT_ID))) {
         LOG_WARN("[DATA_BACKUP]failed to check initiate twice by same tenant", K(tmp_ret), K(tenant_id));
-      } else if (!with_backup_dest && OB_SUCCESS != (tmp_ret =  check_tenant_set_backup_dest_(tenant_id, is_setted))) {
+      } else if (!with_backup_dest
+        && OB_SUCCESS != (tmp_ret = backup::ObBackupUtils::check_tenant_backup_dest_exists(tenant_id, is_setted, *sql_proxy_))) {
         LOG_WARN("fail to check backup dest is valid", K(ret), K(tenant_id));
       } else if (!is_setted) {
         LOG_INFO("backup dest is not setted, can't start backup", K(ret), K(tenant_id));
@@ -460,26 +461,6 @@ int ObBackupDataScheduler::check_log_archive_status_(const uint64_t tenant_id, b
   return ret;
 }
 
-int ObBackupDataScheduler::check_tenant_set_backup_dest_(const uint64_t tenant_id, bool &is_setted)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupHelper backup_helper;
-  ObBackupPathString backup_dest_str;
-  is_setted = false;
-  if (OB_FAIL(backup_helper.init(tenant_id, *sql_proxy_))) {
-    LOG_WARN("fail to init backup help", K(ret));
-  } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to get backup dest", K(ret), K(tenant_id));
-    }
-  } else if (!backup_dest_str.is_empty()) {
-    is_setted = true;
-  } 
-  return ret;
-}
-
 int ObBackupDataScheduler::start_sys_backup_data_(const ObBackupJobAttr &job_attr)
 {
   int ret = OB_SUCCESS;
@@ -510,7 +491,7 @@ int ObBackupDataScheduler::start_sys_backup_data_(const ObBackupJobAttr &job_att
         LOG_WARN("[DATA_BACKUP]failed to check initiate twice by same tenant", K(ret), K(tenant_id));
       } else if (job_attr.backup_path_.is_empty()) {
         bool is_setted = true;
-        if(OB_FAIL(check_tenant_set_backup_dest_(tenant_id, is_setted))) {
+        if (OB_FAIL(backup::ObBackupUtils::check_tenant_backup_dest_exists(tenant_id, is_setted, *sql_proxy_))) {
           LOG_WARN("fail to check backup dest valid", K(ret));
         } else if (!is_setted) {
           ret = OB_BACKUP_CAN_NOT_START;
@@ -1202,7 +1183,6 @@ int ObUserTenantBackupJobMgr::check_dest_validity_()
   } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
     LOG_WARN("fail to check backup dest validity", K(ret), KPC(job_attr_));
   }
-
   return ret;
 }
 

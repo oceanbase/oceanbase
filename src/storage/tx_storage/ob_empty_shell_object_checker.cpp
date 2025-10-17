@@ -156,7 +156,7 @@ int ObDDLEmptyShellChecker::check_delay_deleted_time_exceeds(
     } else {
       STORAGE_LOG(WARN, "get refactored failed", K(ret), K(tablet_id));
     }
-  } else if (ObClockGenerator::getClock() - tag_deleted_us >= DELAY_GC_INTERVAL) {
+  } else if (GCTX.is_shared_storage_mode() || ObClockGenerator::getClock() - tag_deleted_us >= DELAY_GC_INTERVAL) {
     can_become_empty_shell = true;
     STORAGE_LOG(INFO, "delete split src tablet when reaching predefined time limit", K(ret), K(tablet_id));
   } else {

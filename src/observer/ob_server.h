@@ -79,6 +79,7 @@
 #include "share/wr/ob_wr_service.h"
 
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_tenant_gc_task.h"
@@ -388,6 +389,7 @@ private:
   obrpc::ObStorageRpcProxy storage_rpc_proxy_;
   obrpc::ObCommonRpcProxy rs_rpc_proxy_;
   common::ObMySQLProxy sql_proxy_;
+  common::ObOracleSqlProxy oracle_sql_proxy_;
   common::ObMySQLProxy ddl_sql_proxy_;
   common::ObOracleSqlProxy ddl_oracle_sql_proxy_;
   common::ObDbLinkProxy dblink_proxy_;

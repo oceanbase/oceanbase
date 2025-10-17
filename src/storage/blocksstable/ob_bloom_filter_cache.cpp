@@ -29,6 +29,11 @@ ObBloomFilter::ObBloomFilter() : allocator_(ObModIds::OB_BLOOM_FILTER), nhash_(0
 {
 }
 
+ObBloomFilter::ObBloomFilter(const uint64_t tenant_id)
+  : allocator_(ObModIds::OB_BLOOM_FILTER, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id), nhash_(0), nbit_(0), bits_(NULL)
+{
+}
+
 ObBloomFilter::~ObBloomFilter()
 {
   destroy();

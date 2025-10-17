@@ -214,7 +214,8 @@ int TriggerHandle::init_param_old_row(
       } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.old_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
-      } else if ((is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
+      } else if (lib::is_oracle_mode()
+                 && (is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -292,7 +293,8 @@ int TriggerHandle::init_param_new_row(
       } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
-      } else if ((is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+      } else if (lib::is_oracle_mode()
+                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -503,16 +505,17 @@ int TriggerHandle::calc_trigger_routine(
   int ret = OB_SUCCESS;
   ObArray<int64_t> path;
   ObArray<int64_t> nocopy_params;
-  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
   bool old_flag = false;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
+  pl::ObPLExecuteArg pl_execute_arg;
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
   OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
+  OZ (pl_execute_arg.obtain_routine(exec_ctx, trigger_id, routine_id, path));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, cacheobj_guard),
+    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, pl_execute_arg),
       trigger_id, routine_id, params);
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
@@ -552,7 +555,7 @@ int TriggerHandle::check_and_update_new_row(
           LOG_WARN("datum is NULL", K(ret));
         } else if (OB_FAIL(datum->to_obj(new_obj, new_row_exprs.at(i)->obj_meta_))) {
           LOG_WARN("failed to to obj", K(ret));
-        } else {
+        } else if (columns.get_flags()[i].is_update_) {
           bool is_strict_equal = false;
           if (new_obj.is_lob_storage()) {
             common::ObArenaAllocator lob_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -576,14 +579,8 @@ int TriggerHandle::check_and_update_new_row(
           } else {
             is_strict_equal = new_obj.strict_equal(new_cells[i]);
           }
-          if (OB_FAIL(ret)) {
-          } else if(!is_strict_equal) {
-            if (lib::is_oracle_mode() && !columns.get_flags()[i].is_update_) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column not in update column list in before update row trigger");
-            } else {
-              updated = true;
-            }
+          if (OB_SUCC(ret)) {
+            updated = !is_strict_equal;
           }
         }
       }
@@ -607,7 +604,8 @@ int TriggerHandle::check_and_update_new_row(
         } else {
           ObObj tmp_obj = new_cells[i];
           ObDatum &write_datum = expr->locate_datum_for_write(eval_ctx);
-          if (ob_is_geometry(expr->obj_meta_.get_type())) {
+          if (lib::is_oracle_mode()
+              && ob_is_geometry(expr->obj_meta_.get_type())) {
             if (OB_FAIL(convert_pl_type_to_sql_type(eval_ctx.exec_ctx_.get_my_session(),
                                                     eval_ctx.exec_ctx_,
                                                     eval_ctx.exec_ctx_.get_allocator(),

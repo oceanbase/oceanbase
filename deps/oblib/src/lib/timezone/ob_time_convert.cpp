@@ -264,7 +264,8 @@ const ObOracleTimeLimiter ObIntervalLimit::MINUTE             = {0, 59,         
 const ObOracleTimeLimiter ObIntervalLimit::SECOND             = {0, 59,                 OB_ERR_INTERVAL_INVALID};
 const ObOracleTimeLimiter ObIntervalLimit::FRACTIONAL_SECOND  = {0, static_cast<int32_t>(power_of_10[9] - 1), OB_ERR_INTERVAL_INVALID};
 
-int ObTime::set_tz_name(const ObString &tz_name)
+template<typename PartType>
+int ObTimeBase<PartType>::set_tz_name(const ObString &tz_name)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tz_name.empty()) || OB_UNLIKELY(tz_name.length() >= OB_MAX_TZ_NAME_LEN)) {
@@ -283,7 +284,8 @@ int ObTime::set_tz_name(const ObString &tz_name)
   return ret;
 }
 
-int ObTime::set_tzd_abbr(const ObString &tzd_abbr)
+template<typename PartType>
+int ObTimeBase<PartType>::set_tzd_abbr(const ObString &tzd_abbr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tzd_abbr.empty()) || OB_UNLIKELY(tzd_abbr.length() >= OB_MAX_TZ_ABBR_LEN)) {
@@ -2175,11 +2177,16 @@ int ObTimeConverter::merge_date_interval(int64_t base_value, const ObString &int
   if (OB_FAIL(str_to_interval(interval_str, unit_type, interval_value))) {
     LOG_WARN("failed to convert string to interval", K(ret));
   } else {
-    value = base_value + (is_add ? interval_value : -interval_value);
-    if (ZERO_DATETIME != value
-        && (value > DATETIME_MAX_VAL || value < DATETIME_MIN_VAL)) {
+    interval_value = (is_add ? interval_value : -interval_value);
+    if (OB_UNLIKELY(__builtin_add_overflow(base_value, interval_value, &value))) {
       ret = OB_INVALID_DATE_VALUE;
       LOG_WARN("invalid date", K(ret), K(value));
+    } else {
+      if (ZERO_DATETIME != value
+          && (value > DATETIME_MAX_VAL || value < DATETIME_MIN_VAL)) {
+        ret = OB_INVALID_DATE_VALUE;
+        LOG_WARN("invalid date", K(ret), K(value));
+      }
     }
   }
   return ret;
@@ -3088,8 +3095,11 @@ int ObTimeConverter::str_to_ob_interval(const ObString &str, ObDateUnitType unit
     int32_t expect_cnt = INTERVAL_INDEX[unit_type].count_;
     int32_t i = 0;
     for (; OB_SUCC(ret) && i < expect_cnt + 1 && pos < end; ++i) {
-      if (OB_FAIL(get_datetime_digits_delims(pos, end, INT32_MAX, digits[i], delims[i]))) {
-        LOG_WARN("failed to get part value of interval", K(ret), K(str));
+      // interval allow digit overflow INT32_MAX
+      if (OB_FAIL(get_datetime_digits<int64_t>(pos, end, INT32_MAX, digits[i]))) {
+        LOG_WARN("failed to get digits from datetime string", K(ret));
+      } else if (OB_FAIL(get_datetime_delims(pos, end, delims[i]))) {
+        LOG_WARN("failed to get delims from datetime string", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -5741,13 +5751,19 @@ int ObTimeConverter::ob_interval_to_interval(const ObInterval &ob_interval, int6
     ret = OB_INTERVAL_WITH_MONTH;
     LOG_WARN("Interval with year or month can't be converted to useconds", K(ret));
   } else {
-    const int32_t *parts = ob_interval.parts_;
+    const int64_t *parts = ob_interval.parts_;
     value = 0;
-    for (int32_t i = DT_MDAY; i <= DT_USEC; ++i) {
-      value *= DT_PART_BASE[i];
-      value += parts[i];
+    for (int32_t i = DT_MDAY; OB_SUCC(ret) && i <= DT_USEC; ++i) {
+      int64 tmp_value;
+      if (OB_UNLIKELY(__builtin_mul_overflow(value, DT_PART_BASE[i], &tmp_value))) {
+        ret = OB_INVALID_DATE_VALUE;
+      } else if (OB_UNLIKELY(__builtin_add_overflow(tmp_value, parts[i], &tmp_value))) {
+        ret = OB_INVALID_DATE_VALUE;
+      } else {
+        value = tmp_value;
+      }
     }
-    if (DT_MODE_NEG & ob_interval.mode_) {
+    if (OB_SUCC(ret) && DT_MODE_NEG & ob_interval.mode_) {
       value = -value;
     }
   }
@@ -6175,6 +6191,7 @@ int ObTimeConverter::time_overflow_trunc(int64_t &value, const ObScale &time_sca
 //  return ret;
 //}
 
+template<typename ValType>
 int ObTimeConverter::get_datetime_digits(const char *&str, const char *end, int32_t max_len, ObTimeDigits &digits)
 {
   int ret = OB_SUCCESS;
@@ -6184,13 +6201,20 @@ int ObTimeConverter::get_datetime_digits(const char *&str, const char *end, int3
   } else {
     const char *pos = str;
     const char *digit_end = str + max_len < end ? str + max_len : end;
-    int32_t value = 0;
+    int64_t value = 0;
+    constexpr int64_t MAX64_DIV10 = INT64_MAX / 10;
+    constexpr int64_t MAX64_MOD10 = INT64_MAX % 10;
+    constexpr bool is_int32 = std::is_same<ValType, int32_t>::value;
     for (; OB_SUCC(ret) && pos < digit_end && isdigit(*pos); ++pos) {
-      if (value * 10LL > INT32_MAX - (*pos - '0')) {
+      const int64_t num = static_cast<int64_t>(*pos - '0');
+      if (is_int32 && value * 10LL > INT32_MAX - num) {
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("datetime part value is out of range", K(ret));
+      } else if (!is_int32 && (value > MAX64_DIV10 || (value == MAX64_DIV10 && num > MAX64_MOD10))) {
         ret = OB_OPERATE_OVERFLOW;
         LOG_WARN("datetime part value is out of range", K(ret));
       } else {
-        value = value * 10 + *pos - '0';
+        value = value * 10 + num;
       }
     }
     digits.ptr_ = str;
@@ -7681,12 +7705,13 @@ int ObTimeConverter::iso_interval_str_parse(const ObString &str, ObIntervalParts
   return ret;
 }
 
-DEF_TO_STRING(ObTime)
+template<typename PartType>
+DEF_TO_STRING(ObTimeBase<PartType>)
 {
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K(mode_),
-       "parts", ObArrayWrap<int32_t>(parts_, TOTAL_PART_CNT),
+       "parts", ObArrayWrap<PartType>(parts_, TOTAL_PART_CNT),
        "tz_name", ObString(OB_MAX_TZ_NAME_LEN, tz_name_),
        "tzd_abbr", ObString(OB_MAX_TZ_ABBR_LEN, tzd_abbr_),
        K_(time_zone_id),
@@ -7695,6 +7720,9 @@ DEF_TO_STRING(ObTime)
   J_OBJ_END();
   return pos;
 }
+
+template class ObTimeBase<int32_t>;
+template class ObTimeBase<int64_t>;
 
 } // namesapce common
 } // namespace oceanbase

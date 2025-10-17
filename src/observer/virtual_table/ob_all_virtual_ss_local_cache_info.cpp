@@ -17,6 +17,8 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "storage/shared_storage/ob_ss_local_cache_stat.h"
+#include "storage/shared_storage/ob_ss_local_cache_service.h"
 #endif
 
 using namespace oceanbase::storage;
@@ -142,6 +144,38 @@ int ObAllVirtualSSLocalCacheInfo::add_micro_cache_inst_()
   return ret;
 }
 
+int ObAllVirtualSSLocalCacheInfo::add_macro_cache_inst_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    ObSSLocalCacheInfoInst inst;
+    inst.cache_name_ = OB_SS_MACRO_CACHE_NAME;
+    inst.priority_ = OB_SS_MACRO_CACHE_PRIORITY;
+
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
+    } else {
+      ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
+      ObSSMacroCacheAllStat &macro_cache_stat = local_cache_stat.macro_cache_stat_;
+      inst.total_hit_cnt_ = macro_cache_stat.get_total_hit_cnt();
+      inst.total_hit_bytes_ = macro_cache_stat.get_total_hit_bytes();
+      inst.total_miss_cnt_ = macro_cache_stat.get_total_miss_cnt();
+      inst.total_miss_bytes_ = macro_cache_stat.get_total_miss_bytes();
+      const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
+    }
+
+    if (FAILEDx(inst_list_.push_back(inst))) {
+      SERVER_LOG(WARN, "fail to push back macro cache inst", KR(ret), K(inst), K(inst_list_.count()));
+    }
+  }
+#endif
+  return ret;
+}
+
 int ObAllVirtualSSLocalCacheInfo::add_tmpfile_cache_inst_()
 {
   int ret = OB_SUCCESS;
@@ -151,27 +185,23 @@ int ObAllVirtualSSLocalCacheInfo::add_tmpfile_cache_inst_()
     inst.cache_name_ = OB_SS_LOCAL_CACHE_TMPFILE_NAME;
     inst.priority_ = OB_LOCAL_CACHE_TMPFILE_PRIORITY;
 
-    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
-    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
+      SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
     } else {
-      ObLocalCacheHitStat hit_stat;
-      if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_cache_type(ObSSMacroCacheType::TMP_FILE, hit_stat))) {
-        SERVER_LOG(WARN, "fail to get macro cache hit stat by cache type", KR(ret));
-      } else {
-        inst.total_hit_cnt_ = hit_stat.cache_hit_cnt_;
-        inst.total_hit_bytes_ = hit_stat.cache_hit_bytes_;
-        inst.total_miss_cnt_ = hit_stat.cache_miss_cnt_;
-        inst.total_miss_bytes_ = hit_stat.cache_miss_bytes_;
-        const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
-        inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
-      }
+      ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
+      ObSSCacheHitInfo &hit_info = local_cache_stat.macro_cache_stat_.tmpfile_stat_.hit_info_;
+      inst.total_hit_cnt_ = hit_info.hit_cnt_;
+      inst.total_hit_bytes_ = hit_info.hit_bytes_;
+      inst.total_miss_cnt_ = hit_info.miss_cnt_;
+      inst.total_miss_bytes_ = hit_info.miss_bytes_;
+      const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
     }
 
     if (FAILEDx(inst_list_.push_back(inst))) {
-      SERVER_LOG(WARN, "fail to push back tmp file cache inst",
-          KR(ret), K(inst), K(inst_list_.count()));
+      SERVER_LOG(WARN, "fail to push back tmpfile cache inst", KR(ret), K(inst), K(inst_list_.count()));
     }
   }
 #endif
@@ -187,27 +217,23 @@ int ObAllVirtualSSLocalCacheInfo::add_shared_macro_cache_inst_()
     inst.cache_name_ = OB_SS_LOCAL_CACHE_SHARED_MACRO_NAME;
     inst.priority_ = OB_LOCAL_CACHE_SHARED_MACRO_PRIORITY;
 
-    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
-    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
+      SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
     } else {
-      ObLocalCacheHitStat hit_stat;
-      if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_block_type(ObSSMacroBlockType::SHARED_MACRO, hit_stat))) {
-        SERVER_LOG(WARN, "fail to get macro cache hit stat by block type", KR(ret));
-      } else {
-        inst.total_hit_cnt_ = hit_stat.cache_hit_cnt_;
-        inst.total_hit_bytes_ = hit_stat.cache_hit_bytes_;
-        inst.total_miss_cnt_ = hit_stat.cache_miss_cnt_;
-        inst.total_miss_bytes_ = hit_stat.cache_miss_bytes_;
-        const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
-        inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
-      }
+      ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
+      ObSSCacheHitInfo &hit_info = local_cache_stat.macro_cache_stat_.shared_macro_stat_.hit_info_;
+      inst.total_hit_cnt_ = hit_info.hit_cnt_;
+      inst.total_hit_bytes_ = hit_info.hit_bytes_;
+      inst.total_miss_cnt_ = hit_info.miss_cnt_;
+      inst.total_miss_bytes_ = hit_info.miss_bytes_;
+      const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
     }
 
     if (FAILEDx(inst_list_.push_back(inst))) {
-      SERVER_LOG(WARN, "fail to push back shared macro cache inst",
-          KR(ret), K(inst), K(inst_list_.count()));
+      SERVER_LOG(WARN, "fail to push back shared macro cache inst", KR(ret), K(inst), K(inst_list_.count()));
     }
   }
 #endif
@@ -223,22 +249,19 @@ int ObAllVirtualSSLocalCacheInfo::add_private_macro_cache_inst_()
     inst.cache_name_ = OB_SS_LOCAL_CACHE_PRIVATE_MACRO_NAME;
     inst.priority_ = OB_LOCAL_CACHE_PRIVATE_MACRO_PRIORITY;
 
-    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
-    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
+      SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
     } else {
-      ObLocalCacheHitStat hit_stat;
-      if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_block_type(ObSSMacroBlockType::PRIVATE_MACRO, hit_stat))) {
-        SERVER_LOG(WARN, "fail to get macro cache hit stat by block type", KR(ret));
-      } else {
-        inst.total_hit_cnt_ = hit_stat.cache_hit_cnt_;
-        inst.total_hit_bytes_ = hit_stat.cache_hit_bytes_;
-        inst.total_miss_cnt_ = hit_stat.cache_miss_cnt_;
-        inst.total_miss_bytes_ = hit_stat.cache_miss_bytes_;
-        const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
-        inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
-      }
+      ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
+      ObSSCacheHitInfo &hit_info = local_cache_stat.macro_cache_stat_.private_macro_stat_.hit_info_;
+      inst.total_hit_cnt_ = hit_info.hit_cnt_;
+      inst.total_hit_bytes_ = hit_info.hit_bytes_;
+      inst.total_miss_cnt_ = hit_info.miss_cnt_;
+      inst.total_miss_bytes_ = hit_info.miss_bytes_;
+      const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
     }
 
     if (FAILEDx(inst_list_.push_back(inst))) {
@@ -249,7 +272,71 @@ int ObAllVirtualSSLocalCacheInfo::add_private_macro_cache_inst_()
   return ret;
 }
 
-int ObAllVirtualSSLocalCacheInfo::set_local_cache_insts_()
+int ObAllVirtualSSLocalCacheInfo::add_external_table_cache_inst_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    ObSSLocalCacheInfoInst inst;
+    inst.cache_name_ = OB_SS_LOCAL_CACHE_EXTERNAL_TABLE_NAME;
+    inst.priority_ = OB_LOCAL_CACHE_EXTERNAL_TABLE_PRIORITY;
+
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
+    } else {
+      ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
+      ObSSCacheHitInfo &hit_info = local_cache_stat.macro_cache_stat_.external_table_stat_.hit_info_;
+      inst.total_hit_cnt_ = hit_info.hit_cnt_;
+      inst.total_hit_bytes_ = hit_info.hit_bytes_;
+      inst.total_miss_cnt_ = hit_info.miss_cnt_;
+      inst.total_miss_bytes_ = hit_info.miss_bytes_;
+      const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
+    }
+
+    if (FAILEDx(inst_list_.push_back(inst))) {
+      SERVER_LOG(WARN, "fail to push back external_table cache inst", KR(ret), K(inst), K(inst_list_.count()));
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObAllVirtualSSLocalCacheInfo::add_local_cache_inst_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (oceanbase::lib::is_diagnose_info_enabled()) {
+    ObSSLocalCacheInfoInst inst;
+    inst.cache_name_ = OB_SS_LOCAL_CACHE_NAME;
+    inst.priority_ = OB_SS_LOCAL_CACHE_PRIORITY;
+
+    ObSSLocalCacheService *local_cache_service = nullptr;
+    if (OB_ISNULL(local_cache_service = MTL(ObSSLocalCacheService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "local_cache_service is null", KR(ret));
+    } else {
+      ObSSLocalCacheStat &local_cache_stat = local_cache_service->get_local_cache_stat();
+      ObSSCacheHitInfo &hit_info = local_cache_stat.local_cache_stat_.hit_info_;
+      inst.total_hit_cnt_ = hit_info.hit_cnt_;
+      inst.total_hit_bytes_ = hit_info.hit_bytes_;
+      inst.total_miss_cnt_ = hit_info.miss_cnt_;
+      inst.total_miss_bytes_ = hit_info.miss_bytes_;
+      const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+      inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
+    }
+
+    if (FAILEDx(inst_list_.push_back(inst))) {
+      SERVER_LOG(WARN, "fail to push back local cache inst", KR(ret), K(inst), K(inst_list_.count()));
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObAllVirtualSSLocalCacheInfo::set_all_cache_insts_()
 {
   int ret = OB_SUCCESS;
   inst_list_.reset();
@@ -260,12 +347,16 @@ int ObAllVirtualSSLocalCacheInfo::set_local_cache_insts_()
     SERVER_LOG(WARN, "fail to set ss stats", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(add_micro_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add micro cache inst", KR(ret));
+  } else if (OB_FAIL(add_macro_cache_inst_())) {
+    SERVER_LOG(WARN, "fail to add macro cache inst", KR(ret));
   } else if (OB_FAIL(add_tmpfile_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add tmp file cache inst", KR(ret));
   } else if (OB_FAIL(add_shared_macro_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add shared macro cache inst", KR(ret));
   } else if (OB_FAIL(add_private_macro_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add private macro cache inst", KR(ret));
+  } else if (OB_FAIL(add_local_cache_inst_())) {
+    SERVER_LOG(WARN, "fail to add local cache inst", KR(ret));
   }
 #endif
   return ret;
@@ -286,8 +377,8 @@ int ObAllVirtualSSLocalCacheInfo::process_curr_tenant(common::ObNewRow *&row)
       tenant_id_ = MTL_ID();
       if (OB_FAIL(get_the_diag_info(tenant_id_, tenant_di_info_))) {
         SERVER_LOG(WARN, "get diag info fail", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(set_local_cache_insts_())) {
-        SERVER_LOG(WARN, "fail to set local cache status", KR(ret), K(tenant_id_));
+      } else if (OB_FAIL(set_all_cache_insts_())) {
+        SERVER_LOG(WARN, "fail to set all cache status", KR(ret), K(tenant_id_));
       } else {
         cur_idx_ = 0;
       }

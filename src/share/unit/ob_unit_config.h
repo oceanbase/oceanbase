@@ -65,6 +65,8 @@ public:
           const common::ObString &name,
           const ObUnitResource &resource);
 
+  int set(const uint64_t unit_config_id,
+           const ObUnitConfigName &name);
   ////////////////  assign funcs /////////////////
   int assign(const ObUnitConfig &other);
 

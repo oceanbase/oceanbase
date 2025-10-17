@@ -496,7 +496,9 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
       LOG_WARN("failed to reverse link udf", K(ret), K(is_reverse_link), K(dblink_id));
     } else if (OB_FAIL(formalize_link_table(stmt))) {
       LOG_WARN("failed to formalize link table stmt", K(ret));
-    } else if (lib::is_oracle_mode() &&
+    } else if (lib::is_oracle_mode()
+               && !is_reverse_link
+               && stmt->get_query_ctx()->sql_schema_guard_.check_is_under_oracle12c(dblink_id) &&
                OB_FAIL(extract_limit(stmt, stmt))) {
       LOG_WARN("failed to formalize limit", K(ret));
     } else {

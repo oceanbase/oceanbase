@@ -165,7 +165,7 @@ struct ObCurTraceId
 
     inline int64_t get_execution_id() const
     {
-      return id_.inner_sql_id_;
+      return id_.inner_sql_id_ + 1;
     }
 
     inline void set_sub_id(const int32_t sub_id)
@@ -247,7 +247,7 @@ struct ObCurTraceId
   {
     TraceId *trace_id = get_trace_id();
     if (nullptr != trace_id) {
-      trace_id->set_inner_sql_id(execution_id);
+      trace_id->set_inner_sql_id(execution_id - 1);  // don't change inner sql trace_id in the first execution
     }
   }
 

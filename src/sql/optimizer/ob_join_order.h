@@ -26,8 +26,10 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_query_range_define.h"
 #include "src/share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using oceanbase::common::ObString;
+using oceanbase::share::ObVecIdxExtraInfo;
 namespace test
 {
 class TestJoinOrder_ob_join_order_param_check_Test;
@@ -47,6 +49,11 @@ namespace schema
 class ObSchemaGetterGuard;
 }
 }
+namespace common
+{
+class ObLakeTableStat;
+class ObLakeColumnStat;
+}
 namespace sql
 {
   class ObJoinOrder;
@@ -54,6 +61,7 @@ namespace sql
   class ObIndexInfoCache;
   class ObSelectLogPlan;
   class ObConflictDetector;
+  class ObLakeTablePartitionInfo;
   struct CandiRangeExprs
   {
     int64_t column_id_;
@@ -291,61 +299,6 @@ enum DomainIndexType
   VEC_INDEX = 2
 };
 
-enum ObVecIndexType : uint8_t //FARM COMPAT WHITELIST
-{
-  VEC_INDEX_INVALID = 0,
-  VEC_INDEX_POST_WITHOUT_FILTER = 1,
-  VEC_INDEX_PRE = 2,
-  VEC_INDEX_POST_ITERATIVE_FILTER = 3,
-};
-
-struct ObVecIdxExtraInfo
-{
-static constexpr double DEFAULT_SELECTIVITY_RATE = 0.5;
-  ObVecIdxExtraInfo()
-    : algorithm_type_(VIAT_MAX),
-      vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
-      force_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
-      selectivity_(0),
-      row_count_(0),
-      can_use_vec_pri_opt_(false) {}
-  inline void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
-  ObVecIndexType get_vec_idx_type() const { return vec_idx_type_; }
-  inline double get_selectivity() const { return selectivity_; }
-  inline void set_selectivity(double selectivity) { selectivity_ = selectivity;}
-  inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
-  inline void set_vec_algorithm_by_index_type(ObIndexType index_type);
-  inline void set_algorithm_type(const ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
-  inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
-  bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
-  ObVectorIndexAlgorithmType get_algorithm_type() { return algorithm_type_; }
-  inline bool is_hnsw_vec_scan() const
-  {
-    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
-           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
-           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
-           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
-  }
-  inline bool is_hnsw_bq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
-  int64_t get_row_count() { return row_count_; }
-  bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
-  bool is_specify_vec_plan() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_INVALID; }
-  bool is_force_pre_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_force_post_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || force_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
-  ObVecIndexType get_force_filter_type() const {return force_index_type_;}
-  void set_force_vec_index_type(ObVecIndexType force_index_type) { force_index_type_ = force_index_type; }
-  TO_STRING_KV(K_(algorithm_type), K_(vec_idx_type),K_(force_index_type), K_(selectivity), K_(row_count), K_(can_use_vec_pri_opt));
-
-  ObVectorIndexAlgorithmType algorithm_type_;  // hnsw or ivf type
-  ObVecIndexType vec_idx_type_;                // pre & post，might add with/without join back
-  ObVecIndexType force_index_type_;
-  double selectivity_;
-  int64_t row_count_;
-  bool can_use_vec_pri_opt_;                   // when pre-filter is primary key and can filter by query range, search rowkey_vid table directly
-};
-
-
 struct DomainIndexAccessInfo
 {
   DomainIndexAccessInfo()
@@ -354,6 +307,8 @@ struct DomainIndexAccessInfo
       index_scan_index_ids_(),
       func_lookup_exprs_(),
       func_lookup_index_ids_(),
+      match_exprs_(),
+      match_index_ids_(),
       domain_idx_type_(DomainIndexType::NON_DOMAIN_INDEX) {}
 
   void reset()
@@ -363,27 +318,27 @@ struct DomainIndexAccessInfo
     index_scan_index_ids_.reset();
     func_lookup_exprs_.reset();
     func_lookup_index_ids_.reset();
+    match_exprs_.reset();
+    match_index_ids_.reset();
   }
 
   bool has_ir_scan() const { return index_scan_exprs_.count() != 0 && domain_idx_type_ == DomainIndexType::FTS_INDEX; }
   bool has_func_lookup() const { return func_lookup_exprs_.count() != 0 && domain_idx_type_ == DomainIndexType::FTS_INDEX; }
-
-  bool has_vec_index() const { return domain_idx_type_ == DomainIndexType::VEC_INDEX;}
+  bool has_es_match() const { return match_exprs_.count() != 0 && domain_idx_type_ == DomainIndexType::FTS_INDEX; }
   void set_domain_idx_type(DomainIndexType domain_idx_type) { domain_idx_type_ = domain_idx_type;}
-
   TO_STRING_KV(K_(index_scan_exprs), K_(index_scan_filters), K_(index_scan_index_ids),
-      K_(func_lookup_exprs), K_(func_lookup_index_ids), K_(domain_idx_type), K_(vec_extra_info));
+      K_(func_lookup_exprs), K_(func_lookup_index_ids), K_(match_exprs), K_(match_index_ids), K_(domain_idx_type));
 
   common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> index_scan_exprs_;
   common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> index_scan_filters_;
   common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> index_scan_index_ids_;
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> func_lookup_exprs_;
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> func_lookup_index_ids_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> match_exprs_;
+  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> match_index_ids_;
   // 新增成员
   DomainIndexType domain_idx_type_;
-  ObVecIdxExtraInfo vec_extra_info_;
 };
-
 
 class Path
 {
@@ -447,7 +402,8 @@ class Path
         server_list_(),
         is_pipelined_path_(false),
         is_nl_style_pipelined_path_(false),
-        inherit_sharding_index_(-1)
+        inherit_sharding_index_(-1),
+        is_valid_inner_path_(false)
     {  }
     virtual ~Path() {}
     int assign(const Path &other, common::ObIAllocator *allocator);
@@ -456,6 +412,7 @@ class Path
     bool is_json_table_path() const;
     bool is_temp_table_path() const;
     bool is_access_path() const;
+    bool is_lake_table_access_path() const;
     bool is_join_path() const;
     bool is_subquery_path() const;
     bool is_values_table_path() const;
@@ -578,7 +535,8 @@ class Path
                  K_(is_pipelined_path),
                  K_(is_nl_style_pipelined_path),
                  K_(ambient_card),
-                 K_(inherit_sharding_index));
+                 K_(inherit_sharding_index),
+                 K_(is_valid_inner_path));
   public:
     /**
      * 表示当前join order最终的父join order节点
@@ -622,6 +580,8 @@ class Path
     common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
     //Used to indicate which child node the current sharding inherits from
     int64_t inherit_sharding_index_;
+    // mark this access path is inner path and contribute query range
+    bool is_valid_inner_path_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
@@ -747,8 +707,6 @@ class Path
       }
       return ret;
     }
-    // compute current path is inner path and contribute query ranges
-    int compute_valid_inner_path();
     inline bool is_false_range()
     {
       return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
@@ -822,6 +780,7 @@ class Path
     int64_t range_prefix_count_; // prefix count
     BaseTableOptInfo *table_opt_info_;
     DomainIndexAccessInfo domain_idx_info_;
+    VecIndexAccessInfo vec_idx_info_;
     bool for_update_;
     OptSkipScanState use_skip_scan_;
     bool use_column_store_;
@@ -838,8 +797,10 @@ class Path
   enum ObIndexMergeType : uint8_t
   {
     INDEX_MERGE_INVALID = 0,
+    // MERGE NODE TYPE
     INDEX_MERGE_UNION,
     INDEX_MERGE_INTERSECT,
+    // SCAN NODE TYPE
     INDEX_MERGE_SCAN,
     INDEX_MERGE_FTS_INDEX
   };
@@ -858,23 +819,43 @@ class Path
         scan_node_idx_(-1)
     {}
 
-    int formalize_index_merge_tree();
+    static int formalize_index_merge_tree(ObIndexMergeNode *&node);
     int set_scan_direction(const ObOrderDirection &direction);
     inline bool is_merge_node() const {return INDEX_MERGE_UNION == node_type_ || INDEX_MERGE_INTERSECT == node_type_; }
     inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_; }
-    int get_all_index_ids(ObIArray<uint64_t> &index_ids) const;
-    int get_all_match_exprs(ObIArray<ObRawExpr*> &match_exprs, ObIArray<uint64_t> &match_index_ids) const;
 
-    TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(candicate_index_tids), KPC_(ap), K_(scan_node_idx));
+    TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(index_tid), KPC_(ap), K_(scan_node_idx));
 
   public:
     ObIndexMergeType node_type_;
-    common::ObSEArray<ObIndexMergeNode*, 2, common::ModulePageAllocator, true> children_;
-    common::ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> filter_; // filters handled by all child node of this node
+    common::ObSEArray<ObIndexMergeNode*, 4, common::ModulePageAllocator, true> children_;
+    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> filter_; // filters handled by all child node of this node
+    /* fields below are only for the scan node */
     uint64_t index_tid_;
-    common::ObSEArray<uint64_t, 1, common::ModulePageAllocator, true> candicate_index_tids_; // only used when building index merge tree
     AccessPath *ap_;
     int64_t scan_node_idx_;
+  };
+
+  struct ObIndexMergeNodeSelPair
+  {
+  public:
+    ObIndexMergeNodeSelPair() = delete;
+
+    ObIndexMergeNodeSelPair(ObIndexMergeNode *node, double selectivity)
+      : node_(node),
+        selectivity_(selectivity)
+    {
+      is_ror_scan_node_ = OB_NOT_NULL(node) && OB_NOT_NULL(node->ap_) && node->ap_->is_ordered_by_pk_;
+    }
+
+    TO_STRING_KV(KPC_(node), K_(selectivity), K_(is_ror_scan_node));
+
+    bool operator<(const ObIndexMergeNodeSelPair &other) const;
+
+  public:
+    ObIndexMergeNode *node_;
+    double selectivity_;
+    bool is_ror_scan_node_;
   };
 
   class IndexMergePath : public AccessPath
@@ -893,7 +874,10 @@ class Path
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &param, double &card, double &cost) override;
     virtual bool is_index_merge_path() const override { return true; }
+    int get_all_scan_nodes(ObIArray<ObIndexMergeNode*> &scan_nodes) const;
     int get_all_scan_access_paths(ObIArray<AccessPath*> &scan_paths) const;
+    int get_all_index_ids(ObIArray<uint64_t> &index_ids) const;
+    int get_all_match_exprs(ObIArray<ObRawExpr*> &match_exprs, ObIArray<uint64_t> &match_index_ids) const;
 
   public:
     ObIndexMergeNode *root_;
@@ -1029,6 +1013,7 @@ class Path
     inline bool is_left_need_exchange() const {
       return ObPQDistributeMethod::NONE != get_left_dist_method();
     }
+
     inline ObPQDistributeMethod::Type get_left_dist_method() const
     {
       ObPQDistributeMethod::Type dist_method = ObPQDistributeMethod::NONE;
@@ -1117,6 +1102,7 @@ class Path
                                                          int64_t &available_parallel,
                                                          int64_t &server_cnt,
                                                          ObIArray<common::ObAddr> &server_list);
+
     inline bool is_nlj_with_param_down() const
     { return NULL != right_path_ && right_path_->is_inner_path() && !right_path_->nl_params_.empty(); }
     int check_right_is_local_scan(int64_t &local_scan_type) const;
@@ -1421,12 +1407,41 @@ struct NullAwareAntiJoinInfo {
   ObSEArray<ObExprConstraint, 2> expr_constraints_;
 };
 
+struct MergeKeyInfoHelper
+{
+  MergeKeyInfoHelper() :
+      join_order_(nullptr), non_ordering_merge_key_info_(nullptr), can_ignore_merge_plan_(false) {}
+  ~MergeKeyInfoHelper();
+  int init(ObJoinOrder *join_order, const ObIArray<ObRawExpr *> &merge_keys, bool can_ignore_merge_plan);
+  int get_merge_key_info(Path *path, MergeKeyInfo *&merge_key_info);
+  int init_merge_join_structure(ObIAllocator &allocator,
+                                           const ObIArray<Path*> &paths,
+                                           const ObIArray<ObRawExpr*> &join_exprs,
+                                           ObIArray<MergeKeyInfo*> &merge_keys,
+                                           const bool can_ignore_merge_plan);
+  TO_STRING_KV(K_(can_ignore_merge_plan),
+               K_(merge_keys),
+               K_(paths),
+               K_(merge_key_infos));
+
+  ObArenaAllocator allocator_;
+  ObJoinOrder *join_order_;
+  ObSEArray<ObRawExpr*, 4> merge_keys_;
+  ObSEArray<ObOrderDirection, 4> default_directions_;
+  ObSEArray<Path *, 8> paths_;
+  ObSEArray<MergeKeyInfo *, 8> merge_key_infos_;
+  MergeKeyInfo *non_ordering_merge_key_info_;
+  bool can_ignore_merge_plan_;
+
+  DISALLOW_COPY_AND_ASSIGN(MergeKeyInfoHelper);
+};
+
   class ObJoinOrder
   {
   public:
     // used for heuristic index selection
     static const int64_t TABLE_HEURISTIC_UNIQUE_KEY_RANGE_THRESHOLD = 10000;
-    static const int64_t PRUNING_ROW_COUNT_THRESHOLD = 1000;
+    static constexpr double PRUNING_ROW_COUNT_THRESHOLD = 1000.0;
 
     struct MatchExprInfo {
       MatchExprInfo()
@@ -1464,7 +1479,9 @@ struct NullAwareAntiJoinInfo {
         subquery_exprs_(),
         inner_paths_(),
         table_opt_info_(NULL),
-        est_method_(EST_INVALID)
+        est_method_(EST_INVALID),
+        vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
+        vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN)
       {}
 
       bool is_inner_path_;
@@ -1490,6 +1507,8 @@ struct NullAwareAntiJoinInfo {
       ObSEArray<ObExecParamRawExpr *, 2> exec_params_;
       // record basic index and selectivity info for all match exprs
       ObSEArray<MatchExprInfo, 4> match_expr_infos_;
+      ObVecIndexType vec_index_type_;
+      ObVecIdxAdaTryPath vec_idx_try_path_;
     };
 
     ObJoinOrder(common::ObIAllocator *allocator,
@@ -1598,14 +1617,17 @@ struct NullAwareAntiJoinInfo {
     int get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
                                   uint64_t ref_table_id,
                                   uint64_t &inv_idx_tid);
-
+    int get_matched_inv_index_tids(ObMatchFunRawExpr *match_expr,
+                                   uint64_t ref_table_id,
+                                   ObIArray<uint64_t> &inv_idx_tids);
     int get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                       ObRawExpr *vector_expr,
                                       const uint64_t table_id,
                                       const uint64_t ref_table_id,
                                       const bool has_aggr,
                                       bool &vector_index_match,
-                                      uint64_t& vec_index_tid);
+                                      uint64_t& vec_index_tid,
+                                      ObIndexType& index_type);
 
     inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
 
@@ -1808,6 +1830,11 @@ struct NullAwareAntiJoinInfo {
                               PathHelper &helper,
                               AccessPath &access_path,
                               const QueryRangeInfo &range_info);
+    int process_basic_vec_info_for_index_merge_node(const ObDMLStmt *stmt,
+                                                  const uint64_t table_id,
+                                                  const uint64_t ref_table_id,
+                                                  IndexMergePath* index_merge_path,
+                                                  ObIndexMergeNode* root_node);
     int create_access_paths(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             PathHelper &helper,
@@ -1827,81 +1854,89 @@ struct NullAwareAntiJoinInfo {
     int create_index_merge_access_paths(const uint64_t table_id,
                                         const uint64_t ref_table_id,
                                         const PathHelper &helper,
-                                        ObIndexInfoCache &index_info_cache,
                                         ObIArray<AccessPath *> &access_paths,
                                         bool &ignore_normal_access_path);
 
-    int create_full_index_merge_path(const uint64_t table_id,
-                                     const uint64_t ref_table_id,
-                                     const PathHelper &helper,
-                                     ObIndexInfoCache &index_info_cache,
-                                     ObIArray<AccessPath *> &access_paths);
-
-    int get_candi_index_merge_trees(const uint64_t table_id,
-                                    const uint64_t ref_table_id,
-                                    const PathHelper &helper,
-                                    ObIArray<ObIndexMergeNode*> &candi_index_trees,
-                                    bool &is_match_hint);
+    int get_index_merge_tree(const uint64_t table_id,
+                             const uint64_t ref_table_id,
+                             const PathHelper &helper,
+                             ObIndexMergeNode *&index_merge_tree,
+                             bool &is_match_hint);
 
     int get_valid_index_merge_indexes(const uint64_t table_id,
                                       const uint64_t ref_table_id,
                                       ObIArray<uint64_t> &valid_index_ids,
                                       ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-                                      bool ignore_hint);
+                                      const bool use_force_hint);
 
-    int generate_candi_index_merge_trees(const uint64_t ref_table_id,
-                                         const ObIArray<ObRawExpr*> &filters,
-                                         ObIArray<uint64_t> &valid_index_ids,
-                                         ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-                                         ObIArray<ObIndexMergeNode *> &candi_index_trees);
+    int generate_candi_index_merge_tree(const uint64_t ref_table_id,
+                                        const ObIArray<ObRawExpr*> &filters,
+                                        const ObIArray<uint64_t> &valid_index_ids,
+                                        const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                        ObIndexMergeNode *&candi_index_tree);
 
     int generate_candi_index_merge_node(const uint64_t ref_table_id,
                                         ObRawExpr *filter,
-                                        ObIArray<uint64_t> &valid_index_ids,
-                                        ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                        const ObIArray<uint64_t> &valid_index_ids,
+                                        const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                         ObIndexMergeNode *&candi_node,
                                         bool &is_valid_node);
 
+    int try_merge_intersect_child(ObIndexMergeNode *intersect_node,
+                                  ObRawExpr *new_filter,
+                                  bool &merge_happened);
+
     int collect_candicate_indexes(const uint64_t ref_table_id,
-                                  ObRawExpr *filter,
-                                  ObIArray<uint64_t> &valid_index_ids,
-                                  ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                  const ObIArray<ObRawExpr*> &filters,
+                                  const ObIArray<uint64_t> &valid_index_ids,
+                                  const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                   ObIArray<uint64_t> &candicate_index_tids);
-
-    int check_candi_index_trees_match_hint(const uint64_t table_id,
-                                           ObIArray<ObIndexMergeNode*> &candi_index_trees);
-
-    int check_one_candi_node_match_hint(ObIndexMergeNode *candi_node,
-                                        ObIArray<uint64_t> &index_ids,
-                                        int64_t &idx,
-                                        bool &is_match_hint);
-
-    int prune_candi_index_merge_trees(ObIArray<ObIndexMergeNode*> &candi_index_trees);
-
-    int do_create_index_merge_paths(const uint64_t table_id,
-                                    const uint64_t ref_table_id,
-                                    const PathHelper &helper,
-                                    ObIndexInfoCache &index_info_cache,
-                                    ObIArray<ObIndexMergeNode*> &candi_index_trees,
-                                    ObIArray<AccessPath*> &access_paths);
 
     int build_access_path_for_scan_node(const uint64_t table_id,
                                         const uint64_t ref_table_id,
                                         const PathHelper &helper,
-                                        ObIndexInfoCache &index_info_cache,
-                                        ObIArray<ObExprConstraint> &range_expr_constraint,
+                                        const ObIArray<uint64_t> &valid_index_ids,
+                                        const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                         ObIndexMergeNode* node,
-                                        int64_t &scan_node_count);
+                                        bool &has_valid_path);
 
-    int choose_best_selectivity_branch(ObIndexMergeNode* &candi_node);
+    int prune_candi_index_merge_tree(const uint64_t table_id,
+                                     const uint64_t ref_table_id,
+                                     const PathHelper &helper,
+                                     const ObIArray<uint64_t> &valid_index_ids,
+                                     const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                     ObIndexMergeNode* &candi_index_tree,
+                                     const bool is_match_hint);
 
-    int calc_selectivity_for_index_merge_node(ObIndexMergeNode* node,
-                                              double &child_selectivity);
+    int prune_one_index_merge_node(const uint64_t table_id,
+                                   const uint64_t ref_table_id,
+                                   const PathHelper &helper,
+                                   const ObIArray<uint64_t> &valid_index_ids,
+                                   const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                   ObIndexMergeNode* &candi_node,
+                                   const bool ignore_sel_prune,
+                                   bool &is_valid,
+                                   bool &force_preserve,
+                                   double &sum_child_sel);
+
+    int do_create_index_merge_path(const uint64_t table_id,
+                                   const uint64_t ref_table_id,
+                                   const PathHelper &helper,
+                                   ObIndexMergeNode* root_node,
+                                   ObIArray<AccessPath*> &access_paths);
+
+    int collect_index_merge_tree_info(ObIndexMergeNode *node,
+                                      ObIArray<ObPCParamEqualInfo> &equal_param_constraints,
+                                      ObIArray<ObPCConstParamInfo> &const_param_constraints,
+                                      ObIArray<ObExprConstraint> &expr_constraints,
+                                      int64_t &scan_node_count);
 
     int create_one_index_merge_path(const uint64_t table_id,
                                     const uint64_t ref_table_id,
                                     const PathHelper &helper,
-                                    const ObIArray<ObExprConstraint> &range_expr_constraint,
+                                    ObIArray<ObPCParamEqualInfo> &equal_param_constraints,
+                                    ObIArray<ObPCConstParamInfo> &const_param_constraints,
+                                    ObIArray<ObExprConstraint> &expr_constraints,
                                     ObIndexMergeNode* root_node,
                                     IndexMergePath* &index_merge_path);
 
@@ -2000,6 +2035,9 @@ struct NullAwareAntiJoinInfo {
                                         int64_t index_id,
                                         const ObTableSchema *index_schema,
                                         int64_t &out_index_prefix);
+
+    int pre_filter_not_in_expr(const ObIArray<ObRawExpr*> &predicates,
+                               ObIArray<ObRawExpr*> &filtered_exprs);
 
     int check_enable_better_inlist(int64_t table_id,
                                    bool &enable_better_inlist,
@@ -2282,6 +2320,15 @@ struct NullAwareAntiJoinInfo {
 
     int check_can_push_join_pred(bool &can_push) const;
 
+    int compute_nlj_dop_by_auto_dop(Path *left_path,
+                                    Path *right_path,
+                                    const ObJoinType join_type,
+                                    const ObIArray<ObRawExpr*> &other_join_conditions,
+                                    const ObIArray<ObRawExpr*> &filter,
+                                    const bool with_nl_param,
+                                    const bool need_mat,
+                                    int64_t &parallel);
+
     int generate_inner_nl_paths(const EqualSets &equal_sets,
                                 const ObIArray<Path*> &left_paths,
                                 Path *right_path,
@@ -2321,7 +2368,7 @@ struct NullAwareAntiJoinInfo {
     int generate_mj_paths(const EqualSets &equal_sets,
                           const ObIArray<ObSEArray<Path*, 16>> &left_paths,
                           const ObIArray<ObSEArray<Path*, 16>> &right_paths,
-                          const ObIArray<ObSEArray<MergeKeyInfo*, 16>> &left_merge_keys,
+                          MergeKeyInfoHelper &left_merge_infos,
                           const ObIArray<ObRawExpr*> &left_join_keys,
                           const ObIArray<ObRawExpr*> &right_join_keys,
                           const ObIArray<bool> &null_safe_info,
@@ -2335,7 +2382,7 @@ struct NullAwareAntiJoinInfo {
     int generate_mj_paths(const EqualSets &equal_sets,
                           const ObIArray<Path*> &left_paths,
                           const ObIArray<Path*> &right_paths,
-                          const ObIArray<MergeKeyInfo*> &left_merge_keys,
+                          MergeKeyInfoHelper &left_merge_infos,
                           const ObIArray<ObRawExpr*> &left_join_keys,
                           const ObIArray<ObRawExpr*> &right_join_keys,
                           const ObIArray<bool> &null_safe_info,
@@ -2357,18 +2404,6 @@ struct NullAwareAntiJoinInfo {
                                      int64_t &best_prefix_pos,
                                      bool prune_mj);
 
-    int init_merge_join_structure(ObIAllocator &allocator,
-                                  const ObIArray<ObSEArray<Path*, 16>> &paths,
-                                  const ObIArray<ObRawExpr*> &join_exprs,
-                                  ObIArray<ObSEArray<MergeKeyInfo*, 16>> &merge_keys,
-                                  const bool can_ignore_merge_plan);
-
-    int init_merge_join_structure(common::ObIAllocator &allocator,
-                                  const common::ObIArray<Path*> &paths,
-                                  const common::ObIArray<ObRawExpr*> &join_exprs,
-                                  common::ObIArray<MergeKeyInfo*> &merge_keys,
-                                  const bool can_ignore_merge_plan);
-
     int push_down_order_siblings(JoinPath *join_path, const Path *right_path);
 
     int create_and_add_nl_path(const Path *left_path,
@@ -2379,7 +2414,8 @@ struct NullAwareAntiJoinInfo {
                                const common::ObIArray<ObRawExpr*> &where_conditions,
                                const bool has_equal_cond,
                                const bool is_normal_nl,
-                               bool need_mat = false);
+                               bool need_mat = false,
+                               int64_t join_parallel = ObGlobalHint::UNSET_PARALLEL);
 
     int create_and_add_hash_path(const Path *left_path,
                                  const Path *right_path,
@@ -2480,7 +2516,8 @@ struct NullAwareAntiJoinInfo {
                                     const JoinAlgo join_algo,
                                     const bool is_push_down,
                                     const bool is_naaj,
-                                    int64_t &distributed_types);
+                                    int64_t &distributed_types,
+                                    int64_t join_parallel = ObGlobalHint::UNSET_PARALLEL);
 
     bool is_partition_wise_valid(const Path &left_path,
                                  const Path &right_path);
@@ -2752,6 +2789,42 @@ struct NullAwareAntiJoinInfo {
                                       const ObIArray<ObRawExpr*> &equal_join_condition,
                                       const ObJoinType join_type);
 
+    int generate_lake_table_paths();
+    int generate_lake_table_paths(PathHelper &helper);
+    int compute_lake_table_property(uint64_t table_id, uint64_t ref_table_id);
+    int compute_lake_table_location_and_meta(const uint64_t table_id,
+                                             const uint64_t ref_table_id,
+                                             ObTablePartitionInfo *&table_partition_info);
+    int compute_lake_table_meta_info(const uint64_t table_id,
+                                     const uint64_t ref_table_id);
+
+    int create_lake_table_access_paths(const uint64_t table_id,
+                                                const uint64_t ref_table_id,
+                                                PathHelper &helper,
+                                                ObIArray<AccessPath *> &access_paths,
+                                                ObIndexInfoCache &index_info_cache);
+    int fill_lake_table_index_info_entry(const uint64_t table_id,
+                                         const uint64_t base_table_id,
+                                         ObIndexInfoCache &index_info_cache,
+                                         PathHelper &helper);
+    int compute_sharding_info_for_lake_table_entry(IndexInfoEntry *index_info_entry);
+
+    int compute_sharding_info_for_lake_paths(ObIArray<AccessPath *> &access_paths);
+    int set_sharding_info_for_lake_table_path(AccessPath *access_path);
+    int get_iceberg_table_stat(ObIAllocator &allocator,
+                               uint64_t table_id,
+                               ObIArray<uint64_t> &column_ids,
+                               ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                               common::ObLakeTableStat &table_stat,
+                               ObIArray<common::ObLakeColumnStat*> &column_stats);
+    int get_common_lake_table_stat(ObIAllocator &allocator,
+                                   uint64_t ref_table_id,
+                                   ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                                   ObIArray<ObString> &partition_names,
+                                   common::ObLakeTableStat &table_stat,
+                                   ObIArray<common::ObLakeColumnStat*> &column_stats);
+    int get_lake_table_partition_values(ObIArray<ObString> &partition_names);
+
   private:
     int find_matching_cond(const ObIArray<ObRawExpr *> &join_conditions,
                            const OrderItem &left_ordering,
@@ -2762,6 +2835,9 @@ struct NullAwareAntiJoinInfo {
   private:
     int compute_cost_and_prune_access_path(PathHelper &helper,
                                            ObIArray<AccessPath *> &access_paths);
+
+    int prune_none_range_path(ObIArray<Path*> &inner_paths);
+
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
     int create_plan_for_path_with_subq(Path *path);
@@ -2883,13 +2959,17 @@ struct NullAwareAntiJoinInfo {
     int add_valid_fts_index_ids_for_dml(const PathHelper &helper,
                                         const uint64_t table_id,
                                         ObIArray<uint64_t> &valid_index_ids);
+    int add_valid_fts_index_ids_for_dml_and_es_match(const PathHelper &helper,
+                                         const uint64_t table_id,
+                                         ObIArray<uint64_t> &valid_index_ids);
     int add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                 ObSqlSchemaGuard *schema_guard,
                                 const uint64_t table_id,
                                 const uint64_t ref_table_id,
                                 const bool has_aggr,
                                 uint64_t *index_tid_array,
-                                int64_t &size);
+                                int64_t &size,
+                                PathHelper &helper);
     int add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                 ObSqlSchemaGuard *schema_guard,
                                 const uint64_t table_id,
@@ -2907,6 +2987,9 @@ struct NullAwareAntiJoinInfo {
     int find_match_expr_info(const ObIArray<MatchExprInfo> &match_expr_infos,
                             ObRawExpr *match_expr,
                             const MatchExprInfo *&match_expr_info);
+    int find_match_expr_infos(const ObIArray<MatchExprInfo> &match_expr_infos,
+                              ObRawExpr *match_expr,
+                              ObIArray<const MatchExprInfo *> &found_match_expr_infos);
     int find_least_selective_expr_on_index(const ObIArray<ObMatchFunRawExpr*> &match_exprs,
                                           const ObIArray<MatchExprInfo> &match_expr_infos,
                                           uint64_t index_id,
@@ -2976,13 +3059,19 @@ struct NullAwareAntiJoinInfo {
                                       const ObIArray<ObRawExpr*> &pushdown_quals,
                                       InnerPathInfo &inner_path_info);
 
-
     int generate_force_inner_path(const ObIArray<ObRawExpr *> &join_conditions,
                                   const ObRelIds join_relids,
                                   ObJoinOrder &right_tree,
                                   InnerPathInfo &inner_path_info);
 
     int copy_path(const Path& src_path, Path* &dst_path);
+
+    int compute_valid_inner_path(ObIArray<Path*> &inner_paths,
+                                 const ObIArray<ObRawExpr*> &pushdown_quals);
+    int compute_valid_inner_path(Path *inner_path,
+                                 const ObIArray<ObRawExpr*> &pushdown_quals);
+    int extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters);
 
     int check_and_fill_inner_path_info(PathHelper &helper,
                                        const ObDMLStmt &stmt,
@@ -3061,9 +3150,6 @@ struct NullAwareAntiJoinInfo {
                                   ObRawExpr *&new_pred,
                                   PathHelper &helper);
 
-    int get_range_params(const Path *path,
-                         ObIArray<ObRawExpr*> &range_exprs,
-                         ObIArray<ObRawExpr*> &all_table_filters);
 
     int find_best_inner_nl_path(const ObIArray<Path*> &inner_paths,
                                 Path *&best_nl_path);
@@ -3082,13 +3168,6 @@ struct NullAwareAntiJoinInfo {
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
                          bool is_precise, ObIArray<ObPCConstParamInfo> &param_infos);
     int check_match_to_type(ObRawExpr *to_type, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx);
-    int check_can_use_global_stat_instead(const uint64_t ref_table_id,
-                                          const ObTableSchema &table_schema,
-                                          ObIArray<int64_t> &all_used_parts,
-                                          ObIArray<ObTabletID> &all_used_tablets,
-                                          bool &can_use,
-                                          ObIArray<int64_t> &global_part_ids,
-                                          double &scale_ratio);
     int is_valid_range_expr_for_oracle_agent_table(const ObRawExpr *range_expr, bool &is_valid);
     int extract_valid_range_expr_for_oracle_agent_table(const common::ObIArray<ObRawExpr *> &filters,
                                                         common::ObIArray<ObRawExpr *> &new_filters);
@@ -3117,6 +3196,11 @@ struct NullAwareAntiJoinInfo {
                                   PathHelper &helper,
                                   ObIArray<uint64_t> &valid_hint_index_ids);
     int has_valid_match_filter_on_index(PathHelper &helper, uint64_t tid, bool &is_valid);
+    int check_depend_expr_on_index(const ObDMLStmt *stmt,
+                                  uint64_t table_id,
+                                  uint64_t used_column_id,
+                                  const ObTableSchema &index_schema,
+                                  bool &found);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:

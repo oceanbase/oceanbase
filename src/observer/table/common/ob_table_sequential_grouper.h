@@ -12,11 +12,12 @@
 
 #ifndef OCEANBASE_TABLE_SEQUENTIAL_GROUPER_H
 #define OCEANBASE_TABLE_SEQUENTIAL_GROUPER_H
+#define USING_LOG_PREFIX SQL_ENG
 
 #include "share/table/ob_table.h"
 
 
-
+using namespace oceanbase::compaction;
 namespace oceanbase
 {
 namespace table
@@ -118,7 +119,46 @@ public:
   * process order:
   * Group1 → Group2 → Group3 → Group4 → Group5 → Group6 → Group7
   */
-  int add_operation(IndexType index, int tablet_idx, int op_idx, OpType &op);
+  // int add_operation(IndexType index, int tablet_idx, int op_idx, OpType &op);
+  int add_operation(IndexType index, int tablet_idx, int op_idx, OpType &op)
+  {
+    int ret = OB_SUCCESS;
+    ObTableOperationType::Type op_type = get_group_type(op);
+
+    if (groups_.empty() || (OB_NOT_NULL(groups_.at(groups_.count()-1))
+                            && groups_.at(groups_.count()-1)->type_ != op_type))   {
+      if (OB_FAIL(create_new_group(op_type))) {
+        LOG_WARN("failed to create new group", K(ret), K(groups_));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      OpGroup *current_group = groups_.at(groups_.count()-1);
+      if (OB_FAIL(current_group->ops_.push_back(OpInfo(index, &op, tablet_idx, op_idx)))) {
+        LOG_WARN("failed to add operation to group", K(ret), K(op), KP(current_group));
+      }
+    }
+    return ret;
+  }
+
+  int create_new_group(ObTableOperationType::Type type)
+  {
+    int ret = OB_SUCCESS;
+    OpGroup *new_group = OB_NEWx(OpGroup, &allocator_);
+    if (OB_ISNULL(new_group)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      new_group->type_ = type;
+      if (OB_FAIL(groups_.push_back(new_group))) {
+        new_group->~OpGroup();
+        allocator_.free(new_group);
+        LOG_WARN("failed to add group", K(ret), K(groups_));
+      }
+    }
+    return ret;
+  }
+
   template <typename Func> int process_groups(Func &&processor)
   {
     int ret = OB_SUCCESS;
@@ -140,8 +180,6 @@ public:
     return op.type();
   }
   OB_INLINE common::ObSEArray<OpGroup*, 1> &get_groups() { return groups_; }
-
-  int create_new_group(ObTableOperationType::Type type);
 
   TO_STRING_KV(K_(groups));
 private:

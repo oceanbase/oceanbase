@@ -11,9 +11,11 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include "index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_reader.h"
 #include "ob_macro_block_bare_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
+#include "ob_macro_block_meta.h"
+#include "index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -555,7 +557,7 @@ ObSSTableDataBlockReader::ObSSTableDataBlockReader()
     bloomfilter_header_(NULL), column_types_(NULL), column_orders_(NULL),
     column_checksum_(NULL), macro_reader_(), allocator_(ObModIds::OB_CS_SSTABLE_READER),
     hex_print_buf_(nullptr), is_trans_sstable_(false), is_inited_(false), column_type_array_cnt_(0),
-    printer_()
+    printer_(), print_hex_length_(tools::ObDumpMacroBlockContext::DEFUALT_DUMP_HEX_LENGTH)
 {
 }
 
@@ -563,7 +565,7 @@ ObSSTableDataBlockReader::~ObSSTableDataBlockReader()
 {
 }
 
-int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const bool hex_print, FILE *fd)
+int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const int64_t hex_length, const bool hex_print, FILE *fd)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -583,6 +585,7 @@ int ObSSTableDataBlockReader::init(const char *data, const int64_t size, const b
   } else {
     data_ = data;
     size_ = size;
+    print_hex_length_ = hex_length;
     switch (common_header_.get_type()) {
     case ObMacroBlockCommonHeader::SSTableData:
     case ObMacroBlockCommonHeader::SSTableIndex: {
@@ -823,7 +826,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
 
     printer_.print_micro_header(&micro_block_header);
     row_cnt = micro_block_header.row_count_;
-    if (ObRowStoreType::FLAT_ROW_STORE == row_store_type) {
+    if (ObStoreFormat::is_row_store_type_with_flat(row_store_type)) {
     } else if (ObStoreFormat::is_row_store_type_with_pax_encoding(row_store_type)) {
       const ObColumnHeader *encode_col_header = reinterpret_cast<const ObColumnHeader *>(micro_block_buf + pos);
       for (int64_t i = 0; i < macro_header_.fixed_header_.column_count_; ++i) {
@@ -885,7 +888,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         printer_.print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
       } else {
         printer_.print_store_row(
-            row, column_types_, column_type_array_cnt_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
+            row, column_types_, column_type_array_cnt_, print_hex_length_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
       }
 
       if (MicroBlockType::INDEX == block_type) {
@@ -951,7 +954,7 @@ int ObSSTableDataBlockReader::dump_macro_block_meta_block(ObMacroBlockRowBareIte
     LOG_WARN("Failed to parse macro block meta", K(ret));
   } else {
     printer_.print_store_row(
-            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, true, is_trans_sstable_);
+            row, column_types_, micro_data->get_micro_header()->rowkey_column_count_, print_hex_length_, true, is_trans_sstable_);
     printer_.print_macro_meta(&macro_meta);
   }
   return ret;
@@ -1007,7 +1010,7 @@ int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt, const int6
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     for (; i < col_cnt; ++i) {
-      printer_.print_cols_info_line(i, ObUnknownType, ASC,
+      printer_.print_cols_info_line(i, ObUnknownType, ObOrderType::ASC,
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     printer_.print_end_line();

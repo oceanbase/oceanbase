@@ -16,6 +16,8 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_del_upd.h"
 #include "sql/optimizer/ob_log_join_filter.h"
+#include "sql/optimizer/ob_log_temp_table_access.h"
+#include "sql/optimizer/ob_log_temp_table_insert.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -173,6 +175,11 @@ int ObPxResourceAnalyzer::analyze(
       static_cast<const ObLogExchange *>(&root_op)->get_is_remote()) {
     max_parallel_thread_count = 0;
     max_parallel_group_count = 0;
+  } else if (OB_FAIL(all_access_addrs_.create(hash::cal_next_prime(10), ObModIds::OB_SQL_PX,
+                     ObModIds::OB_SQL_PX))) {
+    LOG_WARN("create hash set failed", K(ret));
+  } else if (OB_FAIL(get_access_location_addrs(root_op, all_access_addrs_))) {
+    LOG_WARN("get access location addrs", K(ret));
   } else if (OB_FAIL(convert_log_plan_to_nested_px_tree(root_op))) {
     LOG_WARN("fail convert log plan to nested px tree", K(ret));
   } else if (OB_FAIL(walk_through_logical_plan(root_op, max_parallel_thread_count,
@@ -388,16 +395,12 @@ int ObPxResourceAnalyzer::do_split(
       if (parent_dfo->location_addr_.size() == 0) {
         if (parent_dfo->has_child()) {
           DfoInfo *child_dfo = nullptr;
-          if (OB_FAIL(parent_dfo->get_child(0, child_dfo))) {
-            LOG_WARN("get child dfo failed", K(ret));
-          } else {
-            for (ObHashSet<ObAddr>::const_iterator it = child_dfo->location_addr_.begin();
-                OB_SUCC(ret) && it != child_dfo->location_addr_.end(); ++it) {
+            for (ObHashSet<ObAddr>::const_iterator it = all_access_addrs_.begin();
+                OB_SUCC(ret) && it != all_access_addrs_.end(); ++it) {
               if (OB_FAIL(parent_dfo->location_addr_.set_refactored(it->first))){
                 LOG_WARN("set refactored failed", K(ret), K(it->first));
               }
             }
-          }
         } else if (OB_FAIL(parent_dfo->location_addr_.set_refactored(GCTX.self_addr()))){
           LOG_WARN("set refactored failed", K(ret), K(GCTX.self_addr()));
         }
@@ -428,37 +431,31 @@ int ObPxResourceAnalyzer::create_dfo(DfoInfo *&dfo, ObLogicalOperator &root_op)
 int ObPxResourceAnalyzer::get_dfo_addr_set(const ObLogicalOperator &root_op, ObHashSet<ObAddr> &addr_set)
 {
   int ret = OB_SUCCESS;
-  if ((root_op.is_table_scan() && !root_op.get_contains_fake_cte()) ||
+  if ((root_op.is_table_scan() && !root_op.get_contains_fake_cte() &&
+        !static_cast<const ObLogTableScan &>(root_op).use_das()) ||
       (root_op.is_dml_operator() && (static_cast<const ObLogDelUpd&>(root_op)).is_pdml())) {
-    const ObTablePartitionInfo *tbl_part_info = nullptr;
-    if (root_op.is_table_scan()) {
-      const ObLogTableScan &tsc = static_cast<const ObLogTableScan&>(root_op);
-      tbl_part_info = tsc.get_table_partition_info();
-    } else {
-      const ObLogDelUpd &dml_op = static_cast<const ObLogDelUpd&>(root_op);
-      tbl_part_info = dml_op.get_table_partition_info();
+    const ObIArray<ObAddr> &server_list = root_op.get_server_list();
+    for (int64_t i = 0; i < server_list.count() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(addr_set.set_refactored(server_list.at(i), 1 /* overrite*/))) {
+        LOG_WARN("set refactored failed", K(ret));
+      }
     }
-    if (OB_ISNULL(tbl_part_info)) {
+    LOG_TRACE("table scan server list", K(root_op.get_type()), K(root_op.get_op_id()), K(server_list));
+  } else if (log_op_def::LOG_TEMP_TABLE_ACCESS == root_op.get_type()) {
+    const ObArray<ObAddr> *server_list = NULL;
+    uint64_t temp_table_id = static_cast<const ObLogTempTableAccess &>(root_op).get_temp_table_id();
+    if (OB_ISNULL(server_list = temp_tables_addr_map_.get(temp_table_id))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get table partition info failed", K(ret),
-                                                  K(root_op.get_type()),
-                                                  K(root_op.get_operator_id()));
+      LOG_WARN("addr set of temp table not found", K(ret), K(temp_table_id), K(root_op.get_op_id()));
     } else {
-      const ObCandiTableLoc &phy_tbl_loc_info = tbl_part_info->get_phy_tbl_location_info();
-      const ObCandiTabletLocIArray &phy_part_loc_info_arr = phy_tbl_loc_info.get_phy_part_loc_info_list();
-      for (int64_t i = 0; i < phy_part_loc_info_arr.count() && OB_SUCC(ret); ++i) {
-        share::ObLSReplicaLocation replica_loc;
-        if (OB_FAIL(phy_part_loc_info_arr.at(i).get_selected_replica(replica_loc))) {
-          LOG_WARN("get selected replica failed", K(ret));
-        } else if (OB_FAIL(addr_set.set_refactored(replica_loc.get_server(), 1))) {
-          LOG_WARN("addr set refactored failed");
-        } else {
-          LOG_DEBUG("resource analyzer", K(root_op.get_type()),
-                                         K(root_op.get_operator_id()),
-                                         K(replica_loc.get_server()));
+      for (int64_t i = 0; i < server_list->count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(addr_set.set_refactored(server_list->at(i), 1 /* overrite*/))) {
+          LOG_WARN("set refactored failed", K(ret));
         }
       }
     }
+    LOG_TRACE("temp table access server list", K(root_op.get_type()), K(root_op.get_op_id()),
+               K(temp_table_id), K(server_list));
   } else {
     int64_t num = root_op.get_num_of_child();
     for (int64_t child_idx = 0; OB_SUCC(ret) && child_idx < num; ++child_idx) {
@@ -740,7 +737,7 @@ int ObPxResourceAnalyzer::schedule_dfo(
         }
       }
     }
-    LOG_TRACE("[PxResAnaly] schedule dfo", K(dfo.dop_), K(dfo.has_nested_px_),
+    LOG_TRACE("[PxResAnaly] schedule dfo", K(dfo.dop_), K(dfo.has_nested_px_), K(addr_set.size()),
               K(dfo.nested_px_thread_cnt_), K(dfo.nested_px_group_cnt_), K(threads), K(groups),
               K(OB_ISNULL(dfo.root_op_) ? OB_INVALID_ID : dfo.root_op_->get_op_id()));
   }
@@ -853,6 +850,63 @@ int ObPxResourceAnalyzer::update_max_thead_group_info(
       OB_SUCC(ret) && it != current_group_map.end(); ++it) {
     if (OB_FAIL(update_parallel_map_one_addr(max_parallel_group_map, it->first, it->second, false))) {
       LOG_WARN("update parallel map one addr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObPxResourceAnalyzer::get_access_location_addrs(const ObLogicalOperator &root_op,
+                                                    ObHashSet<ObAddr> &addr_set)
+{
+  int ret = OB_SUCCESS;
+  if (log_op_def::LOG_TEMP_TABLE_INSERT == root_op.get_type()) {
+    ObHashSet<ObAddr> tmp_set;
+    ObLogicalOperator *child_op = nullptr;
+    if (OB_FAIL(tmp_set.create(hash::cal_next_prime(10), ObModIds::OB_SQL_PX, ObModIds::OB_SQL_PX))) {
+      LOG_WARN("create hash set failed", K(ret));
+    } else if (OB_ISNULL(child_op = root_op.get_child(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child op is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(get_access_location_addrs(*child_op, tmp_set)))) {
+      LOG_WARN("get access location addrs failed", K(ret));
+    } else {
+      ObArray<ObAddr> addr_array;
+      for (ObHashSet<ObAddr>::const_iterator iter = tmp_set.begin();
+             iter != tmp_set.end() && OB_SUCC(ret); iter++) {
+        if (OB_FAIL(addr_array.push_back(iter->first))) {
+          LOG_WARN("push back failed", K(ret));
+        } else if (OB_FAIL(addr_set.set_refactored(iter->first, 1 /* overrite*/))) {
+          LOG_WARN("set refactored failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(temp_tables_addr_map_.set_refactored(
+                static_cast<const ObLogTempTableInsert &>(root_op).get_temp_table_id(), addr_array))) {
+        LOG_WARN("set refactored failed", K(ret));
+      }
+    }
+  } else {
+    if (log_op_def::LOG_TEMP_TABLE_TRANSFORMATION == root_op.get_type()) {
+      if (OB_FAIL(temp_tables_addr_map_.create(cal_next_prime(10), "PxAddrMapBucket", "PxAddrMapNode"))) {
+        LOG_WARN("create temp tables addr map failed", K(ret));
+      }
+    } else if (root_op.is_table_scan() || root_op.is_dml_operator()) {
+      const ObIArray<ObAddr> &server_list = root_op.get_server_list();
+      for (int64_t i = 0; i < server_list.count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(addr_set.set_refactored(server_list.at(i), 1 /* overrite*/))) {
+          LOG_WARN("set refactored failed", K(ret));
+        }
+      }
+    }
+    int64_t num = root_op.get_num_of_child();
+    for (int64_t child_idx = 0; OB_SUCC(ret) && child_idx < num; ++child_idx) {
+      ObLogicalOperator *child_op = nullptr;
+      if (OB_ISNULL(child_op = root_op.get_child(child_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(child_idx), K(num), K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_access_location_addrs(*child_op, addr_set)))) {
+        LOG_WARN("get access location addrs failed", K(ret));
+      }
     }
   }
   return ret;

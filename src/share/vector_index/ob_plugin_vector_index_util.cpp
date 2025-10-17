@@ -155,53 +155,6 @@ void ObVectorQueryRowkeyIterator::reset()
   scan_iter_ = nullptr;
 }
 
-int ObVectorQueryVidIterator::init()
-{
-  INIT_SUCC(ret);
-  if (extra_column_count_ < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("extra_column_count_ is invalid", K(ret), K(extra_column_count_));
-  } else if (OB_ISNULL(row_ = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator_->alloc(sizeof(ObObj) * (2 + extra_column_count_))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else {
-    is_init_ = true;
-  }
-  return ret;
-}
-
-int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distances, ObIAllocator *allocator)
-{
-  INIT_SUCC(ret);
-  if (extra_column_count_ != 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("extra_column_count_ is invalid", K(ret), K(extra_column_count_));
-  } else if ((OB_ISNULL(vids) && total != 0) || OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get vids or allocator", K(ret), K(vids), K(allocator));
-  } else if (OB_ISNULL(row_ =  OB_NEWx(ObNewRow, allocator))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = static_cast<ObObj*>(allocator->alloc(sizeof(ObObj) * 2)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else {
-    obj_[0].reset();
-    obj_[1].reset();
-    is_init_ = true;
-    total_ = total;
-    alloc_size_ = total_;
-    cur_pos_ = 0;
-    vids_ = vids;
-    allocator_ = allocator;
-    distance_ = distances;
-  }
-  return ret;
-}
-
 int ObVectorQueryVidIterator::init(int64_t need_count, ObIAllocator *allocator)
 {
   INIT_SUCC(ret);
@@ -211,7 +164,7 @@ int ObVectorQueryVidIterator::init(int64_t need_count, ObIAllocator *allocator)
   } else if (OB_ISNULL(row_ = static_cast<ObNewRow *>(allocator->alloc(sizeof(ObNewRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator->alloc(sizeof(ObObj) * (2 + extra_column_count_))))) {
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj *>(allocator->alloc(sizeof(ObObj) * (2 + extra_column_count_ + rel_count_))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
   } else if (OB_ISNULL(vids_ = static_cast<int64_t *>(allocator->alloc(sizeof(int64_t) * need_count)))) {
@@ -221,17 +174,17 @@ int ObVectorQueryVidIterator::init(int64_t need_count, ObIAllocator *allocator)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator vids.", K(ret), K(need_count));
   } else {
+    is_init_ = true; // obj is inited
     if (extra_column_count_ > 0 && OB_FAIL(extra_info_ptr_.init(allocator, extra_info_actual_size_, need_count))) {
       LOG_WARN("failed to init extra info array", K(ret), K(extra_info_ptr_), K(need_count));
+    } else if (OB_FAIL(reset_obj())) {
+      is_init_ = false;
+      LOG_WARN("failed to reset obj", K(ret));
     } else {
-      for (int i = 0; i < 2 + extra_column_count_; i++) {
-        obj_[i].reset();
-      }
       total_ = 0;
       cur_pos_ = 0;
       alloc_size_ = need_count;
       allocator_ = allocator;
-      is_init_ = true;
     }
   }
   return ret;
@@ -302,11 +255,11 @@ int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distance
   } else if (OB_ISNULL(row_ =  OB_NEWx(ObNewRow, allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
-  } else if (OB_ISNULL(obj_ = static_cast<ObObj*>(allocator->alloc(sizeof(ObObj) * (2 + extra_column_count_))))) {
+  } else if (OB_ISNULL(obj_ = static_cast<ObObj*>(allocator->alloc(sizeof(ObObj) * (2 + extra_column_count_ + rel_count_))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocator NewRow.", K(ret));
   } else {
-    for (int i = 0; i < 2 + extra_column_count_; i++) {
+    for (int i = 0; i < 2 + extra_column_count_ + rel_count_; i++) {
       obj_[i].reset();
     }
     is_init_ = true;
@@ -320,24 +273,32 @@ int ObVectorQueryVidIterator::init(int64_t total, int64_t *vids, float *distance
   return ret;
 }
 
-int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row, const sql::ExprFixedArray& res_exprs)
+int ObVectorQueryVidIterator::reset_obj()
 {
   INIT_SUCC(ret);
   if (!is_init_) {
     ret = OB_NOT_INIT;
     LOG_WARN("iter is not initialized.", K(ret));
-  } else if (cur_pos_ < total_) {
-    obj_[0].reset();
-    obj_[1].reset();
-    for (int i = 0; i < extra_column_count_; i++) {
-      obj_[i + 2].reset();
+  } else {
+    for (int i = 0; i < 2 + extra_column_count_ + rel_count_; i++) {
+      obj_[i].reset();
     }
-    row_->reset();
+  }
+  return ret;
+}
 
+int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row, const sql::ExprFixedArray& res_exprs, const bool no_rel)
+{
+  INIT_SUCC(ret);
+  if (OB_FAIL(reset_obj())) {
+    LOG_WARN("fail to reset obj.", K(ret));
+  } else if (cur_pos_ < total_) {
+    row_->reset();
     obj_[0].set_float(distance_[cur_pos_]);
     obj_[1].set_int(vids_[cur_pos_]);
+    // set extra info if need
     if (!extra_info_ptr_.is_null()) {
-      if (res_exprs.count() != extra_column_count_ + 1) {
+      if (res_exprs.count() != rel_count_ + extra_column_count_ + 1) {
         ret = OB_ERR_UNDEFINED;
         LOG_WARN("res_exprs is not vid, extra_column", K(ret), K(res_exprs.count()), K(extra_column_count_));
       }
@@ -352,10 +313,24 @@ int ObVectorQueryVidIterator::get_next_row(ObNewRow *&row, const sql::ExprFixedA
         }
       }
     }
+    // set relevance if need
+    if (OB_SUCC(ret) && (rel_count_ > 0 && !no_rel) && OB_NOT_NULL(rel_map_ptr_)) {
+      double* rel_ptr = nullptr;
+      if (OB_FAIL(rel_map_ptr_->get_refactored(vids_[cur_pos_], rel_ptr))) {
+        LOG_WARN("failed to find rel_ptr", K(ret), K(vids_[cur_pos_]));
+      } else if (OB_ISNULL(rel_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rel_ptr is null", K(ret), K(vids_[cur_pos_]));
+      }
+      for (int i = 0; i < rel_count_ && OB_SUCC(ret); i++) {
+        obj_[2 + extra_column_count_ + i].set_meta_type(res_exprs.at(i + extra_column_count_ + 1)->obj_meta_);
+        obj_[2 + extra_column_count_ + i].set_double_value(rel_ptr[i]);
+      }
+    }
 
     cur_pos_++;
     row_->cells_ = obj_;
-    row_->count_ = 2 + extra_column_count_;
+    row_->count_ = 2 + extra_column_count_ + rel_count_;
     row_->projector_ = NULL;
     row_->projector_size_ = 0;
 
@@ -379,7 +354,7 @@ int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size, const
     if (batch_size_ > 0) {
       // row.cells: [dis\vid\extras][dis\vid\extras]...
       // Indicates how many obj are in one row, 2 represents vid and dis
-      int64_t one_size_obj_count = 2 + extra_column_count_;
+      int64_t one_size_obj_count = 2 + extra_column_count_ + rel_count_;
       if (OB_ISNULL(row = static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocator NewRow.", K(ret));
@@ -388,9 +363,10 @@ int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size, const
         LOG_WARN("failed to allocator NewRow.", K(ret));
       } else {
         int64_t index = 0;
-        for (; index < batch_size_ && cur_pos_ < total_; ++index) {
+        for (; index < batch_size_ && cur_pos_ < total_ && OB_SUCC(ret); ++index) {
           obj[index * one_size_obj_count].set_float(distance_[cur_pos_]);
           obj[index * one_size_obj_count + 1].set_int(vids_[cur_pos_]);
+          // set extra info if need
           if (!extra_info_ptr_.is_null()) {
             if (res_exprs.count() != extra_column_count_ + 1) {
               ret = OB_ERR_UNDEFINED;
@@ -406,6 +382,20 @@ int ObVectorQueryVidIterator::get_next_rows(ObNewRow *&row, int64_t &size, const
                 LOG_WARN("failed to get extra info", K(ret), K(extra_info_ptr_[cur_pos_]), K(extra_info_actual_size_),
                          K(extra_column_count_));
               }
+            }
+          }
+          // set relevance if need
+          if (OB_SUCC(ret) && rel_count_ > 0 && OB_NOT_NULL(rel_map_ptr_)) {
+            double* rel_ptr = nullptr;
+            if (OB_FAIL(rel_map_ptr_->get_refactored(vids_[cur_pos_], rel_ptr))) {
+              LOG_WARN("failed to find rel_ptr", K(ret), K(vids_[cur_pos_]));
+            } else if (OB_ISNULL(rel_ptr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("rel_ptr is null", K(ret), K(vids_[cur_pos_]));
+            }
+            for (int i = 0; i < rel_count_ && OB_SUCC(ret); i++) {
+              obj[index * one_size_obj_count + 2 + extra_column_count_ + i].set_meta_type(res_exprs.at(i + extra_column_count_ + 1)->obj_meta_);
+              obj[index * one_size_obj_count + 2 + extra_column_count_ + i].set_double_value(rel_ptr[i]);
             }
           }
           cur_pos_++;
@@ -430,9 +420,81 @@ void ObVectorQueryVidIterator::reset()
   total_ = 0;
   cur_pos_ = 0;
   extra_info_ptr_.reset();
+  rel_count_ = 0;
+  rel_map_ptr_ = nullptr;
 }
 
-int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+int ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+                                                                       const ObVsagQueryResult &second,
+                                                                       int64_t &actual_cnt,
+                                                                       int64_t *&vids_result,
+                                                                       float *&float_result,
+                                                                       ObVecExtraInfoPtr &extra_info_result)
+{
+  INIT_SUCC(ret);
+  actual_cnt = 0;
+  int64_t res_num = 0;
+  if (first.total_ == 0) {
+    while (res_num < second.total_ && OB_SUCC(ret)) {
+      if (!extra_info_result.is_null()) {
+        if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[res_num], second.extra_info_ptr_.extra_info_actual_size_))) {
+          LOG_WARN("set extra info failed", K(ret), K(second.extra_info_ptr_), K(res_num));
+        }
+      }
+      vids_result[res_num] = second.vids_[res_num];
+      float_result[res_num] = second.distances_[res_num];
+      res_num++;
+    }
+    actual_cnt = res_num;
+  } else {
+    const int64_t hashset_size = first.total_;
+    common::hash::ObHashSet<int64_t> vid_hash_set;
+    if (OB_FAIL(vid_hash_set.create(hashset_size))){
+      LOG_WARN("fail to create vid hashset id set failed", KR(ret), K(hashset_size));
+    } else {
+      while (res_num < first.total_ && OB_SUCC(ret)) {
+        if (OB_FAIL(vid_hash_set.set_refactored(first.vids_[res_num]))) {
+          LOG_WARN("fail to set vid to hashset", K(first.vids_[res_num]));
+        } else {
+          if (!extra_info_result.is_null()) {
+            if (OB_FAIL(extra_info_result.set_with_copy(res_num, first.extra_info_ptr_[res_num], first.extra_info_ptr_.extra_info_actual_size_))) {
+              LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(res_num));
+            }
+          }
+          vids_result[res_num] = first.vids_[res_num];
+          float_result[res_num] = first.distances_[res_num];
+          res_num++;
+        }
+      }
+      int64_t i = res_num;
+      while (i < first.total_ + second.total_ && OB_SUCC(ret)) {
+        ret = vid_hash_set.exist_refactored(second.vids_[res_num - first.total_]);
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+          i++; // skip
+        } else if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          if (!extra_info_result.is_null()) {
+            if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[res_num - first.total_], second.extra_info_ptr_.extra_info_actual_size_))) {
+              LOG_WARN("set extra info failed", K(ret), K(second.extra_info_ptr_), K(res_num));
+            }
+          }
+          vids_result[res_num] = second.vids_[res_num - first.total_];
+          float_result[res_num] = second.distances_[res_num -first.total_];
+          res_num++;
+          i++;
+        } else {
+          LOG_WARN("fail to check exist refactored", K(ret));
+        }
+      }
+      actual_cnt = res_num;
+    }
+  }
+
+  return ret;
+}
+
+int ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
                                                          const ObVsagQueryResult &second,
                                                          const int64_t total,
                                                          int64_t &actual_cnt,
@@ -570,78 +632,18 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
   return ret;
 }
 
-int ObPluginVectorIndexHelper::get_vector_memory_value_and_limit(const uint64_t tenant_id,int64_t& value, int64_t& upper_limit)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  int64_t extra_mem_percent = 15;
-  int64_t cur_memstore_limit_percent = 0;
-  MTL_SWITCH(tenant_id) {
-    cur_memstore_limit_percent = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
-  }
-  if (tenant_config.is_valid() && OB_SUCC(ret)) {
-    upper_limit = (100 - extra_mem_percent - cur_memstore_limit_percent);
-    if (upper_limit < 0) {
-      upper_limit = 0;
-    }
-    value = tenant_config->ob_vector_memory_limit_percentage;
-    LOG_TRACE("check is_ob_vector_memory_valid", K(value), K(extra_mem_percent), K(cur_memstore_limit_percent), K(upper_limit));
-  } else {
-    upper_limit = 0;
-    value = 0;
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("tenant config is invalid",K(ret), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObPluginVectorIndexHelper::is_ob_vector_memory_valid(const uint64_t tenant_id, bool& is_valid)
-{
-  int ret = OB_SUCCESS;
-  is_valid = false;
-  int64_t value = 0;
-  int64_t upper_limit = 0;
-  if (OB_FAIL(get_vector_memory_value_and_limit(tenant_id, value, upper_limit))) {
-    LOG_WARN("fail to get vector memory value and limit", K(ret));
-  } else if (0 < value && value < upper_limit) {
-    is_valid = true;
-  }
-  return ret;
-}
-
 int ObPluginVectorIndexHelper::get_vector_memory_limit_size(const uint64_t tenant_id, int64_t& memory_limit)
 {
   bool ret = OB_SUCCESS;
-  ObUnitInfoGetter::ObTenantConfig unit;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(GCTX.omt_->get_tenant_unit(tenant_id, unit))) {
-    LOG_WARN("get tenant unit failed", K(tmp_ret), K(tenant_id));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    memory_limit = 0;
+    LOG_WARN("get invalid tenant config", K(tenant_id));
   } else {
-    const int64_t memory_size = unit.config_.memory_size();
-    int64_t ob_vector_memory_limit_percentage = 0;
-    int64_t upper_limit = 0;
-    if (OB_FAIL(get_vector_memory_value_and_limit(tenant_id, ob_vector_memory_limit_percentage, upper_limit))) {
-      LOG_WARN("fail to get vector memory value and limit", K(ret));
-    } else if (0 < ob_vector_memory_limit_percentage && ob_vector_memory_limit_percentage < upper_limit) {
-      memory_limit = memory_size * ob_vector_memory_limit_percentage / 100;
-      LOG_TRACE("vector index memory limit debug", K(memory_size), K(ob_vector_memory_limit_percentage),K(memory_limit));
-    } else {
-      memory_limit = 0;
-      LOG_TRACE("vector index memory is not enough,check memstore config", K(memory_size), K(ob_vector_memory_limit_percentage),K(memory_limit));
-    }
-  }
-  return ret;
-}
-
-
-int ObPluginVectorIndexHelper::vsag_errcode_2ob(int vsag_errcode)
-{
-  int ret = OB_ERR_VSAG_RETURN_ERROR;
-  if (vsag_errcode == 10) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("vsag failed to allocator.", K(ret), K(vsag_errcode));
-  } else {
-    LOG_WARN("get vsag failed.", K(ret), K(vsag_errcode));
+    int64_t total_memory = lib::get_tenant_memory_limit(tenant_id);
+    int64_t vector_limit = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config);
+    memory_limit = total_memory * vector_limit / 100;
+    LOG_TRACE("vector index memory limit debug", K(tenant_id), K(total_memory), K(vector_limit), K(memory_limit));
   }
   return ret;
 }

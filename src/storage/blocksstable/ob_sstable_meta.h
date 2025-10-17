@@ -327,7 +327,7 @@ public:
   int get_column_checksums(common::ObIArray<int64_t> &column_checksums) const;
   bool is_shared_table() const;
   bool is_split_table() const;
-  TO_STRING_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);

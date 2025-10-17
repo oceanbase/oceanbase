@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_FLUSH_PRIORITY_MANAGER_H_
 #define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_FLUSH_PRIORITY_MANAGER_H_
 
+#include "storage/tmp_file/ob_tmp_file_block_handle_list.h"
 #include "storage/tmp_file/ob_tmp_file_block.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/lock/ob_spin_rwlock.h"
@@ -56,8 +57,20 @@ private:
                             ObIArray<ObTmpFileBlockHandle> &block_handles);
 private:
   bool is_inited_;
-  ObTmpFileBlockFlushList flush_lists_[BlockFlushLevel::MAX];
-  ObSpinLock locks_[BlockFlushLevel::MAX];
+  ObTmpFileBlockHandleList flush_lists_[BlockFlushLevel::MAX];
+};
+
+struct PopBlockOperator {
+  PopBlockOperator(int64_t expected_count,
+                    ObTmpFileBlockHandleList &list,
+                    ObIArray<ObTmpFileBlockHandle> &block_handles)
+    : expected_count_(expected_count), actual_count_(0), list_(list), block_handles_(block_handles) {}
+  bool operator()(ObTmpFileBlkNode *node);
+private:
+  int64_t expected_count_;
+  int64_t actual_count_;
+  ObTmpFileBlockHandleList &list_;
+  ObIArray<ObTmpFileBlockHandle> &block_handles_;
 };
 
 class ObTmpFileBlockFlushIterator

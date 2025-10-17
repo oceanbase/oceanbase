@@ -187,7 +187,7 @@ int ObITmpFile::delete_file()
       LOG_WARN("fail to inner delete file", KR(ret), KPC(this));
     } else {
       // read, write, truncate, flush and evict function will fail when is_deleting_ == true.
-      is_deleting_ = true;
+      ATOMIC_SET(&is_deleting_, true);
     }
   }
 

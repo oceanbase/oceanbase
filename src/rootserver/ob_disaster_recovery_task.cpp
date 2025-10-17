@@ -758,6 +758,12 @@ int ObReplaceLSReplicaTask::execute(
     ObDRTaskRetComment &ret_comment) const
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  if (GCONF.errsim_migration_ls_id == get_ls_id().id() && is_user_tenant(get_tenant_id())) {
+    LOG_ERROR("errsim skip before replace replica rpc to observer", "ls_id", get_ls_id());
+    DEBUG_SYNC(BEFORE_SCHEDULE_REPLACE_LS);
+  }
+#endif
   ObLSReplaceReplicaArg arg;
   int64_t rpc_timeout = DisasterRecoveryUtils::DR_TASK_RPC_REQUEST_TIMEOUT + GCONF.rpc_timeout;
   if (OB_UNLIKELY(ERRSIM_SKIP_SEND_SINGLE_REPLACE_RPC_TO_OBSERVER)) {
@@ -1464,7 +1470,7 @@ int ObLSTypeTransformTask::execute(
     ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
     LOG_WARN("fail to send ls type transform rpc", KR(ret), K(arg));
   } else {
-    LOG_INFO("start to execute ls type transform", K(arg));
+    LOG_INFO("start to execute ls type transform", K(arg), K(get_dst_server()));
   }
   return ret;
 }

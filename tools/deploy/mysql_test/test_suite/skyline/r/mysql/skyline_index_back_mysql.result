@@ -81,17 +81,17 @@ KEY `index_block_id` (`block_id`) BLOCK_SIZE 16384
 );
 explain select a, c, v1 from skyline where c = 100;
 Query Plan
-==============================================================
-|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_c_v1)|1       |3           |
-==============================================================
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline.a], [skyline.c], [skyline.v1]), filter([skyline.c = 100]), rowset=16
       access([skyline.c], [skyline.a], [skyline.v1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([skyline.a], [skyline.c], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      range_key([skyline.pk]), range(MIN ; MAX)always true
 explain select /*+index(skyline idx_a_c_v1)*/ a, c, v1 from skyline where c = 100;
 Query Plan
 ==============================================================
@@ -110,7 +110,7 @@ Query Plan
 =======================================================================
 |ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_v2_v3_v4_v5_c)|1       |7           |
+|0 |TABLE FULL SCAN|skyline(idx_a_v2_v3_v4_v5_c)|1       |5           |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -161,23 +161,23 @@ Outputs & filters:
       MAX,MAX,MAX,MAX,MAX,MAX)always true
 explain select a, e, v1 from skyline where e = 100;
 Query Plan
-==============================================================
-|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_e_v1)|1       |3           |
-==============================================================
+==================================================
+|ID|OPERATOR       |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |TABLE FULL SCAN|skyline|1       |3           |
+==================================================
 Outputs & filters:
 -------------------------------------
   0 - output([skyline.a], [skyline.e], [skyline.v1]), filter([skyline.e = 100]), rowset=16
       access([skyline.e], [skyline.a], [skyline.v1]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([skyline.a], [skyline.e], [skyline.v1], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+      range_key([skyline.pk]), range(MIN ; MAX)always true
 explain select /*+index(skyline idx_a_e_v2_v3_v4_v5)*/ a, e, v1 from skyline where e = 100;
 Query Plan
 =======================================================================
 |ID|OPERATOR       |NAME                        |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_e_v2_v3_v4_v5)|1       |7           |
+|0 |TABLE FULL SCAN|skyline(idx_a_e_v2_v3_v4_v5)|1       |5           |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -257,7 +257,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_b_d)|1       |8           |
+|0 |TABLE FULL SCAN|skyline(idx_a_b_d)|1       |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -270,7 +270,7 @@ Query Plan
 ===========================================================
 |ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_b)|1       |8           |
+|0 |TABLE FULL SCAN|skyline(idx_a_b)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -309,7 +309,7 @@ Query Plan
 ===========================================================
 |ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_b)|1       |7           |
+|0 |TABLE FULL SCAN|skyline(idx_a_b)|1       |5           |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -339,7 +339,7 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.e > 100], [skyline.e < 200], [skyline.b = 100]), rowset=16
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.e > 100], [skyline.e < 200]), rowset=16
       access([skyline.b], [skyline.e], [skyline.a], [skyline.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([skyline.pk]), range(MIN ; MAX)always true
@@ -352,7 +352,7 @@ Query Plan
 =============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.e > 100], [skyline.e < 200], [skyline.b = 100]), rowset=16
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.e > 100], [skyline.e < 200]), rowset=16
       access([skyline.pk], [skyline.b], [skyline.e], [skyline.a], [skyline.c]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true,true,true], 
       range_key([skyline.a], [skyline.b], [skyline.e], [skyline.pk]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
@@ -365,7 +365,7 @@ Query Plan
 ==================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.e > 100], [skyline.e < 200], [skyline.b = 100]), rowset=16
+  0 - output([skyline.a], [skyline.b], [skyline.c]), filter([skyline.b = 100], [skyline.e > 100], [skyline.e < 200]), rowset=16
       access([skyline.b], [skyline.e], [skyline.a], [skyline.c]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([skyline.pk]), range(MIN ; MAX)always true
@@ -387,7 +387,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_b_d)|1       |8           |
+|0 |TABLE FULL SCAN|skyline(idx_a_b_d)|1       |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -400,7 +400,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR       |NAME              |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |TABLE FULL SCAN|skyline(idx_a_b_e)|1       |8           |
+|0 |TABLE FULL SCAN|skyline(idx_a_b_e)|1       |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -413,8 +413,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR           |NAME      |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |LIMIT              |          |1       |7           |
-|1 |└─TOP-N SORT       |          |1       |7           |
+|0 |LIMIT              |          |1       |3           |
+|1 |└─TOP-N SORT       |          |1       |3           |
 |2 |  └─TABLE FULL SCAN|cdj_enroll|1       |3           |
 =========================================================
 Outputs & filters:
@@ -449,9 +449,9 @@ Query Plan
 =============================================================
 |ID|OPERATOR           |NAME          |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |LIMIT              |              |1       |15          |
-|1 |└─TOP-N SORT       |              |1       |15          |
-|2 |  └─TABLE FULL SCAN|cdj_enroll(n1)|1       |11          |
+|0 |LIMIT              |              |1       |5           |
+|1 |└─TOP-N SORT       |              |1       |5           |
+|2 |  └─TABLE FULL SCAN|cdj_enroll(n1)|1       |5           |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -485,8 +485,8 @@ Query Plan
 =========================================================
 |ID|OPERATOR           |NAME      |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |LIMIT              |          |1       |7           |
-|1 |└─TOP-N SORT       |          |1       |7           |
+|0 |LIMIT              |          |1       |3           |
+|1 |└─TOP-N SORT       |          |1       |3           |
 |2 |  └─TABLE FULL SCAN|cdj_enroll|1       |3           |
 =========================================================
 Outputs & filters:
@@ -521,8 +521,8 @@ Query Plan
 ==============================================================================================
 |ID|OPERATOR         |NAME                                             |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------------
-|0 |UPDATE           |                                                 |1       |41          |
-|1 |└─TABLE FULL SCAN|quality_item_info(unique_itemid_sellerid_blockid)|1       |9           |
+|0 |UPDATE           |                                                 |1       |29          |
+|1 |└─TABLE FULL SCAN|quality_item_info(unique_itemid_sellerid_blockid)|1       |5           |
 ==============================================================================================
 Outputs & filters:
 -------------------------------------
@@ -550,7 +550,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR         |NAME             |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |UPDATE           |                 |1       |35          |
+|0 |UPDATE           |                 |1       |27          |
 |1 |└─TABLE FULL SCAN|quality_item_info|1       |3           |
 ==============================================================
 Outputs & filters:
@@ -578,7 +578,7 @@ Query Plan
 ==============================================================
 |ID|OPERATOR         |NAME             |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |UPDATE           |                 |1       |35          |
+|0 |UPDATE           |                 |1       |27          |
 |1 |└─TABLE FULL SCAN|quality_item_info|1       |3           |
 ==============================================================
 Outputs & filters:

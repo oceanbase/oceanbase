@@ -8,6 +8,7 @@
 #
 
 import copy
+from collections import OrderedDict
 from ob_inner_table_init_data import *
 import StringIO
 import re
@@ -20,6 +21,7 @@ max_core_table_id        = int(100)
 max_sys_table_id         = int(10000)
 max_ob_virtual_table_id  = int(15000)
 max_ora_virtual_table_id = int(20000)
+max_mysql_sys_view_id    = int(25000)
 max_sys_view_id          = int(30000)
 base_lob_meta_table_id   = int(50000)
 base_lob_piece_table_id  = int(60000)
@@ -45,6 +47,10 @@ def is_mysql_virtual_table(table_id):
 def is_ora_virtual_table(table_id):
   table_id = int(table_id)
   return table_id > max_ob_virtual_table_id and table_id < max_ora_virtual_table_id
+
+def is_ora_sys_view(table_id):
+  table_id = int(table_id)
+  return table_id > max_mysql_sys_view_id and table_id < max_sys_view_id
 
 def is_virtual_table(table_id):
   table_id = int(table_id)
@@ -83,7 +89,7 @@ only_rs_vtables = []
 cluster_distributed_vtables = []
 tenant_distributed_vtables = []
 column_def_enum_array = []
-all_def_keywords =  {}
+all_def_keywords = OrderedDict()
 all_agent_virtual_tables = []
 all_iterate_virtual_tables = []
 all_iterate_private_virtual_tables = []
@@ -192,7 +198,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
       {12}_default,
       {12}_default, //default_value
       {14}, //is_hidden
-      {15}); //is_storing_column 
+      {15}); //is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(), set_op, is_hidden, is_storing_column))
@@ -266,7 +272,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
   }}
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(),set_op))
-    
+
 def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_id, is_hidden, is_storing_column):
   global cpp_f
 
@@ -308,7 +314,7 @@ def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, co
       {9}, //is_nullable
       {10},//is_autoincrement
       {11},//is_hidden
-      {12});//is_storing_column 
+      {12});//is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement,is_hidden ,is_storing_column))
@@ -351,7 +357,7 @@ def print_column(column_name, rowkey_id, index_id, part_key_pos, column_type, co
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement))
 
-    
+
 def print_discard_column(column_name):
   global cpp_f
   line = """
@@ -413,7 +419,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
       {11}, //is_autoincrement
       {12}, //is_on_update_for_timestamp
       {13}, //is_hidden
-      {14});//is_storing_column 
+      {14});//is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp,is_hidden, is_storing_column))
@@ -462,7 +468,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
       {10}, //is_autoincrement
       {11}, //is_on_update_for_timestamp
       {12}, //is_hidden
-      {13});//is_storing_column 
+      {13});//is_storing_column
   }}
 """
       cpp_f.write(line.format(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp, is_hidden, is_storing_column))
@@ -1680,6 +1686,14 @@ struct %s {
 ''' % (table_name.replace('$', '_').upper().strip('_') + "_CDE", ",\n    ".join(t))
     column_def_enum_array.append(content)
 
+def kw2schema_version(kw):
+  tid = kw['table_id']
+  name_postfix = "_ORACLE" if (is_ora_sys_view(tid) or is_ora_virtual_table(tid)) else ""
+  if kw.has_key('index_columns'):
+    return "OB_IDX_" + str(kw['table_id']) + '_' + kw['index_name'].upper() + name_postfix + "_SCHEMA_VERSION"
+  else:
+    return "OB_" + kw['table_name'].replace('$', '_').upper().strip('_') + name_postfix + "_SCHEMA_VERSION"
+
 def table_name2tid(name):
   return "OB_" + name.replace('$', '_').upper().strip('_') + "_TID"
 
@@ -1695,8 +1709,15 @@ def table_name2tname_ora(name):
 def table_name2index_tname(table_name, idx_name):
   return "OB_" + table_name.replace('$', '_').upper().strip('_') + '_' + str(idx_name).upper() + "_TNAME";
 
-__current_range_idx = -1 
-__def_cnt = 0 
+def kw2tid(kw):
+  name_postfix = kw['name_postfix'] if 'name_postfix' in kw else ""
+  if kw.has_key('index_columns'):
+    return table_name2index_tid(kw['table_name']+ name_postfix, kw['index_name'])
+  else:
+    return table_name2tid(kw['table_name']+ name_postfix)
+
+__current_range_idx = -1
+__def_cnt = 0
 __split_size = 50
 def check_split_file(tid):
   global __current_range_idx
@@ -1801,14 +1822,16 @@ def def_table_schema(**keywords):
       if keywords.has_key('real_vt') and True == keywords['real_vt']:
         index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
       else:
-        index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
-        ora_virtual_index_table_id -= 1
+        if not keywords.has_key('index_table_id_ora'):
+          raise Exception("must specific index_table_id_ora", int(keywords['table_id']), keywords['table_name'])
+        index_name_ids.append([keywords['index_name'], int(keywords['index_table_id_ora']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
     elif True == is_mysql_virtual_table(int(keywords['table_id'])):
-      index_name_ids.append([keywords['index_name'], int(ob_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
-      ob_virtual_index_table_id -= 1
+      if not keywords.has_key('index_table_id'):
+        raise Exception("must specific index_table_id", int(keywords['table_id']), keywords['table_name'])
+      index_name_ids.append([keywords['index_name'], keywords['index_table_id'], keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
     elif True == is_sys_table(int(keywords['table_id'])):
       if not keywords.has_key('index_table_id'):
-        raise Exception("must specific index_table_id", int(keywords['table_id']))
+        raise Exception("must specific index_table_id", int(keywords['table_id']), keywords['table_name'])
       index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
   else:
     print_method_start(keywords['table_name'] + keywords['name_postfix'])
@@ -1950,7 +1973,7 @@ def def_table_schema(**keywords):
           tenant_space_table_names.append(table_name2tname(keywords['table_name'] + keywords['name_postfix']))
     elif field == 'view_definition':
       if keywords[field]:
-        add_char_field(field, 'R"__({0})__"'.format(value))
+        add_char_field(field, 'R"__({0})__"'.format(value.replace("\n", " ")))
     elif field == 'partition_expr':
       if keywords[field]:
         add_list_partition_expr_field(value)
@@ -1971,6 +1994,8 @@ def def_table_schema(**keywords):
               keywords['index_table_id'] = v['index_table_id']
           if v.has_key('index_using_type'):
               keywords['index_using_type'] = v['index_using_type']
+          if v.has_key('index_table_id_ora'):
+              keywords['index_table_id_ora'] = v['index_table_id_ora']
           keywords['table_type'] = 'USER_INDEX'
           keywords['index_status'] = 'INDEX_STATUS_AVAILABLE'
           keywords['index_type'] = 'INDEX_TYPE_NORMAL_LOCAL';
@@ -2277,13 +2302,16 @@ private:
     if is_mysql_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       virtual_table_count = virtual_table_count + 1
-  for index_l in new_index_name_ids:
-    if is_mysql_virtual_table(index_l[1]):
-      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
-      virtual_table_count = virtual_table_count + 1
   for (table_name, table_id) in new_table_name_postfix_ids:
     if is_ora_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      virtual_table_count = virtual_table_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  h_f.write("const schema_create_func virtual_table_index_schema_creators [] = {\n")
+  for index_l in new_index_name_ids:
+    if is_mysql_virtual_table(index_l[1]):
+      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
       virtual_table_count = virtual_table_count + 1
   for index_l in new_index_name_ids:
     if is_ora_virtual_table(index_l[1]):
@@ -2725,12 +2753,63 @@ def start_generate_misc_data(fname):
   f.write(copyright)
   return f
 
+def generate_inner_table_hard_code_schema_mapping(f):
+  cases = ""
+  for kw in all_def_keywords.values():
+    cases += "    case {} : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::{}); break;\n".format(
+            kw2tid(kw), kw2schema_version(kw))
+  f.write("""
+#ifdef INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH
+""" + cases + """
+#endif // INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH
+  """)
+
+def run_command(command, raise_error = True):
+  import os
+  print "run command '{}'".format(command)
+  ret = os.system(command)
+  if ret != 0 and raise_error:
+    raise BaseException("failed to run command '{}'".format(command))
+  return ret
+
+def generate_load_inner_table_schema():
+  import os
+  current_path = os.path.abspath(__file__)
+  # /src/share/inner_table
+  current_dir = os.path.dirname(current_path)
+  # /src/share
+  top_dir = os.path.dirname(current_dir)
+  # /src
+  top_dir = os.path.dirname(top_dir)
+  # /
+  top_dir = os.path.dirname(top_dir)
+  # /build.sh
+  build_sh_path = os.path.join(top_dir, 'build.sh')
+  build_type = 'debug'
+  unittest_path = os.path.join(top_dir, 'build_{}/unittest/rootserver/'.format(build_type))
+  test_name = 'test_dump_inner_table_schema'
+  make_type = 'make'
+  make_type = 'ob-make' if run_command('which ob-make', raise_error=False) == 0 else 'make'
+  run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=ON --init'.format(build_sh_path, build_type))
+  run_command('cd {} && {} {} && ./{}'.format(unittest_path, make_type, test_name, test_name))
+  run_command('cp -f {}/ob_load_inner_table_schema.cpp {}'.format(unittest_path, current_dir))
+  # 还原一下build_debug目录
+  run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=OFF --init'.format(build_sh_path, build_type))
+
+def check_file_no_tail_space(file):
+  with open(file) as f:
+    for i, line in enumerate(f):
+      line1 = line.strip('\n\r')
+      if len(line1) !=0 and line1[-1] in ' \t':
+        raise Exception("tailing space in file {}:{}".format(file, i + 1))
+
 if __name__ == "__main__":
   global ob_virtual_index_table_id
   ob_virtual_index_table_id = max_ob_virtual_table_id - 1
   ora_virtual_index_table_id = max_ora_virtual_table_id - 1
 
   clean_files("ob_inner_table_schema.*")
+  check_file_no_tail_space("ob_inner_table_schema_def.py")
   execfile("ob_inner_table_schema_def.py")
   def_all_lob_aux_table()
   end_generate_cpp()
@@ -2752,7 +2831,10 @@ if __name__ == "__main__":
   generate_iterate_virtual_table_misc_data(f)
   generate_cluster_private_table(f)
   generate_sys_index_table_misc_data(f)
+  generate_inner_table_hard_code_schema_mapping(f)
 
   f.close()
+
+  generate_load_inner_table_schema()
 
   print "\nSuccess\n"

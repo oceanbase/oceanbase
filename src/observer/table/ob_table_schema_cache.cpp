@@ -70,13 +70,14 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     set_is_ttl_table(!table_schema->get_ttl_definition().empty());
     set_is_partitioned_table(table_schema->is_partitioned_table());
     set_is_secondary_part(table_schema->get_part_level() == PARTITION_LEVEL_TWO);
+    set_is_heap_table(!table_schema->is_table_with_pk());
     if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, hbase_mode_type_))) {
       LOG_WARN("fail to get mode type", K(ret));
     } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
       uint64_t data_version = 0;
       if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
         flags_.has_hbase_ttl_column_ = true;
-        if (GET_MIN_DATA_VERSION(MTL_ID(), data_version)) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
           LOG_WARN("get data version failed", K(ret));
         } else if (data_version < DATA_VERSION_4_3_5_1) {
           ret = OB_NOT_SUPPORTED;
@@ -368,6 +369,7 @@ int ObKvSchemaCacheGuard::create_schema_cache_obj(ObSchemaGetterGuard &schema_gu
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *table_schema = nullptr;
+  ObKVAttr kv_attr;
   // get full table_schema
   if (!schema_guard.is_inited()) {
     ret = OB_ERR_UNEXPECTED;
@@ -380,6 +382,13 @@ int ObKvSchemaCacheGuard::create_schema_cache_obj(ObSchemaGetterGuard &schema_gu
   } else if (cache_key_.schema_version_ != table_schema->get_schema_version()) {
     cache_key_.schema_version_ = table_schema->get_schema_version();
     LOG_WARN("schema version has change", K(cache_key_.table_id_));
+  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), kv_attr))) {
+    LOG_WARN("failed get table state", K(ret), K(table_schema->get_kv_attributes()));
+  } else if (kv_attr.is_disable_) {
+    ret = OB_KV_TABLE_NOT_ENABLED;
+    const ObString &table_group_name = table_schema->get_tablegroup_name();
+    LOG_WARN("table is disabled", K(table_group_name), K(table_schema->get_table_name()), K(kv_attr), K(table_schema->get_kv_attributes()));
+    LOG_USER_ERROR(OB_KV_TABLE_NOT_ENABLED, table_group_name.length(), table_group_name.ptr());
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObCacheObjectFactory::alloc(cache_guard_,
@@ -548,6 +557,19 @@ int ObKvSchemaCacheGuard::is_partitioned_table(bool &is_partitioned_table)
   }
   return ret;
 }
+
+int ObKvSchemaCacheGuard::is_secondary_part_table(bool &is_secondary_part_table)
+{
+  int ret = OB_SUCCESS;
+  ObKvSchemaCacheObj *cache_obj = nullptr;
+  if (OB_FAIL(get_cache_obj(cache_obj))) {
+    LOG_WARN("fail to get cache obj", K(ret));
+  } else {
+    is_secondary_part_table = cache_obj->get_schema_flags().is_secondary_part_;
+  }
+  return ret;
+}
+
 
 int ObKvSchemaCacheGuard::has_global_index(bool &has_gloabl_index)
 {
@@ -721,6 +743,35 @@ void ObKvSchemaCacheGuard::reset()
   is_init_ = false;
   is_use_cache_ = false;
   lib_cache_ = nullptr;
+}
+
+// return K, Q, T, V, (TTL)
+int ObKvSchemaCacheGuard::get_hbase_column_infos(ObIArray<const ObTableColumnInfo *> &col_infos)
+{
+  int ret = OB_SUCCESS;
+  ObKvSchemaCacheObj *cache_obj = nullptr;
+  if (OB_FAIL(get_cache_obj(cache_obj))) {
+    LOG_WARN("fail to get cache obj", K(ret));
+  } else if (cache_obj->get_hbase_mode_type() != ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hbase mode type is not normal", K(ret));
+  } else {
+    const ObIArray<ObTableColumnInfo *>& column_info_array = cache_obj->get_column_info_array();
+    for (int64_t i = 0; i < column_info_array.count() && OB_SUCC(ret); ++i) {
+      const ObTableColumnInfo *col_info = column_info_array.at(i);
+      if (OB_ISNULL(col_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (col_info->is_rowkey_column_ ||
+                 col_info->column_name_.case_compare(ObHTableConstants::VALUE_CNAME_STR) == 0 ||
+                 col_info->column_name_.case_compare(ObHTableConstants::TTL_CNAME_STR) == 0) {
+        if (OB_FAIL(col_infos.push_back(col_info))) {
+          LOG_WARN("fail to push back column info", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 } // end namespace table

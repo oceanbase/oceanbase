@@ -1049,9 +1049,10 @@ int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
         // copy inrow data
         ObTextStringIterState state;
         ObString src_block_data;
+        ObArenaAllocator tmp_alloc("ConLobOutToIn", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObTextStringIter instr_iter(in_obj);
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(instr_iter.init(0, session, allocator))) {
+        } else if (OB_FAIL(instr_iter.init(0, session, allocator, &tmp_alloc))) {
           COMMON_LOG(WARN, "Lob: init text string iter failed", K(instr_iter));
         } else {
           while (OB_SUCC(ret)

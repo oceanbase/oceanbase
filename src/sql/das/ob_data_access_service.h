@@ -24,7 +24,6 @@ namespace sql
 class ObDASRef;
 class ObDASTaskArg;
 class ObDASTaskResp;
-class ObPhyTableLocation;
 class ObDASExtraData;
 class ObDataAccessService
 {

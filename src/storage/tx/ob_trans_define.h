@@ -36,6 +36,7 @@
 #include "storage/tx/ob_multi_data_source_tx_buffer_node.h"
 #include "storage/tx/ob_tx_on_demand_print.h"
 #include "storage/tx/ob_tx_seq.h"
+#include "storage/tx/ob_trans_id.h"
 
 namespace oceanbase
 {
@@ -226,65 +227,6 @@ protected:
   }
 private:
   ObReserveAllocator reserve_allocator_;
-};
-
-class ObTransID
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTransID() : tx_id_(0) {}
-  ObTransID(const int64_t tx_id) : tx_id_(tx_id) {}
-  ~ObTransID() { tx_id_ = 0; }
-  ObTransID &operator=(const ObTransID &r) {
-    if (this != &r) {
-      tx_id_ = r.tx_id_;
-    }
-    return *this;
-  }
-  ObTransID &operator=(const int64_t &id) {
-    tx_id_ = id;
-    return *this;
-  }
-  bool operator<(const ObTransID &id) {
-    bool bool_ret = false;
-    if (this->compare(id) < 0) {
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  bool operator>(const ObTransID &id) {
-    bool bool_ret = false;
-    if (this->compare(id) > 0) {
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  int64_t get_id() const { return tx_id_; }
-  uint64_t hash() const
-  {
-    return murmurhash(&tx_id_, sizeof(tx_id_), 0);
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return OB_SUCCESS;
-  }
-  bool is_valid() const { return tx_id_ > 0; }
-  void reset() { tx_id_ = 0; }
-  int compare(const ObTransID& other) const;
-  operator int64_t() const { return tx_id_; }
-  bool operator==(const ObTransID &other) const
-  { return tx_id_ == other.tx_id_; }
-  bool operator!=(const ObTransID &other) const
-  { return tx_id_ != other.tx_id_; }
-  /*  XA  */
-  int parse(char *b) {
-    UNUSED(b);
-    return OB_SUCCESS;
-  }
-  TO_STRING_AND_YSON(OB_ID(txid), tx_id_);
-private:
-  int64_t tx_id_;
 };
 
 struct ObLockForReadArg
@@ -1003,6 +945,10 @@ public:
   void set_transfer_blocking() { flag_.transfer_blocking_ = 1; }
   void clear_transfer_blocking() { flag_.transfer_blocking_ = 0; }
 
+  bool is_commit_submitting_redo() const { return flag_.commit_submitting_redo_; }
+  void set_commit_submitting_redo() { flag_.commit_submitting_redo_ = 1; }
+  void clear_commit_submitting_redo() { flag_.commit_submitting_redo_ = 0; }
+
   DECLARE_ON_DEMAND_TO_STRING
   TO_STRING_KV("info_log_submitted",
                flag_.info_log_submitted_,
@@ -1017,7 +963,9 @@ public:
                "force_abort",
                flag_.force_abort_,
                "transfer_blocking",
-               flag_.transfer_blocking_);
+               flag_.transfer_blocking_,
+               "commit_submitting_redo",
+               flag_.commit_submitting_redo_);
 
   bool is_valid() const { return flag_.is_valid(); }
 private:
@@ -1030,6 +978,7 @@ private:
     unsigned int prepare_notify_ : 1;
     unsigned int force_abort_ : 1;
     unsigned int transfer_blocking_ : 1;
+    unsigned int commit_submitting_redo_ : 1;
 
     void reset()
     {
@@ -1040,13 +989,14 @@ private:
       prepare_notify_ = 0;
       force_abort_ = 0;
       transfer_blocking_ = 0;
+      commit_submitting_redo_ = 0;
     }
 
     bool is_valid() const
     {
       return info_log_submitted_ > 0 || gts_waiting_ > 0 || state_log_submitted_ > 0
           || state_log_submitting_ > 0 || prepare_notify_ > 0 || force_abort_ > 0
-          || transfer_blocking_ > 0;
+          || transfer_blocking_ > 0 || commit_submitting_redo_ > 0;
     }
 
     BitFlag() { reset(); }

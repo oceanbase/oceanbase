@@ -53,7 +53,9 @@ struct ObMinMaxFilterParam {
   }
   OB_INLINE bool is_uncertain() const
   {
-    return null_count_.is_null() && min_datum_.is_null() && max_datum_.is_null();
+    const bool no_agg_data = null_count_.is_null() && min_datum_.is_null() && max_datum_.is_null();
+    const bool has_prefix = is_min_prefix_ || is_max_prefix_; // enable filter with min/max prefix in subsequent versions
+    return no_agg_data || has_prefix;
   }
   blocksstable::ObStorageDatum null_count_;
   blocksstable::ObStorageDatum min_datum_;
@@ -93,15 +95,13 @@ public:
                                   const int64_t row_count,
                                   ObMinMaxFilterParam &param,
                                   sql::ObPhysicalFilterExecutor &filter,
-                                  common::ObIAllocator &allocator,
                                   const bool use_vectorize);
 
 private:
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
                         const ObMinMaxFilterParam &param,
-                        sql::ObWhiteFilterExecutor &filter,
-                        common::ObIAllocator &allocator);
+                        sql::ObWhiteFilterExecutor &filter);
 
   int read_aggregate_data(const uint32_t col_idx,
                    common::ObIAllocator &allocator,
@@ -175,7 +175,6 @@ private:
                               const uint64_t row_count,
                               ObMinMaxFilterParam &param,
                               sql::ObBlackFilterExecutor &filter,
-                              common::ObIAllocator &allocator,
                               const bool use_vectorize);
 private:
   ObAggRowReader agg_row_reader_;

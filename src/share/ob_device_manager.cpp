@@ -10,9 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <sys/vfs.h>
+#include <unistd.h>
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
+#include "ob_version_def.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_struct.h"
 #include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_local_device.h"
@@ -25,6 +29,76 @@ namespace oceanbase
 {
 namespace common
 {
+
+int find_existing_parent_path(ObIAllocator &allocator, const char *path, char *&exist_path)
+{
+  int ret = OB_SUCCESS;
+  exist_path = nullptr;
+  int64_t path_length = 0;
+  if (OB_ISNULL(path) || OB_UNLIKELY(STRLEN(path) <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", KR(ret), KP(path));
+  } else if (FALSE_IT(path_length = STRLEN(path) + 3)) {
+  } else if (OB_ISNULL(exist_path = static_cast<char *>(allocator.alloc(path_length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "failed to alloc memory", KR(ret), K(path), K(path_length));
+  } else if (path[0] == '/' && FALSE_IT(STRNCPY(exist_path, path, path_length))) {
+  } else if (path[0] != '/' && OB_FAIL(databuff_printf(exist_path, path_length, "./%s", path))) {
+    OB_LOG(WARN, "failed to printf exist_path", KR(ret), K(path));
+  } else {
+    while (exist_path[0] != '\0' && access(exist_path, F_OK) != 0 && OB_SUCC(ret)) {
+      char *last_slash = strrchr(exist_path, '/');
+      if (OB_ISNULL(last_slash)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "failed to find a existing parent path", KR(ret), K(path), K(exist_path));
+      } else {
+        *last_slash = '\0';
+      }
+    }
+    // exist_path is never be nullptr here
+  }
+  return ret;
+}
+
+int check_is_local_disk(const ObString &path, bool &is_local_disk)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t NFS_SUPER_MAGIC = 0x6969;
+  static const int64_t AFS_SUPER_MAGIC = 0x5346414f;
+  static const int64_t CIFS_MAGIC_NUMBER = 0xff534d42;
+  static const int64_t CODA_SUPER_MAGIC = 0x73757245;
+  static const int64_t NCP_SUPER_MAGIC = 0x564c;
+  static const int64_t OCFS2_SUPER_MAGIC = 0x7461636f;
+  static const int64_t V9FS_MAGIC = 0x01021997;
+  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, "DEVICE_MANAGER");
+  ObArenaAllocator allocator(mem_attr);
+  struct statfs stat;
+  int stat_ret = -1;
+  int64_t f_type = 0;
+  is_local_disk = true;
+  char *exist_path = nullptr;
+  if (OB_UNLIKELY(!path.prefix_match(OB_FILE_PREFIX))) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument: You can only check the local disk when the path's prefix is file://", KR(ret), K(path));
+  } else if (OB_FAIL(find_existing_parent_path(allocator, path.ptr() + STRLEN(OB_FILE_PREFIX), exist_path))) {
+    OB_LOG(WARN, "failed to find an existing parent path", KR(ret), K(path));
+  } else if (OB_FALSE_IT(stat_ret = statfs(exist_path, &stat))) {
+  } else if (OB_UNLIKELY(stat_ret != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "failed to get file system stat, please make sure the path exists", KR(ret), K(path), K(stat_ret), K(exist_path));
+  } else if (FALSE_IT(f_type = static_cast<int64_t>(stat.f_type))) {
+  } else if (f_type == NFS_SUPER_MAGIC
+             || f_type == AFS_SUPER_MAGIC
+             || f_type == CIFS_MAGIC_NUMBER
+             || f_type == CODA_SUPER_MAGIC
+             || f_type == NCP_SUPER_MAGIC
+             || f_type == OCFS2_SUPER_MAGIC
+             || f_type == V9FS_MAGIC) {
+    is_local_disk = false;
+  }
+  return ret;
+}
+
 int ObTenantStsCredentialMgr::get_sts_credential(
     char *sts_credential, const int64_t sts_credential_buf_len)
 {
@@ -122,14 +196,41 @@ bool ObClusterEnableObdalConfig::is_enable_obdal() const
 int ObClusterStateMgr::is_supported_enable_worm_version() const
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    OB_LOG(WARN, "get data version failed", K(ret));
-  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_5_2)) {
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version <= MOCK_CLUSTER_VERSION_4_2_5_5
+    || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0 && min_cluster_version < CLUSTER_VERSION_4_3_5_2)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "date version is less than 4.3.5.2, set enable_worm is");
-    OB_LOG(WARN, "date version is less than 4.3.5.2, setting enable_worm is not supported", K(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is");
+    OB_LOG(WARN, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is is not supported",
+              KR(ret), K(min_cluster_version));
+  }
+  return ret;
+}
+
+int ObClusterStateMgr::is_supported_azblob_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t min_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+    OB_LOG(WARN, "fail to get min data version, use cluster version", KR(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    if ((min_data_version < MOCK_DATA_VERSION_4_2_5_6)
+        || (min_data_version >= DATA_VERSION_4_3_0_0 && min_data_version < MOCK_DATA_VERSION_4_3_5_3)
+        || (min_data_version >= DATA_VERSION_4_4_0_0 && min_data_version < DATA_VERSION_4_4_1_0)) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "data version is too low for azblob", KR(ret), K(min_data_version));
+    }
+  } else {
+    ret = OB_SUCCESS;
+    const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if ((min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_6)
+        || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0 && min_cluster_version < MOCK_CLUSTER_VERSION_4_3_5_3)
+        || (min_cluster_version >= CLUSTER_VERSION_4_4_0_0 && min_cluster_version < CLUSTER_VERSION_4_4_1_0)) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "cluster version is too low for azblob", KR(ret), K(min_cluster_version));
+    }
   }
   return ret;
 }
@@ -248,47 +349,56 @@ ObDeviceManager& ObDeviceManager::get_instance()
 }
 
 /*parse storage info, get device type, alloc device mem*/
-int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device_handle, common::ObFIFOAllocator& allocator)
+int parse_storage_info(common::ObString uri, ObIODevice*& device_handle, common::ObFIFOAllocator& allocator)
 {
   int ret = OB_SUCCESS;
   ObStorageType device_type = OB_STORAGE_MAX_TYPE;
   void* mem = NULL;
 
-  if (storage_type_prefix.prefix_match(OB_LOCAL_PREFIX)) {
+  if (uri.prefix_match(OB_LOCAL_PREFIX)) {
     device_type = OB_STORAGE_LOCAL;
     mem = allocator.alloc(sizeof(share::ObLocalDevice));
     if (NULL != mem) {new(mem)share::ObLocalDevice();}
 #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (storage_type_prefix.prefix_match(OB_LOCAL_CACHE_PREFIX)) {
+  } else if (uri.prefix_match(OB_LOCAL_CACHE_PREFIX)) {
     device_type = OB_STORAGE_LOCAL_CACHE;
     mem = allocator.alloc(sizeof(storage::ObLocalCacheDevice));
     if (NULL != mem) {new(mem)storage::ObLocalCacheDevice();}
 #endif
-  } else if (storage_type_prefix.prefix_match(OB_FILE_PREFIX)) {
+  } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     device_type = OB_STORAGE_FILE;
-    mem = allocator.alloc(sizeof(ObObjectDevice));
-    if (NULL != mem) {new(mem)ObObjectDevice;}
-  } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)) {
+    bool is_local_disk = false;
+    if (OB_FAIL(check_is_local_disk(uri, is_local_disk))) {
+      OB_LOG(WARN, "failed to check local disk", K(ret), K(uri));
+    } else {
+      mem = allocator.alloc(sizeof(ObObjectDevice));
+      if (NULL != mem) {new(mem)ObObjectDevice(is_local_disk);}
+    }
+  } else if (uri.prefix_match(OB_OSS_PREFIX)) {
     device_type = OB_STORAGE_OSS;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
-  } else if (storage_type_prefix.prefix_match(OB_S3_PREFIX)) {
+  } else if (uri.prefix_match(OB_S3_PREFIX)) {
     device_type = OB_STORAGE_S3;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
-  } else if (storage_type_prefix.prefix_match(OB_HDFS_PREFIX)) {
+  } else if (uri.prefix_match(OB_AZBLOB_PREFIX)) {
+    device_type = OB_STORAGE_AZBLOB;
+    mem = allocator.alloc(sizeof(ObObjectDevice));
+    if (NULL != mem) {new(mem)ObObjectDevice;}
+  } else if (uri.prefix_match(OB_HDFS_PREFIX)) {
     device_type = OB_STORAGE_HDFS;
     mem = allocator.alloc(sizeof(share::ObHDFSTableDevice));
     if (NULL != mem) {new(mem)share::ObHDFSTableDevice;}
   } else {
     ret = OB_INVALID_BACKUP_DEST;
-    OB_LOG(WARN, "invaild device name info!", K(storage_type_prefix));
+    OB_LOG(WARN, "invaild device name info!", KR(ret), K(uri));
   }
 
   if (OB_SUCCESS != ret) {
   } else if (OB_ISNULL(mem)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    OB_LOG(WARN, "fail to alloc mem for device ins!", K(storage_type_prefix));
+    OB_LOG(WARN, "fail to alloc mem for device ins!", KR(ret), K(uri));
   } else {
     device_handle = static_cast<ObIODevice*>(mem);
     device_handle->device_type_ = device_type;
@@ -298,7 +408,7 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
 }
 
 int ObDeviceManager::alloc_device_(
-    const ObString &storage_type_prefix,
+    const ObString &uri,
     const ObString &device_key,
     ObDeviceInsInfo *&device_info)
 {
@@ -307,8 +417,8 @@ int ObDeviceManager::alloc_device_(
   int64_t avai_idx = -1;
   ObIODevice *device_handle = nullptr;
   //first validate the key(storage info)
-  if (OB_FAIL(parse_storage_info(storage_type_prefix, device_handle, allocator_))) {
-    OB_LOG(WARN, "fail to alloc device!", K(ret), K(storage_type_prefix));
+  if (OB_FAIL(parse_storage_info(uri, device_handle, allocator_))) {
+    OB_LOG(WARN, "fail to alloc device!", K(ret), K(uri));
   } else {
     //find a device slot
     for (int i = 0; i < MAX_DEVICE_INSTANCE; i++) {
@@ -324,7 +434,7 @@ int ObDeviceManager::alloc_device_(
       //cannot insert into device manager
       ret = OB_OUT_OF_ELEMENT;
       OB_LOG(WARN, "devices too many!", KR(ret),
-          K(MAX_DEVICE_INSTANCE), K(storage_type_prefix), KP(device_key.ptr()));
+          K(MAX_DEVICE_INSTANCE), K(uri), KP(device_key.ptr()));
     } else {
       //try to release one
       if (-1 == avai_idx && -1 != last_no_ref_idx) {
@@ -335,10 +445,10 @@ int ObDeviceManager::alloc_device_(
           OB_LOG(WARN, "fail to remove device channel", KR(ret), KP(del_device));
         } else if (OB_FAIL(device_map_.erase_refactored(old_key))) {
           OB_LOG(WARN, "fail to erase device from device map", KP(old_key.ptr()), KR(ret),
-              K(storage_type_prefix), KP(device_key.ptr()));
+              K(uri), KP(device_key.ptr()));
         } else if (OB_FAIL(handle_map_.erase_refactored((int64_t)(device_ins_[last_no_ref_idx].device_)))) {
           OB_LOG(WARN, "fail to erase device from handle map", K(device_ins_[last_no_ref_idx].device_),
-                 KR(ret), K(storage_type_prefix), KP(device_key.ptr()));
+                 KR(ret), K(uri), KP(device_key.ptr()));
         } else {
           /*free the resource*/
           del_device->destroy();
@@ -354,7 +464,7 @@ int ObDeviceManager::alloc_device_(
           device_count_--;
           avai_idx = last_no_ref_idx;
           OB_LOG(INFO, "release one device for realloc another!", KP(old_key.ptr()),
-              K(storage_type_prefix), KP(device_key.ptr()));
+              K(uri), KP(device_key.ptr()));
         }
       }
 
@@ -363,16 +473,16 @@ int ObDeviceManager::alloc_device_(
         ObString cur_key;
         if (OB_FAIL(ob_write_string(allocator_, device_key, cur_key, true/*c_style*/))) {
           OB_LOG(WARN, "fail to deep copy device key",
-              KR(ret), K(storage_type_prefix), KP(device_key.ptr()));
+              KR(ret), K(uri), KP(device_key.ptr()));
         } else if (FALSE_IT(device_ins_[avai_idx].device_key_ = cur_key.ptr())) {
         } else if (OB_FAIL(device_map_.set_refactored(cur_key, &(device_ins_[avai_idx])))) {
           OB_LOG(WARN, "fail to set device to device map!",
-              KR(ret), KP(cur_key.ptr()), K(storage_type_prefix));
+              KR(ret), KP(cur_key.ptr()), K(uri));
         } else if (OB_FAIL(handle_map_.set_refactored((int64_t)(device_handle), &(device_ins_[avai_idx])))) {
           OB_LOG(WARN, "fail to set device to handle map!",
-              KR(ret), K(storage_type_prefix), KP(device_key.ptr()));
+              KR(ret), K(uri), KP(device_key.ptr()));
         } else {
-          OB_LOG(INFO, "success insert into map!", K(storage_type_prefix), KP(device_key.ptr()));
+          OB_LOG(INFO, "success insert into map!", K(uri), KP(device_key.ptr()));
         }
       }
     }
@@ -387,7 +497,7 @@ int ObDeviceManager::alloc_device_(
     device_ins_[avai_idx].device_ = device_handle;
     device_count_++;
     OB_LOG(INFO, "alloc a new device!",
-           K(storage_type_prefix), K(avai_idx), K(device_count_), K(device_handle));
+           K(uri), K(avai_idx), K(device_count_), K(device_handle));
     device_info = &(device_ins_[avai_idx]);
   }
 
@@ -432,7 +542,7 @@ int ObDeviceManager::get_deivce_(const ObString &device_key, ObIODevice *&device
 }
 
 int ObDeviceManager::alloc_device_and_init_(
-    const ObString &storage_type_prefix,
+    const ObString &uri,
     const ObString &device_key,
     const ObStorageIdMod &storage_id_mod,
     ObIODevice *&device_handle)
@@ -448,11 +558,11 @@ int ObDeviceManager::alloc_device_and_init_(
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       // alloc a device, and set into the map
-      if (OB_FAIL(alloc_device_(storage_type_prefix, device_key, dev_info))) {
+      if (OB_FAIL(alloc_device_(uri, device_key, dev_info))) {
         OB_LOG(WARN, "fail to alloc device!", KR(ret),
-            K(storage_type_prefix), KP(device_key.ptr()), K(storage_id_mod));
-      // only object device goes here to alloc device channel
+            K(uri), KP(device_key.ptr()), K(storage_id_mod));
       } else if (dev_info->device_->is_object_device()) {
+        // only object device goes here to alloc device channel
         // Start a new thread under a normal tenant requires the same tenant context
         // So temporarily set expect_run_wrapper to nullptr
         lib::IRunWrapper *run_wrapper = lib::Threads::get_expect_run_wrapper();
@@ -478,7 +588,7 @@ int ObDeviceManager::alloc_device_and_init_(
       }
     } else {
       OB_LOG(WARN, "fail to re-check device existence", KR(ret),
-          K(storage_type_prefix), K(storage_id_mod), KP(device_key.ptr()));
+          K(uri), K(storage_id_mod), KP(device_key.ptr()));
     }
   }
 
@@ -492,7 +602,7 @@ int ObDeviceManager::alloc_device_and_init_(
 }
 
 int ObDeviceManager::get_device(
-    const ObString &storage_type_prefix,
+    const ObString &uri,
     const ObObjectStorageInfo &storage_info,
     const ObStorageIdMod &storage_id_mod,
     ObIODevice *&device_handle)
@@ -506,21 +616,21 @@ int ObDeviceManager::get_device(
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "device manager is not inited", KR(ret));
   } else if (OB_FAIL(get_device_key_(
-      allocator, storage_type_prefix, storage_info, storage_id_mod, tmp_device_key))) {
+      allocator, uri, storage_info, storage_id_mod, tmp_device_key))) {
     OB_LOG(WARN, "fail to get device key", KR(ret),
-        K(storage_type_prefix), K(storage_info), K(storage_id_mod));
+        K(uri), K(storage_info), K(storage_id_mod));
   } else {
     if (OB_FAIL(get_deivce_(tmp_device_key, device_handle))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         if (OB_FAIL(alloc_device_and_init_(
-              storage_type_prefix, tmp_device_key, storage_id_mod, device_handle))) {
+              uri, tmp_device_key, storage_id_mod, device_handle))) {
           OB_LOG(WARN, "fail to alloc device from device manager ", KR(ret),
-              K(storage_type_prefix), K(storage_info), K(storage_id_mod), KP(tmp_device_key));
+              K(uri), K(storage_info), K(storage_id_mod), KP(tmp_device_key));
         }
       } else {
         OB_LOG(WARN, "fail to get device from device manager ", KR(ret),
-            K(storage_type_prefix), K(storage_info), K(storage_id_mod), KP(tmp_device_key));
+            K(uri), K(storage_info), K(storage_id_mod), KP(tmp_device_key));
       }
     }
   }
@@ -597,7 +707,7 @@ int ObDeviceManager::release_device(ObIODevice *&device_handle)
 
 int ObDeviceManager::get_device_key_(
     ObIAllocator &allcator,
-    const ObString &storage_type_prefix,
+    const ObString &uri,
     const ObObjectStorageInfo &storage_info,
     const ObStorageIdMod &storage_id_mod,
     char *&device_key)
@@ -606,7 +716,7 @@ int ObDeviceManager::get_device_key_(
   if (OB_NOT_NULL(device_key)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "device key is already not null", K(ret));
-  } else if (storage_type_prefix.prefix_match(OB_LOCAL_PREFIX)) {
+  } else if (uri.prefix_match(OB_LOCAL_PREFIX)) {
     // uint64_t occupies up to 20 characters.
     // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
     // reserve some free space, increase 43 to 50.
@@ -620,7 +730,7 @@ int ObDeviceManager::get_device_key_(
                                        storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device key", K(ret));
     }
-  } else if (storage_type_prefix.prefix_match(OB_LOCAL_CACHE_PREFIX)) {
+  } else if (uri.prefix_match(OB_LOCAL_CACHE_PREFIX)) {
     // uint64_t occupies up to 20 characters.
     // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
     // reserve some free space, increase 43 to 50.
@@ -634,9 +744,9 @@ int ObDeviceManager::get_device_key_(
                                        storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device key", K(ret));
     }
-  } else if (storage_type_prefix.prefix_match(OB_FILE_PREFIX)) {
+  } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     // uint64_t occupies up to 20 characters.
-    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43.
+    // 20(storage_used_mod_) + 20(storage_id_) + 2(two '&') + 1(one '\0') = 43
     // reserve some free space, increase 43 to 50.
     const int64_t alloc_size = STRLEN(OB_FILE_PREFIX) + 50;
     if (OB_ISNULL(device_key = static_cast<char *>(allcator.alloc(alloc_size)))) {
@@ -648,10 +758,11 @@ int ObDeviceManager::get_device_key_(
                                        storage_id_mod.storage_id_))) {
       OB_LOG(WARN, "fail to construct device map key", K(ret), K(storage_id_mod));
     }
-  } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)
-             || storage_type_prefix.prefix_match(OB_COS_PREFIX)
-             || storage_type_prefix.prefix_match(OB_S3_PREFIX)
-             || storage_type_prefix.prefix_match(OB_HDFS_PREFIX)) {
+  } else if (uri.prefix_match(OB_OSS_PREFIX)
+             || uri.prefix_match(OB_COS_PREFIX)
+             || uri.prefix_match(OB_S3_PREFIX)
+             || uri.prefix_match(OB_HDFS_PREFIX)
+             || uri.prefix_match(OB_AZBLOB_PREFIX)) {
     const int64_t storage_info_key_len = storage_info.get_device_map_key_len();
     char storage_info_key_str[storage_info_key_len];
     storage_info_key_str[0] = '\0';
@@ -672,7 +783,7 @@ int ObDeviceManager::get_device_key_(
     }
   } else {
     ret = OB_INVALID_BACKUP_DEST; // keep the same errno with old-version observer
-    OB_LOG(WARN, "invalid storage type prefix", K(ret), K(storage_type_prefix), K(storage_id_mod));
+    OB_LOG(WARN, "invalid storage type prefix", K(ret), K(uri), K(storage_id_mod));
   }
   return ret;
 }

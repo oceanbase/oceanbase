@@ -85,7 +85,7 @@ public:
     random_id_(0), type_(type), op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_info_(),
     min_size_(0), row_count_(0), input_size_(0), bucket_size_(0),
     chunk_size_(0), cache_size_(-1), one_pass_size_(0), expect_size_(OB_INVALID_ID),
-    global_bound_size_(INT64_MAX), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
+    global_bound_size_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
     pre_mem_used_(0), dumped_size_(0), max_dumped_size_(0), data_ratio_(0.5),
     active_time_(0), number_pass_(0),
@@ -149,8 +149,6 @@ public:
   OB_INLINE int64_t get_global_bound_size() const { return global_bound_size_; }
   OB_INLINE void set_global_bound_size(int64_t global_bound_size)
             { global_bound_size_ = global_bound_size; }
-  OB_INLINE int64_t get_max_bound() const { return max_bound_; }
-  OB_INLINE void set_max_bound(int64_t max_bound) { max_bound_ = max_bound; }
 
   OB_INLINE bool is_hash_join_wa() const { return ObSqlWorkAreaType::HASH_WORK_AREA == type_; }
   OB_INLINE bool is_sort_wa() const { return ObSqlWorkAreaType::SORT_WORK_AREA == type_; }
@@ -222,11 +220,6 @@ private:
   int64_t one_pass_size_;
   int64_t expect_size_;
   int64_t global_bound_size_;
-  // 取 min(cache_size, global_bound_size)
-  // sort场景，在global_bound_size比较大情况下，sort理论上有data和extra内存，data应该是one-pass size
-  // 也就是expect_size
-  // 但总体内存应该是global_bound_size和cache size更小值，其实也可以用expect_size和global_bound_size取最大值
-  int64_t max_bound_;
 public:
   int64_t delta_size_;
   int64_t data_size_;

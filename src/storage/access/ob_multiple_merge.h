@@ -167,7 +167,7 @@ protected:
   bool is_unprojected_row_valid_; // whether unprojected_row_ is ready for refresh_table_on_demand currently
   ObGetTableParam *get_table_param_;
   ObBlockRowStore *block_row_store_;
-  ObGroupByCell *group_by_cell_;
+  ObGroupByCellBase *group_by_cell_;
   sql::ObBitVector *skip_bit_;
   ObIAllocator *long_life_allocator_; // used for memory which will be chached in ObGlobalIterPool
   ObStoreRowIterPool<ObStoreRowIterator> *stmt_iter_pool_;

@@ -38,6 +38,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_malloc_sample_info.cpp
   ob_cdc_miss_log_handler.cpp
   ob_cdc_server_endpoint_access_info.cpp
+  ob_cdc_tenant_checkpoint.cpp
   ob_cdc_tenant_endpoint_provider.cpp
   ob_cdc_udt.cpp
   ob_concurrent_seq_queue.cpp
@@ -55,6 +56,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_sys_ls_task_handler.cpp
   ob_log_ddl_processor.cpp
   ob_log_ls_op_processor.cpp
+  ob_log_lsn_filter.cpp
   ob_log_ddl_parser.cpp
   ob_log_dml_parser.cpp
   ob_log_entry_task_pool.cpp

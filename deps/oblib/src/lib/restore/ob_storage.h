@@ -133,7 +133,7 @@ public:
 
   virtual ~ListAppendableObjectFragmentOp() { meta_arr_.reset(); }
   virtual int func(const dirent *entry) override;
-  virtual bool need_get_file_size() const { return need_size_; }
+  virtual bool need_get_file_meta() const { return need_size_; }
   int gen_object_meta(ObStorageObjectMeta &obj_meta);
 
   bool exist_format_meta() const { return exist_format_meta_; }
@@ -174,7 +174,7 @@ public:
 
   int func(const dirent *entry) final;
   int handle_each_dir_entry(common::ObBaseDirEntryOperator &op);
-  virtual bool need_get_file_size() const override;
+  virtual bool need_get_file_meta() const override;
 
   struct Entry
   {
@@ -249,6 +249,8 @@ public:
   int is_exist(const common::ObString &uri, const bool is_adaptive, bool &exist);
   int get_file_length(const common::ObString &uri, const bool is_adaptive, int64_t &file_length);
   int get_file_stat(const common::ObString &uri, const bool is_adaptive, ObIODFileStat &statbuf);
+  int get_file_content_digest(
+      const common::ObString &uri, char *digest_buf, const int64_t digest_buf_len);
   int list_appendable_file_fragments(const common::ObString &uri, ObStorageObjectMeta &obj_meta);
 
   int del_file(const common::ObString &uri, const bool is_adaptive);

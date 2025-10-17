@@ -14,7 +14,8 @@
 #define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_ALL_LATCH_H_
 
 #include "lib/net/ob_addr.h"
-#include "share/ob_virtual_table_iterator.h"
+#include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 
 namespace oceanbase
 {
@@ -26,16 +27,31 @@ class ObDiagnoseTenantInfo;
 namespace observer
 {
 
-class ObAllLatch : public common::ObVirtualTableIterator
+class ObAllLatch : public common::ObVirtualTableScannerIterator,
+                   public omt::ObMultiTenantOperator
 {
 public:
-  ObAllLatch();
-  virtual ~ObAllLatch();
+  ObAllLatch() : ObVirtualTableScannerIterator(),
+      addr_(NULL),
+      latch_iter_(0),
+      tenant_di_(allocator_) {}
+  virtual ~ObAllLatch() { reset(); }
   virtual int inner_open();
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow *&row);
-  virtual int get_all_diag_info();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
+  virtual void release_last_tenant() override {
+    latch_iter_ = 0;
+    tenant_di_.reset();
+  }
+protected:
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
+  virtual bool is_need_process(uint64_t tenant_id) override {
+    if (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_) {
+      return true;
+    }
+    return false;
+  }
 private:
   int get_the_diag_info(const uint64_t tenant_id);
 private:
@@ -58,9 +74,8 @@ private:
     WAIT_TIME
   };
   common::ObAddr *addr_;
-  int32_t iter_;
   int64_t latch_iter_;
-  common::ObArray<std::pair<uint64_t, common::ObDiagnoseTenantInfo*> > tenant_dis_;
+  common::ObDiagnoseTenantInfo tenant_di_;
   DISALLOW_COPY_AND_ASSIGN(ObAllLatch);
 }; // end of class ObAllLatch
 

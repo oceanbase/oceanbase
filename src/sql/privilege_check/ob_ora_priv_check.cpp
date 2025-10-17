@@ -2327,6 +2327,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TYPE);
         break;
       }
+      case stmt::T_ALTER_TYPE: {
+        DEFINE_DROP_CHECK_CMD(PRIV_ID_ALTER_ANY_TYPE);
+        break;
+      }
       case stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN: {
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
         break;
@@ -2430,6 +2434,14 @@ int ObOraSysChecker::check_ora_ddl_priv(
       case stmt::T_CREATE_LOCATION:
       case stmt::T_DROP_LOCATION: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_LOCATION);
+        break;
+      }
+      case stmt::T_CREATE_CCL_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_ANY_CCL_RULE);
+        break;
+      }
+      case stmt::T_DROP_CCL_RULE: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_DROP_ANY_CCL_RULE);
         break;
       }
       default: {

@@ -117,3 +117,11 @@
       - 4.4.0.0
 
 - version: 4.4.0.0
+  can_be_upgraded_to:
+      - 4.4.0.1
+
+- version: 4.4.0.1
+  can_be_upgraded_to:
+      - 4.4.1.0
+
+- version: 4.4.1.0

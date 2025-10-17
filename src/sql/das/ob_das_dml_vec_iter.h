@@ -84,13 +84,13 @@ private:
     const ObChunkDatumStore::StoredRow *store_row,
     const int64_t docid_idx,
     const int64_t sparse_vec_idx,
-    ObString &docid,
+    ObDatum &docid,
     ObString &sparse_vec);
   int get_sparse_vec_data_for_update(
     const ObChunkDatumStore::StoredRow *store_row,
     const int64_t docid_idx,
     const int64_t sparse_vec_idx,
-    ObString &docid,
+    ObDatum &docid,
     ObString &sparse_vec);
   int generate_sparse_vec_index_row(common::ObIAllocator &allocator,
     const ObChunkDatumStore::StoredRow *store_row,
@@ -98,7 +98,7 @@ private:
     const int64_t docid_idx,
     const int64_t value_idx,
     const int64_t vec_idx,
-    const ObString &docid,
+    const ObDatum &docid,
     ObString &sparse_vec,
     ObDomainIndexRow &rows);
 };

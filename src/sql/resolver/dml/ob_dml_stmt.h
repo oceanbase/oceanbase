@@ -25,6 +25,8 @@
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "sql/resolver/dml/ob_stmt_expr_visitor.h"
+#include "share/catalog/ob_catalog_properties.h"
+#include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
 {
@@ -173,6 +175,7 @@ struct TableItem
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
+    lake_table_format_ = share::ObLakeTableFormat::INVALID;
     values_table_def_ = NULL;
     sample_info_ = nullptr;
     transpose_table_def_ = NULL;
@@ -284,6 +287,10 @@ struct TableItem
   {
     return synonym_name_.empty() ? database_name_ : synonym_db_name_;
   }
+  const common::ObString &get_catalog_name() const
+  {
+    return catalog_name_;
+  }
   // only can be used in resolve phase
   const TableItem &get_base_table_item() const
   {
@@ -322,6 +329,7 @@ struct TableItem
   bool is_view_table_; //for VIEW privilege check
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
   share::schema::ObTableType table_type_;
+  share::ObLakeTableFormat lake_table_format_;
   CTEType cte_type_;
   common::ObString database_name_;
   /* FOR UPDATE clause */
@@ -746,6 +754,11 @@ public:
   common::ObIArray<JoinedTable*> &get_joined_tables() { return joined_tables_; }
   inline int64_t get_order_item_size() const { return order_items_.count(); }
   inline bool is_single_table_stmt() const { return (1 == get_table_size()); }
+  inline bool has_multi_base_tables() const {
+    return !get_semi_infos().empty() ||
+           get_from_item_size() > 1 ||
+           (get_from_item_size() == 1 && get_from_item(0).is_joined_);
+  }
   int add_semi_info(SemiInfo* info) { return semi_infos_.push_back(info); }
   int remove_semi_info(SemiInfo* info);
   inline common::ObIArray<SemiInfo*> &get_semi_infos() { return semi_infos_; }
@@ -789,6 +802,9 @@ public:
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
+  int check_stmt_valid();
+  int recursively_check_stmt_valid();
+  int check_unpivot_valid();
   int get_target_pseudo_column(const ObItemType target_type,
                                const uint64_t table_id,
                                ObPseudoColumnRawExpr *&pseudo_col);
@@ -922,6 +938,7 @@ public:
   int assign_tables_hash(const ObDMLStmtTableHash &tables_hash);
   ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
   ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
+  const ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id) const;
   int add_column_item(ColumnItem &column_item);
   int add_column_item(ObIArray<ColumnItem> &column_items);
   int remove_column_item(uint64_t table_id, uint64_t column_id);
@@ -941,6 +958,7 @@ public:
   { return match_exprs_; }
   common::ObIArray<ObMatchFunRawExpr *> &get_match_exprs()
   { return match_exprs_; }
+  bool has_es_match() const { return match_exprs_.count() > 0 && match_exprs_.at(0) != nullptr && match_exprs_.at(0)->is_es_match(); }
   int get_match_expr_on_table(uint64_t table_id, ObIArray<ObRawExpr *> &match_exprs) const;
   int get_table_pseudo_column_like_exprs(uint64_t table_id, ObIArray<ObRawExpr *> &pseudo_columns);
   int get_table_pseudo_column_like_exprs(ObIArray<uint64_t> &table_id, ObIArray<ObRawExpr *> &pseudo_columns);
@@ -999,6 +1017,8 @@ public:
   inline bool is_reverse_link() const { return is_reverse_link_; }
   inline void set_has_vec_approx(bool has_vec_approx) { has_vec_approx_ = has_vec_approx; }
   inline bool has_vec_approx() const { return has_vec_approx_; }
+  const share::ObVectorIndexQueryParam& get_vector_index_query_param() const { return vector_index_query_param_; }
+  share::ObVectorIndexQueryParam& get_vector_index_query_param() { return vector_index_query_param_; }
   bool is_contain_vector_origin_distance_calc() const;
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
@@ -1080,7 +1100,8 @@ public:
                N_USER_VARS, user_var_exprs_,
                K_(dblink_id),
                K_(is_reverse_link),
-               K_(has_vec_approx));
+               K_(has_vec_approx),
+               K_(vector_index_query_param));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1114,9 +1135,9 @@ public:
                                        const bool check_having = false) const;
   int get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
                                  bool outer_semi_only = false) const;
-  static int extract_equal_condition_from_joined_table(const TableItem *table,
-                                                       ObIArray<ObRawExpr *> &equal_set_conditions,
-                                                       const bool is_strict);
+  static int extract_on_condition_from_joined_table(const TableItem *table,
+                                                    ObIArray<ObRawExpr *> &equal_set_conditions,
+                                                    const bool is_strict);
   virtual bool is_returning() const { return false; }
   virtual bool has_instead_of_trigger() const { return false; }
   int has_lob_column(int64_t table_id, bool &has_lob)const;
@@ -1281,6 +1302,7 @@ protected:
   bool has_vec_approx_;
   // fulltext search exprs
   common::ObSEArray<ObMatchFunRawExpr*, 2, common::ModulePageAllocator, true> match_exprs_;
+  share::ObVectorIndexQueryParam vector_index_query_param_;
 };
 
 template <typename T>

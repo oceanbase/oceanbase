@@ -312,9 +312,16 @@ int ObMacroMetaTempStoreIter::read_next_item()
       io_info.size_ = read_size;
       io_info.io_desc_.set_wait_event(ObWaitEventIds::INTERM_RESULT_DISK_READ);
       const int64_t timeout_us = THIS_WORKER.get_timeout_remain();
-      io_info.io_timeout_ms_ = timeout_us <= 0 ? 0 : timeout_us / 1000;
       int64_t deserialize_pos = 0;
-      if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info, curr_read_file_pos_, read_handle))) {
+      if (timeout_us <= 0) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("already timeout", KR(ret), K(timeout_us));
+      } else {
+        io_info.io_timeout_ms_ = timeout_us / 1000;
+      }
+      if (OB_FAIL(ret)) {
+        // pass
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.pread(MTL_ID(), io_info, curr_read_file_pos_, read_handle))) {
         LOG_WARN("failed to do tmp file pread", K(ret));
       } else if (OB_FAIL(curr_read_item_.deserialize(read_buf, read_size, deserialize_pos))) {
         LOG_WARN("failed to deserialize macro meta temp store item", K(ret));

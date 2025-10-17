@@ -544,7 +544,7 @@ int ObCGRowScanner::init(
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc len_array_buf", K(ret), K(sql_batch_size));
     } else if (FALSE_IT(len_array_ = reinterpret_cast<uint32_t *>(len_array_buf))) {
-    } else if (!iter_param.enable_pd_aggregate() || use_new_format) {
+    } else if (!iter_param.enable_pd_aggregate() || iter_param.plan_use_new_format()) {
       is_padding_mode_ = common::is_pad_char_to_full_length(access_ctx.sql_mode_);
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {
         col_param = nullptr;

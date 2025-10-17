@@ -64,6 +64,11 @@ public:
   virtual int rescan() override;
   virtual void clear_evaluated_flag() override;
 
+  virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,
+                              const ObIArray<ObExpr *> &rowkey_exprs,
+                              const ObDASScanCtDef *lookup_ctdef,
+                              ObIAllocator *alloc,
+                              int64_t group_id) override;
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;

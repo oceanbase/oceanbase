@@ -21,7 +21,7 @@ using namespace oceanbase::common;
 
 int ObWinbufPieceMsgListener::on_message(
     ObWinbufPieceMsgCtx &ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObWinbufPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;
@@ -88,14 +88,14 @@ int ObWinbufPieceMsgCtx::alloc_piece_msg_ctx(const ObWinbufPieceMsg &pkt,
   return ret;
 }
 
-int ObWinbufPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int ObWinbufPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   whole_msg_.is_datum_ = true;
   whole_msg_.op_id_ = op_id_;
   whole_msg_.is_empty_ = (!whole_msg_.datum_store_.is_inited());
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expected", K(ret));
@@ -378,13 +378,13 @@ void SPWinFuncPXPieceMsgCtx::reset_resource()
   received_ = 0;
 }
 
-int SPWinFuncPXPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int SPWinFuncPXPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   whole_msg_.op_id_ = op_id_;
   whole_msg_.is_empty_ = (!whole_msg_.row_store_.is_inited());
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null channel", K(ret), K(ch));
@@ -403,7 +403,7 @@ int SPWinFuncPXPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs
 }
 
 int SPWinFuncPXPieceMsgListener::on_message(SPWinFuncPXPieceMsgCtx &ctx,
-                                            common::ObIArray<ObPxSqcMeta *> &sqcs,
+                                            common::ObIArray<ObPxSqcMeta> &sqcs,
                                             const SPWinFuncPXPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;

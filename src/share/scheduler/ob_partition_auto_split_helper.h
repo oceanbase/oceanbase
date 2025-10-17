@@ -375,6 +375,7 @@ private:
                        const ObTabletID split_source_tablet_id,
                        const ObRowkey &high_bound_val,
                        const ObTimeZoneInfo *tz_info,
+                       const ObBasePartition *src_part,
                        share::schema::ObPartition &new_part);
   int check_and_cast_high_bound(const ObRowkey &origin_high_bound_val,
                                 const ObTimeZoneInfo *tz_info,
@@ -382,6 +383,7 @@ private:
                                 bool &need_cast,
                                 ObIAllocator &allocator);
   int check_need_to_cast(const ObObj &obj, bool &need_to_cast);
+  int check_null_value(const ObRowkey &high_bound_val);
 private:
   static const int32_t MAX_SPLIT_PARTITION_NUM = 2;
 };
@@ -435,6 +437,7 @@ public:
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
   static bool can_retry(const ObAutoSplitTask &task, const int ret);
   int gc_deleted_tenant_caches();
+  void reset_direct_cache() { task_direct_cache_.reset(); }
 private:
   ObRsAutoSplitScheduler ()
     : polling_mgr_(true/*is_root_server*/, ObSplitCacheType::AUTO_SPLIT_CACHE_TYPE)
@@ -557,6 +560,7 @@ private:
                     const int64_t range_num, const int64_t used_disk_space,
                     const bool query_index,
                     const bool is_oracle_mode,
+                    const bool is_query_table_hidden,
                     common::ObRowkey &low_bound_val,
                     common::ObRowkey &high_bound_val,
                     common::ObArenaAllocator &range_allocator,
@@ -566,6 +570,7 @@ private:
                         const ObIArray<ObNewRange> &column_ranges,
                         const int range_num, const double sample_pct,
                         const bool is_oracle_mode,
+                        const bool query_index,
                         ObSqlString &sql);
   int add_sample_condition_sqls_(const ObIArray<ObString> &columns,
                                  const ObIArray<ObNewRange> &column_ranges,
@@ -585,6 +590,9 @@ private:
                                common::ObRowkey &low_bound_val,
                                common::ObRowkey &high_bound_val,
                                common::ObArenaAllocator &allocator);
+  int set_lower_case_table_names_(const uint64_t tenant_id,
+                                  const bool query_index,
+                                  ObSingleConnectionProxy &single_conn_proxy);
 };
 }
 

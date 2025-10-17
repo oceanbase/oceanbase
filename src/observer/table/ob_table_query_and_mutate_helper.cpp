@@ -493,14 +493,14 @@ int QueryAndMutateHelper::execute_htable_inc_or_append(ObTableQueryResult *resul
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
   int64_t N = mutations.count();
-  ObSEArray<ObITableEntity*, 8> entities;
+  ObSEArray<const ObITableEntity*, 8> entities;
   ObSEArray<ColumnIdx, OB_DEFAULT_SE_ARRAY_COUNT> columns;
   if (OB_FAIL(sort_qualifier(columns, mutations))) {
     LOG_WARN("fail to sort qualifier", K(ret), K(mutations));
   } else if (OB_FAIL(result->get_htable_all_entity(entities))) {
     LOG_WARN("fail to get all entity", K(ret));
   }
-  ObITableEntity *old_entity = nullptr;
+  const ObITableEntity *old_entity = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
     old_entity = nullptr;
     ObTableEntity new_entity;
@@ -753,6 +753,7 @@ int QueryAndMutateHelper::execute_one_mutation(ObIAllocator &allocator,
       } else if (OB_FAIL(new_entity->deep_copy_properties(allocator_, mutate_entity))) {
         LOG_WARN("fail to deep copy property", K(ret));
       } else {
+        new_entity->set_allocator(&allocator_);
         for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
           ObObj key;
           if (OB_FAIL(query_res_entity->get_property(rk_names.at(i), key))) {

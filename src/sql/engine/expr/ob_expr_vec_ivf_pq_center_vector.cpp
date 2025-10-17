@@ -96,8 +96,7 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
     LOG_DEBUG("[vec debug] generate empty pq center vector since only one arg", K(ret), K(1 == expr.arg_cnt_));
   } else if (4 == expr.arg_cnt_) {
     // for pq centroid table, return residual vector
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
-    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    common::ObArenaAllocator tmp_allocator("IVFPQExprPQCVec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTableID table_id;
     ObTabletID tablet_id;
     ObVectorIndexDistAlgorithm dis_algo = VIDA_MAX;
@@ -121,7 +120,7 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
           arr->size(),
           centers,
           reinterpret_cast<float*>(arr->get_data()),
-          VIDA_L2 == dis_algo ? nullptr: &norm_info,
+          VIDA_COS != dis_algo ? nullptr: &norm_info, // cos need norm
           residual_vec))) {
         LOG_WARN("failed to get nearest center", K(ret));
       }
@@ -131,7 +130,8 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
         ObString res_str;
         if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr,
                                           data_str.length(),
-                                          eval_ctx.get_expr_res_alloc(),
+                                          expr,
+                                          eval_ctx,
                                           res_str,
                                           data_str.ptr()))) {
           LOG_WARN("fail to set array res", K(ret), K(data_str));

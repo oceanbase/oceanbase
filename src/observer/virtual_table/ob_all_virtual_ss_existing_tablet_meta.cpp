@@ -365,12 +365,13 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
       ObSSTabletIterator *tablet_iter = nullptr;
       const SCN start_scn = SCN::min_scn();
       SCN end_scn;
-      if (OB_FAIL(meta_service->get_max_committed_meta_scn(end_scn))) {
+      if (OB_FAIL(meta_service->get_max_committed_meta_scn(ls_id_, end_scn))) {
         SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
       }
       ObMetaVersionRange range(start_scn, end_scn, false);
       param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                   ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                  false, /*try read local*/
                                   ObSSLogMetaType::SSLOG_TABLET_META,
                                   ls_id_,
                                   tablet_id_,

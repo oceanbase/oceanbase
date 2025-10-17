@@ -55,11 +55,13 @@ TEST_F(TestObOccamThreadPool, ObOccamThread) {
 }
 
 struct TestInt {
+  TestInt() : data_(-1) {}
   TestInt(int a) : data_(a) {}
   int data_;
 };
 
 struct TestBigInt {
+  TestBigInt() { data_[0] = -1; }
   TestBigInt(int a) { data_[0] = a; }
   int data_[100];
 };

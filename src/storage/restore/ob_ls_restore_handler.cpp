@@ -28,6 +28,8 @@ using namespace storage;
 using namespace backup;
 using namespace logservice;
 
+ERRSIM_POINT_DEF(EN_INSERT_GET_FOLLOWER_SERVER_FAILED);
+
 ObLSRestoreHandler::ObLSRestoreHandler()
   : is_inited_(false),
     is_stop_(false),
@@ -38,7 +40,8 @@ ObLSRestoreHandler::ObLSRestoreHandler()
     ls_restore_arg_(),
     state_handler_(nullptr),
     allocator_(),
-    restore_stat_()
+    restore_stat_(),
+    trace_id_()
 {
 }
 
@@ -63,6 +66,7 @@ int ObLSRestoreHandler::init(ObLS *ls)
   } else {
     ls_ = ls;
     rebuild_seq_ = ls->get_rebuild_seq();
+    trace_id_.init(GCONF.self_addr_);
     is_inited_ = true;
   }
   return ret;
@@ -77,6 +81,7 @@ void ObLSRestoreHandler::destroy()
     state_handler_ = nullptr;
   }
   ls_ = nullptr;
+  trace_id_.reset();
 }
 
 int ObLSRestoreHandler::offline()
@@ -266,8 +271,9 @@ int ObLSRestoreHandler::handle_pull_tablet(
 int ObLSRestoreHandler::process()
 {
   int ret = OB_SUCCESS;
-
+  ObCurTraceId::set(trace_id_);
   bool can_do_restore;
+  ObCurTraceId::init(GCONF.self_addr_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -296,8 +302,7 @@ int ObLSRestoreHandler::process()
       ret = OB_EAGAIN;
   #endif
     } else if (OB_FAIL(state_handler_->do_restore())) {
-      ObTaskId trace_id(*ObCurTraceId::get_trace_id());
-      result_mgr_.set_result(ret, trace_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
+      result_mgr_.set_result(ret, trace_id_, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
       LOG_WARN("fail to do restore", K(ret), KPC(state_handler_));
     }
   }
@@ -1203,6 +1208,11 @@ int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follow
         LOG_WARN("fail to push back follower info", K(ret), K(follower_info));
       }
     }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_INSERT_GET_FOLLOWER_SERVER_FAILED ? : OB_SUCCESS;
+  }
+#endif
   }
   return ret;
 }
@@ -1633,6 +1643,7 @@ int ObLSRestoreStartState::do_restore()
   bool is_created = false;
   bool is_exist = true;
   bool is_ready = false;
+  bool is_finish = false;
   LOG_INFO("ready to start restore ls", K(ls_restore_status_), KPC(ls_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1640,6 +1651,12 @@ int ObLSRestoreStartState::do_restore()
   } else if (OB_ISNULL(log_restore_handle = ls_->get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore handle can't nullptr", K(ret), K(log_restore_handle));
+  } else if (OB_FAIL(check_restore_pre_finish_(is_finish))) {
+    LOG_WARN("fail to check can advance status", K(ret), KPC(ls_));
+  } else if (!is_finish) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_INFO("restore_pre has not finished, wait later", KPC(ls_));
+    }
   } else if (OB_FAIL(check_ls_created_(is_created))) {
     LOG_WARN("fail to check ls created", K(ret), KPC(ls_));
   } else if (!is_created) {
@@ -1662,6 +1679,28 @@ int ObLSRestoreStartState::do_restore()
     }
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
+  }
+  return ret;
+}
+
+int ObLSRestoreStartState::check_restore_pre_finish_(bool &is_finish) const
+{
+  int ret = OB_SUCCESS;
+  is_finish = false;
+  share::ObPhysicalRestoreTableOperator restore_table_operator;
+  const uint64_t tenant_id = ls_->get_tenant_id();
+  if (OB_FAIL(restore_table_operator.init(proxy_, tenant_id, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table operator", K(ret), K(tenant_id));
+  } else {
+    HEAP_VAR(ObPhysicalRestoreJob, job_info) {
+      if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
+        LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
+      } else if (share::PhysicalRestoreStatus::PHYSICAL_RESTORE_PRE >= job_info.get_status()) {
+        is_finish = false;
+      } else {
+        is_finish = true;
+      }
+    }
   }
   return ret;
 }
@@ -1849,6 +1888,8 @@ int ObLSRestoreStartState::check_ls_created_(bool &is_created)
 int ObLSRestoreStartState::check_ls_meta_exist_(bool &is_exist)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_backup_set_info_exist = false;
   storage::ObBackupDataStore store;
   const ObArray<share::ObRestoreBackupSetBriefInfo> &backup_set_array = ls_restore_arg_->get_backup_set_list();
   int idx = backup_set_array.count() - 1;
@@ -1863,6 +1904,13 @@ int ObLSRestoreStartState::check_ls_meta_exist_(bool &is_exist)
     if (OB_ENTRY_NOT_EXIST == ret) {
       is_exist = false;
       ret = OB_SUCCESS;
+    } else if (OB_OBJECT_NOT_EXIST == ret
+      && OB_TMP_FAIL(store.is_backup_set_info_file_exist(is_backup_set_info_exist))) {
+      LOG_WARN("fail to check backup set info file exist", K(tmp_ret));
+    } else if ((OB_OBJECT_NOT_EXIST == ret && !is_backup_set_info_exist)) {
+      ret = OB_CANNOT_ACCESS_BACKUP_SET; // overwrite ret
+      LOG_WARN("cannot access backup set file, please check backup media connectivity.",
+        K(ret), K(is_backup_set_info_exist));
     } else {
       LOG_WARN("fail to read backup set info", K(ret));
     }
@@ -2003,8 +2051,8 @@ int ObLSRestoreSysTabletState::do_restore_sys_tablet()
   int ret = OB_SUCCESS;
   ObLSRestoreArg arg;
   uint64_t tenant_id = arg.tenant_id_;
-  ObCurTraceId::init(GCONF.self_addr_);
-  ObTaskId task_id(*ObCurTraceId::get_trace_id());
+  ObTaskId task_id;
+  task_id.init(GCONF.self_addr_);
   // always restore from backup.
   if (OB_FAIL(leader_fill_ls_restore_arg_(arg))) {
     LOG_WARN("fail to fill ls restore arg", K(ret));
@@ -2181,8 +2229,8 @@ int ObLSRestoreCreateUserTabletState::do_create_user_tablet_(
 {
   int ret = OB_SUCCESS;
   ObTabletGroupRestoreArg arg;
-  ObCurTraceId::init(GCONF.self_addr_);
-  ObTaskId task_id(*ObCurTraceId::get_trace_id());
+  ObTaskId task_id;
+  task_id.init(GCONF.self_addr_);
   bool reach_dag_limit = false;
   bool is_new_election = false;
   // always restore from backup.
@@ -2500,8 +2548,8 @@ int ObLSQuickRestoreState::follower_quick_restore_()
 int ObLSQuickRestoreState::do_quick_restore_(const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore)
 {
   int ret = OB_SUCCESS;
-  ObCurTraceId::init(GCONF.self_addr_);
-  ObTaskId task_id(*ObCurTraceId::get_trace_id());
+  ObTaskId task_id;
+  task_id.init(GCONF.self_addr_);
   ObTabletGroupRestoreArg arg;
   bool reach_dag_limit = false;
   bool is_new_election = false;
@@ -2677,11 +2725,7 @@ int ObLSQuickRestoreFinishState::leader_quick_restore_finish_()
     LOG_WARN("quick restore is not supported now", K(ret), KPC(ls_));
   } else if (ls_restore_arg_->get_restore_type().is_full_restore()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA);
-    bool all_finish = false;
-    if (OB_FAIL(check_all_follower_restore_finish_(all_finish))) {
-      LOG_WARN("fail to request follower restore meta result", K(ret), KPC(ls_));
-    } else if (!all_finish) {
-    } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
+    if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), K(next_status), KPC(ls_));
     } else {
       LOG_INFO("succ to advance leader restore status to restore major from quick restore finish", K(ret));
@@ -2702,12 +2746,8 @@ int ObLSQuickRestoreFinishState::follower_quick_restore_finish_()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("quick restore is not supported now", K(ret), KPC(ls_));
   } else {
-    ObLSRestoreStatus leader_restore_status;
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_MAJOR_DATA);
-    if (OB_FAIL(request_leader_status_(leader_restore_status))) {
-      LOG_WARN("fail to request leader tablets and status", K(ret), KPC(ls_));
-    } else if (check_leader_restore_finish_(leader_restore_status, ls_restore_status_)
-        && OB_FAIL(advance_status_(*ls_, next_status))) {
+    if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance statsu", K(ret), KPC(ls_), K(next_status));
     }
   }
@@ -2839,8 +2879,8 @@ int ObLSRestoreMajorState::do_restore_major_(
     const ObLSRestoreTaskMgr::ToRestoreTabletGroup &tablet_need_restore)
 {
   int ret = OB_SUCCESS;
-  ObCurTraceId::init(GCONF.self_addr_);
-  ObTaskId task_id(*ObCurTraceId::get_trace_id());
+  ObTaskId task_id;
+  task_id.init(GCONF.self_addr_);
   ObTabletGroupRestoreArg arg;
   bool reach_dag_limit = false;
   bool is_new_election = false;
@@ -3261,6 +3301,8 @@ bool ObLSRestoreResultMgr::can_retrieable_err(const int err) const
     case OB_ARCHIVE_ROUND_NOT_CONTINUOUS :
     case OB_HASH_NOT_EXIST:
     case OB_TOO_MANY_PARTITIONS_ERROR:
+    case OB_CANNOT_ACCESS_BACKUP_SET:
+    case OB_OBJECT_STORAGE_PERMISSION_DENIED:
       bret = false;
       break;
     default:

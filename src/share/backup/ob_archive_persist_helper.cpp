@@ -791,6 +791,46 @@ int ObArchivePersistHelper::get_piece(common::ObISQLClient &proxy, const int64_t
   return ret;
 }
 
+int ObArchivePersistHelper::get_piece(common::ObISQLClient &proxy, const int64_t piece_id,
+          const bool need_lock, ObTenantArchivePieceAttr &piece) const {
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("select * from %s where %s=%lu and %s=%ld",
+    OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_PIECE_ID, piece_id))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("no row exist", K(ret), K_(tenant_id), K(piece_id));
+        } else {
+          LOG_WARN("failed to get next", K(ret), K_(tenant_id), K(sql));
+        }
+      } else if (OB_FAIL(piece.parse_from(*result))) {
+        LOG_WARN("failed to parse piece", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Get more than one piece for specific piece_id, unexpected", K(ret), K(sql), K(piece_id));
+      } else if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get next result", K(ret), K(sql));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArchivePersistHelper::get_pieces(
     common::ObISQLClient &proxy,
     const int64_t dest_id,
@@ -875,7 +915,7 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
-      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN,
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_END_SCN,
       end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
@@ -1431,5 +1471,97 @@ int ObArchivePersistHelper::clean_round_comment(common::ObISQLClient &proxy, con
     LOG_WARN("failed to clean round comment", K(ret), K(key));
   }
 
+  return ret;
+}
+
+// Get the first piece which start scn is not greater than start_scn
+// and the next piece which checkpoint scn is not less than end_scn
+// Note: the two pieces are continuous if they has same round_id, otherwise not continuous.
+int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
+    common::ObISQLClient &proxy, const int64_t dest_id,
+    const share::SCN &start_scn, const share::SCN &end_scn, bool &is_continuous) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArray<ObTenantArchivePieceAttr> piece_list;
+  ObTenantArchivePieceAttr floor_piece;
+  ObTenantArchivePieceAttr ceil_piece;
+  bool floor_piece_found = false;
+  bool ceil_piece_found = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0 || !start_scn.is_valid() || !end_scn.is_valid() || start_scn >= end_scn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_id), K(start_scn), K(end_scn));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt( // Get the latest piece whose start_scn <= start_scn
+        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s<=%ld order by %s desc limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
+        OB_STR_TENANT_ID, tenant_id_,
+        OB_STR_DEST_ID, dest_id,
+        OB_STR_FILE_STATUS, OB_STR_DELETED,
+        OB_STR_START_SCN, start_scn.get_val_for_inner_table_field(),
+        OB_STR_PIECE_ID))) {
+      LOG_WARN("failed to assign sql format for floor piece", K(ret));
+    } else {
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+          LOG_WARN("failed to execute sql for floor piece", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null for floor piece", K(ret), K(sql));
+        } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+          LOG_WARN("failed to parse floor piece result", K(ret));
+        } else if (piece_list.count() == 1) {
+          floor_piece = piece_list.at(0);
+          floor_piece_found = true;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    piece_list.reset();
+    sql.reset();
+    if (OB_FAIL(sql.assign_fmt( // Get the first piece whose checkpoint_scn >= end_scn
+        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld order by %s limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
+        OB_STR_TENANT_ID, tenant_id_,
+        OB_STR_DEST_ID, dest_id,
+        OB_STR_FILE_STATUS, OB_STR_DELETED,
+        OB_STR_CHECKPOINT_SCN, end_scn.get_val_for_inner_table_field(),
+        OB_STR_PIECE_ID))) {
+      LOG_WARN("failed to assign sql format for ceil piece", K(ret));
+    } else {
+      HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+          LOG_WARN("failed to execute sql for ceil piece", K(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null for ceil piece", K(ret), K(sql));
+        } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+          LOG_WARN("failed to parse ceil piece result", K(ret));
+        } else if (piece_list.count() == 1) {
+          ceil_piece = piece_list.at(0);
+          ceil_piece_found = true;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (floor_piece_found && ceil_piece_found && floor_piece.key_.round_id_ == ceil_piece.key_.round_id_) {
+      is_continuous = true;
+      LOG_INFO("success to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
+    } else {
+      is_continuous = false;
+      LOG_INFO("fail to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
+    }
+  }
   return ret;
 }

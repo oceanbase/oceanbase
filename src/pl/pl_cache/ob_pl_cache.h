@@ -228,7 +228,7 @@ struct ObPLObjectKey : public ObILibCacheKey
     key_id_(common::OB_INVALID_ID),
     sessid_(0),
     name_(),
-    mode_(ObjectMode::NORMAL),
+    mode_(static_cast<uint64_t>(ObjectMode::NORMAL)),
     sys_vars_str_() {}
   ObPLObjectKey(uint64_t db_id, uint64_t key_id)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_INVALID),
@@ -236,7 +236,7 @@ struct ObPLObjectKey : public ObILibCacheKey
     key_id_(key_id),
     sessid_(0),
     name_(),
-    mode_(ObjectMode::NORMAL),
+    mode_(static_cast<uint64_t>(ObjectMode::NORMAL)),
     sys_vars_str_() {}
 
   void reset();
@@ -252,8 +252,10 @@ struct ObPLObjectKey : public ObILibCacheKey
 
   enum class ObjectMode
   {
-    NORMAL,
-    PROFILE,
+    NORMAL = 0,
+    PROFILE = 1,
+    CODE_COVERAGE = 2,
+    DEBUG = 4,
   };
 
   uint64_t  db_id_;
@@ -263,7 +265,7 @@ struct ObPLObjectKey : public ObILibCacheKey
   // sessid_ != 0 and mode_ == NORMAL marks DEBUG compile, for now
   // TODO: unify DEBUG and PROFILE compile or add DEBUG mode separately
   common::ObString name_;
-  ObjectMode mode_;
+  uint64_t mode_;
   common::ObString sys_vars_str_;
 };
 

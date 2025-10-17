@@ -626,23 +626,26 @@ Outputs & filters:
 insert into t2 values(1, 1, 1, 1), (3, 3, 3, 3);
 EXPLAIN select /*+no_rewrite, leading(t1)*/ * from t1 where exists (select /*+index(t2 i1)*/ 1 from t2 where t1.b=t2.b and t2.c>0);
 Query Plan
-================================================================
-|ID|OPERATOR                      |NAME  |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------
-|0 |SUBPLAN FILTER                |      |1       |88          |
-|1 |├─TABLE FULL SCAN             |t1    |2       |3           |
-|2 |└─DISTRIBUTED TABLE RANGE SCAN|t2(i1)|1       |43          |
-================================================================
+======================================================
+|ID|OPERATOR            |NAME  |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SUBPLAN FILTER      |      |1       |93          |
+|1 |├─TABLE FULL SCAN   |t1    |2       |3           |
+|2 |└─LIMIT             |      |1       |46          |
+|3 |  └─TABLE RANGE SCAN|t2(i1)|1       |46          |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter([(T_OP_EXISTS, subquery(1))]), rowset=16
-      exec_params_([t1.b(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=true
+      exec_params_([t1.b(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.b], [t1.a]), filter(nil), rowset=16
       access([t1.b], [t1.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([1]), filter([t2.c > 0]), rowset=16
-      access([GROUP_ID], [t2.a], [t2.c]), partitions(p0)
+  2 - output([1]), filter(nil), rowset=16
+      limit(1), offset(nil)
+  3 - output(nil), filter([t2.c > 0]), rowset=16
+      access([t2.a], [t2.c]), partitions(p0)
       is_index_back=true, is_global_index=true, filter_before_indexback[false], 
       range_key([t2.b], [t2.a]), range(MIN,MIN ; MAX,MAX)always true, 
       range_cond([:0 = t2.b])

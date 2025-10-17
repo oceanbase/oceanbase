@@ -47,6 +47,7 @@
   RPC_S(PR5 ls_modify_paxos_replica_number, OB_LS_MODIFY_PAXOS_REPLICA_NUMBER, (ObLSModifyPaxosReplicaNumberArg));
   RPC_S(PR5 ls_check_dr_task_exist, OB_LS_CHECK_DR_TASK_EXIST, (ObDRTaskExistArg), obrpc::Bool);
   RPC_S(PR5 ob_exec_drtask_obadmin_command, OB_EXEC_DRTASK_OBADMIN_COMMAND, (ObAdminCommandArg));
+  RPC_S(PR5 trigger_partition_balance, OB_TRIGGER_PARTITION_BALANCE, (ObTriggerPartitionBalanceArg));
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 add_arb, OB_ADD_ARB, (ObAddArbArg), obrpc::ObAddArbResult);
   RPC_S(PR5 remove_arb, OB_REMOVE_ARB, (ObRemoveArbArg), obrpc::ObRemoveArbResult);
@@ -75,6 +76,9 @@
   RPC_S(PR5 check_deployment_mode_match, OB_CHECK_DEPLOYMENT_MODE, (ObCheckDeploymentModeArg), Bool);
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 wait_master_key_in_sync, OB_WAIT_MASTER_KEY_IN_SYNC, (ObWaitMasterKeyInSyncArg));
+#ifdef OB_BUILD_SHARED_STORAGE
+  RPC_S(PR5 notify_upload_root_key, OB_NOTIFY_UPLOAD_ROOT_KEY, (obrpc::UInt64));
+#endif
 #endif
   RPC_S(PR5 notify_create_tenant_user_ls, OB_NOTIFY_CREATE_TENANT_USER_LS, (obrpc::UInt64));
   RPC_S(PR5 report_replica, OB_REPORT_REPLICA);
@@ -118,6 +122,7 @@
   RPC_S(PR5 freeze_split_src_tablet, OB_FREEZE_SPLIT_SRC_TABLET, (obrpc::ObFreezeSplitSrcTabletArg), obrpc::ObFreezeSplitSrcTabletRes);
   RPC_S(PR5 prepare_tablet_split_task_ranges, OB_PREPARE_TABLET_SPLIT_TASK_RANGES, (obrpc::ObPrepareSplitRangesArg), obrpc::ObPrepareSplitRangesRes);
   RPC_S(PR5 check_and_cancel_ddl_complement_dag, OB_CHECK_AND_CANCEL_DDL_COMPLEMENT_DAG, (ObDDLBuildSingleReplicaRequestArg), Bool);
+  RPC_S(PR5 fetch_tablet_physical_row_cnt, OB_FETCH_TABLET_PHYSICAL_ROW_CNT, (obrpc::ObFetchTabletPhysicalRowCntArg), obrpc::ObFetchTabletPhysicalRowCntRes);
   RPC_S(PR5 fetch_split_tablet_info, OB_FETCH_SPLIT_TABLET_INFO, (obrpc::ObFetchSplitTabletInfoArg), obrpc::ObFetchSplitTabletInfoRes);
   RPC_S(PR5 check_and_cancel_delete_lob_meta_row_dag, OB_CHECK_AND_CANCEL_DELETE_LOB_META_ROW_DAG, (ObDDLBuildSingleReplicaRequestArg), Bool);
   RPC_S(PR5 fetch_tablet_autoinc_seq_cache, OB_FETCH_TABLET_AUTOINC_SEQ_CACHE, (obrpc::ObFetchTabletSeqArg), obrpc::ObFetchTabletSeqRes);
@@ -152,6 +157,7 @@
   RPC_S(PR5 update_tenant_memory, OB_UPDATE_TENANT_MEMORY, (obrpc::ObTenantMemoryArg));
   RPC_S(PR5 renew_in_zone_hb, OB_RENEW_IN_ZONE_HB, (share::ObInZoneHbRequest), share::ObInZoneHbResponse);
   RPC_S(PR5 pre_process_server_status, OB_PRE_PROCESS_SERVER, (obrpc::ObPreProcessServerArg));
+  RPC_S(PR5 check_server_alive, OB_CHECK_SERVER_ALIVE, (obrpc::ObCheckServerAliveArg));
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 set_master_key, OB_SET_MASTER_KEY, (obrpc::ObSetMasterKeyArg));
   RPC_S(PR5 get_master_key, OB_GET_MASTER_KEY, (obrpc::Int64), ObGetMasterKeyResultArg);
@@ -202,6 +208,7 @@
   RPC_S(PR5 enable_ss_micro_cache, OB_ENABLE_SS_MICRO_CACHE, (obrpc::ObEnableSSMicroCacheArg));
   RPC_S(PR5 get_ss_micro_cache_info, OB_GET_SS_MICRO_CACHE_INFO, (obrpc::ObGetSSMicroCacheAllInfoArg), obrpc::ObGetSSMicroCacheAllInfoResult);
   RPC_S(PR5 clear_ss_micro_cache, OB_CLEAR_SS_MICRO_CACHE, (obrpc::ObClearSSMicroCacheArg));
+  RPC_S(PR5 flush_ss_local_cache, OB_FLUSH_SS_LOCAL_CACHE, (obrpc::ObFlushSSLocalCacheArg));
   RPC_S(PR5 del_ss_local_tmpfile, OB_DEL_SS_LOCAL_TMPFILE, (obrpc::ObDelSSLocalTmpFileArg));
   RPC_S(PR5 del_ss_local_major, OB_DEL_SS_LOCAL_MAJOR, (obrpc::ObDelSSLocalMajorArg));
   RPC_S(PR5 calibrate_ss_disk_space, OB_CALIBRATE_SS_DISK_SPACE, (obrpc::ObCalibrateSSDiskSpaceArg));
@@ -261,6 +268,7 @@
   RPC_AP(PR5 flush_ls_archive, OB_FLUSH_LS_ARCHIVE, (obrpc::ObFlushLSArchiveArg), obrpc::Int64);
   RPC_S(PR5 notify_clone_scheduler, OB_NOTIFY_CLONE_SCHEDULER, (obrpc::ObNotifyCloneSchedulerArg), obrpc::ObNotifyCloneSchedulerResult);
   RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
+  RPC_S(PR5 admin_alter_ls, OB_ADMIN_ALTER_LS, (share::ObAlterLSArg), share::ObAlterLSRes);
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
   RPC_AP(PR5 shared_storage_net_throt_predict, OB_SHARED_STORAGE_NET_THROT_PREDICT, (obrpc::ObSSNTEndpointArg), obrpc::ObSharedDeviceResourceArray);
   RPC_AP(PR5 shared_storage_net_throt_set, OB_SHARED_STORAGE_NET_THROT_SET, (obrpc::ObSharedDeviceResourceArray), obrpc::ObSSNTSetRes);
@@ -285,9 +293,16 @@
   RPC_S(PR5 notify_ls_restore_finish, OB_NOTIFY_LS_RESTORE_FINISH, (obrpc::ObNotifyLSRestoreFinishArg));
   RPC_S(PR5 notify_start_archive, OB_NOTIFY_START_ARCHIVE, (obrpc::ObNotifyStartArchiveArg));
   RPC_S(PR5 ha_rebuild_tablet, OB_HA_REBUILD_TABLET, (obrpc::ObRebuildTabletArg));
+  RPC_S(PR5 trigger_dump_data_dict, OB_DATA_DICT_TRIGGER_DUMP, (ObTriggerDumpDataDictArg));
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 fetch_arb_member, OB_FETCH_ARB_MEMBER, (ObFetchArbMemberArg), ObMember);
 #endif
   RPC_S(PR5 estimate_skip_rate, OB_ESTIMATE_SKIP_RATE, (obrpc::ObEstSkipRateArg), ObEstSkipRateRes);
   RPC_S(PR5 write_inner_tablet, OB_WRITE_INNER_TABLET, (ObWriteInnerTabletArg), ObWriteInnerTabletResult);
   RPC_S(PR5 force_drop_lonely_lob_aux_table, OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));
+  RPC_AP(PR5 clear_fetched_log_cache, OB_CLEAR_FETCHED_LOG_CACHE, (share::ObClearFetchedLogCacheArg), share::ObClearFetchedLogCacheRes);
+  RPC_AP(PRZ load_tenant_table_schema, OB_LOAD_TENANT_TABLE_SCHEMA, (obrpc::ObLoadTenantTableSchemaArg));
+  RPC_AP(PR5 check_sys_table_schema, OB_CHECK_SYS_TABLE_SCHEMA, (obrpc::ObCheckSysTableSchemaArg), obrpc::ObCheckSysTableSchemaResult);
+  RPC_AP(PR5 check_backup_dest_rw_consistency, OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, (obrpc::ObCheckBackupDestRWConsistencyArg), obrpc::Int64);
+  RPC_S(PR5 check_backup_dest_validity, OB_CHECK_BACKUP_DEST_VALIDITY, (obrpc::ObRemoteCheckBackupDestValidityArg));
+  RPC_S(PR5 write_backup_dest_format_file, OB_WRITE_BACKUP_DEST_FORMAT_FILE, (obrpc::ObRemoteCheckBackupDestValidityArg));

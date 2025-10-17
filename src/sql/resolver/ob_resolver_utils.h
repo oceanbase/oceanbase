@@ -167,7 +167,7 @@ public:
   static int resolve_sparse_vector_type_info(const ParseNode &type_node,
                                       ObStringBuffer &buf,
                                       uint8_t &depth);
-  inline static bool is_collection_support_type(const ObObjType type);
+  static bool is_collection_support_type(const ObObjType type);
   // type_infos is %ori_cs_type, need convert to %cs_type first
   static int check_extended_type_info(common::ObIAllocator &alloc,
                                       ObIArray<ObString> &type_infos,
@@ -402,7 +402,8 @@ public:
                                uint64_t tenant_id,
                                const bool enable_decimal_int_type,
                                const bool enable_mysql_compatible_dates,
-                               const bool convert_real_type_to_decimal = false);
+                               const bool convert_real_type_to_decimal = false,
+                               const bool is_external_table = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,
                                       common::ObDataType &data_type,
@@ -797,7 +798,11 @@ public:
                                           int64_t table_id,
                                           int64_t column_idx,
                                           const ObString &expr_name);
+  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
+                                          int64_t table_id,
+                                          int64_t mapped_column_id);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
+  static int calc_file_column_external_name(const ObString &column_name, ObString &external_column_name);
   static int build_file_column_expr_for_odps(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -806,6 +811,15 @@ public:
     const common::ObString &column_name,
     int64_t column_idx,
     const ObColumnSchemaV2 *column_schema,
+    ObRawExpr *&expr);
+  static int build_file_column_expr_for_iceberg(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const ObString &table_name,
+    const ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *generated_column,
     ObRawExpr *&expr);
   static int build_file_column_expr_for_csv(
     ObRawExprFactory &expr_factory,
@@ -833,7 +847,7 @@ public:
     const common::ObString &column_name,
     ObRawExpr *&expr);
 
-  static int build_file_row_expr_for_parquet(
+  static int build_file_row_expr_for_parquet_orc(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
     const uint64_t table_id,
@@ -849,17 +863,23 @@ public:
     ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
+    sql::ColumnIndexType column_index_type,
+    uint64_t column_idx,
     ObRawExpr *&expr);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
+                                               const ObTableSchema &external_table_schema,
                                                const ObSQLSessionInfo &session_info,
                                                const ObQualifiedName &q_name,
                                                common::ObIArray<ObRawExpr*> &real_exprs,
                                                ObRawExpr *&expr,
                                                const ObColumnSchemaV2 *gen_col_schema = NULL);
-  static bool is_external_file_column_name(const common::ObString &name);
   static bool is_external_pseudo_column_name(const common::ObString &name);
-  static ObExternalFileFormat::FormatType resolve_external_file_column_type(const common::ObString &name);
+  static bool check_external_pseudo_column_is_valid(
+      const ObExternalFileFormat::FormatType format_type,
+      const common::ObString &column_name);
+  static ObExternalFileFormat::FormatType deduce_external_file_format_from_pseudo_column_name(
+      const common::ObString &column_name);
   static int resolve_file_size_node(const ParseNode *file_size_node, int64_t &parse_int_value);
   static int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value);
   struct FileFormatContext {
@@ -877,6 +897,7 @@ public:
                                              ObExternalFileFormat &format,
                                              ObResolverParams &params);
   static int resolve_binary_format(const ParseNode *node, ObExternalFileFormat &format);
+  static int resolve_column_index_type(const ParseNode *node, ObExternalFileFormat &format);
   static int wrap_csv_binary_format_expr(ObResolverParams &params, const ObCSVGeneralFormat& csv_format, ObRawExpr *&real_ref_expr);
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,

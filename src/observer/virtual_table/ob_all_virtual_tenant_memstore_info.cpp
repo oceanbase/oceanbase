@@ -69,6 +69,7 @@ int ObAllVirtualTenantMemstoreInfo::inner_get_next_row(ObNewRow *&row)
         int64_t freeze_trigger = 0;
         int64_t memstore_limit = 0;
         int64_t freeze_cnt = 0;
+        int64_t throttle_trigger_percentage = 0;
         if (is_virtual_tenant_id(tenant_id)
             || (!is_sys_tenant(effective_tenant_id_) && tenant_id != effective_tenant_id_)) {
           continue;
@@ -80,7 +81,8 @@ int ObAllVirtualTenantMemstoreInfo::inner_get_next_row(ObNewRow *&row)
                                                                memstore_used,
                                                                freeze_trigger,
                                                                memstore_limit,
-                                                               freeze_cnt))) {
+                                                               freeze_cnt,
+                                                               throttle_trigger_percentage))) {
             SERVER_LOG(WARN, "fail to get memstore used", K(ret), K(tenant_id));
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {

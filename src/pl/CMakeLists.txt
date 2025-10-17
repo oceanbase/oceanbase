@@ -58,6 +58,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_upgrade.cpp
   sys_package/ob_dbms_sql.cpp
   sys_package/ob_dbms_xplan.cpp
+  sys_package/ob_dbms_xprofile.cpp
   sys_package/ob_dbms_user_define_rule.cpp
   sys_package/ob_dbms_space.cpp
   sys_package/ob_dbms_mview_mysql.cpp
@@ -65,11 +66,16 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_workload_repository.cpp
   sys_package/ob_pl_dbms_resource_manager.cpp
   sys_package/ob_pl_dbms_trusted_certificate_manager.cpp
+  sys_package/ob_dbms_balance.cpp
   sys_package/ob_dbms_limit_calculator_mysql.cpp
   sys_package/ob_dbms_vector_mysql.cpp
+  sys_package/ob_dbms_hybrid_vector_mysql.cpp
   sys_package/ob_dbms_external_table.cpp
   sys_package/ob_dbms_partition.cpp
   sys_package/ob_dbms_java.cpp
+  sys_package/ob_dbms_ai_service.cpp
+  sys_package/ob_dbms_data_dict.cpp
+  sys_package/ob_dbms_python.cpp
 )
 
 ob_set_subtarget(ob_pl pl_recompile
@@ -81,12 +87,25 @@ ob_set_subtarget(ob_pl dblink
 )
 
 ob_set_subtarget(ob_pl external_routine
+  external_routine/proto/ob_pl_java_udf.pb-c.c
   external_routine/ob_external_resource.cpp
   external_routine/ob_java_utils.cpp
   external_routine/ob_java_udf.cpp
+  external_routine/cpython/ob_py_helper.cpp
+  external_routine/ob_py_utils.cpp
+  external_routine/ob_py_udf.cpp
+  external_routine/ob_java_udaf.cpp
 )
 
 ob_server_add_target(ob_pl)
+
+find_program(PYTHON_EXECUTABLE 
+  NAMES python3 python
+  DOC "Python interpreter")
+
+if(NOT PYTHON_EXECUTABLE)
+  message(FATAL_ERROR "Python interpreter not found. Please install python or python3.")
+endif()
 
 set(SYS_PACK_SQL_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src/share/inner_table/sys_package)
 set(gen_syspack_src ${SYS_PACK_SQL_SOURCE_DIR}/syspack_source.cpp)
@@ -95,7 +114,7 @@ set(SYS_PACK_RELEASE_DIR ${CMAKE_BINARY_DIR}/syspack_release CACHE PATH "The pat
 if(OB_BUILD_ORACLE_PL)
   add_custom_command(
     OUTPUT ${gen_syspack_src}
-    COMMAND python ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR} -wp $<TARGET_FILE:wrap>
+    COMMAND ${PYTHON_EXECUTABLE} ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR} -wp $<TARGET_FILE:wrap>
     DEPENDS ${SYS_PACK_SQL_SOURCE_DIR}/*.sql ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py wrap
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Generating wrapped syspack source files"
@@ -103,7 +122,7 @@ if(OB_BUILD_ORACLE_PL)
 else()
   add_custom_command(
     OUTPUT ${gen_syspack_src}
-    COMMAND python ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR}
+    COMMAND ${PYTHON_EXECUTABLE} ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR}
     DEPENDS ${SYS_PACK_SQL_SOURCE_DIR}/*.sql ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Generating wrapped syspack source files"

@@ -78,80 +78,80 @@ ERROR HY000: Invalid argument
 select * from matrix where ST_GeomFromText('POINT(1 1)') = SetType;
 ERROR HY000: Invalid argument
 select * from matrix where ST_GeomFromText('POINT(1 1)') = JsonType;
-ERROR 0A000: geomerty, json not supported
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
 select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = GeometryType;
 st_astext(GeometryType)
 POINT(1 1)
 select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyIntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < SmallIntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumIntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < Int32Type;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > IntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < UTinyIntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > USmallIntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= UMediumIntType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= UInt32Type;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= UInt64Type;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= FloatType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= DoubleType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= UFloatType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= UDoubleType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= NumberType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= UNumberType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > DateTimeType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < TimestampType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > DateType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < TimeType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= YearType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < VarcharType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= CharType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < VarbinaryType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') >= BinaryType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= ExtendType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > TinyTextType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= TextType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > MediumTextType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= LongTextType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > BitType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') <= EnumType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > SetType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') < JsonType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') > GeometryType;
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select * from matrix where ST_GeomFromText('POINT(1 1)') | IntType;
 ERROR HY000: Invalid argument
 select * from matrix where ST_GeomFromText('POINT(1 1)') | GeometryType;
@@ -169,7 +169,7 @@ ERROR HY000: Invalid argument
 select * from matrix where  GeometryType like 'a';
 ERROR HY000: Invalid argument
 select * from matrix where  GeometryType between ST_GeomFromText('POINT(1 1)') and ST_GeomFromText('POINT(2 2)');
-ERROR HY000: Invalid argument
+ERROR 22000: Invalid data type for the operation
 select MIN(GeometryType) from matrix;
 ERROR HY000: Invalid argument
 select MAX(GeometryType) from matrix;

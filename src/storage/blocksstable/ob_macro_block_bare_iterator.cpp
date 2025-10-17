@@ -660,13 +660,8 @@ void ObMacroBlockRowBareIterator::reset()
   column_types_ = nullptr;
   column_checksums_ = nullptr;
   rowkey_descs_.reset();
-  if (nullptr != micro_reader_) {
-    micro_reader_->~ObIMicroBlockReader();
-    if (nullptr != allocator_) {
-      allocator_->free(micro_reader_);
-    }
-    micro_reader_ = nullptr;
-  }
+  micro_reader_ = nullptr;
+  reader_helper_.reset();
   allocator_ = nullptr;
   curr_micro_block_data_.reset();
   curr_block_row_idx_ = -1;
@@ -716,8 +711,11 @@ int ObMacroBlockRowBareIterator::open(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(init_micro_reader(static_cast<ObRowStoreType>(
-                  macro_header.fixed_header_.row_store_type_)))) {
+  } else if (OB_FAIL(reader_helper_.init(*allocator_))) {
+    LOG_WARN("Fail to init micro block reader helper", K(ret), K(macro_header));
+  } else if (OB_FAIL(reader_helper_.get_reader(
+                 static_cast<ObRowStoreType>(macro_header.fixed_header_.row_store_type_),
+                 micro_reader_))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K(macro_header));
   } else {
     is_inited_ = true;
@@ -846,46 +844,6 @@ int ObMacroBlockRowBareIterator::get_macro_block_header(
   int ret = OB_SUCCESS;
   if (OB_FAIL(micro_iter_.get_macro_block_header(macro_header))) {
     LOG_WARN("Fail to get macro block header", K(ret));
-  }
-  return ret;
-}
-
-
-int ObMacroBlockRowBareIterator::init_micro_reader(const ObRowStoreType store_type)
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(micro_reader_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Micro block reader should be null before init", K(ret));
-  } else {
-    switch (store_type) {
-    case FLAT_ROW_STORE: {
-      if (OB_ISNULL(micro_reader_ = OB_NEWx(ObMicroBlockReader, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Fail to new flat micro block reader", K(ret));
-      }
-      break;
-    }
-    case ENCODING_ROW_STORE:
-    case SELECTIVE_ENCODING_ROW_STORE: {
-      if (OB_ISNULL(micro_reader_ = OB_NEWx(ObMicroBlockDecoder, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Fail to new micro block decoder", K(ret));
-      }
-      break;
-    }
-    case CS_ENCODING_ROW_STORE: {
-      if (OB_ISNULL(micro_reader_ = OB_NEWx(ObMicroBlockCSDecoder, allocator_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Fail to new micro block cs decoder", KR(ret));
-      }
-      break;
-    }
-    default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("Not supported row store type", K(ret), K(store_type));
-    }
-    }
   }
   return ret;
 }

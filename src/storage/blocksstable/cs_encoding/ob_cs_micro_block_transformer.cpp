@@ -246,6 +246,7 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
     uint32_t first_stream_begin_offset = column_meta_begin_offset_ + header_->header_size_;
     int32_t stream_idx = -1;
     uint32_t pre_streams_len = 0;
+    int64_t bitmap_byte_size = ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
     for (uint32_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
       const ObCSColumnHeader &column_header = column_headers_[i];
         LOG_DEBUG("build_original_transform_desc for one column", K(i), "stream_start_idx", stream_idx,
@@ -257,8 +258,8 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
         stream_idx = stream_idx + 1;
         original_desc_.column_first_stream_idx_arr_[i] = stream_idx;
         original_desc_.column_meta_pos_arr_[i].offset_ = column_meta_begin_offset_ + pre_streams_len;
-        original_desc_.column_meta_pos_arr_[i].len_ = column_header.has_null_bitmap() ?
-          ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_) : 0;
+        original_desc_.column_meta_pos_arr_[i].len_ = column_header.has_null_or_nop_bitmap() ? bitmap_byte_size : 0;
+        original_desc_.column_meta_pos_arr_[i].len_ += column_header.has_nop_bitmap() ? bitmap_byte_size : 0;
         original_desc_.set_is_integer_stream(stream_idx);
         stream_row_cnt_arr_[stream_idx] = header_->row_count_;
         pre_streams_len = stream_offsets_arr_[stream_idx] - first_stream_begin_offset;
@@ -267,9 +268,8 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
         stream_idx = stream_idx + 1;
         original_desc_.column_first_stream_idx_arr_[i] = stream_idx;
         original_desc_.column_meta_pos_arr_[i].offset_ = column_meta_begin_offset_ + pre_streams_len;
-        original_desc_.column_meta_pos_arr_[i].len_ = column_header.has_null_bitmap()
-          ? ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_)
-          : 0;
+        original_desc_.column_meta_pos_arr_[i].len_ = column_header.has_null_or_nop_bitmap() ? bitmap_byte_size : 0;
+        original_desc_.column_meta_pos_arr_[i].len_ += column_header.has_nop_bitmap() ? bitmap_byte_size : 0;
         // bytes stream has nothing to set, keep default value
         if (!column_header.is_fixed_length()) {
           stream_idx = stream_idx + 1;
@@ -282,13 +282,14 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
         original_desc_.column_meta_pos_arr_[i].offset_ = column_meta_begin_offset_ + pre_streams_len;
         // must has no null bitmap for dict encoding
         original_desc_.column_meta_pos_arr_[i].len_ = sizeof(ObDictEncodingMeta);
+        original_desc_.column_meta_pos_arr_[i].len_ += column_header.has_nop_bitmap() ? bitmap_byte_size : 0;
         const ObDictEncodingMeta *dict_meta = reinterpret_cast<const ObDictEncodingMeta *>(
           payload_buf_ + original_desc_.column_meta_pos_arr_[i].offset_);
         if (0 == dict_meta->distinct_val_cnt_) {
           // this column has no stream, column_first_stream_idx is same with next column's first_stream_idx
           // or the stream count if this column is the last column.
           original_desc_.column_first_stream_idx_arr_[i] = stream_idx + 1;
-          pre_streams_len += sizeof(ObDictEncodingMeta);
+          pre_streams_len += original_desc_.column_meta_pos_arr_[i].len_;
         } else {
           // integer dict stream + dict ref stream
           stream_idx = stream_idx + 1;
@@ -305,13 +306,14 @@ int ObCSMicroBlockTransformer::build_original_transform_desc_(
         original_desc_.column_meta_pos_arr_[i].offset_ = column_meta_begin_offset_ + pre_streams_len;
         // must has no null bitmap for dict encoding
         original_desc_.column_meta_pos_arr_[i].len_ = sizeof(ObDictEncodingMeta);
+        original_desc_.column_meta_pos_arr_[i].len_ += column_header.has_nop_bitmap() ? bitmap_byte_size : 0;
         const ObDictEncodingMeta *dict_meta = reinterpret_cast<const ObDictEncodingMeta *>(
           payload_buf_ + original_desc_.column_meta_pos_arr_[i].offset_);
         if (0 == dict_meta->distinct_val_cnt_) {
           // this column has no stream, column_first_stream_idx is same with next column's first_stream_idx
           // or the stream count if this column is the last column.
           original_desc_.column_first_stream_idx_arr_[i] = stream_idx + 1;
-          pre_streams_len += sizeof(ObDictEncodingMeta);
+          pre_streams_len += original_desc_.column_meta_pos_arr_[i].len_;
         } else {
           // is string dict, bytes stream has nothing to set, keep default value
           stream_idx = stream_idx + 1;
@@ -476,7 +478,10 @@ int ObCSMicroBlockTransformer::build_integer_sub_column_stream_(
 {
   int ret = OB_SUCCESS;
   stream_idx = stream_idx + 1;
-  if (column_header.has_null_bitmap()) {
+  if (column_header.has_null_or_nop_bitmap()) {
+    sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
+  }
+  if (column_header.has_nop_bitmap()) {
     sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
   }
   stream_row_cnt_arr_[stream_idx] = header_->row_count_;
@@ -494,7 +499,10 @@ int ObCSMicroBlockTransformer::build_string_sub_column_stream_(
 {
   int ret = OB_SUCCESS;
   stream_idx = stream_idx + 1;
-  if (column_header.has_null_bitmap()) {
+  if (column_header.has_null_or_nop_bitmap()) {
+    sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
+  }
+  if (column_header.has_nop_bitmap()) {
     sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
   }
   // there is no offset array for fixed length string
@@ -517,6 +525,7 @@ int ObCSMicroBlockTransformer::build_integer_dict_sub_column_stream_(
   int ret = OB_SUCCESS;
   const ObDictEncodingMeta *dict_meta = reinterpret_cast<const ObDictEncodingMeta *>(sub_col_meta_ptr);
   sub_col_meta_ptr += sizeof(ObDictEncodingMeta);
+  sub_col_meta_ptr += column_header.has_nop_bitmap() ? ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_) : 0;
   if (0 == dict_meta->distinct_val_cnt_) {
     // no data
   } else {
@@ -543,6 +552,7 @@ int ObCSMicroBlockTransformer::build_string_dict_sub_column_stream_(
   int ret = OB_SUCCESS;
   const ObDictEncodingMeta *dict_meta = reinterpret_cast<const ObDictEncodingMeta *>(sub_col_meta_ptr);
   sub_col_meta_ptr += sizeof(ObDictEncodingMeta);
+  sub_col_meta_ptr += column_header.has_nop_bitmap() ? ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_) : 0;
   if (0 == dict_meta->distinct_val_cnt_) {
     // no data
   } else {
@@ -618,6 +628,7 @@ int ObCSMicroBlockTransformer::build_stream_decoder_ctx_()
             LOG_WARN("fail to build decoding ctx", K(ret), K(stream_row_cnt_arr_[stream_idx]));
           } else {
             buf += sizeof(ObIntegerStreamDecoderCtx);
+            int64_t offset = header_->header_size_ + original_desc_.column_meta_pos_arr_[stream_idx].offset_;
             LOG_DEBUG("build integer stream decoding ctx", K(stream_idx),
                 K(stream_row_cnt_arr_[stream_idx]), K(*ctx), K(sizeof(ObIntegerStreamDecoderCtx)));
           }
@@ -1167,6 +1178,7 @@ int ObCSMicroBlockTransformer::dump_cs_encoding_info(char *hex_print_buf, const 
     const uint32_t stream_cnt = all_column_header_->stream_count_;
     uint16_t col_first_stream_idx = 0;
     uint16_t col_end_stream_idx = 0;
+    int32_t decoding_ctx_offset = 0;
     for (int64_t i = 0; i < col_cnt; i++) {
       printer.print_cs_encoding_column_header(column_headers_[i], i);
       ObMicroBlockTransformDesc::Pos &meta_pos = original_desc_.column_meta_pos_arr_[i];
@@ -1181,7 +1193,6 @@ int ObCSMicroBlockTransformer::dump_cs_encoding_info(char *hex_print_buf, const 
       } else {
         col_end_stream_idx = stream_cnt;
       }
-      int32_t decoding_ctx_offset = 0;
       while (col_first_stream_idx < col_end_stream_idx) {
         if (original_desc_.is_integer_stream(col_first_stream_idx)) {
           ObIntegerStreamDecoderCtx *ctx = reinterpret_cast<ObIntegerStreamDecoderCtx *>(stream_decoding_ctx_buf_ + decoding_ctx_offset);
@@ -1436,17 +1447,25 @@ int ObCSMicroBlockTransformHelper::build_integer_column_decoder_ctx_(
       ctx.micro_block_header_ = get_micro_block_header();
       ctx.col_header_  = &get_column_header(col_idx);
       ctx.allocator_ = allocator_;
-      if (ctx.col_header_->has_null_bitmap()) {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_BITMAP;
-        ctx.null_bitmap_ = get_column_meta(col_idx);
+      if (ctx.col_header_->has_null_or_nop_bitmap()) {
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_OR_NOP_BITMAP;
+        ctx.null_or_nop_bitmap_ = get_column_meta(col_idx);
       } else if (ctx.ctx_->meta_.is_use_null_replace_value()) {
         ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED;
         ctx.null_replaced_value_ = ctx.ctx_->meta_.null_replaced_value_;
       } else {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
         ctx.null_desc_ = nullptr;
       }
-      LOG_TRACE("build_integer_column_decoder_ctx", K(col_first_stream_idx), K(col_end_stream_idx), K(col_idx), K(ctx));
+      if (ctx.col_header_->has_nop_bitmap()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+        int64_t offset = ctx.col_header_->has_null_or_nop_bitmap() ? ObCSEncodingUtil::get_bitmap_byte_size(ctx.micro_block_header_->row_count_) : 0;
+        ctx.nop_bitmap_ = get_column_meta(col_idx) + offset;
+      } else if (ctx.col_header_->has_nop()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+      } else {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
+      }
     }
   }
   return ret;
@@ -1484,13 +1503,22 @@ int ObCSMicroBlockTransformHelper::build_string_column_decoder_ctx_(
       ctx.micro_block_header_ = get_micro_block_header();
       ctx.col_header_  = &col_header;
       ctx.allocator_ = allocator_;
-      if (col_header.has_null_bitmap()) {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_BITMAP;
-        ctx.null_bitmap_ = get_column_meta(col_idx);
+      if (col_header.has_null_or_nop_bitmap()) {
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_OR_NOP_BITMAP;
+        ctx.null_or_nop_bitmap_ = get_column_meta(col_idx);
       } else if (ctx.str_ctx_->meta_.is_use_zero_len_as_null()) {
         ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED;
       } else {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
+      }
+      if (ctx.col_header_->has_nop_bitmap()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+        int64_t offset = ctx.col_header_->has_null_or_nop_bitmap() ? ObCSEncodingUtil::get_bitmap_byte_size(ctx.micro_block_header_->row_count_) : 0;
+        ctx.nop_bitmap_ = get_column_meta(col_idx) + offset;
+      } else if (ctx.col_header_->has_nop()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+      } else {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
       }
       if (col_stream_cnt == 2) {
         const int64_t col_second_stream_idx = col_first_stream_idx + 1;
@@ -1526,8 +1554,16 @@ int ObCSMicroBlockTransformHelper::build_integer_dict_decoder_ctx_(const ObObjMe
   if (ctx.dict_meta_->has_null()) {
     ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED_REF;
     ctx.null_replaced_ref_ = ctx.dict_meta_->distinct_val_cnt_;
+    if (!ctx.col_header_->has_nop()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
+    } else if (ctx.col_header_->has_nop_bitmap()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+      ctx.nop_bitmap_ = get_column_meta(col_idx) + sizeof(ObDictEncodingMeta);
+    } else {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+    }
   } else {
-    ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+    ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
   }
   if (col_stream_cnt == 0) {  // empty dict, has no stream
     // set nothing
@@ -1588,8 +1624,16 @@ int ObCSMicroBlockTransformHelper::build_string_dict_decoder_ctx_(const ObObjMet
     if (ctx.dict_meta_->has_null()) {
       ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED_REF;
       ctx.null_replaced_ref_ = ctx.dict_meta_->distinct_val_cnt_;
+      if (!ctx.col_header_->has_nop()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
+      } else if (ctx.col_header_->has_nop_bitmap()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+        ctx.nop_bitmap_ = get_column_meta(col_idx) + sizeof(ObDictEncodingMeta);
+      } else {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+      }
     } else {
-      ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+      ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
     }
     if (col_stream_cnt == 0) {  // empty dict, has no stream
       // set nothing
@@ -1696,11 +1740,11 @@ int ObCSMicroBlockTransformHelper::build_semistruct_column_decoder_ctx_(
       LOG_WARN("stream count is incorrect", K(ret), K(col_idx), K(col_first_stream_idx), K(col_end_stream_idx),
           K(sub_col_stream_cnt), K(semistrcut_meta_desc));
     } else {
-      if (col_header.has_null_bitmap()) {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_BITMAP;
-        ctx.null_bitmap_ = semistrcut_meta_desc.null_bitmap_;
+      if (col_header.has_null_or_nop_bitmap()) {
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_OR_NOP_BITMAP;
+        ctx.null_or_nop_bitmap_ = semistrcut_meta_desc.null_bitmap_;
       } else {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < sub_col_cnt; ++i) {
@@ -1800,16 +1844,26 @@ int ObCSMicroBlockTransformHelper::build_integer_sub_column_decoder_ctx_(
       ctx.micro_block_header_ = get_micro_block_header();
       ctx.col_header_  = &sub_col_header;
       ctx.allocator_ = allocator_;
-      if (ctx.col_header_->has_null_bitmap()) {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_BITMAP;
-        ctx.null_bitmap_ = sub_col_meta_ptr;
+      if (ctx.col_header_->has_null_or_nop_bitmap()) {
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_OR_NOP_BITMAP;
+        ctx.null_or_nop_bitmap_ = sub_col_meta_ptr;
         sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
       } else if (ctx.ctx_->meta_.is_use_null_replace_value()) {
         ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED;
         ctx.null_replaced_value_ = ctx.ctx_->meta_.null_replaced_value_;
       } else {
-        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+        ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
         ctx.null_desc_ = nullptr;
+      }
+
+      if (ctx.col_header_->has_nop_bitmap()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+        ctx.nop_bitmap_ = sub_col_meta_ptr;
+        sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
+      } else if (ctx.col_header_->has_nop()) {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+      } else {
+        ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
       }
     }
   }
@@ -1843,14 +1897,23 @@ int ObCSMicroBlockTransformHelper::build_string_sub_column_decoder_ctx_(
     ctx.micro_block_header_ = get_micro_block_header();
     ctx.col_header_  = &sub_col_header;
     ctx.allocator_ = allocator_;
-    if (ctx.col_header_->has_null_bitmap()) {
-      ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_BITMAP;
-      ctx.null_bitmap_ = sub_col_meta_ptr;
+    if (ctx.col_header_->has_null_or_nop_bitmap()) {
+      ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NULL_OR_NOP_BITMAP;
+      ctx.null_or_nop_bitmap_ = sub_col_meta_ptr;
       sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
     } else if (ctx.str_ctx_->meta_.is_use_zero_len_as_null()) {
       ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED;
     } else {
-      ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+      ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
+    }
+    if (ctx.col_header_->has_nop_bitmap()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+      ctx.nop_bitmap_ = sub_col_meta_ptr;
+      sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
+    } else if (ctx.col_header_->has_nop()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+    } else {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
     }
     if (! sub_col_header.is_fixed_length()) {
       const int64_t col_second_stream_idx = col_first_stream_idx + 1;
@@ -1893,9 +1956,19 @@ int ObCSMicroBlockTransformHelper::build_integer_dict_sub_decoder_ctx_(
   if (ctx.dict_meta_->has_null()) {
     ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED_REF;
     ctx.null_replaced_ref_ = ctx.dict_meta_->distinct_val_cnt_;
+    if (!ctx.col_header_->has_nop()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
+    } else if (ctx.col_header_->has_nop_bitmap()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+      ctx.nop_bitmap_ = sub_col_meta_ptr;
+      sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
+    } else {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+    }
   } else {
-    ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+    ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
   }
+
   if (0 == dict_meta->distinct_val_cnt_) {  // empty dict, has no stream
     // set nothing
   } else {
@@ -1948,8 +2021,17 @@ int ObCSMicroBlockTransformHelper::build_string_dict_sub_decoder_ctx_(
   if (ctx.dict_meta_->has_null()) {
     ctx.null_flag_ = ObBaseColumnDecoderCtx::IS_NULL_REPLACED_REF;
     ctx.null_replaced_ref_ = ctx.dict_meta_->distinct_val_cnt_;
+    if (!ctx.col_header_->has_nop()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NO_NOP;
+    } else if (ctx.col_header_->has_nop_bitmap()) {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::HAS_NOP_BITMAP;
+      ctx.nop_bitmap_ = sub_col_meta_ptr;
+      sub_col_meta_ptr += ObCSEncodingUtil::get_bitmap_byte_size(header_->row_count_);
+    } else {
+      ctx.nop_flag_ = ObBaseColumnDecoderCtx::ObNopFlag::IS_NOP_REPLACED;
+    }
   } else {
-    ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL;
+    ctx.null_flag_ = ObBaseColumnDecoderCtx::HAS_NO_NULL_OR_NOP;
   }
   if (0 == dict_meta->distinct_val_cnt_) {  // empty dict, has no stream
     // set nothing

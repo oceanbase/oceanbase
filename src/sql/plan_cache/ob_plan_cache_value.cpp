@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_plan_cache_value.h"
+#include "sql/ob_sql.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/udr/ob_udr_mgr.h"
@@ -58,14 +59,15 @@ int PCVSchemaObj::init(const ObTableSchema *schema)
   return ret;
 }
 
-int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema)
+int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema, const ObSchemaObjVersion &table_version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema) || OB_ISNULL(inner_alloc_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
   } else {
-    database_id_ = schema->get_database_id();
+    is_explicit_db_name_ = table_version.is_db_explicit_;
+    database_id_ = table_version.is_db_explicit_ ? table_version.invoker_db_id_ : schema->get_database_id();
     // copy table name
     char *buf = nullptr;
     const ObString &tname = schema->get_synonym_name_str();
@@ -1160,22 +1162,12 @@ int ObPlanCacheValue::get_outline_param_index(ObExecContext &exec_ctx, int64_t &
 {
   int ret = OB_SUCCESS;
   param_idx = OB_INVALID_INDEX;
-  int64_t param_count = outline_params_wrapper_.get_outline_params().count();
   int64_t concurrent_num = INT64_MAX;
-  if (exec_ctx.get_physical_plan_ctx() != NULL) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
-      bool is_match = false;
-      const ObMaxConcurrentParam *param = outline_params_wrapper_.get_outline_params().at(i);
-      if (OB_ISNULL(param)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param is NULl", K(ret));
-      } else if (OB_FAIL(param->match_fixed_param(exec_ctx.get_physical_plan_ctx()->get_param_store(), is_match))) {
-        LOG_WARN("fail to match", K(ret), K(i));
-      } else if (is_match && param->concurrent_num_ < concurrent_num) {
-        concurrent_num = param->concurrent_num_;
-        param_idx = i;
-      } else {/*do nothing*/}
-    }
+  if (NULL == exec_ctx.get_physical_plan_ctx()) {
+    /* do nothing */
+  } else if (OB_FAIL(outline_params_wrapper_.get_concurrent_limit_param(exec_ctx.get_physical_plan_ctx()->get_param_store(),
+                                                                        param_idx, concurrent_num))) {
+    LOG_WARN("failed to get concurrent limit param", K(ret));
   }
   return ret;
 }
@@ -1206,7 +1198,7 @@ int ObPlanCacheValue::get_one_group_params(int64_t pos, const ParamStore &src_pa
     } else if (array_obj->count_ <= pos) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parameters pos", K(ret), K(i), K(pos), K(objparam));
-    } else if (OB_FAIL(dst_params.push_back(array_obj->data_[pos]))) {
+    } else if (OB_FAIL(ObSql::add_param_to_param_store(array_obj->data_[pos], dst_params))) {
       LOG_WARN("fail to push param_obj to param_store", K(i), K(pos), K(array_obj->data_[pos]), K(ret));
     } else {
       LOG_TRACE("get one batch obj", K(pos), K(i), K(array_obj->data_[pos]));
@@ -1910,7 +1902,7 @@ int ObPlanCacheValue::set_stored_schema_objs(const DependenyTableStore &dep_tabl
           // do nothing
         } else if (OB_FAIL(pcv_schema_obj->init_with_version_obj(table_version))) {
           LOG_WARN("failed to init pcv schema obj", K(ret), K(table_version));
-        } else if (is_synonym && OB_FAIL(pcv_schema_obj->init_with_synonym(synonym_schema))) {
+        } else if (is_synonym && OB_FAIL(pcv_schema_obj->init_with_synonym(synonym_schema, table_version))) {
           LOG_WARN("failed to init table name", K(ret));
         } else if (OB_FAIL(stored_schema_objs_.push_back(pcv_schema_obj))) {
           LOG_WARN("failed to push back array", K(ret));
@@ -2035,16 +2027,21 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
           const ObSimpleSynonymSchema *synonym_schema = nullptr;
-          const ObSimpleTableSchemaV2 *sn_table_schema = nullptr; // table with the same name
           uint64_t synonym_database_id =
             OB_PUBLIC_SCHEMA_ID == pcv_schema->database_id_ ? database_id : pcv_schema->database_id_;
-          if (OB_FAIL(schema_guard.get_simple_table_schema(
-                tenant_id, synonym_database_id, pcv_schema->table_name_, false, sn_table_schema))) {
-            LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
-          } else if (nullptr != sn_table_schema) {
+          ObSchemaChecker schema_checker;
+          OZ (schema_checker.init(schema_guard));
+          bool exist = false;
+          bool is_private_syn = false;
+          OZ (schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
+                                                                        synonym_database_id,
+                                                                        pcv_schema->table_name_,
+                                                                        exist));
+          if (OB_FAIL(ret)) {
+          } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
-            LOG_INFO("a table with the same name exists. regenerate the plan", K(ret),
-                     K(synonym_database_id), K(pcv_schema->table_name_));
+            LOG_INFO("exist object which name as current synonym", K(ret), K(synonym_database_id),
+              K(pcv_schema->table_name_));
           } else if (OB_FAIL(schema_guard.get_synonym_info(
                        tenant_id, synonym_database_id, pcv_schema->table_name_, synonym_schema))) {
             LOG_WARN("failed to get private synonym", K(ret));
@@ -2056,7 +2053,9 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           }
           if (OB_FAIL(ret)) {
           } else if (OB_NOT_NULL(synonym_schema)) {
-            tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
+            tmp_schema_obj.database_id_ = pcv_schema->is_explicit_db_name_
+                                          ? pcv_schema->database_id_
+                                          : synonym_schema->get_database_id();
             tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
             tmp_schema_obj.schema_id_ = synonym_schema->get_synonym_id();
             tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;

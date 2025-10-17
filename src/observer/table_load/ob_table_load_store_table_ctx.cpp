@@ -390,6 +390,7 @@ int ObTableLoadStoreDataTableCtx::init_insert_table_ctx(const ObDirectLoadTransP
     insert_table_param.datum_utils_ = &(schema_->datum_utils_);
     insert_table_param.col_descs_ = &(schema_->column_descs_);
     insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+    insert_table_param.col_nullables_ = schema_->col_nullables_;
     insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
@@ -666,6 +667,7 @@ int ObTableLoadStoreLobTableCtx::init_insert_table_ctx(const ObDirectLoadTransPa
     insert_table_param.datum_utils_ = &(schema_->datum_utils_);
     insert_table_param.col_descs_ = &(schema_->column_descs_);
     insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+    insert_table_param.col_nullables_ = schema_->col_nullables_;
     insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;
@@ -912,6 +914,7 @@ int ObTableLoadStoreIndexTableCtx::init_insert_table_ctx(const ObDirectLoadTrans
     insert_table_param.datum_utils_ = &(schema_->datum_utils_);
     insert_table_param.col_descs_ = &(schema_->column_descs_);
     insert_table_param.cmp_funcs_ = &(schema_->cmp_funcs_);
+    insert_table_param.col_nullables_ = schema_->col_nullables_;
     insert_table_param.lob_column_idxs_ = &(schema_->lob_column_idxs_);
     insert_table_param.online_sample_percent_ = store_ctx_->ctx_->param_.online_sample_percent_;
     insert_table_param.is_no_logging_ = store_ctx_->ctx_->ddl_param_.is_no_logging_;

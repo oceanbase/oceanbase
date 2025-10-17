@@ -11,6 +11,9 @@
  */
 
 #include "log_iterator_storage.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/libpalf/libpalf_common_define.h"
+#endif
 namespace oceanbase
 {
 namespace palf
@@ -194,7 +197,8 @@ MemoryStorage::MemoryStorage() : ILogStorage(ILogStorageType::MEMORY_STORAGE),
                                  buf_len_(0),
                                  start_lsn_(),
                                  log_tail_(),
-                                 is_inited_(false)
+                                 is_inited_(false),
+                                 enable_logservice_(false)
 {
 }
 
@@ -203,7 +207,7 @@ MemoryStorage::~MemoryStorage()
   destroy();
 }
 
-int MemoryStorage::init(const LSN &start_lsn)
+int MemoryStorage::init(const LSN &start_lsn, const bool enable_logservice)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -211,23 +215,43 @@ int MemoryStorage::init(const LSN &start_lsn)
   } else if (false == start_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K(start_lsn));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (enable_logservice && (memory_storage_ == NULL) && OB_FAIL(LIBPALF_ERRNO_CAST(libpalf::libpalf_create_memory_storage(start_lsn.val_, &memory_storage_)))) {
+    PALF_LOG(WARN, "libpalf_create_memory_storage failed", K(ret), K(start_lsn));
+  } else if (enable_logservice && OB_FAIL(LIBPALF_ERRNO_CAST(libpalf::libpalf_reset_memory_storage(start_lsn.val_, memory_storage_)))) {
+    PALF_LOG(WARN, "libpalf_reset_memory_storage failed", K(ret), K(start_lsn));
+#endif
   } else {
     buf_ = NULL;
     buf_len_ = 0;
     log_tail_ = start_lsn_ = start_lsn;
     is_inited_ = true;
+    enable_logservice_ = enable_logservice;
     PALF_LOG(TRACE, "MemoryStorage init success", K(ret), KPC(this));
   }
   return ret;
 }
 
-void MemoryStorage::destroy()
+void MemoryStorage::reset()
 {
   is_inited_ = false;
   buf_ = NULL;
   buf_len_ = 0;
   log_tail_.reset();
   start_lsn_.reset();
+}
+
+void MemoryStorage::destroy()
+{
+  int ret = OB_SUCCESS;
+  reset();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (enable_logservice_ && OB_FAIL(LIBPALF_ERRNO_CAST(libpalf::libpalf_free_memory_storage(memory_storage_)))) {
+    PALF_LOG(ERROR, "libpalf_free_memory_storage failed", K(ret));
+  } else {
+    memory_storage_ = NULL;
+  }
+#endif
 }
 
 int MemoryStorage::append(const char *buf, const int64_t buf_len)
@@ -237,6 +261,10 @@ int MemoryStorage::append(const char *buf, const int64_t buf_len)
     ret = OB_NOT_INIT;
   } else if (NULL == buf || 0 >= buf_len) {
     ret = OB_INVALID_ARGUMENT;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (enable_logservice_ && OB_FAIL(LIBPALF_ERRNO_CAST(libpalf::libpalf_set_memory_storage_buffer(memory_storage_, log_tail_.val_, buf, buf_len)))) {
+    PALF_LOG(WARN, "libpalf_set_memory_storage_buffer failed", K(ret), K(log_tail_), K(buf_len));
+#endif
   } else {
     buf_ = buf;
     buf_len_ = buf_len;

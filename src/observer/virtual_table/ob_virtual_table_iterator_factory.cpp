@@ -116,6 +116,7 @@
 #include "observer/virtual_table/ob_iterate_virtual_table.h"
 #include "observer/virtual_table/ob_all_virtual_id_service.h"
 #include "observer/virtual_table/ob_all_virtual_timestamp_service.h"
+#include "rootserver/ob_root_service.h"
 #include "rootserver/virtual_table/ob_core_meta_table.h"
 #include "rootserver/virtual_table/ob_virtual_core_inner_table.h"
 #include "observer/virtual_table/ob_tenant_virtual_charset.h"
@@ -170,6 +171,7 @@
 #include "observer/virtual_table/ob_all_virtual_log_stat.h"
 #include "observer/virtual_table/ob_all_virtual_apply_stat.h"
 #include "observer/virtual_table/ob_all_virtual_ha_diagnose.h"
+#include "observer/virtual_table/ob_all_virtual_hms_client_pool_stat.h"
 #include "observer/virtual_table/ob_all_virtual_replay_stat.h"
 #include "observer/virtual_table/ob_all_virtual_unit.h"
 #include "observer/virtual_table/ob_all_virtual_server.h"
@@ -249,7 +251,10 @@
 #include "observer/virtual_table/ob_list_file.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_detect_info.h"
-
+#include "observer/virtual_table/ob_all_virtual_dba_source.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
+#include "observer/virtual_table/ob_all_virtual_ccl_status.h"
+#include "observer/virtual_table/ob_all_virtual_ss_object_type_io_stat.h"
 namespace oceanbase
 {
 using namespace common;
@@ -909,6 +914,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else if (OB_FAIL(table_mgr->init(&allocator))) {
               SERVER_LOG(WARN, "failed to init all virtual table mgr", K(ret));
             } else {
+              bool is_index = false;
+              ObAllVirtualTableMgr::INDEX_TYPE index_type = ObAllVirtualTableMgr::INDEX_TYPE_MAX;
+              if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+                LOG_WARN("check is index failed", K(ret));
+              } else if (is_index) {
+                index_type = ObAllVirtualTableMgr::INDEX_TYPE_I1;
+              }
+              table_mgr->use_index_scan(index_type);
               table_mgr->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(table_mgr);
             }
@@ -1940,6 +1953,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               if (OB_FAIL(sstable_macro_info->init(&allocator, addr_))) {
                 SERVER_LOG(WARN, "fail to init ObAllVirtualPartitionSSTableMergeInfo, ", K(ret));
               } else {
+                bool is_index = false;
+                ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE index_type = ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE_MAX;
+                if (OB_FAIL(check_is_index(*index_schema, "i1", is_index))) {
+                  LOG_WARN("check is index failed", K(ret));
+                } else if (is_index) {
+                  index_type = ObAllVirtualTabletSSTableMacroInfo::INDEX_TYPE_I1;
+                }
+                sstable_macro_info->use_index_scan(index_type);
                 vt_iter = static_cast<ObVirtualTableIterator *>(sstable_macro_info);
               }
             }
@@ -2755,6 +2776,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_SOURCE_TID: {
+            ObAllVirtualDbaSource *table = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDbaSource, table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualDbaSource table construct fail", K(ret));
+            } else {
+              table->set_tenant_id(real_tenant_id);
+              vt_iter = static_cast<ObAllVirtualDbaSource *>(table);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_SQL_PLAN_TID: {
             ObAllVirtualSqlPlan *sql_plan_table = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlPlan, sql_plan_table))) {
@@ -3192,6 +3223,48 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               vt_iter = static_cast<ObVirtualTableIterator *>(logservice_cluster_info_table);
             }
           } break;
+          case OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID:
+          {
+            ObAllVirtualTenantVectorMemInfo *gv_tenant_vector_mem_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantVectorMemInfo, gv_tenant_vector_mem_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTenantVectorMemInfo construct failed", K(ret));
+            } else {
+              gv_tenant_vector_mem_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(gv_tenant_vector_mem_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CCL_STATUS_TID:
+          {
+            ObAllVirtualCCLStatus *all_virtual_ccl_status = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCCLStatus, all_virtual_ccl_status))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_ccl_status);
+              if (OB_FAIL(all_virtual_ccl_status->set_svr_addr(addr_)))
+              {
+                LOG_WARN("set server addr failed", K(ret), K(addr_));
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_TID: {
+            ObAllVirtualHMSClientPoolStat *hms_client_pool_stat_table = NULL;
+            if (OB_FAIL(
+                    NEW_VIRTUAL_TABLE(ObAllVirtualHMSClientPoolStat, hms_client_pool_stat_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualHMSClientPoolStat construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(hms_client_pool_stat_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID: {
+            ObAllVirtualSSObjectTypeIoStat *ss_object_type_io_stat = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSSObjectTypeIoStat, ss_object_type_io_stat))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualSSObjectTypeIoStat", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ss_object_type_io_stat);
+            }
+            break;
+          }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

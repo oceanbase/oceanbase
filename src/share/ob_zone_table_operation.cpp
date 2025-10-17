@@ -410,6 +410,47 @@ int ObZoneTableOperation::get_zone_item_count(int64_t &cnt)
   return ret;
 }
 
+int ObZoneTableOperation::get_idc_list(common::ObISQLClient &sql_client, common::ObIArray<common::ObIDC> &idc_list)
+{
+  int ret = OB_SUCCESS;
+  idc_list.reset();
+  ObIDC idc;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    char sql[OB_SHORT_SQL_LENGTH] = { 0 };
+    int64_t pos = 0;
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(databuff_printf(sql, sizeof(sql), pos,
+                "select info as idc from %s where zone != '' and name = 'idc'",  OB_ALL_ZONE_TNAME))) {
+      LOG_WARN("fail to print sql", K(ret));
+    } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(sql_client.read(res, sql))) {
+      LOG_WARN("failed to do read", K(sql), K(ret));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get result", K(sql), K(ret));
+    } else {
+      int64_t tmp_real_str_len = 0;
+      while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, "idc", idc.ptr(), idc.capacity(), tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+        if (FAILEDx(idc_list.push_back(idc))) {
+          LOG_WARN("failed to add idc list", K(ret));
+        }
+      }
+
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get idc list", K(sql), K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+
+  return ret;
+}
 
 int ObZoneTableOperation::get_region_list(
     common::ObISQLClient &sql_client, common::ObIArray<common::ObRegion> &region_list)
@@ -420,7 +461,7 @@ int ObZoneTableOperation::get_region_list(
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
-    char sql[OB_SHORT_SQL_LENGTH];
+    char sql[OB_SHORT_SQL_LENGTH] = { 0 };
     int n = snprintf(sql, sizeof(sql), "select info as region"
                      " from %s where zone != '' and name = 'region' ", OB_ALL_ZONE_TNAME);
     ObTimeoutCtx ctx;
@@ -439,7 +480,7 @@ int ObZoneTableOperation::get_region_list(
       while (OB_SUCCESS == ret && OB_SUCCESS == (ret = result->next())) {
         EXTRACT_STRBUF_FIELD_MYSQL(*result, "region", region.ptr(), MAX_REGION_LENGTH, tmp_real_str_len);
         (void) tmp_real_str_len; // make compiler happy
-        if (OB_FAIL(region_list.push_back(region))) {
+        if (FAILEDx(region_list.push_back(region))) {
           LOG_WARN("failed to add zone list", K(ret));
         }
       }

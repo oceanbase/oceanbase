@@ -491,7 +491,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(idx_row_parser.get_header(idx_row_header))) {
           LOG_WARN("fail to get idx row header", K(ret));
-        } else if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
+        } else if (!idx_row_header->is_pre_aggregated()) {
           clustered_row_desc.serialized_agg_row_buf_ = nullptr;
         } else if (OB_FAIL(idx_row_parser.get_agg_row(
                        clustered_row_desc.serialized_agg_row_buf_,
@@ -607,7 +607,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
       LOG_WARN("fail to assign last rowkey", K(ret), K(index_info), K(rowkey_column_count));
     } else {
       const ObIndexBlockRowHeader * idx_row_header = index_info.row_header_;
-      if (!idx_row_header->is_major_node() || !idx_row_header->is_pre_aggregated()) {
+      if (!idx_row_header->is_pre_aggregated()) {
         clustered_row_desc.serialized_agg_row_buf_ = nullptr;
       } else {
         clustered_row_desc.serialized_agg_row_buf_ = index_info.agg_row_buf_;

@@ -544,11 +544,11 @@ public:
   int check_common_accessible(
     AccessorItem &caller, ObIArray<AccessorItem> &accessors);
   int resolve_routine_accessible_by(
-    const ObString source, ObIArray<AccessorItem> &result);
+    const ObString source, ObIAllocator &allocator, ObIArray<AccessorItem> &result);
   int resolve_package_accessible_by(
-    const ObString source, ObIArray<AccessorItem> &result);
+    const ObString source, ObIAllocator &allocator, ObIArray<AccessorItem> &result);
   int resolve_accessible_by(
-    const ObStmtNodeTree *accessor_list, ObIArray<AccessorItem> &result);
+    const ObStmtNodeTree *accessor_list, ObIAllocator &alloc, ObIArray<AccessorItem> &result);
 
   static
   int resolve_sp_subtype_precision(ObSQLSessionInfo &session_info,
@@ -1034,7 +1034,8 @@ private:
   int get_const_expr_value(const ObRawExpr *expr, uint64_t &val);
   int check_variable_accessible(const ObPLBlockNS &ns,
                                 const ObIArray<ObObjAccessIdx>& access_idxs,
-                                bool for_write);
+                                bool for_write,
+                                bool is_inout_param = false);
   int check_variable_accessible(ObRawExpr *expr, bool for_write);
   int get_subprogram_var(
     ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx, const ObPLVar *&var);

@@ -11,7 +11,7 @@
  *
  * ObEasyHazardMap
  * An easy-to-use HashMap that supports the get/revert/remove interface and implements the methods:
- * 1. use ObObConcurrentHashMapWithHazardValue as a HashMap that supports Hazard protection
+ * 1. use ObObConcurrentHashMapDoNotUseWithHazardValue as a HashMap that supports Hazard protection
  * 2. use ObSmallObjPool as the Value object allocator
  * 3. Require a fixed size of Value object
  */
@@ -21,7 +21,7 @@
 
 #include "lib/atomic/ob_atomic.h"                               // ATOMIC_*
 #include "lib/objectpool/ob_small_obj_pool.h"                   // ObSmallObjPool
-#include "lib/hash/ob_concurrent_hash_map_with_hazard_value.h"  // ObConcurrentHashMapWithHazardValue
+#include "lib/hash/ob_concurrent_hash_map_with_hazard_value.h"  // ObConcurrentHashMapDoNotUseWithHazardValue
 #include "share/ob_errno.h"                                     // KR
 
 namespace oceanbase
@@ -31,7 +31,7 @@ namespace libobcdc
 template <class K, class V>
 class ObEasyHazardMap
 {
-  typedef common::ObConcurrentHashMapWithHazardValue<K, V*> EMap;
+  typedef common::ObConcurrentHashMapDoNotUseWithHazardValue<K, V*> EMap;
   typedef common::ObSmallObjPool<V> EPool;
 
   class EAlloc : public EMap::IValueAlloc

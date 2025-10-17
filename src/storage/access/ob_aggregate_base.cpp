@@ -12,18 +12,20 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_aggregate_base.h"
+#include "share/aggregate/processor.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-ObAggCellBase::ObAggCellBase(common::ObIAllocator &allocator)
+ObAggCellBase::ObAggCellBase(common::ObIAllocator &allocator, const share::ObAggrParamProperty &param_prop)
   : bitmap_(nullptr),
     agg_row_reader_(nullptr),
     result_datum_(),
     skip_index_datum_(),
     allocator_(allocator),
     agg_type_(PD_MAX_TYPE),
+    param_prop_(param_prop),
     is_assigned_to_group_by_processor_(false),
     skip_index_datum_is_prefix_(false),
     is_inited_(false)
@@ -176,7 +178,8 @@ ObPushdownAggContext::ObPushdownAggContext(
     batch_rows_(),
     agg_row_num_(0),
     allocator_(allocator),
-    row_allocator_("PDAggRow", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    row_allocator_("PDAggRow", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    reuse_aggrow_mgr_(allocator, agg_infos_.count())
 {
   batch_rows_.skip_ = skip_bit;
   batch_rows_.size_ = batch_size;
@@ -221,6 +224,8 @@ int ObPushdownAggContext::init(const ObTableAccessParam &param, const int64_t ro
     LOG_WARN("Failed to init aggr infos", K(ret));
   } else if (OB_FAIL(agg_ctx_.init_row_meta(agg_ctx_.aggr_infos_, allocator_))) {
     LOG_WARN("Failed to init row meta for agg ctx", K(ret));
+  } else if (OB_FAIL(reuse_aggrow_mgr_.init(agg_ctx_))) {
+    LOG_WARN("init reuse aggrow manager failed", K(ret));
   } else {
     ObSEArray<ObExpr *, 1> mock_exprs;
     row_meta_.reset();
@@ -257,7 +262,10 @@ int ObPushdownAggContext::init_agg_infos(const ObTableAccessParam &param)
       } else {
         agg_info.real_aggr_type_ = agg_expr->type_;
         agg_info.expr_ = agg_expr;
-        if (agg_expr->arg_cnt_ > 0 && OB_FAIL(agg_info.param_exprs_.push_back(agg_expr->args_[0]))) {
+        if (agg_expr->arg_cnt_ > 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected aggr expr", K(ret), KPC(agg_expr));
+        } else if (agg_expr->arg_cnt_ > 0 && OB_FAIL(agg_info.param_exprs_.push_back(agg_expr->args_[0]))) {
           LOG_WARN("Failed to push back expr", K(ret), KPC(agg_expr));
         } else if (OB_FAIL(agg_infos_.push_back(agg_info))) {
           LOG_WARN("Failed to push bach agg_info", K(ret), K(i), K(agg_info));
@@ -314,31 +322,8 @@ int ObPushdownAggContext::prepare_aggregate_rows(const int64_t count)
 OB_INLINE void ObPushdownAggContext::setup_agg_row(share::aggregate::AggrRowPtr row, const int32_t row_size)
 {
   OB_ASSERT(row_size == agg_ctx_.row_meta().row_size_);
-  MEMSET(row, 0, row_size);
-  for (int col_id = 0; col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    if (agg_ctx_.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT &&
-        agg_ctx_.aggr_infos_.at(col_id).get_expr_type() != T_FUN_SUM_OPNSIZE) {
-      ObDatumMeta &res_meta = agg_ctx_.aggr_infos_.at(col_id).expr_->datum_meta_;
-      VecValueTypeClass res_tc = get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
-      char *cell = nullptr;
-      int32_t cell_len = 0;
-      agg_ctx_.row_meta().locate_cell_payload(col_id, row, cell, cell_len);
-      // oracle mode use ObNumber as result type for count aggregation
-      // we use int64_t as result type for count aggregation in aggregate row
-      // and cast int64_t to ObNumber during `collect_group_result`
-      if (res_tc == VEC_TC_NUMBER) {
-        ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
-        // set zero number
-        d.len_ = 0;
-        d.sign_ = number::ObNumber::POSITIVE;
-        d.exp_ = 0;
-      } else if (res_tc == VEC_TC_FLOAT) {
-        *reinterpret_cast<float *>(cell) = float();
-      } else if (res_tc == VEC_TC_DOUBLE || res_tc == VEC_TC_FIXED_DOUBLE) {
-        *reinterpret_cast<double *>(cell) = double();
-      }
-    }
-  }
+  int ret = aggregate::Processor::reuse_agg_row(row, agg_ctx_, reuse_aggrow_mgr_);
+  OB_ASSERT(ret == OB_SUCCESS);
 }
 
 ObAggDatumBuf::ObAggDatumBuf(common::ObIAllocator &allocator)

@@ -13,7 +13,6 @@
 
 #include "processor.h"
 #include "share/aggregate/single_row.h"
-#include "agg_reuse_cell.h"
 
 namespace oceanbase
 {
@@ -457,21 +456,7 @@ int Processor::setup_rt_info(AggrRowPtr row,
     char *cell = nullptr;
     int32_t cell_len = 0;
     agg_ctx.row_meta().locate_cell_payload(col_id, row, cell, cell_len);
-    // oracle mode use ObNumber as result type for count aggregation
-    // we use int64_t as result type for count aggregation in aggregate row
-    // and cast int64_t to ObNumber during `collect_group_result`
-    if (res_tc == VEC_TC_NUMBER && agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_COUNT &&
-        agg_ctx.aggr_infos_.at(col_id).get_expr_type() != T_FUN_SUM_OPNSIZE) {
-      ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
-      // set zero number
-      d.len_ = 0;
-      d.sign_ = number::ObNumber::POSITIVE;
-      d.exp_ = 0;
-    } else if (res_tc == VEC_TC_FLOAT) {
-      *reinterpret_cast<float *>(cell) = float();
-    } else if (res_tc == VEC_TC_DOUBLE || res_tc == VEC_TC_FIXED_DOUBLE) {
-      *reinterpret_cast<double *>(cell) = double();
-    }
+    helper::init_cell_value(res_tc, cell, agg_ctx.aggr_infos_.at(col_id));
 
     if (T_FUN_SYS_RB_BUILD_AGG == agg_ctx.aggr_infos_.at(col_id).get_expr_type()) {
       // rb_build_agg does not have extra, but need advance collect to save memory
@@ -571,6 +556,8 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
     bool extra_store_inited = false;
     switch (aggr_info.get_expr_type()) {
+    case T_FUN_WM_CONCAT:
+    case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_GROUP_CONCAT: {
       if (aggr_info.has_order_by_) {
         agg_ctx.need_advance_collect_ = true;
@@ -664,8 +651,6 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     case T_FUN_KEEP_MIN:
     case T_FUN_KEEP_SUM:
     case T_FUN_KEEP_COUNT:
-    case T_FUN_KEEP_WM_CONCAT:
-    case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
@@ -1060,49 +1045,8 @@ int Processor::reuse_group(const int64_t group_id)
 {
   int ret = OB_SUCCESS;
   AggrRowPtr agg_row = agg_ctx_.agg_rows_.at(group_id);
-  if (OB_FAIL(reuse_aggrow_mgr_.save(agg_ctx_, agg_row))) {
-    LOG_WARN("save cell info failed", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    MEMSET(agg_row, 0, agg_ctx_.row_meta().row_size_);
-  }
-  // reset result values
-  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
-    ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(col_id);
-    ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
-    VecValueTypeClass res_tc =
-      get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
-    char *cell = nullptr;
-    int32_t cell_len = 0;
-    agg_ctx_.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
-    switch (res_tc) {
-    case VEC_TC_NUMBER: {
-      if (aggr_info.get_expr_type() != T_FUN_COUNT
-          && aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
-        ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
-        // set zero number
-        d.len_ = 0;
-        d.sign_ = number::ObNumber::POSITIVE;
-        d.exp_ = 0;
-      }
-      break;
-    }
-    case VEC_TC_FLOAT: {
-      *reinterpret_cast<float *>(cell) = float();
-      break;
-    }
-    case VEC_TC_DOUBLE:
-    case VEC_TC_FIXED_DOUBLE: {
-      *reinterpret_cast<double *>(cell) = double();
-      break;
-    }
-    default: {
-      break;
-    }
-    }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(reuse_aggrow_mgr_.restore(agg_ctx_, agg_row))) {
-    LOG_WARN("restore cell infos failed", K(ret));
+  if (OB_FAIL(reuse_agg_row(agg_row, agg_ctx_, reuse_aggrow_mgr_))) {
+    LOG_WARN("reuse agg row failed", K(ret));
   }
   for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx_.aggr_infos_.count(); col_id++) {
     if (agg_ctx_.has_extra_ && helper::has_extra_info(agg_ctx_.aggr_infos_.at(col_id))) {
@@ -1115,6 +1059,32 @@ int Processor::reuse_group(const int64_t group_id)
         extra->reuse();
       }
     }
+  }
+  return ret;
+}
+
+int Processor::reuse_agg_row(AggrRowPtr agg_row, RuntimeContext &agg_ctx, ReuseAggCellMgr &reuse_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(reuse_mgr.save(agg_ctx, agg_row))) {
+    LOG_WARN("save cell info failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    MEMSET(agg_row, 0, agg_ctx.row_meta().row_size_);
+  }
+  // reset result values
+  for (int col_id = 0; OB_SUCC(ret) && col_id < agg_ctx.aggr_infos_.count(); col_id++) {
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(col_id);
+    ObDatumMeta &res_meta = aggr_info.expr_->datum_meta_;
+    VecValueTypeClass res_tc =
+      get_vec_value_tc(res_meta.type_, res_meta.scale_, res_meta.precision_);
+    char *cell = nullptr;
+    int32_t cell_len = 0;
+    agg_ctx.row_meta().locate_cell_payload(col_id, agg_row, cell, cell_len);
+    helper::init_cell_value(res_tc, cell, aggr_info);
+  }
+  if (OB_SUCC(ret) && OB_FAIL(reuse_mgr.restore(agg_ctx, agg_row))) {
+    LOG_WARN("restore cell infos failed", K(ret));
   }
   return ret;
 }
@@ -1220,8 +1190,12 @@ int Processor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx) const
 {
   int ret = OB_SUCCESS;
   char *llc_bitmap_buf = nullptr;
-  const int64_t llc_bitmap_size = ObAggregateProcessor::get_llc_size();
-  if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx, llc_bitmap_size))) {
+
+  int64_t llc_bitmap_size = ObAggrInfo::get_approx_cnt_llc_buck_num(expr.extra_);
+  if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_bitmap_size))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected bitmap size", K(ret), K(llc_bitmap_size));
+  } else if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx, llc_bitmap_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_LOG(WARN, "allocate memory failed", K(ret));
   } else {
@@ -1249,187 +1223,6 @@ int Processor::add_batch_aggregate_rows(AggrRowPtr *ptrs, uint16_t *selector,
       } else if (push_agg_row && OB_FAIL(agg_ctx_.agg_rows_.push_back(ptrs[selector[i]]))) {
         SQL_LOG(WARN, "push back element failed", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int Processor::ReuseAggCellMgr::init(RuntimeContext &agg_ctx)
-{
-#define DO_INIT_CELL(agg_func)                                                                     \
-  do {                                                                                             \
-    if (OB_ISNULL(tmp_store_vals_.at(i) =                                                          \
-                    allocator_.alloc(ReuseAggCell<agg_func>::stored_size()))) {                    \
-      ret = OB_ALLOCATE_MEMORY_FAILED;                                                             \
-      LOG_WARN("allocate memory failed", K(ret));                                                  \
-    }                                                                                              \
-  } while (false)
-
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(agg_ctx.aggr_infos_.count() <= 0)) {
-    // do nothing
-  } else if (OB_FAIL(tmp_store_vals_.prepare_allocate(agg_ctx.aggr_infos_.count()))) {
-    LOG_WARN("prepare allocate failed", K(ret));
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
-      ObExprOperatorType expr_type = agg_ctx.aggr_infos_.at(i).get_expr_type();
-      switch (expr_type) {
-      case T_FUN_MAX:
-      case T_FUN_MIN: {
-        DO_INIT_CELL(T_FUN_MAX);
-        break;
-      }
-      case T_FUN_GROUP_CONCAT: {
-        DO_INIT_CELL(T_FUN_GROUP_CONCAT);
-        break;
-      }
-      case T_FUN_APPROX_COUNT_DISTINCT: {
-        DO_INIT_CELL(T_FUN_APPROX_COUNT_DISTINCT);
-        break;
-      }
-      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
-      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
-        DO_INIT_CELL(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS);
-        break;
-      }
-      default: {
-        tmp_store_vals_.at(i) = nullptr;
-      }
-      }
-    }
-  }
-  return ret;
-
-#undef DO_INIT_CELL
-}
-
-int Processor::ReuseAggCellMgr::save(RuntimeContext &agg_ctx, const char *agg_row)
-{
-#define DO_SAVE(agg_func)                                                                          \
-  do {                                                                                             \
-    if (OB_ISNULL(tmp_store_vals_.at(i))) {                                                        \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      LOG_WARN("unexpected null value", K(ret));                                                   \
-    } else if (OB_FAIL(                                                                            \
-                 ReuseAggCell<agg_func>::save(agg_ctx, i, agg_row, tmp_store_vals_.at(i)))) {      \
-      LOG_WARN("save failed", K(ret));                                                             \
-    }                                                                                              \
-  } while (false)
-
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(agg_ctx.aggr_infos_.count() <= 0)) {
-    // do nothing
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
-      ObExprOperatorType expr_type = agg_ctx.aggr_infos_.at(i).get_expr_type();
-      switch (expr_type) {
-      case T_FUN_MIN:
-      case T_FUN_MAX: {
-        DO_SAVE(T_FUN_MAX);
-        break;
-      }
-      case T_FUN_GROUP_CONCAT: {
-        DO_SAVE(T_FUN_GROUP_CONCAT);
-        break;
-      }
-      case T_FUN_APPROX_COUNT_DISTINCT: {
-        DO_SAVE(T_FUN_APPROX_COUNT_DISTINCT);
-        break;
-      }
-      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
-      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
-        DO_SAVE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS);
-        break;
-      }
-      default: {
-        break;
-      }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(save_extra_stores(agg_ctx, agg_row))) {
-    LOG_WARN("save extra stores failed", K(ret));
-  }
-  return ret;
-
-#undef DO_SAVE
-}
-
-int Processor::ReuseAggCellMgr::restore(RuntimeContext &agg_ctx, char *agg_row)
-{
-#define DO_RESTORE(agg_func)                                                                       \
-  do {                                                                                             \
-    if (OB_ISNULL(tmp_store_vals_.at(i))) {                                                        \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      LOG_WARN("unexpected null value", K(ret));                                                   \
-    } else if (OB_FAIL(                                                                            \
-                 ReuseAggCell<agg_func>::restore(agg_ctx, i, agg_row, tmp_store_vals_.at(i)))) {   \
-      LOG_WARN("save failed", K(ret));                                                             \
-    }                                                                                              \
-  } while (false)
-
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(agg_ctx.aggr_infos_.count() <= 0)) {
-    // do nothing
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
-      ObExprOperatorType expr_type = agg_ctx.aggr_infos_.at(i).get_expr_type();
-      switch(expr_type) {
-      case T_FUN_MIN:
-      case T_FUN_MAX: {
-        DO_RESTORE(T_FUN_MAX);
-        break;
-      }
-      case T_FUN_GROUP_CONCAT: {
-        DO_RESTORE(T_FUN_GROUP_CONCAT);
-        break;
-      }
-      case T_FUN_APPROX_COUNT_DISTINCT: {
-        DO_RESTORE(T_FUN_APPROX_COUNT_DISTINCT);
-        break;
-      }
-      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
-      case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
-        DO_RESTORE(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS);
-        break;
-      }
-      default: {
-        break;
-      }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(restore_extra_stores(agg_ctx, agg_row))) {
-    LOG_WARN("restore extra stores failed", K(ret));
-  }
-  return ret;
-
-#undef DO_RESTORE
-}
-
-int Processor::ReuseAggCellMgr::save_extra_stores(RuntimeContext &agg_ctx, const char *agg_row)
-{
-  int ret = OB_SUCCESS;
-  if (agg_ctx.has_extra_) {
-    extra_store_idx_ = *reinterpret_cast<const int32_t *>(agg_row + agg_ctx.row_meta().extra_idx_offset_);
-    if (OB_UNLIKELY(extra_store_idx_ < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid extra store idx", K(ret), K(extra_store_idx_));
-    }
-  }
-  return ret;
-}
-
-int Processor::ReuseAggCellMgr::restore_extra_stores(RuntimeContext &agg_ctx, char *agg_row)
-{
-  int ret = OB_SUCCESS;
-  if (agg_ctx.has_extra_) {
-    if (OB_UNLIKELY(extra_store_idx_ < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid extra store idx", K(ret), K(extra_store_idx_));
-    } else {
-      *reinterpret_cast<int32_t *>(agg_row + agg_ctx.row_meta().extra_idx_offset_) = extra_store_idx_;
-      extra_store_idx_ = -1;
     }
   }
   return ret;

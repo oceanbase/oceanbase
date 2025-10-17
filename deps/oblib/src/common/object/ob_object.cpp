@@ -2106,6 +2106,7 @@ int64_t (*oceanbase::common::composite_serialize_size_callback)(const ObObj&) = 
       obj_crc64_v3<OBJTYPE>,                    \
       ObjHashCalculator<OBJTYPE, ObXxHash, ObObj>::calc_hash_value,  \
       ObjHashCalculator<OBJTYPE, ObMurmurHash, ObObj>::calc_hash_value,  \
+      ObjHashCalculator<OBJTYPE, ObMurmurHash3_x86_32, ObObj>::calc_hash_value,  \
   }
 
 ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
@@ -2407,6 +2408,12 @@ int ObObj::hash_xx(uint64_t &res, uint64_t seed) const
 {
   check_collation_integrity();
   return OBJ_FUNCS[meta_.get_type()].xxhash64(*this, seed, res);
+}
+
+int ObObj::hash_murmur3_x86_32(uint64_t &res, uint64_t seed) const
+{
+  check_collation_integrity();
+  return OBJ_FUNCS[meta_.get_type()].murmurhash3_x86_32(*this, seed, res);
 }
 
 int64_t ObObj::checksum(const int64_t current) const

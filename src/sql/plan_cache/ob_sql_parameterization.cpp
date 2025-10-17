@@ -60,6 +60,7 @@ struct TransformTreeCtx
   bool ignore_scale_check_;
   bool is_from_pl_;
   ObItemType parent_type_;
+  int64_t ps_question_num_;
   TransformTreeCtx();
 };
 
@@ -122,7 +123,8 @@ TransformTreeCtx::TransformTreeCtx() :
  udr_fixed_params_(NULL),
  ignore_scale_check_(false),
  is_from_pl_(false),
- parent_type_(T_INVALID)
+ parent_type_(T_INVALID),
+ ps_question_num_(0)
 {
 }
 
@@ -367,6 +369,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_WIN_NAMED_WINDOWS == tree->type_) {//name window无法参数化，因为无法保证其参数化顺序
     ret_bool = true;
+  } else if (T_VEC_INDEX_PARAMS == tree->type_) {
+    ret_bool = true;
   } else {
     // do nothing
   }
@@ -535,6 +539,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
       // do nothing
     }
     if (OB_SUCC(ret)) {
+      if (T_QUESTIONMARK == ctx.tree_->type_) {
+        ctx.ps_question_num_++;
+      }
       ObObjParam value;
       ObAccuracy tmp_accuracy;
       bool is_fixed = true;
@@ -881,7 +888,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
           }
 
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(mark_tree(ctx.tree_ , *ctx.sql_info_))) {
+            if (OB_FAIL(mark_tree(ctx, ctx.tree_ , *ctx.sql_info_))) {
               SQL_PC_LOG(WARN, "fail to mark function tree", K(ctx.tree_), K(ret));
             }
           }
@@ -1130,6 +1137,17 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
   } else {
     need_parameterized = (!(PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_)
                           || (is_prepare_mode(mode) && sql_info.ps_need_parameterized_));
+    if (!is_prepare_mode(mode)) {
+      // build ObPCParamConstraint
+      for (int i = 0; OB_SUCC(ret) && i < sql_info.params_constraint_.count(); ++i) {
+        if (OB_FAIL(sql_info.params_constraint_.at(i)->build(params, NULL))) {
+          LOG_WARN("failed to build param constraint", K(ret), K(i), KP(sql_info.params_constraint_.at(i)));
+        }
+      }
+      if (OB_SUCC(ret) && sql_info.params_constraint_.count() > 0){
+        OZ(pc_ctx.params_constraint_.assign(sql_info.params_constraint_));
+      }
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -2079,7 +2097,7 @@ int ObSqlParameterization::mark_args(ParseNode *arg_tree,
 // After mark this node, it has following mechanism:
 //       If a node is marked as cannot be parameterized,
 //       CUREENT NODE AND ALL NODES OF IT'S SUBTREE cannot be parameterized.
-int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
+int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,SqlInfo &sql_info)
 {
   int ret = OB_SUCCESS;
   if (NULL == tree) {
@@ -2093,11 +2111,37 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       SQL_PC_LOG(WARN, "invalid argument", K(ret), K(node));
     } else {
       ObString func_name(node[0]->str_len_, node[0]->str_value_);
-      if ((0 == func_name.case_compare("USERENV")
-           || 0 == func_name.case_compare("UNIX_TIMESTAMP"))
+      // UNIX_TIMESTAMP结果精度受参数控制,对于其参数化过程特殊处理。
+      if (0 == func_name.case_compare("UNIX_TIMESTAMP")) {
+        if (1 == node[1]->num_child_) {
+          // EXECUTE模式但是子节点不为QUESTIONMARK 或 父节点已经判断不可参数化
+          if ((is_execute_mode(ctx.mode_) && node[1]->children_[0]->type_ != T_QUESTIONMARK) || ctx.not_param_ || is_tree_not_param(tree)) {
+            const int64_t ARGS_NUMBER_ONE = 1;
+            bool mark_arr[ARGS_NUMBER_ONE] = {1}; //0表示参数化, 1 表示不参数化
+            if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
+              SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
+            }
+          } else {
+            // UNIX_TIMESTAMP(literal) 可参数化为 UNIX_TIMESTAMP(?),但需要生成对应的参数约束，在计划匹配时检查
+            if (!is_prepare_mode(ctx.mode_) &&
+                node[1]->children_[0]->type_ > T_INVALID &&
+                node[1]->children_[0]->type_ < T_MAX_CONST) {
+              void *buf = ctx.allocator_->alloc(sizeof(ObPCUnixTimestampParamConstraint));
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+              } else {
+                ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((is_execute_mode(ctx.mode_) ? ctx.ps_question_num_ : ctx.question_num_));
+                sql_info.params_constraint_.push_back(constraint);
+              }
+            } else {
+              // UNIX_TIMESTAMP(EXPR) 可以正常参数化,这类sql可以共用一个计划,结果精度为6.
+              /*do nothing*/
+            }
+          }
+        }
+      } else if (0 == func_name.case_compare("USERENV")
           && (1 == node[1]->num_child_)) {
         // USERENV函数的返回类型是由参数的具体值来决定，如果参数化后，无法拿到具体值，所以暂时不进行参数化
-        // UNIX_TIMESTAMP(param_str)，结果的精度和param_str有关，不能参数化
         const int64_t ARGS_NUMBER_ONE = 1;
         bool mark_arr[ARGS_NUMBER_ONE] = {1}; //0表示参数化, 1 表示不参数化
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
@@ -2168,28 +2212,14 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         }
       } else if ((0 == func_name.case_compare("json_member_of"))) {
         sql_info.ps_need_parameterized_ = false;
-        if (2 == tree->num_child_) {
-          const int64_t ARGS_NUMBER_TWO = 2;
-          bool mark_arr[ARGS_NUMBER_TWO] = {0, 1}; //0表示参数化, 1 表示不参数化
-          if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TWO, sql_info))) {
-            SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
-          }
-        }
       } else if ((0 == func_name.case_compare("json_contains"))) {
         sql_info.ps_need_parameterized_ = false;
-        for (int64_t i = 0; OB_SUCC(ret) && i < tree->num_child_; i++) {
-          if (OB_ISNULL(tree->children_[i])) {
-            ret = OB_INVALID_ARGUMENT;
-            SQL_PC_LOG(WARN, "invalid argument", K(ret), K(tree->children_[i]));
-          } else if (1 != 1) {
-            tree->children_[i]->is_tree_not_param_ = true;
+        if (3 == node[1]->num_child_) {
+          const int64_t ARGS_NUMBER_THREE = 3;
+          bool mark_arr[ARGS_NUMBER_THREE] = {0, 0, 1}; // 第3个参数为path, 不能参数化
+          if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_THREE, sql_info))) {
+            SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
           }
-        }
-      } else if ((0 == func_name.case_compare("json_overlaps"))) {
-        const int64_t ARGS_NUMBER_TWO = 2;
-        bool mark_arr[ARGS_NUMBER_TWO] = {1, 1};
-        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
-          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
       } else if ((0 == func_name.case_compare("json_schema_valid"))
                 || (0 == func_name.case_compare("json_schema_validation_report"))) {

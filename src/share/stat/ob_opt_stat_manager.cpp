@@ -14,7 +14,8 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
-
+#include "sql/ob_sql_context.h"
+#include "share/catalog/ob_external_catalog.h"
 namespace oceanbase
 {
 using namespace share;
@@ -297,10 +298,8 @@ int ObOptStatManager::update_table_stat(const uint64_t tenant_id,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(tenant_id,
-                                                                       conn,
-                                                                       table_stats,
-                                                                       is_index_stat))) {
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(
+                 tenant_id, conn, table_stats, is_index_stat))) {
     LOG_WARN("failed to update table stats", K(ret));
   }
   return ret;
@@ -316,11 +315,8 @@ int ObOptStatManager::update_table_stat(const uint64_t tenant_id,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(tenant_id,
-                                                                       conn,
-                                                                       table_stats,
-                                                                       current_time,
-                                                                       is_index_stat))) {
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_table_stat(
+                 tenant_id, conn, table_stats, current_time, is_index_stat))) {
     LOG_WARN("failed to update table stats", K(ret));
   }
   return ret;
@@ -419,13 +415,8 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
-  } else if (!table_stats.empty() &&
-             OB_FAIL(stat_service_.get_sql_service().update_table_stat(
-                                                    tenant_id,
-                                                    conn,
-                                                    table_stats,
-                                                    current_time,
-                                                    is_index_stat))) {
+  } else if (!table_stats.empty() && OB_FAIL(stat_service_.get_sql_service().update_table_stat(
+                                         tenant_id, conn, table_stats, current_time, is_index_stat))) {
     LOG_WARN("failed to update table stats", K(ret));
   } else if (!column_stats.empty() &&
              OB_FAIL(stat_service_.get_sql_service().update_column_stat(schema_guard,
@@ -441,6 +432,23 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
   return ret;
 }
 
+int ObOptStatManager::update_stats_internal_stat(const uint64_t tenant_id,
+                                                sqlclient::ObISQLConnection  *conn,
+                                                uint64_t table_id,
+                                                int64_t global_partition_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
+  } else if (OB_FAIL(stat_service_.get_sql_service().update_stats_internal_stat(
+                     tenant_id, conn, table_id, global_partition_id))) {
+    LOG_WARN("failed to update stats internal stat", K(ret), K(tenant_id), K(table_id), K(global_partition_id));
+  }
+
+  return ret;
+}
 
 int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg)
 {
@@ -1063,6 +1071,147 @@ int ObOptStatManager::delete_system_stats(const uint64_t tenant_id)
     LOG_WARN("optimizer statistics manager has not been initialized.", K(ret), K(inited_));
   } else if (OB_FAIL(stat_service_.get_sql_service().delete_system_stats(tenant_id))) {
     LOG_WARN("delete system stat failed", K(ret));
+  }
+  return ret;
+}
+
+int ObOptStatManager::get_external_table_stat(const uint64_t tenant_id,
+                                              const uint64_t ref_table_id,
+                                              const ObIArray<ObString> &partition_names,
+                                              sql::ObSqlSchemaGuard &schema_guard,
+                                              ObLakeTableStat &stat)
+{
+  int ret = OB_SUCCESS;
+  const share::ObILakeTableMetadata *lake_table_metadata = nullptr;
+  ObSEArray<ObOptExternalColumnStatHandle, 16> column_handles;
+  ObSEArray<ObString, 1> fetch_partition_names;
+  if (OB_FAIL(schema_guard.get_lake_table_metadata(tenant_id, ref_table_id, lake_table_metadata))) {
+    LOG_WARN("failed to get lake table metadata", K(ret), K(tenant_id), K(ref_table_id));
+  } else if (OB_ISNULL(lake_table_metadata)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table metadata is null", K(ret), K(tenant_id), K(ref_table_id));
+  } else {
+    ObOptExternalTableStat::Key key;
+    ObOptExternalTableStatHandle handle;
+    key.tenant_id_ = tenant_id;
+    key.catalog_id_ = lake_table_metadata->catalog_id_;
+    key.database_name_ = lake_table_metadata->namespace_name_;
+    key.table_name_ = lake_table_metadata->table_name_;
+    if (partition_names.count() == 1) {
+      key.partition_value_ = partition_names.at(0);
+    }
+    if (OB_FAIL(stat_service_.get_external_table_stat(tenant_id, key, handle))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get external table stat", K(ret), K(tenant_id), K(ref_table_id));
+      } else {
+        if (partition_names.count() == 1 &&
+            OB_FAIL(fetch_partition_names.push_back(partition_names.at(0)))) {
+          LOG_WARN("failed to push back partition name", K(ret), K(partition_names.at(0)));
+        } else if (OB_FAIL(stat_service_.load_external_table_stat_and_put_cache(tenant_id,
+                                                                                lake_table_metadata->catalog_id_,
+                                                                                lake_table_metadata->table_id_,
+                                                                                schema_guard,
+                                                                                fetch_partition_names,
+                                                                                partition_names,
+                                                                                handle,
+                                                                                column_handles))) {
+          LOG_WARN("failed to load external table stat and put cache", K(ret), K(tenant_id), K(ref_table_id));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(handle.stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("external table stat is null", K(ret), K(tenant_id), K(ref_table_id));
+    } else if (OB_SUCC(ret) && handle.stat_->is_valid()) {
+      stat.total_row_count_ = handle.stat_->get_row_count();
+      stat.pruned_row_count_ = handle.stat_->get_row_count();
+      stat.data_size_ = handle.stat_->get_data_size();
+      stat.part_cnt_ = handle.stat_->get_partition_num();
+      stat.file_cnt_ = handle.stat_->get_file_num();
+      stat.last_analyzed_ = handle.stat_->get_last_analyzed();
+    }
+  }
+  return ret;
+}
+
+int ObOptStatManager::get_external_column_stat(ObIAllocator &alloc,
+                                               const uint64_t tenant_id,
+                                               const uint64_t ref_table_id,
+                                               const ObIArray<ObString> &column_names,
+                                               const ObIArray<ObString> &partition_names,
+                                               sql::ObSqlSchemaGuard &schema_guard,
+                                               const int64_t row_cnt,
+                                               const double scale_ratio,
+                                               ObIArray<ObLakeColumnStat*> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  const share::ObILakeTableMetadata *lake_table_metadata = nullptr;
+  ObSEArray<ObOptExternalColumnStat::Key, 16> keys;
+  ObSEArray<ObOptExternalColumnStatHandle, 16> column_handles;
+  ObString fetch_partition_value = partition_names.count() == 1 ? partition_names.at(0) : ObString();
+  if (OB_FAIL(schema_guard.get_lake_table_metadata(tenant_id, ref_table_id, lake_table_metadata))) {
+    LOG_WARN("failed to get lake table metadata", K(ret), K(tenant_id), K(ref_table_id));
+  } else if (OB_ISNULL(lake_table_metadata)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table metadata is null", K(ret), K(tenant_id), K(ref_table_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
+      ObOptExternalColumnStat::Key *key = keys.alloc_place_holder();
+      if (OB_ISNULL(key)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc place holder", K(ret));
+      } else {
+        key->tenant_id_ = tenant_id;
+        key->catalog_id_ = lake_table_metadata->catalog_id_;
+        key->database_name_ = lake_table_metadata->namespace_name_;
+        key->table_name_ = lake_table_metadata->table_name_;
+        key->column_name_ = column_names.at(i);
+        key->partition_value_ = fetch_partition_value;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(stat_service_.get_external_column_stats(tenant_id,
+                                                               keys,
+                                                               column_handles))) {
+      LOG_WARN("failed to get external column stats", K(ret), K(tenant_id), K(ref_table_id));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_handles.count(); ++i) {
+        void *ptr = nullptr;
+        ObLakeColumnStat *column_stat = nullptr;
+        if (OB_ISNULL(ptr = alloc.alloc(sizeof(ObLakeColumnStat)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else if (OB_FALSE_IT(column_stat = new (ptr) ObLakeColumnStat())) {
+        } else if (OB_ISNULL(column_handles.at(i).stat_)) {
+          column_stat->last_analyzed_ = 0;
+        } else if (OB_FAIL(ob_write_obj(alloc,
+                                        column_handles.at(i).stat_->get_min_value(),
+                                        column_stat->min_val_))) {
+          LOG_WARN("failed to deep copy min value", K(ret));
+        } else if (OB_FAIL(ob_write_obj(alloc,
+                                        column_handles.at(i).stat_->get_max_value(),
+                                        column_stat->max_val_))) {
+          LOG_WARN("failed to deep copy max value", K(ret));
+        } else {
+          column_stat->null_count_ = column_handles.at(i).stat_->get_num_null() * scale_ratio;
+          column_stat->size_ = column_handles.at(i).stat_->get_avg_length();
+          column_stat->record_count_ = row_cnt;
+          column_stat->num_distinct_ = column_handles.at(i).stat_->get_num_distinct();
+          if (scale_ratio < 1.0) {
+            column_stat->num_distinct_ = ObOptSelectivity::scale_distinct(row_cnt, row_cnt / scale_ratio, column_stat->num_distinct_);
+          }
+          column_stat->last_analyzed_ = column_handles.at(i).stat_->get_last_analyzed();
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(column_stats.push_back(column_stat))) {
+            LOG_WARN("failed to push back column stat", K(ret));
+          }
+        }
+      }
+    }
   }
   return ret;
 }

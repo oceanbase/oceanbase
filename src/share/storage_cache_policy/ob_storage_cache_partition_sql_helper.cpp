@@ -21,6 +21,27 @@ namespace share
 {
 namespace schema
 {
+int ObAddPartInfoHelper::add_part_storage_cache_policy_column(const ObBasePartition &part,
+                                                              ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  storage::ObStorageCachePolicyType part_storage_cache_policy_type = storage::ObStorageCachePolicyType::NONE_POLICY;
+  const char *part_storage_cache_policy_str = nullptr;
+  if (is_hot_or_auto_policy(part.get_part_storage_cache_policy_type())) {
+    part_storage_cache_policy_type = part.get_part_storage_cache_policy_type();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(storage::ObStorageCacheGlobalPolicy::safely_get_str(part_storage_cache_policy_type, part_storage_cache_policy_str))) {
+    LOG_WARN("get part policy failed", K(ret), K(part_storage_cache_policy_type));
+  } else if (OB_ISNULL(part_storage_cache_policy_str)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_storage_cache_policy_str is null", KR(ret));
+  } else if (OB_FAIL(dml.add_column("storage_cache_policy", part_storage_cache_policy_str))) {
+    LOG_WARN("dml add part info failed", K(ret), KCSTRING(part_storage_cache_policy_str));
+  }
+  return ret;
+}
+
 int ObAlterIncPartPolicyHelper::alter_partition_policy()
 {
   int ret = OB_SUCCESS;

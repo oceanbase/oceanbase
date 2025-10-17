@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_roaringbitmap.h"
+#include "ob_rb_bin.h"
 
 namespace oceanbase {
 namespace common {
@@ -27,6 +28,28 @@ uint64_t ObRoaringBitmap::get_cardinality()
     cardinality = static_cast<uint64_t>(set_.size());
   } else if (is_bitmap_type()) {
     cardinality = roaring::api::roaring64_bitmap_get_cardinality(bitmap_);
+  }
+  return cardinality;
+}
+
+uint64_t ObRoaringBitmap::get_range_cardinality(uint64_t range_start, uint64_t range_end)
+{
+  uint64_t cardinality = 0;
+  if (is_empty_type()) {
+    //do nothing
+  } else if (is_single_type()) {
+    if (single_value_ >= range_start && single_value_ < range_end) {
+      cardinality = 1;
+    }
+  } else if (is_set_type()) {
+    hash::ObHashSet<uint64_t>::const_iterator iter;
+    for (iter = set_.begin(); iter != set_.end(); iter++) {
+      if (iter->first >= range_start && iter->first < range_end) {
+        cardinality++;
+      }
+    }
+  } else if (is_bitmap_type()) {
+    cardinality = roaring::api::roaring64_bitmap_range_cardinality(bitmap_, range_start, range_end);
   }
   return cardinality;
 }
@@ -149,55 +172,55 @@ int ObRoaringBitmap::value_remove(uint64_t value) {
 int ObRoaringBitmap::value_and(ObRoaringBitmap *rb)
 {
   int ret = OB_SUCCESS;
-    if (is_empty_type()) {
-      //do nothing
-    } else if (is_single_type()) {
-      if (rb->is_contains(single_value_)) {
-        // do nothing
+  if (is_empty_type()) {
+    //do nothing
+  } else if (is_single_type()) {
+    if (rb->is_contains(single_value_)) {
+      // do nothing
+    } else {
+      set_empty();
+    }
+  } else if (is_set_type()) {
+    hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
+    int set_size = set_.size();
+    for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
+      if (i != 0) {
+        iter++;
+      }
+      if (!rb->is_contains(iter->first) && OB_FAIL(value_remove(iter->first))) {
+        LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      }
+    }
+  } else if (is_bitmap_type()) {
+    if (rb->is_empty_type()) {
+      set_empty();
+    } else if (rb->is_single_type()) {
+      if (is_contains(rb->single_value_)) {
+        set_single(rb->single_value_);
       } else {
         set_empty();
       }
-    } else if (is_set_type()) {
-      hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
-      int set_size = set_.size();
-      for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
-        if (i != 0) {
-          iter++;
-        }
-        if (!rb->is_contains(iter->first) && OB_FAIL(value_remove(iter->first))) {
-          LOG_WARN("failed to remove value", K(ret), K(iter->first));
-        }
-      }
-    } else if (is_bitmap_type()) {
-      if (rb->is_empty_type()) {
-        set_empty();
-      } else if (rb->is_single_type()) {
-        if (is_contains(rb->single_value_)) {
-          set_single(rb->single_value_);
-        } else {
-          set_empty();
-        }
-      } else if (rb->is_set_type()) {
-        if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
-            LOG_WARN("failed to create set", K(ret));
-        } else {
-          hash::ObHashSet<uint64_t>::const_iterator iter;
-          for (iter = rb->set_.begin(); OB_SUCC(ret) && iter != rb->set_.end(); iter++) {
-            if (is_contains(iter->first) && OB_FAIL(set_.set_refactored(iter->first))) {
-              LOG_WARN("failed to set_refactored to ObHashSet", K(ret), K(iter->first));
-            }
+    } else if (rb->is_set_type()) {
+      if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
+          LOG_WARN("failed to create set", K(ret));
+      } else {
+        hash::ObHashSet<uint64_t>::const_iterator iter;
+        for (iter = rb->set_.begin(); OB_SUCC(ret) && iter != rb->set_.end(); iter++) {
+          if (is_contains(iter->first) && OB_FAIL(set_.set_refactored(iter->first))) {
+            LOG_WARN("failed to set_refactored to ObHashSet", K(ret), K(iter->first));
           }
         }
-        if (OB_SUCC(ret)) {
-          type_ = ObRbType::SET;
-          if (OB_NOT_NULL(bitmap_)) {
-            roaring::api::roaring64_bitmap_free(bitmap_);
-            bitmap_ = NULL;
-          }
-        }
-      } else if (rb->is_bitmap_type()) {
-        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_and_inplace(bitmap_, rb->bitmap_));
       }
+      if (OB_SUCC(ret)) {
+        type_ = ObRbType::SET;
+        if (OB_NOT_NULL(bitmap_)) {
+          roaring::api::roaring64_bitmap_free(bitmap_);
+          bitmap_ = NULL;
+        }
+      }
+    } else if (rb->is_bitmap_type()) {
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_and_inplace(bitmap_, rb->bitmap_));
+    }
   }
   return ret;
 }
@@ -303,6 +326,78 @@ int ObRoaringBitmap::value_andnot(ObRoaringBitmap *rb)
     } else if (is_bitmap_type()) {
       ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_andnot_inplace(bitmap_, rb->bitmap_));
     }
+  }
+  return ret;
+}
+
+int ObRoaringBitmap::value_and(ObRoaringBin *roaring_bin)
+{
+  int ret = OB_SUCCESS;
+  bool is_contains = false;
+  if (is_empty_type()) {
+    // do nothing
+  } else if (is_single_type()) {
+    if (get_single_value() > UINT32_MAX) {
+      set_empty();
+    } else if (OB_FAIL(roaring_bin->contains(static_cast<uint32_t>(get_single_value()), is_contains))) {
+      LOG_WARN("failed to get roaring bin contains", K(ret));
+    } else if (!is_contains) {
+      set_empty();
+    }
+  } else if (is_set_type()) {
+    hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
+    int set_size = set_.size();
+    for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
+      is_contains = false;
+      if (i != 0) {
+        iter++;
+      }
+      if (iter->first > UINT32_MAX) {
+        if (OB_FAIL(value_remove(iter->first))) {
+          LOG_WARN("failed to remove value", K(ret), K(iter->first));
+        }
+      } else if (OB_FAIL(roaring_bin->contains(static_cast<uint32_t>(iter->first), is_contains))) {
+        LOG_WARN("failed to get roaring bin contains", K(ret));
+      } else if (!is_contains && OB_FAIL(value_remove(iter->first))) {
+        LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      }
+    } // end for
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rb in bitmap type is not supported", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
+int ObRoaringBitmap::value_and(ObRoaring64Bin *roaring_bin)
+{
+  int ret = OB_SUCCESS;
+  bool is_contains = false;
+  if (is_empty_type()) {
+    // do nothing
+  } else if (is_single_type()) {
+    if (OB_FAIL(roaring_bin->contains(get_single_value(), is_contains))) {
+      LOG_WARN("failed to get roaring bin contains", K(ret));
+    } else if (!is_contains) {
+      set_empty();
+    }
+  } else if (is_set_type()) {
+    hash::ObHashSet<uint64_t>::const_iterator iter = set_.begin();
+    int set_size = set_.size();
+    for (int i = 0; OB_SUCC(ret) && i < set_size; i++) {
+      is_contains = false;
+      if (i != 0) {
+        iter++;
+      }
+      if (OB_FAIL(roaring_bin->contains(iter->first, is_contains))) {
+        LOG_WARN("failed to get roaring bin contains", K(ret));
+      } else if (!is_contains && OB_FAIL(value_remove(iter->first))) {
+        LOG_WARN("failed to remove value", K(ret), K(iter->first));
+      }
+    } // end for
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("rb in bitmap type is not supported", K(ret), K(get_type()));
   }
   return ret;
 }

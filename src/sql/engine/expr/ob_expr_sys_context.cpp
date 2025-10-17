@@ -726,7 +726,8 @@ int ObExprSysContext::eval_application_context(const ObExpr &expr, ObDatum &res,
       if (OB_FAIL(schema_guard.get_context_schema_with_name(session->get_effective_tenant_id(),
                                                       arg1, ctx_schema))) {
         LOG_WARN("failed to get context schema", K(ret));
-      } else if (OB_ISNULL(ctx_schema)) {
+      } else if (OB_ISNULL(ctx_schema)
+                 || ObContextType::ACCESSED_GLOBALLY != ctx_schema->get_context_type()) {
         // not exist, do nothing and return null
       } else if (OB_ISNULL(sql_client = ctx.exec_ctx_.get_sql_proxy())) {
         ret = OB_ERR_UNEXPECTED;

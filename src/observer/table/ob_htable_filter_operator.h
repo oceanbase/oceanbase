@@ -17,7 +17,7 @@
 #include "share/table/ob_table.h"
 #include "ob_table_filter.h"
 #include "common/row/ob_row_iterator.h"
-#include "ob_htable_utils.h"
+#include "utils/ob_htable_utils.h"
 #include "ob_htable_filter_parser.h"
 #include "ob_htable_filters.h"
 #include "ob_table_scan_executor.h"

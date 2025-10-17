@@ -27,15 +27,70 @@
 #include "share/scn.h"
 #include "mittest/simple_server/env/ob_simple_server_restart_helper.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
 
 static const char *TEST_FILE_NAME = "test_sslog_basic";
 static const char *BORN_CASE_NAME = "ObTestSSLogBasic";
 static const char *RESTART_CASE_NAME = "ObSSLogAfterRestartTest";
 
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
 namespace oceanbase
 {
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
 namespace sslog
 {
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+
+
+
 int ObSSLogNotifyAdapter::get_is_finish_flag_from_extra_info_column(const char *,
                                                                     const int64_t,
                                                                     bool &is_finish_flag)

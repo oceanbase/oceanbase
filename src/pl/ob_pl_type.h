@@ -600,7 +600,6 @@ public:
                                   uint64_t owner_id,
                                   const common::ObString &pkg,
                                   const common::ObString &type,
-                                  common::ObIAllocator &allocator,
                                   sql::ObSQLSessionInfo &session_info,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   common::ObMySQLProxy &sql_proxy,
@@ -613,7 +612,6 @@ public:
                                   uint64_t owner_id,
                                   const ObString &table,
                                   const ObString &type,
-                                  common::ObIAllocator &allocator,
                                   sql::ObSQLSessionInfo &session_info,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   bool is_rowtype,
@@ -623,7 +621,6 @@ public:
   static int transform_from_iparam(const share::schema::ObRoutineParam *iparam,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   sql::ObSQLSessionInfo &session_info,
-                                  common::ObIAllocator &allocator,
                                   common::ObMySQLProxy &sql_proxy,
                                   pl::ObPLDataType &pl_type,
                                   ObIArray<share::schema::ObSchemaObjVersion> *deps = NULL,
@@ -634,6 +631,7 @@ public:
                                   int64_t level,
                                   int64_t &sequence,
                                   share::schema::ObRoutineInfo &routine_info);
+  static int adjust_routine_param_type(const share::schema::ObRoutineParam *iparam, pl::ObPLDataType &pl_type);
   static int deep_copy_pl_type(ObIAllocator &allocator, const ObPLDataType &src, ObPLDataType *&dst);
 
   static int obj_is_null(ObObj &obj, bool &is_null);
@@ -950,7 +948,8 @@ public:
     is_scrollable_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
-    sql_text_()
+    sql_text_(),
+    cursor_total_exec_time_(0)
   {
     reset();
   }
@@ -970,7 +969,8 @@ public:
     is_need_check_snapshot_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
-    sql_text_()
+    sql_text_(),
+    cursor_total_exec_time_(0)
   {
     reset();
   }
@@ -1006,13 +1006,10 @@ public:
     in_forall_ = false;
     save_exception_ = false;
     forall_rollback_ = false;
-    if (is_session_cursor()) {
-      cursor_flag_ = SESSION_CURSOR;
-    } else if (is_dbms_sql_cursor()) {
-      cursor_flag_ = DBMS_SQL_CURSOR;
-    }else {
-      cursor_flag_ = CURSOR_FLAG_UNDEF;
-    }
+    // clear temporary cursor flags
+    clear_flag_bit(TRANSFERING_RESOURCE);
+    clear_flag_bit(SYNC_CURSOR);
+    clear_flag_bit(INVALID_CURSOR);
     // ref_count_ = 0; // 这个不要清零，因为oracle在close之后，它的ref count还是保留的
     is_scrollable_ = false;
     last_execute_time_ = 0;
@@ -1028,6 +1025,7 @@ public:
     sql_text_.reset();
     sql_id_[0] = '\0';
     sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+    cursor_total_exec_time_ = 0;
   }
 
   void reset()
@@ -1195,6 +1193,9 @@ public:
   inline bool is_packed() { return is_packed_; }
   virtual inline bool is_async() { return false; }
 
+  inline int64_t get_cursor_total_exec_time() const { return cursor_total_exec_time_; }
+  inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
+
   TO_STRING_KV(K_(id),
                K_(is_explicit),
                K_(for_update),
@@ -1221,7 +1222,8 @@ public:
                K_(is_need_check_snapshot),
                K_(last_execute_time),
                K_(sql_trace_id),
-               K_(is_packed));
+               K_(is_packed),
+               K_(cursor_total_exec_time));
 
 protected:
   int64_t id_;            // Cursor ID
@@ -1260,6 +1262,7 @@ protected:
   bool is_packed_;
   ObString sql_text_;     //non seesion的非流式游标保存sql text
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1]; //保存非流式游标的sql id
+  int64_t cursor_total_exec_time_;
 };
 
 class ObPsCursorInfo : public ObPLCursorInfo

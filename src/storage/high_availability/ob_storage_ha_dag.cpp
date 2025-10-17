@@ -14,6 +14,7 @@
 #include "ob_storage_ha_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_cs_replica_migration.h"
+#include "storage/high_availability/ob_storage_ha_src_provider.h"
 
 namespace oceanbase
 {
@@ -503,6 +504,57 @@ int ObStorageHADagUtils::inner_check_self_is_valid_member_(
   return ret;
 }
 
+int ObStorageHADagUtils::get_migration_src_info(
+    const ObMigrationOpArg &arg,
+    const uint64_t tenant_id,
+    const share::SCN &local_clog_checkpoint_scn,
+    storage::ObStorageRpc *storage_rpc,
+    ObStorageHASrcInfo &src_info)
+{
+  int ret = OB_SUCCESS;
+  ObStorageHAChooseSrcHelper choose_src_helper;
+  ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  ObStorageHAGetMemberHelper member_helper;
+  bool enable_choose_source_policy = true;
+  SMART_VAR(ObMigrationChooseSrcHelperInitParam, param) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    const char *str = "idc";
+    ObLS* ls = nullptr;
+    ObLSHandle ls_handle;
+    bool use_c_replica_policy = false;
+    src_info.reset();
+    if (!arg.is_valid() || OB_INVALID_ID == tenant_id || !local_clog_checkpoint_scn.is_valid() || OB_ISNULL(storage_rpc)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get migration src info get invalid argument", K(ret), K(tenant_id), K(local_clog_checkpoint_scn));
+    } else if (!tenant_config.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant config is invalid", K(ret));
+    } else if (FALSE_IT(str = tenant_config->choose_migration_source_policy.str())) {
+    } else if (FALSE_IT(enable_choose_source_policy = tenant_config->_enable_choose_migration_source_policy)) {
+    } else if (FALSE_IT(param.tenant_id_ = tenant_id)) {
+    } else if (FALSE_IT(param.ls_id_ = arg.ls_id_)) {
+    } else if (FALSE_IT(param.local_clog_checkpoint_scn_ = local_clog_checkpoint_scn)) {
+    } else if (FALSE_IT(param.arg_ = arg)) {
+    } else if (OB_FAIL(member_helper.init(storage_rpc))) {
+      LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc));
+    } else if (OB_FAIL(member_helper.get_member_list_by_replica_type(tenant_id, arg.ls_id_,
+        arg.dst_, param.info_, param.is_first_c_replica_))) {
+      LOG_WARN("failed to get member list.", K(ret), K(tenant_id), "ls_id", arg.ls_id_, "dst", arg.dst_);
+    } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
+        enable_choose_source_policy, str, param.info_.learner_list_, param.policy_, param.use_c_replica_policy_))) {
+      LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id),
+          K(enable_choose_source_policy), K(str), K(param));
+    } else if (OB_FAIL(choose_src_helper.init(param, storage_rpc, &member_helper))) {
+      LOG_WARN("failed to init src provider.", K(ret), K(param), KP(storage_rpc));
+    } else if (OB_FAIL(choose_src_helper.get_available_src(arg, src_info))) {
+      LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(local_clog_checkpoint_scn), K(arg));
+    } else {
+      FLOG_INFO("choose src", K(src_info), K(arg));
+    }
+  } // end smart var
+  return ret;
+}
+
 int ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(
     const share::ObLSID &ls_id,
     const bool with_leader,
@@ -815,7 +867,7 @@ int ObHATabletGroupMgr::alloc_and_new_tablet_group_ctx(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), KP(buf));
     } else {
-      tablet_group_ctx = new (buf) ObHATabletGroupCtx();
+      tablet_group_ctx = new (buf) ObHATabletGroupCtx(type);
     }
   } else if (ObHATabletGroupCtx::TabletGroupCtxType::CS_REPLICA_TYPE == type) {
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObHATabletGroupCOConvertCtx)))) {

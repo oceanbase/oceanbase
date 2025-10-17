@@ -1202,29 +1202,31 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 K(parse_tree.children_));
           } else {
             show_resv_ctx.condition_node_ = parse_tree.children_[1];
-            uint64_t show_db_id;
-            if (OB_FAIL(get_database_info(catalog_id,
-                                          parse_tree.children_[0],
-                                          database_name,
-                                          real_tenant_id,
-                                          show_resv_ctx,
-                                          show_db_id))) {
-              LOG_WARN("fail to get database info", K(ret));
-            } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("database id is invalid", K(ret), K(show_db_id));
-            } else if (OB_FAIL(check_db_access_for_show_sql(catalog_id, show_resv_ctx, session_priv, enable_role_id_array))) {
-              LOG_WARN("check db access for show sql failed", K(ret));
-            } else {
-              int64_t proc_type = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
-              show_resv_ctx.stmt_type_ = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? stmt::T_SHOW_PROCEDURE_STATUS : stmt::T_SHOW_FUNCTION_STATUS;
-              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PROCEDURE_STATUS);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PROCEDURE_STATUS,
-                            OB_SYS_DATABASE_NAME, OB_ALL_ROUTINE_TNAME,
-                            OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
-                            OB_MYSQL_SCHEMA_NAME, OB_PROC_TNAME,
-                            show_db_id, proc_type);
+            bool skip_db_filter = OB_ISNULL(parse_tree.children_[0]);
+            uint64_t show_db_id = OB_INVALID_ID;
+            if (!skip_db_filter) {
+              if (OB_FAIL(get_database_info(catalog_id,
+                                            parse_tree.children_[0],
+                                            database_name,
+                                            real_tenant_id,
+                                            show_resv_ctx,
+                                            show_db_id))) {
+                LOG_WARN("fail to get database info", K(ret));
+              } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("database id is invalid", K(ret), K(show_db_id));
+              } else if (OB_FAIL(check_db_access_for_show_sql(catalog_id, show_resv_ctx, session_priv, enable_role_id_array))) {
+                LOG_WARN("check db access for show sql failed", K(ret));
+              }
             }
+            int64_t proc_type = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
+            show_resv_ctx.stmt_type_ = T_SHOW_PROCEDURE_STATUS == parse_tree.type_ ? stmt::T_SHOW_PROCEDURE_STATUS : stmt::T_SHOW_FUNCTION_STATUS;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PROCEDURE_STATUS);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PROCEDURE_STATUS,
+                          OB_SYS_DATABASE_NAME, OB_ALL_ROUTINE_TNAME,
+                          OB_SYS_DATABASE_NAME, OB_ALL_DATABASE_TNAME,
+                          OB_MYSQL_SCHEMA_NAME, OB_PROC_TNAME,
+                          show_db_id, skip_db_filter ? "true" : "false", proc_type);
           }
         }();
         break;
@@ -2018,9 +2020,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           ObString location_name;
           location_name.assign_ptr(parse_tree.children_[0]->str_value_,
                                   static_cast<ObString::obstr_size_t>(parse_tree.children_[0]->str_len_));
-          ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+          ObSchemaGetterGuard *schema_guard = NULL;
           uint64_t location_id = OB_INVALID_ID;
-          if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+          if(OB_ISNULL(schema_checker_) || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
             LOG_WARN("failed to get location id", K(ret));
           } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
             LOG_WARN("failed to check location access", K(ret));
@@ -2038,6 +2043,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         uint64_t location_id = OB_INVALID_ID;
         ObString sub_path;
         ObString pattern;
+        ObString location_name;
         if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
             LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
         } else if (min_version < DATA_VERSION_4_4_0_0) {
@@ -2049,10 +2055,20 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
         } else {
           show_resv_ctx.stmt_type_ = stmt::T_LOCATION_UTILS_LIST;
-          ObString location_name;
           ParseNode *child_node = parse_tree.children_[0];
           location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
-          OZ (schema_checker_->get_location_id(real_tenant_id, location_name, location_id));
+          ObSchemaGetterGuard *schema_guard = NULL;
+          if(OB_ISNULL(schema_checker_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+            LOG_WARN("get location id failed", K(ret), K(real_tenant_id), K(location_name));
+          } else if(OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
+            LOG_WARN("check location priv failed", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
+          }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             ParseNode *child_node = parse_tree.children_[1];
             sub_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
@@ -3369,7 +3385,20 @@ int ObShowResolver::replace_where_clause(ParseNode* node, const ObShowResolverCo
         break;
       }
       case T_OP_AND:
-      case T_OP_OR:
+      case T_OP_OR: {
+        if (NULL == node->children_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(node->num_child_), K(node->children_));
+        } else {
+          for (int32_t i = 0; i < node->num_child_; i++) {
+            if (OB_FAIL(replace_where_clause(node->children_[i], show_resv_ctx))) {
+              LOG_WARN("failed replace expr", K(ret));
+            }
+          }
+        }
+        break;
+      }
+      case T_OP_XOR:
       case T_OP_ADD:
       case T_OP_MINUS:
       case T_OP_MUL:
@@ -3994,7 +4023,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLE_STATUS,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PROCEDURE_STATUS,
                        NULL,
-                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and d.database_id = %ld and p.routine_type = %ld and (0 = sys_privilege_check('routine_acc', effective_tenant_id()) or 0 = sys_privilege_check('routine_acc', effective_tenant_id(), d.database_name, p.routine_name, p.routine_type)) ORDER BY name COLLATE utf8mb4_bin ASC",
+                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and (d.database_id = %ld or %s) and p.routine_type = %ld and (0 = sys_privilege_check('routine_acc', effective_tenant_id()) or 0 = sys_privilege_check('routine_acc', effective_tenant_id(), d.database_name, p.routine_name, p.routine_type)) ORDER BY name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRIGGERS,

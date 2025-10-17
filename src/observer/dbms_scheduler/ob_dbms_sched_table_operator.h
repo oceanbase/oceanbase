@@ -103,6 +103,7 @@ private:
   int _build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
   int _build_job_finished_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
   int _build_job_rollback_start_dml(ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_once_job_state_change_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
   int _build_job_log_dml(int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql);
   int _check_need_record(ObDBMSSchedJobInfo &job_info, bool &need_record, bool err_state = true);
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);

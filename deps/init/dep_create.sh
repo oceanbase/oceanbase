@@ -131,6 +131,10 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+      rocky)
+        version_ge "8.0" && OS_RELEASE=8 && return
+        version_ge "7.0" && OS_RELEASE=7 && return
+        ;;
       debian)
         version_ge "12" && compat_centos9 && return
         version_ge "9" && compat_centos7 && return
@@ -178,15 +182,14 @@ WORKSACPE_DEPS_DIR="$(cd $(dirname $0); cd ..; pwd)"
 WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/3rd
 WORKSAPCE_DEPS_3RD_DONE=${WORKSPACE_DEPS_3RD}/DONE
 WORKSAPCE_DEPS_3RD_MD5=${WORKSPACE_DEPS_3RD}/${MD5}
-WORKSAPCE_DEPS_3RD_CPP_STANDARD=${WORKSPACE_DEPS_3RD}/CPP_${CPP_STANDARD}
 
 # 开始判断本地目录依赖目录是否存在
 if [ -f ${WORKSAPCE_DEPS_3RD_MD5} ]; then
-    if [ -f "${WORKSAPCE_DEPS_3RD_DONE}" ] && [ -f "${WORKSAPCE_DEPS_3RD_CPP_STANDARD}" ]; then
-        echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5}, ${WORKSAPCE_DEPS_3RD_DONE} and ${WORKSAPCE_DEPS_3RD_CPP_STANDARD} exists"
+    if [ -f "${WORKSAPCE_DEPS_3RD_DONE}" ]; then
+        echo_log "${DEP_FILE} has been initialized due to ${WORKSAPCE_DEPS_3RD_MD5}, ${WORKSAPCE_DEPS_3RD_DONE} exists"
         exit 0
     else
-        echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_DONE} or ${WORKSAPCE_DEPS_3RD_CPP_STANDARD} not exists"
+        echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_DONE} not exists"
     fi
 else
     echo_log "${DEP_FILE} has been not initialized, due to ${WORKSAPCE_DEPS_3RD_MD5} not exists"
@@ -295,15 +298,6 @@ do
         temp=$(echo "$line" | grep -Eo "target=(\S*)")
         [[ "$temp" != "" ]] && target_name=${temp#*=}
 
-  if [[ "$pkg" == *"obdevtools-llvm"* || "$pkg" == *"obdevtools-gcc"* ]]; then
-    if [[ "$line" =~ cpp_standard=([0-9]+) ]]; then
-      cpp_standard="${BASH_REMATCH[1]}"
-      if [ "$cpp_standard" -ne "$CPP_STANDARD" ]; then
-          continue
-      fi
-    fi
-  fi
-
 	if [[ -f "${TARGET_DIR_3RD}/pkg/${pkg}" ]]; then
             echo_log "find package <${pkg}> in cache"
         else
@@ -342,7 +336,6 @@ done
 if [ ${NEED_SHARE_CACHE} == "OFF" ]; then
     touch ${WORKSAPCE_DEPS_3RD_MD5}
     touch ${WORKSAPCE_DEPS_3RD_DONE}
-    touch ${WORKSAPCE_DEPS_3RD_CPP_STANDARD}
     exit $?
 fi
 
@@ -399,7 +392,6 @@ if [ ${LINK_TARGET_DIRECT} == "ON" ]; then
     fi
     touch ${WORKSAPCE_DEPS_3RD_MD5}
     touch ${WORKSAPCE_DEPS_3RD_DONE}
-    touch ${WORKSAPCE_DEPS_3RD_CPP_STANDARD}
     exit $?
 fi
 
@@ -427,4 +419,3 @@ echo_log "link deps ${WORKSPACE_DEPS_3RD} -> ${CACHE_DEPS_DIR_3RD}"
 # 标记md5和done文件
 touch ${WORKSAPCE_DEPS_3RD_MD5}
 touch ${WORKSAPCE_DEPS_3RD_DONE}
-touch ${WORKSAPCE_DEPS_3RD_CPP_STANDARD}

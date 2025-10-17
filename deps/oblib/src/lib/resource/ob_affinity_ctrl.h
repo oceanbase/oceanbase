@@ -31,7 +31,7 @@ class ObAffinityCtrl
 public:
   ObAffinityCtrl();
   ~ObAffinityCtrl() {}
-  int init();
+  int init(const bool strict_check_os_params);
 
   int run_on_node(const int node);
   int thread_bind_to_node(const int node_hint);

@@ -91,7 +91,7 @@ struct PCVSchemaObj
     is_mv_container_table_(false) {}
 
   int init(const share::schema::ObTableSchema *schema);
-  int init_with_synonym(const ObSimpleSynonymSchema *schema);
+  int init_with_synonym(const ObSimpleSynonymSchema *schema, const ObSchemaObjVersion &table_version);
   int init_with_version_obj(const share::schema::ObSchemaObjVersion &schema_obj_version);
   int init_without_copy_name(const share::schema::ObSimpleTableSchemaV2 *schema);
   void set_allocator(common::ObIAllocator *alloc)

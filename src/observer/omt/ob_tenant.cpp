@@ -42,7 +42,7 @@ using namespace oceanbase::obrpc;
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
 decltype(*addr) var_name = *(decltype(addr))(thread_base + var_name##_offset);
 
-#define EXPAND_INTERVAL (1 * 1000 * 1000)
+#define EXPAND_INTERVAL (500 * 1000)
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 #define SLEEP_INTERVAL (60 * 1000 * 1000)
 
@@ -726,6 +726,7 @@ ObTenant::ObTenant(const int64_t id,
       tenant_meta_(),
       shrink_(0),
       total_worker_cnt_(0),
+      total_ddl_thread_cnt_(0),
       gc_thread_(nullptr),
       has_created_(false),
       stopped_(0),
@@ -754,6 +755,8 @@ ObTenant::ObTenant(const int64_t id,
       token_usage_(.0),
       token_usage_check_ts_(0),
       token_change_ts_(0),
+      stream_rpc_wait_cnt_(0),
+      stream_rpc_wait_cnt_limit_(100),
       ctx_(nullptr),
       st_metrics_(),
       sql_limiter_(),
@@ -1208,6 +1211,17 @@ int64_t ObTenant::cpu_quota_concurrency() const
   return static_cast<int64_t>((tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
 }
 
+int64_t ObTenant::min_active_worker_cnt() const
+{
+  ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+  bool enable_more_aggressive_dynamic_worker = tenant_config.is_valid() ? tenant_config->_enable_more_aggressive_dynamic_worker : false;
+  int64_t cnt = 3;
+  if (is_user_tenant(id()) && enable_more_aggressive_dynamic_worker) {
+    cnt = std::max(3L, 2 + static_cast<int64_t>(unit_max_cpu()));
+  }
+  return cnt;
+}
+
 int64_t ObTenant::min_worker_cnt() const
 {
   ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
@@ -1257,7 +1271,7 @@ int ObTenant::get_new_request(
       ret = group->multi_level_queue_.pop_timeup(task, wk_level, timeout);
       if ((ret == OB_SUCCESS && nullptr == task) || ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_ENTRY_NOT_EXIST;
-        usleep(10 * 1000L);
+        ob_usleep(10 * 1000L);
       } else if (ret == OB_SUCCESS){
         rpc::ObRequest *tmp_req = static_cast<rpc::ObRequest*>(task);
         LOG_WARN("req is timeout and discard", "tenant_id", id_, K(tmp_req));
@@ -1786,7 +1800,8 @@ void ObTenant::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    int64_t token = 3;
+    int64_t ddl_token = 0;
+    int64_t token = min_active_worker_cnt();
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     int64_t threshold = 3 * 1000;
@@ -1802,15 +1817,19 @@ void ObTenant::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
-                 && 0 != w->blocking_ts()
-                 && now - w->blocking_ts() >= threshold
+                 && ((0 != w->blocking_ts() && now - w->blocking_ts() >= threshold) || w->is_doing_ddl())
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
-        ++token;
+        if (w->is_doing_ddl()) {
+          ddl_token++;
+        } else {
+          token++;
+        }
       }
     }
     int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
+    token = token + ddl_token;
     token = std::min(token, max_worker_cnt());
     if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
       const auto diff = min_worker_cnt() - workers_.get_size();
@@ -1832,6 +1851,16 @@ void ObTenant::check_worker_count()
       ATOMIC_STORE(&shrink_, true);
       LOG_INFO("worker thread began to shrink", K(id_), K(token));
     }
+
+    int64_t stream_limit = 0;
+    {
+      ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+      stream_limit =  static_cast<int64_t>(unit_max_cpu() * (tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
+    }
+    // To avoid the regression of stability, making the stream_rpc_wait_cnt_limit_ of stream rpc is not less than 100
+    stream_limit = std::max(stream_limit, 100L);
+    ATOMIC_STORE(&stream_rpc_wait_cnt_limit_, stream_limit);
+
     IGNORE_RETURN workers_lock_.unlock();
   }
 
@@ -1969,7 +1998,7 @@ void ObTenant::lq_wait(ObThWorker &w)
                                          last_query_us);
   wait_us = std::min(wait_us, min(100 * 1000, w.get_timeout_remain()));
   if (wait_us > 10 * 1000) {
-    usleep(wait_us);
+    ob_usleep(wait_us);
     w.set_last_wakeup_ts(ObTimeUtility::current_time());
   }
 }

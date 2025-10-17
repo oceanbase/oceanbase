@@ -61,9 +61,17 @@ public:
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
     const obrpc::ObCreateTableArg &arg,
-    obrpc::ObCreateTableRes &res);
+    obrpc::ObCreateTableRes &res,
+    ObDDLSQLTransaction *external_trans = nullptr);
   virtual ~ObCreateTableHelper();
-
+  TO_STRING_KV(K_(arg),
+               K_(res),
+               K_(replace_mock_fk_parent_table_id),
+               K_(new_tables),
+               K_(new_mock_fk_parent_tables),
+               K_(new_audits),
+               K_(new_sequences),
+               K_(has_index));
 private:
   virtual int init_() override;
 
@@ -74,7 +82,6 @@ private:
   virtual int operation_before_commit_() override;
   virtual int clean_on_fail_commit_() override;
   virtual int construct_and_adjust_result_(int &return_ret) override;
-
   int create_schemas_();
   int create_tablets_();
   int add_index_name_to_cache_();

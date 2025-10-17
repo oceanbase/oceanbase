@@ -339,5 +339,42 @@ int ObDASTableLoc::create_tablet_locs_map()
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObDASPushDownTopN,
+                    order_type_,
+                    sort_key_,
+                    limit_expr_,
+                    offset_expr_,
+                    with_ties_,
+                    is_push_into_index_);
+
+int ObDASPushDownTopN::prepare_limit_param(ObEvalCtx &eval_ctx,
+                                           const ObDASPushDownTopN &push_down_topn,
+                                           ObLimitParam &limit_param)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != push_down_topn.limit_expr_) {
+    ObDatum *limit_datum = nullptr;
+    if (OB_FAIL(push_down_topn.limit_expr_->eval(eval_ctx, limit_datum))) {
+      LOG_WARN("failed to eval limit expr", K(ret));
+    } else {
+      limit_param.limit_ = (limit_datum->is_null() || limit_datum->get_int() < 0) ? 0 : limit_datum->get_int();
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (nullptr != push_down_topn.offset_expr_) {
+    ObDatum *offset_datum = nullptr;
+    if (OB_FAIL(push_down_topn.offset_expr_->eval(eval_ctx, offset_datum))) {
+      LOG_WARN("failed to eval limit expr", K(ret));
+    } else if (offset_datum->is_null()) {
+      limit_param.limit_ = 0;
+      limit_param.offset_ = 0;
+    } else {
+      limit_param.offset_ = offset_datum->get_int() < 0 ? 0 : offset_datum->get_int();
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

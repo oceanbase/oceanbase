@@ -445,19 +445,20 @@ Outputs & filters:
       range_cond([t1.c2 = :0], [t1.c3 = :1])
 explain  select c1 from t11 where c2 not in (select c2 from t11);
 Query Plan
-===============================================================
-|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN NA    |        |1       |23          |
-|1 |├─PX COORDINATOR           |        |1       |12          |
-|2 |│ └─EXCHANGE OUT DISTR     |:EX10000|1       |11          |
-|3 |│   └─PX PARTITION ITERATOR|        |1       |11          |
-|4 |│     └─TABLE FULL SCAN    |t11     |1       |11          |
-|5 |└─PX COORDINATOR           |        |1       |12          |
-|6 |  └─EXCHANGE OUT DISTR     |:EX20000|1       |12          |
-|7 |    └─PX PARTITION ITERATOR|        |1       |11          |
-|8 |      └─TABLE FULL SCAN    |t11     |1       |11          |
-===============================================================
+=================================================================
+|ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |HASH RIGHT ANTI JOIN NA      |        |1       |23          |
+|1 |├─PX COORDINATOR             |        |1       |12          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |11          |
+|3 |│   └─HASH DISTINCT          |        |1       |11          |
+|4 |│     └─PX PARTITION ITERATOR|        |1       |11          |
+|5 |│       └─TABLE FULL SCAN    |t11     |1       |11          |
+|6 |└─PX COORDINATOR             |        |1       |12          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |12          |
+|8 |    └─PX PARTITION ITERATOR  |        |1       |11          |
+|9 |      └─TABLE FULL SCAN      |t11     |1       |11          |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t11.c1]), filter(nil), rowset=16
@@ -466,43 +467,46 @@ Outputs & filters:
   2 - output([t11.c2]), filter(nil), rowset=16
       dop=1
   3 - output([t11.c2]), filter(nil), rowset=16
-      force partition granule
+      distinct([t11.c2]), partial
   4 - output([t11.c2]), filter(nil), rowset=16
+      force partition granule
+  5 - output([t11.c2]), filter(nil), rowset=16
       access([t11.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t11.c1]), range(MIN ; MAX)always true
-  5 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
   6 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      dop=1
   7 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      force partition granule
+      dop=1
   8 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
+      force partition granule
+  9 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
       access([t11.c1], [t11.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t11.c1]), range(MIN ; MAX)always true
 explain  select c1 from t12 where c1 not in (select c1 from t11 where c2 not in (select c2 from t11));
 Query Plan
-===========================================================================
-|ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------
-|0 |PX COORDINATOR                         |        |1       |30          |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10003|1       |30          |
-|2 |  └─HASH RIGHT ANTI JOIN               |        |1       |30          |
-|3 |    ├─EXCHANGE IN DISTR                |        |1       |23          |
-|4 |    │ └─EXCHANGE OUT DISTR (PKEY)      |:EX10002|1       |23          |
-|5 |    │   └─SUBPLAN SCAN                 |VIEW2   |1       |23          |
-|6 |    │     └─HASH RIGHT ANTI JOIN NA    |        |1       |23          |
-|7 |    │       ├─EXCHANGE IN DISTR        |        |1       |12          |
-|8 |    │       │ └─EXCHANGE OUT DISTR     |:EX10000|1       |11          |
-|9 |    │       │   └─PX PARTITION ITERATOR|        |1       |11          |
-|10|    │       │     └─TABLE FULL SCAN    |t11     |1       |11          |
-|11|    │       └─EXCHANGE IN DISTR        |        |1       |12          |
-|12|    │         └─EXCHANGE OUT DISTR     |:EX10001|1       |12          |
-|13|    │           └─PX PARTITION ITERATOR|        |1       |11          |
-|14|    │             └─TABLE FULL SCAN    |t11     |1       |11          |
-|15|    └─PX PARTITION ITERATOR            |        |1       |7           |
-|16|      └─TABLE FULL SCAN                |t12     |1       |7           |
-===========================================================================
+=============================================================================
+|ID|OPERATOR                                 |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |        |1       |30          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10003|1       |30          |
+|2 |  └─HASH RIGHT ANTI JOIN                 |        |1       |30          |
+|3 |    ├─EXCHANGE IN DISTR                  |        |1       |23          |
+|4 |    │ └─EXCHANGE OUT DISTR (PKEY)        |:EX10002|1       |23          |
+|5 |    │   └─SUBPLAN SCAN                   |VIEW2   |1       |23          |
+|6 |    │     └─HASH RIGHT ANTI JOIN NA      |        |1       |23          |
+|7 |    │       ├─EXCHANGE IN DISTR          |        |1       |12          |
+|8 |    │       │ └─EXCHANGE OUT DISTR       |:EX10000|1       |11          |
+|9 |    │       │   └─HASH DISTINCT          |        |1       |11          |
+|10|    │       │     └─PX PARTITION ITERATOR|        |1       |11          |
+|11|    │       │       └─TABLE FULL SCAN    |t11     |1       |11          |
+|12|    │       └─EXCHANGE IN DISTR          |        |1       |12          |
+|13|    │         └─EXCHANGE OUT DISTR       |:EX10001|1       |12          |
+|14|    │           └─PX PARTITION ITERATOR  |        |1       |11          |
+|15|    │             └─TABLE FULL SCAN      |t11     |1       |11          |
+|16|    └─PX PARTITION ITERATOR              |        |1       |7           |
+|17|      └─TABLE FULL SCAN                  |t12     |1       |7           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t12.c1)]), filter(nil), rowset=16
@@ -521,23 +525,25 @@ Outputs & filters:
   8 - output([t11.c2]), filter(nil), rowset=16
       dop=1
   9 - output([t11.c2]), filter(nil), rowset=16
-      force partition granule
+      distinct([t11.c2]), partial
  10 - output([t11.c2]), filter(nil), rowset=16
+      force partition granule
+ 11 - output([t11.c2]), filter(nil), rowset=16
       access([t11.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t11.c1]), range(MIN ; MAX)always true
- 11 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
  12 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      dop=1
  13 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      force partition granule
+      dop=1
  14 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
+      force partition granule
+ 15 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
       access([t11.c1], [t11.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
       range_key([t11.c1]), range(MIN ; MAX)always true
- 15 - output([t12.c1]), filter(nil), rowset=16
-      affinitize, force partition granule
  16 - output([t12.c1]), filter(nil), rowset=16
+      affinitize, force partition granule
+ 17 - output([t12.c1]), filter(nil), rowset=16
       access([t12.c1]), partitions(p[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([t12.c1]), range(MIN ; MAX)always true
@@ -622,43 +628,35 @@ Outputs & filters:
       range_key([t12.c1]), range(MIN ; MAX)always true
 explain  select * from t11 where c1 in (select c1 from t12 where (1 = 0 or c1 > 5));
 Query Plan
-=====================================================================
-|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |1       |19          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |19          |
-|2 |  └─HASH JOIN                    |        |1       |18          |
-|3 |    ├─EXCHANGE IN DISTR          |        |1       |7           |
-|4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|1       |7           |
-|5 |    │   └─PX PARTITION ITERATOR  |        |1       |7           |
-|6 |    │     └─TABLE RANGE SCAN     |t12     |1       |7           |
-|7 |    └─PX PARTITION ITERATOR      |        |1       |11          |
-|8 |      └─TABLE RANGE SCAN         |t11     |1       |11          |
-=====================================================================
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |PX COORDINATOR             |        |1       |8           |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
+|2 |  └─NESTED-LOOP JOIN       |        |1       |8           |
+|3 |    ├─PX PARTITION ITERATOR|        |1       |7           |
+|4 |    │ └─TABLE RANGE SCAN   |t12     |1       |7           |
+|5 |    └─DISTRIBUTED TABLE GET|t11     |1       |77          |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t11.c1, t11.c2)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t11.c1, t11.c2)]), filter(nil), rowset=16
       dop=1
   2 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      equal_conds([t11.c1 = t12.c1]), other_conds(nil)
+      conds(nil), nl_params_([t12.c1(:0)]), use_batch=true
   3 - output([t12.c1]), filter(nil), rowset=16
-  4 - output([t12.c1]), filter(nil), rowset=16
-      (#keys=1, [t12.c1]), dop=1
-  5 - output([t12.c1]), filter(nil), rowset=16
       force partition granule
-  6 - output([t12.c1]), filter(nil), rowset=16
+  4 - output([t12.c1]), filter(nil), rowset=16
       access([t12.c1]), partitions(p[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([t12.c1]), range(5 ; MAX), 
       range_cond([t12.c1 > 5])
-  7 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      affinitize, force partition granule
-  8 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
-      access([t11.c1], [t11.c2]), partitions(p[0-4])
+  5 - output([t11.c1], [t11.c2]), filter(nil), rowset=16
+      access([GROUP_ID], [t11.c1], [t11.c2]), partitions(p[0-4])
       is_index_back=false, is_global_index=false, 
-      range_key([t11.c1]), range(5 ; MAX), 
-      range_cond([t11.c1 > 5])
+      range_key([t11.c1]), range(MIN ; MAX), 
+      range_cond([t11.c1 = :0])
 create table t4 (c1 int, c2 int, c3 date, c4 int, primary key(c1,c2,c3)) partition by hash(c1) subpartition by range columns(c3)
 subpartition template( subpartition p_2016_11_02_00 values less than ('2016-11-02'),
 subpartition p_2016_11_03_00 values less than ('2016-11-03'),
@@ -1564,29 +1562,28 @@ Outputs & filters:
       range_key([b.c1], [b.c2], [b.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain  select /*+use_nl(c)*/ * from t5 as a left join t6 as b on a.c1 = b.c1 and a.c3 = b.c3 left join t4 as c on b.c1=c.c1 and b.c3 = c.c3 limit 100;
 Query Plan
-===================================================================================
-|ID|OPERATOR                                       |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------------
-|0 |LIMIT                                          |        |1       |30          |
-|1 |└─PX COORDINATOR                               |        |1       |30          |
-|2 |  └─EXCHANGE OUT DISTR                         |:EX10002|1       |29          |
-|3 |    └─LIMIT                                    |        |1       |24          |
-|4 |      └─HASH RIGHT OUTER JOIN                  |        |1       |24          |
-|5 |        ├─PX PARTITION ITERATOR                |        |1       |7           |
-|6 |        │ └─TABLE FULL SCAN                    |c       |1       |7           |
-|7 |        └─HASH OUTER JOIN                      |        |1       |18          |
-|8 |          ├─EXCHANGE IN DISTR                  |        |1       |11          |
-|9 |          │ └─EXCHANGE OUT DISTR (PKEY)        |:EX10001|1       |10          |
-|10|          │   └─SUBPLAN SCAN                   |VIEW1   |1       |9           |
-|11|          │     └─LIMIT                        |        |1       |9           |
-|12|          │       └─EXCHANGE IN DISTR          |        |1       |9           |
-|13|          │         └─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
-|14|          │           └─LIMIT                  |        |1       |7           |
-|15|          │             └─PX PARTITION ITERATOR|        |1       |7           |
-|16|          │               └─TABLE FULL SCAN    |a       |1       |7           |
-|17|          └─PX PARTITION ITERATOR              |        |1       |7           |
-|18|            └─TABLE FULL SCAN                  |b       |1       |7           |
-===================================================================================
+=================================================================================
+|ID|OPERATOR                                     |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------------
+|0 |LIMIT                                        |        |1       |30          |
+|1 |└─PX COORDINATOR                             |        |1       |30          |
+|2 |  └─EXCHANGE OUT DISTR                       |:EX10002|1       |29          |
+|3 |    └─HASH RIGHT OUTER JOIN                  |        |1       |24          |
+|4 |      ├─PX PARTITION ITERATOR                |        |1       |7           |
+|5 |      │ └─TABLE FULL SCAN                    |c       |1       |7           |
+|6 |      └─HASH OUTER JOIN                      |        |1       |18          |
+|7 |        ├─EXCHANGE IN DISTR                  |        |1       |11          |
+|8 |        │ └─EXCHANGE OUT DISTR (PKEY)        |:EX10001|1       |10          |
+|9 |        │   └─SUBPLAN SCAN                   |VIEW1   |1       |9           |
+|10|        │     └─LIMIT                        |        |1       |9           |
+|11|        │       └─EXCHANGE IN DISTR          |        |1       |9           |
+|12|        │         └─EXCHANGE OUT DISTR       |:EX10000|1       |8           |
+|13|        │           └─LIMIT                  |        |1       |7           |
+|14|        │             └─PX PARTITION ITERATOR|        |1       |7           |
+|15|        │               └─TABLE FULL SCAN    |a       |1       |7           |
+|16|        └─PX PARTITION ITERATOR              |        |1       |7           |
+|17|          └─TABLE FULL SCAN                  |b       |1       |7           |
+=================================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
@@ -1595,38 +1592,36 @@ Outputs & filters:
   2 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       dop=1
   3 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
-      limit(100), offset(nil)
-  4 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4], [c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       equal_conds([b.c1 = c.c1], [b.c3 = c.c3]), other_conds(nil)
-  5 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+  4 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
-  6 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
+  5 - output([c.c1], [c.c2], [c.c3], [c.c4]), filter(nil), rowset=16
       access([c.c1], [c.c2], [c.c3], [c.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([c.c1], [c.c2], [c.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  7 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+  6 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4], [b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       equal_conds([VIEW1.a.c1 = b.c1], [VIEW1.a.c3 = b.c3]), other_conds(nil)
+  7 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
   8 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
-  9 - output([VIEW1.a.c1], [VIEW1.a.c2], [VIEW1.a.c3], [VIEW1.a.c4]), filter(nil), rowset=16
       (#keys=1, [VIEW1.a.c3]), is_single, dop=1
- 10 - output([VIEW1.a.c1], [VIEW1.a.c3], [VIEW1.a.c2], [VIEW1.a.c4]), filter(nil), rowset=16
+  9 - output([VIEW1.a.c1], [VIEW1.a.c3], [VIEW1.a.c2], [VIEW1.a.c4]), filter(nil), rowset=16
       access([VIEW1.a.c1], [VIEW1.a.c3], [VIEW1.a.c2], [VIEW1.a.c4])
+ 10 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
+      limit(CASE WHEN 100 >= 100 THEN 100 ELSE 100 END), offset(nil)
  11 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
-      limit(100), offset(nil)
  12 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
- 13 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
       dop=1
- 14 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
+ 13 - output([a.c1], [a.c3], [a.c2], [a.c4]), filter(nil), rowset=16
       limit(100), offset(nil)
- 15 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+ 14 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
       force partition granule
- 16 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
+ 15 - output([a.c1], [a.c2], [a.c3], [a.c4]), filter(nil), rowset=16
       access([a.c1], [a.c2], [a.c3], [a.c4]), partitions(p0sp[0-2])
       limit(100), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([a.c1], [a.c2], [a.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
- 17 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+ 16 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       affinitize, partition wise, force partition granule
- 18 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
+ 17 - output([b.c1], [b.c2], [b.c3], [b.c4]), filter(nil), rowset=16
       access([b.c1], [b.c2], [b.c3], [b.c4]), partitions(p0sp[0-2])
       is_index_back=false, is_global_index=false, 
       range_key([b.c1], [b.c2], [b.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true

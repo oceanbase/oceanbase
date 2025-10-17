@@ -383,6 +383,7 @@ void RawLogFetchStatInfo::reset()
   fetch_log_sub_rpc_cnt_ = 0;
   single_rpc_cnt_ = 0;
   result_not_readable_rpc_cnt_ = 0;
+  reach_max_log_id_rpc_cnt_ = 0;
   reach_max_result_rpc_cnt_ = 0;
   no_log_rpc_cnt_ = 0;
   fetch_log_rpc_time_ = 0;

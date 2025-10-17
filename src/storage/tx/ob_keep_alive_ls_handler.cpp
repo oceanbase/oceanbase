@@ -246,6 +246,9 @@ bool ObKeepAliveLSHandler::check_gts_()
   SCN end_scn;
   int ret = OB_SUCCESS;
   SCN sys_ls_end_scn = sys_ls_end_scn_.atomic_load();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const int64_t KEEPALIVE_INTERVAL = tenant_config.is_valid() ?
+      tenant_config->_keepalive_interval : KEEP_ALIVE_GTS_INTERVAL;
   if (OB_ISNULL(log_handler_ptr_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arguments", K(ret), KP(log_handler_ptr_));
@@ -255,14 +258,17 @@ bool ObKeepAliveLSHandler::check_gts_()
     TRANS_LOG(WARN, "get max log_ts failed", K(ret));
   } else if (OB_FAIL(log_handler_ptr_->get_end_scn(end_scn))) {
     TRANS_LOG(WARN, "get end scn failed", K(ret));
-  } else if (!last_gts_.is_valid_and_not_min()
-      || last_gts_ == gts) {
+  } else if (!last_gts_.is_valid_and_not_min()) {
+    // remove the condition last_gts_ == gts, which would bind the keepalive log to gts cache refresh;
+    // Consider the scenario the SYS_LS has no leader, which would make other LS not advance
+    // But if we use the same gts to submit log, the user ls would still advance slowly, so we regard
+    // keepalive log with the same gts as redundant
     need_submit = true;
   } else if (end_scn.is_valid_and_not_min()
       && sys_ls_end_scn.is_valid_and_not_min()
       && end_scn < sys_ls_end_scn) {
     need_submit = true;
-  } else if (gts.convert_to_ts() < max_scn.convert_to_ts() + KEEP_ALIVE_GTS_INTERVAL) {
+  } else if (gts.convert_to_ts() < max_scn.convert_to_ts() + KEEPALIVE_INTERVAL) {
     need_submit = false;
   }
 

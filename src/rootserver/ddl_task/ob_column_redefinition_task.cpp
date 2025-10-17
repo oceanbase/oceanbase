@@ -172,6 +172,7 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
                                                             ret_code,
                                                             addition_info.row_scanned_,
                                                             addition_info.row_inserted_,
+                                                            addition_info.cg_row_inserted_,
                                                             addition_info.physical_row_count_))) {
     LOG_WARN("fail to set update replica build progress", K(ret), K(addr));
   }
@@ -211,6 +212,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
       alter_table_arg_.ddl_task_type_ = share::REBUILD_INDEX_TASK;
       alter_table_arg_.table_id_ = object_id_;
       alter_table_arg_.hidden_table_id_ = target_object_id_;
+      alter_table_arg_.data_version_ = data_format_version_;
       if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, table_schema))) {
@@ -738,8 +740,10 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
     }
     case ObDDLTaskStatus::REDEFINITION: {
       int64_t row_inserted = 0;
-      int64_t physical_row_count_ = 0;
-      double percent = 0.0;
+      int64_t unused_cg_row_inserted = 0;
+      int64_t physical_row_count = 0;
+      double row_percent = 0.0;
+      double unused_cg_row_percent = 0.0;
       bool initializing = false;
       {
         TCRLockGuard guard(lock_);
@@ -753,16 +757,16 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
                                     ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/)))) {
           LOG_WARN("failed to print", K(ret));
         }
-      } else if (OB_FAIL(replica_builder_.get_progress(row_inserted, physical_row_count_, percent))) {
+      } else if (OB_FAIL(replica_builder_.get_progress(physical_row_count, row_inserted, unused_cg_row_inserted, row_percent, unused_cg_row_percent))) {
         LOG_WARN("failed to gather redefinition stats", K(ret));
       } else if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
                                   "STATUS: REPLICA BUILD, PARALLELISM: %ld, ESTIMATED_TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, PROGRESS: %0.2lf%%",
                                   ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
-                                  physical_row_count_,
+                                  physical_row_count,
                                   row_inserted,
-                                  percent))) {
+                                  row_percent))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;

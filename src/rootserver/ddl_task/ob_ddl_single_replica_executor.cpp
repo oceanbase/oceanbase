@@ -77,8 +77,10 @@ void ObSingleReplicaBuildCtx::reset_build_stat()
   ret_code_ = OB_SUCCESS;
   heart_beat_time_ = 0;
   row_inserted_ = 0;
+  cg_row_inserted_ = 0;
   row_scanned_ = 0;
   physical_row_count_ = 0;
+  sess_not_found_times_= 0;
 }
 
 bool ObSingleReplicaBuildCtx::is_valid() const
@@ -114,8 +116,10 @@ int ObSingleReplicaBuildCtx::assign(const ObSingleReplicaBuildCtx &other)
     ret_code_ = other.ret_code_;
     heart_beat_time_ = other.heart_beat_time_;
     row_inserted_ = other.row_inserted_;
+    cg_row_inserted_ = other.cg_row_inserted_;
     row_scanned_ = other.row_scanned_;
     physical_row_count_ = other.physical_row_count_;
+    sess_not_found_times_ = other.sess_not_found_times_;
     dest_tablet_id_ = other.dest_tablet_id_;
   }
   return ret;
@@ -159,6 +163,7 @@ int ObDDLReplicaBuildExecutor::build(const ObDDLReplicaBuildExecutorParam &param
     execution_id_ = param.execution_id_;
     data_format_version_ = param.data_format_version_;
     consumer_group_id_ = param.consumer_group_id_;
+    dest_cg_cnt_ = param.dest_cg_cnt_;
     min_split_start_scn_ = param.min_split_start_scn_;
     is_no_logging_ = param.is_no_logging_;
     ObArray<ObSingleReplicaBuildCtx> replica_build_ctxs;
@@ -376,6 +381,7 @@ int ObDDLReplicaBuildExecutor::update_build_progress(
     const int ret_code,
     const int64_t row_scanned,
     const int64_t row_inserted,
+    const int64_t cg_row_inserted,
     const int64_t physical_row_count)
 {
   int ret = OB_SUCCESS;
@@ -395,7 +401,7 @@ int ObDDLReplicaBuildExecutor::update_build_progress(
         LOG_WARN("failed to get replica build ctx", K(ret), K(tablet_id), K(addr));
       } else if (is_found) {
         if (OB_FAIL(update_replica_build_ctx(*replica_build_ctx,
-                ret_code, row_scanned, row_inserted, physical_row_count, false/*is_rpc_request*/,
+                ret_code, row_scanned, row_inserted, cg_row_inserted, physical_row_count, false/*is_rpc_request*/,
                 true/*is_observer_report*/))) {
           LOG_WARN("failed to update replica build ctx", K(ret), K(tablet_id), K(addr), K(ret_code));
         }
@@ -408,21 +414,32 @@ int ObDDLReplicaBuildExecutor::update_build_progress(
   return ret;
 }
 
-int ObDDLReplicaBuildExecutor::get_progress(int64_t &row_inserted, int64_t &physical_row_count, double &percent)
+int ObDDLReplicaBuildExecutor::get_progress(
+    int64_t &physical_row_count,
+    int64_t &row_inserted,
+    int64_t &cg_row_inserted,
+    double &row_percent,
+    double &cg_row_percent)
 {
   int ret = OB_SUCCESS;
   bool all_done = true;
-  row_inserted = 0;
   physical_row_count = 0;
-  percent = 0;
+  row_inserted = 0;
+  cg_row_inserted = 0;
+  row_percent = 0;
+  cg_row_percent= 0;
   // lock scope
   ObSpinLockGuard guard(lock_);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("replica build executor not init", K(ret));
+  } else if (dest_cg_cnt_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get replica build progress", K(ret), K(dest_cg_cnt_));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < replica_build_ctxs_.count(); ++i) {
     row_inserted += replica_build_ctxs_.at(i).row_inserted_;
+    cg_row_inserted += replica_build_ctxs_.at(i).cg_row_inserted_;
     physical_row_count += replica_build_ctxs_.at(i).physical_row_count_;
     if (ObReplicaBuildStat::BUILD_SUCCEED != replica_build_ctxs_.at(i).stat_) {
       all_done = false;
@@ -432,11 +449,14 @@ int ObDDLReplicaBuildExecutor::get_progress(int64_t &row_inserted, int64_t &phys
   if (OB_FAIL(ret)){
     // error occurred
   } else if (all_done) { // lob meta maybe 0 rows, percent should be 0; (in row storing)
-    percent = 100.0;
+    row_percent = 100.0;
+    cg_row_percent = 100.0;
   } else if (physical_row_count == 0) {
-    percent = 0.0;
+    row_percent = 0;
+    cg_row_percent = 0;
   } else {
-    percent = row_inserted * 100.0 / physical_row_count;
+    row_percent = row_inserted * 100.0 / physical_row_count;
+    cg_row_percent = cg_row_inserted * 100.0 / (physical_row_count * dest_cg_cnt_);
   }
   return ret;
 }
@@ -538,9 +558,9 @@ int ObDDLReplicaBuildExecutor::process_rpc_results(
               is_found))) {
         LOG_WARN("failed to get replica build ctx", K(ret));
       } else if (is_found) {
-        if (replica_build_ctx->stat_ != ObReplicaBuildStat::BUILD_INIT) {
-          continue; // already handle respone rpc
-        } else if (OB_FAIL(update_build_ctx(*replica_build_ctx,
+        /* BUILD_INIT: update build stat
+         * Other Build Stat: update build progress */
+        if (OB_FAIL(update_build_ctx(*replica_build_ctx,
                 result_array.at(i), ret_array.at(i)))) {
           LOG_WARN("failed to update build progress", K(ret));
         }
@@ -564,8 +584,8 @@ int ObDDLReplicaBuildExecutor::update_build_ctx(
     ret = OB_NOT_INIT;
     LOG_WARN("replica build executor not init", K(ret));
   } else if (OB_FAIL(update_replica_build_ctx(build_ctx, ret_code,
-          result->row_scanned_, result->row_inserted_, result->physical_row_count_, true/*is_rpc_request*/,
-          false/*is_observer_report*/))) {
+    result->row_scanned_, result->row_inserted_, result->cg_row_inserted_,
+    result->physical_row_count_, true/*is_rpc_request*/, false/*is_observer_report*/))) {
     LOG_WARN("failed to update replica build ctx", K(ret));
   }
   return ret;
@@ -879,6 +899,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
     const int64_t ret_code,
     const int64_t row_scanned,
     const int64_t row_inserted,
+    const int64_t cg_row_inserted,
     const int64_t physical_row_count,
     const bool is_rpc_request,
     const bool is_observer_report)
@@ -891,6 +912,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
     build_ctx.ret_code_ = OB_SUCCESS;
     if (is_rpc_request) {
       build_ctx.row_inserted_ = MAX(build_ctx.row_inserted_, row_inserted);
+      build_ctx.cg_row_inserted_ = MAX(build_ctx.cg_row_inserted_, cg_row_inserted);
       build_ctx.row_scanned_ = MAX(build_ctx.row_scanned_, row_scanned);
       build_ctx.physical_row_count_ = MAX(build_ctx.physical_row_count_, physical_row_count);
       build_ctx.stat_ = ObReplicaBuildStat::BUILD_REQUESTED;
@@ -898,6 +920,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
           K(build_ctx.src_tablet_id_), K(build_ctx.dest_tablet_id_));
     } else if (is_observer_report) {
       build_ctx.row_inserted_ = row_inserted;
+      build_ctx.cg_row_inserted_ = build_ctx.cg_row_inserted_;
       build_ctx.row_scanned_ = row_scanned;
       build_ctx.physical_row_count_ = physical_row_count;
       build_ctx.stat_ = ObReplicaBuildStat::BUILD_SUCCEED;
@@ -907,6 +930,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
   } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code)) {
     build_ctx.ret_code_ = OB_SUCCESS;
     build_ctx.row_inserted_ = 0;
+    build_ctx.cg_row_inserted_ = 0;
     build_ctx.row_scanned_ = 0;
     build_ctx.physical_row_count_ = 0;
     build_ctx.stat_ = ObReplicaBuildStat::BUILD_RETRY;
@@ -919,6 +943,7 @@ int ObDDLReplicaBuildExecutor::update_replica_build_ctx(
   } else { // other error ret_code
     build_ctx.ret_code_ = ret_code;
     build_ctx.row_inserted_ = 0;
+    build_ctx.cg_row_inserted_ = 0;
     build_ctx.row_scanned_ = 0;
     build_ctx.physical_row_count_ = 0;
     build_ctx.stat_ = ObReplicaBuildStat::BUILD_FAILED;

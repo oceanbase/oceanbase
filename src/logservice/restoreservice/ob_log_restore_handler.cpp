@@ -74,10 +74,25 @@ RestoreSyncStatus str_to_restore_sync_status(const ObString &str)
   return ret_status;
 }
 
+void ObRemoteFetchStat::update_fetch_stat(const ObRemoteFetchTaskStat &stat)
+{
+  fetch_task_count_++;
+  fetch_log_size_ += stat.fetch_log_size_;
+  gen_to_fetch_time_ += stat.start_fetch_ts_ - stat.gen_ts_;
+  fetch_log_time_ += stat.finish_fetch_ts_ - stat.start_fetch_ts_;
+  fetch_to_submit_time_ += stat.start_submit_ts_ - stat.finish_fetch_ts_;
+  submit_log_time_ += stat.finish_submit_ts_ - stat.start_submit_ts_;
+}
+
 ObLogRestoreHandler::ObLogRestoreHandler() :
   parent_(NULL),
   context_(),
-  restore_context_()
+  restore_context_(),
+  last_stat_ts_(OB_INVALID_TIMESTAMP),
+  cur_delay_count_(0),
+  last_delay_count_(0),
+  cur_stat_info_(),
+  last_stat_info_()
 {}
 
 ObLogRestoreHandler::~ObLogRestoreHandler()
@@ -141,6 +156,11 @@ void ObLogRestoreHandler::destroy()
     palf_env_ = NULL;
     id_ = -1;
     proposal_id_ = 0;
+    last_stat_ts_ = OB_INVALID_TIMESTAMP;
+    cur_delay_count_ = 0;
+    last_delay_count_ = 0;
+    cur_stat_info_.reset();
+    last_stat_info_.reset();
     role_ = ObRole::INVALID_ROLE;
     context_.reset();
   }
@@ -393,7 +413,8 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
 
 int ObLogRestoreHandler::update_max_fetch_info(const int64_t proposal_id,
                                                   const palf::LSN &lsn,
-                                                  const SCN &scn)
+                                                  const SCN &scn,
+                                                  const ObRemoteFetchTaskStat &stat)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -412,12 +433,28 @@ int ObLogRestoreHandler::update_max_fetch_info(const int64_t proposal_id,
   } else if (context_.max_fetch_lsn_.is_valid() && context_.max_fetch_lsn_ >= lsn) {
     // do nothing
   } else {
+    const int64_t max_fetch_ts = scn.convert_to_ts();
+    const int64_t cur_delay = stat.finish_submit_ts_ - max_fetch_ts;
+    const int64_t task_delay = stat.finish_submit_ts_ - stat.gen_ts_;
+    const int64_t max_delay = task_delay + cur_delay;
+    constexpr int64_t SECOND_US = 1000 * 1000;
+    cur_stat_info_.update_fetch_stat(stat);
     context_.max_fetch_lsn_ = lsn;
     context_.max_fetch_scn_ = scn;
     context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
-    if (parent_->set_to_end(scn)) {
-      // To stop and clear all restore log tasks and restore context, reset context and advance issue version
-      CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+
+    if (REACH_TIME_INTERVAL(1 * SECOND_US)) {
+      if (max_delay > 1 * SECOND_US && max_delay < 600 * SECOND_US) {
+        CLOG_LOG(INFO, "cur delay larger than 1s, print detail", K(max_delay), K(proposal_id),
+            K(id_), K(role_), K(task_delay), K(cur_delay), K(lsn), K(scn), K(stat));
+      }
+    }
+
+    if (OB_NOT_NULL(parent_)) {
+      if (parent_->set_to_end(scn)) {
+        // To stop and clear all restore log tasks and restore context, reset context and advance issue version
+        CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+      }
     }
   }
   return ret;
@@ -966,14 +1003,15 @@ int ObLogRestoreHandler::get_next_log_after_end_lsn_(ObRemoteLocationParent &loc
     ObRemoteLocationParent &location_parent_;
   };
   GetSourceFunctor get_source_func(location_parent);
-  ObRemoteLogGroupEntryIterator remote_iter(get_source_func);
+  ObRemoteIGroupEntryIterator remote_iter(get_source_func);
   LargeBufferPool tmp_buffer_pool;
   ObLogExternalStorageHandler tmp_handler;
-  LogGroupEntry tmp_entry;
+  ipalf::IGroupEntry tmp_entry;
   LSN tmp_lsn;
   const char *tmp_buf = NULL;
   int64_t tmp_buf_len = 0;
   constexpr int64_t DEFAULT_BUF_SIZE = 64L * 1024 * 1024;
+  const bool enable_logservice = GCONF.enable_logservice;
 
   if (OB_FAIL(tmp_buffer_pool.init("TmpLargePool", 1024L * 1024 * 1024))) {
     CLOG_LOG(WARN, "failed to init tmp_buffer_pool");
@@ -981,7 +1019,7 @@ int ObLogRestoreHandler::get_next_log_after_end_lsn_(ObRemoteLocationParent &loc
     CLOG_LOG(WARN, "failed to init tmp_handler");
   } else if (OB_FAIL(tmp_handler.start(0))) {
     CLOG_LOG(WARN, "failed to start tmp_handler");
-  } else if (OB_FAIL(remote_iter.init(MTL_ID(), ObLSID(id_), end_scn, end_lsn, palf::LSN(palf::LOG_MAX_LSN_VAL), &tmp_buffer_pool, &tmp_handler, DEFAULT_BUF_SIZE))) {
+  } else if (OB_FAIL(remote_iter.init(MTL_ID(), ObLSID(id_), end_scn, end_lsn, palf::LSN(palf::LOG_MAX_LSN_VAL), &tmp_buffer_pool, &tmp_handler, DEFAULT_BUF_SIZE, enable_logservice))) {
     CLOG_LOG(WARN, "failed to init remote_iter");
   } else if (OB_FAIL(remote_iter.next(tmp_entry, tmp_lsn, tmp_buf, tmp_buf_len))) {
     if (OB_ITER_END == ret) {
@@ -1063,7 +1101,7 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
 {
   int ret = OB_SUCCESS;
   share::SCN replayed_scn;
-  PalfBufferIterator iter;
+  ipalf::IPalfIterator<ipalf::ILogEntry> iter;
   done = false;
   ObLogService *logservice = MTL(ObLogService*);
   ObLogReplayService *replayservice = NULL;
@@ -1081,7 +1119,7 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
   } else if (OB_FAIL(iter.set_io_context(palf::LogIOContext(MTL_ID(), id_, palf::LogIOUser::RESTORE)))) {
     CLOG_LOG(WARN, "set_io_context failed", K(id_));
   } else {
-    palf::LogEntry entry;
+    ipalf::ILogEntry entry;
     palf::LSN lsn;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter.next())) {
@@ -1276,6 +1314,33 @@ int ObLogRestoreHandler::get_restore_sync_status(int ret_code,
   return ret;
 }
 
+void ObLogRestoreHandler::inc_delay_count()
+{
+  WLockGuard guard(lock_);
+  cur_delay_count_++;
+}
+
+void ObLogRestoreHandler::print_stat()
+{
+  int ret = OB_SUCCESS;
+  constexpr int64_t STAT_INTERVAL = 10 * 1000 * 1000;
+  WLockGuard guard(lock_);
+  if (OB_INVALID_TIMESTAMP == last_stat_ts_) {
+  } else {
+    ObRemoteFetchStat delta_stat = cur_stat_info_ - last_stat_info_;
+    ObRemoteFetchStat mean_stat = delta_stat / delta_stat.fetch_task_count_;
+    int64_t delay_count_delta = cur_delay_count_ - last_delay_count_;
+
+    CLOG_LOG(INFO, "[RESTORE_HANDLER] [STAT]", K(id_), K(delay_count_delta),
+        K(delta_stat), K(mean_stat), KPC(this),
+        "restore_delay", context_.max_fetch_scn_.is_valid() ?
+        context_.max_fetch_scn_.convert_to_ts(true) - context_.last_fetch_ts_ : 0);
+  }
+  last_delay_count_ = cur_delay_count_;
+  last_stat_info_ = cur_stat_info_;
+  last_stat_ts_ = ObTimeUtility::current_time();
+}
+
 int ObLogRestoreHandler::get_offline_scn_(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
@@ -1297,6 +1362,10 @@ void ObLogRestoreHandler::deep_copy_source_(ObRemoteSourceGuard &source_guard)
     CLOG_LOG(WARN, "parent_ is NULL", K(ret));
   } else if (OB_ISNULL(source = ObResSrcAlloctor::alloc(parent_->get_source_type(), share::ObLSID(id_)))) {
   } else if (FALSE_IT(parent_->deep_copy_to(*source))) {
+  } else if (! source->is_valid()) {
+    ObResSrcAlloctor::free(source); // free source when it is invalid
+    source = nullptr;
+    CLOG_LOG(WARN, "source is invalid");
   } else if (FALSE_IT(source_guard.set_source(source))) {
   }
 }

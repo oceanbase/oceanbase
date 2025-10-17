@@ -38,6 +38,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ObDiagnoseInfoPrio:
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_RS_SCHEDULE_ERROR, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "rs check progress failed",
     3, {"compaction_scn", "errno", "unfinish_table_cnt"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_RS_FROZEN_SCN_ERROR, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "unexpect frozen scn, maybe changed manually",
+    2, {"last_frozen_scn", "curr_frozen_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_ADD_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task add failed",
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "compaction report task process failed",
@@ -52,6 +54,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_REORG_SKIP_MAJOR_MERGE, ObDiagnoseInfoPr
 #endif
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
                       "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_MULTI_VERSION_START_NOT_ADVANCE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "multi version start not advance for a long time",
+    2, {"multi_version_start", "current_time"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 

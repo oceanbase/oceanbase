@@ -65,6 +65,7 @@
 #include "share/ob_create_hidden_tablev2_rpc_struct.h"
 #include "rootserver/ob_location_ddl_service.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
+#include "rootserver/ob_ccl_ddl_service.h"
 
 namespace oceanbase
 {
@@ -269,18 +270,6 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObReloadUnitManagerTask);
   };
 
-  class ObLoadDDLTask : public common::ObAsyncTimerTask
-  {
-  public:
-    explicit ObLoadDDLTask(ObRootService &root_service);
-    virtual ~ObLoadDDLTask() = default;
-    virtual int process() override;
-    virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
-    virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
-  private:
-    ObRootService &root_service_;
-  };
-
   class ObRefreshIOCalibrationTask : public common::ObAsyncTimerTask
   {
   public:
@@ -449,6 +438,7 @@ public:
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
   ObServerManager &get_server_mgr() { return server_manager_; }
+  ObServerZoneOpService &get_server_zone_op_service() { return server_zone_op_service_; }
   ObZoneManager &get_zone_mgr() { return zone_manager_; }
   ObUnitManager &get_unit_mgr() { return unit_manager_; }
   ObRootBalancer &get_root_balancer() { return root_balancer_; }
@@ -559,6 +549,7 @@ public:
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int parallel_create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
+  int parallel_drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDropTableRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
@@ -650,6 +641,8 @@ public:
   int create_udt_with_res(const obrpc::ObCreateUDTArg &arg,
                               obrpc::ObRoutineDDLRes &res);
   int drop_udt(const obrpc::ObDropUDTArg &arg);
+  int alter_udt_with_res(const obrpc::ObAlterUDTArg &arg,
+                         obrpc::ObRoutineDDLRes &res);
   //----End of functions for managing routines----
 
   //----Functions for managing dblinks----
@@ -748,6 +741,16 @@ public:
   int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
   //----End of functions for managing external resource----
 
+  //----Functions for managing ai model----
+  int create_ai_model(const obrpc::ObCreateAiModelArg &arg);
+  int drop_ai_model(const obrpc::ObDropAiModelArg &arg);
+  //----End of functions for managing ai model----
+
+  //----Functions for managing CCL rules----
+  int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
+  int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);
+  //----End of functions for managing CCL rules----
+
   // server related
   int load_server_manager();
   ObStatusChangeCallback &get_status_change_cb() { return status_change_cb_; }
@@ -785,6 +788,7 @@ public:
 
   // storage related
   int add_storage(const obrpc::ObAdminStorageArg &arg);
+  int add_storage_in_trans(const obrpc::ObAdminStorageArg &arg, common::ObMySQLTransaction &trans);
   int drop_storage(const obrpc::ObAdminStorageArg &arg);
   int alter_storage(const obrpc::ObAdminStorageArg &arg);
 
@@ -821,11 +825,11 @@ public:
   int run_job(const obrpc::ObRunJobArg &arg);
   int run_upgrade_job(const obrpc::ObUpgradeJobArg &arg);
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
+  int batch_upgrade_table_schema(const obrpc::ObBatchUpgradeTableSchemaArg &arg);
   int admin_flush_cache(const obrpc::ObAdminFlushCacheArg &arg);
   int admin_upgrade_cmd(const obrpc::Bool &arg);
   int admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeArg &arg);
   int admin_set_tracepoint(const obrpc::ObAdminSetTPArg &arg);
-  int admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg);
   /* physical restore */
   int physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg, obrpc::Int64 &job_id);
   int check_restore_tenant_valid(const share::ObPhysicalRestoreJob &job_info,
@@ -879,7 +883,6 @@ public:
   //update statistic cache
   int update_stat_cache(const obrpc::ObUpdateStatCacheArg &arg);
 
-  int schedule_load_ddl_task();
   int schedule_refresh_io_calibration_task();
   int schedule_check_storage_operation_status();
   int schedule_alter_log_external_table_task();
@@ -894,6 +897,7 @@ public:
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
+  ObTenantDDLService &get_tenant_ddl_service() { return tenant_ddl_service_; }
   ObZoneStorageManager &get_zone_storage_manager() { return zone_storage_manager_; }
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
@@ -922,7 +926,7 @@ public:
                         obrpc::ObReloadMasterKeyResult &result);
 #endif
   int root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg);
-
+  int parallel_htable_ddl(const obrpc::ObHTableDDLArg &arg, obrpc::ObHTableDDLRes &res);
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   int get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
@@ -955,6 +959,7 @@ private:
       const obrpc::ObCreateTableArg &arg,
       share::schema::ObTableSchema &table_schema);
   int clear_special_cluster_schema_status();
+  int update_inmemory_ls_table_();
   int check_tenant_gts_config(const int64_t tenant_id, bool &tenant_gts_config_ok,
                               share::schema::ObSchemaGetterGuard &schema_guard);
   int check_database_config(const int64_t tenant_id, bool &db_config_ok,
@@ -1030,6 +1035,9 @@ private:
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
+  int check_enable_database_sharding_none_(obrpc::ObAdminSetConfigItem &item);
+  int check_default_table_organization_(obrpc::ObAdminSetConfigItem &item);
+  int check_default_table_store_format_(obrpc::ObAdminSetConfigItem &item);
   int start_ddl_service_();
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
@@ -1118,7 +1126,6 @@ private:
   ObRefreshServerTask refresh_server_task_;  // not repeat & no retry
   ObCheckServerTask check_server_task_;      // repeat & no retry
   ObSelfCheckTask self_check_task_;  //repeat to succeed & no retry
-  ObLoadDDLTask load_ddl_task_; // repeat to succeed & no retry
   ObRefreshIOCalibrationTask refresh_io_calibration_task_; // retry to succeed & no repeat
   ObZoneStorageOperationTask zone_storage_operation_task_;  // repeat & no retry
   share::ObEventTableClearTask event_table_clear_task_;  // repeat & no retry
@@ -1130,7 +1137,9 @@ private:
 
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
   ObUpdateRsListTimerTask update_rs_list_timer_task_;
+#endif
   ObUpdateAllServerConfigTask update_all_server_config_task_;
   int64_t baseline_schema_version_;
 

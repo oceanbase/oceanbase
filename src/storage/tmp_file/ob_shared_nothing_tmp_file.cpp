@@ -596,11 +596,11 @@ int ObSharedNothingTmpFile::write(ObTmpFileIOWriteCtx &io_ctx, int64_t &cur_file
   } else if (OB_UNLIKELY(!io_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(fd_), K(io_ctx));
-  } else if (OB_UNLIKELY(is_deleting_)) {
+  } else if (OB_UNLIKELY(ATOMIC_LOAD(&is_deleting_))) {
     // this check is just a hint.
     // although is_deleting_ == false, it might be set as true in the processing of write().
     // we will check is_deleting_ again in the following steps
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_RESOURCE_RELEASED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else if (OB_FAIL(alloc_write_range_(io_ctx, start_write_offset, end_write_offset))) {
     LOG_WARN("fail to alloc write range", KR(ret), KPC(this), K(io_ctx));
@@ -633,7 +633,7 @@ int ObSharedNothingTmpFile::write(ObTmpFileIOWriteCtx &io_ctx, int64_t &cur_file
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("file size is not expected", KR(ret), KPC(this), K(start_write_offset), K(allocated_file_size_));
       } else if (OB_UNLIKELY(is_deleting_)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_RESOURCE_RELEASED;
         LOG_WARN("file is deleting", KR(ret), K(fd_));
       } else {
         bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE ||
@@ -648,6 +648,9 @@ int ObSharedNothingTmpFile::write(ObTmpFileIOWriteCtx &io_ctx, int64_t &cur_file
   return ret;
 }
 
+// For files smaller than 1MB, disk space is allocated from shared blocks, and the allocation size
+// doubles each time until it reaches a maximum of TMP_FILE_MIN_SHARED_PRE_ALLOC_PAGE_NUM.
+// Once this limit is reached, disk space is allocated from exclusive blocks.
 int ObSharedNothingTmpFile::alloc_write_range_(const ObTmpFileIOWriteCtx &io_ctx,
                                                int64_t &start_write_offset, int64_t &end_write_offset)
 {
@@ -738,6 +741,9 @@ int ObSharedNothingTmpFile::alloc_write_range_from_shared_block_(const int64_t t
                                           MAX(ObTmpFileGlobal::TMP_FILE_MIN_SHARED_PRE_ALLOC_PAGE_NUM << n,
                                               pre_allocated_batch_page_num_));
   const int64_t expected_page_num = MIN(ObTmpFileGlobal::TMP_FILE_MAX_SHARED_PRE_ALLOC_PAGE_NUM, 2 * necessary_page_num);
+  // we pre-allocate at least 2 pages (up to 4 pages if there is enough space)
+  // for writes smaller than 8KB. In the worst case (when all files are smaller than 1MB),
+  // this can result in a 4x write amplification.
   if (OB_FAIL(tmp_file_block_manager_->alloc_page_range(necessary_page_num, expected_page_num, alloced_ranges))) {
     LOG_WARN("fail to alloc page range", KR(ret), K(fd_), K(necessary_page_num), K(expected_page_num));
   } else if (OB_UNLIKELY(alloced_ranges.empty())) {
@@ -806,11 +812,11 @@ int ObSharedNothingTmpFile::inner_batch_write_(ObTmpFileIOWriteCtx &io_ctx,
     // this check is just a hint.
     // although is_deleting_ == false, it might be set as true in the processing of write().
     // we will check is_deleting_ again in the following steps
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_RESOURCE_RELEASED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else if (OB_UNLIKELY(batch_write_size <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_), K(start_write_offset), K(end_write_offset));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid write offset", KR(ret), K(fd_), K(start_write_offset), K(end_write_offset));
   } else if (OB_FAIL(meta_tree_.search_data_items(start_write_offset, batch_write_size, io_ctx.get_io_timeout_ms(), data_items))) {
     LOG_WARN("fail to search data items", KR(ret), K(fd_), K(start_write_offset), K(batch_write_size), K(io_ctx));
   } else if (OB_FAIL(page_iterator.init(&data_items, begin_virtual_page_id))) {
@@ -916,16 +922,21 @@ int ObSharedNothingTmpFile::write_partly_page_(ObTmpFileIOWriteCtx &io_ctx,
   } else if (FALSE_IT(block = block_handle.get())) {
   } else if (OB_FAIL(write_cache_->shared_lock(fd_))) {
     LOG_WARN("fail to shared lock", KR(ret), K(fd_));
-  } else if (alloc_partly_write_page_(io_ctx, virtual_page_id, page_id, block_handle, page_handle)) {
-    LOG_WARN("fail to alloc partly write page", KR(ret), K(fd_), K(virtual_page_id), K(page_id), K(block_handle));
-  } else if (OB_UNLIKELY(!page_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("page handle is not valid", KR(ret), K(fd_), K(virtual_page_id), K(page_handle));
-  } else if (FALSE_IT(page = page_handle.get_page())) {
-  } else if (OB_FAIL(inner_write_page_(page_offset, write_size, write_buf, page_handle, block_handle))) {
-    LOG_WARN("fail to write page", KR(ret), K(fd_), K(virtual_page_id), KPC(page), KPC(block));
-  } else if (OB_FAIL(write_cache_->unlock(fd_))) {
-    LOG_ERROR("fail to unlock", KR(ret), K(fd_));
+  } else {
+    if (OB_FAIL(alloc_partly_write_page_(io_ctx, virtual_page_id, page_id, block_handle, page_handle))) {
+      LOG_WARN("fail to alloc partly write page", KR(ret), K(fd_), K(virtual_page_id), K(page_id), K(block_handle));
+    } else if (OB_UNLIKELY(!page_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("page handle is not valid", KR(ret), K(fd_), K(virtual_page_id), K(page_handle));
+    } else if (FALSE_IT(page = page_handle.get_page())) {
+    } else if (OB_FAIL(inner_write_page_(page_offset, write_size, write_buf, page_handle, block_handle))) {
+      LOG_WARN("fail to write page", KR(ret), K(fd_), K(virtual_page_id), KPC(page), KPC(block));
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(write_cache_->unlock(fd_))) {
+      LOG_ERROR("fail to unlock", KR(tmp_ret), K(fd_), KPC(this));
+    }
   }
 
   return ret;

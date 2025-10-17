@@ -26,6 +26,7 @@
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "pl/ob_pl.h"
+#include "pl/external_routine/ob_java_udaf.h"
 
 namespace oceanbase
 {
@@ -43,8 +44,8 @@ using namespace common;
 using namespace common::number;
 namespace sql
 {
-
 OB_SERIALIZE_MEMBER(HashRollupRTInfo, rollup_grouping_id_, expand_exprs_, gby_exprs_, dup_expr_pairs_);
+OB_SERIALIZE_MEMBER(GroupingSetRTInfo, grouping_set_id_, groupset_exprs_, pruned_exprs_);
 
 
 OB_DEF_SERIALIZE(ObAggrInfo)
@@ -91,6 +92,19 @@ OB_DEF_SERIALIZE(ObAggrInfo)
     OB_UNIS_ENCODE(*hash_rollup_info_);
   } else {
     OB_UNIS_ENCODE(grouping_with_hash_rollup);
+  }
+
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_
+  );
+
+  int8_t enable_grouping_set_expansion = (grouping_set_info_ != nullptr);
+  OB_UNIS_ENCODE(enable_grouping_set_expansion);
+  if (grouping_set_info_ != nullptr) {
+    OB_UNIS_ENCODE(*grouping_set_info_);
   }
   return ret;
 }
@@ -155,6 +169,28 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
       }
     }
   }
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_
+  );
+
+  int8_t enable_grouping_set_expansion = 0;
+  OB_UNIS_DECODE(enable_grouping_set_expansion);
+  if (OB_SUCC(ret) && enable_grouping_set_expansion) {
+    CK(alloc_ != NULL);
+    if (OB_SUCC(ret)) {
+      grouping_set_info_ = OB_NEWx(GroupingSetRTInfo, alloc_, (*alloc_));
+      if (OB_ISNULL(grouping_set_info_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        OB_UNIS_DECODE(*grouping_set_info_);
+      }
+    }
+  }
   return ret;
 }
 
@@ -200,6 +236,19 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   if (hash_rollup_info_ != nullptr) {
     OB_UNIS_ADD_LEN(*hash_rollup_info_);
   }
+
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_
+  );
+
+  int8_t enable_grouping_set_expansion = 0;
+  OB_UNIS_ADD_LEN(enable_grouping_set_expansion);
+  if (grouping_set_info_ != nullptr) {
+    OB_UNIS_ADD_LEN(*grouping_set_info_);
+  }
   return len;
 }
 
@@ -228,7 +277,13 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
        KPC_(item_size_param_expr),
        K_(is_need_deserialize_row),
        K_(pl_agg_udf_type_id),
-       K_(pl_result_type)
+       K_(pl_result_type),
+       K_(external_routine_type),
+       K_(external_routine_entry),
+       K_(external_routine_url),
+       K_(external_routine_resource),
+       KP_(hash_rollup_info),
+       KP_(grouping_set_info)
        );
   J_OBJ_END();
   return pos;
@@ -282,13 +337,35 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     LOG_WARN("fail to assign group_idxs_", K(ret));
   } else if (OB_FAIL(distinct_hash_funcs_.assign(rhs.distinct_hash_funcs_))) {
     LOG_WARN("fail to assign distinct_hash_funcs_", K(ret));
+  }
+  if (OB_FAIL(ret)) {
   } else if (rhs.hash_rollup_info_ != nullptr) {
     hash_rollup_info_ = OB_NEWx(HashRollupRTInfo, alloc_, (*alloc_));
     if (OB_ISNULL(hash_rollup_info_)) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_FAIL(hash_rollup_info_->assign(*rhs.hash_rollup_info_))) {
       LOG_WARN("assign hash rollup info failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    external_routine_type_ = rhs.external_routine_type_;
+
+    // alloc_ is from rhs, so shallow copy is enough
+    external_routine_entry_ = rhs.external_routine_entry_;
+    external_routine_url_ = rhs.external_routine_url_;
+    external_routine_resource_ = rhs.external_routine_resource_;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (rhs.grouping_set_info_ != nullptr) {
+    grouping_set_info_ = OB_NEWx(GroupingSetRTInfo, alloc_, (*alloc_));
+    if (OB_ISNULL(grouping_set_info_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (OB_FAIL(grouping_set_info_->assign(*rhs.grouping_set_info_))) {
+      LOG_WARN("assign grouping set info failed", K(ret));
     }
   }
   return ret;
@@ -304,6 +381,18 @@ int HashRollupRTInfo::assign(const HashRollupRTInfo &other)
     LOG_WARN("assign array failed", K(ret));
   } else if (OB_FAIL(dup_expr_pairs_.assign(other.dup_expr_pairs_))) {
     LOG_WARN("assign array failed", K(ret));
+  }
+  return ret;
+}
+
+int GroupingSetRTInfo::assign(const GroupingSetRTInfo &other)
+{
+  int ret = OB_SUCCESS;
+  grouping_set_id_ = other.grouping_set_id_;
+  if (OB_FAIL(groupset_exprs_.assign(other.groupset_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(pruned_exprs_.assign(other.pruned_exprs_))) {
+    LOG_WARN("assign failed", K(ret));
   }
   return ret;
 }
@@ -1404,6 +1493,10 @@ int ObAggregateProcessor::init()
     if (OB_ISNULL(aggr_info.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr node is null", K(aggr_info), K(i), K(ret));
+    } else if (T_FUN_ARG_MIN == aggr_info.get_expr_type() ||
+               T_FUN_ARG_MAX == aggr_info.get_expr_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("this agg func not supported vec1.0", K(aggr_info.get_expr_type()));
     } else {
       has_distinct_ |= aggr_info.has_distinct_;
       has_group_concat_ |= (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type() ||
@@ -1422,7 +1515,11 @@ int ObAggregateProcessor::init()
       if (aggr_info.has_distinct_) {
         ++distinct_count_;
       }
-
+      if (aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT
+          || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS
+          || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+        approx_cnt_distinct_prec_ = aggr_info.expr_->extra_;
+      }
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
         // ObAggregateProcessor::init would be invoked many times under groupby rescan
@@ -3442,7 +3539,10 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
           LOG_WARN("curr_row_results count is not 1", K(stored_row));
         } else if (!stored_row.cells()[0].is_null()) {
           if (aggr_fun == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-            if (OB_UNLIKELY(stored_row.cells()[0].len_ < get_llc_size())) {
+            int64_t llc_size = 0;
+            if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+              LOG_WARN("get llc buckets number failed", K(ret));
+            } else if (OB_UNLIKELY(stored_row.cells()[0].len_ != llc_size)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid argument length", K(ret), K(stored_row.cells()[0].len_));
             }
@@ -3476,15 +3576,23 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
             aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
           aggr_cell.set_tiny_num_int(share::aggregate::is_grouping(aggr_info, grouping_val.get_int()));
           aggr_cell.set_is_evaluated(true);
+        } else if (aggr_info.grouping_set_info_ != nullptr) {
+          ObDatum grouping_val = aggr_info.grouping_set_info_->grouping_set_id_->locate_expr_datum(eval_ctx_);
+          aggr_cell.set_tiny_num_int(share::aggregate::is_grouping(aggr_info, grouping_val.get_int()));
+          aggr_cell.set_is_evaluated(true);
         } else {
           aggr_cell.set_tiny_num_int(0);
         }
         break;
       }
       case T_FUN_GROUPING_ID: {
-        if (aggr_info.hash_rollup_info_ != nullptr) {
-          ObDatum grouping_val =
-            aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
+        if (aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr) {
+          ObDatum grouping_val;
+          if (aggr_info.hash_rollup_info_ != nullptr) {
+            grouping_val = aggr_info.hash_rollup_info_->rollup_grouping_id_->locate_expr_datum(eval_ctx_);
+          } else {
+            grouping_val = aggr_info.grouping_set_info_->grouping_set_id_->locate_expr_datum(eval_ctx_);
+          }
           if (lib::is_oracle_mode()) {
             char num_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
             ObDatum tmp_datum;
@@ -3815,7 +3923,8 @@ int ObAggregateProcessor::process_aggr_batch_result(
       break;
     }
     case T_FUN_GROUPING: {
-      if (aggr_info.hash_rollup_info_!= nullptr && !aggr_cell.get_is_evaluated()) {
+      if ((aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr)
+          && !aggr_cell.get_is_evaluated()) {
         if (OB_FAIL(grouping_calc_batch(aggr_info, aggr_cell, selector))) {
           LOG_WARN("calc grouping failed", K(ret));
         }
@@ -3823,7 +3932,8 @@ int ObAggregateProcessor::process_aggr_batch_result(
       break;
     }
     case T_FUN_GROUPING_ID: {
-      if (aggr_info.hash_rollup_info_ != nullptr && !aggr_cell.get_is_evaluated()) {
+      if ((aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr)
+          && !aggr_cell.get_is_evaluated()) {
         if (OB_FAIL(grouping_id_calc_batch(aggr_info, aggr_cell, selector))) {
           LOG_WARN("calc grouping id failed", K(ret));
         }
@@ -3847,14 +3957,17 @@ int ObAggregateProcessor::process_aggr_batch_result(
       break;
     }
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
-      if (1 != param_exprs->count()) {
+      int64_t llc_size = 0;
+      if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+        LOG_WARN("get llc buckets number failed", K(ret));
+      } else if (1 != param_exprs->count()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("The count of APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE is not 1",
           K(param_exprs->count()));
       } else {
         ObDatumVector arg_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
         ret = approx_count_merge_calc_batch(aggr_cell.get_iter_result(), aggr_cell, arg_datums,
-                                            aggr_info.is_number(), selector);
+                                            aggr_info.is_number(), selector, llc_size);
       }
       break;
     }
@@ -4106,7 +4219,10 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       bool has_null_cell = false;
       ObDatum *llc_bitmap = &aggr_cell.get_iter_result();
       uint64_t hash_value = 0;
-      if (OB_FAIL(llc_calc_hash_value(stored_row,
+      int64_t llc_size = 0;
+      if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+        LOG_WARN("get llc buckets number failed", K(ret));
+      } else if (OB_FAIL(llc_calc_hash_value(stored_row,
                                       aggr_info.param_exprs_,
                                       has_null_cell,
                                       hash_value))) {
@@ -4114,7 +4230,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       } else if (has_null_cell) {
        /*do nothing*/
       } else {
-        ret = llc_add_value(hash_value, llc_bitmap->get_string());
+        ret = llc_add_value(hash_value, llc_bitmap->get_string(), get_llc_bucket_bits(llc_size));
       }
       break;
     }
@@ -4388,7 +4504,7 @@ int ObAggregateProcessor::collect_aggr_result(
     case T_FUN_GROUPING: {
       bool null_result = false;
       int64_t new_value = aggr_cell.get_tiny_num_int();
-      if (aggr_info.hash_rollup_info_) {
+      if (aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr) {
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
           null_result = true;
         }
@@ -4418,7 +4534,7 @@ int ObAggregateProcessor::collect_aggr_result(
       break;
     }
     case T_FUN_GROUPING_ID: {
-      if (aggr_info.hash_rollup_info_) {
+      if (aggr_info.hash_rollup_info_ != nullptr || aggr_info.grouping_set_info_ != nullptr) {
         if (OB_UNLIKELY(!aggr_cell.get_is_evaluated())) {
           result.set_null();
         } else if (lib::is_mysql_mode()) {
@@ -5375,6 +5491,9 @@ int ObAggregateProcessor::get_percentile_param(const ObAggrInfo &aggr_info,
   if (!ob_is_number_tc(param_datum_meta.type_)) {//deduce type时已经转换为number
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("percentile value invalid", K(ret), K(param_datum_meta), K(param));
+  } else if (param.is_null()) {
+    ret = OB_ERR_PERCENTILE_VALUE_INVALID;
+    LOG_WARN("percentile value is null", K(ret));
   } else if (OB_FAIL(percentile.from(ObNumber(param.get_number()), local_allocator))) {
     LOG_WARN("failed to create number percentile", K(ret));
   } else if (percentile.is_negative()
@@ -6287,7 +6406,8 @@ int ObAggregateProcessor::approx_count_merge_calc_batch(
   AggrCell &aggr_cell,
   const ObDatumVector &arg_datums,
   const bool is_number,
-  const T &selector
+  const T &selector,
+  const int64_t llc_buckets_num
 )
 {
   int ret = OB_SUCCESS;
@@ -6296,7 +6416,10 @@ int ObAggregateProcessor::approx_count_merge_calc_batch(
     if (arg_datums.at(nth_row)->is_null()) {
       continue;
     }
-    if (!aggr_cell.get_is_evaluated()) {
+    if (OB_UNLIKELY(llc_buckets_num != arg_datums.at(nth_row)->len_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid merge length", K(ret), K(llc_buckets_num), K(arg_datums.at(nth_row)->len_));
+    } else if (!aggr_cell.get_is_evaluated()) {
       // init firstly
       ret = clone_aggr_cell(aggr_cell, *arg_datums.at(nth_row), is_number);
       aggr_cell.set_is_evaluated(true);
@@ -6316,6 +6439,10 @@ int ObAggregateProcessor::approx_count_calc_batch(
 {
   int ret = OB_SUCCESS;
   int64_t nth_row = 0;
+  int64_t llc_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+    LOG_WARN("get llc buckets number failed", K(ret));
+  }
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     uint64_t hash_value = 0;
     bool has_null_cell = false;
@@ -6335,7 +6462,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
     if (OB_SUCC(ret)) {
       LOG_DEBUG("debug approx_count_calc_batch", K(has_null_cell), K(dst));
       if (!has_null_cell) {
-        ret = llc_add_value(hash_value, dst.get_string());
+        ret = llc_add_value(hash_value, dst.get_string(), get_llc_bucket_bits(llc_size));
       }
     }
   }
@@ -6626,8 +6753,10 @@ template<typename T>
 int ObAggregateProcessor::grouping_calc_batch(const ObAggrInfo &aggr_info, AggrCell &aggr_cell, const T &selector)
 {
   int ret = OB_SUCCESS;
-  ObExpr *rollup_grouping_id = aggr_info.hash_rollup_info_->rollup_grouping_id_;
-  ObDatumVector src = rollup_grouping_id->locate_expr_datumvector(eval_ctx_);
+  ObExpr *grouping_id = (aggr_info.hash_rollup_info_ != nullptr ?
+                                 aggr_info.hash_rollup_info_->rollup_grouping_id_ :
+                                 aggr_info.grouping_set_info_->grouping_set_id_);
+  ObDatumVector src = grouping_id->locate_expr_datumvector(eval_ctx_);
   for (decltype(selector.begin()) it = selector.begin();
        OB_SUCC(ret) && !aggr_cell.get_is_evaluated() && it < selector.end();
        selector.next(it)) {
@@ -6642,8 +6771,10 @@ template<typename T>
 int ObAggregateProcessor::grouping_id_calc_batch(const ObAggrInfo &aggr_info, AggrCell &aggr_cell, const T &selector)
 {
   int ret = OB_SUCCESS;
-  ObExpr *rollup_grouping_id = aggr_info.hash_rollup_info_->rollup_grouping_id_;
-  ObDatumVector src = rollup_grouping_id->locate_expr_datumvector(eval_ctx_);
+  ObExpr *grouping_id = aggr_info.hash_rollup_info_ != nullptr ?
+                                 aggr_info.hash_rollup_info_->rollup_grouping_id_ :
+                                 aggr_info.grouping_set_info_->grouping_set_id_;
+  ObDatumVector src = grouping_id->locate_expr_datumvector(eval_ctx_);
   if (lib::is_oracle_mode()) {
     char nmb_buf[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
     number::ObCompactNumber *res_cnum = reinterpret_cast<number::ObCompactNumber *>(nmb_buf);
@@ -6895,13 +7026,16 @@ int ObAggregateProcessor::llc_add(ObDatum &result, const ObDatum &new_value)
   ObString res_buf = result.get_string();
   ObString left_buf = result.get_string();
   ObString right_buf = new_value.get_string();;
-  if (OB_UNLIKELY(left_buf.length() < get_llc_size())
-      || OB_UNLIKELY(right_buf.length() < get_llc_size())) {
+  int64_t llc_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+    LOG_WARN("get llc bucket number failed", K(ret));
+  } else if (OB_UNLIKELY(left_buf.length() < llc_size)
+      || OB_UNLIKELY(right_buf.length() < llc_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buffer size don't match", K(left_buf.length()), K(right_buf.length()), K(ret));
   } else {
     //TODO::here we can use SSE
-    for (int64_t i = 0; i < get_llc_size(); ++i) {
+    for (int64_t i = 0; i < llc_size; ++i) {
       res_buf.ptr()[i] = std::max(static_cast<uint8_t>(left_buf[i]),
                                   static_cast<uint8_t>(right_buf[i]));
     }
@@ -6909,32 +7043,30 @@ int ObAggregateProcessor::llc_add(ObDatum &result, const ObDatum &new_value)
   return ret;
 }
 
-int ObAggregateProcessor::get_llc_size()
-{
-  return sizeof(char ) * LLC_NUM_BUCKETS;
-}
-
-int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &llc_bitmap_buf)
+int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &llc_bitmap_buf,
+                                        const int64_t llc_bucket_bits /* 10 */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(llc_add_value(value, const_cast<char*>(llc_bitmap_buf.ptr()), llc_bitmap_buf.length()))) {
+  if (OB_FAIL(llc_add_value(value, const_cast<char *>(llc_bitmap_buf.ptr()),
+                            llc_bitmap_buf.length(), llc_bucket_bits))) {
     LOG_WARN("fail to add value", K(ret));
   }
   return ret;
 }
 
-int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
+int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size,
+                                        const int64_t llc_bucket_bits/* 10 */)
 {
   int ret = OB_SUCCESS;
-  uint64_t bucket_index = value >> (64 - LLC_BUCKET_BITS);
+  uint64_t bucket_index = value >> (64 - llc_bucket_bits);
   uint64_t pmax = 0;
-  if (0 == value << LLC_BUCKET_BITS) {
+  if (0 == value << llc_bucket_bits) {
     // do nothing
   } else {
-    pmax = ObExprEstimateNdv::llc_leading_zeros(value << LLC_BUCKET_BITS, 64 - LLC_BUCKET_BITS) + 1;
+    pmax = ObExprEstimateNdv::llc_leading_zeros(value << llc_bucket_bits, 64 - llc_bucket_bits) + 1;
   }
   ObString::obstr_size_t llc_num_buckets = size;
-  OB_ASSERT(size == get_llc_size());
+  // OB_ASSERT(size == get_llc_size());
   OB_ASSERT(ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets));
   OB_ASSERT(llc_num_buckets > bucket_index);
   if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
@@ -6947,18 +7079,25 @@ int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_b
 int ObAggregateProcessor::llc_init(AggrCell &aggr_cell)
 {
   int ret = OB_SUCCESS;
-  char llc_bitmap_buf[sizeof(char ) * LLC_NUM_BUCKETS] = {};
-  ObDatum src_datum;
-  src_datum.set_string(llc_bitmap_buf, sizeof(char ) * LLC_NUM_BUCKETS);
-  ret = clone_aggr_cell(aggr_cell, src_datum);
-  LOG_DEBUG("llc init", K(aggr_cell));
+  int64_t llc_size = 0;
+  int64_t need_cell_len = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+    LOG_WARN("get llc buckets number failed", K(ret));
+  } else if (FALSE_IT(need_cell_len = llc_size * sizeof(char) + 2 * sizeof(int64_t))) {
+  } else if (OB_FAIL(clone_cell(aggr_cell, need_cell_len, nullptr))) {
+    LOG_WARN("clone cell failed", K(ret));
+  } else {
+    const char *buf = aggr_cell.get_buf() + 2 * sizeof(int64_t);
+    MEMSET(const_cast<char *>(buf), 0, sizeof(char) * llc_size);
+    aggr_cell.get_iter_result().pack_ = llc_size * sizeof(char);
+  }
   return ret;
 }
 
-int ObAggregateProcessor::llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc)
+int ObAggregateProcessor::llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc, const int64_t llc_buckets_size)
 {
   int ret = OB_SUCCESS;
-  llc_map_size = get_llc_size();
+  llc_map_size = llc_buckets_size;
   OB_ASSERT(llc_map_size > 0);
   if (OB_ISNULL(llc_map = static_cast<char *> (alloc.alloc(llc_map_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -6973,9 +7112,10 @@ int ObAggregateProcessor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   char *llc_bitmap_buf = NULL;
-  const int64_t llc_bitmap_size = get_llc_size();
-  if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx_,
-      llc_bitmap_size))) {
+  int64_t llc_bitmap_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_bitmap_size))) {
+    LOG_WARN("get llc bucket number failed", K(ret));
+  } else if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx_, llc_bitmap_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc", K(llc_bitmap_size), K(ret));
   } else {
@@ -7492,6 +7632,20 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
     LOG_WARN("rewind failed", KPC(extra), K(ret));
   } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else if (ObExternalRoutineType::INTERNAL_ROUTINE != aggr_info.external_routine_type_) {  // external UDAF
+    if (is_java_external_routine(aggr_info.external_routine_type_)) {
+      pl::ObJavaUDAFExecutor executor(aggr_info, eval_ctx_, *extra);
+
+      if (OB_FAIL(executor.init())) {
+        LOG_WARN("failed to init java udaf executor", K(ret), K(aggr_info));
+      } else if (OB_FAIL(executor.execute(result))) {
+        LOG_WARN("failed to execute java UDAF", K(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported external UDAF", K(ret), K(aggr_info.external_routine_type_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not supported external UDAF");
+    }
   } else if (OB_FAIL(pl_agg_udf_func.init(eval_ctx_.exec_ctx_.get_my_session(),
                                           &(eval_ctx_.exec_ctx_.get_allocator()),
                                           &eval_ctx_.exec_ctx_,
@@ -9734,6 +9888,18 @@ bool ObAggregateProcessor::has_listagg_non_const_separator() const
   }
   return has_it;
 }
+
+int ObAggregateProcessor::get_llc_buckets_num(int64_t &llc_bucket_size)
+{
+  int ret = OB_SUCCESS;
+  llc_bucket_size = ObAggrInfo::get_approx_cnt_llc_buck_num(approx_cnt_distinct_prec_);
+  if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_bucket_size))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid llc bucket number", K(ret), K(llc_bucket_size));
+  }
+  return ret;
+}
+
 
 template<typename RES_T, typename ARG_T>
 struct ObDecIntSumOpFunc

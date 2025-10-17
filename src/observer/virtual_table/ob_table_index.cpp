@@ -540,6 +540,7 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
 {
   int ret = OB_SUCCESS;
   bool is_sub_end = false;
+
   if (OB_ISNULL(schema_guard_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "schema guard is not init", KR(ret), KP(schema_guard_));
@@ -597,9 +598,11 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
           const bool is_fts_index = index_schema->is_fts_index();
           uint64_t doc_id_col_id = OB_INVALID_ID;
           uint64_t ft_col_id = OB_INVALID_ID;
+          ObDocIDType type = ObDocIDType::INVALID;
           if (index_schema->is_built_in_fts_index()) {
             is_sub_end = true;
-          } else if (is_fts_index && OB_FAIL(index_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id))) {
+          } else if (is_fts_index
+                     && OB_FAIL(index_schema->get_fulltext_typed_col_ids(doc_id_col_id, type, ft_col_id))) {
             LOG_WARN("get generated column ids failed", K(ret));
           } else if (is_fts_index) {
             ObArray<uint64_t> dep_column_ids;
@@ -607,24 +610,26 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
             if (OB_INVALID_ID == static_cast<uint64_t>(ft_dep_col_idx_)) {
               ft_dep_col_idx_ = 0;
             }
-            if (OB_UNLIKELY(doc_id_col_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == doc_id_col_id
-                             || ft_col_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == ft_col_id)) {
+            if (OB_UNLIKELY(!ObDocIDUtils::is_docid_col_id_valid(doc_id_col_id) || ft_col_id <= OB_APP_MIN_COLUMN_ID
+                            || OB_INVALID_ID == ft_col_id)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id), K(ft_col_id));
             } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(ft_col_id))) {
               ret = OB_SCHEMA_ERROR;
               SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
-            } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(table_schema, *gen_column_schema, dep_column_ids))) {
+            } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(table_schema,
+                                                                                   *gen_column_schema,
+                                                                                   dep_column_ids))) {
               LOG_WARN("get cascaded column ids from column schema failed", K(ret), K(*gen_column_schema));
             } else if (dep_column_ids.count() <= ft_dep_col_idx_) {
               is_sub_end = true;
               ft_dep_col_idx_ = OB_INVALID_ID;
             } else if (OB_FAIL(add_fulltext_index_column(database_name,
-                                                  table_schema,
-                                                  index_schema,
-                                                  cells,
-                                                  col_count,
-                                                  dep_column_ids[ft_dep_col_idx_]))) {
+                                                         table_schema,
+                                                         index_schema,
+                                                         cells,
+                                                         col_count,
+                                                         dep_column_ids[ft_dep_col_idx_]))) {
               ret = OB_ERR_UNEXPECTED;
               SERVER_LOG(WARN, "fail to add normal index column", K(ret), K(col_count), K(ft_dep_col_idx_));
             }

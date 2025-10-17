@@ -342,6 +342,57 @@ int ObDatumRowkey::to_store_rowkey(const common::ObIArray<share::schema::ObColDe
   return ret;
 }
 
+int ObDatumRowkey::deep_copy(ObStoreRowkey &dest,
+                             common::ObIAllocator &allocator,
+                             const common::ObIArray<share::schema::ObColDesc> &col_descs,
+                             const int64_t datum_cnt,
+                             const uint64_t extra_rowkey_cnt) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(col_descs.count() < datum_cnt || datum_cnt <= 0 || datum_cnt > datum_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid arguments", KR(ret), K(datum_cnt), K(col_descs));
+  } else {
+    const int64_t alloc_size = get_deep_copy_size() + sizeof(ObObj) * extra_rowkey_cnt;
+    char *buffer = nullptr;
+    if (OB_ISNULL(buffer = static_cast<char *>(allocator.alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Fail to alloc memory for obj buffer", KR(ret));
+    } else {
+      ObObj *objs = reinterpret_cast<ObObj *>(buffer);
+      int64_t pos = sizeof(ObObj) * (datum_cnt + extra_rowkey_cnt);
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < datum_cnt; i++) {
+        ObObj obj;
+        if (OB_FAIL(get_datum(i).to_obj_enhance(obj, col_descs.at(i).col_type_))) {
+          STORAGE_LOG(WARN, "Fail to transform datum to obj", KR(ret));
+        } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+          obj.set_has_lob_header();
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(objs[i].deep_copy(obj, buffer, alloc_size, pos))) {
+          STORAGE_LOG(WARN, "Fail to deep copy obj", KR(ret));
+        }
+      }
+
+      // set extra column
+      for (int64_t i = 0; OB_SUCC(ret) && i < extra_rowkey_cnt; i++) {
+        objs[datum_cnt + i].set_max_value();
+      }
+
+      // assign to dest
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(dest.assign(objs, datum_cnt + extra_rowkey_cnt))) {
+        STORAGE_LOG(WARN, "Fail to assign target rowkey", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDatumRowkey::to_multi_version_rowkey(const bool min_value,
                                            common::ObIAllocator &allocator,
                                            ObDatumRowkey &dest) const

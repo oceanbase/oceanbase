@@ -222,7 +222,10 @@ public:
 class ObDtlLinkedBuffer
     : public common::ObLink
 {
-  OB_UNIS_VERSION(1);
+  // master version is 3, 42x version is 2.
+  // compatibility handling based on the version number during deserialization.
+  // notice: Do not modify the version number arbitrarily.
+  OB_UNIS_VERSION(3);
 public:
   ObDtlLinkedBuffer()
       : buf_(), size_(), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),

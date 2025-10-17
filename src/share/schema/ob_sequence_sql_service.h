@@ -68,6 +68,15 @@ public:
                               common::ObISQLClient &sql_client,
                               ObIAllocator &allocator,
                               common::number::ObNumber &next_value);
+  int send_rpc_clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id,
+                                    const uint64_t timeout, const common::ObAddr &server,
+                                    const obrpc::ObSrvRpcProxy &srv_rpc_proxy,
+                                    obrpc::ObSeqCleanCacheRes &cache_res, bool clear_self);
+
+  int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id, ObNumber &inner_next_value,
+                           obrpc::ObSeqCleanCacheRes &cache_res, ObIAllocator &allocator,
+                           const bool clear_self = true);
+
 private:
   int clean_and_write_back_cache(common::ObISQLClient *sql_client,
                                  const ObSequenceSchema &sequence_schema, bool &need_write_back,
@@ -80,8 +89,6 @@ private:
                                   const uint64_t new_sequence_id,
                                   common::ObISQLClient &sql_client,
                                   ObIAllocator &allocator);
-  int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id, ObNumber &inner_next_value,
-                           obrpc::ObSeqCleanCacheRes &cache_res, ObIAllocator &allocator);
 
   int get_lastest_local_cache(ObFixedArray<SequenceCacheNode, common::ObIAllocator> &prefetch_nodes,
                              const SequenceCacheNode &target_cache_node, const ObNumber &inner_next_value,

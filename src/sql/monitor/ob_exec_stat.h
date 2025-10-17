@@ -34,6 +34,8 @@ EVENT_INFO(PUSHDOWN_STORAGE_FILTER_ROW_CNT, pushdown_storage_filter_row_cnt)
 EVENT_INFO(FUSE_ROW_CACHE_HIT, fuse_row_cache_hit)
 EVENT_INFO(SCHEDULE_TIME, schedule_time)
 EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
+EVENT_INFO(TX_TABLE_READ_CNT, tx_table_read_cnt)
+EVENT_INFO(OUTROW_LOB_CNT, outrow_lob_cnt)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -108,6 +110,8 @@ struct ObExecRecord
       concurrency_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                     \
       schedule_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SCHEDULE_WAIT_TIME);                 \
       network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
+      tx_table_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::TX_TABLE_READ_CNT);                   \
+      outrow_lob_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::OUTROW_LOB_CNT);                   \
     } \
   } while(0);
 
@@ -149,6 +153,8 @@ struct ObExecRecord
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
     UPDATE_EVENT(fuse_row_cache_hit);
     UPDATE_EVENT(network_wait_time);
+    UPDATE_EVENT(tx_table_read_cnt);
+    UPDATE_EVENT(outrow_lob_cnt);
   }
 
   uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {
@@ -333,6 +339,8 @@ struct ObAuditRecordData {
     stmt_type_ = sql::stmt::T_NONE;
     sql_memory_used_ = nullptr;
     trans_status_ = INVALID_STATUS;
+    ccl_rule_id_ = 0;
+    ccl_match_time_ = 0;
   }
 
   int64_t get_elapsed_time() const
@@ -459,6 +467,8 @@ struct ObAuditRecordData {
   int64_t plsql_compile_time_;
   ObTransStatus trans_status_;
   int64_t insert_update_or_replace_duplicate_row_count_;
+  int64_t ccl_rule_id_;
+  int64_t ccl_match_time_;
 };
 
 } //namespace sql

@@ -246,7 +246,9 @@ private:
         valid_offsets_(NULL),
         allocator_(allocator),
         range_set_(),
-        is_phy_rowid_range_(false)
+        is_phy_rowid_range_(false),
+        force_no_use_start_(false),
+        force_no_use_end_(false)
     {
     }
 
@@ -307,6 +309,8 @@ private:
     common::ObIAllocator &allocator_;
     common::hash::ObHashSet<ObRangeWrapper, common::hash::NoPthreadDefendMode> range_set_;
     bool is_phy_rowid_range_;
+    bool force_no_use_start_;
+    bool force_no_use_end_;
   };
 
   struct ObRangeGraph
@@ -461,6 +465,7 @@ public:
                                          common::ObIAllocator &allocator,
                                          ObExecContext &exec_ctx,
                                          const ParamStore &param_store,
+                                         int64_t range_buffer_idx,
                                          void *range_buffer,
                                          ObQueryRangeArray &ranges,
                                          const common::ObDataTypeCastParams &dtc_params) const;
@@ -803,11 +808,15 @@ private:
   // find all single range
   int and_first_search(ObSearchState &search_state,
                        ObKeyPart *cur,
+                       bool force_use_start,
+                       bool force_use_end,
                        ObQueryRangeArray &ranges,
                        bool &all_single_value_ranges,
                        const common::ObDataTypeCastParams &dtc_params);
   int and_first_in_key(ObSearchState &search_state,
                        ObKeyPart *cur,
+                       bool force_use_start,
+                       bool force_use_end,
                        ObQueryRangeArray &ranges,
                        bool &all_single_value_ranges,
                        const ObDataTypeCastParams &dtc_params);
@@ -1029,6 +1038,7 @@ private:
                                bool &use_ori_cmp_type);
 
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
+  virtual bool enable_new_false_range() const { return false; }
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   static const int64_t MAX_RANGE_SIZE_OLD = 10000;

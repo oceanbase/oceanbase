@@ -255,7 +255,7 @@ int ObDDLIncRedoLogWriter::write_inc_start_log_with_retry(
     } else if (OB_FAIL(write_inc_start_log(lob_meta_tablet_id, tx_desc, start_scn))) {
       LOG_WARN("write inc ddl start log failed", K(ret));
       if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
-        usleep(1000L * 1000L); // 1s
+        ob_usleep(1000L * 1000L); // 1s
         ++retry_count;
         LOG_WARN("retry write ddl inc start log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
         ret = OB_SUCCESS;
@@ -282,7 +282,7 @@ int ObDDLIncRedoLogWriter::write_inc_redo_log_with_retry(
       LOG_WARN("write inc ddl redo log failed", K(ret));
     }
     if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
-      usleep(1000L * 1000L); // 1s
+      ob_usleep(1000L * 1000L); // 1s
       ++retry_count;
       LOG_WARN("retry write ddl inc redo log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
       ret = OB_SUCCESS;
@@ -312,7 +312,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log_with_retry(
     } else if (OB_FAIL(write_inc_commit_log(allow_remote_write, lob_meta_tablet_id, tx_desc))) {
       LOG_WARN("write inc ddl commit log failed", K(ret));
       if (ObDDLIncRedoLogWriter::need_retry(ret, false/*allow_remote_write*/)) {
-        usleep(1000L * 1000L); // 1s
+        ob_usleep(1000L * 1000L); // 1s
         ++retry_count;
         LOG_WARN("retry write ddl inc commit log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
         ret = OB_SUCCESS;

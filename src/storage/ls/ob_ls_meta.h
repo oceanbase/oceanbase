@@ -69,7 +69,7 @@ public:
   int set_start_work_state();
   int set_start_ha_state();
   int set_finish_ha_state();
-  int set_remove_state();
+  int set_remove_state(const bool write_slog);
   const ObLSPersistentState &get_persistent_state() const;
   ObLSMeta &operator=(const ObLSMeta &other);
   share::SCN get_clog_checkpoint_scn() const;

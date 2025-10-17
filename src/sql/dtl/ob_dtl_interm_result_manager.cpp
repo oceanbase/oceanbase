@@ -192,6 +192,8 @@ int ObDTLIntermResultManager::clear_mem_profile_map()
             key = node_it->first;
           }
         }
+        LOG_ERROR("When destroying the manager,"
+          "the memory profile is unexpectedly destroyed.", K(ret), K(key));
         destroy_mem_profile(key);
       }
       ++bucket_it;
@@ -282,14 +284,12 @@ int ObDTLIntermResultManager::insert_interm_result_info(ObDTLIntermResultKey &ke
   if (!result_info->is_store_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row store is null", K(ret));
-  } else if (-1 == dir_id_) {
+  } else if (DTL_IR_STORE_DO(*result_info, get_file_dir_id) <= 0) {
     // The code here is mainly for the use of the temp_table.
     // For the px module,
     // the dir_id has already been set in the previous access_mem_profile.
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(result_info->get_tenant_id(), dir_id_))) {
-      LOG_WARN("allocate file directory failed", K(ret));
-    } else {
-      DTL_IR_STORE_DO(*result_info, set_dir_id, dir_id_);
+    if (OB_FAIL(DTL_IR_STORE_DO(*result_info, alloc_dir_id))) {
+      LOG_WARN("alloc dir id failed", K(ret));
     }
   }
 
@@ -798,20 +798,25 @@ int ObDTLIntermResultManager::access_mem_profile(const ObDTLMemProfileKey &mem_p
                                                  ObDtlLinkedBuffer &buffer)
 {
   int ret = OB_SUCCESS;
-  ObAtomicGetIntermMemProfileCall call;
-  if (OB_FAIL(mem_profile_map_.atomic_refactored(mem_profile_key, call))) {
+  if (OB_UNLIKELY(!mem_profile_key.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mem_profile_key invalid", K(ret), K(mem_profile_key));
   } else {
-    ret = call.ret_;
-  }
-  if (ret == OB_SUCCESS) {
-    mem_profile_info = call.mem_profile_info_;
-  } else if (ret == OB_HASH_NOT_EXIST) {
-    ret = OB_SUCCESS;
-    if (OB_FAIL(init_mem_profile(mem_profile_key, mem_profile_info, buffer))) {
-      LOG_WARN("fail to init mem_profile", K(ret), K(mem_profile_key));
+    ObAtomicGetIntermMemProfileCall call;
+    if (OB_FAIL(mem_profile_map_.atomic_refactored(mem_profile_key, call))) {
+    } else {
+      ret = call.ret_;
     }
-  } else {
-    LOG_WARN("fail to get mem_profile", K(ret), K(mem_profile_key));
+    if (ret == OB_SUCCESS) {
+      mem_profile_info = call.mem_profile_info_;
+    } else if (ret == OB_HASH_NOT_EXIST) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(init_mem_profile(mem_profile_key, mem_profile_info, buffer))) {
+        LOG_WARN("fail to init mem_profile", K(ret), K(mem_profile_key));
+      }
+    } else {
+      LOG_WARN("fail to get mem_profile", K(ret), K(mem_profile_key));
+    }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(mem_profile_info)) {
     DTL_IR_STORE_DO(interm_res_info, set_allocator, mem_profile_info->allocator_);

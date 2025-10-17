@@ -15,17 +15,18 @@
 
 #include "share/catalog/ob_catalog_meta_getter.h"
 #include "share/catalog/ob_external_catalog.h"
+#include "share/schema/ob_schema_cache.h"
 
 namespace oceanbase
 {
 namespace share
 {
 
-class ObCatalogSchemaCacheKey final : public common::ObIKVCacheKey
+class ObLakeTableMetadataCacheKey final : public common::ObIKVCacheKey
 {
 public:
-  ObCatalogSchemaCacheKey() : tenant_id_(OB_INVALID), catalog_id_(OB_INVALID) {}
-  ~ObCatalogSchemaCacheKey() override {}
+  ObLakeTableMetadataCacheKey() : tenant_id_(OB_INVALID), catalog_id_(OB_INVALID) {}
+  ~ObLakeTableMetadataCacheKey() override {}
   bool operator==(const common::ObIKVCacheKey &other) const override;
   uint64_t hash() const override;
   uint64_t get_tenant_id() const override { return tenant_id_; }
@@ -40,43 +41,54 @@ public:
   common::ObString table_name_;
 };
 
+class ObLakeTableMetadataCacheValue final : public common::ObIKVCacheValue
+{
+public:
+  ObLakeTableMetadataCacheValue() : lake_table_metadata_(NULL)
+  {
+  }
+  ObLakeTableMetadataCacheValue(const ObILakeTableMetadata *lake_table_metadata)
+      : lake_table_metadata_(lake_table_metadata)
+  {
+  }
+  ~ObLakeTableMetadataCacheValue() = default;
+  int64_t size() const override;
+  int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
+  TO_STRING_KV(KP(lake_table_metadata_));
+  const ObILakeTableMetadata *lake_table_metadata_;
+};
+
 class ObCachedCatalogSchemaMgr
 {
 public:
   ObCachedCatalogSchemaMgr() = default;
   int init();
   static ObCachedCatalogSchemaMgr &get_instance();
-  int get_table_schema(ObCatalogMetaGetter *meta_getter,
-                       const uint64_t tenant_id,
-                       const uint64_t catalog_id,
-                       const common::ObString &ns_name,
-                       const common::ObString &tbl_name,
-                       const ObNameCaseMode case_mode,
-                       share::schema::ObTableSchema &table_schema);
+  int get_lake_table_metadata(ObIAllocator &allocator,
+                              ObCatalogMetaGetter *meta_getter,
+                              const uint64_t tenant_id,
+                              const uint64_t catalog_id,
+                              const uint64_t database_id,
+                              const uint64_t table_id,
+                              const common::ObString &ns_name,
+                              const common::ObString &tbl_name,
+                              const ObNameCaseMode case_mode,
+                              ObILakeTableMetadata *&lake_table_metadata);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCachedCatalogSchemaMgr);
-  int check_table_schema_cache_valid_(ObCatalogMetaGetter *meta_getter,
-                                      const int64_t cached_time,
-                                      const uint64_t tenant_id,
-                                      const uint64_t catalog_id,
-                                      const common::ObString &ns_name,
-                                      const common::ObString &tbl_name,
-                                      const ObNameCaseMode case_mode,
-                                      bool &is_valid);
   static constexpr int64_t LOAD_CACHE_LOCK_CNT = 16;
   static const int64_t LOCK_TIMEOUT = 2 * 1000000L;
   common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
-  common::ObKVCache<ObCatalogSchemaCacheKey, schema::ObSchemaCacheValue> schema_cache_;
-  // common::ObKVCache<ObCatalogSchemaCacheKey, ObExternalTableFiles> file_cache_;
+  common::ObKVCache<ObLakeTableMetadataCacheKey, ObLakeTableMetadataCacheValue> lake_metadata_cache_;
 };
 
 // 判断 Cache 是否过期的逻辑，只做在 ObCachingCatalogMetaGetter 这一层，不要侵入内部 Catalog 的 API
 class ObCachedCatalogMetaGetter final : public ObICatalogMetaGetter
 {
 public:
-  ObCachedCatalogMetaGetter(ObSchemaGetterGuard &schema_getter_guard, ObIAllocator &allocator)
-      : delegate_(ObCatalogMetaGetter{schema_getter_guard, allocator})
+  ObCachedCatalogMetaGetter(schema::ObSchemaGetterGuard &schema_getter_guard, ObIAllocator &allocator)
+      : delegate_(ObCatalogMetaGetter{schema_getter_guard, allocator}), allocator_(allocator)
   {
   }
 
@@ -92,20 +104,39 @@ public:
 
   int fetch_namespace_schema(const uint64_t tenant_id,
                              const uint64_t catalog_id,
+                             const uint64_t database_id,
                              const common::ObString &ns_name,
                              const ObNameCaseMode case_mode,
-                             share::schema::ObDatabaseSchema &database_schema) override;
+                             share::schema::ObDatabaseSchema *&database_schema) override;
 
-  int fetch_table_schema(const uint64_t tenant_id,
-                         const uint64_t catalog_id,
-                         const common::ObString &ns_name,
-                         const common::ObString &tbl_name,
-                         const ObNameCaseMode case_mode,
-                         share::schema::ObTableSchema &table_schema) override;
+  int fetch_lake_table_metadata(ObIAllocator &allocator,
+                                const uint64_t tenant_id,
+                                const uint64_t catalog_id,
+                                const uint64_t database_id,
+                                const uint64_t table_id,
+                                const common::ObString &ns_name,
+                                const common::ObString &tbl_name,
+                                const ObNameCaseMode case_mode,
+                                ObILakeTableMetadata *&table_metadata) override;
 
+  int fetch_table_statistics(ObIAllocator &allocator,
+                             sql::ObSqlSchemaGuard &sql_schema_guard,
+                             const ObILakeTableMetadata *table_metadata,
+                             const ObIArray<ObString> &partition_values,
+                             const ObIArray<ObString> &column_names,
+                             ObOptExternalTableStat *&external_table_stat,
+                             ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) override;
+
+  int fetch_partitions(ObIAllocator &allocator,
+                       const ObILakeTableMetadata *table_metadata,
+                       Partitions &partitions) override;
+
+  int get_cache_refresh_interval_sec(const ObILakeTableMetadata *table_metadata,
+                                     int64_t &sec) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCachedCatalogMetaGetter);
   ObCatalogMetaGetter delegate_;
+  ObIAllocator &allocator_;
 };
 
 } // namespace share

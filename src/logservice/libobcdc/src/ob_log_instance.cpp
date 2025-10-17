@@ -57,6 +57,7 @@
 #include "ob_log_rocksdb_store_service.h" // RocksDbStoreService
 #include "ob_cdc_auto_config_mgr.h"       // CDC_CFG_MGR
 #include "ob_cdc_malloc_sample_info.h"    // ObCDCMallocSampleInfo
+#include "share/ls/ob_ls_log_stat_info.h"          // ObLogserviceModelInfo
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
@@ -90,6 +91,13 @@
         (void)var->destroy(); \
         delete v; \
         v = NULL; \
+      } \
+    } while (0)
+
+#define MARK_STOP_FLAG(v) \
+    do { \
+      if (OB_NOT_NULL(v)) { \
+        v->mark_stop_flag(); \
       } \
     } while (0)
 
@@ -244,6 +252,9 @@ int ObLogInstance::init_with_start_tstamp_usec(const char *config_file,
     LOG_ERROR("config init fail", KR(ret));
   } else if (OB_FAIL(TCONF.load_from_file(config_file))) {
     LOG_ERROR("load config from file fail", KR(ret), K(config_file));
+    // init self addr
+  } else if (OB_FAIL(init_self_addr_())) {
+    LOG_ERROR("init self addr error", KR(ret));
   } else if (OB_FAIL(init_common_(start_tstamp_ns, err_cb))) {
     LOG_ERROR("init_common_ fail", KR(ret), K(start_tstamp_ns), K(err_cb));
   } else {
@@ -284,6 +295,9 @@ int ObLogInstance::init_with_start_tstamp_usec(const std::map<std::string, std::
     LOG_ERROR("config init fail", KR(ret));
   } else if (OB_FAIL(TCONF.load_from_map(configs))) {
     LOG_ERROR("load config from map fail", KR(ret));
+    // init self addr
+  } else if (OB_FAIL(init_self_addr_())) {
+    LOG_ERROR("init self addr error", KR(ret));
   } else if (OB_FAIL(init_common_(start_tstamp_ns, err_cb))) {
     // handle error
   } else {
@@ -395,19 +409,18 @@ int ObLogInstance::set_start_global_trans_version(const int64_t start_global_tra
 }
 
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
-// TODO by qingxia: impl config item for log service in cdc
-int init_max_syslog_file_count_with_libpalf_()
+int ObLogInstance::init_max_syslog_file_count_with_libpalf(logservice::ObLogserviceModelInfo &logservice_model_info)
 {
   int ret = OB_SUCCESS;
-  const bool enable_logservice = false;
+  const bool enable_logservice = logservice_model_info.get_model();
   int64_t libpalf_max_syslog_file_count = 0;
   int64_t max_log_file_count = 0;
   int64_t max_syslog_disk_size = 0;
   if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::cal_libpalf_shared_syslog_capacity(
     TCONF.max_log_file_count, 0, libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE,
-    OB_LOGGER.DEFAULT_MAX_FILE_SIZE, libpalf_max_syslog_file_count, max_log_file_count, max_syslog_disk_size))) {
+    MAX_LOG_FILE_SIZE, libpalf_max_syslog_file_count, max_log_file_count, max_syslog_disk_size))) {
     LOG_ERROR("cal_libpalf_shared_syslog_capacity fail", KR(ret), K(TCONF.max_log_file_count.get()),
-      K(libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE), K(OB_LOGGER.DEFAULT_MAX_FILE_SIZE));
+      K(libpalf::LibPalfLogger::LIBPALF_SHARED_MAX_SYSLOG_CAPACITY_PERCENTAGE), K(MAX_LOG_FILE_SIZE));
   } else if (enable_logservice && OB_FAIL(libpalf::LibPalfLogger::set_max_syslog_file_count(libpalf_max_syslog_file_count))) {
     LOG_ERROR("set libpalf_max_syslog_file_count fail", KR(ret), KR(libpalf_max_syslog_file_count));
   } else if (!enable_logservice && FALSE_IT(max_log_file_count = TCONF.max_log_file_count)) { // do nothing
@@ -417,6 +430,8 @@ int init_max_syslog_file_count_with_libpalf_()
   return ret;
 }
 #endif
+
+#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 
 int ObLogInstance::init_logger_()
 {
@@ -474,7 +489,7 @@ int ObLogInstance::init_logger_()
       const char *extra_flags = "|Sanity";
     #endif
     _LOG_INFO("====================libobcdc start====================");
-    _LOG_INFO("libobcdc %s %s", PACKAGE_VERSION, RELEASEID);
+    _LOG_INFO("libobcdc %s", PACKAGE_VERSION);
     _LOG_INFO("BUILD_VERSION: %s", build_version());
     _LOG_INFO("BUILD_TIME: %s %s", build_date(), build_time());
     _LOG_INFO("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
@@ -487,8 +502,6 @@ int ObLogInstance::init_logger_()
   return ret;
 }
 
-#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
-
 void ObLogInstance::print_version()
 {
   #ifndef ENABLE_SANITY
@@ -496,7 +509,7 @@ void ObLogInstance::print_version()
   #else
     const char *extra_flags = "|Sanity";
   #endif
-  MPRINT("libobcdc %s %s", PACKAGE_VERSION, RELEASEID);
+  MPRINT("libobcdc %s", PACKAGE_VERSION);
   MPRINT("REVISION: %s", build_version());
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s%s\n", build_flags(), extra_flags);
@@ -578,11 +591,14 @@ int ObLogInstance::init_sys_var_for_generate_column_schema_()
 int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
   int64_t current_timestamp_usec = get_timestamp() * NS_CONVERSION;
 
   if (start_tstamp_ns <= 0) {
     start_tstamp_ns =  current_timestamp_usec;
     _LOG_INFO("start libobcdc from current timestamp: %ld", start_tstamp_ns);
+  } else {
+    _LOG_INFO("start libobcdc from user specified timestamp: %ld", start_tstamp_ns);
   }
 
   if (OB_SUCC(ret)) {
@@ -601,7 +617,7 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
     if (OB_FAIL(common::ObClockGenerator::init())) {
       LOG_ERROR("failed to init ob clock generator", KR(ret));
     }
-    // 校验配置项是否满足期望
+    // check config items are valid or not
     else if (OB_FAIL(TCONF.check_all())) {
       LOG_ERROR("check config fail", KR(ret));
     } else if (OB_FAIL(dump_config_())) {
@@ -733,7 +749,7 @@ int ObLogInstance::init_self_addr_()
 }
 
 // init schema module
-int ObLogInstance::init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version)
+int ObLogInstance::init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   const uint64_t sys_tenant_id = OB_SYS_TENANT_ID;
@@ -741,13 +757,13 @@ int ObLogInstance::init_schema_(const int64_t start_tstamp_us, int64_t &sys_star
 
   INIT(schema_getter_, ObLogSchemaGetter, tenant_sql_proxy_.get_ob_mysql_proxy(),
       &(TCONF.get_common_config()), TCONF.cached_schema_version_count,
-      TCONF.history_schema_version_count);
+      TCONF.history_schema_version_count, timeout);
 
   if (OB_SUCC(ret)) {
     // Get the SYS tenant startup schema version
     // Note: SYS tenants do not need to handle tenant deletion scenarios
     if (OB_FAIL(schema_getter_->get_schema_version_by_timestamp(sys_tenant_id, start_tstamp_us,
-        sys_start_schema_version, GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+        sys_start_schema_version, timeout))) {
       LOG_ERROR("get_schema_version_by_timestamp fail", KR(ret), K(sys_tenant_id), K(start_tstamp_us));
     }
   }
@@ -771,7 +787,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *rs_list = TCONF.rootserver_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
-  int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
@@ -780,7 +795,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *working_mode_str = TCONF.working_mode.str();
   WorkingMode working_mode = get_working_mode(working_mode_str);
   const char *refresh_mode_str = TCONF.meta_data_refresh_mode.str();
-  RefreshMode refresh_mode = get_refresh_mode(refresh_mode_str);
+  RefreshMode refresh_mode = parse_refresh_mode(refresh_mode_str);
   const char *fetching_mode_str = TCONF.fetching_log_mode.str();
   ClientFetchingMode fetching_mode = get_fetching_mode(fetching_mode_str);
   const char *archive_dest_str = TCONF.archive_dest.str();
@@ -883,7 +898,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_sql_provider_())) {
       LOG_ERROR("init_sql_provider_ failed", KR(ret));
@@ -932,7 +946,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(br_pool_, ObLogBRPool, TCONF.binlog_record_prealloc_count);
 
-  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
+  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, TCONF.sort_trans_participants);
 
   INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
 
@@ -966,13 +980,14 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   const int64_t start_tstamp_usec = start_tstamp_ns / NS_CONVERSION;
+  const int64_t timeout = TCONF.init_timeout.get();
   // The initialization of schema depends on the initialization of timezone_info_getter_,
   // and the initialization of timezone_info_getter_ depends on the initialization of tenant_mgr_
   if (OB_SUCC(ret)) {
     // Initialize schema-related modules, split patterns, and SYS tenant starting schema versions based on start-up timestamps
     if (is_online_refresh_mode(refresh_mode_)) {
-      if (OB_FAIL(init_schema_(start_tstamp_usec, sys_start_schema_version_))) {
-        LOG_ERROR("init schema fail", KR(ret), K(start_tstamp_usec));
+      if (OB_FAIL(init_schema_(start_tstamp_usec, sys_start_schema_version_, timeout))) {
+        LOG_ERROR("init schema fail", KR(ret), K(start_tstamp_usec), "timeout", TVAL_TO_STR(timeout));
       }
     } else if (is_data_dict_refresh_mode(refresh_mode_)) {
       sys_start_schema_version_ = start_tstamp_usec;
@@ -999,7 +1014,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   ObLogSysTableHelper::ClusterInfo cluster_info;
   if (OB_SUCC(ret)) {
     if (is_integrated_fetching_mode(fetching_mode_)) {
-      if (OB_FAIL(query_cluster_info_(cluster_info))) {
+      if (OB_FAIL(query_cluster_info_(cluster_info, timeout))) {
         LOG_ERROR("query_cluster_info_ fail", KR(ret), K(cluster_info));
       }
     } else {
@@ -1076,8 +1091,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(start_tenant_service_())) {
-    LOG_ERROR("start_tenant_service_ failed", KR(ret));
+  if (OB_SUCC(ret) && OB_FAIL(start_tenant_service_(timeout))) {
+    LOG_ERROR("start_tenant_service_ failed", KR(ret), "timeout", TVAL_TO_STR(timeout));
   }
 
   if (is_mock_fail_on_init) {
@@ -1085,7 +1100,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K_(sys_start_schema_version),
-        K(max_cached_trans_ctx_count), K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
+        K_(is_schema_split_mode), K_(enable_filter_sys_tenant));
   } else {
     do_destroy_(true/*force_destroy*/);
   }
@@ -1293,14 +1308,15 @@ int ObLogInstance::config_data_start_schema_version_(const int64_t global_data_s
 }
 
 
-int ObLogInstance::start_tenant_service_()
+int ObLogInstance::start_tenant_service_(const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start_tenant_service_ begin", K_(start_tstamp_ns), K_(sys_start_schema_version));
   // config tenant mgr
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(config_tenant_mgr_(start_tstamp_ns_, sys_start_schema_version_))) {
-      LOG_ERROR("config_tenant_mgr_ fail", KR(ret), K_(start_tstamp_ns), K_(sys_start_schema_version));
+    if (OB_FAIL(config_tenant_mgr_(start_tstamp_ns_, sys_start_schema_version_, timeout))) {
+      LOG_ERROR("config_tenant_mgr_ fail", KR(ret),
+          K_(start_tstamp_ns), K_(sys_start_schema_version), "timeout", TVAL_TO_STR(timeout));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1325,7 +1341,8 @@ int ObLogInstance::start_tenant_service_()
 }
 
 int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
-    const int64_t sys_schema_version)
+    const int64_t sys_schema_version,
+    const int64_t timeout)
 {
   int ret = OB_SUCCESS;
 
@@ -1361,13 +1378,12 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
   if (OB_SUCC(ret)) {
     if (is_online_sql_not_available()) {
       bool add_tenant_succ = false;
-      const char *tenant_name = nullptr;
-
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name;
       if (OB_FAIL(tenant_mgr_->add_tenant(
           start_tstamp_ns,
           sys_schema_version,
           tenant_name,
-          GET_SCHEMA_TIMEOUT_ON_START_UP,
+          timeout,
           add_tenant_succ))) {
         LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
       } else if (! add_tenant_succ) {
@@ -1379,7 +1395,7 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
       if (OB_FAIL(tenant_mgr_->add_all_tenants(
           start_tstamp_ns,
           sys_schema_version,
-          GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+          timeout))) {
         LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
       }
     }
@@ -1587,6 +1603,9 @@ void ObLogInstance::do_stop_(const char *stop_reason)
 
     // stop thread
     wait_threads_stop_();
+    if (is_data_dict_refresh_mode(refresh_mode_)) {
+      ObLogMetaDataService::get_instance().mark_stop_flag();
+    }
     // stop timezon info getter
     timezone_info_getter_->stop();
 
@@ -1640,30 +1659,30 @@ int ObLogInstance::get_tenant_ids(std::vector<uint64_t> &tenant_ids)
 void ObLogInstance::mark_stop_flag(const char *stop_reason)
 {
   stop_flag_ = true;
-  if (inited_) {
-    if (OB_ISNULL(stop_reason)) {
-      stop_reason = "UNKNOWN";
-    }
-    LOG_INFO("mark_stop_flag begin", K(global_errno_), KCSTRING(stop_reason));
-
-    fetcher_->mark_stop_flag();
-    sys_ls_handler_->mark_stop_flag();
-    ddl_parser_->mark_stop_flag();
-    dml_parser_->mark_stop_flag();
-    sequencer_->mark_stop_flag();
-    formatter_->mark_stop_flag();
-    lob_data_merger_->mark_stop_flag();
-    storager_->mark_stop_flag();
-    reader_->mark_stop_flag();
-    store_service_->mark_stop_flag();
-    trans_msg_sorter_->mark_stop_flag();
-    committer_->mark_stop_flag();
-    resource_collector_->mark_stop_flag();
-    timezone_info_getter_->mark_stop_flag();
-    lib::ThreadPool::stop();
-
-    LOG_INFO("mark_stop_flag end", K(global_errno_), KCSTRING(stop_reason));
+  if (OB_ISNULL(stop_reason)) {
+    stop_reason = "UNKNOWN";
   }
+  LOG_INFO("mark_stop_flag begin", K(global_errno_), K_(inited), KCSTRING(stop_reason));
+  if (is_data_dict_refresh_mode(refresh_mode_)) {
+    ObLogMetaDataService::get_instance().mark_stop_flag();
+  }
+  MARK_STOP_FLAG(fetcher_);
+  MARK_STOP_FLAG(sys_ls_handler_);
+  MARK_STOP_FLAG(ddl_parser_);
+  MARK_STOP_FLAG(dml_parser_);
+  MARK_STOP_FLAG(sequencer_);
+  MARK_STOP_FLAG(formatter_);
+  MARK_STOP_FLAG(lob_data_merger_);
+  MARK_STOP_FLAG(storager_);
+  MARK_STOP_FLAG(reader_);
+  MARK_STOP_FLAG(store_service_);
+  MARK_STOP_FLAG(trans_msg_sorter_);
+  MARK_STOP_FLAG(committer_);
+  MARK_STOP_FLAG(resource_collector_);
+  MARK_STOP_FLAG(timezone_info_getter_);
+  lib::ThreadPool::stop();
+
+  LOG_INFO("mark_stop_flag end", K(global_errno_), KCSTRING(stop_reason));
 }
 
 int ObLogInstance::next_record(IBinlogRecord **record, const int64_t timeout_us)
@@ -1943,6 +1962,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
             dml_unique_id.assign_ptr(buf, static_cast<int32_t>(pos));
 
             if (0 == br_unique_id.compare(dml_unique_id)) {
+              LOG_INFO("verify_dml_unique_id_ succ", KP(br), K(br_unique_id), K(dml_unique_id));
               // succ
             } else {
               LOG_ERROR("verify_dml_unique_id_ fail", K(br_unique_id), K(dml_unique_id), KPC(task));
@@ -1977,6 +1997,15 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
           }
         }
       }
+    } else if (EBEGIN == record_type || EDDL == record_type) {
+      ObString br_unique_id;
+      if (OB_FAIL(get_br_filter_value_(*br, 1, br_unique_id))) {
+        LOG_ERROR("get_br_filter_value_ fail", KR(ret), K(br_unique_id));
+      } else {
+        LOG_INFO("verify_dml_unique_id_ succ", KP(br), K(record_type), K(br_unique_id));
+      }
+    } else {
+      LOG_INFO("verify_dml_unique_id_ skip", KP(br), K(record_type));
     }
   }
 
@@ -2056,33 +2085,31 @@ void ObLogInstance::handle_error(const int err_no, const char *fmt, ...)
   static const int64_t MAX_ERR_MSG_LEN = 1024;
   static char err_msg[MAX_ERR_MSG_LEN];
 
-  if (inited_) {
-    // Call the error callback only once
-    if (0 == ATOMIC_CAS(&handle_error_flag_, 0, 1)) {
-      va_list ap;
-      va_start(ap, fmt);
-      vsnprintf(err_msg, sizeof(err_msg), fmt, ap);
-      va_end(ap);
+  // Call the error callback only once
+  if (0 == ATOMIC_CAS(&handle_error_flag_, 0, 1)) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(err_msg, sizeof(err_msg), fmt, ap);
+    va_end(ap);
 
-      global_errno_ = (err_no == OB_SUCCESS ? OB_IN_STOP_STATE : err_no);
-      _LOG_INFO("HANDLE_ERROR: err_cb=%p, errno=%d, errmsg=\"%s\"", err_cb_, err_no, err_msg);
+    global_errno_ = (err_no == OB_SUCCESS ? OB_IN_STOP_STATE : err_no);
+    _LOG_INFO("HANDLE_ERROR: err_cb=%p, errno=%d, errmsg=\"%s\"", err_cb_, err_no, err_msg);
 
-      if (NULL != err_cb_) {
-        ObCDCError err;
-        err.level_ = ObCDCError::ERR_ABORT; // FIXME: Support for other types of error levels
-        err.errno_ = err_no;
-        err.errmsg_ = err_msg;
+    if (NULL != err_cb_) {
+      ObCDCError err;
+      err.level_ = ObCDCError::ERR_ABORT; // FIXME: Support for other types of error levels
+      err.errno_ = err_no;
+      err.errmsg_ = err_msg;
 
-        LOG_INFO("ERROR_CALLBACK begin", KP(err_cb_));
-        err_cb_(err);
-        LOG_INFO("ERROR_CALLBACK end", KP(err_cb_));
-      } else {
-        LOG_ERROR_RET(OB_ERROR, "No ERROR CALLBACK function available, abort now");
-      }
-
-      // notify other module to stop
-      mark_stop_flag("ERROR_CALLBACK");
+      LOG_INFO("ERROR_CALLBACK begin", KP(err_cb_));
+      err_cb_(err);
+      LOG_INFO("ERROR_CALLBACK end", KP(err_cb_));
+    } else {
+      LOG_ERROR_RET(OB_ERROR, "No ERROR CALLBACK function available, abort now");
     }
+
+    // notify other module to stop
+    mark_stop_flag("ERROR_CALLBACK");
   }
 }
 
@@ -2159,6 +2186,7 @@ void ObLogInstance::sql_thread_routine()
 {
   int ret = OB_SUCCESS;
   const static int64_t THREAD_INTERVAL = 1 * _SEC_;
+  const static int64_t TENANT_CHECKPOINT_REFRESH_INTERVAL = 10 * _SEC_;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("instance has not been initialized");
@@ -2199,6 +2227,11 @@ void ObLogInstance::sql_thread_routine()
         if (OB_FAIL(check_observer_version_valid_())) {
           LOG_ERROR("check_observer_version_valid_ fail", KR(ret));
         }
+      }
+
+      if (REACH_TIME_INTERVAL(TENANT_CHECKPOINT_REFRESH_INTERVAL) && OB_NOT_NULL(tenant_mgr_)) {
+        const static int64_t timeout = 10 * _SEC_;
+        tenant_mgr_->refresh_tenant_checkpoint(timeout);
       }
 
       ob_usleep(THREAD_INTERVAL);
@@ -2865,7 +2898,7 @@ void ObLogInstance::clean_log_()
     (void)databuff_printf(cmd_buf, CMD_BUF_SIZE, cmd_pos, "; "
         "for file in `find log/ | grep \"libobcdc.log.\" | grep -v err`; "
         "do "
-        "num=`echo $file | cut -d '.' -f 3`; "
+        "num=`echo $file | cut -d '.' -f 3 | cut -c 1-14`; "
         "if [ $num -lt $base_time ]; "
         "then "
         "echo $file >> log/%s; "
@@ -3095,9 +3128,11 @@ int ObLogInstance::init_ob_trace_id_(const char *ob_trace_id_ptr)
   return ret;
 }
 
-int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster_info)
+int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster_info, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ts = get_timestamp();
+  const int64_t end_ts = start_ts + timeout;
   cluster_info.reset();
   bool done = false;
 
@@ -3105,7 +3140,7 @@ int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster
     LOG_ERROR("systable_helper_ is null", K(systable_helper_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    while (! done && OB_SUCCESS == ret) {
+    while (! done && OB_SUCC(ret)) {
       if (OB_FAIL(systable_helper_->query_cluster_info(cluster_info))) {
         LOG_WARN("systable_helper_ query_cluster_info fail", KR(ret), K(cluster_info));
       } else {
@@ -3113,8 +3148,16 @@ int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster
       }
 
       if (OB_NEED_RETRY == ret) {
-        ret = OB_SUCCESS;
-        ob_usleep(100L * 1000L);
+        if (end_ts < get_timestamp()) {
+          ret = OB_TIMEOUT;
+          LOG_ERROR("query_cluster_info timeout", KR(ret), "timeout", TVAL_TO_STR(timeout));
+        } else {
+          ret = OB_SUCCESS;
+          if (TC_REACH_TIME_INTERVAL(10 * _SEC_)) {
+            LOG_INFO("retry to query cluster_info", KR(ret), "start_ts", TS_TO_STR(start_ts), "timeout", TVAL_TO_STR(timeout));
+          }
+          ob_usleep(100L * _MSEC_);
+        }
       }
     }
   }

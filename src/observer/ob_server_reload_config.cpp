@@ -237,6 +237,7 @@ int ObServerReloadConfig::operator()()
     if (0 != STRNCMP(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod))) {
       ObKVGlobalCache::get_instance().set_storage_leak_check_mod(GCONF._storage_leak_check_mod.str());
       STRNCPY(last_storage_check_mod, GCONF._storage_leak_check_mod.str(), sizeof(last_storage_check_mod));
+      last_storage_check_mod[sizeof(last_storage_check_mod) - 1] = '\0';
     }
   }
 #ifndef ENABLE_SANITY

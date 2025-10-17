@@ -69,6 +69,8 @@ int ObPxSubCoord::pre_process()
       LOG_WARN("unexpected status: op root is null", K(ret));
     } else if (OB_FAIL(rebuild_sqc_access_table_locations())) {
       LOG_WARN("fail to rebuild locations and tsc ops", K(ret));
+    } else if (!is_single_tsc_leaf_dfo_ && OB_FAIL(rebuild_sqc_lake_table_file_map())) {
+      LOG_WARN("failed to rebuild sqc lake table file map");
     } else if (OB_FAIL(construct_p2p_dh_map())) {
       LOG_WARN("fail to construct p2p dh map", K(ret));
     } else if (OB_FAIL(setup_op_input(*sqc_arg_.exec_ctx_,
@@ -224,7 +226,7 @@ int ObPxSubCoord::setup_gi_op_input(ObExecContext &ctx,
         } else {
           ObGIOpInput *gi_input = static_cast<ObGIOpInput*>(kit->input_);
           if (OB_FAIL(sqc_ctx.gi_pump_.init_pump_args(&ctx, scan_ops, tablets_array,
-              sqc_ctx.partitions_info_, sqc.get_access_external_table_files(),
+              sqc_ctx.px_tablets_info_, sqc.get_access_external_table_files(),
               dml_op, sqc.get_task_count(),
               gi_op->get_tablet_size(), gi_op->get_gi_flags(), sqc.get_locations_order(),
               gi_op->id_))) {
@@ -543,35 +545,46 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
   } else if (root.get_type() == PHY_SELECT_INTO) {
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
     ObSelectIntoSpec *select_into_spec = reinterpret_cast<ObSelectIntoSpec *>(&root);
-
-    if (!GCONF._use_odps_jni_connector) {
+    sql::ObExternalFileFormat external_properties;
+    ObString &properties = select_into_spec->external_properties_.str_;
+    if (properties.empty()) {
+      // do nothing
+    } else if (OB_FAIL(external_properties.load_from_string(properties, ctx.get_allocator()))) {
+      LOG_WARN("failed to init external_odps_format", K(ret));
+    } else if (sql::ObExternalFileFormat::ODPS_FORMAT != external_properties.format_type_) {
+      // do nothing
+    } else if (OB_FAIL(external_properties.odps_format_.decrypt())) {
+      LOG_WARN("failed to decrypt odps format", K(ret));
+    }  else {
+      if (!GCONF._use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
-      ObOdpsPartitionDownloaderMgr &odps_mgr = sqc_ctx.gi_pump_.get_odps_mgr();
-      if (OB_FAIL(odps_mgr.init_uploader(
-              select_into_spec->external_properties_.str_,
-              select_into_spec->external_partition_.str_,
-              select_into_spec->is_overwrite_, sqc.get_task_count()))) {
-        LOG_WARN("failed to init odps uploader", K(ret));
-      }
+        ObOdpsPartitionUploaderMgr &odps_mgr = sqc_ctx.gi_pump_.get_odps_uploader_mgr();
+        if (OB_FAIL(odps_mgr.init_uploader(
+                external_properties.odps_format_,
+                select_into_spec->external_partition_.str_,
+                select_into_spec->is_overwrite_, sqc.get_task_count()))) {
+          LOG_WARN("failed to init odps uploader", K(ret));
+        }
 #else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support odps cpp connector", K(ret));
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps cpp connector", K(ret));
 #endif
-    } else {
+      } else {
 #if defined (OB_BUILD_JNI_ODPS)
-      // 对于同一个分区有多个task，这些task共用一个session
-      ObOdpsJniUploaderMgr &odps_mgr =
-          sqc_ctx.gi_pump_.get_odps_jni_uploader_mgr();
-      if (OB_FAIL(odps_mgr.init_writer_params_in_px(
-              select_into_spec->external_properties_.str_,
-              select_into_spec->external_partition_.str_,
-              select_into_spec->is_overwrite_, sqc.get_task_count()))) {
-        LOG_WARN("failed to init odps jni uploader", K(ret));
-      }
+        // 对于同一个分区有多个task，这些task共用一个session
+        ObOdpsPartitionJNIUploaderMgr &odps_mgr =
+            sqc_ctx.gi_pump_.get_odps_jni_uploader_mgr();
+        if (OB_FAIL(odps_mgr.init_writer_params_in_px(
+                external_properties.odps_format_,
+                select_into_spec->external_partition_.str_,
+                select_into_spec->is_overwrite_, sqc.get_task_count()))) {
+          LOG_WARN("failed to init odps jni uploader", K(ret));
+        }
 #else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support odps jni connector", K(ret));
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support odps jni connector", K(ret));
 #endif
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -1081,6 +1094,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
   ObDASCtx &das_ctx = DAS_CTX(*sqc_arg_.exec_ctx_);
   // FIXME @yishen Performance?
   ObDASTableLoc *table_loc = NULL;
+  bool loc_uncertain = false;
   if (!access_locations.empty()) {
     // do nothing
     // it means that it's rebuilded by pre_setup_op_input
@@ -1093,6 +1107,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
     for (int i = 0; i < location_keys.count() && OB_SUCC(ret); ++i) {
       // dml location always at first
       if (OB_ISNULL(table_loc) && location_keys.at(i).is_loc_uncertain_) {
+        loc_uncertain = true;
         ObDASLocationRouter &loc_router = DAS_CTX(*sqc_arg_.exec_ctx_).get_location_router();
         OZ(ObTableLocation::get_full_leader_table_loc(loc_router,
            sqc_arg_.exec_ctx_->get_allocator(),
@@ -1128,7 +1143,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
     }
   }
   if (OB_SUCC(ret) && location_keys.count() != access_locations.count()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = loc_uncertain ? OB_SCHEMA_ERROR : OB_ERR_UNEXPECTED;
     LOG_WARN("invalid location key count", K(ret),
         K(location_keys.count()),
         K(access_locations.count()));
@@ -1153,5 +1168,56 @@ void ObPxSubCoord::try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op)
       try_get_dml_op(*root.get_child(0), dml_op);
     }
   }
+}
+
+int ObPxSubCoord::rebuild_sqc_lake_table_file_map()
+{
+  int ret = OB_SUCCESS;
+  ObLakeTableFileMap *lake_table_file_map = nullptr;
+  ObExecContext *exec_ctx = sqc_arg_.exec_ctx_;
+  ObLakeTableFileDesc &lake_table_file_desc = sqc_arg_.sqc_.get_lake_table_file_desc();
+  ObLakeTableFileArray *files = nullptr;
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, exec ctx must not be nullptr", K(ret));
+  } else if (lake_table_file_desc.is_empty()) {
+    // do nothing
+  } else if (OB_FAIL(exec_ctx->get_lake_table_file_map(lake_table_file_map))) {
+    LOG_WARN("failed to get lake table file map", K(ret));
+  } else if (OB_ISNULL(lake_table_file_map)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table file map is null", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < lake_table_file_desc.keys_.count(); ++i) {
+      files = nullptr;
+      ObLakeTableFileMapKey &key = lake_table_file_desc.keys_.at(i);
+      int64_t offset = lake_table_file_desc.offsets_.at(i);
+      int64_t end = (i < lake_table_file_desc.keys_.count() - 1) ?
+                    lake_table_file_desc.offsets_.at(i + 1) :
+                    lake_table_file_desc.values_.count();
+      if (offset == end) {
+        // do nothing
+      } else {
+        files = OB_NEWx(ObLakeTableFileArray, &exec_ctx->get_allocator(), exec_ctx->get_allocator());
+        if (OB_ISNULL(files)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for ObLakeTableFileArray");
+        } else if (OB_FAIL(files->init(end - offset))) {
+          LOG_WARN("failed to init lake table file array");
+        } else {
+          for (int64_t j = offset; OB_SUCC(ret) && j < end; ++j) {
+            if (OB_FAIL(files->push_back(lake_table_file_desc.values_.at(j)))) {
+              LOG_WARN("failed to push back lake table file");
+            }
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(lake_table_file_map->set_refactored(key, files))) {
+        LOG_WARN("failed to set lake table file map", K(ret));
+      }
+    }
+  }
+  return ret;
 }
 //////////// END /////////

@@ -1841,6 +1841,7 @@ class SqlKeywords:
          SCHEDULE
          SCHEMA_NAME
          SCOPE
+         SCORE
          SECOND
          SECURITY
          SERIAL

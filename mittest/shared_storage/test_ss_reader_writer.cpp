@@ -19,6 +19,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "storage/blocksstable/ob_ss_obj_util.h"
 #undef private
 #undef protected
 
@@ -188,8 +189,10 @@ void TestSSReaderWriter::exhaust_tmp_file_disk_size(int64_t &avail_size)
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
   avail_size = disk_space_manager->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::alloc_tmp_file_disk_size(const int64_t disk_size)
@@ -198,8 +201,10 @@ void TestSSReaderWriter::alloc_tmp_file_disk_size(const int64_t disk_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(disk_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::release_tmp_file_disk_size(const int64_t avail_size)
@@ -208,7 +213,8 @@ void TestSSReaderWriter::release_tmp_file_disk_size(const int64_t avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::check_tmp_file_disk_size_enough(const int64_t size)
@@ -366,6 +372,24 @@ void check_local_cache_tablet_stat(const common::ObTabletID effective_tablet_id,
   ASSERT_EQ(hit_cnt, entry.hit_cnt_);
   ASSERT_EQ(hit_size, entry.hit_size_);
 }
+void check_object_type_stat(const MacroBlockId &macro_id,
+                          const uint64_t read_cnt,
+                          const uint64_t read_size,
+                          const uint64_t write_cnt,
+                          const uint64_t write_size,
+                          ObStorageObjectHandle &object_handle)
+{
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ObSSObjectTypeStat type_stat;
+  ObIOFlag flag;
+  object_handle.get_io_handle().get_io_flag(flag);
+  bool is_remote = flag.is_sync();
+  ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
+  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
+  ASSERT_EQ(read_size, type_stat.read_size_);
+  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
+  ASSERT_EQ(write_size, type_stat.write_size_);
+}
 
 TEST_F(TestSSReaderWriter, private_macro_reader_writer)
 {
@@ -394,7 +418,7 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   ObSSPrivateMacroWriter private_macro_writer;
   ASSERT_EQ(OB_SUCCESS, private_macro_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
   // 2. check macro cache
   ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
   ASSERT_NE(nullptr, macro_cache_mgr);
@@ -423,7 +447,6 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   hit_size += read_info_.size_;
   hit_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 5. check local cache tablet stat hit and update
   ASSERT_EQ(OB_SUCCESS, private_macro_reader.aio_read(read_info_, read_object_handle));
   access_size += read_info_.size_;
@@ -455,6 +478,7 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ObSSShareMacroWriter share_macro_writer;
   ASSERT_EQ(OB_SUCCESS, share_macro_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
 
   ObLogicMicroBlockId logic_micro_id_1;
   logic_micro_id_1.version_ = ObLogicMicroBlockId::LOGIC_MICRO_ID_VERSION_V1;
@@ -489,7 +513,6 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   access_size += read_info_.size_;
   access_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 3. read <1, WRITE_IO_SIZE / 2>, expect hit memory
   read_info_.macro_block_id_ = macro_id;
   read_info_.offset_ = 1;
@@ -510,7 +533,6 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   hit_size += read_info_.size_;
   hit_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 4. read <WRITE_IO_SIZE / 2, WRITE_IO_SIZE>, expect cache miss and load cache
   read_info_.macro_block_id_ = macro_id;
   read_info_.offset_ = WRITE_IO_SIZE / 2;
@@ -528,7 +550,6 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   access_size += read_info_.size_;
   access_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
-
   // 5. wait <1, WRITE_IO_SIZE / 2> flush from memory to disk
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
@@ -709,6 +730,100 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   write_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/, 8192 * 2/*valid_length*/, true/*is_sealed*/, write_buf_ + 8192);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192 * 2/*size*/);
   check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+  // 15. (a) disk space not enough, write remote, unsealed, [0, 8KB);
+  //     (b) disk space not enough, write remote, sealed, [0, 2MB);
+  macro_id.set_third_id(71); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192/*valid_length*/);
+
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+
+  // 16. concurrent append and calibration
+  // (a) disk space enough, write local, unsealed, [0, 8KB);
+  // (b) pause tmp file gc;
+  // (c) append sealed segment, [0, 2MB], write remote; expect delete tmp_file_seg_meta
+  release_tmp_file_disk_size(avail_size);
+  check_tmp_file_disk_size_enough(8192);
+  macro_id.set_third_id(72); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  file_manager->set_tmp_file_cache_pause_gc();
+
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+  file_manager->set_tmp_file_cache_allow_gc();
+
+  // 17. concurrent append and calibration
+  // (a) disk space enough, write local, unsealed;
+  // (b) pause tmp file gc;
+  // (c) disk space not enough, write remote, append unsealed segment
+  // (d) rm_logical_deleted_file
+  check_tmp_file_disk_size_enough(8192);
+  macro_id.set_third_id(73); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  file_manager->set_tmp_file_cache_pause_gc();
+
+  exhaust_tmp_file_disk_size(avail_size);
+  write_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/, 8192 * 2/*valid_length*/, false/*is_sealed*/, write_buf_ + 8192);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192 * 2/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192 * 2/*valid_length*/);
+
+  file_manager->set_tmp_file_cache_allow_gc();
+
+  file_manager->calibrate_disk_space_task_.is_inited_ = true;
+  ASSERT_EQ(OB_SUCCESS, file_manager->calibrate_disk_space_task_.rm_logical_deleted_file());
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192 * 2/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192 * 2/*valid_length*/);
+
+  // 18. concurrent append and calibration
+  // (a) disk space enough, write local, unsealed, append local 3 times
+  // (b) pause tmp file gc
+  // (c) disk space not enough, write remote, unsealed (it will logical delete local file in io_callback)
+  // (d) disk space enough, write local, unsealed
+  // (e) allow tmp file gc, rm_logical_deleted_file
+  release_tmp_file_disk_size(avail_size);
+  check_tmp_file_disk_size_enough(8192);
+  macro_id.set_third_id(74); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/, 8192 * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 8192/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192 * 2/*valid_length*/);
+
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 8192 * 2/*offset*/, 8192/*size*/, 8192 * 3/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 8192 * 2/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192 * 3/*valid_length*/);
+
+  file_manager->set_tmp_file_cache_pause_gc();
+
+  exhaust_tmp_file_disk_size(avail_size);
+  write_tmp_file_data(macro_id, 8192 * 3/*offset*/, 8192/*size*/, 8192 * 4/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 8192 * 3/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, 8192 * 4/*valid_length*/);
+  file_manager->set_tmp_file_cache_allow_gc();
+
+  release_tmp_file_disk_size(avail_size);
+  check_tmp_file_disk_size_enough(8192);
+  write_tmp_file_data(macro_id, 8192 * 4/*offset*/, 8192/*size*/, 8192 * 5/*valid_length*/, false/*is_sealed*/, write_buf_);
+  ASSERT_EQ(OB_SUCCESS, file_manager->calibrate_disk_space_task_.rm_logical_deleted_file());
+  read_and_compare_tmp_file_data(macro_id, 8192 * 4/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192 * 5/*valid_length*/);
 }
 
 TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
@@ -742,12 +857,14 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   ObSSPrivateTabletMetaWriter private_tablet_meta_writer;
   ASSERT_EQ(OB_SUCCESS, private_tablet_meta_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
   write_object_handle.reset();
 
   // try overwrite PRIVATE_TABLET_META, expect return OB_FILE_ALREADY_EXIST errno
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
   ASSERT_EQ(OB_SUCCESS, private_tablet_meta_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_FILE_ALREADY_EXIST, write_object_handle.wait());
+  check_object_type_stat(macro_id, 0/*read_cnt*/, 0/*read_size*/, 1/*write_cnt*/, write_info_.size_, write_object_handle);
   write_object_handle.reset();
 
   // 2. read and compare the read data with the written data
@@ -766,7 +883,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
 
   // 3. check object storage, expect not exist
   bool is_exist = false;
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(macro_id, ls_epoch_id, is_exist));
   ASSERT_FALSE(is_exist);
 
   // 4. errsim OB_SERVER_OUTOF_DISK_SPACE
@@ -794,7 +911,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   read_object_handle.reset();
 
   // 7. check object storage, expect exist
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(macro_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(macro_id, ls_epoch_id, is_exist));
   ASSERT_TRUE(is_exist);
 
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 0);

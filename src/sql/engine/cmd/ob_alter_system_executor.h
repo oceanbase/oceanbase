@@ -52,6 +52,7 @@ DEF_SIMPLE_EXECUTOR(ObFlushIlogCache);
 DEF_SIMPLE_EXECUTOR(ObFlushDagWarnings);
 
 DEF_SIMPLE_EXECUTOR(ObFlushSSMicroCache);
+DEF_SIMPLE_EXECUTOR(ObFlushSSLocalCache);
 
 DEF_SIMPLE_EXECUTOR(ObSwitchReplicaRole);
 
@@ -90,6 +91,8 @@ DEF_SIMPLE_EXECUTOR(ObReloadZone);
 DEF_SIMPLE_EXECUTOR(ObClearMergeError);
 
 DEF_SIMPLE_EXECUTOR(ObMigrateUnit);
+
+DEF_SIMPLE_EXECUTOR(ObReplaceTenant);
 
 DEF_SIMPLE_EXECUTOR(ObAlterLSReplica);
 
@@ -149,10 +152,8 @@ DEF_SIMPLE_EXECUTOR(ObBootstrap);
 DEF_SIMPLE_EXECUTOR(ObResetConfig);
 
 DEF_SIMPLE_EXECUTOR(ObCancelClone);
-
-DEF_SIMPLE_EXECUTOR(ObTransferPartition);
-DEF_SIMPLE_EXECUTOR(ObServiceName);
 DEF_SIMPLE_EXECUTOR(ObRebuildTablet);
+DEF_SIMPLE_EXECUTOR(ObLoadLicense);
 class ObCancelTaskExecutor
 {
 public:

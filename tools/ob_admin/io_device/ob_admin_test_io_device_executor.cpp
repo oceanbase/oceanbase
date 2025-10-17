@@ -32,6 +32,30 @@ ObAdminTestIODeviceExecutor::ObAdminTestIODeviceExecutor()
 ObAdminTestIODeviceExecutor::~ObAdminTestIODeviceExecutor()
 {}
 
+int set_io_timeout(const int64_t tenant_id, const int64_t timeout_ms)
+{
+  int ret = OB_SUCCESS;
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  const int64_t MIN_IO_TIMEOUT_MS = 1000LL;
+  const int64_t MAX_IO_TIMEOUT_MS = 1200 * 1000LL;
+  if (OB_UNLIKELY(timeout_ms < MIN_IO_TIMEOUT_MS || timeout_ms > MAX_IO_TIMEOUT_MS)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid io timeout", KR(ret), K(tenant_id), K(timeout_ms));
+  } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
+    STORAGE_LOG(WARN, "failed to get tenant io manager", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_holder.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tenant io manager is null", KR(ret), K(tenant_id));
+  } else {
+    ObTenantIOConfig::ParamConfig io_param_config(tenant_holder.get_ptr()->get_io_config().param_config_);
+    io_param_config.object_storage_io_timeout_ms_ = timeout_ms;
+    if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_param_config(io_param_config))) {
+      STORAGE_LOG(WARN, "failed to update basic io param config", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
 int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
@@ -60,6 +84,8 @@ int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "failed to start io manager", K(ret));
     }  else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
       STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
+    } else if (OB_FAIL(set_io_timeout(OB_SERVER_TENANT_ID, IO_TIMEOUT_MS))) {
+      STORAGE_LOG(WARN, "failed to set io timeout", KR(ret));
     }
 
     if (is_quiet_) {

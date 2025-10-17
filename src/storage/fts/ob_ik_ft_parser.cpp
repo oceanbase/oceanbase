@@ -221,7 +221,7 @@ int ObIKFTParserDesc::deinit(ObPluginParam *param)
 int ObIKFTParserDesc::segment(ObFTParserParam *param, ObITokenIterator *&iter) const
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
+  ObIKFTParser *parser = nullptr;
   ObFTDictHub *hub = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -231,18 +231,19 @@ int ObIKFTParserDesc::segment(ObFTParserParam *param, ObITokenIterator *&iter) c
     LOG_WARN("invalid argument", K(ret), KPC(param));
   } else if (OB_FAIL(ObFTParsePluginData::instance().get_dict_hub(hub))) {
     LOG_WARN("Failed to get dict hub.", K(ret));
-  } else if (OB_ISNULL(buf = param->allocator_->alloc(sizeof(ObIKFTParser)))) {
+  } else if (OB_ISNULL(parser = OB_NEWx(ObIKFTParser, param->allocator_, *(param->allocator_), hub))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate ik ft parser", K(ret));
+  } else if (OB_FAIL(parser->init(*param))) {
+    LOG_WARN("fail to init ik parser", K(ret), KPC(param));
   } else {
-    ObIKFTParser *parser = new (buf) ObIKFTParser(*(param->allocator_), hub);
-    if (OB_FAIL(parser->init(*param))) {
-      LOG_WARN("fail to init ik parser", K(ret), KPC(param));
-      param->allocator_->free(parser);
-    } else {
-      iter = parser;
-    }
+    iter = parser;
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObIKFTParser, param->allocator_, parser);
+  }
+
   return ret;
 }
 
@@ -335,18 +336,20 @@ int ObIKFTParser::init_ctx(const ObFTParserParam &param)
   if (coll_type_ == common::CS_TYPE_INVALID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Illegal collation type", K(ret));
-  } else if (OB_ISNULL(ctx_ = static_cast<TokenizeContext *>(
-                           allocator_.alloc(sizeof(TokenizeContext))))) {
+  } else if (OB_ISNULL(ctx_ = OB_NEWx(TokenizeContext,
+                                      &allocator_,
+                                      coll_type_,
+                                      allocator_,
+                                      param.fulltext_,
+                                      param.ft_length_,
+                                      param.ik_param_.mode_ == ObFTIKParam::Mode::SMART))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc ctx", K(ret));
-  } else if (FALSE_IT(new (ctx_) TokenizeContext(coll_type_,
-                                                 allocator_,
-                                                 param.fulltext_,
-                                                 param.ft_length_,
-                                                 param.ik_param_.mode_
-                                                     == ObFTIKParam::Mode::SMART))) {
   } else if (OB_FAIL(ctx_->init())) {
     LOG_WARN("Failed to init ctx", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(TokenizeContext, &allocator_, ctx_);
   }
   return ret;
 }
@@ -359,32 +362,24 @@ int ObIKFTParser::init_segmenter(const ObFTParserParam &param)
   ObIKQuantifierProcessor *cnqsg = nullptr;
   ObIKCJKProcessor *cjksg = nullptr;
   ObIKSurrogateProcessor *surrogate_seg = nullptr;
-  if (OB_ISNULL(letter_seg = static_cast<ObIKLetterProcessor *>(
-                    allocator_.alloc(sizeof(ObIKLetterProcessor))))) {
+  if (OB_ISNULL(letter_seg = OB_NEWx(ObIKLetterProcessor, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc letter segmenter", K(ret));
-  } else if (FALSE_IT(new (letter_seg) ObIKLetterProcessor())) {
   } else if (OB_ISNULL(dict_quan_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Dict quan is null.", K(ret));
-  } else if (OB_ISNULL(cnqsg = static_cast<ObIKQuantifierProcessor *>(
-                           allocator_.alloc(sizeof(ObIKQuantifierProcessor))))) {
+  } else if (OB_ISNULL(cnqsg = OB_NEWx(ObIKQuantifierProcessor, &allocator_, *dict_quan_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc cn quantifier segmenter", K(ret));
-  } else if (FALSE_IT(new (cnqsg) ObIKQuantifierProcessor(*dict_quan_, allocator_))) {
   } else if (OB_ISNULL(dict_main_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Dict main is null.", K(ret));
-  } else if (OB_ISNULL(cjksg = static_cast<ObIKCJKProcessor *>(
-                           allocator_.alloc(sizeof(ObIKCJKProcessor))))) {
+  } else if (OB_ISNULL(cjksg = OB_NEWx(ObIKCJKProcessor, &allocator_, *dict_main_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc cjk segmenter", K(ret));
-  } else if (FALSE_IT(new (cjksg) ObIKCJKProcessor(*dict_main_, allocator_))) {
-  } else if (OB_ISNULL(surrogate_seg = static_cast<ObIKSurrogateProcessor *>(
-                           allocator_.alloc(sizeof(ObIKSurrogateProcessor))))) {
+  } else if (OB_ISNULL(surrogate_seg = OB_NEWx(ObIKSurrogateProcessor, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc surrogate segmenter", K(ret));
-  } else if (FALSE_IT(new (surrogate_seg) ObIKSurrogateProcessor())) {
   } else if (OB_FAIL(segmenters_.push_back(letter_seg))) {
     LOG_WARN("Failed to push back letter segmenter", K(ret));
   } else if (FALSE_IT(letter_seg = nullptr)) {
@@ -401,22 +396,10 @@ int ObIKFTParser::init_segmenter(const ObFTParserParam &param)
   // push back by order, quantifier is before cjk
 
   if (OB_FAIL(ret)) {
-    if (!OB_ISNULL(letter_seg)) {
-      letter_seg->~ObIKLetterProcessor();
-      allocator_.free(letter_seg);
-    }
-    if (!OB_ISNULL(cjksg)) {
-      cjksg->~ObIKCJKProcessor();
-      allocator_.free(cjksg);
-    }
-    if (!OB_ISNULL(cnqsg)) {
-      cnqsg->~ObIKQuantifierProcessor();
-      allocator_.free(cnqsg);
-    }
-    if (!OB_ISNULL(surrogate_seg)) {
-      surrogate_seg->~ObIKSurrogateProcessor();
-      allocator_.free(surrogate_seg);
-    }
+    OB_DELETEx(ObIKLetterProcessor, &allocator_, letter_seg);
+    OB_DELETEx(ObIKQuantifierProcessor, &allocator_, cnqsg);
+    OB_DELETEx(ObIKCJKProcessor, &allocator_, cjksg);
+    OB_DELETEx(ObIKSurrogateProcessor, &allocator_, surrogate_seg);
   }
   return ret;
 }
@@ -465,13 +448,14 @@ int ObIKFTParser::build_dict_from_cache(const ObFTDictDesc &desc,
   if (OB_ISNULL(hub_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Hub is null", K(ret));
-  } else if (OB_ISNULL(dict
-                       = static_cast<ObFTRangeDict *>(allocator_.alloc(sizeof(ObFTRangeDict))))) {
+  } else if (OB_ISNULL(dict = OB_NEWx(ObFTRangeDict, &allocator_, allocator_, &container, desc))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc dict", K(ret));
-  } else if (OB_FALSE_IT(new (dict) ObFTRangeDict(allocator_, &container, desc))) {
   } else if (OB_FAIL(dict->init())) {
     LOG_WARN("Failed to init dict", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObIFTDict, &allocator_, dict);
   }
   return ret;
 }

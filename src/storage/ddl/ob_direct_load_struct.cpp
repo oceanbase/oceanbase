@@ -2231,6 +2231,20 @@ int ObDirectLoadSliceWriter::prepare_vector_slice_store(
       LOG_WARN("invalid index type with sclice store", K(ret), K(storage_schema->get_index_type()));
     }
     allocator_.free(vec_idx_slice_store);
+    {  // what ever fail or success, we need to release ivf build helper
+      int tmp_ret = OB_SUCCESS;
+      // is tablet_direct_load_mgr_ is null, no need to erase ivf_build_helper
+      if (OB_NOT_NULL(tablet_direct_load_mgr_)) {
+        ObIvfHelperKey key(tablet_direct_load_mgr_->get_tablet_id(), context_id);
+        if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), key))) {
+          LOG_WARN("failed to erase ivf build helper", K(tmp_ret), K(tablet_direct_load_mgr_->get_ls_id()),
+                   K(tablet_direct_load_mgr_->get_tablet_id()));
+        }
+        if (tmp_ret != OB_SUCCESS && tmp_ret != OB_HASH_NOT_EXIST) {
+          ret = ret != OB_SUCCESS ? ret : tmp_ret;
+        }
+      }
+    }
   }
   return ret;
 }
@@ -3324,7 +3338,8 @@ int ObDirectLoadSliceWriter::check_null_and_length(
 
 int ObDirectLoadSliceWriter::fill_aggregated_column_group(
     const int64_t cg_idx,
-    ObCOSliceWriter *cur_writer)
+    ObCOSliceWriter *cur_writer,
+    ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3337,7 +3352,7 @@ int ObDirectLoadSliceWriter::fill_aggregated_column_group(
   } else if (ATOMIC_LOAD(&is_canceled_)) {
     ret = OB_CANCELED;
     LOG_WARN("fil cg task canceled", K(ret), K(is_canceled_));
-  } else if (OB_FAIL(slice_store_->fill_column_group(cg_idx, cur_writer, nullptr/*insert_monitor*/))) {
+  } else if (OB_FAIL(slice_store_->fill_column_group(cg_idx, cur_writer, insert_monitor))) {
     LOG_WARN("fail to fill column group", KR(ret), KPC(slice_store_), K(cg_idx));
   }
   return ret;
@@ -3515,23 +3530,20 @@ int ObDirectLoadSliceWriter::inner_fill_ivf_vector_index_data(
   } else if (is_empty) {
     // do nothing
     LOG_INFO("[vec index debug] maybe no data for this tablet", K(tablet_direct_load_mgr_->get_tablet_id()));
-  } else if (OB_FAIL(vec_idx_slice_store.build_clusters())) {
+  } else if (OB_FAIL(vec_idx_slice_store.build_clusters(insert_monitor))) {
     LOG_WARN("fail to build clusters", K(ret));
   } else if (FALSE_IT(vec_idx_slice_store.set_lob_inrow_threshold(lob_inrow_threshold))) {
   } else if (OB_FAIL(inner_fill_vector_index_data(macro_block_slice_store, &vec_idx_slice_store, snapshot_version, storage_schema, start_scn, VIAT_MAX/*index_type*/, insert_monitor))) {
     LOG_WARN("fail to inner fill vector index data", K(ret));
   }
-
-  // clean whenever fail or succ
-  int tmp_ret = OB_SUCCESS;
-  ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
-  if (OB_NOT_NULL(vec_index_service)) {
+  { // what ever fail or success, we need to release ivf build helper
+    int tmp_ret = OB_SUCCESS;
     ObIvfHelperKey key(vec_idx_slice_store.tablet_id_, vec_idx_slice_store.get_context_id());
-    if (OB_TMP_FAIL(vec_index_service->erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), key))) {
-      LOG_WARN("failed to erase ivf build helper", K(ret), K(tablet_direct_load_mgr_->get_ls_id()), K(vec_idx_slice_store.tablet_id_));
-      if (OB_SUCC(ret)) {
-        ret = tmp_ret;
-      }
+    if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(tablet_direct_load_mgr_->get_ls_id(), key))) {
+      LOG_WARN("failed to erase ivf build helper", K(tmp_ret), K(tablet_direct_load_mgr_->get_ls_id()), K(vec_idx_slice_store.tablet_id_));
+    }
+    if (tmp_ret != OB_SUCCESS && tmp_ret != OB_HASH_NOT_EXIST) {
+      ret = ret != OB_SUCCESS ? ret : tmp_ret;
     }
   }
   if (nullptr != macro_block_slice_store) {
@@ -3899,6 +3911,7 @@ int ObVectorIndexSliceStore::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
   } else {
+    const ObIArray<share::schema::ObColDesc> &col_desc_array = tablet_direct_load_mgr->get_sqc_build_ctx().data_block_desc_.get_desc().get_col_desc_array();
     is_inited_ = true;
     ctx_.ls_id_ = tablet_direct_load_mgr->get_ls_id();
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
@@ -3929,8 +3942,14 @@ int ObVectorIndexSliceStore::init(
     for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
       // version control col is not valid
       if (!col_array.at(i).is_valid_) {
-      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_)) {
-        vector_vid_col_idx_ = i;
+      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_) ||
+                 col_desc_array.at(i).col_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+        if (vector_vid_col_idx_ == -1) {
+          vector_vid_col_idx_ = i;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_vid_col_idx_), K(i));
+        }
       } else if (ObSchemaUtils::is_vec_hnsw_vector_column(col_array.at(i).column_flags_)) {
         vector_col_idx_ = i;
       } else if (ObSchemaUtils::is_vec_hnsw_key_column(col_array.at(i).column_flags_)) {
@@ -3943,6 +3962,7 @@ int ObVectorIndexSliceStore::init(
         }
       }
     }
+
     if (OB_SUCC(ret)) {
       if (vector_vid_col_idx_ == -1 || vector_col_idx_ == -1 || vector_key_col_idx_ == -1 || vector_data_col_idx_ == -1) {
         ret = OB_ERR_UNEXPECTED;
@@ -4090,6 +4110,7 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
       int64_t vec_vid;
       ObVecExtraInfoObj *extra_obj = nullptr;
       int64_t extra_column_count = extra_column_idx_types_.count();
+      int64_t extra_info_actual_size = 0;
       if (datum_row.get_column_count() <= vector_vid_col_idx_ || datum_row.get_column_count() <= vector_col_idx_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_col_idx_), K(vector_vid_col_idx_), K(datum_row));
@@ -4105,8 +4126,11 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
         LOG_WARN("fail to get real data.", K(ret), K(vec_str));
       } else if (vec_str.length() == 0) {
         // do nothing
+      } else if (OB_NOT_NULL(adaptor_guard.get_adatper()) &&
+                 OB_FAIL(adaptor_guard.get_adatper()->get_extra_info_actual_size(extra_info_actual_size))) {
+        LOG_WARN("failed to get extra info actual size.", K(ret));
       } else {
-        if (extra_column_count > 0) {
+        if (extra_column_count > 0 && extra_info_actual_size > 0) {
           char *buf = nullptr;
           if (OB_ISNULL(buf = static_cast<char *>(tmp_allocator_.alloc(sizeof(ObVecExtraInfoObj) * extra_column_count)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -4212,6 +4236,16 @@ int ObVectorIndexSliceStore::serialize_vector_index(
       } else {
         type = adp->get_snap_index_type();
         LOG_INFO("HgraphIndex finish vsag serialize for tablet", K(tablet_id_), K(ctx_.get_vals().count()), K(type));
+      }
+      if (OB_SUCC(ret)) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(adp->get_tenant_id()));
+        if (!tenant_config.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail get tenant_config", KR(ret), K(adp->get_tenant_id()));
+        } else if (OB_FAIL(adp->renew_single_snap_index(type == VIAT_HNSW_BQ
+            || (tenant_config->vector_index_memory_saving_mode && (type == VIAT_HNSW || type == VIAT_HNSW_SQ || type == VIAT_HGRAPH))))) {
+          LOG_WARN("fail to renew single snap index", K(ret));
+        }
       }
     }
   }
@@ -4458,7 +4492,7 @@ int ObIvfCenterSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
   return ret;
 }
 
-int ObIvfCenterSliceStore::build_clusters()
+int ObIvfCenterSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4539,9 +4573,8 @@ int ObIvfCenterSliceStore::get_next_vector_data_row(
     int64_t dim = executor->get_centers_dim();
     int64_t buf_len = OB_DOC_ID_COLUMN_BYTE_LENGTH;
     char *buf = nullptr;
-    if (OB_ISNULL(center_vector = executor->get_center(cur_row_pos_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("upexpected nullptr center_vector", K(ret));
+    if (OB_FAIL(executor->get_center(cur_row_pos_, center_vector))) {
+      LOG_WARN("fail to get center", K(ret), K(cur_row_pos_));
     } else {
       data_str.assign(reinterpret_cast<char *>(center_vector), static_cast<int64_t>(sizeof(float) * dim));
       if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, data_str.length(), tmp_allocator_, vec_res, data_str.ptr()))) {
@@ -4691,7 +4724,7 @@ int ObIvfSq8MetaSliceStore::append_row(const blocksstable::ObDatumRow &datum_row
   return ret;
 }
 
-int ObIvfSq8MetaSliceStore::build_clusters()
+int ObIvfSq8MetaSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4807,6 +4840,7 @@ int ObIvfPqSliceStore::init(
     LOG_WARN("fail to do ObIvfSliceStore::init", K(ret));
   } else {
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
+    table_id_ = tablet_direct_load_mgr->get_sqc_build_ctx().build_param_.runtime_only_param_.table_id_;
     vec_idx_param_ = vec_idx_param;
     vec_dim_ = vec_dim;
     // prepare in prepare_schema_item_on_demand -> prepare_schema_item_for_vec_idx_data
@@ -4892,21 +4926,17 @@ int ObIvfPqSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
   return ret;
 }
 
-int ObIvfPqSliceStore::build_clusters()
+int ObIvfPqSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ObMultiKmeansExecutor *executor = nullptr;
     ObIvfPqBuildHelper *helper = nullptr;
     if (OB_FAIL(get_spec_ivf_helper(helper))) {
       LOG_WARN("fail to get ivf flat helper", K(ret));
-    } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build())) {
+    } else if (OB_FAIL(helper->build(table_id_, tablet_id_, insert_monitor))) {
       LOG_WARN("failed to build clusters", K(ret));
     }
   }
@@ -4955,9 +4985,8 @@ int ObIvfPqSliceStore::get_next_vector_data_row(
     if (center_count_per_kmeans == 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("upexpected zero center count", K(ret), K(center_count_per_kmeans));
-    } else if (OB_ISNULL(center_vector = executor->get_center(cur_row_pos_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("upexpected nullptr center_vector", K(ret), K(cur_row_pos_), K(center_count_per_kmeans));
+    } else if (OB_FAIL(executor->get_center(cur_row_pos_, center_vector))) {
+      LOG_WARN("fail to get center", K(ret), K(cur_row_pos_), K(center_count_per_kmeans));
     } else {
       data_str.assign(reinterpret_cast<char *>(center_vector), static_cast<int64_t>(sizeof(float) * dim));
       if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr, data_str.length(), vec_allocator_, vec_res, data_str.ptr()))) {

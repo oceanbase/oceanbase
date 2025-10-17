@@ -51,12 +51,12 @@ public:
   OB_UNIS_VERSION_V(1);
 public:
   ObExpandVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type) :
-    ObOpSpec(alloc, type), expand_exprs_(alloc), gby_exprs_(alloc),
-    grouping_id_expr_(nullptr), dup_expr_pairs_(alloc)
+    ObOpSpec(alloc, type), expand_exprs_(alloc), gby_exprs_(alloc), grouping_id_expr_(nullptr),
+    dup_expr_pairs_(alloc), group_set_exprs_(alloc), pruned_groupby_exprs_(alloc)
   {}
   virtual ~ObExpandVecSpec() {}
 public:
-  TO_STRING_KV(KP_(grouping_id_expr), K_(expand_exprs));
+  TO_STRING_KV(KP_(grouping_id_expr), K_(expand_exprs), K_(group_set_exprs), K_(pruned_groupby_exprs));
   // select sum(c1), count(c2) from t group by c3, c4, rollup(c1, c3, c5)
   // expand_exprs = [c1, c3, c5]
   // gby_exprs = [c3, c4]
@@ -65,6 +65,8 @@ public:
   ExprFixedArray gby_exprs_;
   ObExpr *grouping_id_expr_;
   ObFixedArray<DupExprPair, ObIAllocator> dup_expr_pairs_;
+  ObFixedArray<ExprFixedArray, ObIAllocator> group_set_exprs_;
+  ExprFixedArray pruned_groupby_exprs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExpandVecSpec);
 };
@@ -73,11 +75,13 @@ class ObExpandVecOp: public ObOperator
 {
 public:
   ObExpandVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input) :
-    ObOperator(exec_ctx, spec, input), dup_status_(DupStatus::Init), expr_iter_idx_(-1),
+    ObOperator(exec_ctx, spec, input), dup_status_(DupStatus::Init), dup_iter_idx_(-1),
     child_input_size_(0), child_input_skip_(nullptr),
     child_all_rows_active_(false), vec_holder_(nullptr),
     allocator_("ValueExpansion", OB_MALLOC_NORMAL_BLOCK_SIZE,
-               exec_ctx.get_my_session()->get_effective_tenant_id(), ObCtxIds::WORK_AREA)
+               exec_ctx.get_my_session()->get_effective_tenant_id(), ObCtxIds::WORK_AREA),
+    all_group_exprs_(allocator_),
+    group_vec_holder_(nullptr)
   {}
   virtual ~ObExpandVecOp() {}
   virtual int inner_open() override;
@@ -90,7 +94,7 @@ public:
   }
   // virtual int inner_switch_iterator() override;
   virtual void destroy() override;
-  TO_STRING_KV(K_(expr_iter_idx));
+  TO_STRING_KV(K_(dup_iter_idx));
 private:
   enum class DupStatus
   {
@@ -103,7 +107,7 @@ private:
   void reset_status()
   {
     dup_status_ = DupStatus::Init;
-    expr_iter_idx_ = -1;
+    dup_iter_idx_ = -1;
     child_input_size_ = 0;
     child_all_rows_active_ = false;
     child_input_skip_ = nullptr;
@@ -157,10 +161,22 @@ private:
   }
 
   void clear_evaluated_flags();
+
+  inline bool is_dup_for_grouping_sets() const { return MY_SPEC.group_set_exprs_.count() > 0; }
+  inline bool is_dup_for_hash_rollup() const { return MY_SPEC.expand_exprs_.count() > 0; }
+
+  int dup_for_grouping_sets();
+  int backup_group_exprs();
+  int setup_pruned_gby_exprs();
+  int restore_group_exprs();
+  inline bool need_restore_group_exprs() const
+  {
+    return MY_SPEC.group_set_exprs_.count() - 1 > dup_iter_idx_;
+  }
 private:
   DupStatus dup_status_;
 
-  int64_t expr_iter_idx_;
+  int64_t dup_iter_idx_;
   int64_t child_input_size_;
   ObBitVector *child_input_skip_;
   bool child_all_rows_active_;
@@ -170,6 +186,13 @@ private:
     ObBatchResultHolder *datum_holder_;
   };
   common::ObArenaAllocator allocator_;
+  // used for grouping sets duplication
+  ExprFixedArray all_group_exprs_;
+  union
+  {
+    ObVectorsResultHolder *group_vec_holder_;
+    ObBatchResultHolder *group_datum_holder_;
+  };
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExpandVecOp);
 };

@@ -180,7 +180,8 @@ int ObDBMSJava::dropjava_mysql(ObPLExecCtx & ctx, sql::ParamStore & params,
     ret = OB_ERR_OBJECT_NOT_EXIST;
     LOG_WARN("external resource not exist", K(ret), K(tenant_id), K(database_id), K(name));
   } else {
-    ObDropExternalResourceArg args(tenant_id, database_id, name);
+    ObDropExternalResourceArg args(tenant_id, database_id, name,
+                                   share::schema::ObSimpleExternalResourceSchema::ResourceType::JAVA_JAR_TYPE);
     ObDropExternalResourceRes res;
 
     ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(*ctx.exec_ctx_);

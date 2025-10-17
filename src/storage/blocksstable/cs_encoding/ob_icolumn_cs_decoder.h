@@ -41,7 +41,7 @@ public:
   virtual ~ObIColumnCSDecoder() {}
   OB_INLINE void reuse() {}
   VIRTUAL_TO_STRING_KV(K(this));
-  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const = 0;
+  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, ObStorageDatum &datum) const = 0;
 
   virtual ObCSColumnHeader::Type get_type() const = 0;
 
@@ -101,7 +101,12 @@ public:
     return common::OB_NOT_SUPPORTED;
   }
 
-  virtual int get_null_count(
+  int get_null_count(
+      const ObColumnCSDecoderCtx &ctx,
+      const int32_t *row_ids,
+      const int64_t row_cap,
+      int64_t &null_count) const;
+  virtual int inner_get_null_count(
       const ObColumnCSDecoderCtx &ctx,
       const int32_t *row_ids,
       const int64_t row_cap,
@@ -144,10 +149,9 @@ class ObNoneExistColumnCSDecoder : public ObIColumnCSDecoder
 public:
   static const ObCSColumnHeader::Type type_ = ObCSColumnHeader::MAX_TYPE;
 
-  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const override
+  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, ObStorageDatum &datum) const override
   {
-    datum.set_ext();
-    datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);
+    datum.set_nop();
     return common::OB_SUCCESS;
   }
   virtual ObCSColumnHeader::Type get_type() const { return type_; }

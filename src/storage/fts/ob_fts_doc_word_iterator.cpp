@@ -13,8 +13,9 @@
 #define USING_LOG_PREFIX STORAGE_FTS
 
 #include "storage/fts/ob_fts_doc_word_iterator.h"
-#include "storage/tx_storage/ob_access_service.h"
+
 #include "storage/access/ob_table_scan_iterator.h"
+#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
 {
@@ -27,6 +28,7 @@ ObFTDocWordScanIterator::ObFTDocWordScanIterator()
     table_param_(allocator_),
     scan_param_(),
     doc_word_iter_(nullptr),
+    docid_type_(ObDocIDType::INVALID),
     is_inited_(false)
 {
 }
@@ -107,23 +109,21 @@ int ObFTDocWordScanIterator::do_table_rescan()
   return ret;
 }
 
-int ObFTDocWordScanIterator::do_scan(
-    const uint64_t table_id,
-    const common::ObDocId &doc_id)
+int ObFTDocWordScanIterator::do_scan(const uint64_t table_id, const ObDatum &doc_id_datum)
 {
   int ret = OB_SUCCESS;
   const bool need_rescan = nullptr != doc_word_iter_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id || !doc_id.is_valid())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_id), K(doc_id));
+    LOG_WARN("invalid argument", K(ret), K(table_id), K(doc_id_datum));
   } else if (need_rescan) {
     reuse();
   }
-  if (FAILEDx(build_key_range(table_id, doc_id, scan_param_.key_ranges_))) {
-    LOG_WARN("fail to build key range", K(ret), K(table_id), K(doc_id));
+  if (FAILEDx(build_key_range(table_id, doc_id_datum, scan_param_.key_ranges_))) {
+    LOG_WARN("fail to build key range", K(ret), K(table_id), K(doc_id_datum));
   } else if (need_rescan && OB_FAIL(do_table_rescan())) {
     LOG_WARN("fail to do table rescan", K(ret));
   } else if (!need_rescan && OB_FAIL(do_table_scan())) {
@@ -222,6 +222,7 @@ int ObFTDocWordScanIterator::build_table_param(
   const uint64_t tenant_id = MTL_ID();
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTableSchema *table_schema = nullptr;
+  uint64_t generated_doc_id_col = OB_INVALID_ID;
   column_ids.reset();
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -240,31 +241,46 @@ int ObFTDocWordScanIterator::build_table_param(
     LOG_WARN("unexpected error, column count isn't 4 for fts doc word", K(ret), K(column_ids));
   } else if (OB_FAIL(table_param.convert(*table_schema, column_ids, sql::ObStoragePushdownFlag()))) {
     LOG_WARN("fail to convert table param", K(ret), K(column_ids), KPC(table_schema));
+  } else {
+    if (OB_FAIL(table_schema->get_docid_col_id(generated_doc_id_col))) {
+      if (ret == OB_ERR_INDEX_KEY_NOT_FOUND) {
+        ret = OB_SUCCESS;
+        docid_type_ = ObDocIDType::HIDDEN_INC_PK;
+      } else {
+        LOG_WARN("Failed to get generated doc id col id", K(ret));
+      }
+    } else {
+      docid_type_ = ObDocIDType::TABLET_SEQUENCE;
+    }
   }
   return ret;
 }
 
-int ObFTDocWordScanIterator::build_key_range(
-    const uint64_t table_id,
-    const common::ObDocId &doc_id,
-    common::ObIArray<ObNewRange> &rowkey_range)
+int ObFTDocWordScanIterator::build_key_range(const uint64_t table_id,
+                                             const ObDatum &doc_id_datum,
+                                             common::ObIArray<ObNewRange> &rowkey_range)
 {
   int ret = OB_SUCCESS;
   static int64_t ROWKEY_COLUMN_COUNT = 2;
   common::ObNewRange range;
-  void *buf = nullptr;
-  if (OB_UNLIKELY(OB_INVALID_ID == table_id || !doc_id.is_valid())) {
+  common::ObObj *objs = nullptr;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(doc_id));
-  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(common::ObObj) * ROWKEY_COLUMN_COUNT * 2))) {
+    LOG_WARN("invalid arguments", K(ret), K(doc_id_datum));
+  } else if (OB_ISNULL(objs = OB_NEW_ARRAY(common::ObObj, &allocator_, ROWKEY_COLUMN_COUNT * 2))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate buffer for rowkey", K(ret));
   } else {
-    common::ObObj *objs= new (buf) common::ObObj[ROWKEY_COLUMN_COUNT * 2];
-    objs[0].set_varbinary(doc_id.get_string());
+    if (docid_type_ == ObDocIDType::HIDDEN_INC_PK) {
+      objs[0].set_uint64(doc_id_datum.get_uint64());
+      objs[2].set_uint64(doc_id_datum.get_uint64());
+    } else if (docid_type_ == ObDocIDType::TABLET_SEQUENCE) {
+      objs[0].set_varbinary(doc_id_datum.get_string());
+      objs[2].set_varbinary(doc_id_datum.get_string());
+    }
     objs[1] = common::ObObj::make_min_obj();
-    objs[2].set_varbinary(doc_id.get_string());
     objs[3] = common::ObObj::make_max_obj();
+
     range.table_id_ = table_id;
     range.start_key_ = ObRowkey(objs, ROWKEY_COLUMN_COUNT);
     range.end_key_ = ObRowkey(objs + ROWKEY_COLUMN_COUNT, ROWKEY_COLUMN_COUNT);

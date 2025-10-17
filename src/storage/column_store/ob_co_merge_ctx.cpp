@@ -11,11 +11,15 @@
 #include "ob_co_merge_ctx.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
+#include "lib/ob_define.h"
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_CO_MERGE_WITH_MINOR);
 ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     ObCOMergeDagNet &dag_net,
     ObTabletMergeDagParam &param,
@@ -86,6 +90,12 @@ int ObCOTabletMergeCtx::schedule_minor_errsim(bool &schedule_minor) const
   SCHEDULE_MINOR_ERRSIM(EN_SWAP_TABLET_IN_COMPACTION);
   SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_SCHEDULE_MINOR_FAIL);
   SCHEDULE_MINOR_ERRSIM(EN_COMPACTION_CO_MERGE_SCHEDULE_FAILED);
+
+  if (EN_CO_MERGE_WITH_MINOR) {
+    STORAGE_LOG(INFO, "ERRSIM EN_CO_MERGE_WITH_MINOR");
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "co_merge_with_minor", "ret_code", ret);
+    schedule_minor = get_tables_handle().get_count() > 1;
+  }
 #endif
   return ret;
 }
@@ -641,6 +651,22 @@ int ObCOTabletMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint3
       merged_sstable_array_[i] = table_handle.get_table();
       exist_cg_tables_cnt++;
       const ObSSTable *new_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+#ifdef ERRSIM
+      char *origin_thread_name = ob_get_tname_v2();
+      ObSSTableMetaHandle meta_handle;
+      if (OB_FAIL(new_sstable->get_meta(meta_handle))) {
+        LOG_WARN("failed to get sstable meta handle", K(ret), KPC(new_sstable));
+      } else {
+        int64_t co_base_snapshot_version = meta_handle.get_sstable_meta().get_co_base_snapshot_version();
+        int64_t base_snapshot_version = new_sstable->get_key().get_end_scn().get_val_for_logservice();
+        SERVER_EVENT_SYNC_ADD("merge_errsim", "create_sstable",
+                              "origin_thread_name", origin_thread_name,
+                              "tablet_id", get_tablet_id().id(),
+                              "column_group_idx", i,
+                              "base_snapshot_version", base_snapshot_version,
+                              "co_base_snapshot_version", co_base_snapshot_version);
+      }
+#endif
       FLOG_INFO("success to create sstable", KPC(new_sstable), KPC(cg_schema_ptr), "cg_idx", i);
     }
   } // for

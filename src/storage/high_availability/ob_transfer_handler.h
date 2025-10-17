@@ -177,7 +177,8 @@ private:
       const palf::LogConfigVersion &config_version,
       const share::SCN &dest_max_desided_scn,
       ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans);
+      ObMySQLTransaction &trans,
+      bool &is_update_transfer_meta);
   int do_trans_transfer_start_prepare_(
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx,
@@ -190,7 +191,8 @@ private:
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &dest_max_desided_scn,
       ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans);
+      ObMySQLTransaction &trans,
+      bool &is_update_transfer_meta);
   int do_trans_transfer_dest_prepare_(
       const share::ObTransferTaskInfo &task_info,
       ObMySQLTransaction &trans);
@@ -342,7 +344,8 @@ private:
   int update_transfer_meta_info_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
-      ObTimeoutCtx &timeout_ctx);
+      ObTimeoutCtx &timeout_ctx,
+      bool &is_update_transfer_meta);
   int build_transfer_meta_info_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,

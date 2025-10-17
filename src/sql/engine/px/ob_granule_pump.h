@@ -70,7 +70,7 @@ public :
       sharing_iter_end_(false),
       pruning_status_(READY_PRUNING),
       pruning_ret_(OB_SUCCESS),
-      partitions_info_(), parallelism_(0),
+      px_tablets_info_(), parallelism_(0),
       tablet_size_(0), gi_attri_flag_(0),
       lucky_one_(true),
       query_range_by_runtime_filter_(),
@@ -79,7 +79,7 @@ public :
       pump_version_(0) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
-  TO_STRING_KV(K(partitions_info_),
+  TO_STRING_KV(K(px_tablets_info_),
                K(parallelism_),
                K(tablet_size_),
                K(gi_attri_flag_),
@@ -112,7 +112,7 @@ public :
   PruningStatus pruning_status_;
   int pruning_ret_;
   //-----end
-  common::ObArray<ObPxTabletInfo> partitions_info_;
+  common::ObArray<ObPxTabletInfo> px_tablets_info_;
   common::ObArray<share::ObExternalFileInfo> external_table_files_;
   int64_t parallelism_;
   int64_t tablet_size_;
@@ -138,23 +138,28 @@ class ObGITaskSet {
 public:
   struct ObGITaskInfo
   {
-    ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0) {}
+    ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0),
+                     is_false_range_(false) {}
     ObGITaskInfo(ObDASTabletLoc *tablet_loc,
                  common::ObNewRange range,
                  common::ObNewRange ss_range,
-                 int64_t idx) :
-        tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0) {}
+                 int64_t idx,
+                 bool is_false_range) :
+        tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0),
+        is_false_range_(is_false_range) {}
     TO_STRING_KV(KPC(tablet_loc_),
                  KP(tablet_loc_),
                  K(range_),
                  K(ss_range_),
                  K(idx_),
-                 K(hash_value_));
+                 K(hash_value_),
+                 K(is_false_range_));
     ObDASTabletLoc *tablet_loc_;
     common::ObNewRange range_;
     common::ObNewRange ss_range_;
     int64_t idx_;
     uint64_t hash_value_;
+    bool is_false_range_;
   };
 
   enum ObGIRandomType
@@ -246,7 +251,7 @@ protected :
                     ObGITaskSet::ObGIRandomType random_type);
 
 public :
-  ObSEArray<ObPxTabletInfo, 8> partitions_info_;
+  ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
 };
 
 class ObRandomGranuleSplitter : public ObGranuleSplitter
@@ -391,7 +396,7 @@ public:
   int init_pump_args_inner(ObExecContext *ctx,
                            ObIArray<const ObTableScanSpec*> &scan_ops,
                            const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-                           common::ObIArray<ObPxTabletInfo> &partitions_info,
+                           common::ObIArray<ObPxTabletInfo> &tablets_info,
                            common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                            const ObTableModifySpec* modify_op,
                            int64_t parallelism,
@@ -403,7 +408,7 @@ public:
    int init_pump_args(ObExecContext *ctx,
                       ObIArray<const ObTableScanSpec*> &scan_ops,
                       const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-                      common::ObIArray<ObPxTabletInfo> &partitions_info,
+                      common::ObIArray<ObPxTabletInfo> &tablets_info,
                       common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                       const ObTableModifySpec* modify_op,
                       int64_t parallelism,
@@ -466,16 +471,17 @@ public:
     return odps_partition_downloader_mgr_.get_odps_map();
   }
   inline bool is_odps_downloader_inited() {  return odps_partition_downloader_mgr_.is_download_mgr_inited(); }
-  ObOdpsPartitionDownloaderMgr &get_odps_mgr() { return odps_partition_downloader_mgr_; }
+  ObOdpsPartitionDownloaderMgr &get_odps_downloader_mgr() { return odps_partition_downloader_mgr_; }
+  ObOdpsPartitionUploaderMgr &get_odps_uploader_mgr() { return odps_partition_uploader_mgr_; }
 #endif
 #ifdef OB_BUILD_JNI_ODPS
   inline bool is_odps_scanner_mgr_inited() {
     return odps_partition_jni_scanner_mgr_.is_jni_scanner_mgr_inited();
   }
-  ObOdpsPartitionJNIScannerMgr &get_odps_jni_scanner_mgr() {
+  ObOdpsPartitionJNIDownloaderMgr &get_odps_jni_scanner_mgr() {
     return odps_partition_jni_scanner_mgr_;
   }
-  ObOdpsJniUploaderMgr &get_odps_jni_uploader_mgr() {
+  ObOdpsPartitionJNIUploaderMgr &get_odps_jni_uploader_mgr() {
     return odps_jni_uploader_mgr_;
   }
 #endif
@@ -507,7 +513,7 @@ private:
                ObExecContext *ctx,
                ObIArray<const ObTableScanSpec*> &scan_ops,
                const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-               common::ObIArray<ObPxTabletInfo> &partitions_info,
+               common::ObIArray<ObPxTabletInfo> &tablets_info,
                const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                const ObTableModifySpec* modify_op,
                int64_t parallelism,
@@ -526,10 +532,11 @@ private:
   GITaskArrayMap gi_task_array_map_;
 #ifdef OB_BUILD_CPP_ODPS
   ObOdpsPartitionDownloaderMgr odps_partition_downloader_mgr_;
+  ObOdpsPartitionUploaderMgr odps_partition_uploader_mgr_;
 #endif
 #ifdef OB_BUILD_JNI_ODPS
-  ObOdpsPartitionJNIScannerMgr odps_partition_jni_scanner_mgr_;
-  ObOdpsJniUploaderMgr         odps_jni_uploader_mgr_;
+  ObOdpsPartitionJNIDownloaderMgr odps_partition_jni_scanner_mgr_;
+  ObOdpsPartitionJNIUploaderMgr         odps_jni_uploader_mgr_;
 #endif
   ObGranuleSplitterType splitter_type_;
   common::ObArray<ObGranulePumpArgs> pump_args_;

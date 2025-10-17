@@ -337,6 +337,9 @@ TEST(ObLatch, diagnose)
 class TestSpinLock : public lib::ObjectSetV2::Lock
 {
 public:
+  TestSpinLock()
+    : wait_cnt_(0)
+  {}
   void test_lock()
   {
     ATOMIC_INC(&wait_cnt_);

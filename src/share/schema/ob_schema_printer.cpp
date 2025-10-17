@@ -670,12 +670,16 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
                                                                     rowkey_column->column_id_))) {
             ret = OB_SCHEMA_ERROR;
             SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret), KPC(index_schema));
-          } else if (index_schema->is_fts_index() && col->is_doc_id_column()) {
-            // skip doc id for fts index.
-          } else if (index_schema->is_multivalue_index_aux() && col->is_doc_id_column()) {
-            // skip doc id for multivalue index.
-          } else if (index_schema->is_vec_index() && (col->is_vec_hnsw_vid_column())) {
-            // only need vec_type column to show index key, here skip vec_vid column of delta_buffer_table rowkey column
+          } else if (index_schema->is_fts_index() &&
+                     (col->is_doc_id_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+            // skip doc id / hidden pk column(for doc id optimization) for fts index.
+          } else if (index_schema->is_multivalue_index_aux() &&
+                     (col->is_doc_id_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+            // skip doc id / hidden pk column(for doc id optimization)
+          } else if (index_schema->is_vec_index() &&
+                     (col->is_vec_hnsw_vid_column() || col->is_hidden_pk_column_id(col->get_column_id()))) {
+            // only need vec_type column to show index key,
+            // here skip vec_vid column / hidden pk column(for vid optimization)
           } else if (!col->is_shadow_column()) {
             const ObColumnSchemaV2 *tmp_column = NULL;
             if (index_schema->is_multivalue_index_aux() &&
@@ -826,7 +830,7 @@ int ObSchemaPrinter::print_table_definition_indexes(const ObTableSchema &table_s
       // Do not print global index.
     } else if (index_schema->is_built_in_index()) {
       // For full-text or vector index search index, only inverted table can be printed, and others table will not be printed.
-    } else if (index_schema->is_vec_index() && index_schema->get_index_status() != INDEX_STATUS_AVAILABLE) {
+    } else if (index_schema->is_vec_index() && !ObVectorIndexUtil::check_index_is_all_ready(schema_guard_, table_schema, *index_schema)) {
       // Not show vec index which in unavaliable status
     } else if (OB_FAIL(print_single_index_definition(index_schema, table_schema, arena_allocator,
                        buf, buf_len, pos, is_unique_index, is_oracle_mode, false, sql_mode, tz_info))) {
@@ -3430,6 +3434,8 @@ int ObSchemaPrinter::print_hash_sub_partition_elements(ObSubPartition **sub_part
         } else if (OB_FAIL(print_tablespace_definition_for_table(
                    sub_partition->get_tenant_id(), sub_partition->get_tablespace_id(), buf, buf_len, pos))) {
           SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+        } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(sub_partition, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
         } else if (sub_part_num - 1 == i && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
@@ -3502,6 +3508,8 @@ int ObSchemaPrinter::print_list_sub_partition_elements(
         } else if (OB_FAIL(print_tablespace_definition_for_table(
                    sub_partition->get_tenant_id(), sub_partition->get_tablespace_id(), buf, buf_len, pos))) {
           SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+        } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(sub_partition, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
         } else if (sub_part_num - 1 == i && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
@@ -3552,6 +3560,8 @@ int ObSchemaPrinter::print_range_sub_partition_elements(
         } else if (OB_FAIL(print_tablespace_definition_for_table(
                    sub_partition->get_tenant_id(), sub_partition->get_tablespace_id(), buf, buf_len, pos))) {
           SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+        } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(sub_partition, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
         } else if (sub_part_num - 1 != i && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
           SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
         } else if (sub_part_num - 1 == i && OB_FAIL(databuff_printf(buf, buf_len, pos, ")"))) {
@@ -3701,6 +3711,8 @@ int ObSchemaPrinter::print_list_partition_elements(const ObPartitionSchema *&sch
           } else if (OB_FAIL(print_tablespace_definition_for_table(
                      partition->get_tenant_id(), partition->get_tablespace_id(), buf, buf_len, pos))) {
             SHARE_SCHEMA_LOG(WARN, "print tablespace definition failed", K(ret));
+          } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(partition, buf, buf_len, pos))) {
+              SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
           } else if (print_sub_part_element
                      && OB_NOT_NULL(partition->get_subpart_array())
                      && OB_FAIL(print_individual_sub_partition_elements(schema, partition, buf,
@@ -3790,6 +3802,8 @@ int ObSchemaPrinter::print_range_partition_elements(const ObPartitionSchema *&sc
             if (OB_FAIL(print_tablespace_definition_for_table(
                 partition->get_tenant_id(), partition->get_tablespace_id(), buf, buf_len, pos))) {
               SHARE_SCHEMA_LOG(WARN, "print tablespace id failed", K(ret), K(part_name));
+            } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(partition, buf, buf_len, pos))) {
+              SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
             } else if (print_sub_part_element
                        && OB_NOT_NULL(partition->get_subpart_array())
                        && OB_FAIL(print_individual_sub_partition_elements(schema, partition, buf,
@@ -4152,8 +4166,7 @@ int ObSchemaPrinter::add_create_tenant_variables(
   return ret;
 }
 
-int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
-                                        const uint64_t element_type_id,
+int ObSchemaPrinter::print_element_type(const uint64_t element_type_id,
                                         const ObUDTBase *elem_type_info,
                                         char* buf,
                                         const int64_t& buf_len,
@@ -4180,6 +4193,7 @@ int ObSchemaPrinter::print_element_type(const uint64_t tenant_id,
   } else {
     const ObUDTTypeInfo *udt_info = NULL;
     const ObDatabaseSchema *db_schema = NULL;
+    uint64_t tenant_id = pl::get_tenant_id_by_object_id(element_type_id);
     OZ (schema_guard_.get_udt_info(tenant_id, element_type_id, udt_info));
     if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
       ret = OB_ERR_SP_UNDECLARED_TYPE;
@@ -4235,8 +4249,7 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
     } else {
       OZ (databuff_printf(buf, buf_len, pos, " IS TABLE OF "));
     }
-    OZ (print_element_type(tenant_id,
-                           udt_info->get_coll_info()->get_elem_type_id(),
+    OZ (print_element_type(udt_info->get_coll_info()->get_elem_type_id(),
                            udt_info->get_coll_info(),
                            buf, buf_len, pos));
     if (OB_SUCC(ret)
@@ -4253,8 +4266,7 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
         CK (OB_NOT_NULL(attr));
         OZ (databuff_printf(buf, buf_len, pos, "  \"%.*s\" ",
                             attr->get_name().length(), attr->get_name().ptr()));
-        OZ (print_element_type(tenant_id,
-                               attr->get_type_attr_id(), attr,
+        OZ (print_element_type(attr->get_type_attr_id(), attr,
                                buf, buf_len, pos));
         if (OB_SUCC(ret)) {
           if (i != udt_info->get_attributes() - 1) {
@@ -4273,6 +4285,51 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
     }
   }
   SHARE_SCHEMA_LOG(DEBUG, "print user define type schema", K(ret), K(*udt_info));
+  return ret;
+}
+
+int ObSchemaPrinter::print_object_spec_definition(const uint64_t tenant_id,
+                                                  ObUDTTypeInfo *udt_info,
+                                                  char* buf,
+                                                  const int64_t& buf_len,
+                                                  int64_t& pos,
+                                                  ObString methods_definition) const
+{
+  int ret = OB_SUCCESS;
+  const ObDatabaseSchema *db_schema = NULL;
+  CK (OB_NOT_NULL(udt_info));
+  OZ (schema_guard_.get_database_schema(tenant_id, udt_info->get_database_id(), db_schema));
+  if (OB_SUCC(ret) && OB_ISNULL(db_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    SHARE_SCHEMA_LOG(WARN, "Unknow database", K(ret), K(udt_info->get_database_id()));
+  }
+  OZ (databuff_printf(buf, buf_len, pos,
+                      "CREATE OR REPLACE%s TYPE \"%.*s\".\"%.*s\" ",
+                      udt_info->is_noneditionable() ? " NONEDITIONABLE" : "",
+                      db_schema->get_database_name_str().length(),
+                      db_schema->get_database_name_str().ptr(),
+                      udt_info->get_type_name().length(),
+                      udt_info->get_type_name().ptr()));
+  if (OB_SUCC(ret)) {
+    OZ (databuff_printf(buf, buf_len, pos, " IS OBJECT ( \n"));
+    for (int64_t i = 0; OB_SUCC(ret) && i < udt_info->get_attributes(); ++i) {
+      ObUDTTypeAttr* attr = udt_info->get_attrs().at(i);
+      CK (OB_NOT_NULL(attr));
+      OZ (databuff_printf(buf, buf_len, pos, "  \"%.*s\" ",
+                          attr->get_name().length(), attr->get_name().ptr()));
+      OZ (print_element_type(attr->get_type_attr_id(), attr,
+                             buf, buf_len, pos));
+      if (OB_SUCC(ret)) {
+        if (i != udt_info->get_attributes() - 1) {
+          OZ (databuff_printf(buf, buf_len, pos, ",\n"));
+        } else if (methods_definition.empty()) {
+          OZ (databuff_printf(buf, buf_len, pos, ");\n"));
+        } else {
+          OZ (databuff_printf(buf, buf_len, pos, ",\n%.*s);", methods_definition.length(), methods_definition.ptr()));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -4363,9 +4420,10 @@ int ObSchemaPrinter::print_object_definition(const ObUDTObjectType *object,
   ObStmtNodeTree *object_stmt = NULL;
   const ParseNode *src_node = NULL;
   ObString object_src;
+  bool is_wrap = false;
   CK (!object->get_source().empty());
   OZ (parser.parse_package(object->get_source(), object_stmt, ObDataTypeCastParams(),
-                           NULL, false, NULL, false));
+                           NULL, false, is_wrap, NULL, false));
   CK (OB_NOT_NULL(object_stmt));
   CK (T_STMT_LIST == object_stmt->type_);
   OX (src_node = object_stmt->children_[0]);
@@ -4416,6 +4474,7 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
   pl::ObPLParser parser(allocator, ObCharsets4Parser());
   ObStmtNodeTree *package_stmt = NULL;
   const ObStmtNodeTree *real_package_stmt = NULL;
+  bool is_wrap = false;
   OZ (schema_guard_.get_package_info(tenant_id, package_id, package_info));
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
@@ -4440,6 +4499,7 @@ int ObSchemaPrinter::print_package_definition(const uint64_t tenant_id,
                            ObDataTypeCastParams(),
                            NULL,
                            false,
+                           is_wrap,
                            nullptr,
                            false));
   CK (OB_NOT_NULL(package_stmt));
@@ -4867,17 +4927,18 @@ int ObSchemaPrinter::print_routine_definition(
     ObStmtNodeTree *return_type = NULL;
     ObStmtNodeTree *clause_list = NULL;
     bool is_wrapped_routine = false;
+    bool is_wrap = false;
     CK (!routine_body.empty());
 #ifdef OB_BUILD_ORACLE_PL
-    OZ (parser.parse_routine_body(routine_body, wrapped_parse_tree, false, false));
+    OZ (parser.parse_routine_body(routine_body, wrapped_parse_tree, false, is_wrap, false));
     OX (is_wrapped_routine = pl::ObPLParser::is_wrapped_parse_tree(*wrapped_parse_tree));
     if (is_wrapped_routine) {
-      OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+      OZ (parser.parse_routine_body(routine_body, parse_tree, false, is_wrap));
     } else {
       OX (parse_tree = wrapped_parse_tree);
     }
 #else
-    OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+    OZ (parser.parse_routine_body(routine_body, parse_tree, false, is_wrap));
 #endif  // OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(parse_tree));
     CK (T_STMT_LIST == parse_tree->type_);
@@ -5849,6 +5910,8 @@ int ObSchemaPrinter::print_hash_partition_elements(const ObPartitionSchema *&sch
           } else if (OB_FAIL(print_tablespace_definition_for_table(
                      partition->get_tenant_id(), partition->get_tablespace_id(), buf, buf_len, pos))) {
             SHARE_SCHEMA_LOG(WARN, "print tablespace id failed", K(ret), K(part_name));
+          } else if (OB_FAIL(!strict_compat_ && ObStorageCacheUtil::print_storage_cache_policy_element(partition, buf, buf_len, pos))) {
+            SHARE_SCHEMA_LOG(WARN, "failed to print storage cache policy element", K(ret));
           } else if (print_sub_part_element
                      && OB_NOT_NULL(partition->get_subpart_array())
                      && OB_FAIL(print_individual_sub_partition_elements(schema, partition, buf,
@@ -6339,8 +6402,9 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
     }
     if (OB_SUCC(ret)) {
       if (!is_oracle_mode && table_schema.get_pk_comment_str().length() > 0) {
+        ObCStringHelper helper;
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'" ,
-            to_cstring(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
+            helper.convert(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print primary key comment", K(ret), K(table_schema));
         }
       }
@@ -6355,13 +6419,25 @@ int ObSchemaPrinter::print_semistruct_encodng_options(const ObTableSchema &table
                                                        int64_t& pos) const
 {
   int ret = OB_SUCCESS;
-  const ObSemiStructEncodingType& type = table_schema.get_semistruct_encoding_type();
-  if (type.mode_ == ObSemiStructEncodingType::Mode::ENCODING) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SEMISTRUCT_ENCODING_TYPE='ENCODING' "))) {
+  const ObSemiStructEncodingType &type = table_schema.get_semistruct_encoding_type();
+  if (type.is_enable_semistruct_encoding()) {
+    ObSemistructProperties properties;
+    if (OB_FAIL(properties.resolve_semistruct_properties(type.mode_, table_schema.get_semistruct_properties()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to resolve semistruct properties", K(ret), K(table_schema));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SEMISTRUCT_PROPERTIES=(ENCODING_TYPE="))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encoding type", K(ret), K(table_schema));
+    } else if (type.mode_ == ObSemistructProperties::Mode::ENCODING) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ENCODING"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encoding type", K(ret), K(table_schema));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ", FREQ_THRESHOLD=%2d))", properties.get_freq_threshold()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print semistruct freq column threshold", K(ret), K(table_schema));
     }
   }
-    return ret;
+  return ret;
 }
 
 int ObSchemaPrinter::print_dynamic_partition_policy(
@@ -6480,10 +6556,15 @@ int ObSchemaPrinter::print_location_definiton(const uint64_t tenant_id,
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  KRB5CONF = "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print krb5conf", K(ret), K(*location_schema));
         }
-      } else if (0 == strncmp(CONFIGS, token, strlen(CONFIGS))) {
-        length = strlen(CONFIGS);
+      } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
+        length = strlen(HDFS_CONFIGS);
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  CONFIGS = "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print configs", K(ret), K(*location_schema));
+        }
+      } else if (0 == strncmp(HADOOP_USERNAME, token, strlen(HADOOP_USERNAME))) {
+        length = strlen(HADOOP_USERNAME);
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  USERNAME = "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print user_name", K(ret), K(*location_schema));
         }
       }
 

@@ -34,7 +34,6 @@
 
 namespace oceanbase {
 namespace sql {
-
   class ObOrcFileAccess : public orc::InputStream {
     public:
       ObOrcFileAccess(ObExternalFileAccess &file_reader, const char *file_name, int64_t len) :
@@ -50,13 +49,11 @@ namespace sql {
         return 128 * 1024; // 128KB
       }
 
-      void read(void* buf,
-                uint64_t length,
-                uint64_t offset) override  {
+      void read(void* buf, uint64_t length, uint64_t offset) override {
         int ret = OB_SUCCESS;
         int64_t bytesRead = 0;
         bool is_hit_cache = false;
-        const int64_t io_timeout_ms = (timeout_ts_ - ObTimeUtility::current_time()) / 1000;
+        const int64_t io_timeout_ms = MAX(0, (timeout_ts_ - ObTimeUtility::current_time()) / 1000);
         ObExternalReadInfo read_info(offset, buf, length, io_timeout_ms);
         if (OB_FAIL(read_from_cache(offset, length, buf, is_hit_cache))) {
           SERVER_LOG(WARN, "failed to read from cache", K(ret));
@@ -187,11 +184,24 @@ namespace sql {
                                            const orc::Statistics *orc_stat)
             : orc_row_iter_(orc_row_iter), orc_stat_(orc_stat) {}
       virtual ~OrcMinMaxFilterParamBuilder() {}
-      int build(const int64_t ext_tbl_col_id, const ObExpr *expr,
+      int build(const int32_t ext_tbl_col_id, const ObColumnMeta &column_meta,
                 blocksstable::ObMinMaxFilterParam &param) override;
+      int next_range(const int64_t column_id, int64_t &offset, int64_t &rows) override
+      {
+        return OB_NOT_SUPPORTED;
+      }
     private:
       ObOrcTableRowIterator *orc_row_iter_;
       const orc::Statistics *orc_stat_;
+    };
+
+    class OrcFilterColumnLoader : public ObFilterColumnLoader {
+    public:
+      OrcFilterColumnLoader(ObOrcTableRowIterator *orc_row_iter) : orc_row_iter_(orc_row_iter) {}
+      virtual ~OrcFilterColumnLoader() {}
+      int load(const common::ObIArray<uint64_t> &col_ids) override;
+    private:
+      ObOrcTableRowIterator *orc_row_iter_;
     };
 
     class RowIndexStatisticsWrapper : public orc::Statistics
@@ -219,177 +229,296 @@ namespace sql {
 
       void reset()
       {
-        start_row_group_idx = 0;
-        end_row_group_idx = 0;
         num_rows = 0;
         first_row_id = 0;
       }
 
       bool is_empty() const { return num_rows <= 0; }
 
-      /// \brief The start row group index of range in the stripe.
-      int64_t start_row_group_idx;
-      /// \brief The end row group index of range in the stripe.
-      int64_t end_row_group_idx;
       /// \brief Number of rows in the range
       int64_t num_rows;
       /// \brief Index of first row of the stripe
       int64_t first_row_id;
-      TO_STRING_KV(K(start_row_group_idx), K(end_row_group_idx), K(num_rows), K(first_row_id));
-    };
-
-    struct ObOrcReaderMetrics
-    {
-      ObOrcReaderMetrics() { reset(); }
-      void reset()
-      {
-        selected_file_count = 0;
-        skipped_file_count = 0;
-        selected_stripe_count = 0;
-        skipped_stripe_count = 0;
-        selected_row_group_count = 0;
-        skipped_row_group_count = 0;
-        read_rows_count = 0;
-      }
-      TO_STRING_KV(K(selected_file_count), K(skipped_file_count), K(selected_stripe_count),
-              K(skipped_stripe_count), K(selected_row_group_count), K(skipped_row_group_count),
-              K(read_rows_count));
-      int64_t selected_file_count;
-      int64_t skipped_file_count;
-      int64_t selected_stripe_count;
-      int64_t skipped_stripe_count;
-      int64_t selected_row_group_count;
-      int64_t skipped_row_group_count;
-      int64_t read_rows_count;
+      TO_STRING_KV(K(num_rows), K(first_row_id));
     };
 
   public:
     ObOrcTableRowIterator() :
-      file_column_exprs_(allocator_), mapping_column_exprs_(allocator_), mapping_column_ids_(allocator_),
-      file_meta_column_exprs_(allocator_), bit_vector_cache_(NULL),
-      options_(), file_prebuffer_(data_access_driver_), reader_metrics_() {}
+      query_flag_(0), inner_sector_reader_(nullptr), sector_reader_(nullptr), bit_vector_cache_(NULL),
+      options_(), file_prebuffer_(data_access_driver_), reader_metrics_(),
+      file_contains_attribute_key_(false)
+    {}
     virtual ~ObOrcTableRowIterator()
     {
       file_prebuffer_.destroy();
+      reader_profile_.dump_metrics();
+      reader_profile_.update_profile();
+      if (nullptr != inner_sector_reader_) {
+        inner_sector_reader_->~SectorReader();
+        inner_sector_reader_ = nullptr;
+      }
     }
 
     int init(const storage::ObTableScanParam *scan_param) override;
-
     virtual int get_next_row(ObNewRow *&row) override
     {
       UNUSED(row);
       return common::OB_ERR_UNEXPECTED;
-  }
+    }
 
-  int get_next_row() override;
-  int get_next_rows(int64_t &count, int64_t capacity) override;
-  virtual void reset() override;
+    int get_next_row() override;
+    int get_next_rows(int64_t &count, int64_t capacity) override;
+    virtual void reset() override;
 private:
   // load vec data from orc file to expr mem
   struct DataLoader {
-    DataLoader(ObEvalCtx &eval_ctx,
-               ObExpr *file_col_expr,
-               std::unique_ptr<orc::ColumnVectorBatch> &batch,
-               const int64_t batch_size,
-               const ObIArray<int> &idxs,
-               int64_t &row_count,
-               const orc::Type *col_type):
-      eval_ctx_(eval_ctx),
-      file_col_expr_(file_col_expr),
-      batch_(batch),
-      batch_size_(batch_size),
-      idxs_(idxs),
-      row_count_(row_count),
-      col_type_(col_type)
-    {}
-    typedef int (DataLoader::*LOAD_FUNC)();
-    static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
-                                          const orc::Type &type);
-    int load_data_for_col(LOAD_FUNC &func);
-    int load_string_col();
-    int load_year_vec();
-    int load_int32_vec();
-    int load_int64_vec();
-    int load_timestamp_vec();
-    int load_date_to_time_or_stamp();
-    int load_float();
-    int load_double();
-    int load_dec128_vec();
-    int load_dec64_vec();
-    int load_int64_to_number_vec();
-    int to_numeric(const int64_t idx, const int64_t int_value);
+    DataLoader() { reset(); }
+    ~DataLoader() { reset(); }
+    int init(ObExpr *file_col_expr, const orc::ColumnVectorBatch *batch, const orc::Type *col_type);
+    int init(ObExpr *file_col_expr, const ObColumnDefaultValue *col_def);
+    void reset()
+    {
+      file_col_expr_ = nullptr;
+      batch_ = nullptr;
+      col_type_ = nullptr;
+      load_func_ = nullptr;
+      col_def_ = nullptr;
+    }
 
-    static bool is_orc_read_utc(const orc::Type *type);
-    static bool is_ob_type_store_utc(const ObObjType &type);
+    bool has_load_func() const { return load_func_ != nullptr; }
+
+    int load_data_for_col(ObEvalCtx &eval_ctx);
+
     static int64_t calc_tz_adjust_us(const orc::Type *orc_type, const ObObjType ob_type,
                                      const ObSQLSessionInfo *session);
-    int64_t calc_tz_adjust_us();
-    ObEvalCtx &eval_ctx_;
+
+   private:
+    typedef int (DataLoader::*LOAD_FUNC)(ObEvalCtx &eval_ctx);
+    static LOAD_FUNC select_load_function(const ObDatumMeta &datum_type,
+                                          const orc::Type &type);
+    int load_string_col(ObEvalCtx &eval_ctx);
+    int load_lob_col(ObEvalCtx &eval_ctx);
+    int load_year_vec(ObEvalCtx &eval_ctx);
+    int load_int32_vec(ObEvalCtx &eval_ctx);
+    int load_int64_vec(ObEvalCtx &eval_ctx);
+    int load_timestamp_vec(ObEvalCtx &eval_ctx);
+    int load_date_to_time_or_stamp(ObEvalCtx &eval_ctx);
+    int load_float(ObEvalCtx &eval_ctx);
+    int load_double(ObEvalCtx &eval_ctx);
+    int load_dec128_vec(ObEvalCtx &eval_ctx);
+    int load_dec64_vec(ObEvalCtx &eval_ctx);
+    int load_dec64_to_dec128_vec(ObEvalCtx &eval_ctx);
+    int load_int64_to_number_vec(ObEvalCtx &eval_ctx);
+    int load_default(ObEvalCtx &eval_ctx);
+    static bool is_orc_read_utc(const orc::Type *type);
+    static bool is_ob_type_store_utc(const ObObjType &type);
+    int64_t calc_tz_adjust_us(ObEvalCtx &eval_ctx);
     ObExpr *file_col_expr_;
-    std::unique_ptr<orc::ColumnVectorBatch> &batch_;
-    const int64_t batch_size_;
-    const ObIArray<int> &idxs_;
-    int64_t &row_count_;
+    const orc::ColumnVectorBatch *batch_;
     const orc::Type *col_type_;
+    const ObColumnDefaultValue *col_def_;
+    LOAD_FUNC load_func_;
   };
+
+  // wrapper struct of orc row reader and batch
+  struct OrcRowReader {
+    OrcRowReader() : row_reader_(nullptr), orc_batch_(nullptr), data_loaders_(), row_id_(0) {}
+
+    ~OrcRowReader() {
+      row_reader_.reset();
+      orc_batch_.reset();
+      data_loaders_.reset();
+    }
+
+    template<typename T>
+    void init(int64_t capacity, const std::list<T>& include_columns, orc::Reader *reader);
+    void init_for_hive_table(int64_t capacity,
+                            const std::list<uint64_t>& include_columns,
+                            orc::Reader *reader);
+
+    OB_INLINE bool next_batch(const int64_t capacity)
+    {
+      // Iceberg table may have no row_reader, just load data by default value
+      bool has_rows = true;
+      if (row_reader_) {
+        orc_batch_->capacity = capacity;
+        has_rows = row_reader_->next(*orc_batch_);
+      }
+      return has_rows;
+    }
+
+    std::unique_ptr<orc::RowReader> row_reader_;
+    std::unique_ptr<orc::ColumnVectorBatch> orc_batch_;
+    common::ObArrayWrap<DataLoader> data_loaders_;
+    int64_t row_id_;
+  };
+
+  class SectorReader {
+    // keep max sector row size same as default orc row index group size to avoid unnecessary skip
+    // within row group.
+    static const int64_t MAX_SECTOR_ROW_COUNT = 10000;
+  public:
+    SectorReader(ObIAllocator &allocator) :
+      allocator_(allocator), orc_row_iter_(nullptr), eager_reader_(), bitmap_(allocator),
+      skip_(nullptr), next_(nullptr), sector_begin_(0), sector_end_(0), sector_size_(0) {}
+    virtual ~SectorReader()
+    {
+      if (skip_ != nullptr) {
+        allocator_.free(skip_);
+        skip_ = nullptr;
+      }
+      if (next_ != nullptr) {
+        allocator_.free(next_);
+        next_ = nullptr;
+      }
+    }
+
+    int init(ObOrcTableRowIterator *orc_row_iter);
+
+    int next(int64_t &count, int64_t capacity);
+
+    OB_INLINE bool is_finished() const
+    {
+      return sector_begin_ >= sector_end_;
+    }
+
+    OB_INLINE void seek_to_row(const int64_t row_id)
+    {
+      if (eager_reader_.row_reader_) {
+        eager_reader_.row_reader_->seekToRow(row_id);
+      }
+      eager_reader_.row_id_ = row_id;
+    }
+
+    OB_INLINE bool has_eager_reader() const
+    {
+      return eager_reader_.row_reader_ != nullptr;
+    }
+
+    OrcRowReader &get_eager_reader() { return eager_reader_; }
+
   private:
+    OB_INLINE void reset_sector_state()
+    {
+      sector_begin_ = 0;
+      sector_end_ = 0;
+      sector_size_ = 0;
+    }
+
+    int build_sector_bitmap_by_filter(bool &has_active_row);
+    int popcnt_rows_by_filter(bool &has_active_row);
+    int next_sector_range(const int64_t capacity, orc::ProjectArgument &arg);
+    int merge_bitmap_with_delete_bitmap(ObBitmap *bitmap, const int64_t eval_count,
+                                        const int64_t sector_start_row_id);
+
+  private:
+    ObIAllocator &allocator_;
+    ObOrcTableRowIterator *orc_row_iter_;
+    OrcRowReader eager_reader_;
+    int64_t max_batch_size_;
+    ObBitmap bitmap_;
+    uint16_t *skip_;
+    uint16_t *next_;
+    int64_t sector_begin_;
+    int64_t sector_end_;
+    int64_t sector_size_;
+  };
+
+  private:
+    int init_query_flag();
     int next_file();
     int next_stripe();
     int next_row_range();
     int build_type_name_id_map(const orc::Type* type, ObIArray<ObString> &col_names);
+    int build_iceberg_id_to_type_map(const orc::Type* type);
     int prepare_read_orc_file();
+    int init_data_loader(int64_t i, int64_t orc_col_id, const orc::Type *type,
+                        OrcRowReader &reader, ObColumnDefaultValue *default_value);
+    int compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id);
     int to_dot_column_path(ObIArray<ObString> &col_names, ObString &path);
-    int get_data_column_batch_idxs(const orc::Type *type, const int col_id, ObIArray<int> &idxs);
+    int get_data_column_batch(const orc::Type *type, const orc::StructVectorBatch *root_batch,
+                              const int col_id, orc::ColumnVectorBatch *&batch);
     ObExternalTableAccessOptions& make_external_table_access_options(stmt::StmtType stmt_type);
+    int create_row_readers();
+    int init_selected_columns();
     int filter_file(const int64_t task_idx);
      // the select row ranges stored in `row_ranges_`
     int select_row_ranges(const int64_t stripe_idx);
-    int select_row_ranges_by_pushdown_filter(const orc::StripeInformation &stripe,
-                                             const int64_t stripe_idx,
+    int select_row_ranges_by_pushdown_filter(const int64_t stripe_idx,
                                              const int64_t stripe_first_row_id,
                                              const int64_t stripe_num_rows,
                                              bool &build_whole_stripe_range);
-    int ensure_row_range_array(const int64_t size);
     int init_column_range_slices();
     int filter_by_statistic(const PushdownLevel filter_level,
                             const orc::Statistics *orc_stat,
                             bool &skipped);
-    int pre_buffer_row_index(const orc::StripeInformation &stripe);
-    int pre_buffer_data(const orc::StripeInformation &stripe);
+    int pre_buffer(const bool row_index);
     int convert_orc_statistics(const orc::ColumnStatistics* orc_stat,
                                const orc::Type *orc_type,
-                               const ObDatumMeta &col_meta,
-                               const bool has_lob_header,
+                               const ObColumnMeta &column_meta,
                                blocksstable::ObMinMaxFilterParam &param);
+    int init_sector_reader();
+    int fill_file_meta_column(ObEvalCtx &eval_ctx, ObExpr *meta_expr, const int64_t read_count);
+    // project column dependent expr to column expr.
+    int project_column(ObEvalCtx &eval_ctx, const ObExpr *from, const ObExpr *to,
+                       const int64_t read_count);
+    int load_filter_column(const common::ObIArray<uint64_t> &col_ids);
+    int next_batch(int64_t &read_count, const int64_t capacity);
 
+    int compute_column_id_by_table_type(int64_t index, int64_t &orc_col_id);
+    int create_file_reader(const ObString& data_file_path,
+                          ObExternalFileAccess& file_access_driver,
+                          ObFilePreBuffer& file_prebuffer,
+                          const int64_t file_size,
+                          std::unique_ptr<orc::Reader>& delete_reader);
+    void clear_filter_expr_evaluated_flag()
+    {
+      scan_param_->op_->clear_evaluated_flag();
+      FOREACH(filter_expr_rel, filter_expr_rels_) {
+        filter_expr_rel->second.projected_ = false;
+      }
+    }
+    bool is_contain_attribute_key(const orc::Type *type);
   private:
-
     ObOrcIteratorState state_;
     lib::ObMemAttr mem_attr_;
     ObArenaAllocator allocator_;
     ObOrcMemPool orc_alloc_;
+    union {
+      struct {
+        uint16_t is_count_aggr_ : 1;
+        uint16_t is_count_aggr_with_filter_ : 1;
+        uint16_t is_file_meta_filter_ : 1; // if only file meta filter
+        uint16_t has_skip_index_filter_ : 1;
+        uint16_t has_eager_column_ : 1;
+        uint16_t need_pre_buffer_index_ : 1;
+        uint16_t reserved_ : 10;
+      };
+      uint16_t query_flag_;
+    };
     std::unique_ptr<orc::Reader> reader_;
-    std::unique_ptr<orc::RowReader> row_reader_;
-    std::unique_ptr<orc::ColumnVectorBatch> orc_batch_;
+    orc::CachedReaderContext reader_ctx_;
+    std::unique_ptr<orc::RowReader> all_row_reader_;
+    OrcRowReader project_reader_;
+    SectorReader *inner_sector_reader_;
+    SectorReader *sector_reader_;
+    common::ObArrayWrap<bool> selected_columns_;
     ObExternalFileAccess data_access_driver_;
     common::ObArrayWrap<int> column_indexs_; //for getting statistics
     common::ObArrayWrap<SelectedRowRange> row_ranges_;
-    ExprFixedArray file_column_exprs_; //column value from orc file
-    ExprFixedArray mapping_column_exprs_;
-    ObFixedArray<uint64_t, ObIAllocator> mapping_column_ids_;
-    ExprFixedArray file_meta_column_exprs_; //column value from file meta
-    common::ObArrayWrap<DataLoader::LOAD_FUNC> load_funcs_;
     ObSqlString url_;
     ObBitVector *bit_vector_cache_;
     common::ObArrayWrap<char *> file_url_ptrs_; //for file url expr
     common::ObArrayWrap<ObLength> file_url_lens_; //for file url expr
     hash::ObHashMap<int64_t, const orc::Type*, common::hash::NoPthreadDefendMode> id_to_type_;
     hash::ObHashMap<ObString, int64_t, common::hash::NoPthreadDefendMode> name_to_id_;
+    hash::ObHashMap<int64_t, const orc::Type*, common::hash::NoPthreadDefendMode> iceberg_id_to_type_;
     ObExternalTableAccessOptions options_;
     ObFilePreBuffer file_prebuffer_;
-    ObOrcReaderMetrics reader_metrics_; // record reader info in the filter-down scenario
     common::ObArenaAllocator temp_allocator_; // used for lob filter pushdown
     common::ObArrayWrap<ObFilePreBuffer::ColumnRangeSlices *> column_range_slices_;
+    ObLakeTableReaderMetrics reader_metrics_;
+    bool file_contains_attribute_key_;
 };
 
 }

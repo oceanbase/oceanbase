@@ -17,6 +17,7 @@
 #include "share/cache/ob_cache_name_define.h"
 #include "observer/ob_server_struct.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "share/schema/ob_iceberg_table_schema.h"
 namespace oceanbase
 {
 using namespace common;
@@ -226,6 +227,14 @@ int ObSchemaCacheValue::deep_copy(char *buf,
     }
     case MOCK_FK_PARENT_TABLE_SCHEMA: {
       DEEP_COPY_SCHEMA(ObMockFKParentTableSchema);
+      break;
+    }
+    case CCL_RULE_SCHEMA: {
+      DEEP_COPY_SCHEMA(ObCCLRuleSchema);
+      break;
+    }
+    case ICEBERG_TABLE_SCHEMA: {
+      DEEP_COPY_SCHEMA(ObIcebergTableSchema);
       break;
     }
     default: {
@@ -1176,6 +1185,18 @@ int ObSchemaFetcher::fetch_schema(ObSchemaType schema_type,
           }
           break;
         }
+      case CCL_RULE_SCHEMA: {
+        ObCCLRuleSchema *ccl_rule_schema = NULL;
+        if (OB_FAIL(fetch_ccl_rule_info(
+                schema_status, schema_id, schema_version, allocator,
+                ccl_rule_schema))) {
+          LOG_WARN("fetch ccl_rule_schema failed", K(ret),
+                    K(schema_status), K(schema_id), K(schema_version));
+        } else {
+          schema = ccl_rule_schema;
+        }
+        break;
+      }
       default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unknown schema type, should not reach here", K(ret), K(schema_type));
@@ -1501,6 +1522,7 @@ int ObSchemaFetcher::fetch_##OBJECT_NAME##_info(const ObRefreshSchemaStatus &sch
   DEF_SCHEMA_INFO_FETCHER(tablespace, ObTablespaceSchema);
   DEF_SCHEMA_INFO_FETCHER(profile, ObProfileSchema);
   DEF_SCHEMA_INFO_FETCHER(mock_fk_parent_table, ObMockFKParentTableSchema);
+  DEF_SCHEMA_INFO_FETCHER(ccl_rule, ObCCLRuleSchema);
 #undef DEF_SCHEMA_INFO_FETCHER
 #endif
 }      //end of namespace schema

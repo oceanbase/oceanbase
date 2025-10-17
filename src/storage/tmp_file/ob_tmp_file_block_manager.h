@@ -78,7 +78,9 @@ public:
 
 private:
   int alloc_block_(ObTmpFileBlock *&block, ObTmpFileBlock::BlockType block_type);
-
+  struct PrintBlockOp {
+    bool operator()(const ObTmpFileBlockKey &key, const ObTmpFileBlockHandle &value);
+  };
 private:
   typedef common::ObLinearHashMap<ObTmpFileBlockKey, ObTmpFileBlockHandle> ObTmpFileBlockMap;
   typedef SpinWLockGuard ExclusiveLockGuard;

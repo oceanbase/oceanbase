@@ -35,7 +35,8 @@ OB_SERIALIZE_MEMBER(ObUnitInfoGetter::ObTenantConfig,
                     has_memstore_,
                     is_removed_,
                     hidden_sys_data_disk_config_size_,
-                    actual_data_disk_size_);
+                    actual_data_disk_size_,
+                    replica_type_);
 
 const char* ObUnitInfoGetter::unit_status_strs_[] = {
     "NORMAL",
@@ -57,7 +58,8 @@ ObUnitInfoGetter::ObTenantConfig::ObTenantConfig()
     has_memstore_(true),
     is_removed_(false),
     hidden_sys_data_disk_config_size_(0),
-    actual_data_disk_size_(0)
+    actual_data_disk_size_(0),
+    replica_type_(REPLICA_TYPE_FULL)
 {}
 
 int ObUnitInfoGetter::ObTenantConfig::init(
@@ -70,7 +72,8 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     const bool has_memstore,
     const bool is_remove,
     const int64_t hidden_sys_data_disk_config_size,
-    const int64_t actual_data_disk_size)
+    const int64_t actual_data_disk_size,
+    const common::ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(config_.assign(config))) {
@@ -85,6 +88,7 @@ int ObUnitInfoGetter::ObTenantConfig::init(
     is_removed_ = is_remove;
     hidden_sys_data_disk_config_size_ = hidden_sys_data_disk_config_size;
     actual_data_disk_size_ = actual_data_disk_size;
+    replica_type_ = replica_type;
   }
   return ret;
 }
@@ -127,7 +131,8 @@ int ObUnitInfoGetter::ObTenantConfig::divide_meta_tenant(ObTenantConfig& meta_te
       has_memstore_,
       is_removed_,
       hidden_sys_data_disk_config_size_,
-      ObUnitResource::gen_meta_tenant_data_disk_size(actual_data_disk_size_)))) {
+      ObUnitResource::gen_meta_tenant_data_disk_size(actual_data_disk_size_),
+      replica_type_))) {
     LOG_WARN("init meta tenant config fail", KR(ret), KPC(this), K(meta_config));
   }
   // update self unit resource
@@ -151,6 +156,7 @@ void ObUnitInfoGetter::ObTenantConfig::reset()
   is_removed_ = false;
   hidden_sys_data_disk_config_size_ = 0;
   actual_data_disk_size_ = 0;
+  replica_type_ = REPLICA_TYPE_FULL;
 }
 
 bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) const
@@ -164,7 +170,8 @@ bool ObUnitInfoGetter::ObTenantConfig::operator==(const ObTenantConfig &other) c
           has_memstore_ == other.has_memstore_ &&
           is_removed_ == other.is_removed_ &&
           hidden_sys_data_disk_config_size_ == other.hidden_sys_data_disk_config_size_ &&
-          actual_data_disk_size_ == other.actual_data_disk_size_);
+          actual_data_disk_size_ == other.actual_data_disk_size_ &&
+          replica_type_ == other.replica_type_);
 }
 
 int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantConfig &other)
@@ -184,6 +191,7 @@ int ObUnitInfoGetter::ObTenantConfig::assign(const ObUnitInfoGetter::ObTenantCon
     is_removed_ = other.is_removed_;
     hidden_sys_data_disk_config_size_ = other.hidden_sys_data_disk_config_size_;
     actual_data_disk_size_ = other.actual_data_disk_size_;
+    replica_type_ = other.replica_type_;
   }
   return ret;
 }
@@ -297,7 +305,8 @@ int ObUnitInfoGetter::get_server_tenant_configs(const common::ObAddr &server,
                                      has_memstore,
                                      false /*is_removed*/,
                                      hidden_sys_data_disk_config_size,
-                                     tenant_config.gen_init_actual_data_disk_size(unit_infos.at(i).config_)))) {
+                                     tenant_config.gen_init_actual_data_disk_size(unit_infos.at(i).config_),
+                                     unit_infos.at(i).unit_.replica_type_))) {
         LOG_WARN("tenant_config init failed", KR(ret), K(tenant_id), K(unit_infos.at(i)));
       } else if (is_user_tenant(tenant_id)) {
         meta_tenant_config.reset();

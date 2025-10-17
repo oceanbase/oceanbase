@@ -471,7 +471,8 @@ public:
                        K_(is_primary_index),
                        K_(is_table_without_pk),
                        K_(has_instead_of_trigger),
-                       KPC_(trans_info_expr));
+                       KPC_(trans_info_expr),
+                       K_(is_vec_hnsw_index_vid_opt));
 
   ObDMLOpType dml_type_;
   ExprFixedArray check_cst_exprs_;
@@ -495,6 +496,8 @@ public:
   bool is_table_without_pk_;
   bool has_instead_of_trigger_;
   ObExpr *trans_info_expr_;
+  bool is_table_with_clustering_key_;
+  bool is_vec_hnsw_index_vid_opt_;
 protected:
   ObDMLBaseCtDef(common::ObIAllocator &alloc,
                  ObDASDMLBaseCtDef &das_base_ctdef,
@@ -513,7 +516,9 @@ protected:
       is_primary_index_(false),
       is_table_without_pk_(false),
       has_instead_of_trigger_(false),
-      trans_info_expr_(nullptr)
+      trans_info_expr_(nullptr),
+      is_table_with_clustering_key_(false),
+      is_vec_hnsw_index_vid_opt_(false)
   { }
 };
 
@@ -969,6 +974,12 @@ public:
     : ins_ctdef_(NULL),
       upd_ctdef_(NULL),
       is_upd_rowkey_(false),
+      do_opt_path_(false),
+      do_index_lookup_(false),
+      unique_key_conv_exprs_(alloc),
+      unique_index_rowkey_exprs_(alloc),
+      das_index_scan_ctdef_(NULL),
+      lookup_ctdef_for_batch_(NULL),
       alloc_(alloc)
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
@@ -977,6 +988,14 @@ public:
   ObInsCtDef *ins_ctdef_;
   ObUpdCtDef *upd_ctdef_;
   bool is_upd_rowkey_;
+
+  /* for opt path */
+  bool do_opt_path_;                         // is do opt path
+  bool do_index_lookup_;                     // is do index lookup
+  ExprFixedArray unique_key_conv_exprs_;     // index unique conv exprs
+  ExprFixedArray unique_index_rowkey_exprs_; // index unique rowkey exprs
+  ObDASScanCtDef *das_index_scan_ctdef_;     // scan the unique index table
+  ObDASScanCtDef *lookup_ctdef_for_batch_;   // lookup data table by batch
   common::ObIAllocator &alloc_;
 };
 

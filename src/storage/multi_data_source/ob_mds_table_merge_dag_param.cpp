@@ -18,7 +18,7 @@ namespace storage
 {
 namespace mds
 {
-ObMdsTableMergeDagParam::ObMdsTableMergeDagParam()
+ObTabletMdsMiniMergeDagParam::ObTabletMdsMiniMergeDagParam()
   : ObTabletMergeDagParam(),
     flush_scn_(share::SCN::invalid_scn()),
     generate_ts_(0),

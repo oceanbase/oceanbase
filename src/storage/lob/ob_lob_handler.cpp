@@ -27,10 +27,7 @@ namespace storage
 int ObLobQueryBaseHandler::init_base(ObLobMetaManager *lob_meta_mngr)
 {
   int ret = OB_SUCCESS;
-  if (param_.lob_locator_ != nullptr && !param_.lob_locator_->is_persist_lob()) {
-    ret = OB_NOT_IMPLEMENT;
-    LOG_WARN("Unsupport outrow tmp lob.", K(ret), K(param_));
-  } else if (!param_.lob_common_->is_init_) {
+  if (!param_.lob_common_->is_init_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob common header for out row.", K(ret), KPC(param_.lob_common_));
   } else if (OB_ISNULL(param_.lob_data_ = reinterpret_cast<ObLobData*>(param_.lob_common_->buffer_))) {

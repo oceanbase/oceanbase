@@ -1527,6 +1527,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     // fill macro block bloom filter
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, enable_macro_block_bloom_filter, table_schema,
         true/*skip null error*/, true/*ignore_column_error*/, false);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, micro_block_format_version, table_schema, int64_t,
+        true/*skip null error*/, true/*ignore_column_error*/, storage::ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, merge_engine_type, table_schema, ObMergeEngineType,
         true/*skip null*/, true/*ignore column error*/, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1553,6 +1555,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
                                                         uint64_t, true, true, common::OB_INVALID_ID);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_sub_path, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, semistruct_properties, table_schema, true/*skip null*/, true/*ignore column error*/, "");
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
@@ -1967,6 +1971,10 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_CATALOG) != 0 ? OB_PRIV_CREATE_CATALOG : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_USE_CATALOG) != 0 ? OB_PRIV_USE_CATALOG : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_LOCATION) != 0 ? OB_PRIV_CREATE_LOCATION : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_AI_MODEL) != 0 ? OB_PRIV_CREATE_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_AI_MODEL) != 0 ? OB_PRIV_ALTER_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_DROP_AI_MODEL) != 0 ? OB_PRIV_DROP_AI_MODEL : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_ACCESS_AI_MODEL) != 0 ? OB_PRIV_ACCESS_AI_MODEL : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -6230,6 +6238,63 @@ int ObSchemaRetrieveUtils::retrieve_object_list(
   return ret;
 }
 
+RETRIEVE_SCHEMA_FUNC_DEFINE(ccl_rule);
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_ccl_rule_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObSimpleCCLRuleSchema &simple_ccl_rule_schema,
+    bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  simple_ccl_rule_schema.reset();
+  is_deleted = false;
+
+  simple_ccl_rule_schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, ccl_rule_id, simple_ccl_rule_schema, tenant_id);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, simple_ccl_rule_schema, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, ccl_rule_name, simple_ccl_rule_schema);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_for_all_databases, simple_ccl_rule_schema, bool);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_for_all_tables, simple_ccl_rule_schema, bool);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_dml, simple_ccl_rule_schema, oceanbase::share::schema::ObCCLAffectDMLType);
+  }
+  return ret;
+}
+
+template<typename T>
+int ObSchemaRetrieveUtils::fill_ccl_rule_schema(
+    const uint64_t tenant_id,
+    T &result,
+    ObCCLRuleSchema &ccl_rule_schema,
+    bool &is_deleted)
+{
+  int ret = common::OB_SUCCESS;
+  ccl_rule_schema.reset();
+  is_deleted = false;
+
+  ccl_rule_schema.set_tenant_id(tenant_id);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, ccl_rule_id, ccl_rule_schema, tenant_id);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+  if (!is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, ccl_rule_schema, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, ccl_rule_name, ccl_rule_schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, affect_user_name, ccl_rule_schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, affect_host, ccl_rule_schema);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_for_all_databases, ccl_rule_schema, bool);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_for_all_tables, ccl_rule_schema, bool);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, affect_database, ccl_rule_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, "");
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, affect_table, ccl_rule_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, "");
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_dml, ccl_rule_schema, oceanbase::share::schema::ObCCLAffectDMLType);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, affect_scope, ccl_rule_schema, oceanbase::share::schema::ObCCLAffectScope);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ccl_keywords, ccl_rule_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, "");
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, max_concurrency, ccl_rule_schema, uint64_t);
+  }
+  return ret;
+}
+
 template<typename T>
 int ObSchemaRetrieveUtils::fill_object_id(const uint64_t tenant_id, T &result,
                                           uint64_t &object_id, bool &is_deleted)
@@ -6315,6 +6380,7 @@ int ObSchemaRetrieveUtils::retrieve_external_resource_schema(const uint64_t tena
   return ret;
 }
 
+
 template<typename T>
 int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_id,
                                                          T &result,
@@ -6335,6 +6401,37 @@ int ObSchemaRetrieveUtils::fill_external_resource_schema(const uint64_t tenant_i
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, database_id, schema, tenant_id);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, name, schema);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, type, schema, ObSimpleExternalResourceSchema::ResourceType);
+  }
+
+  return ret;
+}
+
+RETRIEVE_SCHEMA_FUNC_DEFINE(ai_model);
+template<typename T>
+int ObSchemaRetrieveUtils::fill_ai_model_schema(const uint64_t tenant_id,
+                                                T &result,
+                                                ObAiModelSchema &schema,
+                                                bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+
+  schema.reset();
+
+  schema.set_tenant_id(tenant_id);
+  int64_t type = 0;
+
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, model_id, schema, tenant_id);
+  EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
+
+  if (OB_SUCC(ret) && !is_deleted) {
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, schema, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "type", type, int64_t);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, name, schema);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, model_name, schema);
+  }
+
+  if (OB_SUCC(ret)) {
+    schema.set_type(EndpointType::convert_type_from_int(type));
   }
 
   return ret;

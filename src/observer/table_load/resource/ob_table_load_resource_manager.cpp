@@ -168,14 +168,9 @@ void ObTableLoadResourceManager::pause()
 {
   int ret = OB_SUCCESS;
   if (refresh_and_check_task_.is_inited_) {
-    bool is_exist = true;
-    if (OB_SUCC(TG_TASK_EXIST(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_and_check_task_, is_exist))) {
-      if (is_exist) {
-        TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_and_check_task_);
-        TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_and_check_task_);
-        refresh_and_check_task_.is_inited_ = false;
-      }
-    }
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_and_check_task_);
+    TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), refresh_and_check_task_);
+    refresh_and_check_task_.is_inited_ = false;
   }
   resource_inited_ = false;
 }

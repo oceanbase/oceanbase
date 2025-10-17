@@ -240,7 +240,8 @@ public:
   int get_all_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                    const common::ObPartID part_id,
                                    common::ObIArray<common::ObTabletID> &tablet_ids,
-                                   common::ObIArray<common::ObObjectID> &out_part_ids);
+                                   common::ObIArray<common::ObObjectID> &out_part_ids,
+                                   const bool need_dedup);
   int get_all_tablet_and_object_id(common::ObIArray<common::ObTabletID> &tablet_ids,
                                    common::ObIArray<common::ObObjectID> &out_part_ids);
   int get_default_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
@@ -358,9 +359,6 @@ class ObDASLocationRouter
 public:
   ObDASLocationRouter(common::ObIAllocator &allocator);
   ~ObDASLocationRouter();
-  int nonblock_get(const ObDASTableLocMeta &loc_meta,
-                   const common::ObTabletID &tablet_id,
-                   share::ObLSLocation &location);
 
   int nonblock_get_candi_tablet_locations(const ObDASTableLocMeta &loc_meta,
                                           const common::ObIArray<ObTabletID> &tablet_ids,
@@ -398,7 +396,8 @@ public:
   void reset_cur_retry_cnt() { cur_retry_cnt_ = 0; }
   void inc_cur_retry_cnt() { ++cur_retry_cnt_; }
   void set_retry_info(const ObQueryRetryInfo* retry_info);
-  int get_external_table_ls_location(share::ObLSLocation &location);
+  static int get_external_table_ls_location(share::ObLSLocation &location,
+                                            const common::ObAddr *server = nullptr);
   void save_cur_exec_status(int err_no)
   {
     if (OB_SUCCESS == cur_errno_) {
@@ -418,10 +417,20 @@ private:
   int get_vt_ls_location(uint64_t table_id,
                          const common::ObTabletID &tablet_id,
                          share::ObLSLocation &location);
+  int nonblock_get(const ObDASTableLocMeta &loc_meta,
+                   const common::ObTabletID &tablet_id,
+                   share::ObLSLocation &location);
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
                                     ObDASTabletLoc &tablet_loc,
+                                    const bool is_weak_read,
                                     const ObRoutePolicyType route_policy);
+  int nonblock_get_candi_tablet_location(const ObDASTableLocMeta &loc_meta,
+                                         const common::ObTabletID &tablet_id,
+                                         const common::ObObjectID &partition_id,
+                                         const common::ObObjectID &first_level_part_id,
+                                         share::ObLSLocation &location,
+                                         ObCandiTabletLoc &candi_tablet_loc);
 private:
   int last_errno_;
   int cur_errno_;

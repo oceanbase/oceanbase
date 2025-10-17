@@ -48,7 +48,13 @@ int ObIOFaultDetector::get_device_health_status(ObDeviceHealthStatus &dhs,
 using namespace common;
 namespace logservice
 {
-int ObLogService::get_io_start_time(int64_t &last_working_time)
+int ObLogService::get_io_statistic_info(int64_t &last_working_time,
+                                        int64_t &pending_write_size,
+                                        int64_t &pending_write_count,
+                                        int64_t &pending_write_rt,
+                                        int64_t &accum_write_size,
+                                        int64_t &accum_write_count,
+                                        int64_t &accum_write_rt)
 {
   last_working_time = mock_clog_disk_hang ?
                       mock_fatal_err_ts - CLOG_HANG_TIME_THRESHOLD_US

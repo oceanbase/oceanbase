@@ -17,6 +17,7 @@
 #include "storage/blocksstable/ob_datum_range.h"
 #include "ob_sstable_index_filter.h"
 #include "common/ob_tablet_id.h"
+#include "share/ob_compute_property.h"
 #include "share/ob_i_tablet_scan.h"
 #include "share/schema/ob_table_param.h"
 #include "lib/utility/ob_print_utils.h"
@@ -46,6 +47,7 @@ struct ObTableIterParam
 public:
   ObTableIterParam();
   virtual ~ObTableIterParam();
+  void reuse();
   void reset();
   OB_INLINE bool is_valid() const
   {
@@ -190,6 +192,8 @@ public:
   { tablet_handle_ = tablet_handle; }
   OB_INLINE bool use_new_format() const
   { return op_->enable_rich_format_; }
+  OB_INLINE bool plan_use_new_format() const
+  { return plan_enable_rich_format_; }
   OB_INLINE int64_t get_io_read_batch_size() const
   { return table_scan_opt_.io_read_batch_size_; }
   OB_INLINE int64_t get_io_read_gap_size() const
@@ -212,6 +216,7 @@ public:
   const common::ObIArray<int32_t> *out_cols_project_;
   const common::ObIArray<int32_t> *agg_cols_project_;
   const common::ObIArray<int32_t> *group_by_cols_project_;
+  const common::ObIArray<share::ObAggrParamProperty> *aggr_param_props_;
   sql::ObPushdownFilterExecutor *pushdown_filter_;
   sql::ObPushdownOperator *op_;
   ObSSTableIndexFilter *sstable_index_filter_;
@@ -242,6 +247,9 @@ public:
   bool is_tablet_spliting_;
   bool is_column_replica_table_;
   bool is_delete_insert_;
+  // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
+  // valid after 4.4.1.0, same meaning with op->enable_rich_format before 4.4.1.0
+  bool plan_enable_rich_format_;
   const bool *need_update_tablet_param_;
 };
 
@@ -250,6 +258,7 @@ struct ObTableAccessParam
 public:
   ObTableAccessParam();
   virtual ~ObTableAccessParam();
+  void reuse();
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_ && iter_param_.is_valid(); }
   // used for query

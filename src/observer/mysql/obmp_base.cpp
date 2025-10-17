@@ -347,6 +347,9 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
         LOG_WARN("set session debug sync actions to thread local actions failed", K(tmp_ret));
       }
     }
+#ifdef OB_BUILD_SPM
+    ctx.spm_ctx_.baseline_plan_hash_array_.set_allocator(&CURRENT_CONTEXT->get_arena_allocator());
+#endif
     // construct sql context
     ctx.multi_stmt_item_ = multi_stmt_item;
     ctx.session_info_ = &session;

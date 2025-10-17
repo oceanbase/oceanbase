@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_FTS_INDEX_BUILDER_UTIL_H_
 #define OCEANBASE_SHARE_FTS_INDEX_BUILDER_UTIL_H_
 
+#include "object/ob_object.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
 #include "sql/resolver/ob_schema_checker.h"
@@ -20,18 +21,63 @@
 
 namespace oceanbase
 {
+namespace rootserver
+{
+class ObDDLService;
+} // namespace rootserver
+
 namespace share
 {
 class ObMulValueIndexBuilderUtil;
+
+static constexpr int64_t MIN_DATA_VERSION_FOR_DOC_ID_OPT = DATA_VERSION_4_4_1_0;
+
+class ObDocIDUtils
+{
+public:
+  // for now, we can judge by it's col id, else we should make it compatiable.
+  static ObDocIDType get_type_by_col_id(const uint64_t col_id)
+  {
+    ObDocIDType type = ObDocIDType::TABLET_SEQUENCE;
+    if (col_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+      return ObDocIDType::HIDDEN_INC_PK;
+    }
+    return type;
+  }
+
+  static bool is_docid_col_id_valid(const uint64_t col_id)
+  {
+    bool bret = false;
+    if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == col_id) {
+      bret = true;
+    } else if ((col_id > OB_APP_MIN_COLUMN_ID) && (OB_INVALID_ID != col_id)) {
+      bret = true;
+    }
+    return bret;
+  }
+};
 
 class ObFtsIndexBuilderUtil
 {
   friend class ObMulValueIndexBuilderUtil;
 public:
+  static constexpr const char *DOC_ROWKEY_NAME = "fts_doc_rowkey";
+  static constexpr const char *ROWKEY_DOC_NAME = "fts_rowkey_doc";
   static const int64_t OB_FTS_INDEX_TABLE_INDEX_COL_CNT = 2;
   static const int64_t OB_FTS_DOC_WORD_TABLE_INDEX_COL_CNT = 2;
   static const int64_t OB_FTS_INDEX_OR_DOC_WORD_TABLE_COL_CNT = 4;
 public:
+  // Check if we can use rowkey instead of doc id.
+  // if we want to add more types, make this one condition of them.
+  static int determine_docid_type(const ObTableSchema &table_schema, ObDocIDType &doc_id_type);
+  static int check_fts_aux_index_schema_exist(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg &arg,
+      const share::schema::ObIndexType index_type,
+      ObSchemaGetterGuard &schema_guard,
+      rootserver::ObDDLService &ddl_service,
+      ObIAllocator &allocator,
+      bool &is_exist);
   static int get_doc_id_column_id(
       const ObTableSchema *data_schema,
       uint64_t &doc_id_col_id);
@@ -87,6 +133,9 @@ public:
   static int get_doc_id_col(
       const ObTableSchema &data_schema,
       const ObColumnSchemaV2 *&doc_id_col);
+  static int get_fts_rowkey_col(
+      const ObTableSchema &data_schema,
+      const ObColumnSchemaV2 *&rowkey_col);
   static int get_index_column_ids_for_fts(
       const share::schema::ObTableSchema &data_schema,
       const share::schema::ObColumnSchemaV2 &column_schema,
@@ -110,10 +159,14 @@ public:
   static int check_supportability_for_building_index(
         const ObTableSchema *data_schema,
         const obrpc::ObCreateIndexArg *index_arg);
-  static int get_fts_multivalue_index_column_name(
+  static int get_fts_index_column_name(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
       ObIArray<ObString> &col_names);
+  static int get_multivalue_index_column_name(
+        const ObTableSchema &data_table_schema,
+        const ObTableSchema &index_table_schema,
+        ObIArray<ObString> &col_names);
   static int generate_fts_mtv_index_aux_columns(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &index_table_schema,
@@ -134,10 +187,12 @@ public:
         const int64_t original_parallelism,
         int64_t &decided_parallelism);
 private:
-  static int get_multivalue_index_column_name(
-      const ObTableSchema &data_table_schema,
-      const ObTableSchema &index_table_schema,
-      ObIArray<ObString> &col_names);
+  static int build_fts_aux_index_name(
+    const ObIndexType type,
+    const ObString &index_name,
+    char *name_buf,
+    const int64_t buf_len,
+    int64_t &pos);
   static bool compare_index_column(const std::pair<int64_t, ObString> &lhs, const std::pair<int64_t, ObString> &rhs) { return lhs.first < rhs.first; }
   static int check_ft_cols(
       const obrpc::ObCreateIndexArg *index_arg,
@@ -237,6 +292,7 @@ private:
       const share::schema::ObTableSchema &data_schema,
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator &allocator);
+  static int add_skip_index_for_index_column(schema::ObColumnSchemaV2 &column_schema);
 };
 
 class ObMulValueIndexBuilderUtil
@@ -257,12 +313,12 @@ public:
    ObIAllocator *allocator,
    ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
  static int is_multivalue_index_type(
-   const ObString& column_string,
-   bool& is_multi_value_index);
+   const ParseNode *expr_node,
+   bool &is_multi_value_index);
  static int adjust_index_type(
-   const ObString& column_string,
-   bool& is_multi_value_index,
-   int* index_keyname);
+   const ParseNode *expr_node,
+   bool &is_multi_value_index,
+   int *index_keyname);
  static int get_mulvalue_col(
    const ObTableSchema &data_schema,
    const obrpc::ObCreateIndexArg *index_arg,
@@ -298,10 +354,6 @@ public:
     bool force_rebuild,
     ObColumnSchemaV2 *&gen_col,
     ObColumnSchemaV2 *&gen_budy_col);
- static int inner_adjust_multivalue_arg(
-   obrpc::ObCreateIndexArg &index_arg,
-   const ObTableSchema &data_schema,
-   ObColumnSchemaV2 *doc_id_col);
  static int set_multivalue_index_table_columns(
    const obrpc::ObCreateIndexArg &arg,
    const ObTableSchema &data_schema,

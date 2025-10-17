@@ -21,6 +21,8 @@
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_ckpt_phy_block_reader.h"
 #include "storage/shared_storage/micro_cache/ckpt/ob_ss_ckpt_phy_block_writer.h"
 #include "storage/shared_storage/micro_cache/ob_ss_micro_range_manager.h"
+#include "storage/shared_storage/micro_cache/ob_ss_micro_cache_util.h"
+#include "storage/shared_storage/ob_file_manager.h"
 
 namespace oceanbase
 {
@@ -77,7 +79,10 @@ void TestSSExecuteCheckpointTask::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32)));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/));
+  ObTenantFileManager *tnt_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tnt_file_mgr);
+  tnt_file_mgr->is_cache_file_exist_ = true;
   micro_cache->start();
   micro_cache_ = micro_cache;
   mem_blk_mgr_ = &micro_cache_->mem_blk_mgr_;
@@ -86,6 +91,7 @@ void TestSSExecuteCheckpointTask::SetUp()
   ASSERT_NE(nullptr, phy_blk_mgr_);
   micro_meta_mgr_ = &micro_cache_->micro_meta_mgr_;
   ASSERT_NE(nullptr, micro_meta_mgr_);
+  micro_meta_mgr_->enable_save_meta_mem_ = false; // disable save meta memory
   release_cache_task_ = &micro_cache_->task_runner_.release_cache_task_;
   ASSERT_NE(nullptr, release_cache_task_);
   persist_meta_task_ = &micro_cache_->task_runner_.persist_meta_task_;
@@ -117,7 +123,7 @@ int TestSSExecuteCheckpointTask::restart_micro_cache()
   micro_cache_->destroy();
   tnt_file_mgr->is_cache_file_exist_ = true;
 
-  if (OB_FAIL(micro_cache_->init(MTL_ID(), (1L << 32)))) {
+  if (OB_FAIL(micro_cache_->init(MTL_ID(), (1L << 32), 1/*micro_split_cnt*/))) {
     LOG_WARN("fail to init micro_cache", KR(ret));
   } else {
     micro_cache_->start();
@@ -322,12 +328,14 @@ int TestSSExecuteCheckpointTask::check_super_block(const ObSSMicroCacheSuperBlk 
 TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_lack_phy_blk)
 {
   LOG_INFO("TEST: start test_micro_ckpt_lack_phy_blk");
+  const uint64_t tenant_id = MTL_ID();
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
   const int64_t block_size = micro_cache->phy_blk_size_;
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
 
   // add block
   const int64_t WRITE_BLK_CNT = 50;
@@ -369,6 +377,41 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_lack_phy_blk)
   ASSERT_EQ(1, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
   ASSERT_LT(cache_stat.task_stat().micro_ckpt_item_cnt_, block_size / SS_AVG_MICRO_META_PERSIST_SIZE);
+
+  ObArray<ObSSMicroSubRangeInfo *> persisted_sub_rngs;
+  const int64_t init_rng_cnt = micro_range_mgr.init_range_cnt_;
+  ObSSMicroInitRangeInfo **init_rng_arr = micro_range_mgr.init_range_arr_;
+  ASSERT_LT(0, init_rng_cnt);
+  ASSERT_NE(nullptr, init_rng_arr);
+  for (int64_t i = 0; i < init_rng_cnt; ++i) {
+    ObSSMicroSubRangeInfo *cur_sub_rng = init_rng_arr[i]->next_;
+    while (nullptr != cur_sub_rng) {
+      if (cur_sub_rng->phy_blk_idx_ != -1) {
+        ASSERT_EQ(OB_SUCCESS, persisted_sub_rngs.push_back(cur_sub_rng));
+      }
+      cur_sub_rng = cur_sub_rng->next_;
+    }
+  }
+  ASSERT_LT(0, persisted_sub_rngs.count());
+
+  char *range_buf = static_cast<char *>(allocator.alloc(block_size));
+  ASSERT_NE(nullptr, range_buf);
+  ObArray<ObSSMicroBlockMetaInfo> micro_infos;
+  for (int64_t i = 0; i < persisted_sub_rngs.count(); ++i) {
+    ObSSMicroSubRangeInfo *cur_sub_rng = persisted_sub_rngs.at(i);
+    const int64_t phy_blk_idx = cur_sub_rng->phy_blk_idx_;
+    const int64_t offset = cur_sub_rng->offset_;
+    const int64_t size = cur_sub_rng->length_;
+    const uint64_t reuse_version = cur_sub_rng->reuse_version_;
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.read_persisted_sub_range(range_buf, phy_blk_idx, offset, size, reuse_version));
+    ASSERT_EQ(OB_SUCCESS, ObSSMicroCacheUtil::parse_range_micro_metas(tenant_id, range_buf, block_size, block_size, micro_infos));
+    ASSERT_LT(0, micro_infos.count());
+    for (int64_t j = 0; j < micro_infos.count(); ++j) {
+      const ObSSMicroBlockMetaInfo &micro_info = micro_infos.at(j);
+      ASSERT_LT(0, micro_info.access_time_s_);
+      ASSERT_GE(cur_sub_rng->end_hval_, micro_info.get_micro_key().micro_hash());
+    }
+  }
 }
 
 TEST_F(TestSSExecuteCheckpointTask, test_persist_micro_meta_parallel_with_add)
@@ -739,7 +782,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   micro_cache_->wait();
   micro_cache_->destroy();
   MTL(ObTenantFileManager*)->is_cache_file_exist_ = true;
-  ASSERT_EQ(OB_SUCCESS, micro_cache_->init(MTL_ID(), cache_file_size));
+  ASSERT_EQ(OB_SUCCESS, micro_cache_->init(MTL_ID(), cache_file_size, 1/*micro_split_cnt*/));
   ASSERT_EQ(OB_SUCCESS, micro_cache_->start());
 
   const int64_t REPLAY_CKPT_TIMEOUT_S = 120;
@@ -815,6 +858,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
 
   // 6. execute persist micro_meta
+  int64_t ori_reusable_blk_cnt = phy_blk_mgr_->get_reusable_blocks_cnt();
   ori_micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_ = 0; // manully set this value as 0
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.start_op());
@@ -823,17 +867,21 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(ori_micro_ckpt_cnt + 1, cache_stat.task_stat().micro_ckpt_cnt_);
   ASSERT_EQ((WRITE_BLK_CNT - 1) * micro_cnt, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_EQ(blk_ckpt_used_cnt, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
+  int64_t delta_reusable_blk_cnt = phy_blk_mgr_->get_reusable_blocks_cnt() - ori_reusable_blk_cnt;
   micro_ckpt_used_cnt = phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt();
   ASSERT_LT(0, micro_ckpt_used_cnt);
-  ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_,
+            phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt() + delta_reusable_blk_cnt);
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
 
   // 7. execute phy_block checkpoint
   ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.start_op());
   blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = ObTimeUtility::current_time_us() - SS_SCAN_REUSABLE_BLK_INTERVAL_US;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.gen_checkpoint());
   ASSERT_EQ(ori_blk_ckpt_cnt + 1, cache_stat.task_stat().blk_ckpt_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr_->get_reusable_blocks_cnt());
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.total_blk_cnt_ - 2, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
@@ -845,6 +893,10 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
 /* This case tests whether the micro cache can be restored to the expected state after restart.  */
 TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
 {
+  LOG_INFO("TEST: start test_micro_cache_ckpt_after_restart",
+    K(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.cur_super_blk_.get_ckpt_split_cnt()),
+    K(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_.get_ckpt_split_cnt()),
+    K(phy_blk_mgr_->super_blk_.get_ckpt_split_cnt()));
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
   micro_cache_->task_runner_.disable_task();
   micro_cache_->task_runner_.enable_persist_data();
@@ -877,17 +929,22 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   int64_t start_time_us = ObTimeUtility::current_time_us();
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.start_op());
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
-  // ensure scan reusable blks must invoke
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us() - 1000 * 1000;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_checkpoint());
   const int64_t micro_exe_time_us = ObTimeUtility::current_time_us() - start_time_us;
   ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_);
-  ASSERT_EQ(alloc_phy_blk_cnt, phy_blk_mgr_->reusable_blks_.size());
   ASSERT_EQ((write_blk_cnt - 1) * 20, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_);
 
   start_time_us = ObTimeUtility::current_time_us();
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.start_op());
   blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  // ensure scan reusable blks must invoke
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
+  ob_usleep(1000 * 1000);
+  ASSERT_EQ(true, blk_ckpt_task_->ckpt_op_.need_scan_reusable_blocks());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_reuse());
+  ASSERT_EQ(alloc_phy_blk_cnt, phy_blk_mgr_->reusable_blks_.size());
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.finish_scan_phy_blk();
+
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.gen_checkpoint());
   const int64_t blk_exe_time_us = ObTimeUtility::current_time_us() - start_time_us;
   ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
@@ -935,7 +992,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   blk_ckpt_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
   ob_usleep(2 * 1000 * 1000);
 
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
+  // blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
   ObSSMicroCacheSuperBlk super_blk2;
   ASSERT_EQ(OB_SUCCESS, super_blk2.assign(phy_blk_mgr_->super_blk_));
 
@@ -981,7 +1038,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
   // 1. destroy original init_range, build new init_range
   ObSSMicroRangeManager &micro_range_mgr = micro_cache_->micro_range_mgr_;
   micro_range_mgr.inner_destroy_initial_range();
-  micro_range_mgr.init_range_cnt_ = 2;
+  micro_range_mgr.init_range_cnt_ = 1000;
   ASSERT_EQ(OB_SUCCESS, micro_range_mgr.inner_build_initial_range(false));
 
   // 2. add some micro_block into cache and record their micro_meta
@@ -1002,15 +1059,15 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.start_op());
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_checkpoint());
-  ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
+  ASSERT_LT(0, persist_meta_task_->persist_meta_op_.full_ckpt_item_cnt_);
 }
 
-/* After persist_meta_task execucte scan_blocks_to_reuse, need_scan_phy_blk() will return false */
-TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
+/* After persist_meta_task execucte scan_blocks_to_reuse, need_scan_reusable_blk() will return false */
+TEST_F(TestSSExecuteCheckpointTask, test_ckpt_task_exec_scan_block)
 {
-  LOG_INFO("TEST: test_micro_ckpt_task_exec_scan_block");
+  LOG_INFO("TEST: test_ckpt_task_exec_scan_block");
   int ret = OB_SUCCESS;
-  blk_ckpt_task_->is_inited_ = false;
+  persist_meta_task_->is_inited_ = false;
 
   const int64_t block_cnt = 10;
   for (int64_t i = 0; i < block_cnt; i++) {
@@ -1024,10 +1081,10 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_reuse());
   ASSERT_EQ(block_cnt, phy_blk_mgr_->get_reusable_blocks_cnt());
 
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us() - 1000 * 1000L;
-  ASSERT_EQ(true, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_scan_phy_blk());
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.finish_scan_phy_blk();
-  ASSERT_EQ(false, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_scan_phy_blk());
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us() - 1000 * 1000L;
+  ASSERT_EQ(true, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_scan_reusable_blk());
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.finish_scan_phy_blk();
+  ASSERT_EQ(false, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_scan_reusable_blk());
 }
 
 /* Test whether extra meta blocks can be dynamically allocated when the number of blocks required
@@ -1096,6 +1153,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
     }
   } while (!finish_check && ObTimeUtility::current_time_s() - check_start_s <= WAIT_TIMEOUT_S);
   ASSERT_EQ(micro_ckpt_cnt + 2, cache_stat.task_stat().micro_ckpt_cnt_);
+  ob_usleep(5 * 1000 * 1000L); // wait for update_super_block and try_free_blocks
   ASSERT_EQ(blk_cnt_info.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_LT(origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.used_cnt_);
   ASSERT_LT(origin_meta_blk_usd_cnt, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
@@ -1310,6 +1368,8 @@ int main(int argc, char **argv)
   system("rm -f test_ss_execute_checkpoint_task.log*");
   OB_LOGGER.set_file_name("test_ss_execute_checkpoint_task.log", true, true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

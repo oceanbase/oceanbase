@@ -705,6 +705,7 @@ int ObDDLRedefinitionTask::send_build_single_replica_request()
       param.data_format_version_ = data_format_version_;
       param.consumer_group_id_ = alter_table_arg_.consumer_group_id_;
       param.is_no_logging_ = is_no_logging_;
+      param.dest_cg_cnt_ = target_cg_cnt_; // only use for 4.3.x recover table
       if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
         LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
       } else if (OB_FAIL(ObDDLUtil::get_tablets(dst_tenant_id_, target_object_id_, param.dest_tablet_ids_))) {
@@ -726,6 +727,7 @@ int ObDDLRedefinitionTask::send_build_single_replica_request()
           LOG_WARN("failed to push back dest schema version", K(ret));
         }
       }
+
       if (OB_SUCC(ret)) {
         if (OB_FAIL(replica_builder_.build(param))) {
           LOG_WARN("fail to send build single replica", K(ret));
@@ -2138,6 +2140,27 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         } else {
           LOG_WARN("fail to get new column name", K(ret), K(*col));
         }
+      } else if (col->is_prefix_column()) {
+        ObSEArray<uint64_t, 1> deps_column_ids;
+        const ObColumnSchemaV2 *orig_column = NULL;
+        const ObColumnSchemaV2 *alter_column = NULL;
+        ObString alter_column_name;
+        if (OB_FAIL(col->get_cascaded_column_ids(deps_column_ids))) {
+            LOG_WARN("get cascaded column ids from column schema failed", K(ret), KPC(col));
+        } else if (OB_UNLIKELY(deps_column_ids.count() != 1)) {
+          // do nothing
+        } else if (OB_ISNULL(orig_column = data_table_schema.get_column_schema(deps_column_ids.at(0)))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("deps column not found in table schema", K(ret), K(deps_column_ids.at(0)), K(data_table_schema));
+        } else if (OB_FAIL(col_name_map.get(orig_column->get_column_name_str(), alter_column_name))) {
+          LOG_WARN("failed to get new name", K(ret), K(orig_column->get_column_name()));
+        } else if (OB_ISNULL(alter_column = new_table_schema.get_column_schema(alter_column_name))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("alter column not found in table schema", K(ret), K(alter_column_name), K(new_table_schema));
+        } else if (alter_column->get_data_length() < col->get_data_length()) {
+          // alter dep_column_length < prefix_len, we need delete prefix column ,do nothing here
+          ret = OB_SUCCESS;
+        }
       } else if (OB_ISNULL(new_col = new_table_schema.get_column_schema(new_col_name))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new column schema should not be null", K(ret), K(new_col_name), K(new_table_schema));
@@ -2553,7 +2576,7 @@ int ObDDLRedefinitionTask::generate_rebuild_index_arg_list(
         } else if (OB_ISNULL(index_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected schema nullptr", K(ret), KP(index_schema));
-        } else if (!index_schema->is_global_index_table()) { // skip
+        } else if (!index_schema->is_global_index_table() || !index_schema->is_partitioned_table()) { // skip
         } else if (OB_FAIL(new_index_schema.assign(*index_schema))) {
           LOG_WARN("fail to assign schema", K(ret));
         } else if (OB_FAIL(pre_split.do_table_pre_split_if_need(database_name, ObDDLType::DDL_CREATE_INDEX, false, *table_schema, *index_schema, new_index_schema))) {

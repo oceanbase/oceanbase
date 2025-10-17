@@ -23,13 +23,14 @@ namespace oceanbase
 namespace blocksstable
 {
 int ObStrDictColumnDecoder::decode(
-  const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const
+  const ObColumnCSDecoderCtx &ctx, const int32_t row_id, ObStorageDatum &datum) const
 {
   int ret = OB_SUCCESS;
   const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
   const uint64_t distinct_cnt = dict_ctx.dict_meta_->distinct_val_cnt_;
   if (OB_UNLIKELY(0 == distinct_cnt)) {
-    datum.set_null();  // empty dict, all datum is null
+    datum.set_null();
+    ctx.base_ctx_.set_nop_if_is_null(row_id, datum);
   } else {
     if (dict_ctx.dict_meta_->is_const_encoding_ref()) {
       GET_CONST_ENCODING_REF(dict_ctx.ref_ctx_->meta_.width_, dict_ctx.ref_data_, row_id, datum.pack_);
@@ -38,13 +39,14 @@ int ObStrDictColumnDecoder::decode(
     }
     if (datum.pack_ == distinct_cnt) {
       datum.set_null();
+      ctx.base_ctx_.set_nop_if_is_null(row_id, datum);
     } else {
       const uint8_t offset_width = dict_ctx.str_ctx_->meta_.is_fixed_len_string() ?
           FIX_STRING_OFFSET_WIDTH_V : dict_ctx.offset_ctx_->meta_.width_;
       ConvertStringToDatumFunc convert_func = convert_string_to_datum_funcs
           [offset_width]
           [ObRefStoreWidthV::REF_IN_DATUMS]
-          [ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL]  /*null has been processed, so here set HAS_NO_NULL*/
+          [ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP]  /*null has been processed, so here set HAS_NO_NULL_OR_NOP*/
           [dict_ctx.need_copy_];
       convert_func(dict_ctx, dict_ctx.str_data_, *dict_ctx.str_ctx_,
           dict_ctx.offset_data_, nullptr/*ref_data*/, nullptr/*row_ids*/, 1, &datum);
@@ -83,7 +85,7 @@ int ObStrDictColumnDecoder::decode_and_aggregate(
       ConvertStringToDatumFunc convert_func = convert_string_to_datum_funcs
           [offset_width]
           [ObRefStoreWidthV::REF_IN_DATUMS]
-          [ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL]  /*null has been processed, so here set HAS_NO_NULL*/
+          [ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP]  /*null has been processed, so here set HAS_NO_NULL_OR_NOP*/
           [dict_ctx.need_copy_];
       convert_func(dict_ctx, dict_ctx.str_data_, *dict_ctx.str_ctx_,
           dict_ctx.offset_data_, nullptr/*ref_data*/, nullptr/*row_ids*/, 1, &datum);

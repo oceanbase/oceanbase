@@ -220,6 +220,8 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
   skip_rate_sample_cnt_ = other.skip_rate_sample_cnt_;
+  use_part_derive_global_ = other.use_part_derive_global_;
+
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {
@@ -277,6 +279,7 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   min_iops_ = other.min_iops_;
   max_iops_ = other.max_iops_;
   weight_iops_ = other.weight_iops_;
+  use_part_derive_global_ = other.use_part_derive_global_;
   return ret;
 }
 
@@ -317,6 +320,7 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   is_global_index_ = other.is_global_index_;
   part_level_ = other.part_level_;
   consumer_group_id_ = other.consumer_group_id_;
+  use_part_derive_global_ = other.use_part_derive_global_;
   if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {

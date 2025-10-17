@@ -44,6 +44,12 @@ int ObFTParserJsonProps::init()
   } else {
     is_inited_ = true;
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObIJsonBase, &allocator_, root_);
+    root_ = nullptr;
+  }
+
   return ret;
 }
 
@@ -65,6 +71,11 @@ int ObFTParserJsonProps::config_set_min_token_size(const int64_t size)
     LOG_WARN("Fail to add min_token_size", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonInt, &allocator_, min_token_size);
+  }
+
   return ret;
 }
 
@@ -86,6 +97,11 @@ int ObFTParserJsonProps::config_set_max_token_size(const int64_t size)
     LOG_WARN("Fail to add max_token_size", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonInt, &allocator_, max_token_size);
+  }
+
   return ret;
 }
 
@@ -107,6 +123,11 @@ int ObFTParserJsonProps::config_set_ngram_token_size(const int64_t size)
     LOG_WARN("Fail to add ngram_token_size", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonInt, &allocator_, ngram_token_size);
+  }
+
   return ret;
 }
 
@@ -126,6 +147,11 @@ int ObFTParserJsonProps::config_set_dict_table(const ObString &str)
     LOG_WARN("Fail to add dict_table", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonString, &allocator_, dict_table);
+  }
+
   return ret;
 }
 
@@ -144,6 +170,11 @@ int ObFTParserJsonProps::config_set_stopword_table(const ObString &str)
     LOG_WARN("Fail to add stopword_table", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonString, &allocator_, stopword_table);
+  }
+
   return ret;
 }
 
@@ -162,6 +193,11 @@ int ObFTParserJsonProps::config_set_quantifier_table(const ObString &str)
     LOG_WARN("Fail to add quantifier_table", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonString, &allocator_, quantifier_table);
+  }
+
   return ret;
 }
 
@@ -179,6 +215,11 @@ int ObFTParserJsonProps::config_set_ik_mode(const ObString &ik_mode)
                                        ik_mode_node))) {
     LOG_WARN("Fail to add ik_mode", K(ret));
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonString, &allocator_, ik_mode_node);
+  }
+
   return ret;
 }
 
@@ -200,6 +241,11 @@ int ObFTParserJsonProps::config_set_min_ngram_token_size(const int64_t size)
     LOG_WARN("Fail to add min_ngram_size", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonInt, &allocator_, ngram_token_size);
+  }
+
   return ret;
 }
 
@@ -221,6 +267,11 @@ int ObFTParserJsonProps::config_set_max_ngram_token_size(const int64_t size)
     LOG_WARN("Fail to add max_ngram_size", K(ret));
   } else {
   }
+
+  if (OB_FAIL(ret)) {
+    OB_DELETEx(ObJsonInt, &allocator_, ngram_token_size);
+  }
+
   return ret;
 }
 

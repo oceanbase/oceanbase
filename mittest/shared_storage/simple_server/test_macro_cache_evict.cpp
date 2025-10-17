@@ -30,6 +30,66 @@
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_common_meta.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
+namespace oceanbase
+{
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
+namespace sslog
+{
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+} // namespace sslog
+} // namespace oceanbase
+
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
@@ -179,8 +239,8 @@ public:
       bool is_exist_remote = false;
       bool is_exist_local = false;
 
-      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(macro_id, 0, is_exist_remote));
-      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(macro_id, 0, is_exist_local));
+      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(macro_id, META_FILE_LS_EPOCH_ID, is_exist_remote));
+      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_local_file(macro_id, META_FILE_LS_EPOCH_ID, is_exist_local));
       LOG_INFO("evict_test_info_log", K(is_exist_remote), K(is_exist_local), "cur_type_name", get_ss_macro_cache_type_str(cur_type), K(macro_id), K(test_type));
       ASSERT_EQ(true, is_exist_remote);
       ASSERT_EQ(false, is_exist_local);
@@ -189,11 +249,10 @@ public:
       unsealed_remote_seg_id.set_storage_object_type((uint64_t)ObStorageObjectType::UNSEALED_REMOTE_SEG_FILE);
       unsealed_remote_seg_id.set_fourth_id(WRITE_IO_SIZE);
       bool is_exist_remote = false;
-      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(unsealed_remote_seg_id, 0, is_exist_remote));
+      ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(unsealed_remote_seg_id, META_FILE_LS_EPOCH_ID, is_exist_remote));
       LOG_INFO("evict_test_info_log", K(is_exist_remote), "cur_type_name", get_ss_macro_cache_type_str(cur_type), K(macro_id), K(test_type));
       ASSERT_EQ(true, is_exist_remote);
     }
-
   }
 
   void init_wr_macro_cache(ObTenantFileManager *tenant_file_mgr, const int64_t test_type)
@@ -244,7 +303,7 @@ public:
       i = i+1;
       macro_block_free_size = disk_space_mgr->get_macro_cache_free_size();
     }
-    ASSERT_TRUE(macro_block_free_size < WRITE_IO_SIZE);
+    ASSERT_LT(macro_block_free_size, WRITE_IO_SIZE);
     // write to bucket   ->   check write through
     macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK, test_type, true);
     // before evict
@@ -259,7 +318,7 @@ public:
     macro_block_used_size_af_evict = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].used_;
     tmp_file_used_size_af_evict = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::TMP_FILE)].used_;
     info_log(ObSSMacroCacheType::MACRO_BLOCK, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    ASSERT_TRUE(macro_block_used_size_af_evict < macro_block_used_size);
+    ASSERT_LT(macro_block_used_size_af_evict, macro_block_used_size);
     // delete file
     delete_all_wr_file(tmp_file_num, tenant_file_mgr, ObSSMacroCacheType::TMP_FILE);
     delete_all_wr_file(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK);
@@ -303,7 +362,7 @@ public:
       i = i+1;
       meta_file_free_size = disk_space_mgr->get_macro_cache_free_size();
     }
-    ASSERT_TRUE(meta_file_free_size < WRITE_IO_SIZE);
+    ASSERT_LT(meta_file_free_size, WRITE_IO_SIZE);
     // write to bucket   ->   check write through
     macro_cache_write(i, tenant_file_mgr, ObSSMacroCacheType::META_FILE, test_type, true);
     // before evict
@@ -318,7 +377,7 @@ public:
     macro_block_used_size_af_evict = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)].used_;
     hot_tablet_used_size_af_evict = disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].used_;
     info_log(ObSSMacroCacheType::META_FILE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    ASSERT_TRUE(macro_block_used_size_af_evict < macro_block_used_size);
+    ASSERT_LT(macro_block_used_size_af_evict, macro_block_used_size);
     // delete file
     delete_all_wr_file(hot_tablet_num, tenant_file_mgr, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK);
     delete_all_wr_file(i, tenant_file_mgr, ObSSMacroCacheType::META_FILE);
@@ -459,7 +518,7 @@ public:
       cur_type_free_size = disk_space_mgr->get_macro_cache_free_size();
       i = i+1;
     }
-    ASSERT_TRUE(cur_type_free_size < WRITE_IO_SIZE);
+    ASSERT_LT(cur_type_free_size, WRITE_IO_SIZE);
     // write to bucket   ->   check write through
     macro_cache_write(i, tenant_file_mgr, cache_type, test_type, true);
     // before evict record
@@ -480,16 +539,16 @@ public:
     info_log(cache_type, -1, disk_space_mgr, macro_cache_mgr, test_type);
     switch (cache_type) {
       case ObSSMacroCacheType::MACRO_BLOCK:
-        ASSERT_TRUE(macro_block_used_size_af_evict < macro_block_used_size);
+        ASSERT_LT(macro_block_used_size_af_evict, macro_block_used_size);
         break;
       case ObSSMacroCacheType::META_FILE:
-        ASSERT_TRUE(macro_block_used_size_af_evict < macro_block_used_size);
+        ASSERT_LT(macro_block_used_size_af_evict, macro_block_used_size);
         break;
       case ObSSMacroCacheType::TMP_FILE:
-        ASSERT_TRUE(tmp_file_used_size_af_evict < tmp_file_used_size);
+        ASSERT_LT(tmp_file_used_size_af_evict, tmp_file_used_size);
         break;
       case ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK:
-        ASSERT_TRUE(hot_tablet_used_size_af_evict < hot_tablet_used_size);
+        ASSERT_LT(hot_tablet_used_size_af_evict, hot_tablet_used_size);
         break;
       default:
         ASSERT_TRUE(false);
@@ -526,12 +585,17 @@ public:
     info_log(ObSSMacroCacheType::MACRO_BLOCK, i, disk_space_mgr, macro_cache_mgr, test_type);
     // start write cache flush
     macro_cache_mgr->write_cache_ctrl_task_.is_inited_ = true;
-    sleep(60); // some time for write cache flush
     i = i + 1;
-    // after flush
-    write_cache_size_af_flush = macro_cache_mgr->get_write_cache_size();
+    // some time for write cache flush
+    for (int64_t j = 0; j < 80; j++) {
+      sleep(1);
+      write_cache_size_af_flush = macro_cache_mgr->get_write_cache_size();
+      if (write_cache_size_af_flush < write_cache_size) {
+        break;
+      }
+    }
     info_log(ObSSMacroCacheType::MACRO_BLOCK, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    ASSERT_TRUE(write_cache_size_af_flush < write_cache_size);
+    ASSERT_LT(write_cache_size_af_flush, write_cache_size);
     // delete file
     delete_all_wr_file(i, tenant_file_mgr, ObSSMacroCacheType::MACRO_BLOCK);
     info_log(ObSSMacroCacheType::MACRO_BLOCK, -1, disk_space_mgr, macro_cache_mgr, test_type);
@@ -539,7 +603,7 @@ public:
   }
 
   public:
-    static const int64_t WRITE_IO_SIZE = 2 * 1024L * 1024L; // 2MB
+    static constexpr int64_t WRITE_IO_SIZE = 2 * 1024L * 1024L; // 2MB
     static const uint64_t MACRO_BLOCK_TABLET_ID = 200004; // tablet_id for MACRO_BLOCK
     static const uint64_t TMP_FILE_ID = 100; // tmp_file_id for TMP_FILE
     static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK

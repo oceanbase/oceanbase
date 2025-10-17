@@ -486,6 +486,11 @@ int DataStoreVecExtraResult::init_data_set(ObAggrInfo &aggr_info, ObEvalCtx &eva
         }
       }
     }
+    if (T_FUN_KEEP_WM_CONCAT == aggr_info.get_expr_type()) {
+      context.topn_cnt_ = 1;
+      context.is_fetch_with_ties_ = true;
+      context.is_aggregate_keep_ = true;
+    }
     context.sk_exprs_ = sort_key;
     context.addon_exprs_ = addon_keys;
     context.sk_collations_ = cur_collation;

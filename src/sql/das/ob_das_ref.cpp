@@ -467,6 +467,25 @@ int ObDASRef::get_detectable_id(ObDetectableId &detectable_id) {
   return ret;
 }
 
+int ObDASRef::cancel_all_async_callbacks()
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH_NORET(curr, async_cb_list_.get_obj_list()) {
+    ObRpcDasAsyncAccessCallBack *cb = curr->get_obj();
+    if (!cb->is_visited() &&
+        !(cb->is_processed() || cb->is_timeout() || cb->is_invalid())) {
+      uint64_t gtid = cb->gtid_;
+      uint32_t pkt_id = cb->pkt_id_;
+      int err = 0;
+      if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
+        ret = tranlate_to_ob_error(err);
+        LOG_WARN("terminate pkt failed", K(ret), K(err));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDASRef::wait_all_executing_tasks()
 {
   int ret = OB_SUCCESS;
@@ -487,29 +506,27 @@ int ObDASRef::wait_all_executing_tasks()
 
   if (OB_FAIL(ret)) {
     int64_t save_ret = ret;
+    bool need_retry_cancel_cb = false;
     ret = OB_SUCCESS;
 
     // must ensure that all callbacks have been called to exit the function
-    DLIST_FOREACH_NORET(curr, async_cb_list_.get_obj_list()) {
-      ObRpcDasAsyncAccessCallBack *cb = curr->get_obj();
-      if (!cb->is_visited() &&
-          !(cb->is_processed() || cb->is_timeout() || cb->is_invalid())) {
-        uint64_t gtid = cb->gtid_;
-        uint32_t pkt_id = cb->pkt_id_;
-        int err = 0;
-        if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
-          int r = tranlate_to_ob_error(err);
-          LOG_WARN("terminate pkt failed", K(r), K(err));
-        }
-      }
+    if (OB_FAIL(cancel_all_async_callbacks())) {
+      LOG_WARN("failed to cancel all async callbacks", K(ret));
+      need_retry_cancel_cb = true;
     }
 
     ObThreadCondGuard guard(das_ref_count_ctx_.get_cond());
     while (das_ref_count_ctx_.get_current_concurrency() < das_ref_count_ctx_.get_max_das_task_concurrency()) {
-      if (OB_FAIL(das_ref_count_ctx_.get_cond().wait_us(500))) {
+      if (OB_FAIL(das_ref_count_ctx_.get_cond().wait_us(1000))) {
         if (ret != OB_TIMEOUT) {
           LOG_WARN("failed to wait all das tasks to be finished.", K(ret));
         }
+        ret = OB_SUCCESS;
+      }
+      if (need_retry_cancel_cb && OB_FAIL(cancel_all_async_callbacks())) {
+        LOG_WARN("failed to cancel all async callbacks", K(ret));
+      } else {
+        need_retry_cancel_cb = false;
       }
     }
 

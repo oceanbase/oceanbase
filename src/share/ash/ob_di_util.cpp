@@ -77,8 +77,6 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
     ObIArray<std::pair<uint64_t, ObDISessionCollect>> &diag_infos, int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  common::ObVector<uint64_t> ids;
-  GCTX.omt_->get_tenant_ids(ids);
   std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn =
       [&diag_infos, tenant_id](const SessionID &session_id, ObDiagnosticInfo *di) {
         int ret = OB_SUCCESS;
@@ -86,7 +84,7 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
         HEAP_VAR(DiPair, pair)
         {
           const uint64_t cur_tenant_id = di->get_tenant_id();
-          if (tenant_id == OB_SYS_TENANT_ID || cur_tenant_id == tenant_id) {
+          if (cur_tenant_id == tenant_id) {
             pair.first = di->get_session_id();
             pair.second.session_id_ = di->get_session_id();
             pair.second.client_sid_ = di->get_client_sid();
@@ -101,16 +99,11 @@ int ObDiagnosticInfoUtil::get_all_diag_info(
         }
         return OB_SUCCESS == ret;
       };
-  for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); ++i) {
-    const uint64_t cur_tenant_id = ids[i];
-    if (tenant_id == OB_SYS_TENANT_ID || cur_tenant_id == tenant_id) {
-      if (!is_virtual_tenant_id(cur_tenant_id)) {
-        MTL_SWITCH(cur_tenant_id)
-        {
-          if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_and_delay_release_ref(fn))) {
-            LOG_WARN("failed to get all diag info", K(ret));
-          }
-        }
+  if (!is_virtual_tenant_id(tenant_id)) {
+    MTL_SWITCH(tenant_id)
+    {
+      if (OB_FAIL(MTL(ObDiagnosticInfoContainer *)->for_each_and_delay_release_ref(fn))) {
+        LOG_WARN("failed to get all diag info", K(ret));
       }
     }
   }

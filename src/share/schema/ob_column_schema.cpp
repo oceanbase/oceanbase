@@ -213,6 +213,17 @@ bool ObColumnSchemaV2::is_prefix_column() const
   return bret;
 }
 
+bool ObColumnSchemaV2::is_prefix_index_column() const
+{
+  bool bret = false;
+  if (is_hidden() && !is_generated_column()) {
+    const char *prefix_str = "__substr";
+    int64_t min_len = min(column_name_.length(), static_cast<int64_t>(strlen(prefix_str)));
+    bret = (0 == strncasecmp(get_column_name(), prefix_str, min_len));
+  }
+  return bret;
+}
+
 bool ObColumnSchemaV2::is_func_idx_column() const
 {
   bool bret = false;
@@ -787,8 +798,10 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
   /* to avoid column_name_str not end with \0, write cg_name using ObString::write*/
   char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
   int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s",
-                               static_cast<int>(sizeof(OB_COLUMN_GROUP_NAME_PREFIX)),
-                               OB_COLUMN_GROUP_NAME_PREFIX, column_name_.length(), column_name_.ptr());
+                               static_cast<int>(strlen(OB_COLUMN_GROUP_NAME_PREFIX)),
+                               OB_COLUMN_GROUP_NAME_PREFIX,
+                               column_name_.length(),
+                               column_name_.ptr());
   if (write_len < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to format column group_name", K(ret), K(write_len));

@@ -47,10 +47,10 @@ public:
 */
 
 template<typename Key, typename Value>
-class ObConcurrentHashMapWithHazardValue {};
+class ObConcurrentHashMapDoNotUseWithHazardValue {};
 
 template<typename Key, typename Value>
-class ObConcurrentHashMapWithHazardValue<Key, Value *>
+class ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>
 {
 public:
   class IValueAlloc
@@ -65,8 +65,8 @@ public:
     virtual void reclaim_value(Value *value) = 0;
   };
 public:
-  ObConcurrentHashMapWithHazardValue();
-  ObConcurrentHashMapWithHazardValue(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc);
+  ObConcurrentHashMapDoNotUseWithHazardValue();
+  ObConcurrentHashMapDoNotUseWithHazardValue(IHashAlloc &hash_alloc, IArrayAlloc &array_alloc);
   int init();
   int init(IValueAlloc *value_alloc);
 
@@ -92,7 +92,7 @@ public:
   // return OB_SUCCESS for success, other for errors.
   int get_count(int64_t &cnt);
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObConcurrentHashMapWithHazardValue);
+  DISALLOW_COPY_AND_ASSIGN(ObConcurrentHashMapDoNotUseWithHazardValue);
 private:
   typedef HashRoot                  SHashRoot;
   typedef HashBase<Key, Value *>    SHash;
@@ -101,14 +101,14 @@ private:
   typedef typename SHash::Handle    SGetHandle;
   typedef typename SHash::Handle    SPutHandle;
 protected:
-  /// this class is for ObConcurrentHashMapWithHazardValue
+  /// this class is for ObConcurrentHashMapDoNotUseWithHazardValue
   class DefaultValueAlloc : public IValueAlloc
   {
   public:
     Value *alloc() { return op_alloc(Value); }
     void   free(Value *value) { op_free(value); value = NULL; }
   };
-  /// this class is for ObConcurrentHashMapWithHazardValue
+  /// this class is for ObConcurrentHashMapDoNotUseWithHazardValue
   class DefaultValueReclaimCallback : public IValueReclaimCallback
   {
   public:
@@ -201,7 +201,7 @@ void ArrayAlloc::free(void *p)
 */
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::DefaultValueReclaimCallback::init(IValueAlloc *alloc)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::DefaultValueReclaimCallback::init(IValueAlloc *alloc)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(alloc)) {
@@ -214,7 +214,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::DefaultValueReclaimCallbac
 }
 
 template<typename Key, typename Value>
-void ObConcurrentHashMapWithHazardValue<Key, Value *>::DefaultValueReclaimCallback::reclaim_value(Value *value)
+void ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::DefaultValueReclaimCallback::reclaim_value(Value *value)
 {
   if (OB_ISNULL(alloc_)) {
     COMMON_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "DefaultValueReclaimCallback wrong status", KP(alloc_));
@@ -225,7 +225,7 @@ void ObConcurrentHashMapWithHazardValue<Key, Value *>::DefaultValueReclaimCallba
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::HazardPtrReclaimCallback::init(IValueReclaimCallback *value_reclaim_callback)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::HazardPtrReclaimCallback::init(IValueReclaimCallback *value_reclaim_callback)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(value_reclaim_callback)) {
@@ -238,7 +238,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::HazardPtrReclaimCallback::
 }
 
 template<typename Key, typename Value>
-void ObConcurrentHashMapWithHazardValue<Key, Value *>::HazardPtrReclaimCallback::reclaim_ptr(uintptr_t ptr)
+void ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::HazardPtrReclaimCallback::reclaim_ptr(uintptr_t ptr)
 {
   if (OB_ISNULL(value_reclaim_callback_)) {
     COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "HazardPtrReclaimCallback wrong status", K(value_reclaim_callback_));
@@ -248,7 +248,7 @@ void ObConcurrentHashMapWithHazardValue<Key, Value *>::HazardPtrReclaimCallback:
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::HashReclaimCallback::init(ObHazardPointer *hazard_ptr)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::HashReclaimCallback::init(ObHazardPointer *hazard_ptr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(hazard_ptr)) {
@@ -261,7 +261,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::HashReclaimCallback::init(
 }
 
 template<typename Key, typename Value>
-void ObConcurrentHashMapWithHazardValue<Key, Value *>::HashReclaimCallback::reclaim_key_value(Key &key,
+void ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::HashReclaimCallback::reclaim_key_value(Key &key,
     Value *&value)
 {
   UNUSED(key);
@@ -276,7 +276,7 @@ void ObConcurrentHashMapWithHazardValue<Key, Value *>::HashReclaimCallback::recl
 }
 
 template<typename Key, typename Value>
-ObConcurrentHashMapWithHazardValue<Key, Value *>::ObConcurrentHashMapWithHazardValue()
+ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::ObConcurrentHashMapDoNotUseWithHazardValue()
   :
     hazard_pointer_(),
     hazard_ptr_reclaim_callback_(),
@@ -294,7 +294,7 @@ ObConcurrentHashMapWithHazardValue<Key, Value *>::ObConcurrentHashMapWithHazardV
 }
 
 template<typename Key, typename Value>
-ObConcurrentHashMapWithHazardValue<Key, Value *>::ObConcurrentHashMapWithHazardValue(IHashAlloc &hash_alloc,
+ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::ObConcurrentHashMapDoNotUseWithHazardValue(IHashAlloc &hash_alloc,
     IArrayAlloc &array_alloc)
   :
     hazard_pointer_(),
@@ -313,23 +313,23 @@ ObConcurrentHashMapWithHazardValue<Key, Value *>::ObConcurrentHashMapWithHazardV
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::init()
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::init()
 {
   return init(&default_value_alloc_, &default_value_reclaim_callback_);
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::init(IValueAlloc *value_alloc)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::init(IValueAlloc *value_alloc)
 {
   return init(value_alloc, &default_value_reclaim_callback_);
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::init(IValueAlloc *value_alloc, IValueReclaimCallback *value_reclaim_callback)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::init(IValueAlloc *value_alloc, IValueReclaimCallback *value_reclaim_callback)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
-    COMMON_LOG(ERROR, "ObConcurrentHashMapWithHazardValue has inited_", K(this));
+    COMMON_LOG(ERROR, "ObConcurrentHashMapDoNotUseWithHazardValue has inited_", K(this));
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(value_alloc) || OB_ISNULL(value_reclaim_callback)) {
     COMMON_LOG(ERROR, "invalid arguments", KP(value_alloc), KP(value_reclaim_callback));
@@ -351,7 +351,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::init(IValueAlloc *value_al
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::put_refactored(const Key &key, Value *value)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::put_refactored(const Key &key, Value *value)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_init())) {
@@ -367,7 +367,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::put_refactored(const Key &
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::remove_refactored(const Key &key)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::remove_refactored(const Key &key)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_init())) {
@@ -384,7 +384,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::remove_refactored(const Ke
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::create_refactored(const Key &key, Value *&value)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::create_refactored(const Key &key, Value *&value)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_init())) {
@@ -421,7 +421,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::create_refactored(const Ke
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::get_refactored(const Key &key, Value *&value)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::get_refactored(const Key &key, Value *&value)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_init())) {
@@ -445,7 +445,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::get_refactored(const Key &
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::revert_value(const Value *value)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::revert_value(const Value *value)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_init())) {
@@ -461,7 +461,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::revert_value(const Value *
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::contains_key(const Key &key) const
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::contains_key(const Key &key) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_init())) {
@@ -480,7 +480,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::contains_key(const Key &ke
 
 template <typename Key, typename Value>
 template <typename Function>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::for_each(Function &fn)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::for_each(Function &fn)
 {
   int ret = OB_SUCCESS;
   int hash_ret = 0;
@@ -504,7 +504,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::for_each(Function &fn)
 }
 
 template <typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::get_count(int64_t &count)
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::get_count(int64_t &count)
 {
   int ret = OB_SUCCESS;
   int hash_ret = 0;
@@ -529,7 +529,7 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::get_count(int64_t &count)
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::err_code_map(int err) const
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::err_code_map(int err) const
 {
   int ret = OB_SUCCESS;
   switch (err) {
@@ -544,11 +544,11 @@ int ObConcurrentHashMapWithHazardValue<Key, Value *>::err_code_map(int err) cons
 }
 
 template<typename Key, typename Value>
-int ObConcurrentHashMapWithHazardValue<Key, Value *>::check_init() const
+int ObConcurrentHashMapDoNotUseWithHazardValue<Key, Value *>::check_init() const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
-    COMMON_LOG(ERROR, "ObConcurrentHashMapWithHazardValue status error", K(this));
+    COMMON_LOG(ERROR, "ObConcurrentHashMapDoNotUseWithHazardValue status error", K(this));
     ret = OB_NOT_INIT;
   }
   return ret;

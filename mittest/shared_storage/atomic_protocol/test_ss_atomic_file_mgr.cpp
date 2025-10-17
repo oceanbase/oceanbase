@@ -113,11 +113,14 @@ TEST_F(TestAtomicFileMgr, test_get_sstable_list_handle)
   {
     // test normal workflow
     GET_MINI_SSTABLE_LIST_HANDLE_DEFAULT(file_handle, 1);
+    GET_MINI_SSTABLE_LIST_HANDLE_V2(file_handle, 1010, 200001, SCN::base_scn(), 2);
+    ASSERT_EQ(true, file_handle1.get_atomic_file() != file_handle2.get_atomic_file());
     ObAtomicFile *atomic_file = NULL;
     ObAtomicFileKey file_key(ObAtomicFileType::MINI_SSTABLE_LIST, ls_id1, tablet_id1);
     ASSERT_EQ(OB_SUCCESS, MTL(ObAtomicFileMgr*)->atomic_file_map_.get(file_key, atomic_file));
     MTL(ObAtomicFileMgr*)->atomic_file_map_.revert(atomic_file);
     file_handle1.reset();
+
   }
 
   {
@@ -129,15 +132,15 @@ TEST_F(TestAtomicFileMgr, test_get_sstable_list_handle)
     ObAtomicFile *file_ptr1 = file_handle1.get_atomic_file();
 
     ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle;
-    ASSERT_EQ(OB_SUCCESS, file_ptr1->create_op(op_handle));
+    ASSERT_EQ(OB_SUCCESS, file_ptr1->create_op(op_handle, true, ObString()));
 
     ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle2;
-    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2));
+    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
     ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle));
-    ASSERT_EQ(OB_SUCCESS, file_handle2.get_atomic_file()->create_op(op_handle2));
+    ASSERT_EQ(OB_SUCCESS, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
     ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle2));
     file_handle1.get_atomic_file()->set_deleting();
-    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2));
+    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
     // can not use this file to do op because it's deleting
     file_handle1.get_atomic_file()->state_.reset();
     file_handle1.reset();

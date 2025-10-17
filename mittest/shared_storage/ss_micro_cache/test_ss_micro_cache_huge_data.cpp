@@ -110,6 +110,7 @@ void TestSSMicroCacheHugeData::SetUp()
   micro_cache->destroy();
   ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 32))); // 4096MB
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  micro_cache->micro_meta_mgr_.enable_save_meta_mem_ = false;
 }
 
 void TestSSMicroCacheHugeData::TearDown()

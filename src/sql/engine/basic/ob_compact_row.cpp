@@ -21,7 +21,8 @@ namespace sql
 {
 int RowMeta::init(const ObExprPtrIArray &exprs,
                   const int32_t extra_size,
-                  const bool enable_reorder_expr /*ture*/)
+                  const bool enable_reorder_expr /*ture*/,
+                  common::ObIAllocator *allocator /*NULL*/)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -31,6 +32,7 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   fixed_offsets_ = NULL;
   projector_ = NULL;
   nulls_off_ = 0;
+  allocator_ = allocator;
   var_offsets_off_ = nulls_off_ + ObTinyBitVector::memory_size(col_cnt_);
   if (enable_reorder_expr) {
     for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
@@ -97,7 +99,7 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   return ret;
 }
 
-int RowMeta::assign(const RowMeta &row_meta)
+int RowMeta::assign(const RowMeta &row_meta, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   allocator_ = row_meta.allocator_;

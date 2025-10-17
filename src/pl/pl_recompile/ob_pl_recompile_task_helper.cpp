@@ -213,7 +213,7 @@ int ObPLRecompileTaskHelper::collect_delta_error_data(common::ObMySQLProxy* sql_
     OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
     CK (OB_NOT_NULL(result = res.get_result()));
     if (OB_SUCC(ret)) {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t obj_id = 0;
           ObString err_text;
           int64_t schema_version = 0;
@@ -270,7 +270,7 @@ int ObPLRecompileTaskHelper::collect_delta_ddl_operation_data(
       OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
       CK (OB_NOT_NULL(result = res.get_result()));
       if (OB_SUCC(ret)) {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t dep_obj_id = OB_INVALID_ID;
           int64_t dep_obj_type = 0;
           int64_t ref_obj_id = OB_INVALID_ID;
@@ -338,7 +338,7 @@ int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLPro
       OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
       CK (OB_NOT_NULL(result = res.get_result()));
       if (OB_SUCC(ret)) {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", last_max_schema_version, int64_t);
         }
         SET_ITERATE_END_RET;
@@ -352,7 +352,7 @@ int ObPLRecompileTaskHelper::collect_delta_recompile_obj_data(common::ObMySQLPro
       OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
       CK (OB_NOT_NULL(result = res.get_result()));
       if (OB_SUCC(ret)) {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t op_type = OB_INVALID_ID;
           int64_t table_id = OB_INVALID_ID;
           int64_t schema_version = 0;
@@ -472,7 +472,7 @@ int ObPLRecompileTaskHelper::update_dropped_obj(common::hash::ObHashMap<ObString
       OZ (sql_proxy->read(res, OB_SYS_TENANT_ID, query_inner_sql.ptr()));
       CK (OB_NOT_NULL(result = res.get_result()));
       if (OB_SUCC(ret)) {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           OZ (add_var_to_array_no_dup(valid_obj_names, dropped_obj_name));
         }
         SET_ITERATE_END_RET;
@@ -511,7 +511,7 @@ int ObPLRecompileTaskHelper::update_recomp_table(ObIArray<ObPLRecompileInfo>& de
         OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
         CK (OB_NOT_NULL(result = res.get_result()));
         if (OB_SUCC(ret)) {
-          while (OB_SUCC(result->next())) {
+          while (OB_SUCC(ret) && OB_SUCC(result->next())) {
             int64_t key_id = 0;
             EXTRACT_INT_FIELD_MYSQL(*result, "KEY_ID", key_id, int64_t);
             if (share::schema::ObTriggerInfo::is_trigger_body_package_id(key_id)) {
@@ -574,7 +574,7 @@ int ObPLRecompileTaskHelper::find_udt_id(common::ObMySQLProxy* sql_proxy,
     OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
     CK (OB_NOT_NULL(result = res.get_result()));
     if (OB_SUCC(ret)) {
-      while (OB_SUCC(result->next())) {
+      while (OB_SUCC(ret) && OB_SUCC(result->next())) {
         EXTRACT_INT_FIELD_MYSQL(*result, "object_type_id", udt_id, int64_t);
       }
       SET_ITERATE_END_RET;
@@ -612,7 +612,7 @@ int ObPLRecompileTaskHelper::get_recompile_pl_objs(common::ObMySQLProxy* sql_pro
     OZ (sql_proxy->read(res, tenant_id, query_inner_sql.ptr()));
     CK (OB_NOT_NULL(result = res.get_result()));
     if (OB_SUCC(ret)) {
-      while (OB_SUCC(result->next())) {
+      while (OB_SUCC(ret) && OB_SUCC(result->next())) {
         int64_t dep_obj_id = OB_INVALID_ID;
         ObString droped_ref_obj_name;
         int64_t fail_count = 0;

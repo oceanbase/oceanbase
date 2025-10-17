@@ -116,6 +116,7 @@ int ObTransformLateMaterialization::check_stmt_need_late_materialization(const O
   } else if (stmt.has_hierarchical_query() ||
              stmt.has_group_by()||
              stmt.has_rollup() ||
+             stmt.has_grouping_sets() ||
              stmt.has_having() ||
              stmt.has_window_function() ||
              stmt.has_distinct() ||

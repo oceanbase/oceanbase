@@ -19,18 +19,23 @@ namespace oceanbase
 namespace storage
 {
 using namespace common;
+using namespace transaction;
 
 ObDDLIncLogBasic::ObDDLIncLogBasic()
   : tablet_id_(),
     lob_meta_tablet_id_(),
-    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID)
+    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
+    trans_id_(),
+    seq_no_()
 {
 }
 
 int ObDDLIncLogBasic::init(
     const ObTabletID &tablet_id,
     const ObTabletID &lob_meta_tablet_id,
-    const ObDirectLoadType direct_load_type)
+    const ObDirectLoadType direct_load_type,
+    const ObTransID &trans_id,
+    const ObTxSEQ &seq_no)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!tablet_id.is_valid())) {
@@ -43,6 +48,8 @@ int ObDDLIncLogBasic::init(
     tablet_id_ = tablet_id;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
     direct_load_type_ = direct_load_type;
+    trans_id_ = trans_id;
+    seq_no_ = seq_no;
   }
 
   return ret;
@@ -62,10 +69,11 @@ int ObDDLIncLogBasic::hash(uint64_t &hash_val) const
   return OB_SUCCESS;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLIncLogBasic, tablet_id_, lob_meta_tablet_id_, direct_load_type_);
+OB_SERIALIZE_MEMBER(ObDDLIncLogBasic, tablet_id_, lob_meta_tablet_id_, direct_load_type_, trans_id_, seq_no_);
 
 ObDDLIncStartLog::ObDDLIncStartLog()
-  : log_basic_()
+  : log_basic_(),
+    has_cs_replica_(false)
 {
 }
 
@@ -77,12 +85,13 @@ int ObDDLIncStartLog::init(const ObDDLIncLogBasic &log_basic)
     LOG_WARN("invalid argument", KR(ret), K(log_basic));
   } else {
     log_basic_ = log_basic;
+    has_cs_replica_ = false;
   }
 
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLIncStartLog, log_basic_);
+OB_SERIALIZE_MEMBER(ObDDLIncStartLog, log_basic_, has_cs_replica_);
 
 ObDDLIncCommitLog::ObDDLIncCommitLog()
   : log_basic_()

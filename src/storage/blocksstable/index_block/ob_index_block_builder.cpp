@@ -558,7 +558,9 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
     }
   }
   LOG_INFO("init sstable index builder", K(ret), K(data_desc),
-           K(index_store_desc_), K(container_store_desc_), K(leaf_store_desc_),
+           K(ObSimplePrintDataStoreDesc(index_store_desc_.get_desc())),
+           K(ObSimplePrintDataStoreDesc(container_store_desc_)),
+           K(ObSimplePrintDataStoreDesc(leaf_store_desc_)),
            KP(&object_cleaner_));
   return ret;
 }
@@ -2712,8 +2714,8 @@ int ObDataIndexBlockBuilder::init(const ObDataStoreDesc &data_store_desc,
                                                        index_tree_root_ctx_))) {
     LOG_WARN("fail to init referemce pointer members", K(ret));
   } else if (OB_UNLIKELY(index_store_desc->get_row_store_type() != data_store_desc.get_row_store_type()
-                         && (index_store_desc->get_row_store_type() == FLAT_ROW_STORE
-                             || data_store_desc.get_row_store_type() == FLAT_ROW_STORE)
+                         && (ObStoreFormat::is_row_store_type_with_flat(index_store_desc->get_row_store_type())
+                             || ObStoreFormat::is_row_store_type_with_flat(data_store_desc.get_row_store_type()))
                          && !data_store_desc.is_force_flat_store_type_)) {
     // since n-1 micro block should keep format same with data_blocks
     ret = OB_INVALID_ARGUMENT;

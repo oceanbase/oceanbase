@@ -1790,8 +1790,9 @@ int ObExprOperator::aggregate_collection_sql_type(
       if (ob_is_null(types[i].get_type())) {
         // do nothing
       } else if (!ob_is_collection_sql_type(types[i].get_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("invalid type for op", K(ret), K(types[i].get_type()));
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported type for merge", K(ret), K(types[i].get_type()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "merge array with other type is");
       } else if (first) {
         // choose the first collection subschema id now
         type.set_subschema_id(types[i].get_subschema_id());
@@ -2406,7 +2407,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                   || type_ == T_OP_IS_NOT
                   || type_ == T_OP_IN
                   || type_ == T_OP_NOT_IN)) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if ((type1.is_roaringbitmap() || type2.is_roaringbitmap())
              && !(type_ == T_FUN_SYS_NULLIF)) {
@@ -4387,23 +4388,26 @@ int ObSubQueryRelationalExpr::cg_expr(ObExprCGCtx &op_cg_ctx,
 int ObSubQueryRelationalExpr::check_exists(const ObExpr &expr, ObEvalCtx &ctx, bool &exists)
 {
   int ret = OB_SUCCESS;
-  ObDatum *v = NULL;
   ObSubQueryIterator *iter = NULL;
   exists = false;
   if (1 != expr.arg_cnt_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected argument count", K(ret));
-  } else if (OB_FAIL(expr.args_[0]->eval(ctx, v))) {
-    LOG_WARN("NULL subquery ref info returned", K(ret));
-  } else if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
-              ctx, ObExprSubQueryRef::Extra::get_info(v->get_int()), iter))) {
-    LOG_WARN("get subquery iterator failed", K(ret));
-  } else if (OB_ISNULL(iter)) {
+  } else if (OB_ISNULL(expr.args_[0])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL subquery iterator", K(ret));
-  } else if (OB_FAIL(iter->rewind())) {
-      LOG_WARN("start iterate failed", K(ret));
+    LOG_WARN("unexpected nullptr", K(ret));
   } else {
+    const ObExprSubQueryRef::Extra &extra = ObExprSubQueryRef::Extra::get_info(*expr.args_[0]);
+    if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(ctx, extra, iter))) {
+      LOG_WARN("failed to get subquery iter", K(ret), K(extra));
+    } else if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(iter));
+    } else if (OB_FAIL(iter->rewind())) {
+      LOG_WARN("failed to rewind subquery iter", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(iter)) {
     bool found_in_hash_map = false;
     bool is_hash_enabled = iter->has_hashmap();
     if (is_hash_enabled) {
@@ -4483,23 +4487,23 @@ int ObSubQueryRelationalExpr::setup_row(
   int ret = OB_SUCCESS;
   used_ctx = &ctx;
   if (is_iter) {
-    ObDatum *v = NULL;
-    if (OB_FAIL(expr[0]->eval(ctx, v))) {
-      LOG_WARN("expr evaluate failed", K(ret));
-    } else if (v->is_null()) {
+    if (OB_ISNULL(expr) || OB_ISNULL(expr[0])) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL subquery ref info returned", K(ret));
-    } else if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
-                ctx, ObExprSubQueryRef::Extra::get_info(v->get_int()), iter))) {
-      LOG_WARN("get subquery iterator failed", K(ret));
-    } else if (OB_ISNULL(iter) || cmp_func_cnt != iter->get_output().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL subquery iterator", K(ret), KP(iter), K(cmp_func_cnt));
-    } else if (OB_FAIL(iter->rewind())) {
-      LOG_WARN("start iterate failed", K(ret));
+      LOG_WARN("unexpected nullptr", K(ret), K(expr));
     } else {
-      row = &const_cast<ExprFixedArray &>(iter->get_output()).at(0);
-      used_ctx = &iter->get_eval_ctx();
+      const ObExprSubQueryRef::Extra &extra = ObExprSubQueryRef::Extra::get_info(*expr[0]);
+      if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
+                  ctx, extra, iter))) {
+        LOG_WARN("get subquery iterator failed", K(ret));
+      } else if (OB_ISNULL(iter) || cmp_func_cnt != iter->get_output().count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL subquery iterator", K(ret), KP(iter), K(cmp_func_cnt));
+      } else if (OB_FAIL(iter->rewind())) {
+        LOG_WARN("start iterate failed", K(ret));
+      } else {
+        row = &const_cast<ExprFixedArray &>(iter->get_output()).at(0);
+        used_ctx = &iter->get_eval_ctx();
+      }
     }
   } else if (T_OP_ROW == expr[0]->type_) {
     if (cmp_func_cnt != expr[0]->arg_cnt_) {

@@ -724,7 +724,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
   const uint64_t data_version = DATA_CURRENT_VERSION;
-  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const int64_t tablet_meta_version = 0;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
 
@@ -829,8 +830,9 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_EQ(1, tablet->get_ref());
 
   const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t tablet_meta_version = 0;
   ObTabletHandle new_handle;
-  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
 
   ObSArray<MacroBlockId> shared_meta_id_arr;
@@ -945,7 +947,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
 
   ObTabletHandle new_handle;
   const uint64_t data_version = DATA_CURRENT_VERSION;
-  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const int64_t tablet_meta_version = 0;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
@@ -1047,7 +1050,8 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
 
   ObTabletHandle new_handle;
   const uint64_t data_version = DATA_CURRENT_VERSION;
-  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const int64_t tablet_meta_version = 0;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));

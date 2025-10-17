@@ -415,7 +415,7 @@ int ObSimpleDynamicThreadPool::set_adaptive_thread(int64_t min_thread_num, int64
 int ObSimpleDynamicThreadPool::set_max_thread_count(int64_t max_thread_cnt)
 {
   int ret = OB_SUCCESS;
-  if (max_thread_cnt > MAX_THREAD_NUM || max_thread_cnt <= 0) {
+  if (max_thread_cnt < 0 || max_thread_cnt < min_thread_cnt_) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "set_adaptive_thread failed", KP(this), K(max_thread_cnt));
   } else {

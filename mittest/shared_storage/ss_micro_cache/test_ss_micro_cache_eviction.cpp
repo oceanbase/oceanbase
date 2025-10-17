@@ -107,7 +107,7 @@ void TestSSMicroCacheEviction::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30))); // 1G
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30), 1/*micro_split_cnt*/)); // 1G
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
   micro_cache_ = micro_cache;
 }
@@ -300,7 +300,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   ASSERT_EQ(OB_SUCCESS,TestSSCommonUtil::wait_for_persist_task());
 
   // print micro map
-  LOG_INFO("start print micro map");
+  LOG_INFO("start print micro map", K(micro_cache_->cache_stat_), K(phy_blk_mgr.super_blk_));
   ObSSMicroMetaManager::SSMicroMetaMap &micro_map = micro_cache_->micro_meta_mgr_.micro_meta_map_;
   ObSSMicroMetaManager::SSMicroMetaMap::BlurredIterator micro_iter_(micro_map);
   micro_iter_.rewind();
@@ -324,8 +324,9 @@ TEST_F(TestSSMicroCacheEviction, test_delete_all_persisted_micro)
   total_unpersisted_micro_cnt = cal_unpersisted_micro_cnt();
   ASSERT_EQ(total_unpersisted_micro_cnt, micro_cache_->cache_stat_.micro_stat().valid_micro_cnt_);
   ASSERT_LE(micro_cache_->cache_stat_.micro_stat().valid_micro_cnt_, micro_cnt * 2);
-  ASSERT_EQ(phy_blk_mgr.reusable_blks_.size(), phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  ASSERT_EQ(0, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
 }
+
 } // namespace storage
 } // namespace oceanbase
 

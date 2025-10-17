@@ -165,7 +165,7 @@ private:
                                 const int64_t col_idx,
                                 int64_t &size) const;
   int prescan_(const int64_t column_index);
-  int semistruct_scan_(const int64_t column_index);
+  int semistruct_prescan_(const int64_t column_index);
   int choose_encoder_(const int64_t column_idx);
   int choose_encoder_for_integer_(const int64_t column_idx, ObIColumnCSEncoder *&e);
   int choose_encoder_for_string_(const int64_t column_idx, ObIColumnCSEncoder *&e);
@@ -174,9 +174,9 @@ private:
                                const ObObjTypeStoreClass store_class,
                                const ObCSColumnHeader::Type type,
                                ObIColumnCSEncoder *&e);
-  int try_use_previous_encoder_(const int64_t column_idx,
-                                const ObObjTypeStoreClass store_class,
-                                ObIColumnCSEncoder *&e);
+  int use_previous_encoder_(const int64_t column_idx,
+                            const ObObjTypeStoreClass store_class,
+                            ObIColumnCSEncoder *&e);
   int update_previous_info_after_choose_encoder_(const int32_t col_idx, ObIColumnCSEncoder &e);
   int update_previous_info_after_encoding_(const int32_t col_idx, ObIColumnCSEncoder &e);
   void free_encoders_();
@@ -213,6 +213,8 @@ private:
   }
 
 private:
+  static ObObj NOP;
+
   compaction::ObLocalArena allocator_;
   ObMicroBlockEncodingCtx ctx_;
   ObMicroBufferWriter row_buf_holder_;
@@ -232,6 +234,7 @@ private:
   common::ObArray<ObIColumnCSEncoder *> encoders_;
   common::ObArray<uint32_t> stream_offsets_;
   ObCSEncoderAllocator encoder_allocator_;
+  int64_t hash_tables_unused_times_;
   common::ObArray<ObDictEncodingHashTable *> hashtables_;
   ObDictEncodingHashTableFactory hashtable_factory_;
   common::ObArray<ObColumnCSEncodingCtx> col_ctxs_;

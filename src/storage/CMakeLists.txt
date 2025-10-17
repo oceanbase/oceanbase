@@ -47,6 +47,8 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_logic_macro_id.cpp
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_storage_cache_suite.cpp
+  blocksstable/ob_storage_object_type.cpp
+  blocksstable/ob_ss_obj_util.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
   blocksstable/ob_storage_datum.cpp
   blocksstable/ob_datum_row.cpp
@@ -157,10 +159,16 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_index_block_tree_cursor.cpp
   blocksstable/index_block/ob_index_block_util.cpp
   blocksstable/index_block/ob_skip_index_filter_executor.cpp
+  blocksstable/index_block/ob_sstable_index_scanner.cpp
   blocksstable/index_block/ob_sstable_meta_info.cpp
   blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
   blocksstable/index_block/ob_clustered_index_block_writer.cpp
   blocksstable/index_block/ob_index_block_bare_iterator.cpp
+)
+
+ob_set_subtarget(ob_storage macro_cache
+  macro_cache/ob_storage_disk_space_meta.cpp
+  macro_cache/ob_ext_table_disk_cache_common_meta.cpp
 )
 
 ob_set_subtarget(ob_storage meta_store
@@ -183,6 +191,7 @@ ob_set_subtarget(ob_storage tmp_file
   tmp_file/ob_tmp_file_block_flush_priority_manager.cpp
   tmp_file/ob_tmp_file_block_manager.cpp
   tmp_file/ob_tmp_file_block.cpp
+  tmp_file/ob_tmp_file_block_handle_list.cpp
   tmp_file/ob_tmp_file_cache.cpp
   tmp_file/ob_tmp_file_global.cpp
   tmp_file/ob_tmp_file_info.cpp
@@ -225,8 +234,10 @@ ob_set_subtarget(ob_storage ckpt
   slog_ckpt/ob_server_checkpoint_slog_handler.cpp
   slog_ckpt/ob_server_checkpoint_writer.cpp
   slog_ckpt/ob_tenant_checkpoint_slog_handler.cpp
+  slog_ckpt/ob_tenant_slog_checkpoint_workflow.cpp
+  slog_ckpt/ob_tenant_slog_checkpoint_util.cpp
   slog_ckpt/ob_tenant_storage_checkpoint_reader.cpp
-  slog_ckpt/ob_tenant_storage_checkpoint_writer.cpp
+  slog_ckpt/ob_tenant_storage_snapshot_writer.cpp
   slog_ckpt/ob_tenant_meta_snapshot_handler.cpp
   slog_ckpt/ob_tablet_replay_create_handler.cpp
 )
@@ -911,15 +922,17 @@ ob_set_subtarget(ob_storage tablelock
 )
 
 ob_set_subtarget(ob_storage direct_load
-  direct_load/ob_direct_load_batch_row_buffer.cpp
+  direct_load/ob_direct_load_batch_rows.cpp
   direct_load/ob_direct_load_compare.cpp
   direct_load/ob_direct_load_conflict_check.cpp
+  direct_load/ob_direct_load_continuous_vector.cpp
   direct_load/ob_direct_load_data_block.cpp
   direct_load/ob_direct_load_data_fuse.cpp
   direct_load/ob_direct_load_data_insert.cpp
   direct_load/ob_direct_load_data_with_origin_query.cpp
   direct_load/ob_direct_load_datum_row.cpp
   direct_load/ob_direct_load_datum.cpp
+  direct_load/ob_direct_load_discrete_vector.cpp
   direct_load/ob_direct_load_external_fragment.cpp
   direct_load/ob_direct_load_external_multi_partition_row.cpp
   direct_load/ob_direct_load_external_multi_partition_table.cpp
@@ -927,6 +940,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_external_table_builder.cpp
   direct_load/ob_direct_load_external_table_compactor.cpp
   direct_load/ob_direct_load_external_table.cpp
+  direct_load/ob_direct_load_fixed_length_vector.cpp
   direct_load/ob_direct_load_i_table.cpp
   direct_load/ob_direct_load_insert_data_table_ctx.cpp
   direct_load/ob_direct_load_insert_lob_table_ctx.cpp
@@ -990,6 +1004,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_table_store.cpp
   direct_load/ob_direct_load_tmp_file.cpp
   direct_load/ob_direct_load_vector_utils.cpp
+  direct_load/ob_direct_load_vector.cpp
 )
 
 ob_set_subtarget(ob_storage lob
@@ -1070,6 +1085,22 @@ ob_set_subtarget(ob_storage reorganization_info_table
   reorganization_info_table/ob_tablet_reorg_info_table_operation.cpp
   reorganization_info_table/ob_tablet_reorg_info_table_iterator.cpp
   reorganization_info_table/ob_tablet_reorg_info_service.cpp
+)
+
+ob_set_subtarget(ob_storage retrieval
+  retrieval/ob_block_max_iter.cpp
+  retrieval/ob_block_stat_collector.cpp
+  retrieval/ob_block_stat_iter.cpp
+  retrieval/ob_sparse_bmw_iter.cpp
+  retrieval/ob_sparse_daat_iter.cpp
+  retrieval/ob_sparse_taat_iter.cpp
+  retrieval/ob_sparse_utils.cpp
+  retrieval/ob_sparse_lookup_iter.cpp
+  retrieval/ob_text_retrieval_token_iter.cpp
+  retrieval/ob_text_daat_iter.cpp
+  retrieval/ob_text_taat_iter.cpp
+  retrieval/ob_spiv_daat_iter.cpp
+  retrieval/ob_spiv_dim_iter.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

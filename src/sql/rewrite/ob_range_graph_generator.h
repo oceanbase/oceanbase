@@ -19,6 +19,7 @@
 
 namespace oceanbase
 {
+
 namespace sql
 {
 
@@ -115,7 +116,7 @@ private:
 
   static int and_two_range_node(ObRangeNode *&l_node,
                                 ObRangeNode *&r_node,
-                                const int64_t column_cnt,
+                                const ObQueryRangeCtx &ctx,
                                 bool &is_merge);
 
   static int or_two_range_node(ObRangeNode *&l_node,
@@ -126,11 +127,11 @@ private:
   static int get_and_tails(ObRangeNode *range_node, ObIArray<ObRangeNode*> &and_tails);
 
   int formalize_final_range_node(ObRangeNode *&range_node);
-  int collect_graph_infos(ObRangeNode *range_node,
-                          uint64_t *total_range_sizes,
-                          uint64_t *range_sizes,
-                          bool &start_from_zero,
-                          int64_t &min_offset);
+  int collect_graph_infos_dp(ObRangeNode *range_node,
+                             uint64_t *total_range_sizes,
+                             uint64_t *range_sizes,
+                             bool &start_from_zero,
+                             int64_t &min_offset);
   int check_skip_scan_valid(ObRangeNode *range_node,
                             ObRangeNode *&ss_head);
   static int generate_node_id(ObRangeNode *range_node, uint64_t &node_count);
@@ -170,7 +171,8 @@ private:
   static int crop_final_range_node(ObRangeNode *&range_node, int64_t crop_offset,
                                    RangeNodeConnectInfo &connect_info,
                                    common::hash::ObHashMap<uint64_t, ObRangeNode*> &refined_ranges,
-                                   common::hash::ObHashSet<uint64_t> &shared_ranges);
+                                   common::hash::ObHashSet<uint64_t> &shared_ranges,
+                                   uint64_t &proc_count);
   static int check_crop_range_node_valid(ObRangeNode *range_node,
                                          ObRangeNode *next_range_node,
                                          RangeNodeConnectInfo &connect_info);
@@ -190,6 +192,10 @@ private:
                                                  const ObRangeMap &range_map,
                                                  bool is_equal_range,
                                                  bool &fast_nlj_range);
+  int check_can_general_nlj_range_extraction(const ObRangeNode *range_node,
+                                                    const ObRangeMap &range_map,
+                                                    ObIArray<ObFastFinalPos> &pos_arr,
+                                                    bool &general_nlj_range);
 
   static int formalize_one_range_node(ObRangeNode &range_node);
   int formalize_final_exprs(const ObRangeNode *range_node,

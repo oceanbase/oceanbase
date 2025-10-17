@@ -39561,7 +39561,7 @@ int ObTimeZoneInfoPos::get_timezone_sub_offset(int64_t value, const ObString &tz
     if (OB_UNLIKELY(revt_type_info.is_gap())) {//gap
       ret = is_oracle_mode ? OB_ERR_FIELD_NOT_FOUND_IN_DATETIME_OR_INTERVAL
             : OB_ERR_UNEXPECTED_TZ_TRANSITION;
-      LOG_WARN("fail to get offset, value may be in gap range", K(value), K(type_idx), K(revt_type_info), K(ret));
+      LOG_WARN("fail to get offset, value may be in gap range", K(tz_id_), K(value), K(type_idx), K(revt_type_info), K(ret));
     } else if (OB_UNLIKELY(revt_type_info.is_overlap())) {//overlap
       if (OB_LIKELY(tz_abbr_str.empty())) {
         if (error_on_overlap_time_) {
@@ -39798,6 +39798,7 @@ void ObTZNameIDAlloc::free_node(ObTZNameHashNode *node)
 
 int ObTZInfoMap::init(const lib::ObMemAttr &attr)
 {
+  // offset_map will be init in ObTimeZoneInfoManager when necessary
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
@@ -39816,8 +39817,10 @@ void ObTZInfoMap::destroy()
 {
   id_map_ = NULL;
   name_map_ = NULL;
+  offset_map_ = NULL;
   id_map_buf_.destroy();
   name_map_buf_.destroy();
+  offset_map_buf_.destroy();
 }
 
 static bool print_tz_info(ObTZIDKey &key, ObTimeZoneInfoPos *tz_info)
@@ -39902,7 +39905,7 @@ int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos 
   ObTZNameIDInfo *name_id_info = NULL;
   if (OB_NOT_NULL(tz_info_by_name)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("v should be null here", K(ret));
+    LOG_WARN("tz_info_by_name should be null here", K(ret));
   } else if (OB_FAIL(name_map_->get(ObTZNameKey(tz_name), name_id_info))) {
     LOG_WARN("fail to get get_tz_info_by_name", K(tz_name), K(ret));
   } else if (OB_FAIL(get_tz_info_by_id(name_id_info->tz_id_, tz_info_by_name))) {
@@ -39917,6 +39920,47 @@ int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos 
   }
 
   return ret;
+}
+
+int ObTZInfoMap::get_offset_by_couple_tz_name(int64_t timestamp_data, const common::ObString &tz_str_s, const common::ObString &tz_str_d, int32_t &offset)
+{
+  int ret = OB_SUCCESS;
+  ObTZNameIDInfo *name_id_info_s = NULL;
+  ObTZNameIDInfo *name_id_info_d = NULL;
+  ObTZOffsetValue offset_info;
+  if (0 == offset_map_->size()) {
+    ret = OB_HASH_NOT_EXIST;
+    LOG_DEBUG("offset map is empty", K(ret),K(offset_map_->size()), K(offset_map_), K(&offset_map_buf_), K(tz_str_s), K(tz_str_d), K(offset_info));
+  } else if (OB_FAIL(name_map_->get(ObTZNameKey(tz_str_s), name_id_info_s))) {
+    LOG_WARN("fail to get get_tz_info_by_name", K(tz_str_s), K(ret));
+  } else if (OB_FAIL(name_map_->get(ObTZNameKey(tz_str_d), name_id_info_d))) {
+    LOG_WARN("fail to get get_tz_info_by_name", K(tz_str_s), K(ret));
+  } else if (OB_FAIL(offset_map_->get_refactored(ObTZOffsetKey(name_id_info_s->tz_id_, name_id_info_d->tz_id_), offset_info))) {
+    LOG_DEBUG("fail to get offset", KPC(name_id_info_s), KPC(name_id_info_d), K(ret));
+  } else {
+    offset = offset_info.offset_;
+  }
+  if (OB_HASH_NOT_EXIST == ret || OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_ERR_UNKNOWN_TIME_ZONE;
+  }
+  if (NULL != name_id_info_s) {
+    name_map_->revert(name_id_info_s);
+    name_id_info_s = NULL;
+  }
+  if (NULL != name_id_info_d) {
+    name_map_->revert(name_id_info_d);
+    name_id_info_d = NULL;
+  }
+
+  return ret;
+}
+
+void ObTZInfoMap::revert_tz_info_pos(ObTimeZoneInfoPos *&tz_info)
+{
+  if (NULL != tz_info) {
+    id_map_->revert(tz_info);
+    tz_info = NULL;
+  }
 }
 
 void ObTimeZoneInfoWrap::set_tz_info_map(const ObTZInfoMap *tz_info_map)

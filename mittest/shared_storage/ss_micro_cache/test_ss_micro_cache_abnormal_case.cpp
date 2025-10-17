@@ -84,6 +84,8 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
   ObSSPersistMicroDataTask &persist_data_task = micro_cache->task_runner_.persist_data_task_;
+  persist_data_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
 
   const int64_t blk_idx = 2;
   ObSSPhyBlockHandle phy_blk_handle;
@@ -143,6 +145,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
   // free sealed_mem_block
   ASSERT_EQ(OB_SUCCESS, persist_data_task.persist_data_op_.handle_sealed_mem_block(updated_micro_cnt, true, tmp_mem_handle));
   ASSERT_EQ(micro_cnt / 2, cache_stat.micro_stat().mark_del_micro_cnt_); // micro_block which fail to update meta are deleted from map.
+  mem_blk_mgr.fg_mem_blk_ = nullptr;
   LOG_INFO("TEST_CASE: finish test_mem_blk_update_meta_fail");
 }
 
@@ -223,6 +226,76 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_ckpt_write_abnormal)
   ASSERT_EQ(OB_EAGAIN, ret); // fail to write block, will retry, until use up all blk_ckpt blocks
   TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 0);
   LOG_INFO("TEST_CASE: finish test_ckpt_write_abnormal");
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_phy_ckpt_timeout");
+  const uint64_t tenant_id = MTL_ID();
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ASSERT_EQ(0, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  const int64_t block_size = phy_blk_mgr.get_block_size();
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+  const int64_t blk_ckpt_block_cnt = blk_cnt_info.phy_ckpt_blk_cnt_;
+  blk_ckpt_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
+
+  // 1. first execute phy_blk checkpoint task
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+
+  // 2. second execute phy_blk checkpoint task
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 1);
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_EAGAIN, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(blk_ckpt_block_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, OB_TIMEOUT, 0, 0);
+
+  ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.has_free_ckpt_blk());
+  bool exist_reusable_ckpt_blks = false;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free(exist_reusable_ckpt_blks));
+  ASSERT_EQ(false, exist_reusable_ckpt_blks);
+  ASSERT_EQ(false, blk_ckpt_task.ckpt_op_.has_free_ckpt_blk());
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
+
+  // 3. third execute phy_blk checkpoint task, but no available block, cuz reusable_blocks can't be reused now.
+  //    Thus, won't execute blk_ckpt.
+  int64_t ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(ori_blk_ckpt_cnt, cache_stat.task_stat().blk_ckpt_cnt_);
+  ASSERT_EQ(blk_ckpt_block_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
+
+  // 3.1 update reusable_blocks' alloc_time_s, make them can be reused now.
+  ObHashSet<int64_t>::iterator iter = phy_blk_mgr.reusable_blks_.begin();
+  for (; OB_SUCC(ret) && iter != phy_blk_mgr.reusable_blks_.end(); iter++) {
+    const int64_t blk_idx = iter->first;
+    ObSSPhysicalBlock *phy_blk = phy_blk_mgr.inner_get_phy_block_by_idx(blk_idx);
+    ASSERT_NE(nullptr, phy_blk);
+    if (is_ss_ckpt_block(phy_blk->get_block_type())) {
+      phy_blk->alloc_time_s_ -= SS_FREE_BLK_MIN_REUSE_TIME_S;
+    }
+  }
+
+  // 4. fourth execute phy_blk checkpoint task
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
+  ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_MICRO_DATA_BLK));
+
+  LOG_INFO("TEST_CASE: finish test_phy_ckpt_timeout");
 }
 
 }  // namespace storage

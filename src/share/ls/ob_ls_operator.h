@@ -280,7 +280,7 @@ class ObLSAttrOperator : public ObLSTemplateOperator
 {
 public:
   ObLSAttrOperator(const uint64_t tenant_id,
-                   common::ObMySQLProxy *proxy) :
+                   common::ObISQLClient *proxy) :
                       tenant_id_(tenant_id), proxy_(proxy) {};
   virtual ~ObLSAttrOperator(){}
 
@@ -377,7 +377,7 @@ private:
                    const bool skip_dup_ls_check = false);
 private:
   uint64_t tenant_id_;
-  common::ObMySQLProxy *proxy_;
+  common::ObISQLClient *proxy_;
 };
 }
 }

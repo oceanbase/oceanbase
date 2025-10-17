@@ -444,6 +444,7 @@ int ObTransformWinMagic::check_view_table_basic(ObSelectStmt *stmt, bool &is_val
             || stmt->is_set_stmt()
             || stmt->has_window_function()
             || stmt->has_rollup()
+            || stmt->has_grouping_sets()
             || stmt->get_table_size() < 1
             || stmt->get_user_var_size() > 0) {
     is_valid = false;
@@ -1793,6 +1794,7 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
              view_table->ref_query_->has_limit() ||
              view_table->ref_query_->is_hierarchical_query() ||
              view_table->ref_query_->has_rollup() ||
+             view_table->ref_query_->has_grouping_sets() ||
              view_table->ref_query_->is_set_stmt() ||
              view_table->ref_query_->has_sequence() ||
              !view_table->ref_query_->has_window_function()) {

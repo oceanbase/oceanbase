@@ -1366,6 +1366,23 @@ void ObTxReadSnapshot::init_weak_read(const SCN snapshot)
   core_.scn_.reset();
   core_.elr_ = false;
   source_ = SRC::WEAK_READ_SERVICE;
+  snapshot_lsid_.reset();
+  snapshot_ls_role_= common::ObRole::INVALID_ROLE;
+  snapshot_acquire_addr_.reset();
+  parts_.reset();
+  valid_ = true;
+}
+
+void ObTxReadSnapshot::init_weak_read(const SCN snapshot, const ObTransID tx_id)
+{
+  core_.version_ = snapshot;
+  core_.tx_id_ = tx_id;
+  core_.scn_.reset();
+  core_.elr_ = false;
+  source_ = SRC::WEAK_READ_SERVICE;
+  snapshot_lsid_.reset();
+  snapshot_ls_role_ = common::ObRole::INVALID_ROLE;
+  snapshot_acquire_addr_.reset();
   parts_.reset();
   valid_ = true;
 }
@@ -1406,6 +1423,9 @@ void ObTxReadSnapshot::wait_consistency()
   if (SRC::GLOBAL == source_) {
     const int64_t ts = MonotonicTs::current_time().mts_;
     if (ts < uncertain_bound_) {
+      if (TC_REACH_TIME_INTERVAL(1000000)) {
+        TRANS_LOG(INFO, "wait for consistency", K(uncertain_bound_), K(ts));
+      }
       ob_usleep(uncertain_bound_ - ts);
     }
   }

@@ -148,10 +148,8 @@ int ObServerStorageMetaService::get_server_slogger(ObStorageLogger *&slogger) co
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (!is_shared_storage_) {
-    slogger = server_slogger_;
   } else {
-    slogger = nullptr;
+    slogger = server_slogger_;
   }
   return ret;
 }
@@ -460,7 +458,7 @@ int ObServerStorageMetaService::try_write_checkpoint_for_compat()
         // nothing to do.
       } else {
         MTL_SWITCH(super_block.tenant_id_) {
-          if (OB_FAIL(MTL(ObTenantStorageMetaService*)->write_checkpoint(true/*is_force*/))) {
+          if (OB_FAIL(MTL(ObTenantStorageMetaService*)->write_checkpoint(ObTenantSlogCheckpointWorkflow::COMPAT_UPGRADE))) {
             LOG_WARN("fail to write tenant slog checkpoint", K(ret));
           } else {
             // we don't write checkpoint or update super_block for hidden tenant

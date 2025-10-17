@@ -72,10 +72,17 @@ using namespace storage;
 using namespace mds;
 using namespace transaction;
 
+storage::ObLS FAKE_LS;
+storage::mds::ObMdsTableMgr FAKE_MDS_TABLE_MGR;
+
 class TestMdsTableFlush: public ::testing::Test
 {
 public:
-  TestMdsTableFlush() { ObMdsSchemaHelper::get_instance().init(); }
+  TestMdsTableFlush()
+  {
+    ObMdsSchemaHelper::get_instance().init();
+    FAKE_MDS_TABLE_MGR.ls_ = &FAKE_LS;
+  }
   virtual ~TestMdsTableFlush() {}
   virtual void SetUp() {
   }
@@ -85,7 +92,6 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestMdsTableFlush);
 };
-
 
 //                                                max_decided_scn:475
 //                                                     │
@@ -142,6 +148,7 @@ TEST_F(TestMdsTableFlush, normal_flush) {
   ASSERT_EQ(mock_scn(50), rec_scn);// 没转储的时候是最小的node的redo scn值
 
   // 第一次转储
+  handle.get_mds_table_ptr()->mgr_handle_.mgr_ = &FAKE_MDS_TABLE_MGR;
   ASSERT_EQ(OB_SUCCESS, handle.flush(mock_scn(1000), mock_scn(125)));// 因为max_decided_scn较小，所以会用125做flush
   bool is_flusing = false;
   ASSERT_EQ(OB_SUCCESS, handle.is_flushing(is_flusing));// 在flush流程中
@@ -228,6 +235,8 @@ TEST_F(TestMdsTableFlush, advance_rec_scn_consider_about_max_aborted_scn_on_mds_
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(3), ExampleUserData1(1), ctx);
   ctx.on_redo(mock_scn(474));
   ctx.on_abort(mock_scn(477));
+
+  handle.get_mds_table_ptr()->mgr_handle_.mgr_ = &FAKE_MDS_TABLE_MGR;
   ASSERT_EQ(OB_SUCCESS, handle.flush(mock_scn(475), MOCK_MAX_CONSEQUENT_CALLBACKED_SCN));
   ASSERT_EQ(OB_SUCCESS, handle.is_flushing(is_flusing));// 在flush流程中
   ASSERT_EQ(true, is_flusing);
@@ -275,6 +284,8 @@ TEST_F(TestMdsTableFlush, flush_scn_decline1) {
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx3);
   ctx3.on_redo(mock_scn(29));
   ctx3.on_commit(mock_scn(40), mock_scn(40));
+
+  handle.get_mds_table_ptr()->mgr_handle_.mgr_ = &FAKE_MDS_TABLE_MGR;
   ASSERT_EQ(OB_SUCCESS, handle.flush(mock_scn(1000), mock_scn(35)));// finally will be 9
   share::SCN rec_scn;
   ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));
@@ -296,6 +307,8 @@ TEST_F(TestMdsTableFlush, flush_scn_decline2) {
   handle.set<ExampleUserKey, ExampleUserData1>(ExampleUserKey(1), ExampleUserData1(1), ctx3);
   ctx3.on_redo(mock_scn(29));
   ctx3.on_commit(mock_scn(40), mock_scn(40));
+
+  handle.get_mds_table_ptr()->mgr_handle_.mgr_ = &FAKE_MDS_TABLE_MGR;
   ASSERT_EQ(OB_SUCCESS, handle.flush(mock_scn(1000), mock_scn(35)));// finally will be 9
   share::SCN rec_scn;
   ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));

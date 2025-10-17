@@ -339,18 +339,28 @@ int ObDBMSMonitor::tenant_trace_disable(sql::ObExecContext &ctx, sql::ParamStore
 {
   int ret = OB_SUCCESS;
   ObString tenant_name;
+  uint64_t disable_tenant_id = 0;
+  uint64_t cur_tenant_id = GET_MY_SESSION(ctx)->get_effective_tenant_id();
   UNUSED(result);
   if (1 == params.count()) {
     if (params.at(0).is_varchar()) {
       OZ (params.at(0).get_string(tenant_name));
       if (tenant_name.case_compare(GET_MY_SESSION(ctx)->get_tenant_name()) == 0) {
-        // do nothing
+        disable_tenant_id = cur_tenant_id;
+      } else if (true == is_sys_tenant(MTL_ID())) {
+        ObSchemaGetterGuard schema_guard;
+        if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(cur_tenant_id, schema_guard))) {
+          LOG_WARN("fail to get tenant schema guard", K(ret));
+        } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, disable_tenant_id))) {
+          LOG_WARN("Invalid tenant", "tenant_name", tenant_name, KR(ret));
+        }
+        // sys tenant allow to do this for all tenant.
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name");
       }
     } else if (params.at(0).is_null()) {
-      // do nothing
+      disable_tenant_id = cur_tenant_id;
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name");
@@ -359,8 +369,7 @@ int ObDBMSMonitor::tenant_trace_disable(sql::ObExecContext &ctx, sql::ParamStore
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name");
   }
-
-  ObFLTControlInfoManager mgr(GET_MY_SESSION(ctx)->get_effective_tenant_id());
+  ObFLTControlInfoManager mgr(disable_tenant_id);
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(mgr.init())) {

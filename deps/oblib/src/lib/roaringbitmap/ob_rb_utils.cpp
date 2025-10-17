@@ -157,7 +157,7 @@ int ObRbUtils::build_empty_binary(ObIAllocator &allocator, ObString &res_rb_bin)
   return ret;
 }
 
-int ObRbUtils::to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, ObString &rb_bin, ObString &roaring64_bin)
+int ObRbUtils::to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, const ObString &rb_bin, ObString &roaring64_bin)
 {
   int ret = OB_SUCCESS;
   uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
@@ -226,7 +226,7 @@ int ObRbUtils::get_cardinality(ObIAllocator &allocator, const ObString &rb_bin, 
   return ret;
 }
 
-int ObRbUtils::get_calc_cardinality(ObIAllocator &allocator, ObString &rb1_bin, ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op)
+int ObRbUtils::get_calc_cardinality(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op)
 {
   int ret = OB_SUCCESS;
   ObRbBinType rb1_type;
@@ -273,9 +273,9 @@ int ObRbUtils::get_calc_cardinality(ObIAllocator &allocator, ObString &rb1_bin, 
 }
 
 int ObRbUtils::get_and_cardinality(ObIAllocator &allocator,
-                                   ObString &rb1_bin,
+                                   const ObString &rb1_bin,
                                    ObRbBinType rb1_type,
-                                   ObString &rb2_bin,
+                                   const ObString &rb2_bin,
                                    ObRbBinType rb2_type,
                                    uint64_t &cardinality,
                                    uint64_t &rb1_card,
@@ -393,7 +393,7 @@ int ObRbUtils::get_and_cardinality(ObIAllocator &allocator,
 }
 
 
-int ObRbUtils::binary_calc(ObIAllocator &allocator, ObString &rb1_bin, ObString &rb2_bin, ObString &res_rb_bin, ObRbOperation op)
+int ObRbUtils::binary_calc(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, ObString &res_rb_bin, ObRbOperation op)
 {
   int ret = OB_SUCCESS;
   ObRbBinType rb1_bin_type = ObRbBinType::EMPTY;
@@ -551,7 +551,7 @@ int ObRbUtils::rb_serialize(ObIAllocator &allocator, ObString &res_rb_bin, ObRoa
   return ret;
 }
 
-int ObRbUtils::build_binary(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_bin)
+int ObRbUtils::build_binary(ObIAllocator &allocator, const ObString &rb_bin, ObString &res_rb_bin)
 {
   int ret = OB_SUCCESS;
   ObRoaringBitmap *rb = NULL;
@@ -675,11 +675,11 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
   return ret;
 }
 
-int ObRbUtils::rb_from_string(ObIAllocator &allocator, ObString &rb_str, ObRoaringBitmap *&rb)
+int ObRbUtils::rb_from_string(ObIAllocator &allocator, const ObString &rb_str, ObRoaringBitmap *&rb)
 {
   int ret = OB_SUCCESS;
   const char *str = rb_str.ptr();
-  char *str_end = rb_str.ptr() + rb_str.length();
+  const char *str_end = rb_str.ptr() + rb_str.length();
   char *value_end = nullptr;
   uint64_t value = 0;
   bool is_first = true;
@@ -721,7 +721,7 @@ int ObRbUtils::rb_from_string(ObIAllocator &allocator, ObString &rb_str, ObRoari
   return ret;
 }
 
-int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_str)
+int ObRbUtils::rb_to_string(ObIAllocator &allocator, const ObString &rb_bin, ObString &res_rb_str)
 {
   int ret = OB_SUCCESS;
   ObRbBinType bin_type;
@@ -756,11 +756,18 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count > 0) {
-          uint32_t *value_ptr = reinterpret_cast<uint32_t *>(rb_bin.ptr() + offset);
-          lib::ob_sort(value_ptr, value_ptr + value_count);
+          const uint32_t *value_ptr = reinterpret_cast<const uint32_t *>(rb_bin.ptr() + offset);
+          uint32_t value_set_size = value_count * sizeof(uint32_t);
+          uint32_t *sort_buf = NULL;
+          if (OB_ISNULL(sort_buf = (static_cast<uint32_t *>(allocator.alloc(value_set_size))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory failed", K(ret), K(value_count));
+          } else {
+            MEMCPY(sort_buf, value_ptr, value_set_size);
+            lib::ob_sort(sort_buf, sort_buf + value_count);
+          }
           for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
-            uint32_t value_32 = *reinterpret_cast<const uint32_t*>(rb_bin.ptr() + offset);
-            offset += sizeof(uint32_t);
+            uint32_t value_32 = sort_buf[i];
             ObFastFormatInt ffi(value_32);
             if (!is_first && OB_FAIL(res_buf.append(","))) {
               LOG_WARN("failed to append res_buf", K(ret));
@@ -777,10 +784,18 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count > 0) {
-          uint64_t *value_ptr = reinterpret_cast<uint64_t *>(rb_bin.ptr() + offset);
-          lib::ob_sort(value_ptr, value_ptr + value_count);
+          const uint64_t *value_ptr = reinterpret_cast<const uint64_t *>(rb_bin.ptr() + offset);
+          uint32_t value_set_size = value_count * sizeof(uint64_t);
+          uint64_t *sort_buf = NULL;
+          if (OB_ISNULL(sort_buf = (static_cast<uint64_t *>(allocator.alloc(value_set_size))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory failed", K(ret), K(value_count));
+          } else {
+            MEMCPY(sort_buf, value_ptr, value_set_size);
+            lib::ob_sort(sort_buf, sort_buf + value_count);
+          }
           for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
-            uint64_t value_64 = *reinterpret_cast<const uint64_t*>(rb_bin.ptr() + offset);
+            uint64_t value_64 = sort_buf[i];
             offset += sizeof(uint64_t);
             ObFastFormatInt ffi(value_64);
             if (!is_first && OB_FAIL(res_buf.append(","))) {
@@ -930,7 +945,8 @@ ObRbAggCell::ObRbAggCell(ObRoaringBitmap *rb, const uint64_t tenant_id):
     max_cache_count_(0),
     cached_value_(),
     rb_bin_(),
-    is_serialized_(false)
+    is_serialized_(false),
+    is_new_(true)
 {
   max_cache_count_ = MAX_CACHED_COUNT;
   cached_value_.set_attr(lib::ObMemAttr(tenant_id, "RbAggArray"));
@@ -947,6 +963,7 @@ int ObRbAggCell::destroy()
   rb_bin_.reset();
   allocator_.reset();
   is_serialized_ = false;
+  is_new_ = true;
   return ret;
 }
 
@@ -983,8 +1000,85 @@ int ObRbAggCell::value_add(const uint64_t val)
   }
   return ret;
 }
+int ObRbAggCell::value_calc(const ObString rb_bin, ObItemType func_type, bool need_validate)
+{
+  int ret = OB_SUCCESS;
+  ObRoaringBitmap *value_rb = NULL;
+  if (OB_UNLIKELY(cached_value_.count() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cached_value_ is not empty", K(ret), K(cached_value_.count()));
+  } else if (need_validate && OB_FAIL(ObRbUtils::check_binary(rb_bin))) {
+    LOG_WARN("invalid roaringbitmap binary string", K(ret));
+  } else if (func_type == T_FUN_SYS_RB_OR_AGG) {
+    is_new_ = false;
+    if (OB_FAIL(ObRbUtils::rb_deserialize(allocator_, rb_bin, value_rb, need_validate))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    } else if (OB_FAIL(rb_->value_or(value_rb))) {
+      LOG_WARN("failed to calculate value or", K(ret));
+    }
+  } else if (func_type == T_FUN_SYS_RB_AND_AGG) {
+    ObRbBinType bin_type;
+    if (is_new_) {
+      // for the first roaringbitmap, use "OR" to insert
+      is_new_ = false;
+      if (OB_FAIL(ObRbUtils::rb_deserialize(allocator_, rb_bin, value_rb, need_validate))) {
+        LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+      } else if (OB_FAIL(rb_->value_or(value_rb))) {
+        LOG_WARN("failed to calculate value or", K(ret));
+      }
+    } else if (OB_FAIL(rb_->optimize())) {
+      LOG_WARN("failed to optimize", K(ret));
+    } else if (rb_->is_empty_type()) {
+      // do nothing
+    } else if (OB_FAIL(ObRbUtils::get_bin_type(rb_bin, bin_type))) {
+      LOG_WARN("invalid value roaringbitmap binary string", K(ret));
+    } else if (rb_->is_bitmap_type() || !ObRbUtils::is_bitmap_bin(bin_type)) {
+      // deserialize the value binary to execute "AND"
+      if (OB_FAIL(ObRbUtils::rb_deserialize(allocator_, rb_bin, value_rb, need_validate))) {
+        LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+      } else if (OB_FAIL(rb_->value_and(value_rb))) {
+        LOG_WARN("failed to calculate value and", K(ret));
+      }
+    } else {
+      // no deserializing the value binary, check the existen of each value from the rb_ in the value binary
+      uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
+      bool is_contains = false;
+      ObString binary_str = ObString(rb_bin.length() - offset, rb_bin.ptr() + offset);
+      if (bin_type == ObRbBinType::BITMAP_32) {
+        ObRoaringBin *roaring_bin = NULL;
+        if (OB_ISNULL(roaring_bin = OB_NEWx(ObRoaringBin, &allocator_, &allocator_, binary_str))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for ObRoaringBin", K(ret));
+        } else if (OB_FAIL(roaring_bin->init())) {
+          LOG_WARN("failed to init ObRoaringBin", K(ret), K(binary_str));
+        } else if (OB_FAIL(rb_->value_and(roaring_bin))) {
+          LOG_WARN("failed to calculate value and", K(ret));
+        }
+      } else if (bin_type == ObRbBinType::BITMAP_64) {
+        ObRoaring64Bin *roaring64_bin = NULL;
+        if (OB_ISNULL(roaring64_bin = OB_NEWx(ObRoaring64Bin, &allocator_, &allocator_, binary_str))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for ObRoaring64Bin", K(ret));
+        } else if (OB_FAIL(roaring64_bin->init())) {
+          LOG_WARN("failed to init ObRoaring64Bin", K(ret), K(binary_str));
+        } else if (OB_FAIL(rb_->value_and(roaring64_bin))) {
+          LOG_WARN("failed to calculate value and", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid rb type", K(ret), K(bin_type));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid function type", K(ret), K(func_type));
+  }
 
-int ObRbAggCell::value_or(const ObRbAggCell *other)
+  ObRbUtils::rb_destroy(value_rb);
+  return ret;
+}
+
+int ObRbAggCell::rollup(const ObRbAggCell *other, ObItemType func_type)
 {
   int ret = OB_SUCCESS;
   if (is_serialized_) {
@@ -996,16 +1090,35 @@ int ObRbAggCell::value_or(const ObRbAggCell *other)
   } else if (OB_ISNULL(other)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("other rb is null", K(ret));
-  } else if (OB_FAIL(add_values(cached_value_))) {
-    LOG_WARN("add value fail", K(ret));
-  } else if (OB_FAIL(add_values(other->cached_value_))) {
-    LOG_WARN("add value fail", K(ret));
-  } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
-    LOG_WARN("or value fail", K(ret));
+  } else if (func_type == T_FUN_SYS_RB_BUILD_AGG) {
+    if (OB_FAIL(add_values(cached_value_))) {
+      LOG_WARN("add value fail", K(ret));
+    } else if (OB_FAIL(add_values(other->cached_value_))) {
+      LOG_WARN("add value fail", K(ret));
+    } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+      LOG_WARN("or value fail", K(ret));
+    } else {
+      // reset for save memory
+      cached_value_.reset();
+    }
+  } else if (func_type == T_FUN_SYS_RB_AND_AGG) {
+    if (is_new_) {
+      is_new_ = false;
+      if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+        LOG_WARN("or value fail", K(ret));
+      }
+    } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_and(other->rb_))) {
+      LOG_WARN("and value fail", K(ret));
+    }
+  } else if (func_type == T_FUN_SYS_RB_OR_AGG) {
+    if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+      LOG_WARN("or value fail", K(ret));
+    }
   } else {
-    // reset for save memory
-    cached_value_.reset();
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid func_type", K(ret), K(func_type));
   }
+
   return ret;
 }
 
@@ -1041,6 +1154,7 @@ int ObRbAggCell::serialize()
     ObRbUtils::rb_destroy(rb_);
     rb_ = nullptr;
     is_serialized_ = true;
+    is_new_ = true;
   }
   return ret;
 }

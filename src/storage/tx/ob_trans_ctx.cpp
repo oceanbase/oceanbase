@@ -137,6 +137,11 @@ void ObTransCtx::print_trace_log_if_necessary_()
     FORCE_PRINT_TRACE(tlog_, "[long trans] ");
   } else if (OB_UNLIKELY(trans_id_ % SAMPLING_SEED == 1)) {
     FORCE_PRINT_TRACE(tlog_, "[trans sampling] ");
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_UNLIKELY(is_tenant_sslog_ls(tenant_id_, ls_id_) &&
+                         ObClockGenerator::getClock() >= (ctx_create_time_ + 30_ms))) {
+    FORCE_PRINT_TRACE(tlog_, "[long sslog trans] ");
+#endif
   } else {
     PRINT_TRACE(tlog_);
   }

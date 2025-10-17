@@ -52,12 +52,7 @@ int ObBackupCleanJobOperator::fill_dml_with_job_(const ObBackupCleanJobAttr &job
 {
   int ret = OB_SUCCESS;
   int64_t parameter = 0;
-  char parameter_str[common::OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH] = { 0 };
-  if (OB_FAIL(job_attr.get_clean_parameter(parameter))) {
-    LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(databuff_printf(parameter_str, OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH, "%ld", parameter))) {
-    LOG_WARN("failed to set parameter", K(ret), K(parameter));
-  } else if (OB_FAIL(dml.add_pk_column(OB_STR_JOB_ID, job_attr.job_id_))) {
+  if (OB_FAIL(dml.add_pk_column(OB_STR_JOB_ID, job_attr.job_id_))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, job_attr.tenant_id_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -68,8 +63,6 @@ int ObBackupCleanJobOperator::fill_dml_with_job_(const ObBackupCleanJobAttr &job
   } else if (OB_FAIL(dml.add_column(OB_STR_INITIATOR_JOB_ID, job_attr.initiator_job_id_))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_CLEAN_TYPE, ObNewBackupCleanType::get_str(job_attr.clean_type_)))) {
-    LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_column(OB_STR_CLEAN_PARAMETER, parameter_str))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_DESCRIPTION, job_attr.description_.ptr()))) {
     LOG_WARN("failed to add column", K(ret));
@@ -85,7 +78,24 @@ int ObBackupCleanJobOperator::fill_dml_with_job_(const ObBackupCleanJobAttr &job
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(job_attr.get_executor_tenant_id_str(dml))) {
     LOG_WARN("fail to get backup tenant id str", K(ret), K(job_attr));
-  } 
+  } else {
+    char parameter_buffer[common::OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH] = { 0 };
+    int64_t pos = 0;
+    if (OB_FAIL(job_attr.get_parameter_list_str(parameter_buffer, sizeof(parameter_buffer), pos))) {
+      LOG_WARN("fail to get backup parameter list str", K(ret), K(job_attr));
+    } else if (OB_FAIL(dml.add_column(OB_STR_CLEAN_PARAMETER, parameter_buffer))) {
+      LOG_WARN("fail to add column clean parameter", K(ret));
+    } else if (ObNewBackupCleanType::DELETE_BACKUP_ALL == job_attr.clean_type_) {
+      if (OB_FAIL(handle_write_delete_backup_all_path_(job_attr, dml))) {
+        LOG_WARN("failed to handle write delete backup all path", K(ret), K(job_attr));
+      }
+    } else if (ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP == job_attr.clean_type_ && !is_sys_tenant(job_attr.tenant_id_)) {
+      if (OB_FAIL(handle_write_delete_obsolete_backup_path_(job_attr, dml))) {
+        LOG_WARN("failed to handle write delete obsolete backup path", K(ret), K(job_attr));
+      }
+    }
+  }
+  LOG_INFO("fill dml with job finished", K(ret), K(job_attr));
   return ret;
 }
 
@@ -113,7 +123,7 @@ int ObBackupCleanJobOperator::get_jobs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret), K(sql));
       } else if (OB_FAIL(parse_job_result_(*result, job_attrs))) {
-        LOG_WARN("failed to parse result", K(ret));
+        LOG_WARN("failed to parse result", K(ret), K(sql));
       }
     }
   }
@@ -203,6 +213,7 @@ int ObBackupCleanJobOperator::cnt_jobs(
   return ret;
 }
 
+
 int ObBackupCleanJobOperator::fill_select_job_sql_(ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -221,6 +232,10 @@ int ObBackupCleanJobOperator::fill_select_job_sql_(ObSqlString &sql)
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_CLEAN_TYPE))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_CLEAN_PARAMETER))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_DATA_BACKUP_PATH_LIST))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_ARCHIVE_PATH_LIST))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_START_TS))) {
     LOG_WARN("failed to append fmt", K(ret));
@@ -306,6 +321,8 @@ int ObBackupCleanJobOperator::do_parse_job_result_(
   char clean_type_str[OB_DEFAULT_STATUS_LENTH] = "";
   char job_level[OB_SYS_TASK_TYPE_LENGTH] = "";
   char parameter_str[common::OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH] = { 0 };
+  char data_backup_path_list_str[common::OB_MAX_BACKUP_PTAH_LIST_LENGTH] = { 0 };
+  char log_archive_path_list_str[common::OB_MAX_BACKUP_PTAH_LIST_LENGTH] = { 0 };
   char executor_tenant_id_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = "";
   int64_t parameter = 0;
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_JOB_ID, job.job_id_, int64_t);
@@ -320,23 +337,33 @@ int ObBackupCleanJobOperator::do_parse_job_result_(
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, job.result_, int);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RETRY_COUNT, job.retry_count_, int);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_CLEAN_PARAMETER, parameter_str, common::OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH, real_length);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_DATA_BACKUP_PATH_LIST, data_backup_path_list_str, common::OB_MAX_BACKUP_PTAH_LIST_LENGTH, real_length);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_LOG_ARCHIVE_PATH_LIST, log_archive_path_list_str, common::OB_MAX_BACKUP_PTAH_LIST_LENGTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_BACKUP_STR_JOB_LEVEL, job_level, OB_SYS_TASK_TYPE_LENGTH, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_EXECUTOR_TENANT_ID, executor_tenant_id_str, OB_INNER_TABLE_DEFAULT_VALUE_LENTH, real_length);
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(parse_int_(parameter_str, parameter))) {
-    LOG_WARN("failed to parse parameter", K(ret), K(parameter_str));
   } else if (OB_FAIL(job.status_.set_status(status_str))) {
     LOG_WARN("failed to set status", K(ret), K(status_str));
   } else if (FALSE_IT(job.clean_type_ = ObNewBackupCleanType::get_type(clean_type_str))) {
   } else if (OB_FAIL(job.job_level_.set_level(job_level))) {
     LOG_WARN("failed to set backup level", K(ret), K(job_level));
-  } else if (OB_FAIL(job.set_clean_parameter(parameter))) {
-    LOG_WARN("failed to set clean parameter", K(ret), K(parameter));
+  } else if (OB_FAIL(job.set_clean_parameter(ObString(parameter_str)))) {
+    LOG_WARN("failed to set clean parameter", K(ret), K(parameter_str));
   } else if (OB_FAIL(job.set_executor_tenant_id(ObString(executor_tenant_id_str)))) {
     LOG_WARN("set backup tenant id failed", K(ret), K(executor_tenant_id_str));
+  } else {
+    if (job.is_delete_backup_all()) {
+      if (OB_FAIL(handle_get_delete_backup_all_path_(job, log_archive_path_list_str, data_backup_path_list_str))) {
+        LOG_WARN("failed to handle delete backup all path", K(ret), K(job));
+      }
+    } else if (job.is_delete_obsolete_backup() && !is_sys_tenant(job.tenant_id_)) {
+      if (OB_FAIL(handle_get_delete_obsolete_backup_path_(job, log_archive_path_list_str, data_backup_path_list_str))) {
+        LOG_WARN("failed to handle delete obsolete backup path", K(ret), K(job));
+      }
+    }
   }
-
+  LOG_INFO("do parse delete backup all finished", K(job));
   return ret;
 }
 
@@ -350,16 +377,32 @@ int ObBackupCleanJobOperator::advance_job_status(
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = -1;
-  const char *comment = OB_SUCCESS == result ? "" : common::ob_strerror(result);
   if (!next_status.is_valid() || !job_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid status", K(ret), K(job_attr));
-  } else if (OB_FAIL(sql.assign_fmt(
-      "update %s set %s='%s',%s=%ld,%s=%d,%s='%s' where %s=%lu and %s=%lu", 
-      OB_ALL_BACKUP_DELETE_JOB_TNAME, OB_STR_STATUS, next_status.get_str(),
-      OB_STR_END_TS, end_ts, OB_STR_RESULT, result, OB_STR_COMMENT, comment,
-      OB_STR_JOB_ID, job_attr.job_id_, OB_STR_TENANT_ID, job_attr.tenant_id_))) {
-    LOG_WARN("failed to assign sql", K(ret), K(next_status));
+  } else {
+    if (is_sys_tenant(job_attr.tenant_id_)) {
+      const char *comment = OB_SUCCESS == result ? "" : common::ob_strerror(result);
+      if (OB_FAIL(sql.assign_fmt(
+                  "update %s set %s='%s',%s=%ld,%s=%d,%s='%s' where %s=%lu and %s=%lu",
+                  OB_ALL_BACKUP_DELETE_JOB_TNAME, OB_STR_STATUS, next_status.get_str(),
+                  OB_STR_END_TS, end_ts, OB_STR_RESULT, result, OB_STR_COMMENT, comment,
+                  OB_STR_JOB_ID, job_attr.job_id_, OB_STR_TENANT_ID, job_attr.tenant_id_))) {
+        LOG_WARN("failed to assign sql", K(ret), K(next_status));
+      }
+    } else {
+      // For user tenant, some error code more clear has been added already, not overwrite it here
+      if (OB_FAIL(sql.assign_fmt(
+                  "update %s set %s='%s',%s=%ld,%s=%d where %s=%lu and %s=%lu",
+                  OB_ALL_BACKUP_DELETE_JOB_TNAME, OB_STR_STATUS, next_status.get_str(),
+                  OB_STR_END_TS, end_ts, OB_STR_RESULT, result,
+                  OB_STR_JOB_ID, job_attr.job_id_, OB_STR_TENANT_ID, job_attr.tenant_id_))) {
+        LOG_WARN("failed to assign sql", K(ret), K(next_status));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (ObBackupCleanStatus::Status::CANCELING != next_status.status_ 
     && OB_FAIL(sql.append_fmt(" and %s='%s'", OB_STR_STATUS, job_attr.status_.get_str()))) {
     LOG_WARN("failed to append sql", K(ret), K(sql));
@@ -432,52 +475,11 @@ int ObBackupCleanJobOperator::move_job_to_his(
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to exec sql", K(ret), K(sql));
   } else {
-    FLOG_INFO("[BACKUP_CLEAN]succeed move backup job to history table", K(job_id), K(tenant_id));
+    FLOG_INFO("[BACKUP_CLEAN]succeed move backup clean job to history table", K(job_id), K(tenant_id));
   }
   return ret;
 }
 
-int ObBackupCleanJobOperator::check_same_tenant_and_clean_type_job_exist(
-    common::ObISQLClient &proxy,
-    const ObBackupCleanJobAttr &job_attr,
-    bool &is_exist)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  is_exist = true;
-  int64_t parameter = 0;
-  int64_t affected_rows = -1;
-
-  if (!job_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(job_attr));
-  } else if (OB_FAIL(job_attr.get_clean_parameter(parameter))) {
-    LOG_WARN("failed to exec sql", K(ret), K(sql));
-  } else {
-    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt(
-        "select * from %s where %s=%lu and type='%s' and parameter=%lu", 
-        OB_ALL_BACKUP_DELETE_JOB_TNAME, OB_STR_TENANT_ID, job_attr.tenant_id_,
-        ObNewBackupCleanType::get_str(job_attr.clean_type_), parameter))) {
-        LOG_WARN("failed to assign sql", K(ret), K(sql), K(ObNewBackupCleanType::get_str(job_attr.clean_type_)));  
-      } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(job_attr.tenant_id_), sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(sql)); 
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret), K(sql));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          is_exist = false;
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get next row", K(ret), K(sql));
-        }
-      }
-    }
-  }
-  return ret;
-}
 
 int ObBackupCleanJobOperator::report_failed_to_sys_tenant(
   common::ObISQLClient &proxy,
@@ -502,7 +504,7 @@ int ObBackupCleanJobOperator::report_failed_to_sys_tenant(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid affected_rows, more than one job be updated is invalid", K(ret), K(affected_rows), K(sql));
   } else {
-    FLOG_INFO("succeed to report report_backup_result_to_initiator");
+    FLOG_INFO("succeeded to report report_backup_result_to_initiator", K(job_attr), K(sql.ptr()));
   }
   return ret;
 }
@@ -530,6 +532,50 @@ int ObBackupCleanJobOperator::update_retry_count(
   }
   return ret;
 }
+
+int ObBackupCleanJobOperator::update_comment(common::ObISQLClient &proxy, const ObBackupCleanJobAttr &job_attr)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  ObDMLSqlSplicer dml;
+  ObString comment;
+  char comment_buffer[common::OB_MAX_ERROR_MSG_LEN] = { 0 };
+  int64_t pos = 0;
+
+  if (!job_attr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[BACKUP_CLEAN]invalid status", K(ret), K(job_attr));
+  } else if (OB_SUCCESS == job_attr.result_) {
+    // do nothing
+  } else {
+    const char *base_error = common::ob_strerror(job_attr.result_);
+    if (OB_FAIL(databuff_printf(comment_buffer, sizeof(comment_buffer), pos, "%s", base_error))) {
+      LOG_WARN("failed to format base error", K(ret));
+    } else if (!job_attr.failure_reason_.is_empty()
+      && OB_FAIL(databuff_printf(comment_buffer, sizeof(comment_buffer), pos, "; %s", job_attr.failure_reason_.ptr()))) {
+      LOG_WARN("failed to format failure reason", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(dml.add_pk_column(OB_STR_JOB_ID, job_attr.job_id_))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, job_attr.tenant_id_))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, comment_buffer))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to add column", K(ret));
+  } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_DELETE_JOB_TNAME, sql))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to splice_update_sql", K(ret));
+  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(job_attr.tenant_id_), sql.ptr(), affected_rows))) {
+    LOG_WARN("[BACKUP_CLEAN]failed to exec sql", K(ret), K(sql));
+  } else {
+    LOG_INFO("[BACKUP_CLEAN]update comment end", K(job_attr), K(comment), K(sql));
+  }
+  return ret;
+}
+
+
 //----------------------------__all_backup_task----------------------------
 int ObBackupCleanTaskOperator::insert_backup_clean_task(
     common::ObISQLClient &proxy, 
@@ -1374,7 +1420,7 @@ int ObDeletePolicyOperator::drop_delete_policy(common::ObISQLClient &proxy, cons
   return ret;
 }
 
-int ObDeletePolicyOperator::get_default_delete_policy(common::ObISQLClient &proxy, const uint64_t tenant_id, ObDeletePolicyAttr &delete_policy)
+int ObDeletePolicyOperator::get_delete_policy(common::ObISQLClient &proxy, const uint64_t tenant_id, ObDeletePolicyAttr &delete_policy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1384,8 +1430,8 @@ int ObDeletePolicyOperator::get_default_delete_policy(common::ObISQLClient &prox
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s='default'",
-          OB_ALL_BACKUP_DELETE_POLICY_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_POLICY_NAME))) {
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu",
+          OB_ALL_BACKUP_DELETE_POLICY_TNAME, OB_STR_TENANT_ID, tenant_id))) {
         LOG_WARN("failed append sql", K(ret),K(sql));
       } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql));
@@ -1399,13 +1445,116 @@ int ObDeletePolicyOperator::get_default_delete_policy(common::ObISQLClient &prox
         } else {
           LOG_WARN("failed to get next", K(ret), K(sql));
         }
-      } else {
+      } else { // Extract the policy value
         int64_t real_length = 0;
+        LOG_INFO("extract the policy result", K(ret), K(sql), K(tenant_id));
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_TENANT_ID, delete_policy.tenant_id_, uint64_t);
         EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_RECOVERY_WINDOW, delete_policy.recovery_window_, sizeof(delete_policy.recovery_window_), real_length);
-        LOG_INFO("get value", K(ret), K(delete_policy));
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_POLICY_NAME, delete_policy.policy_name_, sizeof(delete_policy.policy_name_), real_length);
+        LOG_INFO("get value", K(ret), K(sql), K(tenant_id), K(delete_policy));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_SUCC(result->next())) { // get more than one policy row, it's unexpected
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get more than one policy row, it's unexpected", K(ret), K(sql));
+        } else if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next result", K(ret), K(sql));
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupCleanJobOperator::handle_get_delete_backup_all_path_(
+    ObBackupCleanJobAttr &job,
+    const char *log_archive_path_list_str,
+    const char *data_backup_path_list_str)
+{
+  int ret = OB_SUCCESS;
+  bool has_log_archive = (0 != STRLEN(log_archive_path_list_str));
+  bool has_data_backup = (0 != STRLEN(data_backup_path_list_str));
+  if ((has_log_archive && has_data_backup) || (!has_log_archive && !has_data_backup)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("two dests are not allowed both empty or non empty", K(ret), K(job), K(has_log_archive), K(has_data_backup));
+  } else if (has_log_archive) {
+    if (OB_FAIL(job.backup_path_.assign(log_archive_path_list_str))) {
+      LOG_WARN("failed to assign log archive path", K(ret), K(log_archive_path_list_str));
+    } else {
+      job.backup_path_type_ = share::ObBackupDestType::DEST_TYPE_ARCHIVE_LOG;
+    }
+  } else {
+    if (OB_FAIL(job.backup_path_.assign(data_backup_path_list_str))) {
+      LOG_WARN("failed to assign data backup path", K(ret), K(data_backup_path_list_str));
+    } else {
+      job.backup_path_type_ = share::ObBackupDestType::DEST_TYPE_BACKUP_DATA;
+    }
+  }
+  return ret;
+}
+
+int ObBackupCleanJobOperator::handle_get_delete_obsolete_backup_path_(
+    ObBackupCleanJobAttr &job,
+    const char *log_archive_path_list_str,
+    const char *data_backup_path_list_str)
+{
+  int ret = OB_SUCCESS;
+  bool has_log_archive = (0 != STRLEN(log_archive_path_list_str));
+  bool has_data_backup = (0 != STRLEN(data_backup_path_list_str));
+  if (has_log_archive && has_data_backup) {
+    job.backup_path_type_ = share::ObBackupDestType::DEST_TYPE_BACKUP_DATA;
+  } else if (has_log_archive) {
+    job.backup_path_type_ = share::ObBackupDestType::DEST_TYPE_ARCHIVE_LOG;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid backup path type", K(ret), K(job));
+  }
+  return ret;
+}
+
+int ObBackupCleanJobOperator::handle_write_delete_backup_all_path_(
+    const ObBackupCleanJobAttr &job_attr,
+    ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  if (share::ObBackupDestType::DEST_TYPE_ARCHIVE_LOG == job_attr.backup_path_type_) {
+    if (OB_FAIL(dml.add_column(OB_STR_LOG_ARCHIVE_PATH_LIST, job_attr.backup_path_.ptr()))) {
+      LOG_WARN("failed to add column log archive path list", K(ret));
+    }
+  } else if (share::ObBackupDestType::DEST_TYPE_BACKUP_DATA == job_attr.backup_path_type_) {
+    if (OB_FAIL(dml.add_column(OB_STR_DATA_BACKUP_PATH_LIST, job_attr.backup_path_.ptr()))) {
+      LOG_WARN("failed to add column data backup path list", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid backup path type", K(ret), K(job_attr));
+  }
+  return ret;
+}
+
+int ObBackupCleanJobOperator::handle_write_delete_obsolete_backup_path_(
+    const ObBackupCleanJobAttr &job_attr,
+    ObDMLSqlSplicer &dml)
+{
+  int ret = OB_SUCCESS;
+  if (!job_attr.is_delete_obsolete_backup()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(job_attr));
+  } else if (share::ObBackupDestType::DEST_TYPE_ARCHIVE_LOG == job_attr.backup_path_type_) { // log_only
+    if (OB_FAIL(dml.add_column(OB_STR_LOG_ARCHIVE_PATH_LIST, "tenant current write log archive dest"))) {
+      LOG_WARN("failed to add column log archive path list", K(ret));
+    }
+  } else if (share::ObBackupDestType::DEST_TYPE_BACKUP_DATA == job_attr.backup_path_type_) { // default
+    if (OB_FAIL(dml.add_column(OB_STR_DATA_BACKUP_PATH_LIST, "tenant current write data backup dest"))) {
+      LOG_WARN("failed to add column data backup path list", K(ret));
+    } else if (OB_FAIL(dml.add_column(OB_STR_LOG_ARCHIVE_PATH_LIST, "tenant current write log archive dest"))) {
+      LOG_WARN("failed to add column log archive path list", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid backup path type", K(ret), K(job_attr));
   }
   return ret;
 }

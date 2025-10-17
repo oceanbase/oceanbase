@@ -1254,7 +1254,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
     if (! done) {
       // Retry to get it again
       ret = OB_SUCCESS;
-      // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, usleep for a short time
+      // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, ob_usleep for a short time
       ob_usleep(100);
     }
 
@@ -1520,6 +1520,25 @@ int c_str_to_int(const char *str, int64_t &num)
     ret = OB_INVALID_ARGUMENT;
   } else {
     num = strtoll(str, &end_str, 10);
+    if (errno != 0 || (NULL != end_str && *end_str != '\0')) {
+      LOG_ERROR("strtoll convert string to int value fail", K(str), K(num),
+        "error", strerror(errno), K(end_str));
+      ret = OB_INVALID_DATA;
+    }
+  }
+  return ret;
+}
+
+int c_str_to_uint64(const char *str, uint64_t &num)
+{
+  int ret = OB_SUCCESS;
+  errno = 0;
+  char *end_str = NULL;
+  if (OB_ISNULL(str) || OB_UNLIKELY(0 == strlen(str))) {
+    LOG_ERROR("c_str_to_int str should not null");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    num = strtoull(str, &end_str, 10);
     if (errno != 0 || (NULL != end_str && *end_str != '\0')) {
       LOG_ERROR("strtoll convert string to int value fail", K(str), K(num),
         "error", strerror(errno), K(end_str));

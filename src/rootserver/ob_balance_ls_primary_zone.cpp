@@ -305,6 +305,7 @@ int ObBalanceLSPrimaryZone::need_update_ls_primary_zone (
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_UPDATE_SYS_LS_PRIMARY_ZONE);
 int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -316,6 +317,8 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
   if (OB_UNLIKELY(is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("user tenant no need update sys ls primary zone", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(ERRSIM_UPDATE_SYS_LS_PRIMARY_ZONE)) {
+    LOG_WARN("ERRSIM_UPDATE_SYS_LS_PRIMARY_ZONE opened, do nothing", KR(ret), K(tenant_id));
   } else if (OB_FAIL(prepare_sys_ls_balance_primary_zone_info(
       tenant_id,
       primary_zone_info,

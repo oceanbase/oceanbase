@@ -71,7 +71,9 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
       OZ (schema_guard.get_udt_info(tenant_id, udt_id_, udt_info));
       if (OB_SUCC(ret)) {
         ret = OB_ERR_CALL_WRONG_ARG;
-        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+        if (OB_NOT_NULL(udt_info)) {
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+        }
       }
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
     } else {
@@ -182,11 +184,20 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     }
   }
 
-  ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
+  ObIAllocator *alloc = &ctx.exec_ctx_.get_allocator();
+  pl::ObPLExecCtx *pl_exec_ctx = nullptr;
+  // for collection construct in pl, use top_expr_allocator
+  // we will destroy this obj in pl final interface
+  if (OB_NOT_NULL(session) &&
+      OB_NOT_NULL(session->get_pl_context()) &&
+      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
+      pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
+    alloc = pl_exec_ctx->get_top_expr_allocator();
+  }
   if (OB_SUCC(ret)) {
     if (pl::PL_NESTED_TABLE_TYPE == info->type_) {
       if (NULL == (coll =
-      static_cast<pl::ObPLNestedTable*>(alloc.alloc(sizeof(pl::ObPLNestedTable) + 8)))) {
+      static_cast<pl::ObPLNestedTable*>(alloc->alloc(sizeof(pl::ObPLNestedTable) + 8)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
       } else {
@@ -194,7 +205,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
       }
     } else if (pl::PL_VARRAY_TYPE == info->type_) {
       if (NULL == (coll =
-      static_cast<pl::ObPLVArray*>(alloc.alloc(sizeof(pl::ObPLVArray) + 8)))) {
+      static_cast<pl::ObPLVArray*>(alloc->alloc(sizeof(pl::ObPLVArray) + 8)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
       } else {
@@ -203,7 +214,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
       }
     } else if (pl::PL_ASSOCIATIVE_ARRAY_TYPE == info->type_) {
        if (NULL == (coll =
-        static_cast<pl::ObPLAssocArray*>(alloc.alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
+        static_cast<pl::ObPLAssocArray*>(alloc->alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
         } else {
@@ -214,7 +225,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
       LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
     }
   }
-  OZ (coll->init_allocator(alloc, true));
+  OZ (coll->init_allocator(*alloc, true));
   OZ(expr.eval_param_value(ctx));
 
   for (int64_t i = 0; OB_SUCC(ret) && info->not_null_ && i < expr.arg_cnt_; ++i) {
@@ -239,7 +250,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     } else {
       schema_guard = exec_ctx.get_sql_ctx()->schema_guard_;
     }
-    pl::ObPLResolveCtx resolve_ctx(alloc,
+    pl::ObPLResolveCtx resolve_ctx(*alloc,
                                    *session,
                                    *(schema_guard),
                                    package_guard,
@@ -299,7 +310,9 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                 OZ (schema_guard->get_udt_info(session->get_effective_tenant_id(), info->udt_id_, udt_info));
                 if (OB_SUCC(ret)) {
                   ret = OB_ERR_CALL_WRONG_ARG;
-                  LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+                  if (OB_NOT_NULL(udt_info)) {
+                    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+                  }
                 }
                 LOG_WARN("invalid argument. unexpected composite value", K(ret), K(v), KPC(coll));
               }
@@ -312,7 +325,9 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                 const ObUDTTypeInfo *udt_info = NULL;
                 OZ (schema_guard->get_udt_info(session->get_effective_tenant_id(), info->udt_id_, udt_info));
                 if (OB_SUCC(ret)) {
-                  LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+                  if (OB_NOT_NULL(udt_info)) {
+                    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+                  }
                   ret = tmp_ret;
                 }
               }
@@ -358,7 +373,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
           OZ (ObSPIService::spi_pad_char_or_varchar(session,
                                                     info->elem_type_.get_obj_type(),
                                                     info->elem_type_.get_accuracy(),
-                                                    &alloc,
+                                                    alloc,
                                                     &v));
           OZ (deep_copy_obj(*coll->get_allocator(),
                             v,

@@ -76,6 +76,13 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
                      db_name.length(), db_name.ptr(),
                      sp_name.length(), sp_name.ptr());
     }
+
+    if (OB_SUCC(ret) && ObExternalRoutineType::INTERNAL_ROUTINE != routine_info->get_external_routine_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("ALTER external routine is not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ALTER external routine");
+    }
+
     // add schema check info
     OZ (ob_add_ddl_dependency(routine_info->get_routine_id(),
                               ROUTINE_SCHEMA,
@@ -96,6 +103,7 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
       OX (alter_routine_stmt->get_routine_arg().is_need_alter_ = true);
     } else {
       CK (OB_NOT_NULL(parse_tree.children_[1]));
+      OX (alter_routine_stmt->get_routine_arg().db_name_ = db_name);
       OZ (resolve_impl(
         alter_routine_stmt->get_routine_arg(), *routine_info, *(parse_tree.children_[1])));
       OX (alter_routine_stmt->get_routine_arg()

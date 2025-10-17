@@ -57,6 +57,7 @@ struct ObObjTypeFuncs
   ob_obj_crc64_v3 crc64_v3;
   ob_obj_hash xxhash64;
   ob_obj_hash murmurhash_v3;
+  ob_obj_hash murmurhash3_x86_32;
 };
 
 // function templates for the above functions
@@ -963,9 +964,13 @@ DEF_NUMBER_FUNCS(ObNumberFloatType, number_float);
                                             obj.get_scale(), buffer, length, pos); \
     }                                                                   \
     if (OB_SUCC(ret)) {                                            \
-      if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_datetime_or_mysql_datetime(obj.get_type())) {                        \
-        ret = databuff_printf(buffer, length, pos, "' AS %s)", CAST_PREFIX_MYSQL_DATETIME);     \
-      } else {                                                                                  \
+      if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ob_is_datetime_or_mysql_datetime(obj.get_type())) {                    \
+        if (obj.get_scale() > 0 && obj.get_scale() <= 6) {                                                                         \
+          ret = databuff_printf(buffer, length, pos, "' AS %s (%d))", CAST_PREFIX_MYSQL_DATETIME, obj.get_scale());                \
+        } else {                                                                                                                   \
+          ret = databuff_printf(buffer, length, pos, "' AS %s)", CAST_PREFIX_MYSQL_DATETIME);                                      \
+        }                                                                                                                          \
+      } else {                                                                                                                     \
         const char *fmt_suffix = params.need_cast_expr_ && lib::is_oracle_mode() ?              \
                                   CAST_SUFFIX_ORACLE : NORMAL_SUFFIX;                           \
         ret = databuff_printf(buffer, length, pos, "%s", fmt_suffix);     \

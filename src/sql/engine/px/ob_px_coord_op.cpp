@@ -112,7 +112,6 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   row_allocator_(common::ObModIds::OB_SQL_PX),
   coord_info_(*this, allocator_, msg_loop_, interrupt_id_),
   root_dfo_(NULL),
-  root_receive_ch_provider_(),
   first_row_fetched_(false),
   first_row_sent_(false),
   qc_id_(common::OB_INVALID_ID),
@@ -623,26 +622,22 @@ int ObPxCoordOp::destroy_all_channel()
   /* even if one channel unlink faild, we still continue destroy other channel */
   ARRAY_FOREACH_X(dfos, idx, cnt, true) {
     const ObDfo *edge = dfos.at(idx);
-    ObSEArray<const ObPxSqcMeta *, 16> sqcs;
-    if (OB_FAIL(edge->get_sqcs(sqcs))) {
-      LOG_WARN("fail to get sqcs", K(ret));
-    } else {
-      /* one channel unlink faild still continue destroy other channel */
-      ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, true) {
-        const ObDtlChannelInfo &qc_ci = sqcs.at(sqc_idx)->get_qc_channel_info_const();
-        const ObDtlChannelInfo &sqc_ci = sqcs.at(sqc_idx)->get_sqc_channel_info_const();
-        if (OB_FAIL(ObDtlChannelGroup::unlink_channel(qc_ci))) {
-          LOG_WARN("fail unlink channel", K(qc_ci), K(ret));
-        }
-        /*
-         * actually, the qc and sqc can see the channel id of sqc.
-         * sqc channel's owner is SQC, not QC.
-         * if we release there, all these channel will be release twice.
-         * So, sqc channel will be release by sqc, not qc.
-         *
-         * */
-        UNUSED(sqc_ci);
+    const ObIArray<ObPxSqcMeta> &sqcs = edge->get_sqcs();
+    /* one channel unlink faild still continue destroy other channel */
+    ARRAY_FOREACH_X(sqcs, sqc_idx, sqc_cnt, true) {
+      const ObDtlChannelInfo &qc_ci = sqcs.at(sqc_idx).get_qc_channel_info_const();
+      const ObDtlChannelInfo &sqc_ci = sqcs.at(sqc_idx).get_sqc_channel_info_const();
+      if (OB_FAIL(ObDtlChannelGroup::unlink_channel(qc_ci))) {
+        LOG_WARN("fail unlink channel", K(qc_ci), K(ret));
       }
+      /*
+        * actually, the qc and sqc can see the channel id of sqc.
+        * sqc channel's owner is SQC, not QC.
+        * if we release there, all these channel will be release twice.
+        * So, sqc channel will be release by sqc, not qc.
+        *
+        * */
+      UNUSED(sqc_ci);
     }
   }
   /*
@@ -811,7 +806,6 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
   }
   return ret;
 }
-
 int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
                                int64_t &times_offset,
                                bool &all_dfo_terminate,
@@ -820,52 +814,45 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
   int ret = OB_SUCCESS;
   all_dfo_terminate = true;
   for (int64_t i = 0; i < active_dfos.count() && all_dfo_terminate && OB_SUCC(ret); ++i) {
-    ObArray<ObPxSqcMeta *> sqcs;
-    if (OB_FAIL(active_dfos.at(i)->get_sqcs(sqcs))) {
-      LOG_WARN("fail get qc-sqc channel for QC", K(ret));
-    } else {
-      ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-        ObPxSqcMeta *sqc = sqcs.at(idx);
-        if (OB_ISNULL(sqc)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL unexpected sqc", K(ret));
-        } else if (sqc->need_report()) {
-          LOG_DEBUG("wait for sqc", K(sqc));
-          int64_t cur_timestamp = ObTimeUtility::current_time();
-          // > 1s, increase gradually
-          // In order to get the dfo to propose as soon as possible and
-          // In order to avoid the interruption that is not received,
-          // So the interruption needs to be sent repeatedly
-          if (cur_timestamp - last_timestamp > (1000000 + min(times_offset, 10) * 1000000)) {
-            last_timestamp = cur_timestamp;
-            times_offset++;
-            ObInterruptUtil::broadcast_dfo(active_dfos.at(i), OB_GOT_SIGNAL_ABORTING);
-          }
-          all_dfo_terminate = false;
-          break;
-        } else if (sqc->is_server_not_alive() || sqc->is_interrupt_by_dm()) {
-          if (sqc->is_interrupt_by_dm()) {
-            ObRpcResultCode err_msg;
-            ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
-                OB_RPC_CONNECT_ERROR, err_msg, sqc->get_exec_addr());
-          }
-          sqc->set_server_not_alive(false);
-          sqc->set_interrupt_by_dm(false);
-          const DASTabletLocIArray &access_locations = sqc->get_access_table_locations();
-          for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
-            if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
-              LOG_WARN("add touched ls failed", K(ret));
-            }
-          }
-          const DASTabletLocIArray &extra_access_locations = sqc->get_extra_access_table_locations();
-          for (int64_t i = 0; i < extra_access_locations.count() && OB_SUCC(ret); i++) {
-            if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(extra_access_locations.at(i)->ls_id_))) {
-              LOG_WARN("add touched ls failed", K(ret));
-            }
-          }
-          LOG_WARN("server not alive", KPC(sqc), K(access_locations),
-                   K(sqc->get_access_table_location_keys()), K(extra_access_locations));
+    ObIArray<ObPxSqcMeta> &sqcs = active_dfos.at(i)->get_sqcs();
+    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
+      ObPxSqcMeta &sqc = sqcs.at(idx);
+      if (sqc.need_report()) {
+        LOG_DEBUG("wait for sqc", K(sqc));
+        int64_t cur_timestamp = ObTimeUtility::current_time();
+        // > 1s, increase gradually
+        // In order to get the dfo to propose as soon as possible and
+        // In order to avoid the interruption that is not received,
+        // So the interruption needs to be sent repeatedly
+        if (cur_timestamp - last_timestamp > (1000000 + min(times_offset, 10) * 1000000)) {
+          last_timestamp = cur_timestamp;
+          times_offset++;
+          ObInterruptUtil::broadcast_dfo(active_dfos.at(i), OB_GOT_SIGNAL_ABORTING);
         }
+        all_dfo_terminate = false;
+        break;
+      } else if (sqc.is_server_not_alive() || sqc.is_interrupt_by_dm()) {
+        if (sqc.is_interrupt_by_dm()) {
+          ObRpcResultCode err_msg;
+          ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+              OB_RPC_CONNECT_ERROR, err_msg, sqc.get_exec_addr());
+        }
+        sqc.set_server_not_alive(false);
+        sqc.set_interrupt_by_dm(false);
+        const DASTabletLocIArray &access_locations = sqc.get_access_table_locations();
+        for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
+          if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
+            LOG_WARN("add touched ls failed", K(ret));
+          }
+        }
+        const DASTabletLocIArray &extra_access_locations = sqc.get_extra_access_table_locations();
+        for (int64_t i = 0; i < extra_access_locations.count() && OB_SUCC(ret); i++) {
+          if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(extra_access_locations.at(i)->ls_id_))) {
+            LOG_WARN("add touched ls failed", K(ret));
+          }
+        }
+        LOG_WARN("server not alive", K(sqc), K(access_locations),
+                  K(sqc.get_access_table_location_keys()), K(extra_access_locations));
       }
     }
   }

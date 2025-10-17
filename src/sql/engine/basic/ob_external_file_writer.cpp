@@ -318,6 +318,7 @@ int ObParquetFileWriter::open_parquet_file_writer(ObArrowMemPool &arrow_alloc,
     builder.max_row_group_length(row_group_size);
     builder.compression(static_cast<parquet::Compression::type>(compress_type_index));
     builder.memory_pool(&arrow_alloc);
+    builder.enable_write_page_index();
     std::shared_ptr<ObParquetOutputStream> cur_file =
           std::make_shared<ObParquetOutputStream>(&file_appender_,
                                                   &storage_appender_,
@@ -494,7 +495,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<parquet::ByteArray*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             case parquet::Type::FIXED_LEN_BYTE_ARRAY:
@@ -504,7 +505,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<parquet::FixedLenByteArray*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             case parquet::Type::DOUBLE:
@@ -514,7 +515,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<double*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             case parquet::Type::FLOAT:
@@ -524,7 +525,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<float*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             case parquet::Type::INT32:
@@ -534,7 +535,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<int32_t*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             case parquet::Type::INT64:
@@ -544,7 +545,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<int64_t*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             case parquet::Type::INT96:
@@ -554,7 +555,7 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<parquet::Int96*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->EstimatedBufferedValueBytes();
+              estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
             default:

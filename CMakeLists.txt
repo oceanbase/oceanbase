@@ -5,14 +5,21 @@ include(cmake/Env.cmake)
 
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"
-    VERSION 4.4.0.0
+    VERSION 4.4.1.0
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
+elseif(OB_BUILD_STANDALONE)
+  project("OceanBase_standalone"
+    VERSION 4.4.1.0
+    DESCRIPTION "OceanBase Standalone Edition"
+    HOMEPAGE_URL "https://www.oceanbase.com/"
+    LANGUAGES CXX C ASM)
+  message(STATUS "standalone build enabled")
 else()
   project(OceanBase
-    VERSION 4.4.0.0
+    VERSION 4.4.1.0
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
@@ -93,6 +100,8 @@ if (ENABLE_FATAL_ERROR_HANG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_500_MEMORY_LIMIT")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_500_MEMORY_LIMIT")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_DEBUG_ASSERT")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_DEBUG_ASSERT")
 endif()
 
 if (DETECT_RECURSION)

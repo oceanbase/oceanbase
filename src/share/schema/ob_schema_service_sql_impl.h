@@ -45,6 +45,8 @@
 #include "share/schema/ob_catalog_sql_service.h"
 #include "share/schema/ob_external_resource_sql_service.h"
 #include "share/schema/ob_location_sql_service.h"
+#include "share/schema/ob_ai_model_sql_service.h"
+#include "share/schema/ob_ccl_rule_sql_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -137,6 +139,8 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog)
   GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource)
   GET_DDL_SQL_SERVICE_FUNC(Location, location)
+  GET_DDL_SQL_SERVICE_FUNC(AiModel, ai_model)
+  GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule)
 
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
@@ -249,6 +253,8 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(location, ObLocationSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -338,6 +344,9 @@ public:
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
 
+  virtual int fetch_new_ai_model_id(const uint64_t tenant_id, uint64_t &new_ai_model_id);
+  virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id);
+
   virtual int get_tablegroup_schema(const ObRefreshSchemaStatus &schema_status,
                                     const uint64_t tablegroup_id,
                                     const int64_t schema_version,
@@ -404,6 +413,8 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(location, ObLocationSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -431,6 +442,7 @@ public:
   GET_BATCH_FULL_SCHEMA_FUNC_DECLARE(profile, ObProfileSchema);
   GET_BATCH_FULL_SCHEMA_FUNC_DECLARE(audit, ObSAuditSchema);
   GET_BATCH_FULL_SCHEMA_FUNC_DECLARE(mock_fk_parent_table, ObMockFKParentTableSchema);
+  GET_BATCH_FULL_SCHEMA_FUNC_DECLARE(ccl_rule, ObCCLRuleSchema);
 
   virtual int get_batch_users(const ObRefreshSchemaStatus &schema_status,
                               const int64_t schema_version,
@@ -499,6 +511,8 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(location, ObLocationSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(obj_mysql_priv, ObObjMysqlPriv);
+  FETCH_SCHEMAS_FUNC_DECLARE(ai_model, ObAiModelSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
 
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -548,6 +562,7 @@ public:
   FETCH_FULL_SCHEMAS_FUNC_DECLARE(audit, ObSAuditSchema);
   FETCH_FULL_SCHEMAS_FUNC_DECLARE(sys_priv, ObSysPriv);
   FETCH_FULL_SCHEMAS_FUNC_DECLARE(mock_fk_parent_table, ObMockFKParentTableSchema);
+  FETCH_FULL_SCHEMAS_FUNC_DECLARE(ccl_rule, ObCCLRuleSchema);
 
   int fetch_all_user_info(const ObRefreshSchemaStatus &schema_status,
                           const int64_t schema_version,
@@ -821,18 +836,6 @@ public:
               const ObString &udt_name,
               uint64_t &udt_id) override;
 
-  virtual int get_table_schema_versions(
-              common::ObISQLClient &sql_client,
-              const uint64_t tenant_id,
-              const common::ObIArray<uint64_t> &table_ids,
-              common::ObIArray<ObSchemaIdVersion> &versions) override;
-
-  virtual int get_mock_fk_parent_table_schema_versions(
-              common::ObISQLClient &sql_client,
-              const uint64_t tenant_id,
-              const common::ObIArray<uint64_t> &table_ids,
-              common::ObIArray<ObSchemaIdVersion> &versions) override;
-
   virtual int get_audits_in_owner(
               common::ObISQLClient &sql_client,
               const uint64_t tenant_id,
@@ -853,6 +856,50 @@ public:
                const ObString &dst,
                const bool case_compare,
                const bool compare_with_collation) override;
+
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  virtual int get_##OBJECT_NAME##_schema_versions(common::ObISQLClient &sql_client, \
+                                                  const uint64_t tenant_id, \
+                                                  const common::ObIArray<uint64_t> &object_ids, \
+                                                  common::ObIArray<ObSchemaIdVersion> &versions) override;
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
+  virtual int get_obj_priv_with_obj_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t obj_id,
+              const uint64_t obj_type,
+              ObIArray<ObObjPriv> &obj_privs) override;
+
+  virtual int get_table_schemas_in_tablegroup(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              common::ObIArray<const ObTableSchema *> &table_schemas);
+
+  virtual int check_database_exists_in_tablegroup(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              bool &exists);
+
+  virtual int get_table_id_and_table_name_in_tablegroup(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              common::ObIArray<ObString> &table_names,
+              common::ObIArray<uint64_t> &table_ids);
   /*----------- interfaces for latest schema end -------------*/
 
 private:
@@ -1312,6 +1359,8 @@ private:
   ObRlsSqlService rls_service_;
   ObCatalogSqlService catalog_service_;
   ObExternalResourceSqlService external_resource_service_;
+  ObAiModelSqlService ai_model_service_;
+  ObCCLRuleSqlService ccl_rule_service_;
 
   ObClusterSchemaStatus cluster_schema_status_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> gen_schema_version_map_;

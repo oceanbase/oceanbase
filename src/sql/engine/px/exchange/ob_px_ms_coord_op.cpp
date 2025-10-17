@@ -227,8 +227,20 @@ int ObPxMSCoordOp::setup_readers()
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       reader_cnt_ = task_channels_.count();
+      uint64_t plan_min_cluster_version_ = ctx_.get_physical_plan_ctx()->get_phy_plan()
+                            ->get_min_cluster_version();
+      bool reorder_fixed_expr = ctx_.get_physical_plan_ctx()->get_phy_plan()
+                            ->get_min_cluster_version() >= CLUSTER_VERSION_4_3_3_0;
+      common::ObIAllocator *allocator =
+        ((plan_min_cluster_version_ >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+          plan_min_cluster_version_ < CLUSTER_VERSION_4_4_0_0) ||
+          plan_min_cluster_version_ >= CLUSTER_VERSION_4_4_1_0)
+          ? &ctx_.get_allocator() : NULL;
       for (int64_t i = 0; i < reader_cnt_; i++) {
-        new (&readers_[i]) ObReceiveRowReader(get_spec().id_);
+        new (&readers_[i]) ObReceiveRowReader(get_spec().id_,
+              &(static_cast<const ObPxReceiveSpec &>(spec_).child_exprs_),
+              reorder_fixed_expr,
+              allocator);
       }
     }
   }

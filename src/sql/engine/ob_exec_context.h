@@ -32,6 +32,7 @@
 #include "lib/udt/ob_collection_type.h"
 #include "sql/plan_cache/ob_adaptive_auto_dop.h"
 #include "sql/engine/ob_diagnosis_manager.h"
+#include "sql/optimizer/file_prune/ob_lake_table_file_map.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
 #define GET_MY_SESSION(ctx) ((ctx).get_my_session())
@@ -194,7 +195,7 @@ public:
   int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
-  int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  int get_convert_charset_allocator(common::ObIAllocator *&allocator);
   int get_malloc_allocator(ObIAllocator *&allocator);
   void try_reset_convert_charset_allocator();
 
@@ -327,6 +328,11 @@ public:
   inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
   // set write branch id for DML write
   void set_branch_id(const int16_t branch_id) { das_ctx_.set_write_branch_id(branch_id); }
+  bool has_lake_table_file_map() const { return lake_table_file_map_ != nullptr; }
+  void set_lake_table_file_map(ObLakeTableFileMap *map) { lake_table_file_map_ = map; }
+  int get_lake_table_file_map(ObLakeTableFileMap *&lake_table_file_map);
+  int add_lake_table_files(const ObDASTableLocMeta &loc_meta, const ObCandiTableLoc &candi_table_loc);
+  int add_lake_table_file(uint64_t table_loc_id, ObTabletID tablet_id, const ObCandiTabletLoc &candi_tablet_loc);
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
   uint64_t get_ser_version() const;
@@ -438,8 +444,12 @@ public:
 
   char **get_frames() const { return frames_; }
   void set_frames(char **frames) { frames_ = frames; }
+  char **get_ori_frames() const { return ori_frames_; }
+  void set_ori_frames(char **frames) { ori_frames_ = frames; }
   uint64_t get_frame_cnt() const { return frame_cnt_; }
   void set_frame_cnt(uint64_t frame_cnt) { frame_cnt_ = frame_cnt; }
+  uint64_t get_ori_frame_cnt() const { return ori_frame_cnt_; }
+  void set_ori_frame_cnt(uint64_t frame_cnt) { ori_frame_cnt_ = frame_cnt; }
 
   ObOperatorKit *get_operator_kit(const uint64_t id) const
   {
@@ -471,7 +481,7 @@ public:
   int fill_px_batch_info(
       ObBatchRescanParams &params,
       int64_t batch_id,
-      sql::ObExpr::ObExprIArray &array);
+      const sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }
@@ -578,6 +588,12 @@ public:
 
   void *get_external_url_resource_cache() { return external_url_resource_cache_; }
   void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
+  void *get_external_py_url_resource_cache() { return external_py_url_resource_cache_; }
+  void set_external_py_url_resource_cache(void *cache) { external_py_url_resource_cache_ = cache; }
+  void *get_external_py_sch_resource_cache() { return external_py_sch_resource_cache_; }
+  void set_external_py_sch_resource_cache(void *cache) { external_py_sch_resource_cache_ = cache; }
+  void *get_py_sub_inter_ctx() { return py_sub_inter_ctx_; }
+  void set_py_sub_inter_ctx(void *sub_inter_ctx) { py_sub_inter_ctx_ = sub_inter_ctx; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -693,6 +709,8 @@ protected:
   // data frames and count
   char **frames_;
   uint64_t frame_cnt_;
+  char **ori_frames_;
+  uint64_t ori_frame_cnt_;
 
   ObOpKitStore op_kit_store_;
 
@@ -773,6 +791,15 @@ protected:
   common::ObArenaAllocator deterministic_udf_cache_allocator_;
 
   void *external_url_resource_cache_;
+  void *external_py_url_resource_cache_;
+  void *external_py_sch_resource_cache_;
+  void *py_sub_inter_ctx_;
+  /*
+   * lake table file map, no need to serialize.
+   * @brief The key is (table_loc_id, tablet_id),
+   *        The value is a file array related to the key.
+   * */
+  ObLakeTableFileMap *lake_table_file_map_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };
@@ -804,9 +831,11 @@ inline void ObExecContext::reference_my_plan(const ObPhysicalPlan *my_plan)
 inline void ObExecContext::set_my_session(ObSQLSessionInfo *session)
 {
   my_session_ = session;
-  set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+  if (OB_NOT_NULL(session)) {
+    set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
                          ObModIds::OB_SQL_EXEC_CONTEXT,
                          ObCtxIds::EXECUTE_CTX_ID));
+  }
 }
 
 inline ObSQLSessionInfo *ObExecContext::get_my_session() const

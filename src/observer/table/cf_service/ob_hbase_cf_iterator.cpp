@@ -317,7 +317,7 @@ ObHbaseRowIterator::ObHbaseRowIterator(const ObHbaseQuery &hbase_query, ObTableE
       is_inited_(false),
       need_verify_cell_ttl_(false),
       forward_rescan_param_(),
-      hbase_adapter_guard_(exec_ctx.get_allocator(), exec_ctx),
+      hbase_adapter_guard_(exec_ctx.get_allocator()),
       exec_ctx_(exec_ctx),
       htable_filter_(hbase_query.get_query().get_htable_filter()),
       hfilter_(NULL),
@@ -366,7 +366,8 @@ int ObHbaseRowIterator::get_and_init_cell_iter(ObIAllocator &allocator,
     LOG_WARN("invalid tablet ids count", K(ret), K(tablet_cnt));
   } else if (tablet_cnt == 1) {
     ObIHbaseAdapter *hbase_adapter = nullptr;
-    if (OB_FAIL(hbase_adapter_guard_.get_hbase_adapter(hbase_adapter))) {
+    if (OB_FAIL(hbase_adapter_guard_.get_hbase_adapter(hbase_adapter,
+        exec_ctx_.get_schema_cache_guard().get_hbase_mode_type()))) {
       LOG_WARN("fail to get hbase adapter", K(ret));
     } else if (OB_FAIL(hbase_adapter->scan(exec_ctx_.get_allocator(), exec_ctx_, query, tmp_cell_iter))) {
       LOG_WARN("fail to scan", K(ret), K(query));

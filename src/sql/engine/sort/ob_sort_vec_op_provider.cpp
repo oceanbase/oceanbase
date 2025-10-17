@@ -79,8 +79,9 @@ int ObSortVecOpProvider::decide_sort_key_type(ObSortVecOpContext &ctx)
   if (!ctx.enable_encode_sortkey_) {
     is_basic_cmp_ = true;
     is_str_cmp_ = true;
-    for (int64_t i = 0; is_basic_cmp_ && i < ctx.sk_exprs_->count(); i++) {
-      VecValueTypeClass vec_tc = ctx.sk_exprs_->at(i)->get_vec_value_tc();
+    for (int64_t i = 0; is_basic_cmp_ && i < ctx.sk_collations_->count(); i++) {
+      ObExpr *expr = ctx.sk_exprs_->at(ctx.sk_collations_->at(i).field_idx_);
+      VecValueTypeClass vec_tc = expr->get_vec_value_tc();
       is_basic_cmp_ = is_basic_cmp_type(vec_tc);
       is_str_cmp_ &= (vec_tc == VEC_TC_STRING);
     }

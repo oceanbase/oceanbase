@@ -323,21 +323,12 @@ int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &ar
       break;
     };
     case ObNewBackupCleanType::DELETE_BACKUP_SET: 
-    case ObNewBackupCleanType::DELETE_BACKUP_PIECE: {
-    // TODO(lyh444845) 4.4.1 support delete backup set/piece
-      ret = OB_NOT_SUPPORTED;
-      break;
-    };
+    case ObNewBackupCleanType::DELETE_BACKUP_PIECE:
     case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP:
-    case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP_BACKUP: {
-      if (OB_FAIL(handle_backup_delete_obsolete(arg))) {
+    case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
+      if (OB_FAIL(handle_backup_delete_(arg))) {
         LOG_WARN("failed to handle delete backup obsolete data", K(ret), K(arg));
       }
-      break;
-    };
-    case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
-    // TODO(lyh444845) 4.4.1 support delete backup all function
-      ret = OB_NOT_SUPPORTED;
       break;
     };
     default: {
@@ -392,15 +383,18 @@ int ObBackupCleanService::handle_delete_policy(const obrpc::ObDeletePolicyArg &a
   return ret;
 }
 
-int ObBackupCleanService::handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg)
+int ObBackupCleanService::handle_backup_delete_(const obrpc::ObBackupCleanArg &arg)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP != arg.type_) {
+  } else if (ObNewBackupCleanType::DELETE_BACKUP_SET != arg.type_
+             && ObNewBackupCleanType::DELETE_BACKUP_PIECE != arg.type_
+             && ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP != arg.type_
+             && ObNewBackupCleanType::DELETE_BACKUP_ALL != arg.type_) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("backup delete arg type is not obsolete backup arg", K(ret), K(arg));
+    LOG_WARN("backup delete arg type is not supported", K(ret), K(arg));
   } else if (OB_FAIL(backup_clean_scheduler_.start_schedule_backup_clean(arg))) {
     LOG_WARN("failed to start schedule backup clean", K(ret), K(arg));
   }

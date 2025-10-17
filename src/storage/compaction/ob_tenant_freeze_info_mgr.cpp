@@ -441,7 +441,8 @@ void ObTenantFreezeInfoMgr::check_tenant_in_restore_with_mv_(
 int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     const ObTabletID &tablet_id,
     const int64_t merged_version,
-    ObStorageSnapshotInfo &snapshot_info)
+    ObStorageSnapshotInfo &snapshot_info,
+    const bool skip_undo_retention)
 {
   int ret = OB_SUCCESS;
   ObFreezeInfo freeze_info;
@@ -488,7 +489,12 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SS_GC, last_succ_scn.get_val_for_tx());
     LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(user_tenant_id), K(snapshot_info));
 #endif
-  } else if (OB_FAIL(get_multi_version_duration(duration))) {
+  }
+  if (OB_FAIL(ret)) {
+  } else if (skip_undo_retention && !GCTX.is_shared_storage_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get unexpected argument skip_undo_retention", K(ret));
+  } else if (!skip_undo_retention && OB_FAIL(get_multi_version_duration(duration))) {
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merged_version < 1) {

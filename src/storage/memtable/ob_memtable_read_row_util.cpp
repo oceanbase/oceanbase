@@ -107,7 +107,7 @@ int ObReadRow::fill_in_row_with_tx_node_(const storage::ObITableReadInfo &read_i
 
   const ObMemtableDataHeader *mtd = nullptr;
   const ObRowHeader *row_header = nullptr;
-  ObRowReader reader;
+  ObCompatRowReader reader;
   if (OB_ISNULL(mtd = reinterpret_cast<const ObMemtableDataHeader *>(tx_node->buf_))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "trans node value is null", K(ret), KP(mtd), KP(tx_node));

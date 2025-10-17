@@ -26,6 +26,7 @@
 #include "common/ob_zone_status.h"
 #include "common/ob_zone_type.h"
 #include "share/ob_replica_info.h"
+#include "common/ob_idc.h"
 
 namespace oceanbase
 {
@@ -133,9 +134,15 @@ public:
   ObZoneInfo &operator =(const ObZoneInfo &other);
   void reset();
   bool is_valid() const;
+  int init(
+      const common::ObZone &zone,
+      const common::ObRegion &region,
+      const ObZoneStatus::Status &zone_status,
+      const share::ObZoneInfo::StorageType &storage_type);
   DECLARE_TO_STRING;
 
   int get_region(common::ObRegion &region) const;
+  int get_idc(common::ObIDC &idc) const;
   const char *get_status_str() const;
 
   inline int64_t get_item_count() const { return list_.get_size(); }

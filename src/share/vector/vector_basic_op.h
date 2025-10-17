@@ -438,7 +438,7 @@ template<typename HashMethod, bool hash_v2>
 struct VecTCHashCalc<VEC_TC_STRING, HashMethod, hash_v2> {
   OB_INLINE static int hash(HASH_ARG_LIST) {
     bool calc_end_space = meta.is_calc_end_space();
-    if (hash_v2 && CS_TYPE_UTF8MB4_BIN == meta.get_collation_type()) {
+    if (hash_v2 && (CS_TYPE_UTF8MB4_BIN == meta.get_collation_type() || CS_TYPE_UTF8MB4_0900_BIN == meta.get_collation_type())) {
       if (calc_end_space) {
         res = HashMethod::hash(data, len, seed);
       } else {

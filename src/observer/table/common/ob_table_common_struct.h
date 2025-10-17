@@ -18,7 +18,7 @@
 #include "observer/table/object_pool/ob_table_object_pool.h"
 #include "observer/table/ob_table_schema_cache.h"
 #include "observer/table/ob_table_audit.h"
-#include "observer/table/ob_table_trans_utils.h"
+#include "observer/table/utils/ob_table_trans_utils.h"
 
 namespace oceanbase
 {
@@ -48,6 +48,8 @@ public:
       table_id_(common::OB_INVALID_ID),
       ls_id_(ObLSID::INVALID_LS_ID),
       entity_factory_(nullptr),
+      simple_schema_(nullptr),
+      table_schema_(nullptr),
       is_async_commit_(false)
   {}
   ~ObTableExecCtx() = default;
@@ -83,7 +85,13 @@ public:
   OB_INLINE void set_entity_factory(ObITableEntityFactory *entity_factory) { entity_factory_ = entity_factory; }
   OB_INLINE const share::ObLSID &get_ls_id() const { return ls_id_; }
   OB_INLINE void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
-  OB_INLINE const share::schema::ObSimpleTableSchemaV2 *get_simple_schema() const { return simple_schema_; }
+  OB_INLINE const share::schema::ObTableSchema *get_table_schema() const { return table_schema_; }
+  OB_INLINE void set_table_schema(const share::schema::ObTableSchema *table_schema) { table_schema_ = table_schema; }
+  // if table_schema is set and simple_schema is not set, return table_schema_ directly to avoid init simple_schema_ repeatedly.
+  OB_INLINE const share::schema::ObSimpleTableSchemaV2 *get_simple_schema() const
+  {
+    return simple_schema_ == nullptr ? (table_schema_ != nullptr ?  table_schema_ : nullptr) : simple_schema_;
+  }
   OB_INLINE void set_simple_schema(const share::schema::ObSimpleTableSchemaV2 *simple_schema) { simple_schema_ = simple_schema; }
   OB_INLINE void set_async_commit(bool is_async) { is_async_commit_ = is_async; }
   OB_INLINE bool is_async_commit() const { return is_async_commit_; }
@@ -102,6 +110,7 @@ private:
   share::ObLSID ls_id_;
   ObITableEntityFactory *entity_factory_;
   const share::schema::ObSimpleTableSchemaV2 *simple_schema_;
+  const share::schema::ObTableSchema *table_schema_;
   bool is_async_commit_;
 };
 

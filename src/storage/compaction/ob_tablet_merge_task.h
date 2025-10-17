@@ -184,7 +184,7 @@ public:
         && ls_id_.is_valid() && tablet_id_.is_valid();
   }
 
-  virtual int64_t inner_hash() const;
+  virtual uint64_t inner_hash() const;
   bool belong_to_same_tablet(const ObMergeDagHash *other) const;
 
   TO_STRING_KV("merge_type", merge_type_to_str(merge_type_), K_(ls_id), K_(tablet_id));
@@ -208,7 +208,7 @@ public:
   bool is_reserve_mode() const { return param_.is_reserve_mode_; }
   void set_reserve_mode() { param_.is_reserve_mode_ = true; }
   virtual bool operator == (const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool ignore_warning() override
@@ -265,6 +265,7 @@ class ObTabletMergeExecuteDag: public ObTabletMergeDag
 {
 public:
   ObTabletMergeExecuteDag();
+  ObTabletMergeExecuteDag(const share::ObDagType::ObDagTypeEnum type);
   virtual ~ObTabletMergeExecuteDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override; // for diagnose
   int prepare_init(

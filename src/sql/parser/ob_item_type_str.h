@@ -76,6 +76,12 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_SYS_BIT_XOR:
       ret = "BIT_XOR";
       break;
+    case T_FUN_ARG_MAX:
+      ret = "ARG_MAX";
+      break;
+    case T_FUN_ARG_MIN:
+      ret = "ARG_MIN";
+      break;
     default:
       break;
   }

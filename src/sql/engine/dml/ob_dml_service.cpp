@@ -1431,8 +1431,7 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
                                                          upd_ctdef.trans_info_expr_,
                                                          old_row))) {
       LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
-    } else if (upd_ctdef.is_table_without_pk_ &&
-        old_tablet_loc != new_tablet_loc &&
+    } else if (((upd_ctdef.is_table_without_pk_ && old_tablet_loc != new_tablet_loc) || (upd_ctdef.is_vec_hnsw_index_vid_opt_)) &&
         OB_FAIL(set_update_hidden_pk(dml_rtctx.get_eval_ctx(),
                                      upd_ctdef,
                                      new_tablet_loc->tablet_id_))) {
@@ -1609,7 +1608,8 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                                  const int16_t write_branch_id,
                                  ObIAllocator &das_alloc,
                                  storage::ObStoreCtxGuard &store_ctx_gurad,
-                                 storage::ObDMLBaseParam &dml_param)
+                                 storage::ObDMLBaseParam &dml_param,
+                                 bool is_insert_up_gts_opt)
 {
   int ret = OB_SUCCESS;
   dml_param.timeout_ = base_rtdef.timeout_ts_;
@@ -1623,18 +1623,20 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.prelock_ = base_rtdef.prelock_;
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
+  dml_param.is_main_table_in_fts_ddl_ = base_ctdef.is_main_table_in_fts_ddl_;
   if (OB_FAIL(dml_param.snapshot_.assign(snapshot))) {
     LOG_WARN("assign snapshot fail", K(ret));
   }
   dml_param.branch_id_ = write_branch_id;
   dml_param.store_ctx_guard_ = &store_ctx_gurad;
-  init_dml_write_flag(base_ctdef, base_rtdef, dml_param.write_flag_);
+  init_dml_write_flag(base_ctdef, base_rtdef, dml_param.write_flag_, is_insert_up_gts_opt);
   return ret;
 }
 
 void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
                                        ObDASDMLBaseRtDef &base_rtdef,
-                                       concurrent_control::ObWriteFlag &write_flag)
+                                       concurrent_control::ObWriteFlag &write_flag,
+                                       bool is_insert_up_gts_opt)
 {
   if (base_ctdef.is_batch_stmt_) {
     write_flag.set_is_dml_batch_opt();
@@ -1663,6 +1665,9 @@ void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
   }
   if (base_rtdef.is_immediate_row_conflict_check_ && base_ctdef.is_update_pk_) {
     write_flag.set_immediate_row_check();
+  }
+  if (is_insert_up_gts_opt) {
+    write_flag.set_plain_insert_gts_opt();
   }
 }
 

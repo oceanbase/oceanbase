@@ -184,16 +184,26 @@ public:
 int ObComplementDataParam::prepare_task_ranges()
 {
   int ret = OB_SUCCESS;
+  bool is_allow_parallel = true;
+  const bool is_remote_exec = orig_tenant_id_ != dest_tenant_id_; // task type
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(this));
+  } else if (OB_FAIL(get_complement_parallel_mode(dest_tenant_id_,
+                                                  dest_table_id_,
+                                                  dest_schema_version_,
+                                                  compat_mode_,
+                                                  is_remote_exec,
+                                                  is_allow_parallel))) {
+    LOG_WARN("fail to get complement parallel mode", K(ret), K(dest_tenant_id_), K(dest_table_id_),
+      K(dest_schema_version_), K(compat_mode_), K(is_remote_exec));
   } else {
     ranges_.reset();
     concurrent_cnt_ = 0;
-    if (user_parallelism_ <= 1) {
+    if (!is_allow_parallel || user_parallelism_ <= 1) {
       ObDatumRange datum_range;
       datum_range.set_whole_range();
       if (OB_FAIL(ranges_.push_back(datum_range))) {
@@ -202,23 +212,26 @@ int ObComplementDataParam::prepare_task_ranges()
         concurrent_cnt_ = 1;
         LOG_INFO("succeed to to init task ranges", K(ret), K(user_parallelism_), K(concurrent_cnt_), K(ranges_));
       }
-    } else if (orig_tenant_id_ == dest_tenant_id_) {
-      if (OB_FAIL(split_task_ranges(task_id_, data_format_version_, orig_ls_id_, orig_tablet_id_, orig_schema_tablet_size_, user_parallelism_))) {
-        LOG_WARN("fail to init task ranges", K(ret), KPC(this));
-      }
-    } else if (OB_FAIL(split_task_ranges_remote(orig_tenant_id_,
-                                                orig_ls_id_,
-                                                orig_tablet_id_,
-                                                orig_schema_tablet_size_,
-                                                user_parallelism_,
-                                                dest_schema_cg_cnt_,
-                                                need_rescan_fill_cg_))) {
+    } else if (!is_remote_exec && OB_FAIL(split_task_ranges(task_id_,
+                                                            data_format_version_,
+                                                            orig_ls_id_,
+                                                            orig_tablet_id_,
+                                                            orig_schema_tablet_size_,
+                                                            user_parallelism_))) {
+      LOG_WARN("fail to init task ranges", K(ret), KPC(this));
+    } else if (is_remote_exec && OB_FAIL(split_task_ranges_remote(orig_tenant_id_,
+                                                                  orig_ls_id_,
+                                                                  orig_tablet_id_,
+                                                                  orig_schema_tablet_size_,
+                                                                  user_parallelism_,
+                                                                  dest_schema_cg_cnt_,
+                                                                  need_rescan_fill_cg_))) {
       LOG_WARN("fail to init task ranges", K(ret), KPC(this));
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (orig_tenant_id_ == dest_tenant_id_) {
+    if (!is_remote_exec) {
       SERVER_EVENT_ADD("alter_table", "drop_column_data_complement",
         "tenant_id", dest_tenant_id_,
         "task_id", task_id_,
@@ -430,6 +443,54 @@ int ObComplementDataParam::split_task_ranges_remote(
   return ret;
 }
 
+/* In oracle mode table recovery, when the rowkey columns contain character type(char,vachar2,nchar,nvarchar2).
+ * Specally when it's charset is not system default character(utf8mb4), like gbk.
+ * Inner_sql execute the generated SQL may not get the correct result. Not allow partition parallel is above scenario. */
+int ObComplementDataParam::get_complement_parallel_mode(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t schema_version,
+    const lib::Worker::CompatMode compat_mode,
+    const bool is_recover_table,
+    bool &is_allow_parallel)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  ObArray<share::schema::ObColDesc> rowkey_column_ids;
+  is_allow_parallel = true; // default use parallel
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(common::OB_INVALID_TENANT_ID == tenant_id
+    || common::OB_INVALID_TENANT_ID == table_id || schema_version <= 0
+    || lib::Worker::CompatMode::INVALID == compat_mode)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(table_id), K(schema_version), K(compat_mode));
+  } else if (!is_recover_table || lib::Worker::CompatMode::MYSQL == compat_mode) {
+      // do nothing
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+    tenant_id, schema_guard, schema_version))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id), K(table_id), K(schema_version));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), KPC(this));
+  } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_column_ids))) {
+    LOG_WARN("fail to get row schema", K(ret), KPC(this));
+  } else {
+    /* oracle mode && reocver table && table rowkey has character type not allow parallel */
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); i++) {
+      const ObColDesc &col_des = rowkey_column_ids.at(i);
+      if (col_des.col_type_.is_character_type()) {
+        is_allow_parallel = false;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObComplementDataContext::init(
     const ObComplementDataParam &param,
     const share::schema::ObTableSchema &hidden_table_schema)
@@ -626,7 +687,7 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
 int ObComplementDataDag::calc_total_row_count()
 {
   int ret = OB_SUCCESS;
-
+  const bool is_remote_exec = param_.orig_tenant_id_ != param_.dest_tenant_id_; // task type
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("has not been inited ", K(ret));
@@ -636,10 +697,15 @@ int ObComplementDataDag::calc_total_row_count()
   } else if (context_.physical_row_count_ != 0) {
     ret =  OB_INIT_TWICE;
     LOG_WARN("has calculated the row_count", K(ret), K(context_.physical_row_count_));
-  } else if (param_.orig_tenant_id_ != param_.dest_tenant_id_) {
-    // FIXME(YIREN), How to calc the row count of the source tablet for restore table.
-    // RPC?
-  } else if (OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(
+  } else if (is_remote_exec && OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt_remote(
+                                  param_.orig_tenant_id_,
+                                  param_.orig_ls_id_,
+                                  param_.orig_tablet_id_,
+                                  true, // calc_sstable = true
+                                  true, // calc_memtable = true
+                                  context_.physical_row_count_))) {
+    LOG_WARN("failed to calc row count remote", K(ret), K(param_), K(context_));
+  } else if (!is_remote_exec && OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(
                                   param_.orig_ls_id_,
                                   param_.orig_tablet_id_,
                                   true, // calc_sstable = true
@@ -822,10 +888,10 @@ int ObComplementDataDag::prepare_context()
   return ret;
 }
 
-int64_t ObComplementDataDag::hash() const
+uint64_t ObComplementDataDag::hash() const
 {
   int tmp_ret = OB_SUCCESS;
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid())) {
     tmp_ret = OB_ERR_SYS;
     LOG_ERROR("table schema must not be NULL", K(tmp_ret), K(is_inited_), K(param_));
@@ -893,6 +959,7 @@ int ObComplementDataDag::report_replica_build_status()
     arg.task_id_ = param_.task_id_;
     arg.execution_id_ = param_.execution_id_;
     arg.row_inserted_ = context_.row_inserted_;
+    arg.cg_row_inserted_ = context_.cg_row_inserted_;
     arg.physical_row_count_ = context_.physical_row_count_;
     arg.server_addr_ = GCTX.self_addr();
     FLOG_INFO("send replica build status response to RS", K(ret), K(context_), K(arg));
@@ -1471,14 +1538,14 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   }
   int64_t total_time = ObTimeUtility::current_time() - process_start_time;
   if (param_->orig_tenant_id_ == param_->dest_tenant_id_) {
-    SERVER_EVENT_ADD("alter_table", "drop_column_data_complement",
+    SERVER_EVENT_ADD("alter_table", "data_complement_task",
       "tenant_id", param_->dest_tenant_id_,
       "task_id", param_->task_id_,
       "complement_task_id", task_id_,
       "total_cost", total_time
     );
   } else {
-    SERVER_EVENT_ADD("recover_table", "recover_table_complement_task",
+    SERVER_EVENT_ADD("recover_table", "data_complement_task",
       "tenant_id", param_->dest_tenant_id_,
       "task_id", param_->task_id_, /** import table task id */
       "complement_task_id", task_id_,
@@ -1765,8 +1832,11 @@ int ObComplementRescanWriteTask::process()
     LOG_WARN("invalid param", K(ret),  KPC_(param));
   } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
     LOG_WARN("switch to tenant failed", K(ret), KPC_(param));
-  } else if (OB_FAIL(context_->ddl_agent_.fill_column_group(param_->concurrent_cnt_, task_id_))) {
-    LOG_WARN("fill_column_group failed", K(ret), KPC_(param), K_(task_id));
+  } else {
+    ObInsertMonitor insert_monitor(context_->row_scanned_, context_->row_inserted_, context_->cg_row_inserted_);
+    if (OB_FAIL(context_->ddl_agent_.fill_column_group(param_->concurrent_cnt_, task_id_, &insert_monitor))) {
+      LOG_WARN("fill_column_group failed", K(ret), KPC_(param), K_(task_id));
+    }
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {

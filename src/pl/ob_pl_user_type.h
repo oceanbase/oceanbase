@@ -193,7 +193,8 @@ public:
                                    char *dst,
                                    const int64_t dst_len,
                                    int64_t &dst_pos,
-                                   bool &has_serialized) const;
+                                   bool &has_serialized,
+                                   const sql::ObSQLSessionInfo &session) const;
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(user_type_id), K_(type_name));
 protected:
@@ -416,7 +417,7 @@ public:
 
   int add_record_member(
     const common::ObString &record_name, const ObPLDataType &record_type,
-    int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);
+    int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL, bool need_check_dup = false);
   int add_record_member(
     ObPLEnumSetCtx &enum_set_ctx, const common::ObString &record_name, const ObPLDataType &record_type,
     int64_t default_idx = OB_INVALID_INDEX, sql::ObRawExpr *default_raw_expr = NULL);
@@ -587,6 +588,7 @@ public:
                                         const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
+  virtual int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 };
 #endif
 //---------- for ObCollectionType ----------
@@ -1123,7 +1125,9 @@ public:
   static uint32_t last_offset_bits() { return offsetof(ObPLCollection, last_) * 8; }
   static uint32_t data_offset_bits() { return offsetof(ObPLCollection, data_) * 8; }
   void print() const;
-  int deep_copy(ObPLCollection *src, common::ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src,
+                common::ObIAllocator *allocator,
+                bool ignore_del_element = false);
   int assign(ObPLCollection *src, ObIAllocator *allocator);
   int64_t get_init_size() const
   {

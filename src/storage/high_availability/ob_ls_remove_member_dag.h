@@ -69,7 +69,7 @@ public:
   virtual ~ObLSRemoveMemberDag();
   ObLSRemoveMemberCtx *get_ctx() { return &ctx_; }
   virtual bool operator == (const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
@@ -98,6 +98,7 @@ private:
   int modify_member_number_(ObLS *ls);
   int transform_member_(ObLS *ls);
   int switch_learner_to_acceptor_(ObLS *ls);
+  int verify_addr_for_transform_member_();
 
   int report_to_disaster_recovery_();
 private:

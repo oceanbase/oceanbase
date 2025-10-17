@@ -82,7 +82,7 @@ public:
       : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0), tenant_id_(tenant_id),
         whole_msg_() {}
   virtual ~ObReportingWFPieceMsgCtx() = default;
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
   INHERIT_TO_STRING_KV("meta", ObPieceMsgCtx, K_(received));
   static int alloc_piece_msg_ctx(const ObReportingWFPieceMsg &pkt,
@@ -104,7 +104,7 @@ public:
   ~ObReportingWFPieceMsgListener() = default;
   static int on_message(
       ObReportingWFPieceMsgCtx &ctx,
-      common::ObIArray<ObPxSqcMeta *> &sqcs,
+      common::ObIArray<ObPxSqcMeta> &sqcs,
       const ObReportingWFPieceMsg &pkt);
 private:
   /* functions */

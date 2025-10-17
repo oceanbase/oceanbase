@@ -31,7 +31,11 @@ c1	c2
 commit;
 begin;
 select /*+read_consistency(weak) */ * from xm_test_t1;
-ERROR 0A000: weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level not supported
+c1	c2
+1	1
+2	1
+3	1
+4	1
 commit;
 begin;
 select * from xm_test_t1;

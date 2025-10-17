@@ -625,5 +625,36 @@ void ObTenantSwitchGuard::release()
   }
 }
 
+int ObTenantSimpleGuard::get_tenant_base(uint64_t tenant_id, ObTenantBase *&tenant_base)
+{
+  int ret = OB_SUCCESS;
+
+  if (!common::is_valid_tenant_id(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant id to get", K(ret), K(tenant_id));
+  } else if (tenant_id == MTL_ID()) {
+    tenant_base = ObTenantEnv::get_tenant();
+  } else if (is_virtual_tenant_id(tenant_id)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_ERROR("can't get virtual tenant", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_base_with_lock(tenant_id, lock_handle_, tenant_base, release_cb_))) {
+    if (ret == OB_IN_STOP_STATE) {
+      ret = OB_TENANT_NOT_IN_SERVER;
+    }
+    LOG_WARN("get tenant base fail", K(tenant_id), K(ret), K(lbt()));
+  }
+
+  return ret;
+}
+
+void ObTenantSimpleGuard::release()
+{
+  if (release_cb_ != nullptr) {
+    release_cb_(lock_handle_);
+    release_cb_ = nullptr;
+  }
+  reset();
+}
+
 } // end of namespace share
 } // end of namespace oceanbase

@@ -322,6 +322,32 @@ void ObZoneInfo::reset()
   new(this) ObZoneInfo();
 }
 
+int ObZoneInfo::init(
+    const common::ObZone &zone,
+    const common::ObRegion &region,
+    const ObZoneStatus::Status &zone_status,
+    const share::ObZoneInfo::StorageType &storage_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(zone.is_empty()
+               || region.is_empty()
+               || ObZoneStatus::UNKNOWN == zone_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(zone), K(region), K(zone_status));
+  } else if (OB_FAIL(region_.info_.assign(region.ptr()))) {
+    LOG_WARN("fail assign default region info", KR(ret), K(region));
+  } else if (OB_FAIL(status_.info_.assign(ObString(ObZoneStatus::get_status_str(zone_status))))) {
+    LOG_WARN("fail to assign zone status str", KR(ret), K(zone_status));
+  } else if (OB_FAIL(storage_type_.info_.assign(ObString(share::ObZoneInfo::get_storage_type_str(storage_type))))) {
+    LOG_WARN("fail to assign zone storage_type str", KR(ret));
+  } else {
+    zone_ = zone;
+    status_.value_ = zone_status;
+    storage_type_.value_ = storage_type;
+  }
+  return ret;
+}
+
 DEF_TO_STRING(ObZoneInfo)
 {
   int64_t pos = 0;
@@ -347,6 +373,16 @@ int ObZoneInfo::get_region(common::ObRegion &region) const
   region = DEFAULT_REGION_NAME;
   if (OB_FAIL(region.assign(region_.info_.ptr()))) {
     LOG_WARN("get_region assign failed", K(ret));
+  }
+  return ret;
+}
+
+int ObZoneInfo::get_idc(common::ObIDC &idc) const
+{
+  int ret = OB_SUCCESS;
+  idc.reset();
+  if (OB_FAIL(idc.assign(idc_.info_.ptr()))) {
+    LOG_WARN("get_idc assign failed", K(ret));
   }
   return ret;
 }

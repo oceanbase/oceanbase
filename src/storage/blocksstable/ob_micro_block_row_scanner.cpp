@@ -45,10 +45,6 @@ ObIMicroBlockRowScanner::ObIMicroBlockRowScanner(common::ObIAllocator &allocator
     range_(nullptr),
     sstable_(nullptr),
     reader_(nullptr),
-    flat_reader_(nullptr),
-    decoder_(nullptr),
-    pax_decoder_(nullptr),
-    cs_decoder_(nullptr),
     memtable_reader_(nullptr),
     param_(nullptr),
     context_(nullptr),
@@ -60,18 +56,6 @@ ObIMicroBlockRowScanner::ObIMicroBlockRowScanner(common::ObIAllocator &allocator
 
 ObIMicroBlockRowScanner::~ObIMicroBlockRowScanner()
 {
-  if (nullptr != flat_reader_) {
-    flat_reader_->~ObMicroBlockReader();
-    allocator_.free(flat_reader_);
-  }
-  if (nullptr != pax_decoder_) {
-    pax_decoder_->~ObMicroBlockDecoder();
-    allocator_.free(pax_decoder_);
-  }
-  if (nullptr != cs_decoder_) {
-    cs_decoder_->~ObMicroBlockCSDecoder();
-    allocator_.free(cs_decoder_);
-  }
   if (nullptr != memtable_reader_) {
     memtable_reader_->~ObMemtableBlockReader();
     allocator_.free(memtable_reader_);
@@ -84,6 +68,7 @@ ObIMicroBlockRowScanner::~ObIMicroBlockRowScanner()
     filter_bitmap_->~ObCGBitmap();
     allocator_.free(filter_bitmap_);
   }
+  reader_helper_.reset();
 }
 
 void ObIMicroBlockRowScanner::reuse()
@@ -376,6 +361,9 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
   } else if (OB_FAIL(end_of_block())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to judge end of block or not", K(ret), K_(macro_id), K_(start), K_(last), K_(current));
+    } else {
+      // can_blockscan_ = true;
+      // is_filter_applied_ = block_row_store_->filter_pushdown() && (param_->is_delete_insert_ || can_ignore_multi_version_);
     }
   } else if (!block_row_store_->filter_pushdown() || (!param_->is_delete_insert_ && !can_ignore_multi_version_)) {
     can_blockscan_ = true;
@@ -410,49 +398,21 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
 
 int ObIMicroBlockRowScanner::set_reader(const ObRowStoreType store_type)
 {
-#define INIT_MICRO_READER(ptr, type)                                        \
-  do {                                                                      \
-    if (ptr == nullptr) {                                                   \
-      if (OB_ISNULL(ptr = OB_NEWx(type, (&allocator_)))) {                  \
-        ret = OB_ALLOCATE_MEMORY_FAILED;                                    \
-        LOG_WARN("Failed to alloc memory for reader", K(ret));              \
-      }                                                                     \
-    }                                                                       \
-    if (OB_SUCC(ret)) {                                                     \
-      reader_ = ptr;                                                        \
-    }                                                                       \
-  } while(0)
-
   int ret = OB_SUCCESS;
-  switch (store_type) {
-    case FLAT_ROW_STORE: {
-      INIT_MICRO_READER(flat_reader_, ObMicroBlockReader);
-      break;
-    }
 
-    case ENCODING_ROW_STORE:
-    case SELECTIVE_ENCODING_ROW_STORE:
-    case CS_ENCODING_ROW_STORE: {
-      if (OB_UNLIKELY(nullptr != sstable_ && sstable_->is_multi_version_minor_sstable())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not supported multi version encode store type", K(ret), K(store_type));
-      } else {
-        if (CS_ENCODING_ROW_STORE == store_type) {
-          INIT_MICRO_READER(cs_decoder_, ObMicroBlockCSDecoder);
-          decoder_ = cs_decoder_;
-        } else {
-          INIT_MICRO_READER(pax_decoder_, ObMicroBlockDecoder);
-          decoder_ = pax_decoder_;
-        }
-      }
-      break;
-    }
-
-    default:
+  if (ObStoreFormat::is_row_store_type_with_encoding(store_type)) {
+    if (OB_UNLIKELY(nullptr != sstable_ && sstable_->is_multi_version_minor_sstable())) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not supported row store type", K(ret), K(store_type));
+      LOG_WARN("not supported multi version encode store type", K(ret), K(store_type));
+    }
   }
-#undef INIT_MICRO_READER
+
+  if (OB_FAIL(ret)) {
+  } else if (!reader_helper_.is_inited() && OB_FAIL(reader_helper_.init(allocator_))) {
+    LOG_WARN("Fail to init reader helper", KR(ret), K(store_type));
+  } else if (OB_FAIL(reader_helper_.get_reader(store_type, reader_))) {
+    LOG_WARN("Fail to get reader", KR(ret), K(store_type));
+  }
 
   return ret;
 }
@@ -581,8 +541,9 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   if ((ObIMicroBlockReader::Decoder == reader_->get_type() ||
       ObIMicroBlockReader::CSDecoder == reader_->get_type()) &&
       filter.can_pushdown_decoder()) {
-    if (decoder_->can_apply_black(col_offsets) &&
-        OB_FAIL(decoder_->filter_black_filter_batch(
+    ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+    if (decoder->can_apply_black(col_offsets) &&
+        OB_FAIL(decoder->filter_black_filter_batch(
                 parent,
                 filter,
                 pd_filter_info,
@@ -657,38 +618,52 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
-  if (ObIMicroBlockReader::Reader == reader_->get_type()) {
-    ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
-    if (OB_FAIL(flat_reader->get_rows(col_offsets,
-                                      col_params,
-                                      default_datums,
-                                      is_padding_mode,
-                                      row_ids,
-                                      row_cap,
-                                      row_,
-                                      datum_infos,
-                                      vector_offset,
-                                      exprs,
-                                      eval_ctx))) {
-      LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
-               "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
+
+  switch (reader_->get_type())
+  {
+    case ObIMicroBlockReader::Reader:
+    case ObIMicroBlockReader::NewFlatReader: {
+      if (OB_FAIL(reader_->get_rows(col_offsets,
+                                    col_params,
+                                    default_datums,
+                                    is_padding_mode,
+                                    row_ids,
+                                    row_cap,
+                                    row_,
+                                    datum_infos,
+                                    vector_offset,
+                                    exprs,
+                                    eval_ctx))) {
+        LOG_WARN("Failed to copy rows",
+                 K(ret),
+                 K(row_cap),
+                 "row_ids",
+                 common::ObArrayWrap<const int32_t>(row_ids, row_cap));
+      }
+      break;
     }
-  } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-             ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
-    if (OB_FAIL(decoder->get_rows(col_offsets,
-                                  col_params,
-                                  is_padding_mode,
-                                  row_ids,
-                                  cell_datas,
-                                  row_cap,
-                                  datum_infos,
-                                  vector_offset))) {
-      LOG_WARN("Failed to get rows", K(ret), K(row_cap), K(vector_offset));
+
+    case ObIMicroBlockReader::Decoder:
+    case ObIMicroBlockReader::CSDecoder: {
+      ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+      if (OB_FAIL(decoder->get_rows(col_offsets,
+                                    col_params,
+                                    is_padding_mode,
+                                    row_ids,
+                                    cell_datas,
+                                    row_cap,
+                                    datum_infos,
+                                    vector_offset))) {
+        LOG_WARN("Failed to get rows", K(ret), K(row_cap), K(vector_offset));
+      }
+      break;
+    };
+
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected micro block reader", K(ret), K(reader_->get_type()));
+      break;
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected micro block reader", K(ret), K(reader_->get_type()));
   }
 
   if (OB_SUCC(ret) && param_->has_lob_column_out() && reader_->has_lob_out_row()) {
@@ -723,42 +698,52 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
 {
   int ret = OB_SUCCESS;
   sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
-  if (ObIMicroBlockReader::Reader == reader_->get_type()) {
-    ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
-    if (OB_FAIL(flat_reader->get_rows(col_offsets,
-                                      col_params,
-                                      default_datums,
-                                      is_padding_mode,
-                                      row_ids,
-                                      vector_offset,
-                                      row_cap,
-                                      row_,
-                                      exprs,
-                                      eval_ctx,
-                                      need_init_vector))) {
-      LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
-               "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
+
+  switch (reader_->get_type())
+  {
+    case ObIMicroBlockReader::Reader:
+    case ObIMicroBlockReader::NewFlatReader: {
+      if (OB_FAIL(reader_->get_rows(col_offsets,
+                                    col_params,
+                                    default_datums,
+                                    is_padding_mode,
+                                    row_ids,
+                                    vector_offset,
+                                    row_cap,
+                                    row_,
+                                    exprs,
+                                    eval_ctx,
+                                    need_init_vector))) {
+        LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
+                 "row_ids", common::ObArrayWrap<const int32_t>(row_ids, row_cap));
+      }
+      break;
     }
-  } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-             ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
-    if (OB_FAIL(decoder->get_rows(col_offsets,
-                                  col_params,
-                                  default_datums,
-                                  is_padding_mode,
-                                  row_ids,
-                                  row_cap,
-                                  cell_datas,
-                                  vector_offset,
-                                  len_array,
-                                  eval_ctx,
-                                  exprs,
-                                  need_init_vector))) {
-      LOG_WARN("Failed to get rows", K(ret), K(row_cap));
+
+    case ObIMicroBlockReader::Decoder:
+    case ObIMicroBlockReader::CSDecoder: {
+      if (OB_FAIL(reader_->get_rows(col_offsets,
+                                    col_params,
+                                    default_datums,
+                                    is_padding_mode,
+                                    row_ids,
+                                    row_cap,
+                                    cell_datas,
+                                    vector_offset,
+                                    len_array,
+                                    eval_ctx,
+                                    exprs,
+                                    need_init_vector))) {
+        LOG_WARN("Failed to get rows", K(ret), K(row_cap));
+      }
+      break;
+    };
+
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected micro block reader", K(ret), K(reader_->get_type()));
+      break;
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected micro block reader", K(ret), K(reader_->get_type()));
   }
 
   if (OB_SUCC(ret) && param_->has_lob_column_out() && reader_->has_lob_out_row()) {
@@ -790,13 +775,8 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KP(reader_), KPC(filter));
   } else if (filter->is_truncate_node()) {
-    if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-        ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-      if (OB_FAIL(decoder_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
-        LOG_WARN("Failed to pushdown truncate scn filter", K(ret));
-      }
-    } else if (OB_FAIL(flat_reader_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
-      LOG_WARN("Failed to execute black pushdown filter", K(ret));
+    if (OB_FAIL(reader_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
+      LOG_WARN("Failed to pushdown truncate scn filter", K(ret));
     }
   } else if (filter->is_sample_node()) {
     if (ObIMicroBlockReader::MemtableReader == reader_->get_type()) {
@@ -816,63 +796,77 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
                                                filter->get_op().get_eval_ctx(),
                                                filter->get_op().get_eval_ctx().max_batch_size_))) {
     LOG_WARN("Failed to init exprs vector header", K(ret));
-  } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-             ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    // change to black filter in below situation
-    // 1. if need project lob column and micro block has outrow lob
-    // 2. if it is semistruct_filter_node, but not cs decoder (beacuase semistrcut white filter only support cs decoder)
-    if ((param_->has_lob_column_out() && reader_->has_lob_out_row())
-        || (filter->is_semistruct_filter_node() && ObIMicroBlockReader::CSDecoder != reader_->get_type())) {
-      sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
-      if (OB_FAIL(decoder_->filter_pushdown_filter(parent,
-                                                   *physical_filter,
-                                                   pd_filter_info,
-                                                   bitmap))) {
-        LOG_WARN("Failed to execute pushdown filter", K(ret));
-      }
-    } else if (filter->is_filter_black_node()) {
-      sql::ObBlackFilterExecutor *black_filter = static_cast<sql::ObBlackFilterExecutor *>(filter);
-      if (can_use_vectorize && black_filter->can_vectorized()) {
-        if (OB_FAIL(apply_black_filter_batch(
-                    parent,
-                    *black_filter,
-                    pd_filter_info,
-                    bitmap))) {
-          LOG_WARN("Failed to execute black pushdown filter in batch", K(ret));
-        }
-      } else if (OB_FAIL(decoder_->filter_pushdown_filter(
-                  parent,
-                  *black_filter,
-                  pd_filter_info,
-                  bitmap))) {
-        LOG_WARN("Failed to execute black pushdown filter", K(ret));
-      }
-    } else {
-      if (OB_FAIL(decoder_->filter_pushdown_filter(
-                  parent,
-                  *static_cast<sql::ObWhiteFilterExecutor *>(filter),
-                  pd_filter_info,
-                  bitmap))) {
-        LOG_WARN("Failed to execute white pushdown filter", K(ret));
-      }
-    }
-  } else if (ObIMicroBlockReader::MemtableReader == reader_->get_type()) {
-    if (OB_FAIL(memtable_reader_->filter_pushdown_filter(
-                parent,
-                *filter,
-                pd_filter_info,
-                bitmap))) {
-      LOG_WARN("failed to execute memtable pushdown filter");
-    }
   } else {
-    if (OB_FAIL(flat_reader_->filter_pushdown_filter(
-                parent,
-                *filter,
-                pd_filter_info,
-                bitmap))) {
-      LOG_WARN("Failed to execute black pushdown filter", K(ret));
+    switch (reader_->get_type())
+    {
+      case ObIMicroBlockReader::Decoder:
+      case ObIMicroBlockReader::CSDecoder: {
+        ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+        // change to black filter in below situation
+        // 1. if need project lob column and micro block has outrow lob
+        // 2. if it is semistruct_filter_node, but not cs decoder (beacuase semistrcut white filter only support cs decoder)
+        if ((param_->has_lob_column_out() && reader_->has_lob_out_row())
+            || (filter->is_semistruct_filter_node() && ObIMicroBlockReader::CSDecoder != reader_->get_type())) {
+          sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
+          if (OB_FAIL(decoder->filter_pushdown_filter(parent,
+                                                      *physical_filter,
+                                                      pd_filter_info,
+                                                      bitmap))) {
+            LOG_WARN("Failed to execute pushdown filter", K(ret));
+          }
+        } else if (filter->is_filter_black_node()) {
+          sql::ObBlackFilterExecutor *black_filter = static_cast<sql::ObBlackFilterExecutor *>(filter);
+          if (can_use_vectorize && black_filter->can_vectorized()) {
+            if (OB_FAIL(apply_black_filter_batch(
+                        parent,
+                        *black_filter,
+                        pd_filter_info,
+                        bitmap))) {
+              LOG_WARN("Failed to execute black pushdown filter in batch", K(ret));
+            }
+          } else if (OB_FAIL(decoder->filter_pushdown_filter(
+                      parent,
+                      *black_filter,
+                      pd_filter_info,
+                      bitmap))) {
+            LOG_WARN("Failed to execute black pushdown filter", K(ret));
+          }
+        } else {
+          if (OB_FAIL(decoder->filter_pushdown_filter(
+                      parent,
+                      *static_cast<sql::ObWhiteFilterExecutor *>(filter),
+                      pd_filter_info,
+                      bitmap))) {
+            LOG_WARN("Failed to execute white pushdown filter", K(ret));
+          }
+        }
+        break;
+      }
+
+      case ObIMicroBlockReader::MemtableReader: {
+        if (OB_FAIL(
+                memtable_reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+          LOG_WARN("failed to execute memtable pushdown filter");
+        }
+        break;
+      }
+
+      case ObIMicroBlockReader::Reader:
+      case ObIMicroBlockReader::NewFlatReader: {
+        if (OB_FAIL(reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+          LOG_WARN("Failed to execute black pushdown filter", K(ret));
+        }
+        break;
+      }
+
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unknown type of reader", KR(ret), K(reader_->get_type()));
+        break;
+      }
     }
   }
+
 
   return ret;
 }
@@ -940,7 +934,7 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t select_cnt = pd_filter_info.filter_->get_result()->popcnt();
+      const int64_t select_cnt = use_private_bitmap_ ? filter_bitmap_->popcnt() : pd_filter_info.filter_->get_result()->popcnt();
       EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
     }
   }
@@ -1107,9 +1101,7 @@ int ObIMicroBlockRowScanner::check_can_group_by(
   int ret = OB_SUCCESS;
   row_cnt = reader_->row_count();
   read_cnt = last_ - current_ + 1;
-  if (param_->has_lob_column_out() && reader_->has_lob_out_row()) {
-    can_group_by = false;
-  } else if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
+  if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
     if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
       LOG_WARN("Failed to get distinct cnt", K(ret));
     } else {
@@ -1391,8 +1383,9 @@ int ObMicroBlockRowScanner::estimate_row_count(
       }
       est.logical_row_count_ = est.physical_row_count_;
 
-      ObMicroBlockReader *reader = static_cast<ObMicroBlockReader *>(reader_);
-      if (est.physical_row_count_ > 0 && consider_multi_version && !reader->committed_single_version_rows()) {
+      ObIMicroBlockFlatReaderBase *reader = static_cast<ObIMicroBlockFlatReaderBase *>(reader_);
+      if (est.physical_row_count_ > 0 && consider_multi_version
+          && !reader->committed_single_version_rows()) {
         est.logical_row_count_ = 0;
         if (OB_FAIL(reader->get_logical_row_cnt(last_, current_, est.logical_row_count_))) {
           LOG_WARN("failed to get logical row count", K(ret));
@@ -1522,10 +1515,11 @@ int ObMultiVersionMicroBlockRowScanner::open(
         && block_data.get_micro_header()->max_merged_trans_version_ <= context_->trans_version_range_.snapshot_version_
         && block_data.get_micro_header()->min_merged_trans_version_ > context_->trans_version_range_.base_version_) {
       read_row_direct_flag_ = true;
-      can_ignore_multi_version_ = flat_reader_->single_version_rows()
-                                  && is_last_multi_version_row_
-                                  && !reverse_scan_
-                                  && !(0 == version_range_.base_version_ && IF_NEED_CHECK_BASE_VERSION_FILTER(context_));
+      can_ignore_multi_version_
+          = static_cast<ObIMicroBlockFlatReaderBase *>(reader_)->single_version_rows()
+            && is_last_multi_version_row_
+            && !reverse_scan_
+            && !(0 == version_range_.base_version_ && IF_NEED_CHECK_BASE_VERSION_FILTER(context_));
       LOG_DEBUG("use direct read", K(ret), K(can_ignore_multi_version_),
                 KPC(block_data.get_micro_header()), K(context_->trans_version_range_));
     }
@@ -1863,6 +1857,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
               LOG_WARN("Unexpected trans info", K(ret), K(trans_idx), K(trans_version), KPC(row), KPC_(read_info));
             } else {
               LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
+              row->storage_datums_[trans_idx].reuse();
               row->storage_datums_[trans_idx].set_int(-trans_version);
             }
             if (OB_UNLIKELY(0 == version_range_.base_version_ &&
@@ -2010,7 +2005,9 @@ int ObMultiVersionMicroBlockRowScanner::check_foreign_key(
   ObStoreRowLockState lock_state;
   const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
   memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
-  if (context_->query_flag_.is_for_foreign_key_check() &&
+  bool is_plain_insert_gts_opt = context_->query_flag_.is_plain_insert_gts_opt();
+  bool is_for_fk_check = context_->query_flag_.is_for_foreign_key_check();
+  if ((is_plain_insert_gts_opt || is_for_fk_check) &&
       OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_sstable(
               acc_ctx.get_tx_table_guards(),
               acc_ctx.get_tx_id(),
@@ -2668,6 +2665,7 @@ int ObMultiVersionDIMicroBlockRowScanner::set_row_trans_col(
         LOG_WARN("Unexpected trans info", K(ret), K(trans_version), K(row), KPC_(read_info));
       } else {
         LOG_DEBUG("success to set trans_version", K(ret), K(trans_version));
+        row.storage_datums_[trans_idx].reuse();
         row.storage_datums_[trans_idx].set_int(-trans_version);
       }
     }

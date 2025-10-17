@@ -56,6 +56,7 @@
 #include "share/detect/ob_detect_manager.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_service.h"
 #include "share/ob_device_credential_task.h"
+#include "share/external_table/ob_external_table_utils.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
@@ -83,6 +84,7 @@
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -134,7 +136,7 @@ ObServer::ObServer()
     prepare_stop_(true), stop_(true), has_stopped_(true), has_destroy_(false),
     net_frame_(gctx_), sql_conn_pool_(), ddl_conn_pool_(), dblink_conn_pool_(),
     res_inner_conn_pool_(), restore_ctx_(), srv_rpc_proxy_(),
-    storage_rpc_proxy_(), rs_rpc_proxy_(), sql_proxy_(),
+    storage_rpc_proxy_(), rs_rpc_proxy_(), sql_proxy_(), oracle_sql_proxy_(),
     dblink_proxy_(),
     executor_proxy_(), executor_rpc_(), dbms_job_rpc_proxy_(), dbms_sched_job_rpc_proxy_(), interrupt_proxy_(),
     config_(ObServerConfig::get_instance()),
@@ -238,15 +240,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   init_arches();
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
-#if defined(__x86_64__)
-  if (OB_UNLIKELY(!is_arch_supported(ObTargetArch::AVX))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("unsupported CPU platform, AVX instructions are required.");
-  }
-#endif
-
   // server parameters be inited here.
-  if (OB_SUCC(ret) && OB_FAIL(init_config())) {
+  if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
   // set alert log level earlier
@@ -335,7 +330,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init global load data stat map failed", KR(ret));
     } else if (OB_FAIL(init_pre_setting())) {
       LOG_ERROR("init pre setting failed", KR(ret));
-    } else if (GCONF._enable_numa_aware && OB_FAIL(AFFINITY_CTRL.init())) {
+    } else if (GCONF._enable_numa_aware && OB_FAIL(AFFINITY_CTRL.init(GCONF.strict_check_os_params))) {
       LOG_ERROR("init affinity ctrl topology failed", KR(ret));
     } else if (OB_FAIL(init_global_context())) {
       LOG_ERROR("init global context failed", KR(ret));
@@ -441,6 +436,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
+    } else if (OB_FAIL(ObCachedExternalFileInfoCollector::get_instance().init())) {
+      LOG_ERROR("init cached external file info collector failed", KR(ret));
     } else if (OB_FAIL(ObCachedCatalogSchemaMgr::get_instance().init())) {
       LOG_ERROR("init ObCachedCatalogSchemaMgr failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
@@ -816,6 +813,10 @@ void ObServer::destroy()
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
 
+    FLOG_INFO("begin to destroy external file disk space mgr");
+    OB_EXTERNAL_FILE_DISK_SPACE_MGR.destroy();
+    FLOG_INFO("external file disk space mgr destroyed");
+
     FLOG_INFO("begin to destroy storage object mgr");
     OB_STORAGE_OBJECT_MGR.destroy();
     FLOG_INFO("storage object mgr destroyed");
@@ -1002,6 +1003,12 @@ int ObServer::start()
       LOG_ERROR("start storage object mgr fail", KR(ret), K(slog_reserved_size));
     } else {
       FLOG_INFO("success to start storage object manager");
+    }
+
+    if (FAILEDx(OB_EXTERNAL_FILE_DISK_SPACE_MGR.start())) {
+      LOG_ERROR("fail to start external file disk space mgr", KR(ret));
+    } else {
+      FLOG_INFO("success to start external file disk space mgr");
     }
 
     if (FAILEDx(multi_tenant_.start())) {
@@ -1242,6 +1249,14 @@ int ObServer::start()
             "replay_log_cost_us", ObTimeUtility::current_time() - schema_refreshed_ts);
       }
     }
+
+    if (OB_SUCC(ret)) {
+      (void) ObLicenseUtils::clear_license_table_if_need();
+      if (OB_FAIL(ObLicenseUtils::start_license_mgr())) {
+        FLOG_ERROR("failed to start license manager", KR(ret));
+      }
+    }
+
   }
 
   if (OB_FAIL(ret)) {
@@ -1325,11 +1340,23 @@ int ObServer::check_if_schema_ready()
 {
   int ret = OB_SUCCESS;
   bool schema_ready = false;
+  bool in_bootstrap = false;
   LOG_DBA_INFO_V2(OB_SERVER_WAIT_SCHEMA_READY_BEGIN,
                   DBA_STEP_INC_INFO(server_start),
                   "wait schema ready begin.");
   while (OB_SUCC(ret) && !stop_ && !schema_ready) {
-    schema_ready = schema_service_.is_sys_full_schema();
+    if (in_bootstrap) {
+      // GCTX.in_bootstrap_ is set false when tenant full schema refreshed
+      schema_ready = !GCTX.in_bootstrap_;
+    } else {
+      if (GCTX.in_bootstrap_) {
+        in_bootstrap = true;
+      } else {
+        // in bootstrap, refreshed schema version is set to 2 when broadcasting schema
+        // full schema is refreshed later, which will cause write sql failed in the following steps
+        schema_ready = schema_service_.is_sys_full_schema();
+      }
+    }
     if (!schema_ready) {
       SLEEP(1);
     }
@@ -1498,6 +1525,10 @@ int ObServer::stop()
     FLOG_INFO("begin to stop disk usage report task");
     TG_STOP(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("disk usage report task stopped");
+
+    FLOG_INFO("begin to stop external file disk space mgr");
+    OB_EXTERNAL_FILE_DISK_SPACE_MGR.stop();
+    FLOG_INFO("external file disk space mgr stopped");
 
     FLOG_INFO("begin to stop storage object mgr");
     OB_STORAGE_OBJECT_MGR.stop();
@@ -1927,6 +1958,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait disk usage report task");
     TG_WAIT(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("wait disk usage report task success");
+
+    FLOG_INFO("begin to wait external file disk space mgr");
+    OB_EXTERNAL_FILE_DISK_SPACE_MGR.wait();
+    FLOG_INFO("wait external file disk space mgr success");
 
     FLOG_INFO("begin to wait storage object mgr");
     OB_STORAGE_OBJECT_MGR.wait();
@@ -2459,6 +2494,8 @@ int ObServer::init_sql_proxy()
     LOG_ERROR("init sql connection pool failed", KR(ret));
   } else if (OB_FAIL(sql_proxy_.init(&sql_conn_pool_))) {
     LOG_ERROR("init sql proxy failed", KR(ret));
+  } else if (OB_FAIL(oracle_sql_proxy_.init(&sql_conn_pool_) )) {
+    LOG_ERROR("init oracle sql proxy failed", KR(ret));
   } else if (OB_FAIL(res_inner_conn_pool_.init(&schema_service_,
                                   &sql_engine_,
                                   &vt_data_service_.get_vt_iter_factory().get_vt_iter_creator(),
@@ -2984,6 +3021,7 @@ int ObServer::init_global_context()
   gctx_.load_data_proxy_ = &load_data_proxy_;
   gctx_.external_table_proxy_ = &external_table_proxy_;
   gctx_.sql_proxy_ = &sql_proxy_;
+  gctx_.oracle_sql_proxy_ = &oracle_sql_proxy_;
   gctx_.ddl_sql_proxy_ = &ddl_sql_proxy_;
   gctx_.ddl_oracle_sql_proxy_ = &ddl_oracle_sql_proxy_;
   gctx_.dblink_proxy_ = &dblink_proxy_;
@@ -3034,6 +3072,7 @@ int ObServer::init_global_context()
     LOG_INFO("this observer has had a valid server_id", K(gctx_.get_server_id()));
   }
   gctx_.in_bootstrap_ = false;
+  gctx_.in_replace_sys_ = false;
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {
     ret = OB_INVALID_ARGUMENT;
@@ -3139,6 +3178,8 @@ int ObServer::init_storage()
       LOG_WARN("fail to init disk usage report task", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::DiskUseReport))) {
       LOG_WARN("fail to initialize disk usage report timer", KR(ret));
+    } else if (OB_FAIL(OB_EXTERNAL_FILE_DISK_SPACE_MGR.init())) {
+      LOG_ERROR("fail to init external file disk space mgr", KR(ret));
     } else if (OB_FAIL(sql::ObExternalDataPageCache::get_instance().init("ObExtPageCache", 1))) {
       LOG_ERROR("init external_table pageCache failed", KR(ret));
     }

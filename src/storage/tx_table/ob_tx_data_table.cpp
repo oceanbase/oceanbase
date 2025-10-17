@@ -764,6 +764,7 @@ int ObTxDataTable::self_freeze_task()
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_UPPER_TRANS_VERSION_PLUS_SECONDS)
 // The main steps in calculating upper_trans_version. For more details, see :
 //
 int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn,
@@ -802,6 +803,11 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
     } else if (OB_FAIL(calc_upper_trans_scn_(sstable_end_scn, upper_trans_version))) {
       STORAGE_LOG(WARN, "calc upper trans version failed", KR(ret), "ls_id", get_ls_id());
     } else {
+      if (EN_UPPER_TRANS_VERSION_PLUS_SECONDS < 0) {
+        const uint64_t delta = 1000L * 1000 * 1000 * (-EN_UPPER_TRANS_VERSION_PLUS_SECONDS);
+        upper_trans_version = SCN::plus(upper_trans_version, delta);
+        FLOG_INFO("TRACEPOINT: EN_UPPER_TRANS_VERSION_PLUS_SECONDS : ", K(upper_trans_version), K(delta));
+      }
       FLOG_INFO("get upper trans version finish.",
                 KR(ret),
                 K(skip_calc),

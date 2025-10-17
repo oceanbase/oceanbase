@@ -59,10 +59,6 @@ enum class ObLSMigrationHandlerStatus : int8_t // FARM COMPAT WHITELIST
 struct ObLSMigrationHandlerStatusHelper
 {
 public:
-  static int check_can_change_status(
-      const ObLSMigrationHandlerStatus &curr_status,
-      const ObLSMigrationHandlerStatus &change_status,
-      bool &can_change);
   static bool is_valid(const ObLSMigrationHandlerStatus &status);
   static int get_next_change_status(
       const ObLSMigrationHandlerStatus &curr_status,
@@ -107,6 +103,8 @@ public:
   int cancel_task(const share::ObTaskId &task_id, bool &is_exist);
   bool is_cancel() const;
   bool is_complete() const;
+  bool is_dag_net_cleared() const;
+  void set_dag_net_cleared();
   int set_result(const int32_t result);
   int get_migration_task_and_handler_status(
       ObLSMigrationTask &task,
@@ -123,7 +121,6 @@ private:
   void wakeup_();
   int get_ls_migration_handler_status_(ObLSMigrationHandlerStatus &status);
   int check_task_list_empty_(bool &is_empty);
-  int change_status_(const ObLSMigrationHandlerStatus &new_status);
   int get_result_(int32_t &result);
   bool is_migration_failed_() const;
   int get_ls_migration_task_(ObLSMigrationTask &task);
@@ -144,14 +141,8 @@ private:
   int do_finish_status_();
   int do_wait_status_();
   int generate_build_ls_dag_net_();
-  int schedule_build_ls_dag_net_(
-      const ObLSMigrationTask &task);
   int generate_prepare_ls_dag_net_();
-  int schedule_prepare_ls_dag_net_(
-      const ObLSMigrationTask &task);
   int generate_complete_ls_dag_net_();
-  int schedule_complete_ls_dag_net_(
-      const ObLSMigrationTask &task);
   int report_result_();
   int report_meta_table_();
   int report_to_disaster_recovery_();
@@ -168,9 +159,9 @@ private:
   int check_task_exist_with_nolock_(const share::ObTaskId &task_id, bool &is_exist) const;
   int switch_next_stage_with_nolock_(const int32_t result);
   int generate_build_tablet_dag_net_();
-  int schedule_build_tablet_dag_net_(
-      const ObLSMigrationTask &task);
   int check_need_to_abort_(bool &need_to_abort);
+  template<typename DagNetType>
+  int schedule_dag_net_(const share::ObIDagInitParam *param, const bool check_cancel);
 private:
   bool is_inited_;
   ObLS *ls_;
@@ -189,6 +180,7 @@ private:
   bool is_cancel_;
   ObStorageHASrcInfo chosen_src_;
   bool is_complete_; // true when ObLSCompleteMigrationDagNet has been generated
+  bool is_dag_net_cleared_;
 
 #ifdef OB_BUILD_SHARED_STORAGE
   common::ObThreadCond switch_leader_cond_;
@@ -198,6 +190,42 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
 
+template<typename DagNetType>
+int ObLSMigrationHandler::schedule_dag_net_(
+    const share::ObIDagInitParam *param,
+    const bool check_cancel)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls migration handler is not inited", K(ret));
+  } else if (OB_ISNULL(param) || !param->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "schedule dag net get invalid argument", K(ret), K(status_), KP(param));
+  } else {
+    const int32_t cancel_result = OB_CANCELED;
+    if (check_cancel && is_cancel_) {
+      STORAGE_LOG(INFO, "skip schedule dag net when canceled", K(ret), K(status_), KPC(ls_),
+        K(cancel_result), K(check_cancel));
+      if (OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
+        STORAGE_LOG(WARN, "failed to swicth next stage cancel", K(ret), K(status_));
+      }
+    } else {
+      ObTenantDagScheduler *scheduler = nullptr;
+      if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "failed to get ObTenantDagScheduler from MTL", K(ret));
+      } else if (FALSE_IT(is_dag_net_cleared_ = false)) {
+      } else if (OB_FAIL(scheduler->create_and_add_dag_net<DagNetType>(param))) {
+        STORAGE_LOG(WARN, "failed to create and add migration dag net", K(ret), K(status_), KPC(ls_));
+        is_dag_net_cleared_ = true;
+      } else {
+        STORAGE_LOG(INFO, "schedule dag net success", K(ret), K(status_), KPC(ls_));
+      }
+    }
+  }
+  return ret;
+}
 
 }
 }

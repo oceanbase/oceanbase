@@ -2,10 +2,6 @@ add_library(oblib_base INTERFACE)
 add_library(oblib_base_without_pass INTERFACE)
 add_library(oblib_pass INTERFACE)
 
-if(NOT CPP_STANDARD_20)
-  target_compile_options(oblib_base_without_pass INTERFACE -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
-
 get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
 
 target_include_directories(
@@ -31,7 +27,10 @@ target_include_directories(
   ${DEP_DIR}/include/apache-arrow
   ${DEP_DIR}/include/apache-orc
   ${DEP_DIR}/include/fast_float
+  ${DEP_DIR}/include/avro
+  ${DEP_DIR}/include/krb5
   ${USSL_INCLUDE_DIRS}
+  ${DEP_DIR}/python3/include/python3.13
 )
 
 if(OB_BUILD_OPENSOURCE)
@@ -107,6 +106,13 @@ if(OB_BUILD_AUDIT_SECURITY)
   )
 endif()
 
+if(OB_BUILD_STANDALONE)
+  target_include_directories(
+    oblib_base_without_pass INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/license
+  )
+endif()
+
 if(OB_USE_BABASSL)
   target_include_directories(
     oblib_base_without_pass INTERFACE
@@ -137,23 +143,20 @@ if (OB_USE_CLANG)
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
     $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter>
-    -Wno-register -Wno-invalid-partial-specialization)
-  if (CPP_STANDARD_20)
-    set(OBLIB_COMPILE_DEFINITIONS ${OBLIB_COMPILE_DEFINITIONS}
-        -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
-        -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
-        -Wno-enum-constexpr-conversion -Wno-covered-switch-default
-        -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
-        -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class
-        -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
-        -Wno-ambiguous-reversed-operator
-        -Wno-string-concatenation)
-  endif()
+    -Wno-register -Wno-invalid-partial-specialization
+    -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
+    -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+    -Wno-enum-constexpr-conversion -Wno-covered-switch-default
+    -Wno-bitwise-instead-of-logical -Wno-suggest-override -Wno-non-virtual-dtor -Wno-cast-qual
+    -Wno-unused-value -Wno-macro-redefined -Wno-reinterpret-base-class
+    -Wno-implicit-fallthrough -Wno-deprecated-non-prototype
+    -Wno-ambiguous-reversed-operator
+    -Wno-string-concatenation)
   target_compile_options(oblib_base_without_pass INTERFACE ${OBLIB_COMPILE_DEFINITIONS})
   if (ENABLE_SANITY)
     target_compile_options(oblib_pass
       INTERFACE
-      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
+      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-fpass-plugin=${DEVTOOLS_DIR}/lib64/libsanitypass.so>"
       -fno-builtin-memset
       -fno-builtin-bzero
       -fno-builtin-memcpy
@@ -261,6 +264,13 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  ${DEP_DIR}/lib/libthrift.a
+  ${DEP_DIR}/lib/cyrus-sasl/libsasl2.a
+  ${DEP_DIR}/lib/krb5/libgssapi_krb5.a
+  ${DEP_DIR}/lib/krb5/libkrb5.a
+  ${DEP_DIR}/lib/krb5/libk5crypto.a
+  ${DEP_DIR}/lib/krb5/libkrb5support.a
+  ${DEP_DIR}/lib/krb5/libcom_err.a
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
@@ -277,6 +287,8 @@ target_link_libraries(oblib_base_without_pass
   -laio -lpthread -ldl -lrt
   ${ARCH_LDFLAGS}
   ${DEP_DIR}/lib/libisal.a
+  ${DEP_DIR}/lib/libavrocpp_s.a
+  ${DEP_DIR}/lib64/libfmt.a # used by avro
  )
 else()
 set(ignoreMe OB_STATIC_LINK_LGPL_DEPS)
@@ -297,6 +309,13 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  ${DEP_DIR}/lib/libthrift.a
+  ${DEP_DIR}/lib/cyrus-sasl/libsasl2.a
+  ${DEP_DIR}/lib/krb5/libgssapi_krb5.a
+  ${DEP_DIR}/lib/krb5/libkrb5.a
+  ${DEP_DIR}/lib/krb5/libk5crypto.a
+  ${DEP_DIR}/lib/krb5/libkrb5support.a
+  ${DEP_DIR}/lib/krb5/libcom_err.a
   ${DEP_DIR}/lib64/libarrow.a
   ${DEP_DIR}/lib64/libparquet.a
   ${DEP_DIR}/lib64/libarrow_bundled_dependencies.a
@@ -314,6 +333,8 @@ target_link_libraries(oblib_base_without_pass
   ${ARCH_LDFLAGS}
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libpalf.a
+  ${DEP_DIR}/lib/libavrocpp_s.a
+  ${DEP_DIR}/lib64/libfmt.a # used by avro
  )
 endif()
 target_link_libraries(oblib_base INTERFACE oblib_base_without_pass oblib_pass)

@@ -223,11 +223,11 @@ public:
 
     ObBaseColumnDecoderCtx base_ctx;
     base_ctx.allocator_ = &allocator_;
-    base_ctx.null_flag_ = ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL;
+    base_ctx.null_flag_ = ObBaseColumnDecoderCtx::ObNullFlag::HAS_NO_NULL_OR_NOP;
     base_ctx.null_desc_ = nullptr;
     if (use_nullbitmap) {
-      base_ctx.null_bitmap_ = bitmap;
-      base_ctx.null_flag_ = ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_BITMAP;
+      base_ctx.null_or_nop_bitmap_ = bitmap;
+      base_ctx.null_flag_ = ObBaseColumnDecoderCtx::ObNullFlag::HAS_NULL_OR_NOP_BITMAP;
     } else if (use_null_replaced_ref) {
       ref_width_V = ObRefStoreWidthV::REF_IN_DATUMS;
       base_ctx.null_flag_ = ObBaseColumnDecoderCtx::ObNullFlag::IS_NULL_REPLACED_REF;

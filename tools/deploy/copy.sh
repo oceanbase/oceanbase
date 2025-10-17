@@ -49,6 +49,35 @@ function do_install {
   fi
 }
 
+function do_install_python3 {
+  quiet=false
+  if [ $# -eq 3 ] && [[ "$3" == "true" ]]
+  then
+    quiet=true
+  fi
+  [[ "$quiet" == "false" ]] && echo -n "Installing $1 "
+  if [ ! -e "$1" ]; then
+    [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\nNo such file: $1"
+    if [ "$quiet" == "false" ]
+    then
+      return 1
+    else
+      return 0
+    fi
+  fi
+  if [ -d "$1" ]; then
+    err_msg=$(cp -r "$1" "$2"/ 2>&1)
+  else
+    do_install "$@"
+  fi
+  if [ $? -eq 0 ]
+  then
+    [[ "$quiet" == "false" ]] && echo -e "\033[0;32mOK\033[0m"
+  else
+    [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\n$err_msg"
+  fi
+}
+
 if [ $# -lt 2 ]
 then
   mkdir -p $BIN_DIR
@@ -70,7 +99,6 @@ then
   do_install "$SOURCE_DIR/tools/timezone*.data" $ETC_DIR
   do_install $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/ true
   do_install $SOURCE_DIR/deps/3rd/home/admin/oceanbase/bin/obshell $BIN_DIR/obshell true
-  do_install $SOURCE_DIR/tools/timezone*.data $ETC_DIR true
   do_install "$SOURCE_DIR/tools/spatial_reference_systems.data" $ETC_DIR
 
 
@@ -82,5 +110,11 @@ then
   do_install ./usr/lib/oracle/12.2/client64/lib/libociei.so $LIB_DIR true
   do_install ./usr/lib/oracle/12.2/client64/lib/libmql1.so $LIB_DIR true
   do_install ./usr/lib/oracle/12.2/client64/lib/libipc1.so $LIB_DIR true
+
+
+  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/python3.13 $LIB_DIR true
+  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/pkgconfig $LIB_DIR true
+  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.so $LIB_DIR true
+  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.13.so.1.0 $LIB_DIR true
 
 fi

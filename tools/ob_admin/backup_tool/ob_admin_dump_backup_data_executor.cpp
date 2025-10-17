@@ -554,7 +554,7 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
 #ifdef OB_BUILD_TDE_SECURITY
   // The root_key is set to ensure the successful parsing of backup_dest, because there is encryption and decryption of access_key
   share::ObMasterKeyGetter::instance().init(NULL);
-  ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID, obrpc::RootKeyType::DEFAULT, ObString());
+  ObMasterKeyGetter::instance().fake_sys_default_root_key();
 #endif
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     STORAGE_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
@@ -570,6 +570,8 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     STORAGE_LOG(WARN, "failed to init io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster state mgr", KR(ret));
   } else if (check_exist_) {
     // ob_admin dump_backup -d'xxxxx' -c
     if (OB_FAIL(do_check_exist_())) {

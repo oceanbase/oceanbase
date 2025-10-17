@@ -101,8 +101,38 @@ public:
   TO_STRING_KV(KP_(rollup_grouping_id), K_(expand_exprs), K_(gby_exprs), K_(dup_expr_pairs));
 };
 
+struct GroupingSetRTInfo
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  GroupingSetRTInfo(): grouping_set_id_(nullptr), groupset_exprs_(), pruned_exprs_() {}
+  GroupingSetRTInfo(ObIAllocator &alloc): grouping_set_id_(nullptr), groupset_exprs_(alloc), pruned_exprs_(alloc) {}
+
+  int assign(const GroupingSetRTInfo &other);
+
+  TO_STRING_KV(KP_(grouping_set_id), K_(groupset_exprs), K_(pruned_exprs));
+public:
+  ObExpr *grouping_set_id_;
+  ObFixedArray<ExprFixedArray, ObIAllocator> groupset_exprs_;
+  ExprFixedArray pruned_exprs_;
+};
+
 struct ObAggrInfo
 {
+public:
+  static const int64_t DEFAULT_APPROX_COUNT_DISTINCT_PRECISION = 10;
+  static const int64_t MAX_APPROX_COUNT_DISTINCT_PRECISION = 16;
+  static const int64_t MIN_APPROX_COUNT_DISTINCT_PRECISION = 4;
+  static const int64_t APPROX_COUNT_MAX_BUCKET_LEN = 65536;
+  static int64_t get_approx_cnt_llc_buck_num(int64_t prec) { return (1 << get_valid_approx_cnt_prec(prec)); }
+  // if input precision is invalid, e.g 0, return default precision (10) for compatibility's sake
+  static int64_t get_valid_approx_cnt_prec(int64_t org_prec)
+  {
+    return (org_prec >= MIN_APPROX_COUNT_DISTINCT_PRECISION
+            && org_prec <= MAX_APPROX_COUNT_DISTINCT_PRECISION) ?
+             org_prec :
+             DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+  }
 public:
   OB_UNIS_VERSION_V(1);
 public:
@@ -138,7 +168,12 @@ public:
     with_unique_keys_(false),
     distinct_hash_funcs_(),
     max_disuse_param_expr_(NULL),
-    hash_rollup_info_(nullptr)
+    hash_rollup_info_(nullptr),
+    external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+    external_routine_entry_(),
+    external_routine_url_(),
+    external_routine_resource_(),
+    grouping_set_info_(nullptr)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : alloc_(&alloc),
@@ -170,10 +205,14 @@ public:
     with_unique_keys_(false),
     distinct_hash_funcs_(alloc),
     max_disuse_param_expr_(NULL),
-    hash_rollup_info_(nullptr)
+    hash_rollup_info_(nullptr),
+    external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+    external_routine_entry_(),
+    external_routine_url_(),
+    external_routine_resource_(),
+    grouping_set_info_(nullptr)
   {}
   virtual ~ObAggrInfo();
-
   inline ObObjType get_first_child_type() const;
   inline ObPrecision get_first_child_datum_precision() const;
   inline ObScale get_first_child_datum_scale() const;
@@ -228,6 +267,8 @@ public:
   bool is_need_deserialize_row_;
 
   //for pl agg udf
+  //AGGREGATE USING type id for Oracle mode
+  //UDF id for MySQL mode external UDAF
   int64_t pl_agg_udf_type_id_;
   common::ObFixedArray<ObExprResType, common::ObIAllocator> pl_agg_udf_params_type_;
   ObExprResType pl_result_type_;
@@ -257,6 +298,11 @@ public:
   //used for top_k_fre_hist
   ObExpr *max_disuse_param_expr_;
   HashRollupRTInfo *hash_rollup_info_;
+  ObExternalRoutineType external_routine_type_;
+  ObString external_routine_entry_;
+  ObString external_routine_url_;
+  ObString external_routine_resource_;
+  GroupingSetRTInfo *grouping_set_info_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;
@@ -858,8 +904,9 @@ public:
   int clone_cell_for_wf(ObDatum &target_cell,
                         const ObDatum &src_cell,
                         const bool is_number/*false*/);
-  static int get_llc_size();
 
+  int get_llc_buckets_num(int64_t &llc_bucket_size);
+  static int64_t get_llc_bucket_bits(const int64_t llc_bucket_num) { return __builtin_ctz(llc_bucket_num); }
   typedef int (ObAggregateProcessor::*process_fun)(GroupRow &group_row);
   typedef int (ObAggregateProcessor::*collect_fun)(const int64_t group_id, const ObExpr *diff_expr);
 
@@ -887,7 +934,8 @@ public:
     io_event_observer_ = observer;
   }
   // used in optimizer statistic gathering.
-  static int llc_add_value(const uint64_t value, const common::ObString &llc_bitmap_buf);
+  static int llc_add_value(const uint64_t value, const common::ObString &llc_bitmap_buf,
+                           const int64_t llc_bucket_bits = 10);
   inline void set_op_eval_infos(ObIArray<ObEvalInfo *> *eval_infos)
   {
     op_eval_infos_ = eval_infos;
@@ -903,8 +951,9 @@ public:
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
   void set_need_advance_collect() { need_advance_collect_ = true; }
   bool get_need_advance_collect() const { return need_advance_collect_; }
-  static int llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc);
-  static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
+  static int llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc, const int64_t llc_buckets_size = 1024);
+  static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size,
+                           const int64_t llc_bucket_bits = 10);
   inline int64_t get_distinct_aggr_count() const { return distinct_aggr_count_; }
   inline void set_hp_infras_mgr(HashPartInfrasMgr *hp_infras_mgr)
   { hp_infras_mgr_ = hp_infras_mgr; }
@@ -953,7 +1002,8 @@ private:
     AggrCell &aggr_cell,
     const ObDatumVector &arg_datums,
     const bool is_number,
-    const T &selector
+    const T &selector,
+    const int64_t llc_buckets_num
   );
   template <typename T>
   int group_extra_aggr_calc_batch(
@@ -1171,7 +1221,8 @@ private:
                                  const ObIArray<ObExpr *> &param_exprs,
                                  bool &has_null_cell,
                                  uint64_t &hash_value);
-  static int llc_add(ObDatum &result, const ObDatum &new_value);
+  int llc_add(ObDatum &result, const ObDatum &new_value);
+
   void set_expr_datum_null(ObExpr *expr);
 
   IAggrFuncCtx *get_aggr_func_ctx(const ObAggrInfo &info) const
@@ -1310,11 +1361,6 @@ private:
 
   static void check_mysql_decimal_int_overflow(ObDatum &datum);
 
-  // HyperLogLogCount-related data members
-  // banliu.zyd: hllc算法中桶数这里取相对合理的值(1<<10)。
-  static const int8_t LLC_BUCKET_BITS = 10;
-  static const int64_t LLC_NUM_BUCKETS = (1 << LLC_BUCKET_BITS);
-
   //  const static int64_t CONCAT_STR_BUF_LEN  = common::OB_MAX_VARCHAR_LENGTH;
   const static int64_t STORED_ROW_MAGIC_NUM  = 0xaaaabbbbccccdddd;
 //  typedef common::hash::ObHashSet<AggrDistinctItem, common::hash::NoPthreadDefendMode> AggrDistinctBucket;
@@ -1371,6 +1417,7 @@ private:
   int64_t distinct_count_;
   HashPartInfrasMgr *hp_infras_mgr_;
   bool enable_hash_distinct_;
+  int64_t approx_cnt_distinct_prec_;
 };
 
 struct ObAggregateCalcFunc

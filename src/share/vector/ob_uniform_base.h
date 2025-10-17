@@ -39,6 +39,25 @@ public:
   OB_INLINE void set_datums(ObDatum *datums) { datums_ = datums; }
   inline sql::ObEvalInfo *get_eval_info() { return eval_info_; }
   inline const sql::ObEvalInfo *get_eval_info() const { return eval_info_; }
+  OB_INLINE void append_rows_multiple_times(ObDatum *datums,
+                              const int64_t src_start_idx, const int64_t src_end_idx,
+                              const int64_t times, const int64_t dst_start_idx)
+  {
+    const int64_t interval = src_end_idx - src_start_idx;
+    const ObDatum *src = datums + src_start_idx;
+    ObDatum *dst = datums_ + dst_start_idx;
+    if (interval > MEMCPY_THRESHOLD) {
+      for (int64_t i = 0; i < times; ++i) {
+        MEMCPY(dst + i * interval, src, sizeof(ObDatum) * interval);
+      }
+    } else {
+      for (int64_t i = 0; i < interval; ++i) {
+        for (int64_t j = 0; j < times; ++j) {
+          dst[i + j * interval] = src[i];
+        }
+      }
+    }
+  };
   virtual int to_rows(const sql::RowMeta &row_meta,
                        sql::ObCompactRow **stored_rows,
                        const uint16_t selector[],

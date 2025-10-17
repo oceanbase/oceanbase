@@ -47,6 +47,11 @@ public:
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
   OB_INLINE int deep_copy(ObDatumRowkey &dest, char *buf, const int64_t buf_len) const;
+  int deep_copy(ObStoreRowkey &dest,
+                common::ObIAllocator &allocator,
+                const common::ObIArray<share::schema::ObColDesc> &col_descs,
+                const int64_t datum_cnt /* datum count needed to by copy */,
+                const uint64_t extra_rowkey_cnt = 0 /* default set max value */) const;
   OB_INLINE int shallow_copy(ObDatumRowkey &dest) const;
   OB_INLINE int semi_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const;
   int murmurhash(const uint64_t seed, const ObStorageDatumUtils &datum_utils, uint64_t &hash) const;

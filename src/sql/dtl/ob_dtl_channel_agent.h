@@ -78,6 +78,7 @@ public:
   ObDtlLinkedBuffer *get_buffer() { return buffer_; }
   void set_row_meta(RowMeta &meta) { meta_ = &meta; }
   void set_size_per_buffer(const int64_t size) { size_per_buffer_ = size; }
+  void set_plan_min_cluster_version(uint64_t plan_min_cluster_version) {plan_min_cluster_version_ = plan_min_cluster_version;};
 private:
   int64_t use_row_store_;
   int64_t tenant_id_;
@@ -91,6 +92,7 @@ private:
   ObDtlChannelEncoder *msg_writer_;
   RowMeta *meta_;
   int64_t size_per_buffer_;
+  uint64_t plan_min_cluster_version_;
 };
 
 class ObDtlBcastService
@@ -149,6 +151,9 @@ public:
   int destroy();
   void set_row_meta(RowMeta &meta) { dtl_buf_encoder_.set_row_meta(meta); }
   void set_size_per_buffer(const int64_t size) { dtl_buf_encoder_.set_size_per_buffer(size); }
+  void set_plan_min_cluster_version(uint64_t plan_min_cluster_version) {
+    dtl_buf_encoder_.set_plan_min_cluster_version(plan_min_cluster_version);
+  }
 private:
   int switch_buffer(int64_t need_size);
   int send_last_buffer(ObDtlLinkedBuffer *&last_buffer);

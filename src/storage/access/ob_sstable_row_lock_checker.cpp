@@ -147,7 +147,6 @@ int ObSSTableRowLockMultiChecker::check_row_locked(
     const share::SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
-  const ObDatumRow *store_row = nullptr;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("SSTable row lock multi checker is not opened", K(ret), K_(is_opened));
@@ -157,52 +156,76 @@ int ObSSTableRowLockMultiChecker::check_row_locked(
     auto *row_lock_checker = static_cast<ObMicroBlockRowLockMultiChecker *>(micro_scanner_);
     row_lock_checker->set_snapshot_version(snapshot_version);
     row_lock_checker->set_check_exist(check_exist);
-    if (OB_FAIL(ObSSTableRowScanner::inner_get_next_row(store_row))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Failed to get next row", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
-  }
-  return ret;
-}
 
-int ObSSTableRowLockMultiChecker::fetch_row(
-    ObSSTableReadHandle &read_handle,
-    const ObDatumRow *&store_row)
-{
-  int ret = OB_SUCCESS;
-  if (-1 == read_handle.micro_begin_idx_) {
-    ret = OB_ITER_END;
-  } else {
-    if (-1 == prefetcher_.cur_micro_data_fetch_idx_) {
-      prefetcher_.cur_micro_data_fetch_idx_ = read_handle.micro_begin_idx_;
-      if (OB_FAIL(open_cur_data_block(read_handle))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Failed to open current data block", K(ret), KPC(this));
-        }
-      }
-    }
-    auto *multi_checker = static_cast<ObMicroBlockRowLockMultiChecker *>(micro_scanner_);
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(multi_checker->get_next_row(store_row))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Failed to get next row", K(ret));
-        } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
-          multi_checker->inc_empty_read(read_handle);
+    while(OB_SUCC(ret)) {
+      if (OB_FAIL(prefetcher_.prefetch())) {
+        LOG_WARN("Fail to prefetch micro block", K(ret), KPC(this));
+      } else if (prefetcher_.cur_range_fetch_idx_ >= prefetcher_.cur_range_prefetch_idx_) {
+        if (OB_LIKELY(prefetcher_.is_prefetch_end_)) {
           ret = OB_ITER_END;
-        } else if (FALSE_IT(++prefetcher_.cur_micro_data_fetch_idx_)) {
-        } else if (OB_FAIL(open_cur_data_block(read_handle))) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("Failed to open current data block", K(ret), KPC(this));
-          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Current fetch handle idx exceed prefetching idx", K(ret), KPC(this));
+        }
+      } else if (prefetcher_.read_wait()) {
+        continue;
+      } else if (OB_FAIL(fetch_row(prefetcher_.current_read_handle()))) {
+        if (OB_LIKELY(OB_ITER_END == ret)) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to fetch row", K(ret), KPC(this));
         }
       } else {
         break;
       }
     }
+    if (OB_LIKELY(OB_ITER_END == ret)) {
+      ret = OB_SUCCESS;
+    }
   }
+
+  return ret;
+}
+
+int ObSSTableRowLockMultiChecker::fetch_row(ObSSTableReadHandle &read_handle)
+{
+  int ret = OB_SUCCESS;
+  ObMicroBlockRowLockMultiChecker *multi_checker = static_cast<ObMicroBlockRowLockMultiChecker *>(micro_scanner_);
+
+  if (-1 == read_handle.micro_begin_idx_) { // empty range
+    ret = OB_ITER_END;
+    ++prefetcher_.cur_range_fetch_idx_;
+  } else {
+    if (-1 == prefetcher_.cur_micro_data_fetch_idx_) {
+      prefetcher_.cur_micro_data_fetch_idx_ = read_handle.micro_begin_idx_;
+    } else {
+      prefetcher_.inc_cur_micro_data_fetch_idx();
+    }
+    if (prefetcher_.cur_micro_data_fetch_idx_ > read_handle.micro_end_idx_) {
+      ret = OB_ITER_END;
+      LOG_DEBUG("all prefetched blocks checked", K(ret), K(read_handle),
+          K(prefetcher_.cur_micro_data_fetch_idx_), K(prefetcher_.is_prefetch_end_));
+      if (prefetcher_.is_prefetch_end_) {
+        multi_checker->inc_empty_read(read_handle);
+        ++prefetcher_.cur_range_fetch_idx_;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(open_cur_data_block(read_handle))) {
+      LOG_WARN("Failed to open current data block", K(ret), KPC(this));
+    } else {
+      const ObDatumRow *unused_row = nullptr;
+      if (OB_FAIL(multi_checker->get_next_row(unused_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("Failed to get next row", K(ret));
+        }
+      }
+      LOG_DEBUG("one block checked", K(ret), K(read_handle),
+          K(prefetcher_.cur_micro_data_fetch_idx_), K(prefetcher_.is_prefetch_end_));
+    }
+  }
+
   return ret;
 }
 

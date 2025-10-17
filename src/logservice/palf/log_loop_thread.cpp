@@ -22,6 +22,9 @@ namespace palf
 LogLoopThread::LogLoopThread()
     : palf_env_impl_(NULL),
       run_interval_(DEFAULT_LOG_LOOP_INTERVAL_US),
+      self_(),
+      any_in_period_freeze_mode_(false),
+      any_is_reconfirming_(false),
       is_inited_(false)
 {
 }
@@ -31,19 +34,20 @@ LogLoopThread::~LogLoopThread()
   destroy();
 }
 
-int LogLoopThread::init(IPalfEnvImpl *palf_env_impl)
+int LogLoopThread::init(IPalfEnvImpl *palf_env_impl, const common::ObAddr &self)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     PALF_LOG(WARN, "LogLoopThread has been inited", K(ret));
-  } else if (NULL == palf_env_impl) {
+  } else if (NULL == palf_env_impl || false == self.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", K(ret), KP(palf_env_impl));
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(palf_env_impl), K(self));
   } else {
     palf_env_impl_ = palf_env_impl;
     share::ObThreadPool::set_run_wrapper(MTL_CTX());
     run_interval_ = DEFAULT_LOG_LOOP_INTERVAL_US;
+    self_ = self;
     is_inited_ = true;
   }
 
@@ -62,6 +66,9 @@ void LogLoopThread::destroy()
   PALF_LOG(INFO, "runlin trace wait");
   is_inited_ = false;
   palf_env_impl_ = NULL;
+  self_.reset();
+  any_in_period_freeze_mode_ = false;
+  any_is_reconfirming_ = false;
 }
 
 void LogLoopThread::run1()
@@ -81,16 +88,26 @@ void LogLoopThread::log_loop_()
     int tmp_ret = OB_SUCCESS;
     const int64_t start_ts = ObTimeUtility::current_time();
 
-    auto switch_state_func = [](IPalfHandleImpl *ipalf_handle_impl) {
-      return ipalf_handle_impl->check_and_switch_state();
+    bool any_is_reconfirming = false;
+    auto switch_state_func = [this, &any_is_reconfirming](IPalfHandleImpl *ipalf_handle_impl) {
+      int ret = OB_SUCCESS;
+      common::ObAddr ele_leader;
+      common::ObRole role;
+      int64_t pid = 0;
+      bool is_pending_state = false;
+      ret = ipalf_handle_impl->check_and_switch_state();
+      (void) ipalf_handle_impl->get_election_leader(ele_leader);
+      (void) ipalf_handle_impl->get_role(role, pid, is_pending_state);
+      any_is_reconfirming = (self_ == ele_leader && is_pending_state)? true : any_is_reconfirming;
+      return ret;
     };
     if (start_ts - last_switch_state_time >= 10 * 1000) {
       if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(switch_state_func))) {
         PALF_LOG_RET(WARN, tmp_ret, "for_each switch_state_func failed", K(tmp_ret));
       }
       last_switch_state_time = start_ts;
+      any_is_reconfirming_ = any_is_reconfirming;
     }
-
     if (start_ts - last_check_freeze_mode_time >= 1 * 1000 * 1000) {
       auto switch_freeze_mode_func  = [](IPalfHandleImpl *ipalf_handle_impl) {
         return ipalf_handle_impl->check_and_switch_freeze_mode();
@@ -115,22 +132,25 @@ void LogLoopThread::log_loop_()
       }
       // update ts for each round
       last_check_freeze_mode_time = start_ts;
+      any_in_period_freeze_mode_ = any_in_period_freeze_mode;
+    }
 
-      // Try switch run_interval_ according to whether some palf is in period_freeze_mode.
-      if (any_in_period_freeze_mode) {
-        if (run_interval_ > LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US) {
-          // Some palf_handle is in period_freeze mode, the run_interval_
-          // need be adjusted to DEFAULT_LOG_LOOP_INTERVAL_US here.
-          run_interval_ = LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US;
-          PALF_LOG(INFO, "LogLoopThread switch run_interval(us)", K_(run_interval), K(any_in_period_freeze_mode));
-        }
-      } else {
-        // There is not any ls in period_freeze mode,
-        // try set run_interval_ to 100ms.
-        if (run_interval_ < DEFAULT_LOG_LOOP_INTERVAL_US) {
-          run_interval_ = DEFAULT_LOG_LOOP_INTERVAL_US;
-          PALF_LOG(INFO, "LogLoopThread switch run_interval(us)", K_(run_interval), K(any_in_period_freeze_mode));
-        }
+    // Try switch run_interval_ according to whether some palf is in period_freeze_mode or is reconfiming
+    if (any_in_period_freeze_mode_ || any_is_reconfirming_) {
+      if (run_interval_ > LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US) {
+        // Some palf_handle is in period_freeze mode, the run_interval_
+        // need be adjusted to DEFAULT_LOG_LOOP_INTERVAL_US here.
+        run_interval_ = LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US;
+        PALF_LOG(INFO, "LogLoopThread switch run_interval(us)", K_(run_interval),
+            K_(any_in_period_freeze_mode), K_(any_is_reconfirming));
+      }
+    } else {
+      // There is not any ls in period_freeze mode,
+      // try set run_interval_ to 100ms.
+      if (run_interval_ < DEFAULT_LOG_LOOP_INTERVAL_US) {
+        run_interval_ = DEFAULT_LOG_LOOP_INTERVAL_US;
+        PALF_LOG(INFO, "LogLoopThread switch run_interval(us)", K_(run_interval),
+            K_(any_in_period_freeze_mode), K_(any_is_reconfirming));
       }
     }
 

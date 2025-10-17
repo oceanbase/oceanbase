@@ -10,7 +10,7 @@ repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/x86_64/
 
 
 [deps]
-obdal-0.2.2-242025070116.el8.x86_64.rpm target=community
+obdal-0.2.2-302025082510.el8.x86_64.rpm target=community
 devdeps-gtest-1.8.0-132022101316.el8.x86_64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el8.x86_64.rpm
 devdeps-libcurl-static-8.12.1-132025040210.el8.x86_64.rpm
@@ -34,13 +34,18 @@ devdeps-icu-69.1-72022112416.el8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.x86_64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.el8.x86_64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.x86_64.rpm
-devdeps-apache-arrow-9.0.0-172024052218.el8.x86_64.rpm
+devdeps-apache-arrow-20.0.0-42025082815.el8.x86_64.rpm
 devdeps-hyperscan-5.4.2-242024090219.el8.x86_64.rpm
-devdeps-vsag-1.0.0-1672025052316.el8.x86_64.rpm
-devdeps-apache-orc-2.1.1-62025032517.el8.x86_64.rpm
+devdeps-vsag-1.1.0-532025082110.el8.x86_64.rpm
+devdeps-apache-orc-2.1.1-82025081116.el8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
 devdeps-fast-float-6.1.3-42024112122.el8.x86_64.rpm
 devdeps-hdfs-sdk-3.3.6-112024123116.el8.x86_64.rpm
+devdeps-apache-avro-cpp-1.12.0-72025062510.el8.x86_64.rpm
+devdeps-apache-thrift-0.16.0-132025070909.el8.x86_64.rpm
+devdeps-mit-krb5-1.21.3-212025063015.el8.x86_64.rpm
+devdeps-cyrus-sasl-2.1.28-102025070115.el8.x86_64.rpm
+devdeps-python3-3.13.3-132025070111.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm
@@ -48,18 +53,16 @@ obdevtools-bison-2.4.1-12022100413.el8.x86_64.rpm
 obdevtools-ccache-3.7.12-12022100417.el8.x86_64.rpm
 obdevtools-cmake-3.30.3-52024111819.el8.x86_64.rpm
 obdevtools-flex-2.5.35-12022100417.el8.x86_64.rpm
-obdevtools-gcc9-9.3.0-52022092914.el8.x86_64.rpm cpp_standard=11
-obdevtools-gcc-12.3.0-32024122017.el8.x86_64.rpm cpp_standard=20
-obdevtools-llvm-11.0.1-312022092921.el8.x86_64.rpm cpp_standard=11
-obdevtools-llvm-17.0.3-232024111415.el8.x86_64.rpm cpp_standard=20
+obdevtools-gcc-12.3.0-32024122017.el8.x86_64.rpm
+obdevtools-llvm-17.0.6-72025060300.el8.x86_64.rpm
 
 [tools-deps]
 devdeps-oblogmsg-1.1-52024052811.el8.x86_64.rpm
 devdeps-rocksdb-6.22.1-32024123015.el8.x86_64.rpm
 obstack-2.0.4-172024070513.el8.x86_64.rpm
-obshell-4.2.6.0-62025032619.el8.x86_64.rpm target=community
+obshell-4.3.1.0-12025070719.el8.x86_64.rpm target=community
 
 [test-utils]
-ob-deploy-3.0.1-1.el8.x86_64.rpm target=community
+ob-deploy-3.6.0-3.el8.x86_64.rpm target=community
 obclient-2.2.2-1.el8.x86_64.rpm target=community
 libobclient-2.2.2-3.el8.x86_64.rpm target=community

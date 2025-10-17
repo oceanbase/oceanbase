@@ -111,7 +111,8 @@ private:
     WORKAREA_TEMPSEG,
     WORKAREA_MAX_TEMPSEG,
     SQL_ID,
-    PLAN_HASH_VALUE
+    PLAN_HASH_VALUE,
+    RAW_PROFILE
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualSqlPlanMonitor);
 
@@ -146,6 +147,8 @@ private:
   int64_t rt_node_idx_;
   int64_t rt_start_idx_;
   int64_t rt_end_idx_;
+  bool fetch_profile_;
+  ObArenaAllocator profile_allocator_;
 };
 
 } //namespace observer

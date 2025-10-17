@@ -171,6 +171,7 @@ public:
   OB_INLINE bool is_inited() const { return nullptr != ptr_; }
   void reset();
   int init(ObTmpFileBlock *block);
+  OB_INLINE ObTmpFileBlock *operator->() const { return ptr_; }
   TO_STRING_KV(KPC(ptr_));
 private:
   ObTmpFileBlock *ptr_;

@@ -627,7 +627,36 @@ OB_DEF_DESERIALIZE(ObArrayParamGroup)
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
+int ObPhysicalPlanCtx::serialize(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
+      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    const int64_t compat_version = 1;
+    OB_UNIS_ENCODE(compat_version);
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(serialize_(buf, buf_len, pos))) {
+        RPC_WARN("serialize fail", K(ret));
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    if (OB_SUCC(ret)) {
+      CHECK_SERIALIZE_SIZE(CLS, serial_size);
+      ret = common::serialization::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+        size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ParamStore empty_param_store;
@@ -859,129 +888,157 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   return len;
 }
 
-OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
+int ObPhysicalPlanCtx::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  int64_t param_cnt = 0;
-  int32_t real_param_cnt = 0;
-  int64_t param_idx = OB_INVALID_INDEX;
-  ObObjParam param_obj;
-  int64_t cursor_count = 0;
-  int64_t local_var_array_cnt = 0;
-  // used for function sys_view_bigint_param(idx), @note unused anymore
-  ObSEArray<common::ObObj, 1> sys_view_bigint_params_;
-  char message_[1] = {'\0'}; //error msg buffer, unused anymore
-  //按老的序列方式进行
-  OB_UNIS_DECODE(tenant_id_);
-  OB_UNIS_DECODE(tsc_snapshot_timestamp_);
-  OB_UNIS_DECODE(cur_time_);
-  OB_UNIS_DECODE(merging_frozen_time_);
-  OB_UNIS_DECODE(ts_timeout_us_);
-  OB_UNIS_DECODE(consistency_level_);
-  OB_UNIS_DECODE(param_store_);
-  OB_UNIS_DECODE(sys_view_bigint_params_);
-  OB_UNIS_DECODE(sql_mode_);
-  OB_UNIS_DECODE(autoinc_params_);
-  OB_UNIS_DECODE(tablet_autoinc_param_);
-  OB_UNIS_DECODE(last_insert_id_session_);
-  OB_UNIS_DECODE(message_);
-  OB_UNIS_DECODE(expr_op_size_);
-  OB_UNIS_DECODE(is_ignore_stmt_);
-  OB_UNIS_DECODE(param_cnt);
-  if (OB_SUCC(ret) && param_cnt > 0) {
-    if (OB_FAIL(param_store_.prepare_allocate(param_cnt))) {
-      LOG_WARN("prepare_allocate param store failed", K(ret), K(param_cnt));
-    } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &real_param_cnt))) {
-      LOG_WARN("decode int32_t failed", K(data_len), K(pos), K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < real_param_cnt; ++i) {
-      OB_UNIS_DECODE(param_idx);
-      OB_UNIS_DECODE(param_obj);
-      ObObjParam tmp = param_obj;
-      if (OB_UNLIKELY(param_idx < 0) || OB_UNLIKELY(param_idx >= param_cnt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid param idx", K(param_idx), K(param_cnt));
-      } else if (OB_FAIL(deep_copy_obj(allocator_, param_obj, tmp))) {
-        LOG_WARN("deep copy object failed", K(ret), K(param_obj));
-      } else {
-        param_store_.at(param_idx) = tmp;
-        param_store_.at(param_idx).set_param_meta();
-      }
-    }
-  }
-  if (OB_SUCC(ret) && param_cnt <= 0) {
-    //param count <= 0不为按需序列化分区相关的param store，直接序列化所有的param
-    //所以需要对param store的所有元素都执行一次深拷贝
-  	for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); ++i) {
-  	  const ObObjParam &objpara = param_store_.at(i);
-      ObObjParam tmp = objpara;
-      if (OB_FAIL(deep_copy_obj(allocator_, objpara, tmp))) {
-      	LOG_WARN("deep copy obj failed", K(ret));
-      } else {
-        param_store_.at(i) = tmp;
-        param_store_.at(i).set_param_meta();
-      }
-  	}
-  }
-  OB_UNIS_DECODE(foreign_key_checks_);
-  OB_UNIS_DECODE(unsed_worker_count_since_222rel_);
-  OB_UNIS_DECODE(tenant_schema_version_);
-  OB_UNIS_DECODE(cursor_count);
-  if (OB_SUCC(ret) && cursor_count > 0) {
-    if (OB_FAIL(implicit_cursor_infos_.prepare_allocate(cursor_count))) {
-      LOG_WARN("init implicit cursor infos failed", K(ret));
-    }
-  }
-  OB_UNIS_DECODE(plan_start_time_);
+  int64_t version = 0;
+  int64_t len = 0;
+  OB_UNIS_DECODE(version);
+  OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
-    (void)ObSQLUtils::adjust_time_by_ntp_offset(plan_start_time_);
-    (void)ObSQLUtils::adjust_time_by_ntp_offset(ts_timeout_us_);
-  }
-  OB_UNIS_DECODE(last_trace_id_);
-  OB_UNIS_DECODE(tenant_srs_version_);
-  OB_UNIS_DECODE(original_param_cnt_);
-  int64_t array_group_count = 0;
-  OB_UNIS_DECODE(array_group_count);
-  if (OB_SUCC(ret) && array_group_count > 0) {
-    for (int64_t i = 0 ; OB_SUCC(ret) && i < array_group_count; i++) {
-      ObArrayParamGroup array_p_group;
-      OB_UNIS_DECODE(array_p_group);
-      if (OB_FAIL(array_param_groups_.push_back(array_p_group))) {
-        LOG_WARN("failed to push back");
-      }
-    }
-  }
-  OB_UNIS_DECODE(enable_rich_format_);
-  OB_UNIS_DECODE(local_var_array_cnt);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(all_local_session_vars_.reserve(local_var_array_cnt))) {
-      LOG_WARN("reserve local session vars failed", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < local_var_array_cnt; ++i) {
-    ObLocalSessionVar *local_vars = OB_NEWx(ObLocalSessionVar, &allocator_);
-    if (NULL == local_vars) {
+    if (len < 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("alloc local var failed", K(ret));
-    } else if (OB_FAIL(all_local_session_vars_.push_back(ObSolidifiedVarsContext(local_vars, &allocator_)))) {
-      LOG_WARN("push back local session var array failed", K(ret));
+      LOG_WARN("can't decode object with negative length", K(len));
+    } else if (data_len < len + pos) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("buf length not enough", K(len), K(pos), K(data_len));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const_cast<int64_t&>(data_len) = len;
+    int64_t pos_orig = pos;
+    buf = buf + pos_orig;
+    pos = 0;
+
+    int64_t param_cnt = 0;
+    int32_t real_param_cnt = 0;
+    int64_t param_idx = OB_INVALID_INDEX;
+    ObObjParam param_obj;
+    int64_t cursor_count = 0;
+    int64_t local_var_array_cnt = 0;
+    // used for function sys_view_bigint_param(idx), @note unused anymore
+    ObSEArray<common::ObObj, 1> sys_view_bigint_params_;
+    char message_[1] = {'\0'}; //error msg buffer, unused anymore
+    //按老的序列方式进行
+    OB_UNIS_DECODE(tenant_id_);
+    OB_UNIS_DECODE(tsc_snapshot_timestamp_);
+    OB_UNIS_DECODE(cur_time_);
+    OB_UNIS_DECODE(merging_frozen_time_);
+    OB_UNIS_DECODE(ts_timeout_us_);
+    OB_UNIS_DECODE(consistency_level_);
+    OB_UNIS_DECODE(param_store_);
+    OB_UNIS_DECODE(sys_view_bigint_params_);
+    OB_UNIS_DECODE(sql_mode_);
+    OB_UNIS_DECODE(autoinc_params_);
+    OB_UNIS_DECODE(tablet_autoinc_param_);
+    OB_UNIS_DECODE(last_insert_id_session_);
+    OB_UNIS_DECODE(message_);
+    OB_UNIS_DECODE(expr_op_size_);
+    OB_UNIS_DECODE(is_ignore_stmt_);
+    OB_UNIS_DECODE(param_cnt);
+    if (OB_SUCC(ret) && param_cnt > 0) {
+      if (OB_FAIL(param_store_.prepare_allocate(param_cnt))) {
+        LOG_WARN("prepare_allocate param store failed", K(ret), K(param_cnt));
+      } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &real_param_cnt))) {
+        LOG_WARN("decode int32_t failed", K(data_len), K(pos), K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < real_param_cnt; ++i) {
+        OB_UNIS_DECODE(param_idx);
+        OB_UNIS_DECODE(param_obj);
+        ObObjParam tmp = param_obj;
+        if (OB_UNLIKELY(param_idx < 0) || OB_UNLIKELY(param_idx >= param_cnt)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid param idx", K(param_idx), K(param_cnt));
+        } else if (OB_FAIL(deep_copy_obj(allocator_, param_obj, tmp))) {
+          LOG_WARN("deep copy object failed", K(ret), K(param_obj));
+        } else {
+          param_store_.at(param_idx) = tmp;
+          param_store_.at(param_idx).set_param_meta();
+        }
+      }
+    }
+    if (OB_SUCC(ret) && param_cnt <= 0) {
+      //param count <= 0不为按需序列化分区相关的param store，直接序列化所有的param
+      //所以需要对param store的所有元素都执行一次深拷贝
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); ++i) {
+        const ObObjParam &objpara = param_store_.at(i);
+        ObObjParam tmp = objpara;
+        if (OB_FAIL(deep_copy_obj(allocator_, objpara, tmp))) {
+          LOG_WARN("deep copy obj failed", K(ret));
+        } else {
+          param_store_.at(i) = tmp;
+          param_store_.at(i).set_param_meta();
+        }
+      }
+    }
+    OB_UNIS_DECODE(foreign_key_checks_);
+    OB_UNIS_DECODE(unsed_worker_count_since_222rel_);
+    OB_UNIS_DECODE(tenant_schema_version_);
+    OB_UNIS_DECODE(cursor_count);
+    if (OB_SUCC(ret) && cursor_count > 0) {
+      if (OB_FAIL(implicit_cursor_infos_.prepare_allocate(cursor_count))) {
+        LOG_WARN("init implicit cursor infos failed", K(ret));
+      }
+    }
+    OB_UNIS_DECODE(plan_start_time_);
+    if (OB_SUCC(ret)) {
+      (void)ObSQLUtils::adjust_time_by_ntp_offset(plan_start_time_);
+      (void)ObSQLUtils::adjust_time_by_ntp_offset(ts_timeout_us_);
+    }
+    OB_UNIS_DECODE(last_trace_id_);
+    OB_UNIS_DECODE(tenant_srs_version_);
+    OB_UNIS_DECODE(original_param_cnt_);
+    int64_t array_group_count = 0;
+    OB_UNIS_DECODE(array_group_count);
+    if (OB_SUCC(ret) && array_group_count > 0) {
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < array_group_count; i++) {
+        ObArrayParamGroup array_p_group;
+        OB_UNIS_DECODE(array_p_group);
+        if (OB_FAIL(array_param_groups_.push_back(array_p_group))) {
+          LOG_WARN("failed to push back");
+        }
+      }
+    }
+
+    if (version == 2) {
+      enable_rich_format_ = false;
     } else {
-      local_vars->set_allocator(&allocator_);
-      OB_UNIS_DECODE(*local_vars);
+      OB_UNIS_DECODE(enable_rich_format_);
     }
-  }
-  // following is not deserialize, please add deserialize ahead.
-  if (OB_SUCC(ret) && array_group_count > 0 &&
-      datum_param_store_.count() == 0 &&
-      datum_param_store_.count() != param_store_.count()) {
-    if (OB_FAIL(init_param_store_after_deserialize())) {
-      LOG_WARN("failed to deserialize param store", K(ret));
+
+    OB_UNIS_DECODE(local_var_array_cnt);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(all_local_session_vars_.reserve(local_var_array_cnt))) {
+        LOG_WARN("reserve local session vars failed", K(ret));
+      }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < local_var_array_cnt; ++i) {
+      ObLocalSessionVar *local_vars = OB_NEWx(ObLocalSessionVar, &allocator_);
+      if (NULL == local_vars) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alloc local var failed", K(ret));
+      } else if (OB_FAIL(all_local_session_vars_.push_back(ObSolidifiedVarsContext(local_vars, &allocator_)))) {
+        LOG_WARN("push back local session var array failed", K(ret));
+      } else {
+        local_vars->set_allocator(&allocator_);
+        OB_UNIS_DECODE(*local_vars);
+      }
+    }
+    // following is not deserialize, please add deserialize ahead.
+    if (OB_SUCC(ret) && array_group_count > 0 &&
+        datum_param_store_.count() == 0 &&
+        datum_param_store_.count() != param_store_.count()) {
+      if (OB_FAIL(init_param_store_after_deserialize())) {
+        LOG_WARN("failed to deserialize param store", K(ret));
+      }
+    }
+    OB_UNIS_DECODE(mview_ids_);
+    OB_UNIS_DECODE(last_refresh_scns_);
+    OB_UNIS_DECODE(is_direct_insert_plan_);
+    OB_UNIS_DECODE(check_pdml_affected_rows_);
+
+    pos = pos_orig + len;
   }
-  OB_UNIS_DECODE(mview_ids_);
-  OB_UNIS_DECODE(last_refresh_scns_);
-  OB_UNIS_DECODE(is_direct_insert_plan_);
-  OB_UNIS_DECODE(check_pdml_affected_rows_);
   return ret;
 }
 
@@ -1204,20 +1261,24 @@ int ObPhysicalPlanCtx::get_subschema_id_by_collection_elem_type(ObNestedType col
                                                                 uint16_t &subschema_id)
 {
   int ret = OB_SUCCESS;
+  bool is_subschema_inited_in_plan = true;
   if (OB_NOT_NULL(phy_plan_)) { // physical plan exist, use subschema ctx on phy plan
     if (!phy_plan_->get_subschema_ctx().is_inited()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("plan with empty subschema mapping", K(ret), K(phy_plan_->get_subschema_ctx()));
+      LOG_INFO("plan with empty subschema mapping", K(phy_plan_->get_subschema_ctx()));
+      is_subschema_inited_in_plan = false;
     } else if (OB_FAIL(phy_plan_->get_subschema_ctx().get_subschema_id_by_typedef(coll_type,
                                                                                              elem_type,
                                                                                              subschema_id))) {
       LOG_WARN("failed to get subschema id", K(ret), K(elem_type));
     }
   // no phy plan
-  } else if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
-    LOG_WARN("subschema ctx init failed", K(ret));
-  } else if (OB_FAIL(subschema_ctx_.get_subschema_id_by_typedef(coll_type, elem_type, subschema_id))) {
-    LOG_WARN("failed to get subschema id", K(ret), K(elem_type));
+  }
+  if (OB_SUCC(ret) && (OB_ISNULL(phy_plan_) || !is_subschema_inited_in_plan)) {
+    if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
+      LOG_WARN("subschema ctx init failed", K(ret));
+    } else if (OB_FAIL(subschema_ctx_.get_subschema_id_by_typedef(coll_type, elem_type, subschema_id))) {
+      LOG_WARN("failed to get subschema id", K(ret), K(elem_type));
+    }
   }
   return ret;
 }

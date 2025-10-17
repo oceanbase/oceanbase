@@ -182,15 +182,9 @@ int ObLLVMDIHelper::insert_declare(ObLLVMValue &storage, ObLLVMDILocalVariable &
   } else if (OB_ISNULL(expr = jc_->dbuilder_.createExpression())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to create expression", K(ret));
-#ifdef CPP_STANDARD_20
   } else if (OB_ISNULL(jc_->dbuilder_.insertDeclare(storage.get_v(), variable.get_v(),
                                                     expr, ObDILocation::get(sp->getContext(), line, 0, sp),
 						    block.get_v()))) {
-#else
-  } else if (OB_ISNULL(jc_->dbuilder_.insertDeclare(storage.get_v(), variable.get_v(),
-                                                    expr, ObDebugLoc::get(line, 0, sp),
-                                                    block.get_v()))) {
-#endif
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to insert declare", K(ret));
   }

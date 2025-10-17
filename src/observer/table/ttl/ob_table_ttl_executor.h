@@ -98,7 +98,7 @@ private:
   int check_expired(bool &is_expired);
   int generate_ttl_rtdefs();
   int get_next_row_from_child();
-  int refresh_exprs_frame(const table::ObTableEntity *entity);
+  int refresh_exprs_frame(const table::ObITableEntity *entity);
   int do_insert();
   int do_delete();
   int try_insert_row();

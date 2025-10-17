@@ -152,7 +152,8 @@ TEST_F(TestFtsParser, create_node_test)
   const int64_t ft_word_bkt_cnt = MAX(strlen(query_str) / 10, 2);
   ret = tokens_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMapTest"));
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObFtsEvalNode::fts_boolean_node_create(parant_node, node, ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, allocator_, query_tokens, tokens_map);
+  bool dummy_has_duplicate_tokens = false;
+  ObFtsEvalNode::fts_boolean_node_create(parant_node, node, ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, allocator_, query_tokens, tokens_map, dummy_has_duplicate_tokens);
   ASSERT_FALSE(parant_node->leaf_node_);
 
   ASSERT_TRUE(parant_node->child_nodes_.at(0)->leaf_node_);

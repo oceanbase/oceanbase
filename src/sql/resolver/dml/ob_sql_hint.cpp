@@ -223,36 +223,30 @@ int ObQueryHint::set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name)
   return ret;
 }
 
-int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, const ObDMLStmt &stmt) const
+int ObQueryHint::set_params_from_hint(const ObResolverParams &params) const
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo *session_info = NULL;
-  bool has_enable_param = false;
+  ObSQLSessionInfo *session_info = NULL;
   ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(session_info = params.session_info_)
-      || OB_ISNULL(query_ctx = params.query_ctx_)) {
+  if (OB_ISNULL(session_info = params.session_info_) ||
+      OB_ISNULL(query_ctx = params.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(session_info), K(query_ctx));
-  } else if (T_NONE_SCOPE != params.hidden_column_scope_ &&
-             OB_FAIL(global_hint_.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
-    LOG_WARN("failed to check has enable opt param", K(ret));
-  } else if (OB_UNLIKELY(T_NONE_SCOPE != params.hidden_column_scope_ && !has_enable_param)) {
-    if (OB_ISNULL(params.hidden_column_name_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(params.hidden_column_scope_), K(params.hidden_column_name_));
-    } else {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      LOG_WARN("hidden columns not allowed", K(ret));
-      ObString column_name(params.hidden_column_name_);
-      ObString scope_name = ObString::make_string(get_scope_name(params.hidden_column_scope_));
-      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-                                            scope_name.length(), scope_name.ptr());
-    }
-  } else if (OB_FAIL(check_ddl_schema_version_from_hint(stmt))) {
-    LOG_WARN("failed to check ddl schema version", K(ret));
   } else {
+    ObSqlCtx *sql_ctx = NULL;
+    ObExecContext *exec_ctx = NULL;
     if (global_hint_.query_timeout_ > 0) {
       THIS_WORKER.set_timeout_ts(session_info->get_query_start_time() + global_hint_.query_timeout_);
+    }
+    if (!OB_ISNULL(exec_ctx = session_info->get_cur_exec_ctx()) &&
+        !OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
+      sql_ctx->force_print_trace_ = global_hint_.force_trace_log_;
+    }
+    if (global_hint_.log_level_.length() > 0) {
+      const ObString &log_level = global_hint_.log_level_;
+      if (OB_UNLIKELY(OB_SUCCESS != process_thread_log_id_level_map(log_level.ptr(), log_level.length()))) {
+        LOG_WARN("Failed to process thread log id level map");
+      }
     }
     if (global_hint_.has_valid_opt_features_version()) {
       query_ctx->optimizer_features_enable_version_ = global_hint_.opt_features_version_;
@@ -263,40 +257,21 @@ int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, 
   return ret;
 }
 
-int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt,
-                                                    const ObDDLSchemaVersionHint& ddlSchemaVersionHint) const
+int ObQueryHint::check_ddl_schema_version_from_hint(TableItem *table_item) const
 {
   int ret = OB_SUCCESS;
-  TableItem* item = NULL;
-  if (OB_FAIL(get_basic_table_without_index_by_hint_table(stmt, ddlSchemaVersionHint.table_, item))) {
-    LOG_WARN("failed to get table item by hint table", K(ret));
-  } else if (OB_ISNULL(item)) {
-    ObSEArray<ObSelectStmt*, 8> child_stmts;
-    if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
-    }
-    for (int64_t index = 0; OB_SUCC(ret) && index < child_stmts.count(); ++index) {
-      if (OB_FAIL(SMART_CALL(check_ddl_schema_version_from_hint(*child_stmts.at(index),
-                                                        ddlSchemaVersionHint)))) {
-        LOG_WARN("failed to check ddl schema version from hint", K(ret));
-      }
-    }
-  } else if (OB_LIKELY(item->ddl_schema_version_ > 0) &&
-             OB_UNLIKELY(ddlSchemaVersionHint.schema_version_ != item->ddl_schema_version_)) {
-    ret = OB_DDL_SCHEMA_VERSION_NOT_MATCH;
-    LOG_USER_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH);
-    LOG_WARN("failed to check ddl schema version", K(ret), K(item->ddl_schema_version_), K(ddlSchemaVersionHint.schema_version_));
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr", K(table_item), K(ret));
   }
-  return ret;
-}
-
-int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const
-{
-  int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < global_hint_.ob_ddl_schema_versions_.count(); i++) {
-    if (OB_FAIL(check_ddl_schema_version_from_hint(stmt, 
-                                                   global_hint_.ob_ddl_schema_versions_.at(i)))) {
-      LOG_WARN("failed to check ddl schema version from hint", K(ret));
+    const ObDDLSchemaVersionHint &ddlSchemaVersionHint = global_hint_.ob_ddl_schema_versions_.at(i);
+    if (ddlSchemaVersionHint.table_.is_match_physical_table_item(cs_type_, *table_item) &&
+        OB_LIKELY(table_item->ddl_schema_version_ > 0) &&
+        OB_UNLIKELY(ddlSchemaVersionHint.schema_version_ != table_item->ddl_schema_version_)) {
+      ret = OB_DDL_SCHEMA_VERSION_NOT_MATCH;
+      LOG_USER_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH);
+      LOG_WARN("failed to check ddl schema version", K(ret), K(table_item->ddl_schema_version_), K(ddlSchemaVersionHint.schema_version_));
     }
   }
   return ret;
@@ -305,9 +280,11 @@ int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const
 // init query hint after resolve all stmt.
 int ObQueryHint::init_query_hint(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
+                                 const ObGlobalHint &global_hint,
                                  ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
+  const int64_t max_concurrent = global_hint_.max_concurrent_;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(allocator), K(session_info), K(stmt));
@@ -322,7 +299,12 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
     LOG_WARN("failed to generate stmt name after resolve", K(ret));
   } else if (OB_FAIL(distribute_hint_to_orig_stmt(stmt))) {
     LOG_WARN("faild to distribute hint to orig stmt", K(ret));
+  } else if (has_outline_data() || has_user_def_outline()) {
+    LOG_TRACE("finish init query hint", K(has_outline_data()), K(has_user_def_outline()), K(*this));
+  } else if (OB_FAIL(global_hint_.assign(global_hint))) {
+    LOG_WARN("failed to combine global hint", K(ret));
   } else {
+    global_hint_.merge_max_concurrent_hint(max_concurrent);
     LOG_TRACE("finish init query hint", K(*this));
   }
   return ret;
@@ -908,33 +890,6 @@ int ObQueryHint::get_table_item_by_hint_table(const ObDMLStmt &stmt,
   return ret;
 }
 
-int ObQueryHint::get_basic_table_without_index_by_hint_table(const ObDMLStmt &stmt,
-                                                             const ObTableInHint &table,
-                                                             TableItem *&table_item) const
-{
-  int ret = OB_SUCCESS;
-  table_item = NULL;
-  const ObIArray<TableItem*> &table_items = stmt.get_table_items();
-  int64_t num = table_items.count();
-  TableItem *item = NULL;
-  table_item = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == table_item && i < num; ++i) {
-    if (OB_ISNULL(item = table_items.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table item.", K(ret), K(item));
-    } else if (!item->is_basic_table()) {
-      /* do nothing */
-    } else if (OB_LIKELY(item->ddl_table_id_ != OB_INVALID_ID) && OB_UNLIKELY(item->ddl_table_id_ != item->ref_id_)) {
-      // do nothing
-    } else if (!table.is_match_physical_table_item(cs_type_, *item)) {
-      /* do nothing */
-    } else {
-      table_item = item;
-    }
-  }
-  return ret;
-}
-
 int ObQueryHint::get_qb_name(int64_t stmt_id, ObString &qb_name) const
 {
   int ret = OB_SUCCESS;
@@ -991,6 +946,17 @@ bool ObQueryHint::is_valid_outline_transform(int64_t trans_list_loc, const ObHin
     /* do nothing */
   } else {
     bret = true;
+  }
+  return bret;
+}
+
+bool ObQueryHint::has_hint_exclude_concurrent() const
+{
+  bool bret = !qb_hints_.empty()
+              || !stmt_id_hints_.empty()
+              || global_hint_.has_hint_exclude_concurrent();
+  for (int64_t i = 0; !bret && i < stmt_id_map_.count(); ++i) {
+    bret = stmt_id_map_.at(i).is_from_hint_;
   }
   return bret;
 }
@@ -1359,7 +1325,7 @@ int ObStmtHint::merge_hint(ObHint &hint,
       || hint.is_table_parallel_hint()
       || hint.is_table_dynamic_sampling_hint()
       || hint.is_pq_subquery_hint()
-      || hint.is_union_merge_hint()) {
+      || hint.is_index_merge_hint()) {
     if (OB_FAIL(add_var_to_array_no_dup(other_opt_hints_, &hint))) {
       LOG_WARN("failed to add var to array", K(ret));
     }
@@ -1515,8 +1481,8 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
       if (OB_FAIL(normal_hints_.push_back(hint))) {
         LOG_WARN("failed to push back", K(ret));
       }
-    } else if (hint->is_union_merge_hint()) {
-      if (OB_FAIL(add_union_merge_hint(stmt, query_hint, *static_cast<const ObUnionMergeHint*>(hint)))) {
+    } else if (hint->is_index_merge_hint()) {
+      if (OB_FAIL(add_index_merge_hint(stmt, query_hint, *static_cast<const ObIndexMergeHint*>(hint)))) {
         LOG_WARN("failed to add union merge hint", K(ret));
       }
     } else {
@@ -1584,21 +1550,19 @@ int ObLogPlanHint::add_index_hint(const ObDMLStmt &stmt,
   return ret;
 }
 
-int ObLogPlanHint::add_union_merge_hint(const ObDMLStmt &stmt,
+int ObLogPlanHint::add_index_merge_hint(const ObDMLStmt &stmt,
                                         const ObQueryHint &query_hint,
-                                        const ObUnionMergeHint &union_merge_hint)
+                                        const ObIndexMergeHint &index_merge_hint)
 {
   int ret = OB_SUCCESS;
   LogTableHint *log_table_hint = NULL;
-  if (OB_FAIL(get_log_table_hint_for_update(stmt, query_hint, union_merge_hint.get_table(),
+  if (OB_FAIL(get_log_table_hint_for_update(stmt, query_hint, index_merge_hint.get_table(),
                                             true, log_table_hint))) {
     LOG_WARN("failed to get log table hint by hint", K(ret));
   } else if (NULL == log_table_hint) {
     /* do nothing */
-  } else if (T_UNION_MERGE_HINT == union_merge_hint.get_hint_type()) {
-    if (NULL == log_table_hint->union_merge_hint_) {
-      log_table_hint->union_merge_hint_ = &union_merge_hint;
-    }
+  } else if (OB_FAIL(log_table_hint->index_merge_hints_.push_back(&index_merge_hint))) {
+    LOG_WARN("failed to push back index merge hint", K(ret));
   }
   return ret;
 }
@@ -1771,7 +1735,8 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
                                         bool &force_partition_wise,
                                         bool &force_dist_hash,
                                         bool &force_pull_to_local,
-                                        bool &force_hash_local) const
+                                        bool &force_hash_local,
+                                        bool &force_pushdown_group_by) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
@@ -1783,6 +1748,7 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
   force_dist_hash = false;
   force_pull_to_local = false;
   force_hash_local = false;
+  force_pushdown_group_by = pushdown_group_by();
   const ObAggHint *agg_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_AGGREGATE));
   const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_GBY_HINT));
   const bool enable_pq_hint = COMPAT_VERSION_4_3_3 <= optimizer_features_enable_version_
@@ -1916,13 +1882,6 @@ int ObLogPlanHint::check_use_das(uint64_t table_id, bool &force_das, bool &force
     force_no_das = true;
   }
   return ret;
-}
-
-const ObUnionMergeHint *ObLogPlanHint::get_union_merge_hint(uint64_t table_id) const
-{
-  int ret = OB_SUCCESS;
-  const LogTableHint *log_table_hint = get_log_table_hint(table_id);
-  return NULL == log_table_hint ? NULL : log_table_hint->union_merge_hint_;
 }
 
 int ObLogPlanHint::check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const
@@ -2455,6 +2414,7 @@ int LogJoinHint::add_join_hint(const ObJoinHint &join_hint)
       } else {
         dist_methods_ |= join_hint.get_dist_algo();
       }
+      parallel_ = join_hint.get_parallel();
       break;
     }
     case T_PQ_MAP:  {
@@ -2525,7 +2485,6 @@ int LogTableHint::assign(const LogTableHint &other)
   parallel_hint_ = other.parallel_hint_;
   use_das_hint_ = other.use_das_hint_;
   use_column_store_hint_ = other.use_column_store_hint_;
-  union_merge_hint_ = other.union_merge_hint_;
   if (OB_FAIL(index_list_.assign(other.index_list_))) {
     LOG_WARN("failed to assign index list", K(ret));
   } else if (OB_FAIL(index_hints_.assign(other.index_hints_))) {
@@ -2534,6 +2493,10 @@ int LogTableHint::assign(const LogTableHint &other)
     LOG_WARN("failed to assign index list", K(ret));
   } else if (OB_FAIL(left_tables_.assign(other.left_tables_))) {
     LOG_WARN("failed to assign hints", K(ret));
+  } else if (OB_FAIL(index_merge_list_.assign(other.index_merge_list_))) {
+    LOG_WARN("failed to assign index merge list", K(ret));
+  } else if (OB_FAIL(index_merge_hints_.assign(other.index_merge_hints_))) {
+    LOG_WARN("failed to assign index merge hints", K(ret));
   }
   return ret;
 }
@@ -2547,7 +2510,7 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
   if (OB_ISNULL(table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected log index hint", K(ret), K(this));
-  } else if (index_hints_.empty() && union_merge_hint_ == nullptr) {
+  } else if (index_hints_.empty() && index_merge_hints_.empty()) {
     /* do nothing */
   } else if (OB_FAIL(schema_guard.get_can_read_index_array(table_->ref_id_,
                                                            tids,
@@ -2574,12 +2537,10 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
     ObSEArray<uint64_t, 4> no_index_list;
     ObSEArray<const ObIndexHint*, 4> index_hints;
     ObSEArray<const ObIndexHint*, 4> no_index_hints;
-    ObSEArray<uint64_t, 4> union_merge_list;
-    int64_t union_merge_hint_match_cnt = 0;
-    if (NULL != union_merge_hint_ &&
-        OB_FAIL(union_merge_list.prepare_allocate(union_merge_hint_->get_index_name_list().count()))) {
-      LOG_WARN("failed to prepare allocate merge index list", K(ret), KPC(union_merge_hint_));
-    }
+    ObSEArray<uint64_t, 4> index_merge_list;
+    ObSEArray<uint64_t, 4> no_index_merge_list;
+    ObSEArray<const ObIndexMergeHint*, 4> index_merge_hints;
+    ObSEArray<const ObIndexMergeHint*, 4> no_index_merge_hints;
     for (int64_t i = -1; OB_SUCC(ret) && i < table_index_aux_count; ++i) {
       uint64_t index_id = -1 == i ? table_->ref_id_ : tids[i];
       ObString index_name;
@@ -2675,35 +2636,67 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
             LOG_WARN("fail to push back", K(ret), K(hint_pos));
           }
         }
-
-        if (OB_SUCC(ret) && union_merge_hint_ != nullptr) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < union_merge_hint_->get_index_name_list().count(); ++i) {
-            if (0 != union_merge_hint_->get_index_name_list().at(i).case_compare(index_name)) {
-              /* do nothing */
-            } else {
-              union_merge_list.at(i) = index_id;
-              ++union_merge_hint_match_cnt;
+        // handle index merge hint
+        for (int64_t hint_i = 0; OB_SUCC(ret) && hint_i < index_merge_hints_.count(); ++hint_i) {
+          const ObIndexMergeHint* index_merge_hint = index_merge_hints_.at(hint_i);
+          bool is_match = false;
+          if (OB_ISNULL(index_merge_hint)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null index merge hint", K(ret), K(hint_i), K(index_merge_hints_));
+          } else if (index_merge_hint->get_index_name_list().empty()) {
+            is_match = true;
+          } else {
+            for (int64_t index_i = 0; OB_SUCC(ret) && !is_match && index_i < index_merge_hint->get_index_list_count(); ++index_i) {
+              if (0 == index_merge_hint->get_index_name_list().at(index_i).case_compare(index_name)) {
+                is_match = true;
+              }
+            }
+          }
+          if (OB_FAIL(ret) || !is_match) {
+            // do nothing
+          } else if (index_merge_hint->is_enable_hint()) {
+            if (OB_FAIL(index_merge_list.push_back(index_id))) {
+              LOG_WARN("fail to push back index id", K(ret), K(index_id));
+            } else if (OB_FAIL(add_var_to_array_no_dup(index_merge_hints, index_merge_hint))) {
+              LOG_WARN("failed to push back index merge hint", K(ret));
+            }
+          } else {
+            if (OB_FAIL(no_index_merge_list.push_back(index_id))) {
+              LOG_WARN("fail to push back index id", K(ret), K(index_id));
+            } else if (OB_FAIL(add_var_to_array_no_dup(no_index_merge_hints, index_merge_hint))) {
+              LOG_WARN("failed to push back index merge hint", K(ret));
             }
           }
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      if (NULL != union_merge_hint_
-          && union_merge_hint_match_cnt == union_merge_hint_->get_index_name_list().count()
-          && OB_FAIL(union_merge_list_.assign(union_merge_list))) {
+    if (OB_FAIL(ret)) {
+    } else if (!index_list.empty()) {
+      if (OB_FAIL(index_list_.assign(index_list))) {
         LOG_WARN("failed to assign array", K(ret));
-      } else if (!index_list.empty()) {
-        if (OB_FAIL(index_list_.assign(index_list))) {
-          LOG_WARN("failed to assign array", K(ret));
-        } else if (OB_FAIL(index_hints_.assign(index_hints))) {
-          LOG_WARN("failed to assign array", K(ret));
-        }
-      } else if (OB_FAIL(index_list_.assign(no_index_list))) {
-        LOG_WARN("failed to assign array", K(ret));
-      } else if (OB_FAIL(index_hints_.assign(no_index_hints))) {
+      } else if (OB_FAIL(index_hints_.assign(index_hints))) {
         LOG_WARN("failed to assign array", K(ret));
       }
+    } else if (OB_FAIL(index_list_.assign(no_index_list))) {
+      LOG_WARN("failed to assign array", K(ret));
+    } else if (OB_FAIL(index_hints_.assign(no_index_hints))) {
+      LOG_WARN("failed to assign array", K(ret));
+    }
+    // handle index merge hint
+    if (OB_FAIL(ret)) {
+    } else if (index_merge_list.empty()) {
+      if (OB_FAIL(index_merge_list_.assign(no_index_merge_list))) {
+        LOG_WARN("failed to assign no index merge list", K(ret));
+      } else if (OB_FAIL(index_merge_hints_.assign(no_index_merge_hints))) {
+        LOG_WARN("failed to assign no index merge hints", K(ret));
+      }
+    } else if (ObOptimizerUtil::overlap(index_merge_list, no_index_merge_list)) {
+      // index merge hint has conflict, ignore all index merge hint
+      index_merge_hints_.reset();
+    } else if (OB_FAIL(index_merge_list_.assign(index_merge_list))) {
+      LOG_WARN("failed to assign index merge list", K(ret));
+    } else if (OB_FAIL(index_merge_hints_.assign(index_merge_hints))) {
+      LOG_WARN("failed to assign index merge hints", K(ret));
     }
   }
   return ret;

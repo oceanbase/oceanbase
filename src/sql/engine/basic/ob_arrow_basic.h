@@ -93,18 +93,22 @@ class ObOrcOutputStream : public orc::OutputStream {
 class ObArrowMemPool : public ::arrow::MemoryPool
 {
 public:
-  ObArrowMemPool() : total_alloc_size_(0) {}
+  ObArrowMemPool() : total_alloc_size_(0), total_hold_size_(0), num_allocations_(0) {}
   void init(uint64_t tenant_id);
-  virtual arrow::Status Allocate(int64_t size, uint8_t** out) override;
+  virtual arrow::Status Allocate(int64_t size, int64_t alignment, uint8_t** out) override;
 
-  virtual arrow::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr) override;
+  virtual arrow::Status Reallocate(int64_t old_size, int64_t new_size, int64_t alignment,
+                                   uint8_t **ptr) override;
 
-  virtual void Free(uint8_t* buffer, int64_t size) override;
+  virtual void Free(uint8_t* buffer, int64_t size, int64_t alignment) override;
 
   virtual void ReleaseUnused() override;
-
+  /// The number of bytes that were allocated.
+  virtual int64_t total_bytes_allocated() const override;
+  virtual int64_t num_allocations() const override;
+  /// The number of bytes that were allocated and not yet free'd through
+  /// this allocator.
   virtual int64_t bytes_allocated() const override;
-
   virtual int64_t max_memory() const override { return -1; }
 
   virtual std::string backend_name() const override { return "Arrow"; }
@@ -113,6 +117,8 @@ private:
   common::ObMemAttr mem_attr_;
   arrow::internal::MemoryPoolStats stats_;
   int64_t total_alloc_size_;
+  int64_t total_hold_size_;
+  int64_t num_allocations_;
 };
 
 class ObArrowFile : public arrow::io::RandomAccessFile {

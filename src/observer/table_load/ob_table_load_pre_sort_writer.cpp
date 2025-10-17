@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_mem_chunk_manager.h"
+#include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 
@@ -106,22 +107,19 @@ int ObTableLoadPreSortWriter::write(int32_t session_id,
 }
 
 int ObTableLoadPreSortWriter::px_write(ObIVector *tablet_id_vector,
-                                       const ObIArray<ObIVector *> &vectors,
-                                       const ObBatchRows &batch_rows,
-                                       int64_t &affected_rows)
+                                       const ObDirectLoadBatchRows &batch_rows)
 {
   int ret = OB_SUCCESS;
-  affected_rows = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadPreSortWriter not init", KR(ret));
   } else if (OB_UNLIKELY(nullptr == tablet_id_vector ||
-                         vectors.count() != mem_ctx_->table_data_desc_.column_count_ ||
-                         (!batch_rows.all_rows_active_ && nullptr == batch_rows.skip_) ||
-                         batch_rows.size_ <= 0)) {
+                         batch_rows.get_column_count() !=
+                           mem_ctx_->table_data_desc_.column_count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(vectors.count()), K(batch_rows));
-  } else if (!datum_row_.is_valid() && OB_FAIL(datum_row_.init(mem_ctx_->table_data_desc_.column_count_))) {
+    LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(batch_rows));
+  } else if (!datum_row_.is_valid() &&
+             OB_FAIL(datum_row_.init(mem_ctx_->table_data_desc_.column_count_))) {
     LOG_WARN("fail to init datum row", KR(ret));
   } else if (OB_UNLIKELY(-1 != chunk_node_id_ || nullptr != chunk_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -129,24 +127,16 @@ int ObTableLoadPreSortWriter::px_write(ObIVector *tablet_id_vector,
   } else {
     datum_row_.seq_no_ = 0;
     ObTabletID tablet_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < batch_rows.size_; ++i) {
-      if (!batch_rows.all_rows_active_ && batch_rows.skip_->at(i)) {
-        continue;
-      } else {
-        ++affected_rows;
-        tablet_id = ObDirectLoadVectorUtils::get_tablet_id(tablet_id_vector, i);
-        if (OB_FAIL(ObDirectLoadVectorUtils::to_datums(vectors,
-                                                       i,
-                                                       datum_row_.storage_datums_,
-                                                       datum_row_.count_))) {
-          LOG_WARN("fail to transfer vectors to datums", KR(ret), K(i));
-        } else if (OB_FAIL(append_row(tablet_id, datum_row_))) {
-          LOG_WARN("fail to append row", KR(ret));
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_rows.size(); ++i) {
+      tablet_id = ObDirectLoadVectorUtils::get_tablet_id(tablet_id_vector, i);
+      if (OB_FAIL(batch_rows.get_datum_row(i, datum_row_))) {
+        LOG_WARN("fail to get datum row", KR(ret), K(i), K(batch_rows));
+      } else if (OB_FAIL(append_row(tablet_id, datum_row_))) {
+        LOG_WARN("fail to append row", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      ATOMIC_AAF(&pre_sorter_->ctx_->job_stat_->store_.processed_rows_, affected_rows);
+      ATOMIC_AAF(&pre_sorter_->ctx_->job_stat_->store_.processed_rows_, batch_rows.size());
     }
     if (OB_LIKELY(-1 != chunk_node_id_ && nullptr != chunk_)) {
       int tmp_ret = OB_SUCCESS;

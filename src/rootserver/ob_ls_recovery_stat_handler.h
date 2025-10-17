@@ -322,7 +322,7 @@ inline int ObLSRecoveryStatHandler::wait_func_with_timeout_(
         RS_LOG(WARN, "failed to check", KR(ret));
       } else if (!is_finish) {
         if (current_timeout > TIME_WAIT) {
-          usleep(TIME_WAIT);
+          ob_usleep(TIME_WAIT);
           current_timeout -= TIME_WAIT;
         } else {
           ret = OB_TIMEOUT;

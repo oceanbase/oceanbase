@@ -128,7 +128,7 @@ public:
   static int content_unparsed_binary_check_doc(ObMulModeMemCtx* mem_ctx, ObString binary_str, ObString &res_str);
   static int check_element_validity(ObMulModeMemCtx* mem_ctx, ObXmlElement *in_ele, ObXmlElement *&out_ele, bool &validity);
   static int check_doc_validity(ObMulModeMemCtx* mem_ctx, ObXmlDocument *&doc, bool &validity);
-  static int process_sql_udt_results(common::ObObj& value, sql::ObResultSet &result);
+  static int process_sql_udt_results(common::ObObj& value, sql::ObResultSet &result, common::ObIAllocator *alloc = NULL);
   static int process_sql_udt_results(common::ObObj& value,
                                      common::ObIAllocator *allocator,
                                      sql::ObSQLSessionInfo *session_info,

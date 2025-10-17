@@ -355,7 +355,7 @@ ObFTCharUtil::is_num_connector(const char *input, const uint8_t char_len, bool &
   if (OB_FAIL(decode_unicode<CS_TYPE>(input, char_len, unicode))) {
     STORAGE_FTS_LOG(WARN, "Failed to decode unicode", K(ret));
   } else {
-    is_connector = ObUnicodeBlockUtils::is_unicode_cn_number(unicode);
+    is_connector = ObUnicodeBlockUtils::check_num_connector(unicode);
   }
   return ret;
 }

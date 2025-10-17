@@ -32,14 +32,33 @@
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
         <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
     </a>
+    <a href="https://www.youtube.com/@OceanBaseDB">
+        <img alt="Static Badge" src="https://img.shields.io/badge/YouTube-red?logo=youtube">
+    </a>
+    <a href="https://www.linkedin.com/company/oceanbase" target="_blank">
+        <img src="https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff" alt="follow on LinkedIn">
+    </a>
+    <a href="https://en.oceanbase.com/">
+        <img alt="Static Badge" src="https://img.shields.io/badge/OceanBase-Official%20Website-blue">
+    </a>
+    <a href="https://oceanbase.github.io/docs/blogs/users/1st-financial">
+        <img alt="Static Badge" src="https://img.shields.io/badge/OceanBase-Official%20Blog-blue">
+    </a>
+    <a href="https://x.com/OceanBaseDB">
+        <img alt="Static Badge" src="https://img.shields.io/badge/Follow-%40OceanBaseDB-white?logo=x&labelColor=black">
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/graphs/commit-activity" target="_blank">
+        <img alt="Static Badge" src="https://img.shields.io/badge/commit%20activity%201020%2Fmonth-yellow">
+    </a>
 </p>
 
-English | [中文版](README_CN.md)
+English | [中文版](README_CN.md) | [日本語版](README_JA.md)
 
-**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. The OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. The OceanBase Database is not dependent on specific hardware architectures.
+**OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. The OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, the OceanBase Database provides high availability and linear scalability. The OceanBase Database is not dependent on specific hardware architectures. It also supports vector database functionality, enabling efficient vector search for AI and large-scale retrieval scenarios.
 
 # Key features
 
+- **Vector Search**: Supports vector indexing and efficient queries, making it ideal for AI applications, recommendation systems, and semantic search, providing high throughput and low-latency vector search capabilities.
 - **Transparent Scalability**: 1,500 nodes, PB data and a trillion rows of records in one cluster.
 - **Ultra-fast Performance**: TPC-C 707 million tmpC and TPC-H 15.26 million QphH @30000GB.
 - **Cost Efficiency**: saves 70%–90% of storage costs.
@@ -126,8 +145,7 @@ OceanBase Database is licensed under the Mulan Public License, Version 2. See th
 
 Join the OceanBase community via:
 
-* [Discord](https://discord.gg/74cF8vbNEs)
-* [Ask on Stack Overflow](https://stackoverflow.com/questions/tagged/oceanbase)
-* [Chinese User Forum](https://ask.oceanbase.com/)
-* DingTalk Group: [33254054](images/dingtalk.png)
-* WeChat Group (Add the assistant with WeChat ID: OBCE666)
+* [Discord](https://discord.gg/74cF8vbNEs): Best for: asking questions, sharing feedback, getting the latest news, and connecting with other OceanBase users.
+* [GitHub Issues](https://github.com/oceanbase/oceanbase/issues): Best for: addressing bugs encountered while using OceanBase, as well as submitting feature proposals.
+* [Chinese User Forum](https://ask.oceanbase.com/): Only for Chinese users, best for: asking questions, sharing feedback, getting the latest news, and connecting with other OceanBase users.
+* WeChat Group (Add the assistant with WeChat ID: OBCE666): Only for Chinese users, best for: getting the latest news and connecting with other OceanBase users.

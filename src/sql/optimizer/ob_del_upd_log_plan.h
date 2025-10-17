@@ -177,11 +177,6 @@ public:
                                   ObTablePartitionInfo *table_location,
                                   IndexDMLInfo *index_dml_info);
 
-  int check_need_exchange_for_pdml_del_upd(ObLogicalOperator *top,
-                                           const ObExchangeInfo &exch_info,
-                                           uint64_t table_id,
-                                           bool &need_exchange);
-
   int create_index_dml_info(const IndexDMLInfo &orgi_dml_info,
                             IndexDMLInfo *&opt_dml_info);
   //split update index dml info with delete and insert
@@ -237,7 +232,8 @@ public:
                                 IndexDMLInfo*& index_dml_info) const;
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
-  int check_update_primary_key(const ObTableSchema* index_schema,
+  int check_update_primary_key(ObSchemaGetterGuard &schema_guard,
+                               const ObTableSchema* index_schema,
                                IndexDMLInfo*& index_dml_info) const;
   int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
   bool use_pdml() const { return use_pdml_; }
@@ -264,6 +260,9 @@ protected:
                                     ObIArray<ObRawExpr*> &normal_query_refs,
                                     ObIArray<ObRawExpr*> &alias_query_refs);
   int check_use_direct_load();
+  int check_basic_sharding_for_dml_stmt(ObShardingInfo &target_sharding,
+                                        ObLogicalOperator &child,
+                                        bool &is_basic);
 private:
   int get_parallel_info_from_direct_load(int64_t &dml_parallel) const;
   int check_dml_table_write_dependency(const uint64_t table_id, const ObTableSchema &index_schema) const;

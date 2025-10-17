@@ -51,6 +51,7 @@ inline bool has_extra_info(ObAggrInfo &info)
 {
   bool has = false;
   switch (info.get_expr_type()) {
+  case T_FUN_WM_CONCAT:
   case T_FUN_GROUP_CONCAT: {
     if (info.has_order_by_) {
       has = true;
@@ -71,7 +72,6 @@ inline bool has_extra_info(ObAggrInfo &info)
   case T_FUN_KEEP_SUM:
   case T_FUN_KEEP_COUNT:
   case T_FUN_KEEP_WM_CONCAT:
-  case T_FUN_WM_CONCAT:
   case T_FUN_PL_AGG_UDF:
   case T_FUN_JSON_ARRAYAGG:
   case T_FUN_ORA_JSON_ARRAYAGG:
@@ -147,11 +147,14 @@ public:
     Derived &derived = *static_cast<Derived *>(this);
     sql::ObEvalCtx &ctx = agg_ctx.eval_ctx_;
     ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_;
+    bool is_arg_min_max = agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type() == T_FUN_ARG_MIN
+                          || agg_ctx.aggr_infos_.at(agg_col_id).get_expr_type() == T_FUN_ARG_MAX;
 #ifndef NDEBUG
     helper::print_input_rows(row_sel, skip, bound, agg_ctx.aggr_infos_.at(agg_col_id), false,
                              agg_ctx.eval_ctx_, this, agg_col_id);
 #endif
     if (param_exprs.count() == 1
+               || (param_exprs.count() == 2 && is_arg_min_max)
                || agg_ctx.aggr_infos_.at(agg_col_id).is_implicit_first_aggr()) { // by pass implicit first row
       VectorFormat fmt = VEC_INVALID;
       ObExpr *param_expr = nullptr;
@@ -161,8 +164,9 @@ public:
         fmt = agg_ctx.aggr_infos_.at(agg_col_id).expr_->get_format(ctx);
         param_expr = agg_ctx.aggr_infos_.at(agg_col_id).expr_;
       } else {
-        fmt = param_exprs.at(0)->get_format(ctx);
-        param_expr = param_exprs.at(0);
+        int32_t param_idx = is_arg_min_max ? 1 : 0;
+        fmt = param_exprs.at(param_idx)->get_format(ctx);
+        param_expr = param_exprs.at(param_idx);
       }
       switch (fmt) {
       case common::VEC_UNIFORM: {
@@ -253,6 +257,11 @@ public:
       param_expr = aggr_info.expr_;
     } else if (aggr_info.param_exprs_.count() == 1) {
       param_expr = aggr_info.param_exprs_.at(0);
+      fmt = param_expr->get_format(eval_ctx);
+    } else if (aggr_info.param_exprs_.count() == 2
+               && (aggr_info.get_expr_type() == T_FUN_ARG_MIN ||
+                   aggr_info.get_expr_type() == T_FUN_ARG_MAX)) {
+      param_expr = aggr_info.param_exprs_.at(1);
       fmt = param_expr->get_format(eval_ctx);
     }
     if (OB_ISNULL(param_expr)) { // count(*)
@@ -462,13 +471,6 @@ protected:
     }
     return ret;
   }
-  template <>
-  int inner_add_for_multi_groups<ObVectorBase>(RuntimeContext &agg_ctx, AggrRowPtr *agg_rows,
-                                               RowSelector &row_sel, const int64_t batch_size,
-                                               const int32_t agg_col_id, ObExpr *param_expr)
-  {
-    return OB_NOT_IMPLEMENT;
-  }
   template <typename ColumnFmt>
   int add_batch_rows(RuntimeContext &agg_ctx, const sql::ObBitVector &skip,
                      const sql::EvalBound &bound, const ObExpr &param_expr,
@@ -481,6 +483,9 @@ protected:
     Derived &derived = *static_cast<Derived *>(this);
     void *tmp_res = derived.get_tmp_res(agg_ctx, agg_col_id, agg_cell);
     int64_t calc_info = derived.get_batch_calc_info(agg_ctx, agg_col_id, agg_cell);
+    ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
+    bool is_arg_min_max = (T_FUN_ARG_MAX == aggr_info.get_expr_type()
+                            || T_FUN_ARG_MIN == aggr_info.get_expr_type());
     if (OB_LIKELY(!agg_ctx.removal_info_.enable_removal_opt_)) {
       if (OB_LIKELY(row_sel.is_empty() && bound.get_all_rows_active())) {
         if (all_not_null) {
@@ -490,7 +495,7 @@ protected:
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
-          if (agg_cell != nullptr) {
+          if (agg_cell != nullptr && !is_arg_min_max) {
             NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
             not_nulls.set(agg_col_id);
           }
@@ -510,7 +515,7 @@ protected:
               SQL_LOG(WARN, "add row failed", K(ret));
             }
           } // end for
-          if (agg_cell != nullptr) {
+          if (agg_cell != nullptr && !is_arg_min_max) {
             NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
             not_nulls.set(agg_col_id);
           }
@@ -536,7 +541,7 @@ protected:
               has_data = true;
             }
           } // end for
-          if (OB_SUCC(ret) && agg_cell != nullptr && has_data) {
+          if (OB_SUCC(ret) && agg_cell != nullptr && has_data && !is_arg_min_max) {
             NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
             not_nulls.set(agg_col_id);
           }
@@ -628,15 +633,6 @@ protected:
     return ret;
   }
 
-  template <>
-  int collect_group_results<ObVectorBase>(RuntimeContext &agg_ctx, const int32_t agg_col_id,
-                                          const int32_t start_gid, const int32_t start_output_idx,
-                                          const int32_t batch_size, const ObBitVector *skip)
-  {
-    int ret = OB_NOT_IMPLEMENT;
-    SQL_LOG(WARN, "not implemented", K(ret), K(*this));
-    return ret;
-  }
 
   template <typename ResultFmt>
   int collect_group_results(RuntimeContext &agg_ctx, const int32_t agg_col_id,
@@ -683,16 +679,6 @@ protected:
         }
       }
     }
-    return ret;
-  }
-  template <>
-  int collect_group_results<ObVectorBase>(RuntimeContext &agg_ctx, const int32_t agg_col_id,
-                                          const int32_t output_start_idx, const int32_t batch_size,
-                                          const ObCompactRow **rows, const RowMeta &row_meta,
-                                          const int32_t row_start_idx, const bool need_init_vector)
-  {
-    int ret = OB_NOT_IMPLEMENT;
-    SQL_LOG(WARN, "not implemented", K(ret));
     return ret;
   }
 
@@ -1245,6 +1231,36 @@ inline constexpr bool is_var_len_agg_cell(VecValueTypeClass vec_tc)
          || vec_tc == VEC_TC_COLLECTION
          || vec_tc == VEC_TC_ROARINGBITMAP
          || vec_tc == VEC_TC_EXTEND;
+}
+
+template<VecValueTypeClass vec_tc>
+struct is_fixed_len
+{
+  static constexpr bool value = !is_var_len_agg_cell(vec_tc);
+};
+template<VecValueTypeClass vec_tc>
+struct is_var_len
+{
+  static constexpr bool value = is_var_len_agg_cell(vec_tc);
+};
+
+static void init_cell_value(VecValueTypeClass vec_tc, char *cell, const ObAggrInfo &aggr_info)
+{
+  // oracle mode use ObNumber as result type for count aggregation
+  // we use int64_t as result type for count aggregation in aggregate row
+  // and cast int64_t to ObNumber during `collect_group_result`
+  if (vec_tc == VEC_TC_NUMBER && aggr_info.get_expr_type() != T_FUN_COUNT &&
+      aggr_info.get_expr_type() != T_FUN_SUM_OPNSIZE) {
+    ObNumberDesc &d = *reinterpret_cast<ObNumberDesc *>(cell);
+    // set zero number
+    d.len_ = 0;
+    d.sign_ = number::ObNumber::POSITIVE;
+    d.exp_ = 0;
+  } else if (vec_tc == VEC_TC_FLOAT) {
+    *reinterpret_cast<float *>(cell) = float();
+  } else if (vec_tc == VEC_TC_DOUBLE || vec_tc == VEC_TC_FIXED_DOUBLE) {
+    *reinterpret_cast<double *>(cell) = double();
+  }
 }
 
 template <typename AggType>

@@ -580,9 +580,9 @@ int ObKVCacheStore::get_washable_size(const uint64_t tenant_id, int64_t &washabl
   return ret;
 }
 
-void ObKVCacheStore::flush_washable_mbs()
+int ObKVCacheStore::flush_washable_mbs()
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS, last_error_code = OB_SUCCESS;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -593,17 +593,19 @@ void ObKVCacheStore::flush_washable_mbs()
       COMMON_LOG(WARN, "Fail to get all tenant ids", K(ret));
     } else {
       uint64_t tenant_id = OB_INVALID_TENANT_ID;
-      for (int64_t i = 0 ; i < tenant_ids.count() ; ++i) {
-        int tmp_ret = OB_SUCCESS;
+      // record error code in last_error_code
+      for (int64_t i = 0 ; /* OB_SUCC(ret) && */ i < tenant_ids.count() ; ++i) {
         if (OB_FAIL(tenant_ids.at(i, tenant_id))) {
           COMMON_LOG(WARN, "Fail to get tenant id, continue to flush rest tenants", K(ret), K(i));
-        } else if (OB_TMP_FAIL(flush_washable_mbs(tenant_id))) {
-          COMMON_LOG(WARN, "Fail to flush tenant washable memblock", K(tmp_ret));
+        } else if (OB_FAIL(flush_washable_mbs(tenant_id))) {
+          COMMON_LOG(WARN, "Fail to flush tenant washable memblock");
         }
+        last_error_code = ret;
       }
     }
   }
 
+  return ret == OB_SUCCESS ? last_error_code : ret;
 }
 
 int ObKVCacheStore::flush_washable_mbs(const uint64_t tenant_id, const bool force_flush)
@@ -861,6 +863,7 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
   HazardList retire_list;
   ObDLink* head = list_handle.get_head();
   int64_t tenant_id = list_handle.list_->tenant_id_;
+  int64_t timeout_us = INT_MAX == size_to_wash ? FLUSH_MB_TIMEOUT_US : SYNC_WASH_MB_TIMEOUT_US;
   if (OB_LIKELY(GCONF._enable_kvcache_hazard_pointer)) {
     // retire memblock and reclaim until
     // 1. wash out enough memory, or
@@ -913,16 +916,16 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
 
           if (!force_flush && check_idx > 0 && 0 == check_idx % check_interval) {
             const int64_t cost = ObTimeUtility::current_time() - start;
-            if (cost > SYNC_WASH_MB_TIMEOUT_US) {
+            if (cost > timeout_us) {
               ret = OB_SYNC_WASH_MB_TIMEOUT;
-              COMMON_LOG(WARN, "sync wash mb timeout", K(cost), LITERAL_K(SYNC_WASH_MB_TIMEOUT_US));
+              COMMON_LOG(WARN, "sync wash mb timeout", K(cost), K(timeout_us));
             }
           }
           ++check_idx;
         }
       }  // qclock guard
 
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) && OB_SYNC_WASH_MB_TIMEOUT != ret) {
       } else if (size_retired >= size_to_wash - size_washed || size_to_wash == INT64_MAX) {
         // do recliam if has retired enough memory
         int64_t start_time = ObTimeUtility::current_time();
@@ -1004,9 +1007,9 @@ int ObKVCacheStore::inner_flush_washable_mb(const int64_t cache_id, const int64_
 
       if (!force_flush && check_idx > 0 && 0 == check_idx % check_interval) {
         const int64_t cost = ObTimeUtility::current_time() - start;
-        if (cost > SYNC_WASH_MB_TIMEOUT_US) {
+        if (cost > timeout_us) {
           ret = OB_SYNC_WASH_MB_TIMEOUT;
-          COMMON_LOG(WARN, "sync wash mb timeout", K(cost), LITERAL_K(SYNC_WASH_MB_TIMEOUT_US));
+          COMMON_LOG(WARN, "sync wash mb timeout", K(cost), K(timeout_us));
         }
       }
       ++check_idx;
@@ -1312,7 +1315,7 @@ bool ObKVCacheStore::compute_tenant_wash_size()
 
   if (OB_FAIL(mem_limit_getter_->get_all_tenant_id(tenant_ids_))) {
     COMMON_LOG(WARN, "Fail to get all tenant ids, ", K(ret));
-  } else if (OB_FAIL(insts_->get_cache_info(OB_SYS_TENANT_ID, inst_handles_))) {
+  } else if (OB_FAIL(insts_->get_cache_info(inst_handles_))) {
     COMMON_LOG(WARN, "Fail to get all cache infos, ", K(ret));
   }
 
@@ -1757,7 +1760,11 @@ void ObKVCacheStore::retire_mb_handles(HazardList &retire_list, const bool do_re
     if (wash_itid_ == get_itid()) {  // wash thread should not sync wash
       retire_limit = WASH_THREAD_RETIRE_LIMIT;
     }
+    bool need_purge = retire_list.size() > retire_limit;
     get_retire_station().retire(reclaim_list, retire_list, retire_limit);
+    if (need_purge) {
+      get_retire_station().retire(reclaim_list, retire_list, -1);
+    }
     reuse_mb_handles(reclaim_list);
   }
 }

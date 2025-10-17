@@ -79,6 +79,7 @@ StmtType ObTableAuditUtils::get_stmt_type(ObTableOperationType::Type op_type)
 // statement is "multi $op_name $table_name col1, col2, col3"
 int64_t ObTableAuditMultiOp::get_stmt_length(const ObString &table_name) const
 {
+  int ret = OB_SUCCESS;
   int64_t len = 0;
   ObString tmp_table_name = table_name.empty() ? ObString::make_string("(null)") : table_name;
 
@@ -92,16 +93,18 @@ int64_t ObTableAuditMultiOp::get_stmt_length(const ObString &table_name) const
   if (get_op_count() != 0) {
     const ObITableEntity *entity = get_entity(0);
     if (OB_NOT_NULL(entity)) {
-      const ObIArray<ObString> *propertiy_names = entity->get_all_properties_names();
-      if (OB_NOT_NULL(propertiy_names)) {
-        int64_t N = propertiy_names->count();
+      ObSEArray<ObString, 8> propertiy_names;
+      if (OB_FAIL(entity->get_properties_names(propertiy_names))) {
+        LOG_WARN("failed to get properties names", K(ret), KPC(entity));
+      } else {
+        int64_t N = propertiy_names.count();
         for (int64_t index = 0; index < N - 1; ++index) {
-          len += propertiy_names->at(index).length(); // col1
+          len += propertiy_names.at(index).length(); // col1
           len += 2; // "\"\"" double quote
           len += 2; // ", "
         }
         if (0 < N) {
-          len += propertiy_names->at(N - 1).length(); // col_n
+          len += propertiy_names.at(N - 1).length(); // col_n
           len += 2; // "\"\"" double quote
         }
       }
@@ -133,15 +136,17 @@ int ObTableAuditMultiOp::generate_stmt(const ObString &table_name, char *buf, in
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("entity is null", K(ret), K(index));
       } else {
-        const ObIArray<ObString> *propertiy_names = entity->get_all_properties_names();
-        if (OB_NOT_NULL(propertiy_names)) {
-          int64_t N = propertiy_names->count();
+        ObSEArray<ObString, 8> propertiy_names;
+        if (OB_FAIL(entity->get_properties_names(propertiy_names))) {
+          LOG_WARN("failed to get properties names", K(ret), KPC(entity));
+        } else {
+          int64_t N = propertiy_names.count();
           for (int64_t index = 0; index < N - 1; ++index) {
-            BUF_PRINTO(propertiy_names->at(index)); // pos will change in BUF_PRINTO
+            BUF_PRINTO(propertiy_names.at(index)); // pos will change in BUF_PRINTO
             J_COMMA(); // ", "
           }
           if (0 < N) {
-            BUF_PRINTO(propertiy_names->at(N - 1));
+            BUF_PRINTO(propertiy_names.at(N - 1));
           }
         }
       }

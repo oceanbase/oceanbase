@@ -239,44 +239,10 @@ int MutatorRow::parse_columns_(
               if (! is_out_row) {
                 OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
                 obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
-              } else {
-                const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
-
-                const ObLobDataOutRowCtx *lob_data_out_row_ctx =
-                  reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
-
-                OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
-                    K(lob_data), K(obj), KPC(lob_data_out_row_ctx));
-
-                if (is_parse_new_col) {
-                  // new_cols in MutatorRow for delete operation expect nop data, however delete_insert table mode set data(copy from old_cols), should skip such data;
-                  if (OB_LIKELY(!dml_flag.is_delete())) {
-                    ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
-
-                    if (OB_ISNULL(lob_data_get_ctx)) {
-                      ret = OB_ALLOCATE_MEMORY_FAILED;
-                      LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
-                    } else {
-                      new(lob_data_get_ctx) ObLobDataGetCtx();
-                      lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data);
-
-                      new_lob_ctx_cols_.add(lob_data_get_ctx);
-                    }
-                  }
-                } else {
-                  if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {
-                    if (OB_ENTRY_NOT_EXIST != ret) {
-                      LOG_ERROR("new_lob_ctx_cols_ set_old_lob_data failed", KR(ret), K(column_id), K(lob_data));
-                    } else {
-                      // Not finding it is a possibility, eg:
-                      // LOB old row is out row storage, but new row is in row storage
-                      ret = OB_SUCCESS;
-                    }
-                  }
-                }
+              } else if (OB_FAIL(parse_outrow_lob_column_(is_parse_new_col, dml_flag, column_id, lob_common))) {
+                LOG_ERROR("parse_outrow_lob_column_ failed", K(ret), K(obj), K(column_id));
               }
             } // is_lob_storage
-
             if (OB_SUCC(ret) && OB_FAIL(add_column_(
                 column_id,
                 &obj,
@@ -297,6 +263,75 @@ int MutatorRow::parse_columns_(
     } // for
 
     ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  }
+
+  return ret;
+}
+
+int MutatorRow::parse_outrow_lob_column_(
+    const bool is_parse_new_col,
+    const blocksstable::ObDmlRowFlag &dml_flag,
+    const uint64_t column_id,
+    const ObLobCommon &lob_common)
+{
+  int ret = OB_SUCCESS;
+
+  const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
+
+  const ObLobDataOutRowCtx *lob_data_out_row_ctx =
+    reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
+
+  OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
+                    K(lob_data), KPC(lob_data_out_row_ctx));
+
+  if (is_parse_new_col) {
+    // new_cols in MutatorRow for delete operation expect nop data, however delete_insert table mode set data(copy from old_cols), should skip such data;
+    if (OB_LIKELY(!dml_flag.is_delete())) {
+      ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+
+      if (OB_ISNULL(lob_data_get_ctx)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+      } else {
+        new(lob_data_get_ctx) ObLobDataGetCtx();
+        if (OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data, true/*is_new_col*/))) {
+          LOG_ERROR("lob_data_get_ctx reset failed", K(new_lob_ctx_cols_));
+        } else {
+          new_lob_ctx_cols_.add(lob_data_get_ctx);
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(new_lob_ctx_cols_.set_old_lob_data(column_id, &lob_data))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("new_lob_ctx_cols_ set_old_lob_data failed", KR(ret), K(column_id), K(lob_data));
+      } else {
+        // Not finding it is a possibility, eg:
+        //   1. LOB old row is out row storage, but new row is in row storage.
+        //   2. Delete outrow lob.
+        ret = OB_SUCCESS;
+
+        if (! dml_flag.is_delete() && ! dml_flag.is_update()) {
+          // If neither of the above two possibilities, do nothing.
+        } else if (!lob_data_out_row_ctx->is_valid_old_value() && !lob_data_out_row_ctx->is_valid_old_value_ext_info_log()) {
+          // Among the two possibilities above, the lob_data_out_row_ctx op_type will be set to either 'VALID_OLD_VALUE' or
+          // 'VALID_OLD_VALUE_EXT_INFO_LOG'. If it is neither of these two types, do nothing.
+        } else {
+          ObLobDataGetCtx *lob_data_get_ctx = static_cast<ObLobDataGetCtx *>(allocator_.alloc(sizeof(ObLobDataGetCtx)));
+          if (OB_ISNULL(lob_data_get_ctx)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory for ObLobDataGetCtx fail", KR(ret), "size", sizeof(ObLobDataGetCtx));
+          } else {
+            new(lob_data_get_ctx) ObLobDataGetCtx();
+            if(OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data, false/*is_new_col*/))) {
+              LOG_ERROR("lob data get ctx reset failed", KR(ret));
+            } else {
+              new_lob_ctx_cols_.add(lob_data_get_ctx);
+            }
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -379,11 +414,12 @@ int MutatorRow::add_column_(
     common::ObArrayHelper<common::ObString> extended_type_info;
     common::ObAccuracy accuracy;
     common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
-
+    const common::ObSqlCollectionInfo *collection_info = nullptr;
     // Set meta information and scale information if column schema is valid
     if (NULL != column_schema_info) {
       column_cast(cv_node->value_, *column_schema_info);
       column_schema_info->get_extended_type_info(extended_type_info);
+      collection_info = column_schema_info->get_collection_info();
       accuracy = column_schema_info->get_accuracy();
       collation_type = column_schema_info->get_collation_type();
     }
@@ -437,6 +473,7 @@ int MutatorRow::add_column_(
         allocator_,
         false,
         extended_type_info,
+        collection_info,
         accuracy,
         collation_type,
         tz_info_wrap))) {
@@ -1112,7 +1149,7 @@ int MemtableMutatorRow::parse_cols(
     ret = OB_STATE_NOT_MATCH;
   }
 
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row(tenant_id);
 
   // parse value of new column
@@ -1212,7 +1249,7 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     LOG_ERROR("row has not been deserialized", KR(ret));
   }
 
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row(OB_SERVER_TENANT_ID);
 
   // parse value of new column
@@ -1277,7 +1314,7 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
 int MemtableMutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log)
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row;
   bool is_found = false;
   if (OB_UNLIKELY(cols_parsed_)) {
@@ -1465,7 +1502,7 @@ int DmlStmtTask::parse_col(
   common::ObArrayHelper<common::ObString> extended_type_info;
   common::ObAccuracy accuracy;
   common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
-
+  const common::ObSqlCollectionInfo *collection_info = column_schema_info.get_collection_info();
   column_schema_info.get_extended_type_info(extended_type_info);
   accuracy = column_schema_info.get_accuracy();
   collation_type = column_schema_info.get_collation_type();
@@ -1478,6 +1515,7 @@ int DmlStmtTask::parse_col(
       row_.get_allocator(),
       false,
       extended_type_info,
+      collection_info,
       accuracy,
       collation_type,
       tz_info_wrap))) {

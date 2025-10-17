@@ -17,6 +17,7 @@
 #include "lib/list/ob_list.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_cached_allocator.h"
+#include "lib/charset/ob_charset.h"
 
 namespace oceanbase
 {
@@ -72,10 +73,9 @@ struct dblink_param_ctx{
   uint64_t dblink_id_;
   int64_t sql_request_level_;
   const char *set_sql_mode_cstr_;
-  const char *set_client_charset_cstr_;
-  const char *set_connection_charset_cstr_;
-  const char *set_results_charset_cstr_;
+  ObCharsetType set_conn_charset_type_;
   const char *set_transaction_isolation_cstr_;
+  int64_t ob_query_timeout_;
   dblink_param_ctx() :
   charset_id_(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)), //utf8, deault value, don't modify it cause dblink pull meta need it
   ncharset_id_(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)), //utf8, deault value, don't modify it cause dblink pull meta need it
@@ -86,10 +86,9 @@ struct dblink_param_ctx{
   dblink_id_(OB_INVALID_ID),
   sql_request_level_(0),
   set_sql_mode_cstr_(NULL),
-  set_client_charset_cstr_(NULL),
-  set_connection_charset_cstr_(NULL),
-  set_results_charset_cstr_(NULL),
-  set_transaction_isolation_cstr_(NULL)
+  set_conn_charset_type_(ObCharsetType::CHARSET_INVALID),
+  set_transaction_isolation_cstr_(NULL),
+  ob_query_timeout_(0)
   { }
   TO_STRING_KV(K_(charset_id),
                K_(ncharset_id),
@@ -100,10 +99,9 @@ struct dblink_param_ctx{
                K_(dblink_id),
                K_(sql_request_level),
                K_(set_sql_mode_cstr),
-               K_(set_client_charset_cstr),
-               K_(set_connection_charset_cstr),
-               K_(set_results_charset_cstr),
-               K_(set_transaction_isolation_cstr));
+               K_(set_conn_charset_type),
+               K_(set_transaction_isolation_cstr),
+               K_(ob_query_timeout));
 };
 
 class ObISQLConnectionPool

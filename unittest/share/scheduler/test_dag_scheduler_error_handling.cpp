@@ -270,7 +270,7 @@ public:
     }
     return OB_SUCCESS;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDag &other) const
   {
     bool bret = false;

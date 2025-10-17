@@ -44,6 +44,16 @@ public:
   ~ObUnit() {}
   inline bool operator <(const ObUnit &unit) const;
   int assign(const ObUnit& that);
+  int init(const uint64_t unit_id,
+           const uint64_t resource_pool_id,
+           const uint64_t unit_group_id,
+           const common::ObZone &zone,
+           const common::ObAddr &server,
+           const common::ObAddr &migrate_from_server,
+           const bool is_manual_migrate,
+           const Status &status,
+           const common::ObReplicaType &replica_type,
+           const int64_t time_stamp);
   void reset();
   bool is_valid() const;
   bool is_manual_migrate() const { return is_manual_migrate_; }
@@ -67,6 +77,7 @@ public:
   bool is_manual_migrate_;
   Status status_;
   common::ObReplicaType replica_type_;
+  int64_t time_stamp_ =  OB_INVALID_TIMESTAMP;
 };
 
 inline bool ObUnit::operator <(const ObUnit &unit) const

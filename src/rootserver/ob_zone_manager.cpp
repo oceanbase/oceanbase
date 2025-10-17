@@ -16,6 +16,7 @@
 #include "ob_zone_manager.h"
 #include "share/ob_zone_table_operation.h"
 #include "src/share/ob_common_rpc_proxy.h"
+#include "rootserver/ob_server_zone_op_service.h"
 
 namespace oceanbase
 {
@@ -427,6 +428,12 @@ int ObZoneManagerBase::add_zone(
         LOG_INFO("succeed to add new zone", "zone_info", zone_infos_[zone_count_]);
         ++zone_count_;
         ROOTSERVICE_EVENT_ADD("zone", "add_zone", K(zone));
+#ifdef OB_BUILD_SHARED_STORAGE
+        if (GCTX.is_shared_storage_mode() && OB_FAIL(ObServerZoneOpService::insert_zone_in_palf_kv(zone))) {
+          // do not check data_version
+          LOG_WARN("fail to insert zone in palf kv", KR(ret), K(zone));
+        }
+#endif
       }
     }
   }
@@ -451,6 +458,14 @@ int ObZoneManagerBase::delete_zone(const ObZone &zone)
   } else if (ObZoneStatus::INACTIVE != zone_infos_[idx].status_) {
     ret = OB_ZONE_STATUS_NOT_MATCH;
     LOG_WARN("zone is not inactive, can't delete it", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+          && OB_FAIL(ObServerZoneOpService::delete_zone_from_palf_kv(zone))) {
+    // do not check data_version
+    // delete palf kv first, then delete the inner table to ensure that when delete inner table failed,
+    // the inner table is more than palf kv.
+    LOG_WARN("fail to delete zone from palf kv", KR(ret), K(zone));
+#endif
   } else if (OB_FAIL(ObZoneTableOperation::remove_zone_info(*proxy_, zone))) {
     LOG_WARN("remove_zone_info failed", K(zone), K(ret));
   } else {

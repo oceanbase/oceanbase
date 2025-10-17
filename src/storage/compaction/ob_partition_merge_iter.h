@@ -344,7 +344,7 @@ protected:
     const int64_t multi_version_start = access_context_.trans_version_range_.multi_version_start_;
     if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
       const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
-      if (is_delete_insert_merge_ && !is_ha_compeleted_) {
+      if (is_delete_insert_merge_ && (!is_ha_compeleted_ || base_version <= 0)) {
         need_recycle = false;
       } else if (commit_version <= multi_version_start) {
         need_recycle = true;

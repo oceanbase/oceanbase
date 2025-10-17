@@ -560,7 +560,7 @@ ERROR 0A000: Not supported feature or function
 ALTER TABLE geo_t1 MODIFY t SET('a','b');
 ERROR 0A000: Not supported feature or function
 ALTER TABLE geo_t1 MODIFY t JSON;
-ERROR 0A000: Not supported feature or function
+ERROR 22032: Cannot create a JSON value from a string.
 ALTER TABLE geo_t1 MODIFY t BIT(8);
 ERROR 22001: Data too long for column
 ALTER TABLE geo_t1 MODIFY t varchar(256);
@@ -592,7 +592,7 @@ ERROR 0A000: Not supported feature or function
 ALTER TABLE geo_t1 change t tt SET('a','b');
 ERROR 0A000: Not supported feature or function
 ALTER TABLE geo_t1 change t tt JSON;
-ERROR 0A000: Not supported feature or function
+ERROR 22032: Cannot create a JSON value from a string.
 ALTER TABLE geo_t1 change t tt BIT(8);
 ERROR 22001: Data too long for column
 ALTER TABLE geo_t1 change t tt varchar(256);

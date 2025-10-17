@@ -190,15 +190,17 @@ int ObSetCommentHelper::check_table_legitimacy_()
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view is");
   } else if (OB_UNLIKELY(orig_table_schema_->is_ctas_tmp_table())) {
     ret = OB_ERR_WRONG_OBJECT;
+    ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-    to_cstring(arg_.database_name_), to_cstring(arg_.table_name_), "BASE TABLE");
+    helper.convert(arg_.database_name_), helper.convert(arg_.table_name_), "BASE TABLE");
   } else if (OB_UNLIKELY((!orig_table_schema_->is_user_table()
                           && !orig_table_schema_->is_tmp_table()
                           && !orig_table_schema_->is_view_table()
                           && !orig_table_schema_->is_external_table()))) {
     ret = OB_ERR_WRONG_OBJECT;
+    ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-    to_cstring(arg_.database_name_), to_cstring(arg_.table_name_), "BASE TABLE");
+    helper.convert(arg_.database_name_), helper.convert(arg_.table_name_), "BASE TABLE");
   } else if (OB_UNLIKELY(orig_table_schema_->is_sys_view() && !GCONF.enable_sys_table_ddl)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("comment on sys view is not allowed", KR(ret), K(orig_table_schema_->get_table_id()));
@@ -250,7 +252,7 @@ int ObSetCommentHelper::lock_for_common_ddl_()
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     LOG_WARN("get min data version failed", KR(ret), K_(tenant_id));
   } else {
-    if (OB_FAIL(ObDDLLock::lock_for_common_ddl_in_trans(*orig_table_schema_, false/*require_strict_binary_format*/,trans_))) {
+    if (OB_FAIL(ObDDLLock::lock_for_common_ddl_in_trans(*orig_table_schema_, false/*require_strict_binary_format*/,get_trans_()))) {
       LOG_WARN("fail to lock for common ddl", KR(ret));
     }
   }
@@ -337,14 +339,14 @@ int ObSetCommentHelper::operate_schemas_()
     for (uint64_t column_idx = 0; OB_SUCC(ret) && column_idx < arg_.column_name_list_.size(); column_idx++) {
       new_column_schemas_.at(column_idx)->set_schema_version(new_schema_version);
       if (OB_FAIL(schema_service_impl->get_table_sql_service().update_single_column(
-                trans_, *orig_table_schema_, *new_table_schema_,
+                get_trans_(), *orig_table_schema_, *new_table_schema_,
                 *new_column_schemas_.at(column_idx), false /* record ddl operation*/, need_del_stat))) {
         LOG_WARN("fail to update single column", KR(ret));
       }
     }
     new_table_schema_->set_schema_version(new_schema_version);
     if (FAILEDx(schema_service_impl->get_table_sql_service().only_update_table_options(
-                                                             trans_,
+                                                             get_trans_(),
                                                              *new_table_schema_,
                                                              OB_DDL_ALTER_TABLE,
                                                              ddl_stmt_str))) {

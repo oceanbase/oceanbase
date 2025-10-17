@@ -42,7 +42,7 @@ private:
                        const common::ObIArray<ObTableOperation> &ops,
                        common::ObIArray<ObTableOperationResult> &results);
   static int multi_get_fuse_key_range(ObTableBatchCtx &ctx, ObTableApiSpec &spec,
-                                      const common::ObIArray<ObITableEntity *> &entities,
+                                      const common::ObIArray<const ObITableEntity *> &entities,
                                       common::ObIArray<ObTableOperationResult> &results,
                                       int64_t &got_row_count);
   static int multi_op_in_executor(ObTableBatchCtx &ctx,
@@ -101,7 +101,7 @@ private:
                         bool returning_affected_entity);
   static int adjust_entities(ObTableBatchCtx &ctx,
                              const common::ObIArray<ObTableOperation> &ops,
-                             ObIArray<ObITableEntity*> &entities);
+                             ObIArray<const ObITableEntity*> &entities);
   static int check_legality(ObTableBatchCtx &ctx,
                             const common::ObIArray<ObTableOperation> &ops,
                             common::ObIArray<ObTableOperationResult> &results);

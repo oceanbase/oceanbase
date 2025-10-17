@@ -20,7 +20,7 @@ namespace oceanbase
 namespace tools
 {
 int ObAdminCommonUtils::dump_single_macro_block(
-    const ObDumpMacroBlockContext &macro_context,
+    const ObDumpMacroBlockParam &param,
     const char* buf,
     const int64_t size)
 {
@@ -29,9 +29,9 @@ int ObAdminCommonUtils::dump_single_macro_block(
   if (OB_ISNULL(buf) || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "invalid argument", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(macro_reader.init(buf, size, false))) {
-    STORAGE_LOG(ERROR, "failed to init macro reader", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(macro_reader.dump(macro_context.tablet_id_, macro_context.scn_))) {
+  } else if (OB_FAIL(macro_reader.init(buf, size, param.macro_context_.hex_length_, param.hex_print_))) {
+    STORAGE_LOG(ERROR, "failed to init macro reader", K(ret), KP(buf), K(size), "hex_print", param.hex_print_);
+  } else if (OB_FAIL(macro_reader.dump(param.macro_context_.tablet_id_, param.macro_context_.scn_))) {
     STORAGE_LOG(ERROR, "failed dump macro block", K(ret), KP(buf), K(size));
   }
 
@@ -39,7 +39,7 @@ int ObAdminCommonUtils::dump_single_macro_block(
 }
 
 int ObAdminCommonUtils::dump_shared_macro_block(
-    const ObDumpMacroBlockContext &macro_context,
+    const ObDumpMacroBlockParam &param,
     const char* buf,
     const int64_t size)
 {
@@ -64,9 +64,9 @@ int ObAdminCommonUtils::dump_shared_macro_block(
         }
       } else if (OB_FAIL(common_header.check_integrity())) {
         STORAGE_LOG(ERROR, "invalid common header", K(ret), K(common_header));
-      } else if (OB_FAIL(dump_single_macro_block(macro_context, cur_buf,
+      } else if (OB_FAIL(dump_single_macro_block(param, cur_buf,
           common_header.get_header_size() + common_header.get_payload_size()))) {
-        STORAGE_LOG(ERROR, "dump single block fail", K(ret), K(common_header));
+        STORAGE_LOG(ERROR, "dump single block fail", K(ret), K(common_header), K(param));
       } else {
         current_page_offset = upper_align(
             current_page_offset + common_header.get_header_size() + common_header.get_payload_size(),

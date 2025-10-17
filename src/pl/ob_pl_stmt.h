@@ -562,7 +562,8 @@ public:
       cursor_type_(),
       formal_params_(allocator),
       state_(INVALID),
-      has_dup_column_name_(false) {}
+      has_dup_column_name_(false),
+      pkg_body_id_(0) /*0 means not set yet, Why not set to Invalid, Cause When create body resolver, pkg_body_id is INVALID ID*/ {}
   virtual ~ObPLCursor() {}
 
   inline bool is_package_cursor() const
@@ -592,7 +593,7 @@ public:
   inline void set_hidden_rowid(bool has_hidden_rowid) { value_.set_hidden_rowid(has_hidden_rowid); }
   inline bool has_hidden_rowid() const { return value_.has_hidden_rowid(); }
   inline void set_skip_locked(bool is_skip_locked) { value_.set_skip_locked(is_skip_locked); }
-  inline bool is_skip_locked() { return value_.is_skip_locked(); }
+  inline bool is_skip_locked() const { return value_.is_skip_locked(); }
   inline const common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects() const { return value_.get_ref_objects(); }
   inline int set_ref_objects(const common::ObIArray<share::schema::ObSchemaObjVersion> &ref_objects) { return value_.set_ref_objects(ref_objects); }
   inline void set_row_desc(const ObRecordType* row_desc) { value_.set_row_desc(row_desc); }
@@ -609,22 +610,25 @@ public:
   inline void set_rowid_table_id(uint64 table_id) { value_.set_rowid_table_id(table_id); }
   inline void set_dup_column() { has_dup_column_name_ = true; }
   inline bool is_dup_column() const { return has_dup_column_name_; }
+  inline void set_package_body_id(uint64_t pkg_body_id) { pkg_body_id_ = pkg_body_id; }
+  inline uint64_t get_package_body_id() const { return pkg_body_id_; }
+  inline bool is_define_in_body() const { return pkg_body_id_ != 0; }
 
   int set(const ObString &sql,
-                 const ObIArray<int64_t> &expr_idxs,
-                 const common::ObString &ps_sql,
-                 sql::stmt::StmtType type,
-                 bool for_update,
-                 ObRecordType *record_type,
-                 const ObPLDataType &cursor_type,
-                 CursorState state,
-                 const ObIArray<share::schema::ObSchemaObjVersion> &ref_objects,
-                 const common::ObIArray<int64_t> &params,
-                 bool has_dup_column_name
-                 );
+          const ObIArray<int64_t> &expr_idxs,
+          const common::ObString &ps_sql,
+          sql::stmt::StmtType type,
+          bool for_update,
+          ObRecordType *record_type,
+          const ObPLDataType &cursor_type,
+          CursorState state,
+          const ObIArray<share::schema::ObSchemaObjVersion> &ref_objects,
+          const common::ObIArray<int64_t> &params,
+          bool has_dup_column_name);
 
   TO_STRING_KV(
-    K_(pkg_id), K_(routine_id), K_(idx), K_(value), K_(cursor_type), K_(formal_params), K_(state), K_(has_dup_column_name));
+    K_(pkg_id), K_(routine_id), K_(idx), K_(value),
+    K_(cursor_type), K_(formal_params), K_(state), K_(has_dup_column_name), K_(pkg_body_id));
 
 protected:
   uint64_t pkg_id_;
@@ -635,6 +639,7 @@ protected:
   ObPLSEArray<int64_t> formal_params_;
   CursorState state_;
   bool has_dup_column_name_;
+  uint64_t pkg_body_id_; // It means CURSOR is declare in spec and define in body, sql params will save in body instead of spec.
 };
 
 class ObPLCursorTable
@@ -666,7 +671,8 @@ public:
                  const common::ObIArray<int64_t> &formal_params,
                  ObPLCursor::CursorState state = ObPLCursor::DEFINED,
                  bool has_dup_column_name = false,
-                 bool skip_locked = false);
+                 bool skip_locked = false,
+                 uint64_t package_body_id = 0);
 
   TO_STRING_KV(K_(cursors));
 
@@ -1903,6 +1909,7 @@ enum ObPLStmtType
   PL_INTERFACE,
   PL_DO,
   PL_CASE,
+  PL_TRANSFORMED_ASSIGN,
   MAX_PL_STMT
 };
 

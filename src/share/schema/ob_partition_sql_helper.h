@@ -284,6 +284,7 @@ private:
   template<class P>  //ObPartition or ObSubPartition
   int add_list_val_column(const P &partition,
                                 ObDMLSqlSplicer &dml);
+  int add_part_storage_cache_policy_column(const ObBasePartition &part, ObDMLSqlSplicer &dml);
 
 private:
   char *high_bound_val_;

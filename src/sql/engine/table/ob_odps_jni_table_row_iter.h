@@ -19,8 +19,8 @@
 
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
-#include "sql/engine/connector/ob_jni_scanner.h"
-#include "sql/engine/connector/ob_jni_writer.h"
+#include "sql/engine/connector/ob_odps_jni_reader.h"
+#include "sql/engine/connector/ob_odps_jni_writer.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/engine/table/ob_odps_table_utils.h"
 
@@ -31,42 +31,42 @@ class Field;
 namespace oceanbase {
 namespace sql {
 
-inline bool is_fixed_odps_type(const ObJniConnector::OdpsType type)
+inline bool is_fixed_odps_type(const ObOdpsJniConnector::OdpsType type)
 {
-  return type == ObJniConnector::OdpsType::BOOLEAN ||
-         type == ObJniConnector::OdpsType::TINYINT ||
-         type == ObJniConnector::OdpsType::SMALLINT ||
-         type == ObJniConnector::OdpsType::INT ||
-         type == ObJniConnector::OdpsType::BIGINT ||
-         type == ObJniConnector::OdpsType::FLOAT ||
-         type == ObJniConnector::OdpsType::DOUBLE ||
-         type == ObJniConnector::OdpsType::DECIMAL ||
-         type == ObJniConnector::OdpsType::DATE ||
-         type == ObJniConnector::OdpsType::DATETIME ||
-         type == ObJniConnector::OdpsType::TIMESTAMP_NTZ ||
-         type == ObJniConnector::OdpsType::TIMESTAMP;
+  return type == ObOdpsJniConnector::OdpsType::BOOLEAN ||
+         type == ObOdpsJniConnector::OdpsType::TINYINT ||
+         type == ObOdpsJniConnector::OdpsType::SMALLINT ||
+         type == ObOdpsJniConnector::OdpsType::INT ||
+         type == ObOdpsJniConnector::OdpsType::BIGINT ||
+         type == ObOdpsJniConnector::OdpsType::FLOAT ||
+         type == ObOdpsJniConnector::OdpsType::DOUBLE ||
+         type == ObOdpsJniConnector::OdpsType::DECIMAL ||
+         type == ObOdpsJniConnector::OdpsType::DATE ||
+         type == ObOdpsJniConnector::OdpsType::DATETIME ||
+         type == ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ ||
+         type == ObOdpsJniConnector::OdpsType::TIMESTAMP;
 }
 
-inline bool is_variety_odps_type(const ObJniConnector::OdpsType type)
+inline bool is_variety_odps_type(const ObOdpsJniConnector::OdpsType type)
 {
-  return type == ObJniConnector::OdpsType::CHAR ||
-         type == ObJniConnector::OdpsType::VARCHAR ||
-         type == ObJniConnector::OdpsType::STRING ||
-         type == ObJniConnector::OdpsType::BINARY ||
-         type == ObJniConnector::OdpsType::JSON;
+  return type == ObOdpsJniConnector::OdpsType::CHAR ||
+         type == ObOdpsJniConnector::OdpsType::VARCHAR ||
+         type == ObOdpsJniConnector::OdpsType::STRING ||
+         type == ObOdpsJniConnector::OdpsType::BINARY ||
+         type == ObOdpsJniConnector::OdpsType::JSON;
 }
 
-inline bool is_array_odps_type(const ObJniConnector::OdpsType type)
+inline bool is_array_odps_type(const ObOdpsJniConnector::OdpsType type)
 {
-  return type == ObJniConnector::OdpsType::ARRAY;
+  return type == ObOdpsJniConnector::OdpsType::ARRAY;
 }
 
 class ObODPSJNITableRowIterator : public ObExternalTableRowIterator {
 public:
-  using MirrorOdpsJniColumn = ObJniConnector::MirrorOdpsJniColumn;
-  using OdpsJNIColumn = ObJniConnector::OdpsJNIColumn;
-  using OdpsJNIPartition = ObJniConnector::OdpsJNIPartition;
-  using OdpsType = ObJniConnector::OdpsType;
+  using MirrorOdpsJniColumn = ObOdpsJniConnector::MirrorOdpsJniColumn;
+  using OdpsJNIColumn = ObOdpsJniConnector::OdpsJNIColumn;
+  using OdpsJNIPartition = ObOdpsJniConnector::OdpsJNIPartition;
+  using OdpsType = ObOdpsJniConnector::OdpsType;
 
   struct StateValues {
     StateValues()
@@ -103,7 +103,7 @@ public:
       datums_(nullptr),
       array_(nullptr) {}
 
-    virtual int init(JniScanner::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
+    virtual int init(ObOdpsJniReader::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
     virtual int decode(ObEvalCtx &ctx, const ObExpr &expr, int64_t offset, int64_t size);
 
     ObIAllocator& alloc_;
@@ -132,7 +132,7 @@ public:
       ob_time_(ob_time),
       timezone_ret_(timezone_ret),
       timezone_offset_(timezone_offset) {}
-    virtual int init(JniScanner::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
+    virtual int init(ObOdpsJniReader::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
     virtual int decode(ObEvalCtx &ctx, const ObExpr &expr, int64_t offset, int64_t size);
 
     long column_addr_;
@@ -147,7 +147,7 @@ public:
     : OdpsDecoder(alloc, is_root, odps_column),
       offsets_(nullptr),
       base_addr_(nullptr) {}
-    virtual int init(JniScanner::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
+    virtual int init(ObOdpsJniReader::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
     virtual int decode(ObEvalCtx &ctx, const ObExpr &expr, int64_t offset, int64_t size);
 
     int *offsets_;
@@ -159,38 +159,35 @@ public:
     : OdpsDecoder(alloc, is_root, odps_column),
       offsets_(nullptr),
       child_decoder_(nullptr) {}
-    virtual int init(JniScanner::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
+    virtual int init(ObOdpsJniReader::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
     virtual int decode(ObEvalCtx &ctx, const ObExpr &expr, int64_t offset, int64_t size);
 
     int64_t *offsets_;
     OdpsDecoder *child_decoder_;
   };
 
-public:
-  static const int64_t ODPS_BLOCK_DOWNLOAD_SIZE = 1 << 18;
-  static const char *NON_PARTITION_FLAG;
 
 public:
   ObODPSJNITableRowIterator()
-      : odps_format_(),
-        state_(),
+      : inited_columns_and_types_(false),
         is_part_table_(false),
-        bit_vector_cache_(NULL),
-        batch_size_(-1),
-        inited_columns_and_types_(false),
         is_empty_external_file_exprs_(false),
-        read_rounds_(0),
-        read_rows_(0),
-        real_row_idx_(0),
-        timezone_str_(nullptr),
+        api_mode_(ObODPSGeneralFormat::ApiMode::TUNNEL_API),
         timezone_ret_(OB_SUCCESS),
         timezone_offset_(0),
-        session_ptr_(nullptr),
-        ob_time_(DT_TYPE_ORACLE_TTZ),
+        batch_size_(-1),
+        read_rounds_(0),
+        read_rows_(0),
         predicate_buf_(nullptr),
         predicate_buf_len_(0),
+        bit_vector_cache_(nullptr),
+        odps_jni_schema_scanner_(nullptr),
+        session_ptr_(nullptr),
+        ob_time_(DT_TYPE_ORACLE_TTZ),
+        timezone_str_(nullptr),
         pd_storage_filters_(nullptr),
-        array_helpers_()
+        array_helpers_(),
+        state_()
   {
     mem_attr_ = ObMemAttr(MTL_ID(), "OdpsJniRowIter");
     malloc_alloc_.set_attr(mem_attr_);
@@ -249,9 +246,19 @@ public:
   }
 
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
-  int init_required_mini_params(const ObSQLSessionInfo* session_ptr_in);
+  int init_required_mini_params(const ObSQLSessionInfo* session_ptr_in, const ObODPSGeneralFormat &odps_format);
   int init_jni_schema_scanner(const ObODPSGeneralFormat &odps_format, const ObSQLSessionInfo* session_ptr_in);
   int init_jni_meta_scanner(const ObODPSGeneralFormat &odps_format, const ObSQLSessionInfo* session_ptr_in);
+  int pull_data_columns();
+  int pull_partition_columns();
+  ObIArray<MirrorOdpsJniColumn> &get_mirror_nonpart_column_list()
+  {
+    return mirror_nonpart_column_list_;
+  }
+  ObIArray<MirrorOdpsJniColumn> &get_mirror_partition_column_list()
+  {
+    return mirror_partition_column_list_;
+  }
   int close_schema_scanner();
   int init_storage_api_meta_param(
       const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str, int64_t split_block_size);
@@ -277,6 +284,10 @@ public:
   int construct_predicate_using_white_filter(const ObDASScanCtDef &das_ctdef,
                                              ObDASScanRtDef *das_rtdef,
                                              ObExecContext &exec_ctx);
+  int fetch_partition_row_count(const ObString &part_spec, int64_t &row_count);
+  int fetch_partition_size(const ObString &part_spec, int64_t &row_count);
+  int pull_partition_info();
+
 private:
   int init_all_columns_name_as_odps_params();
   int init_data_tunnel_reader_params(int64_t start, int64_t step, const ObString &part_spec);
@@ -284,10 +295,8 @@ private:
       const ObString &session_str, int64_t capacity);
   int inner_get_next_row();
   int pull_and_prepare_column_exprs(const ExprFixedArray &ext_file_column_expr);
-  int pull_data_columns();
-  int pull_partition_columns();
   int extract_mirror_odps_columns(
-      ObSEArray<ObString, 8> &mirror_columns, ObSEArray<MirrorOdpsJniColumn, 8> &mirror_target_columns);
+      ObSEArray<ObString, 4> &mirror_columns, ObSEArray<MirrorOdpsJniColumn, 4> &mirror_target_columns);
   int extract_mirror_odps_column(ObString &mirror_column_string, ObIArray<MirrorOdpsJniColumn> &mirror_columns);
   int get_int_from_mirror_column_string(ObString &mirror_column_string, int &int_val);
   int get_type_expr_from_mirror_column_string(ObString &mirror_column_string, ObString &type_expr);
@@ -316,14 +325,7 @@ private:
 
   int get_next_rows_tunnel(int64_t &count, int64_t capacity);
   int get_next_rows_storage_api(int64_t &count, int64_t capacity);
-
-  // flush table count
-public:
-  int fetch_partition_row_count(const ObString &part_spec, int64_t &row_count);
-  int pull_partition_info();
-
-private:
-  int extract_odps_partition_specs(ObSEArray<ObString, 8> &partition_specs);
+  int extract_odps_partition_specs(ObSEArray<ObString, 4> &partition_specs);
   int create_odps_decoder(ObEvalCtx &ctx,
                           const ObExpr &expr,
                           const MirrorOdpsJniColumn &odps_column,
@@ -360,33 +362,30 @@ private:
   bool is_zero_time(const ObObj &obj);
 
 private:
+  // only used for get next task and recall inner_get_next_row() when current task was iter end.
+  bool inited_columns_and_types_;
+  bool is_part_table_;
+  bool is_empty_external_file_exprs_;
+  ObODPSGeneralFormat::ApiMode api_mode_;
+  // -1 means not inited, 0 means call get_next_row(), > 0 means call get_next_rows().
+  int timezone_ret_;
+  int64_t timezone_offset_;
+  int64_t batch_size_;
+  // Only used in reading empty file columns expr, hold the temp remanant records.
+  int64_t read_rounds_;
+  int64_t read_rows_;
+  char *predicate_buf_;
+  int64_t predicate_buf_len_;
+  ObBitVector *bit_vector_cache_;
+  JNIScannerPtr odps_jni_schema_scanner_;
   common::ObMemAttr mem_attr_;
   common::ObMemAttr expr_attr_;
   common::ObMalloc malloc_alloc_;
   common::ObArenaAllocator arena_alloc_;
   common::ObArenaAllocator column_exprs_alloc_;  // op一次读取生命周期 下一次读取重置
   common::ObArenaAllocator task_alloc_;          // task级别的生命周期 取task重置
-  ObODPSGeneralFormat odps_format_;
-  StateValues state_;
-  bool is_part_table_;
-  ObBitVector *bit_vector_cache_;
-  // -1 means not inited, 0 means call get_next_row(), > 0 means call get_next_rows().
-  int64_t batch_size_;
-  // only used for get next task and recall inner_get_next_row() when current task was iter end.
-  bool inited_columns_and_types_;
-  bool is_empty_external_file_exprs_;
-  // Only used in reading empty file columns expr, hold the temp remanant records.
-  int64_t read_rounds_;
-  int64_t read_rows_;
-  int64_t real_row_idx_;
   common::hash::ObHashMap<ObString, ObString> odps_params_map_;
-  JNIScannerPtr odps_jni_schema_scanner_;
-
-  // mirror column list is using for pre-static checking
-  ObSEArray<MirrorOdpsJniColumn, 8> mirror_nonpart_column_list_;
-  ObSEArray<MirrorOdpsJniColumn, 8> mirror_partition_column_list_;
-
-  ObSEArray<OdpsJNIPartition, 8> partition_specs_;
+  ObSQLSessionInfo* session_ptr_;
 
   // non-partition column.
   struct ExternalPair {
@@ -400,40 +399,42 @@ private:
     };
     TO_STRING_KV(K_(ob_col_idx), K_(odps_col_idx));
   };
-  ObSEArray<ExternalPair, 8> sorted_column_ids_;
-  // total_column_ids_ contains the all column with parittion column and
-  ObSEArray<ExternalPair, 8> obexpr_odps_part_col_idsmap_;
-  // obexpr_odps_nonpart_col_idsmap_ only contains the normal column index.
-  ObSEArray<ExternalPair, 8> obexpr_odps_nonpart_col_idsmap_;
-  ObString timezone_str_;
-  int timezone_ret_;
-  int64_t timezone_offset_;
-  ObSQLSessionInfo* session_ptr_;
   ObTime ob_time_;
-  char *predicate_buf_;
-  int64_t predicate_buf_len_;
+  ObString timezone_str_;
+  ObSEArray<ExternalPair, 4> sorted_column_ids_;
+  // total_column_ids_ contains the all column with parittion column and
+  ObSEArray<ExternalPair, 4> obexpr_odps_part_col_idsmap_;
+  // obexpr_odps_nonpart_col_idsmap_ only contains the normal column index.
+  ObSEArray<ExternalPair, 4> obexpr_odps_nonpart_col_idsmap_;
+  // mirror column list is using for pre-static checking
+  ObSEArray<MirrorOdpsJniColumn, 4> mirror_nonpart_column_list_;
+  ObSEArray<MirrorOdpsJniColumn, 4> mirror_partition_column_list_;
+  ObSEArray<OdpsJNIPartition, 4> partition_specs_;
   sql::ObPushdownFilterExecutor *pd_storage_filters_;
-  ObSEArray<ObODPSArrayHelper*, 8> array_helpers_;
+  ObSEArray<ObODPSArrayHelper*, 4> array_helpers_;
+  StateValues state_;
 
   static const int64_t MAX_PARAMS_SIZE = 16;
   static const char *DATETIME_PREFIX;
   static const char *TIMESTAMP_PREFIX;
   static const char *TIMESTAMP_NTZ_PREFIX;
+  static const char *NON_PARTITION_FLAG;
 };
 
-class ObOdpsPartitionJNIScannerMgr {
+class ObOdpsPartitionJNIDownloaderMgr {
 public:
-  ObOdpsPartitionJNIScannerMgr() : inited_(false), ref_(0)
+  ObOdpsPartitionJNIDownloaderMgr() : inited_(false), ref_(0)
   {}
-  static int fetch_row_count(ObExecContext &exec_ctx, uint64_t tenant_id, const ObString &properties,
-      ObIArray<ObExternalFileInfo> &external_table_files, bool &use_partition_gi);
+  static int init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session, const ObString &properties, ObODPSJNITableRowIterator &odps_driver);
 
-  static int fetch_row_count(ObExecContext &exec_ctx, const ObString part_spec, const ObString &properties, int64_t &row_count);
+  static int fetch_row_count(const ObString &part_spec,
+                             const bool get_part_table_size,
+                             ObODPSJNITableRowIterator &odps_driver,
+                             int64_t &row_count);
 
-  static int fetch_storage_row_count(ObExecContext &exec_ctx,
+  static int fetch_storage_row_count(ObSQLSessionInfo *session,
     const ObString part_spec, const ObString &properties, int64_t &row_count);
 
-  static int fetch_storage_row_count(ObExecContext &exec_ctx, const ObString &properties, int64_t &row_count);
   static int fetch_storage_api_total_task(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
       const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &split_count,
       ObIAllocator &range_allocator);
@@ -475,7 +476,7 @@ private:
   int64_t ref_;
 };
 
-class ObOdpsJniUploaderMgr {
+class ObOdpsPartitionJNIUploaderMgr {
 public:
   struct OdpsUploader {
     OdpsUploader() : writer_ptr(nullptr)
@@ -484,7 +485,7 @@ public:
     JNIWriterPtr writer_ptr;
   };
 
-  ObOdpsJniUploaderMgr()
+  ObOdpsPartitionJNIUploaderMgr()
       : inited_(false),
         ref_(0),
         block_num_(0),
@@ -493,7 +494,7 @@ public:
         write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
 
-  ~ObOdpsJniUploaderMgr()
+  ~ObOdpsPartitionJNIUploaderMgr()
   {
     if (OB_NOT_NULL(session_holder_ptr_.get())) {
       (void)session_holder_ptr_->do_close();
@@ -531,7 +532,7 @@ public:
       const ObString &external_partition, bool is_overwrite, common::hash::ObHashMap<ObString, ObString> &params_map);
 
   int init_writer_params_in_px(
-      const ObString &properties, const ObString &external_partition, bool is_overwrite, int64_t parallel);
+      sql::ObODPSGeneralFormat &odps_format, const ObString &external_partition, bool is_overwrite, int64_t parallel);
 
   int get_odps_uploader_in_px(int task_id, const common::ObFixedArray<ObExpr *, common::ObIAllocator> &select_exprs,
       OdpsUploader &odps_uploader);

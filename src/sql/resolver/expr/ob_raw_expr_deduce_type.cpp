@@ -18,12 +18,19 @@
 #include "sql/engine/expr/ob_expr_between.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/parser/ob_parser.h"
+#include "sql/engine/expr/ob_expr_estimate_ndv.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
+
+OB_INLINE static ObScale round_up_scale(const ObScale scale)
+{
+  static const ObScale DIV_CALC_SCALE = 9;
+  return static_cast<ObScale>(((scale) + DIV_CALC_SCALE - 1) / DIV_CALC_SCALE * DIV_CALC_SCALE);
+}
 
 int ObRawExprDeduceType::deduce(ObRawExpr &expr)
 {
@@ -399,6 +406,31 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObIExprRes
     bool is_show_stmt = (my_session_ != NULL && ObStmt::is_show_stmt(my_session_->get_stmt_type()));
 
     LOG_DEBUG("stmt type", K(is_explain_stmt), K(lbt()), K(is_ddl_stmt));
+
+    // batch multi stmt will transform const expr to column ref expr
+    // after this expr will set max integer precision,
+    // like 'delete from t4 where c1 = 9/3', '9' precision will be set to 11
+    // const expr should not be set max integer precision
+    // so use is_batched_multi_stmt_pseudo_column to check if the param expr is from const expr
+    bool is_batched_multi_stmt_const_expr = false;
+    if (my_session_ != NULL && my_session_->get_cur_exec_ctx() != NULL
+        && my_session_->get_cur_exec_ctx()->get_sql_ctx() != NULL
+        && my_session_->get_cur_exec_ctx()->get_sql_ctx()->is_batch_params_execute()
+        && param_expr->is_column_ref_expr()) {
+      const ObColumnRefRawExpr *column_ref_expr = reinterpret_cast<const ObColumnRefRawExpr *>(param_expr);
+      uint64_t table_id = column_ref_expr->get_table_id();
+      const ObStmt *cur_stmt = my_session_->get_cur_exec_ctx()->get_sql_ctx()->cur_stmt_;
+      if (OB_NOT_NULL(cur_stmt)) {
+        if (cur_stmt->is_dml_stmt()) {
+          const ObDMLStmt *dml_stmt = static_cast<const ObDMLStmt*>(cur_stmt);
+          const TableItem *table_item = dml_stmt->get_table_item_by_id(table_id);
+          if (OB_NOT_NULL(table_item) && !table_item->is_basic_table()) {
+            is_batched_multi_stmt_const_expr = true;
+          }
+        }
+      }
+    }
+
     // `select integer_column + 1.123 from t1`
     // integer_column's precision should be deduced as max_integer_precision
     // same as `create table t2 as select integer_column + 1.234 from t1`
@@ -419,7 +451,7 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObIExprRes
     //  explain stmt does not proceduce questionmark exprs, special processing is needed in order to
     //  print precise sql plan.
     if (is_mysql_mode && ob_is_int_uint_tc(types.at(idx).get_type())
-        && (param_expr->is_column_ref_expr())) {
+        && (param_expr->is_column_ref_expr()) && !is_batched_multi_stmt_const_expr) {
       ObPrecision max_prec =
         ObAccuracy::MAX_ACCURACY2[0 /*mysql*/][types.at(idx).get_type()].get_precision();
       const ObPrecision prec = MAX(types.at(idx).get_precision(), max_prec);
@@ -448,6 +480,14 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObIExprRes
     if (ob_is_decimal_int_tc(param_expr->get_result_type().get_type()) &&
         T_FUN_SYS_CAST == param_expr->get_expr_type()) {
       types.at(idx).add_decimal_int_cast_mode(param_expr->get_cast_mode());
+    }
+    const bool is_mysql_number = lib::is_mysql_mode() && types.at(idx).is_number();
+    if (is_mysql_number && param_expr->need_extra_calc_type(is_mysql_number)) {
+      if (DECIMAL_INT_ADJUST_FLAG == types.at(idx).get_result_flag()) {
+        types.at(idx).set_calc_scale(round_up_scale(types.at(idx).get_scale()));
+      } else {
+        types.at(idx).set_calc_scale(param_expr->get_extra_calc_scale());
+      }
     }
   }
   return ret;
@@ -508,7 +548,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     op->set_row_dimension(row_dimension);
     op->set_real_param_num(static_cast<int32_t>(types.count()));
     op->set_is_called_in_sql(expr.is_called_in_sql());
-    ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+    get_cached_initial_type_ctx(type_ctx);
     if (OB_SUCC(ret) && !solidify_session_vars_) {
       if (NULL != my_local_vars_) {
         if (OB_FAIL(ObSQLUtils::merge_solidified_vars_into_type_ctx(type_ctx,
@@ -873,6 +913,13 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
     result_type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     expr.set_result_type(result_type);
+  } else if (T_ANY == expr.get_expr_type() || T_ALL == expr.get_expr_type()) {
+    // ANY/ALL expr will be removed during transform preprocess, mock type deduce here
+    expr.set_data_type(ObNullType);
+  } else if (2 == expr.get_param_count() && NULL != expr.get_param_expr(1) &&
+             (T_ANY == expr.get_param_expr(1)->get_expr_type() || T_ALL == expr.get_param_expr(1)->get_expr_type())) {
+    // skip
+    expr.set_data_type(ObTinyIntType);
   } else if (T_OP_ROW == expr.get_expr_type()) {
     expr.set_data_type(ObNullType);
   // During the prepare phase, some boolean expressions do not undergo recursive type deduction.
@@ -1118,9 +1165,14 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_WARN("invalid relational operator", K(ret));
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, static_cast<long>(1));
+    } else if (T_ANY == expr.get_param_expr(1)->get_expr_type() ||
+               T_ALL == expr.get_param_expr(1)->get_expr_type()) {
+      // intermediate state, skip check
     } else if (1 > expr.get_param_expr(0)->get_param_count()
         || T_OP_ROW == expr.get_param_expr(0)->get_param_expr(0)->get_expr_type()
-        || T_OP_ROW != expr.get_param_expr(1)->get_expr_type()) {
+        || (T_OP_ROW != expr.get_param_expr(1)->get_expr_type() &&
+            T_ANY != expr.get_param_expr(1)->get_expr_type() &&
+            T_ALL != expr.get_param_expr(1)->get_expr_type())) {
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_WARN("invalid relational operator", K(ret), K(expr.get_param_expr(0)->get_param_count()));
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, expr.get_param_expr(0)->get_param_count());
@@ -1178,6 +1230,8 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
         } // end for
       }
     }
+  } else if (T_ANY == expr.get_expr_type() || T_ALL == expr.get_expr_type()) {
+    //do nothing, ANY/ALL will be removed after transform preprocess, mock here
   } else if (T_OP_ROW != expr.get_expr_type()
              && OB_FAIL(check_param_expr_op_row(&expr, 1))) {
     //其它普通操作符不能包含向量
@@ -1745,6 +1799,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           result_type = child_expr->get_result_type();
           ObObjType obj_type = result_type.get_type();
           ObScale scale_increment = 0;
+          ObScale calc_scale = child_expr->get_extra_calc_scale();
           if (T_FUN_AVG == expr.get_expr_type()) {
             int64_t increment = 0;
             if (OB_ISNULL(my_session_)) {
@@ -1873,6 +1928,11 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               scale_increment_recover = result_type.get_scale();
               result_type.set_scale(static_cast<ObScale>(
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
+              result_type.set_calc_scale(
+                static_cast<ObScale>(MIN(OB_MAX_DOUBLE_FLOAT_SCALE, calc_scale + scale_increment)));
+              if (OB_FAIL(set_extra_calc_type_info(expr, result_type))) {
+                LOG_WARN("failed to set extra calc type info", K(ret), K(expr));
+              }
             }
             int64_t precision_increment = scale_increment;
             int16_t result_precision = result_type.get_precision();
@@ -1886,7 +1946,9 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
                 real_child_expr = win_expr->get_agg_expr();
               }
             }
+            // todo: hack!!
             if (T_FUN_SUM == expr.get_expr_type() &&
+                !expr.get_is_keep_sum_precision() &&
                 (T_FUN_SUM != real_child_expr->get_expr_type()
                   || !expr.has_flag(IS_INNER_ADDED_EXPR))) {
               if (ob_is_integer_type(obj_type)) {
@@ -2063,7 +2125,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         if (OB_SUCC(ret)) {
           result_type.set_varchar();
-          result_type.set_length(ObAggregateProcessor::get_llc_size());
+          result_type.set_length(ObAggrInfo::APPROX_COUNT_MAX_BUCKET_LEN);
           ObCollationType coll_type = CS_TYPE_INVALID;
           CK(OB_NOT_NULL(my_session_));
           OC( (my_session_->get_collation_connection)(coll_type) );
@@ -2196,8 +2258,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         break;
       }
       case T_FUN_MAX:
-      case T_FUN_MIN: {
-        ret = set_agg_min_max_result_type(expr, result_type, need_add_cast);
+      case T_FUN_MIN:
+      case T_FUN_ARG_MAX:
+      case T_FUN_ARG_MIN: {
+        ret = set_agg_min_max_result_type(expr, result_type, need_add_cast,
+                                          expr.get_expr_type() == T_FUN_ARG_MAX
+                                          || expr.get_expr_type() == T_FUN_ARG_MIN);
         break;
       }
       default: {
@@ -2781,7 +2847,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
 
   common::ObIArray<ObRawExpr *> &func_params = expr.get_func_params();
   ObExprTypeCtx type_ctx;
-  ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+  get_cached_initial_type_ctx(type_ctx);
   if (func_params.count() <= 0) {
     if (NULL == expr.get_agg_expr()) {
       ObRawExprResType result_type;
@@ -3261,6 +3327,19 @@ int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
       LOG_WARN("add_implicit_cast failed", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (expr.is_es_match()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_columns_boosts().count(); ++i) {
+      int index = expr.get_search_key_idx() + 1 + i;
+      ObCastMode def_cast_mode = CM_NONE;
+      ObExprResType result_type;
+      result_type.set_double();
+      result_type.set_calc_type(ObDoubleType);
+      if (OB_FAIL(try_add_cast_expr(expr, index, result_type, def_cast_mode))) {
+        LOG_WARN("add_implicit_cast failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -3345,8 +3424,8 @@ int ObRawExprDeduceType::set_agg_udf_result_type(ObAggFunRawExpr &expr)
   }
   if (OB_SUCC(ret)) {
     ObExprTypeCtx type_ctx;
+    get_cached_initial_type_ctx(type_ctx);
     type_ctx.set_raw_expr(&expr);
-    ObSQLUtils::init_type_ctx(my_session_, type_ctx);
     if (OB_FAIL(udf_func.init(udf_meta))) {
       LOG_WARN("udf function init failed", K(ret));
     } else if (OB_FAIL(ObUdfUtil::calc_udf_result_type(
@@ -3379,7 +3458,7 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
   expr.set_data_type(ObVarcharType);
   const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
   ObExprTypeCtx type_ctx;
-  ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+  get_cached_initial_type_ctx(type_ctx);
   for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
     ObRawExpr *real_param_expr = real_parm_exprs.at(i);
     if (OB_ISNULL(real_param_expr)) {
@@ -3512,27 +3591,35 @@ int ObRawExprDeduceType::set_agg_json_array_result_type(ObAggFunRawExpr &expr,
 
 int ObRawExprDeduceType::set_agg_min_max_result_type(ObAggFunRawExpr &expr,
                                                      ObExprResType &result_type,
-                                                     bool &need_add_cast)
+                                                     bool &need_add_cast,
+                                                     bool is_arg_min_max)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *child_expr = NULL;
-  if (OB_ISNULL(child_expr = expr.get_param_expr(0))) {
+  ObRawExpr *arg_expr = NULL; // for output
+  ObRawExpr *val_expr = NULL; // for compare
+  int32_t arg_idx = 0;
+  int32_t val_idx = is_arg_min_max ? 1 : 0;
+  if (is_arg_min_max && expr.get_param_count() < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param expr is not enough");
+  } else if (OB_ISNULL(val_expr = expr.get_param_expr(val_idx))
+             || OB_ISNULL(arg_expr = expr.get_param_expr(arg_idx))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param expr is null");
-  } else if (OB_UNLIKELY(ob_is_geometry(child_expr->get_data_type()))) {
+  } else if (OB_UNLIKELY(ob_is_geometry(val_expr->get_data_type()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Incorrect geometry arguments", K(child_expr->get_data_type()), K(ret));
-  } else if (OB_UNLIKELY(ob_is_roaringbitmap(child_expr->get_data_type()))) {
+    LOG_WARN("Incorrect geometry arguments", K(val_expr->get_data_type()), K(ret));
+  } else if (OB_UNLIKELY(ob_is_roaringbitmap(val_expr->get_data_type()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Incorrect roaringbitmap arguments", K(child_expr->get_data_type()), K(ret));
-  } else if (OB_UNLIKELY(ob_is_collection_sql_type(child_expr->get_data_type()))) {
+    LOG_WARN("Incorrect roaringbitmap arguments", K(val_expr->get_data_type()), K(ret));
+  } else if (OB_UNLIKELY(ob_is_collection_sql_type(val_expr->get_data_type()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Incorrect collection arguments", K(child_expr->get_data_type()), K(ret));
-  } else if (OB_UNLIKELY(ob_is_enumset_tc(child_expr->get_data_type()))) {
+    LOG_WARN("Incorrect collection arguments", K(val_expr->get_data_type()), K(ret));
+  } else if (OB_UNLIKELY(ob_is_enumset_tc(arg_expr->get_data_type()))) {
     // To compatible with MySQL, we need to add cast expression that enumset to varchar
     // to evalute MIN/MAX aggregate functions.
     need_add_cast = true;
-    const ObRawExprResType& res_type = child_expr->get_result_type();
+    const ObExprResType& res_type = arg_expr->get_result_type();
     result_type.set_varchar();
     result_type.set_length(res_type.get_length());
     ObObjMeta obj_meta;
@@ -3544,7 +3631,7 @@ int ObRawExprDeduceType::set_agg_min_max_result_type(ObAggFunRawExpr &expr,
     expr.set_result_type(result_type);
   } else {
     // keep same with default path
-    expr.set_result_type(child_expr->get_result_type());
+    expr.set_result_type(arg_expr->get_result_type());
     expr.unset_result_flag(NOT_NULL_FLAG);
     expr.unset_result_flag(ZEROFILL_FLAG);
   }
@@ -3855,7 +3942,9 @@ bool ObRawExprDeduceType::skip_cast_expr(const ObRawExpr &parent,
       T_FUN_ENUM_TO_INNER_TYPE == parent_expr_type ||
       T_OP_EXISTS == parent_expr_type  ||
       T_OP_NOT_EXISTS == parent_expr_type ||
-      (T_FUN_SYS_CAST == parent_expr_type && !CM_IS_EXPLICIT_CAST(parent.get_cast_mode()))) {
+      (T_FUN_SYS_CAST == parent_expr_type && !CM_IS_EXPLICIT_CAST(parent.get_cast_mode())) ||
+      (T_FUN_ARG_MAX == parent_expr_type && child_idx > 0) ||
+      (T_FUN_ARG_MIN == parent_expr_type && child_idx > 0)) {
     bret = true;
   }
   return bret;
@@ -4169,7 +4258,8 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
       cast_dst_type.set_scale(SCALE_UNKNOWN_YET);
       cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
     }
-  } else if (lib::is_oracle_mode() && dst_type.get_calc_meta().is_number() && expr.is_const_expr()) {
+  } else if (lib::is_oracle_mode() && dst_type.get_calc_meta().is_number() &&
+      (expr.is_const_expr() || dst_type.get_calc_scale() == SCALE_UNKNOWN_YET)) {
     cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
     cast_dst_type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
   }
@@ -4391,12 +4481,23 @@ int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &paren
 int ObRawExprDeduceType::set_extra_calc_type_info(ObRawExpr &expr, const ObExprResType &res_type)
 {
   int ret = OB_SUCCESS;
-  if (expr.need_extra_calc_type()) {
+  if (expr.need_extra_calc_type(lib::is_mysql_mode() && res_type.is_number())) {
     if (OB_FAIL(expr.set_extra_calc_type(res_type))) {
       LOG_WARN("failed to set extra calc type", K(ret));
     }
   }
   return ret;
+}
+
+void ObRawExprDeduceType::get_cached_initial_type_ctx(ObExprTypeCtx &type_ctx)
+{
+  if (OB_NOT_NULL(expr_factory_) &&
+      OB_NOT_NULL(expr_factory_->get_query_ctx()) &&
+      expr_factory_->get_query_ctx()->is_type_ctx_inited()) {
+    type_ctx.assign_initial_type_ctx(expr_factory_->get_query_ctx()->get_initial_type_ctx());
+  } else {
+    ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+  }
 }
 
 }  // namespace sql

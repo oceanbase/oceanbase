@@ -36,6 +36,34 @@ namespace rootserver
 {
 class ObDDLSQLTransaction;
 class ObDDLService;
+class ObDDLHelperUtils
+{
+public:
+  static int gen_task_id_and_schema_versions(share::schema::ObDDLTransController *controller,
+                                             const uint64_t tenant_id,
+                                             const uint64_t schema_version_cnt,
+                                             int64_t &task_id);
+  static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service,
+                                      const uint64_t tenant_id,
+                                      ObDDLSQLTransaction &trans);
+  static int wait_ddl_trans(share::schema::ObDDLTransController *controller,
+                            const uint64_t tenant_id,
+                            const int64_t task_id);
+  static int end_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
+                           share::schema::ObDDLTransController *ddl_trans_controller,
+                           const uint64_t tenant_id,
+                           const int return_ret,
+                           const int64_t task_id,
+                           ObDDLSQLTransaction &trans);
+  static int wait_and_end_ddl_trans(const int return_ret,
+                                    share::schema::ObMultiVersionSchemaService *schema_service,
+                                    share::schema::ObDDLTransController *ddl_trans_controller,
+                                    const uint64_t tenant_id,
+                                    const int64_t task_id,
+                                    ObDDLSQLTransaction &trans,
+                                    bool &need_clean_failed);
+  static int check_schema_version();
+};
 class ObDDLHelper
 {
 public:
@@ -63,12 +91,13 @@ public:
   ObDDLHelper(
     share::schema::ObMultiVersionSchemaService *schema_service,
     const uint64_t tenant_id,
-    const char* parallel_ddl_type);
+    const char* parallel_ddl_type,
+    ObDDLSQLTransaction *external_trans = nullptr);
   virtual ~ObDDLHelper();
 
-  int init(rootserver::ObDDLService &ddl_service);
+  int init(ObDDLService &ddl_service);
 
-  virtual int execute() final;
+  virtual int execute();
   static int obj_lock_database_name(
              ObDDLSQLTransaction &trans,
              const uint64_t tenant_id,
@@ -85,6 +114,16 @@ public:
              const uint64_t tenant_id,
              const uint64_t obj_id,
              const transaction::tablelock::ObTableLockMode lock_mode);
+
+  // sort and check if dep objs are consistent
+  static int check_dep_objs_consistent(
+             ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
+             ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &r);
+public:
+  int clean_on_fail_commit()
+  {
+    return clean_on_fail_commit_();
+  }
 protected:
   virtual int check_inner_stat_();
   virtual int init_() = 0;
@@ -96,11 +135,11 @@ protected:
   int gen_task_id_and_schema_versions_();
   virtual int operate_schemas_() = 0;
   int serialize_inc_schema_dict_();
-  int wait_ddl_trans_();
   virtual int operation_before_commit_() = 0;
-  int end_ddl_trans_(const int return_ret);
   virtual int clean_on_fail_commit_() = 0;
-  virtual int construct_and_adjust_result_(int &returen_ret) = 0;
+  virtual int construct_and_adjust_result_(int &return_ret) = 0;
+  virtual ObDDLSQLTransaction &get_trans_();
+  virtual ObDDLSQLTransaction *get_external_trans_();
   /*--------------*/
 protected:
   // lock database name
@@ -138,6 +177,11 @@ protected:
   int check_parallel_ddl_conflict_(const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
   int add_lock_table_udt_id_(const ObTableSchema &table_schema);
   int check_table_udt_exist_(const ObTableSchema &table_schema);
+  ObSchemaType transfer_obj_type_to_schema_type_for_dep_(const ObObjectType obj_type);
+  // lock tablegroup name
+  int add_lock_object_by_tablegroup_name_(
+      const ObString &tablegroup_name,
+      const transaction::tablelock::ObTableLockMode lock_mode);
 private:
   int add_lock_object_to_map_(
       const uint64_t lock_obj_id,
@@ -154,10 +198,17 @@ private:
              const uint64_t obj_id,
              const transaction::tablelock::ObTableLockMode lock_mode,
              const ObLockOBJType obj_type);
+  static bool dep_compare_func_(const std::pair<uint64_t, share::schema::ObObjectType> &a,
+                                const std::pair<uint64_t, share::schema::ObObjectType> &b)
+  { return a.first > b.first || (a.first == b.first && a.second > b.second); }
+  int check_schema_version_()
+  {
+    return ObDDLHelperUtils::check_schema_version();
+  }
 protected:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
-  rootserver::ObDDLService *ddl_service_;
+  ObDDLService *ddl_service_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObDDLTransController *ddl_trans_controller_;
 
@@ -165,7 +216,7 @@ protected:
   int64_t task_id_;             // allocated by ObDDLTransController
   int64_t schema_version_cnt_;  // used to allocate schema versions for this DDL
   int64_t object_id_cnt_;       // used to allocate object ids for this DDL
-  rootserver::ObDDLSQLTransaction trans_;
+  ObDDLSQLTransaction *external_trans_;
   // used to lock databases by name
   ObjectLockMap lock_database_name_map_;
   // used to lock objects by name
@@ -176,6 +227,8 @@ protected:
   share::schema::ObLatestSchemaGuard latest_schema_guard_;
   common::ObArenaAllocator allocator_;
   const char* parallel_ddl_type_;
+private:
+  ObDDLSQLTransaction trans_;
 private:
   static const int64_t OBJECT_BUCKET_NUM = 1024;
   DISALLOW_COPY_AND_ASSIGN(ObDDLHelper);

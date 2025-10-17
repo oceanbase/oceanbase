@@ -405,6 +405,7 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
+      micro_block_format_version_ = src_schema.micro_block_format_version_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -557,8 +558,13 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   if (OB_SUCC(ret)) {
     semistruct_encoding_type_ = src_schema.semistruct_encoding_type_;
   }
+
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.dynamic_partition_policy_, dynamic_partition_policy_))) {
     LOG_WARN("fail to deep copy dynamic partition policy string", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.semistruct_properties_, semistruct_properties_))) {
+    LOG_WARN("fail to deep copy semistruct_properties string", KR(ret));
   }
 
   return ret;

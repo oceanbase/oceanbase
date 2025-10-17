@@ -784,7 +784,9 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_ORA_XMLAGG:
         case T_FUNC_SYS_ARRAY_AGG:
         case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-        case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+        case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
+        case T_FUN_ARG_MAX:
+        case T_FUN_ARG_MIN: {
           aggregate::IAggregate *agg_func = nullptr;
           winfunc::AggrExpr *aggr_expr = nullptr;
           if (OB_FAIL(alloc_expr<winfunc::AggrExpr>(*local_allocator_, aggr_expr))) {
@@ -2178,12 +2180,12 @@ int ObWindowFunctionVecOp::compute_wf_values(WinFuncColExpr *end, int64_t &check
               *wf_skip       = batch_ctx_.calc_wf_skip_;
   ObDataBuffer backup_alloc((char *)batch_ctx_.all_exprs_backup_buf_, batch_ctx_.all_exprs_backup_buf_len_);
   ObVectorsResultHolder tmp_holder(&backup_alloc);
-  int64_t saved_batch_size = 0;
+  int64_t saved_batch_size = 0, max_part_size = 0;
   FOREACH_WINCOL(end) {
-    saved_batch_size = std::max(input_stores_.cur_->count() - it->part_first_row_idx_, saved_batch_size);
+    max_part_size = std::max(input_stores_.cur_->count() - it->part_first_row_idx_, saved_batch_size);
   }
-  saved_batch_size = std::min(saved_batch_size, MY_SPEC.max_batch_size_);
-  if (OB_FAIL(tmp_holder.init(get_all_expr(), eval_ctx_))) {
+  saved_batch_size = std::min(max_part_size, MY_SPEC.max_batch_size_);
+  if (OB_FAIL(tmp_holder.init_for_actual_rows(get_all_expr(), saved_batch_size, eval_ctx_))) {
     LOG_WARN("init tmp result holder failed", K(ret));
   } else if (OB_FAIL(tmp_holder.save(saved_batch_size))) {
     LOG_WARN("save vector resule failed", K(ret));

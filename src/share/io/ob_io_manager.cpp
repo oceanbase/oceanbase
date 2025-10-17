@@ -87,7 +87,7 @@ int64_t ObTrafficControl::IORecord::calc()
 int ObTrafficControl::ObSharedDeviceIORecord::calc_usage(ObIORequest &req)
 {
   int ret = OB_SUCCESS;
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("io request is not object device", K(req), K(ret));
   } else {
@@ -118,7 +118,7 @@ ObTrafficControl::ObSharedDeviceControl::ObSharedDeviceControl()
 int ObTrafficControl::ObSharedDeviceControl::calc_clock(const int64_t current_ts, ObIORequest &req, int64_t &deadline_ts)
 {
   int ret = OB_SUCCESS;
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("io request is not object device", K(req), K(ret));
   } else {
@@ -205,16 +205,18 @@ int ObTrafficControl::ObSharedDeviceControlV2::set_storage_key(const ObTrafficCo
 {
   return storage_key_.assign(key);
 }
-int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
+int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits(uint64_t storage_key)
 {
   int ret = OB_SUCCESS;
-  limit_ids_[static_cast<int>(ResourceType::ips)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ips));
-  limit_ids_[static_cast<int>(ResourceType::ibw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::ibw));
-  limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops));
-  limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw));
+  limit_ids_[static_cast<int>(ResourceType::ips)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ips), storage_key);
+  limit_ids_[static_cast<int>(ResourceType::ibw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::ibw), storage_key);
+  limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops), storage_key);
+  limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw), storage_key);
   LOG_INFO("add shared device limit success",
       "storage_key",
       storage_key_,
+      "storage_key_hash",
+      storage_key,
       "ips_limit_id",
       limit_ids_[static_cast<int>(ResourceType::ips)],
       "ibw_limit_id",
@@ -262,7 +264,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::ObSDGroupList::add_group(const Ob
       LOG_ERROR("qdisc add limit fail" , K(ret),K(grp_key), K(qid), K(ResourceType::obw), K(limit_ids[static_cast<int>(ResourceType::obw)]));
     }
   }
-  LOG_INFO("add group limit of shared device success", K(grp_key), K(qid), K(ret));
+  LOG_INFO("add group limit of shared device success", K(grp_key), K(qid), K(limit_ids[static_cast<int>(ResourceType::ips)]), K(limit_ids[static_cast<int>(ResourceType::ibw)]), K(limit_ids[static_cast<int>(ResourceType::ops)]), K(limit_ids[static_cast<int>(ResourceType::obw)]), K(ret));
   return ret;
 }
 
@@ -306,7 +308,7 @@ int ObTrafficControl::calc_clock(const int64_t current_ts, ObIORequest &req, int
   uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
   ObStorageInfoType table = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().get_category();
   ObStorageKey key(storage_id, req.tenant_id_, table);
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("io request is not object device", K(req), K(ret));
   } else if (((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().is_valid() != true) {
@@ -341,7 +343,7 @@ int ObTrafficControl::calc_usage(ObIORequest &req)
   const ObStorageIdMod &id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod();
   ObIORecordKey key(ObStorageKey(id.storage_id_, req.tenant_id_, id.get_category()), req.tenant_id_);
   ObSharedDeviceIORecord *record = nullptr;
-  if (req.fd_.device_handle_->is_object_device() != true) {
+  if (!req.is_limit_net_bandwidth_req()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("io request is not object device", K(req), K(ret));
   } else {
@@ -602,7 +604,7 @@ void ObTrafficControl::inner_calc_()
 
 int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
   int ret = OB_SUCCESS;
-  if (req.fd_.device_handle_->is_object_device()) {
+  if (req.is_limit_net_bandwidth_req()) {
     uint64_t storage_id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_id_;
     ObStorageInfoType storage_type = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().get_category();
     ObTrafficControl::ObStorageKey key(storage_id, req.tenant_id_, storage_type);
@@ -617,7 +619,7 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
       } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, SET_IGNORE_MEM_VERSION("SDCtrlV2")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(tc->set_storage_key(key))) {
-      } else if (OB_FAIL(tc->add_shared_device_limits())) {
+      } else if (OB_FAIL(tc->add_shared_device_limits(key.hash()))) {
         LOG_WARN("add shared device limits failed", K(ret), K(req), K(grp_key), K(qid));
       } else if (OB_FAIL(shared_device_map_v2_.set_refactored(key, tc))) {
         LOG_WARN("set map failed", K(ret));
@@ -1565,6 +1567,7 @@ ObTenantIOManager::ObTenantIOManager()
     request_count_(0),
     result_count_(0),
     tenant_id_(0),
+    io_cancel_count_(0),
     io_config_(),
     io_clock_(),
     io_allocator_(),
@@ -1623,6 +1626,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
   } else {
     tenant_id_ = tenant_id;
     io_scheduler_ = io_scheduler;
+    local_iops_util_ = 0;
     inc_ref();
     is_inited_ = true;
   }
@@ -1660,6 +1664,7 @@ void ObTenantIOManager::destroy()
   io_memory_limit_ = 0;
   request_count_ = 0;
   result_count_ = 0;
+  io_cancel_count_ = 0;
   group_id_index_map_.destroy();
   io_allocator_.destroy();
   LOG_INFO("destroy tenant io manager success", K(tenant_id_));
@@ -2537,6 +2542,7 @@ int ObTenantIOManager::print_io_status()
     ObIOMode mode = ObIOMode::MAX_MODE;
     ObIOGroupMode group_mode = ObIOGroupMode::MODECNT;
     int tmp_ret = OB_SUCCESS;
+    const int64_t io_cancel_count = get_and_reset_io_cancel_count();
     for (int64_t i = 0; i < info.count(); ++i) {
       if (OB_TMP_FAIL(transform_usage_index_to_group_config_index(i, group_config_index))) {
         continue;
@@ -2747,6 +2753,8 @@ int ObTenantIOManager::print_io_status()
     if (need_print_io_config) {
       int64_t iops = ips + ops;
       double failed_iops = failed_ips + failed_ops;
+      int64_t iops_limit = io_clock_.get_unit_limit(ObIOMode::MAX_MODE) == 0 ? INT64_MAX : io_clock_.get_unit_limit(ObIOMode::MAX_MODE);
+      local_iops_util_ = iops * 100 / iops_limit;
       LOG_INFO("[IO STATUS TENANT]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "hold_mem", io_allocator_.get_allocated_size(),
           "[FAILED]: "
@@ -2759,9 +2767,10 @@ int ObTenantIOManager::print_io_status()
           "ips", ips,
           "ops", ops,
           "iops", iops,
+          "local_iops_util", local_iops_util_,
           "ibw", ibw,
           "obw", obw,
-          "iops_limit", io_clock_.get_unit_limit(ObIOMode::MAX_MODE),
+          "iops_limit", iops_limit,
           "ibw_limit", io_clock_.get_unit_limit(ObIOMode::READ),
           "obw_limit", io_clock_.get_unit_limit(ObIOMode::WRITE));
     }
@@ -2777,6 +2786,12 @@ int ObTenantIOManager::print_io_status()
       (void)callback_mgr_.to_string(io_status, sizeof(io_status));
       LOG_INFO("[IO STATUS CALLBACK]", K_(tenant_id), KCSTRING(io_status));
     }
+    LOG_INFO("[IO STATUS CANCEL]", K_(tenant_id), K(io_cancel_count));
+#ifdef ENABLE_DEBUG_LOG
+    if (io_cancel_count > 10000) {
+      LOG_ERROR("too much io cancelled", K_(tenant_id), K(io_cancel_count));
+    }
+#endif
   }
   return ret;
 }
@@ -2820,10 +2835,10 @@ int ObTenantIOManager::print_io_function_status()
           LOG_WARN("fail to calc func usage", K(ret), K(i), K(j));
         } else if (avg_size < std::numeric_limits<double>::epsilon()) {
         } else {
-          const char *func_name = to_cstring(get_io_function_name(static_cast<share::ObFunctionType>(i)));
+          const ObString &func_name = get_io_function_name(static_cast<share::ObFunctionType>(i));
           snprintf(io_status, sizeof(io_status),
-                    "function_name:%s, mode:%s, avg_size:%ld, avg_iops:%ld, avg_bw:%ld, [delay/us]: prepare:%ld, schedule:%ld, submit:%ld, device:%ld, total:%ld",
-                    func_name,
+                    "function_name:%.*s, mode:%s, avg_size:%ld, avg_iops:%ld, avg_bw:%ld, [delay/us]: prepare:%ld, schedule:%ld, submit:%ld, device:%ld, total:%ld",
+                    func_name.length(), func_name.ptr(),
                     mode_str,
                     static_cast<int64_t>(avg_size + 0.5),
                     static_cast<int64_t>(avg_iops + 0.99),

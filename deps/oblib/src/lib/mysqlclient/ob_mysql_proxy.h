@@ -33,16 +33,14 @@ class ObISQLConnectionPool;
 class ObDbLinkConnectionPool;
 }
 
-struct ObSessionDDLInfo final
+struct InnerDDLInfo final
 {
 public:
-  ObSessionDDLInfo()
-    : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
-      is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
-      is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), reserved_bit_(0)
+  InnerDDLInfo() : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
+  is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
+  is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), is_vec_tablet_rebuild_(false), reserved_bit_(0)
   {
   }
-  ~ObSessionDDLInfo() = default;
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
   bool is_ddl() const { return is_ddl_; }
   void set_source_table_hidden(const bool is_hidden) { is_source_table_hidden_ = is_hidden; }
@@ -63,6 +61,8 @@ public:
   bool is_dummy_ddl_for_inner_visibility() const { return is_dummy_ddl_for_inner_visibility_; }
   void set_major_refreshing_mview(const bool flag) { is_major_refreshing_mview_ = flag; }
   bool is_major_refreshing_mview() const { return is_major_refreshing_mview_; }
+  void set_is_vec_tablet_rebuild(const bool flag) { is_vec_tablet_rebuild_ = flag; }
+  bool is_vec_tablet_rebuild() const { return is_vec_tablet_rebuild_; }
   inline void reset() { ddl_info_ = 0; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
@@ -75,8 +75,9 @@ public:
   static const int64_t IS_REFRESHING_MVIEW_BIT = 1;
   static const int64_t IS_RETRYABLE_DDL_BIT = 1;
   static const int64_t IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT = 1;
+  static const int64_t IS_VEC_TABLET_REBUILD_BIT = 1;
   static const int64_t IS_MAJOR_REFRESHING_MVIEW_BIT = 1;
-  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT;
+  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT - IS_VEC_TABLET_REBUILD_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -95,11 +96,55 @@ public:
       */
       uint64_t is_dummy_ddl_for_inner_visibility_: IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT;
       uint64_t is_major_refreshing_mview_ : IS_MAJOR_REFRESHING_MVIEW_BIT;
+      uint64_t is_vec_tablet_rebuild_ : IS_VEC_TABLET_REBUILD_BIT;
       uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };
 };
+struct ObSessionDDLInfo final
+{
+public:
+  ObSessionDDLInfo()
+    : ddl_info_(), session_id_(OB_INVALID_ID)
+  {
+  }
+  ~ObSessionDDLInfo() = default;
+  inline int init (const InnerDDLInfo ddl_info,
+                   const uint64_t session_id) { ddl_info_ = ddl_info;
+                                                session_id_ = session_id;
+                                                return is_valid() ? OB_SUCCESS
+                                                                    : OB_INVALID_ARGUMENT; }
+  void set_is_ddl(const bool is_ddl) { ddl_info_.set_is_ddl(is_ddl); }
+  void set_source_table_hidden(const bool is_hidden) { ddl_info_.set_source_table_hidden(is_hidden); }
+  void set_dest_table_hidden(const bool is_hidden) { ddl_info_.set_dest_table_hidden(is_hidden); }
+  void set_heap_table_ddl(const bool flag) { ddl_info_.set_heap_table_ddl(flag); }
+  void set_ddl_check_default_value(const bool flag) { ddl_info_.set_ddl_check_default_value(flag); }
+  void set_mview_complete_refresh(const bool flag) { ddl_info_.set_mview_complete_refresh(flag); }
+  void set_refreshing_mview(const bool flag) { ddl_info_.set_refreshing_mview(flag); }
+  void set_retryable_ddl(const bool flag) { ddl_info_.set_retryable_ddl(flag); }
+  void set_is_dummy_ddl_for_inner_visibility(const bool flag) { ddl_info_.set_is_dummy_ddl_for_inner_visibility(flag); }
+  void set_major_refreshing_mview(const bool flag) { ddl_info_.set_major_refreshing_mview(flag); }
 
+  bool is_ddl() const { return ddl_info_.is_ddl(); }
+  bool is_source_table_hidden() const { return ddl_info_.is_source_table_hidden(); }
+  bool is_dest_table_hidden() const { return ddl_info_.is_dest_table_hidden(); }
+  bool is_heap_table_ddl() const { return ddl_info_.is_heap_table_ddl(); }
+  bool is_ddl_check_default_value() const { return ddl_info_.is_ddl_check_default_value(); }
+  bool is_mview_complete_refresh() const { return ddl_info_.is_mview_complete_refresh(); }
+  bool is_refreshing_mview() const { return ddl_info_.is_refreshing_mview(); }
+  bool is_retryable_ddl() const { return ddl_info_.is_retryable_ddl(); }
+  bool is_dummy_ddl_for_inner_visibility() const { return ddl_info_.is_dummy_ddl_for_inner_visibility(); }
+  bool is_major_refreshing_mview() const { return ddl_info_.is_major_refreshing_mview(); }
+  inline uint64_t get_session_id() const { return session_id_;}
+  inline void reset() { session_id_ = OB_INVALID_ID;
+                        ddl_info_.reset();}
+  bool is_valid() { return !(is_ddl() && OB_INVALID_ID == session_id_); }
+  TO_STRING_KV(K_(ddl_info), K_(session_id));
+  OB_UNIS_VERSION(1);
+private:
+  InnerDDLInfo ddl_info_;
+  uint64_t session_id_;
+};
 struct ObSessionParam final
 {
 public:
@@ -265,9 +310,17 @@ public:
   int clean_dblink_connection(uint64_t tenant_id);
   static int execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx,
                               sqlclient::ObISQLConnection *dblink_conn);
-private:
   int prepare_enviroment(const sqlclient::dblink_param_ctx &param_ctx,
                          sqlclient::ObISQLConnection *dblink_conn);
+private:
+  static int init_conn_character_set(sqlclient::ObMySQLConnection &mysql_conn,
+                                     sqlclient::ObMySQLStatement &stmt, ObCharsetType charset_type);
+  static int init_conn_sql_mode(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt,
+                                const char *set_sql_mode_cstr);
+  static int init_conn_trans_isolation(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt,
+                                const char *trans_isolation_str);
+  static int init_conn_query_timeout(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt,
+                                     int64_t query_timeout);
 private:
   sqlclient::ObDbLinkConnectionPool *link_pool_;
 };

@@ -207,7 +207,7 @@ int ObAdminDumpBlock::decompress_()
     const LSN end_lsn = start_lsn + log_len;
     ObGetFileSize get_file_size(end_lsn);
 
-    if (OB_FAIL(mem_storage.init(start_lsn))) {
+    if (OB_FAIL(mem_storage.init(start_lsn, false))) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
     } else if (OB_FAIL(mem_storage.append(buf_out, log_len))) {
       LOG_WARN("MemoryStorage append failed", K(ret));
@@ -317,7 +317,7 @@ int ObAdminDumpBlock::dump_()
     int fd_out = -1;
     const LSN end_lsn = start_lsn + body_size;
     auto get_file_size = [&]() -> LSN { return end_lsn; };
-    if (OB_FAIL(mem_storage.init(start_lsn))) {
+    if (OB_FAIL(mem_storage.init(start_lsn, false))) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
     } else if (OB_FAIL(helper.mmap_log_file(mmap_buf, header_size + body_size, block_path_, fd_out))) {
       LOG_WARN("mmap_log_file_ failed", K(ret));
@@ -478,7 +478,7 @@ int ObAdminDumpMetaBlock::dump()
     char *mmap_buf = NULL;
     char *data_buf = NULL;
     int fd_out = -1;
-    if (OB_FAIL(mem_storage.init(start_lsn))) {
+    if (OB_FAIL(mem_storage.init(start_lsn, false))) {
       LOG_WARN("MemoryIteratorStorage init failed", K(ret), K(block_path_));
     } else if (OB_FAIL(helper.mmap_log_file(mmap_buf, header_size + body_size, block_path_, fd_out))) {
       LOG_WARN("mmap_log_file_ failed", K(ret));
@@ -590,7 +590,9 @@ int ObAdminLogServiceDumpBlock::dump()
     LOG_WARN("mmap_log_file_ failed", K(ret), K(block_path_), K(fd), K(body_size));
   } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_log_block_header_get_min_lsn(mmap_buf, &pos, &start_lsn.val_)))) {
     LOG_WARN("failed to get started lsn", K(ret));
-  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_seek_mem_group_log_iterator(start_lsn.val_, &iter, &memory_storage)))) {
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_create_memory_storage(start_lsn.val_, &memory_storage)))) {
+    LOG_WARN("libpalf_create_memory_storage failed", K(ret), K(start_lsn));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_seek_mem_group_log_iterator(start_lsn.val_, &iter, memory_storage, INT64_MAX)))) {
     LOG_WARN("MemoryGroupIteratorStorage seek failed", K(ret), K(block_path_));
   } else if (FALSE_IT(data_buf = mmap_buf + header_size)) {
   } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_set_memory_storage_buffer(memory_storage, start_lsn.val_, data_buf, body_size)))) {
@@ -667,9 +669,10 @@ int ObAdminLogServiceDumpBlock::parse_single_group_entry_(LibPalfLogGroupEntry &
   uint64_t next_min_scn_val = 0;
   bool iterate_end_by_upper_bound = false;
   size_t group_entry_body_size = 0;
-
-  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_seek_mem_log_iterator(lsn.val_ + sizeof(LibPalfLogGroupEntryHeader),
-      &log_iter, &memory_storage)))) {
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_create_memory_storage(lsn.val_, &memory_storage)))) {
+    LOG_WARN("libpalf_create_memory_storage failed", K(ret), K(lsn));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_seek_mem_log_iterator(lsn.val_ + sizeof(LibPalfLogGroupEntryHeader),
+      &log_iter, memory_storage, INT64_MAX)))) {
     LOG_WARN("MemoryLogIteratorStorage seek failed", K(ret));
   } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_group_log_entry_get_body_size(&group_entry.header, lsn.val_, &group_entry_body_size)))) {
     LOG_WARN("get group_entry_body_size failed", K(ret));

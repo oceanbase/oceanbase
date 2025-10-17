@@ -20,6 +20,9 @@
 #include "ob_cg_aggregated_scanner.h"
 #include "ob_cg_group_by_scanner.h"
 #include "ob_virtual_cg_scanner.h"
+#include "lib/ob_define.h"
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -466,6 +469,16 @@ int ObCOSSTableV2::serialize_full_table(const uint64_t data_version, char *buf, 
   } else if (OB_FAIL(cs_meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("failed to deserialize cs meta", K(ret), KP(buf), K(buf_len), K(pos));
   } else {
+#ifdef ERRSIM
+    char *origin_thread_name = ob_get_tname_v2();
+    int64_t base_snapshot_version = key_.get_end_scn().get_val_for_logservice();
+    SERVER_EVENT_SYNC_ADD("co_sstable_errsim", "serialize_full_table",
+                          "origin_thread_name", origin_thread_name,
+                          "tablet_id", key_.tablet_id_.id(),
+                          "column_group_idx", key_.column_group_idx_,
+                          "base_snapshot_version", base_snapshot_version,
+                          "co_base_snapshot_version", meta_->get_co_base_snapshot_version());
+#endif
     LOG_INFO("succeed to serialize co sstable", K(ret), KPC(this), K(buf_len), K(old_pos), K(pos));
   }
   return ret;

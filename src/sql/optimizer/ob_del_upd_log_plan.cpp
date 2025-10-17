@@ -435,6 +435,9 @@ int ObDelUpdLogPlan::calculate_insert_table_location_and_sharding(ObTablePartiti
   } else if (del_upd_stmt->is_insert_stmt() &&
              !static_cast<const ObInsertStmt*>(del_upd_stmt)->value_from_select()) {
     /*do nothing*/
+  } else if (del_upd_stmt->is_merge_stmt() &&
+             !static_cast<const ObMergeStmt*>(del_upd_stmt)->has_insert_clause()) {
+    /*do nothing*/
   } else if (OB_FAIL(del_upd_stmt->get_dml_table_infos(dml_table_infos))) {
     LOG_WARN("failed to get dml table infos", K(ret));
   } else if (OB_UNLIKELY(dml_table_infos.count() != 1) || OB_ISNULL(dml_table_infos.at(0))) {
@@ -1711,37 +1714,6 @@ int ObDelUpdLogPlan::allocate_pdml_update_as_top(ObLogicalOperator *&top,
   return ret;
 }
 
-int ObDelUpdLogPlan::check_need_exchange_for_pdml_del_upd(ObLogicalOperator *top,
-                                                          const ObExchangeInfo &exch_info,
-                                                          uint64_t table_id,
-                                                          bool &need_exchange)
-{
-  int ret = OB_SUCCESS;
-  bool is_equal = false;
-  ObShardingInfo *top_sharding = NULL;
-  ObShardingInfo *source_sharding = NULL;
-  ObTablePartitionInfo *source_table_part = NULL;
-  need_exchange = false;
-  if (OB_ISNULL(top) || OB_ISNULL(top_sharding = top->get_sharding())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_stmt()), K(top->get_sharding()), K(ret));
-  } else if (OB_FAIL(get_source_table_info(*top, table_id, source_sharding, source_table_part))) {
-    LOG_WARN("failed to get source sharding info", K(ret));
-  } else if (NULL == source_sharding) {
-    need_exchange = true;
-  } else if (OB_FAIL(ObShardingInfo::is_sharding_equal(top_sharding,
-                                                       source_sharding,
-                                                       top->get_output_equal_sets(),
-                                                       is_equal))) {
-    LOG_WARN("failed to check if sharding is equal", K(ret));
-  } else if (!is_equal) {
-    need_exchange = true;
-  } else {
-    need_exchange = false;
-  }
-  return ret;
-}
-
 int ObDelUpdLogPlan::split_update_index_dml_info(const IndexDMLInfo &upd_dml_info,
                                                  IndexDMLInfo *&del_dml_info,
                                                  IndexDMLInfo *&ins_dml_info)
@@ -1942,6 +1914,11 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
+      } else if (primary_dml_info.is_vec_hnsw_index_vid_opt_) {
+        // need to add all the related index ids
+        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+          LOG_WARN("add related index ids failed", K(ret));
+        }
       } else {
         bool found_col = false;
         //in update clause, need to check this local index whether been updated
@@ -2074,7 +2051,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get table schema", K(index_tid[i]), K(ret));
-      } else if (index_schema->is_fts_index() && OB_FAIL(check_dml_table_write_dependency(
+      } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index())&& OB_FAIL(check_dml_table_write_dependency(
           table_info.ref_table_id_, *index_schema))) {
         LOG_WARN("failed to check dml table write dependency", K(ret));
       } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
@@ -2441,7 +2418,8 @@ int ObDelUpdLogPlan::check_update_part_key(const ObTableSchema* index_schema,
   return ret;
 }
 
-int ObDelUpdLogPlan::check_update_primary_key(const ObTableSchema* index_schema,
+int ObDelUpdLogPlan::check_update_primary_key(ObSchemaGetterGuard &schema_guard,
+                                              const ObTableSchema* index_schema,
                                               IndexDMLInfo*& index_dml_info) const
 {
   int ret = OB_SUCCESS;
@@ -2466,6 +2444,27 @@ int ObDelUpdLogPlan::check_update_primary_key(const ObTableSchema* index_schema,
       } else if (has_exist_in_array(pk_ids, column_item->base_cid_)) {
         index_dml_info->is_update_primary_key_ = true;
         break;
+      }
+    }
+  }
+
+  if (index_schema->is_table_with_hidden_pk_column()) {
+    ObDocIDType vid_type = ObDocIDType::INVALID;
+    if (OB_FAIL(ObVectorIndexUtil::determine_vid_type(*index_schema, vid_type))) {
+      LOG_WARN("failed to determine vid type", K(ret), K(vid_type));
+    } else if (vid_type == ObDocIDType::HIDDEN_INC_PK) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->assignments_.count()
+                          && !index_dml_info->is_vec_hnsw_index_vid_opt_; ++i) {
+        ObColumnRefRawExpr *col_expr = index_dml_info->assignments_.at(i).column_expr_;
+        ObIndexType index_type = INDEX_TYPE_MAX;
+        bool is_col_has_vec_idx = false;
+        if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*index_schema, schema_guard, col_expr->get_column_id(),
+                                                                     is_col_has_vec_idx, index_type))) {
+          LOG_WARN("failed to check column has vector index", K(ret));
+        } else if (is_col_has_vec_idx && index_type == ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
+          index_dml_info->is_update_primary_key_ = true;
+          index_dml_info->is_vec_hnsw_index_vid_opt_ = true;
+        }
       }
     }
   }
@@ -2604,7 +2603,7 @@ int ObDelUpdLogPlan::check_dml_table_write_dependency(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null table schema", K(ret));
-  } else if (index_schema.is_fts_index()) {
+  } else if (index_schema.is_fts_index() || index_schema.is_multivalue_index()) {
     uint64_t rowkey_doc_id_tid = OB_INVALID_ID;
     uint64_t doc_id_col_id = OB_INVALID_ID;
     if (OB_FAIL(table_schema->get_docid_col_id(doc_id_col_id))) {
@@ -2618,6 +2617,7 @@ int ObDelUpdLogPlan::check_dml_table_write_dependency(
     }
     const bool need_check_rowkey_doc = (rowkey_doc_id_tid != OB_INVALID_ID)
         && (index_schema.is_fts_index_aux()
+          || index_schema.is_multivalue_index_aux()
           || index_schema.is_fts_doc_word_aux()
           || index_schema.is_doc_id_rowkey());
 
@@ -2669,5 +2669,27 @@ int ObDelUpdLogPlan::check_dml_table_write_dependency(
     }
   }
 
+  return ret;
+}
+
+int ObDelUpdLogPlan::check_basic_sharding_for_dml_stmt(ObShardingInfo &target_sharding,
+                                                       ObLogicalOperator &child,
+                                                       bool &is_basic)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObShardingInfo*, 4> input_sharding;
+  ObAddr &local_addr = get_optimizer_context().get_local_server_addr();
+  is_basic = false;
+  if (OB_ISNULL(child.get_sharding())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(input_sharding.push_back(&target_sharding)) ||
+             OB_FAIL(input_sharding.push_back(child.get_sharding()))) {
+    LOG_WARN("failed to push back sharding info", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::check_basic_sharding_info(local_addr,
+                                                                input_sharding,
+                                                                is_basic))) {
+    LOG_WARN("failed to check if it is basic sharding info", K(ret));
+  } else { /*do nothing*/ }
   return ret;
 }

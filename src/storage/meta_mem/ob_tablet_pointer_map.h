@@ -44,10 +44,6 @@ public:
       const bool force_alloc_new,
       ObITabletFilterOp *op);
   int try_get_in_memory_meta_obj(const ObTabletMapKey &key, bool &success, ObTabletHandle &guard);
-  int try_get_in_memory_meta_obj_and_addr(
-      const ObTabletMapKey &key,
-      ObMetaDiskAddr &addr,
-      ObTabletHandle &guard);
   int get_meta_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int get_attr_for_obj(const ObTabletMapKey &key, ObTabletHandle &guard);
   int get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state);
@@ -74,6 +70,8 @@ public:
       const ObTabletMapKey &key,
       const share::SCN &change_version);
 
+  int alloc_tablet_meta_version(const ObTabletMapKey &key, int64_t &tablet_meta_version);
+
 private:
   static int read_from_disk(
       const bool is_full_load,
@@ -97,6 +95,12 @@ private:
       ObTablet *&t);
   int load_and_hook_meta_obj_(const ObTabletMapKey &key, ObTabletPointerHandle &ptr_hdl, ObTabletHandle &guard);
   int try_get_in_memory_meta_obj_(
+      const ObTabletMapKey &key,
+      ObTabletPointerHandle &ptr_hdl,
+      ObTabletHandle &guard,
+      bool &is_in_memory);
+
+  int try_get_in_memory_meta_obj_without_lock_(
       const ObTabletMapKey &key,
       ObTabletPointerHandle &ptr_hdl,
       ObTabletHandle &guard,

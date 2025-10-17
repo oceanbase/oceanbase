@@ -14,7 +14,7 @@
 #include "ob_table.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_object.h"
-#include "observer/table/ob_htable_utils.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -514,11 +514,13 @@ int ObTableEntity::get_properties_names(ObIArray<ObString> &properties_names) co
   return ret;
 }
 
-int ObTableEntity::get_properties_values(ObIArray<ObObj> &properties_values) const
+int ObTableEntity::get_properties_values(ObIArray<ObObj*> &properties_values) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(properties_values.assign(properties_values_))) {
-    LOG_WARN("failed to assign properties values array", K(ret));
+  for (int i = 0; OB_SUCC(ret) && i < properties_values_.count(); ++i) {
+    if (OB_FAIL(properties_values.push_back(const_cast<ObObj*>(&properties_values_[i])))) {
+      LOG_WARN("fail to push back properties values", K(ret));
+    }
   }
   return ret;
 }
@@ -2012,7 +2014,7 @@ void ObTableQueryResult::rewind()
   buf_.get_position() = 0;
 }
 
-int ObTableQueryResult::get_htable_all_entity(ObIArray<ObITableEntity*> &entities)
+int ObTableQueryResult::get_htable_all_entity(ObIArray<const ObITableEntity*> &entities)
 {
   int ret = OB_SUCCESS;
   curr_idx_ = 0;
@@ -3059,6 +3061,7 @@ OB_DEF_DESERIALIZE(ObTableSingleOp, )
       for (int64_t i = 0; OB_SUCC(ret) && i < entities_size; ++i) {
         ObTableSingleOpEntity &op_entity = entities_.at(i);
         op_entity.set_dictionary(all_rowkey_names_, all_properties_names_);
+        op_entity.set_allocator(deserialize_alloc_);
         op_entity.set_is_same_properties_names(is_same_properties_names_);
         OB_UNIS_DECODE(op_entity);
       }
@@ -3907,3 +3910,477 @@ int ObRedisResult::convert_to_table_op_result(ObTableOperationResult &result)
 
   return ret;
 }
+
+OB_DEF_DESERIALIZE(ObHCell)
+{
+  int ret = OB_SUCCESS;
+  int64_t cell_num = 0;
+  OB_UNIS_DECODE(cell_num);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(objs_.prepare_allocate(cell_num + 1))) {
+      LOG_WARN("fail to prepare allocate objs", K(ret), K(cell_num));
+    } else {
+      // [Q T V (TTL)]
+      ObObj &Q = objs_[ObHTableConstants::COL_IDX_Q];
+      ObObj &T = objs_[ObHTableConstants::COL_IDX_T];
+      ObObj &V = objs_[ObHTableConstants::COL_IDX_V];
+      if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, Q))) {
+        LOG_WARN("fail to deserialize Q object", K(ret), K(buf), K(data_len), K(pos));
+      } else if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, T))) {
+        LOG_WARN("fail to deserialize T object", K(ret), K(buf), K(data_len), K(pos));
+      } else if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, V))) {
+        LOG_WARN("fail to deserialize V object", K(ret), K(buf), K(data_len), K(pos));
+      }
+      if (OB_SUCC(ret) && cell_num == 4) {
+        ObObj &TTL = objs_[ObHTableConstants::COL_IDX_TTL];
+        if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, TTL))) {
+          LOG_WARN("fail to deserialize V object", K(ret), K(buf), K(data_len), K(pos));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObHCell)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(objs_.count());
+  for (int i = 0; OB_SUCC(ret) && i < objs_.count(); ++i) {
+    OB_UNIS_ENCODE(objs_.at(i));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObHCell)
+{
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  OB_UNIS_ADD_LEN(objs_.count());
+  for (int i = 0; OB_SUCC(ret) && i < objs_.count(); ++i) {
+    OB_UNIS_ADD_LEN(objs_.at(i));
+  }
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObHCfRows)
+{
+   /*
+    [2][4][0]...
+    [1] [3] [2] ...
+    [QTV(TTL)] [QTV(TTL)][QTV(TTL)][QTV(TTL)] [QTV(TTL)][QTV(TTL)]
+  */
+  int ret = OB_SUCCESS;
+  // decode real_table_name_
+  OB_UNIS_DECODE(real_table_name_);
+  if (OB_SUCC(ret) && (OB_ISNULL(keys_) || OB_ISNULL(deserialize_alloc_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("keys or deserialize_alloc_ is null", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObFixedArray<int64_t, ObIAllocator> key_idx;
+    key_idx.set_allocator(deserialize_alloc_);
+    ObFixedArray<int64_t, ObIAllocator> cell_num_array;
+    cell_num_array.set_allocator(deserialize_alloc_);
+    // decode key_index, [2, 4, 0, ...]
+    int64_t key_idx_num = 0;
+    OB_UNIS_DECODE(key_idx_num);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(key_idx.prepare_allocate(key_idx_num))) {
+        LOG_WARN("fail to prepare allocate key index", K(ret));
+      }
+      int64_t idx = 0;
+      for (int i = 0; OB_SUCC(ret) && i < key_idx_num; ++i) {
+        OB_UNIS_DECODE(idx);
+        key_idx.at(i) = idx;
+      }
+      if (OB_SUCC(ret)) {
+        // encode cell_num_array, [1, 3, 2, ...]
+        int64_t cell_num_array_size = 0;
+        int64_t cell_num = 0;
+        OB_UNIS_DECODE(cell_num_array_size);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(cell_num_array.prepare_allocate(cell_num_array_size))) {
+            LOG_WARN("fail to prepare allocate cell num array", K(ret), K(cell_num_array_size));
+          }
+          for (int i = 0; OB_SUCC(ret) && i < cell_num_array_size; ++i) {
+            OB_UNIS_DECODE(cell_num);
+            cell_num_array.at(i) = cell_num;
+          }
+          if (OB_SUCC(ret)) {
+            // decode cell and construct ObHCfRow
+            if (key_idx_num != cell_num_array_size) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("the size of key index array does not equal to cell num array", K(ret), K(key_idx_num), K(cell_num_array_size));
+            } else if (OB_FAIL(rows_.prepare_allocate(key_idx_num))) {
+              LOG_WARN("fail to prepare allocate rows", K(ret), K(key_idx_num));
+            } else {
+              for (int i = 0; OB_SUCC(ret) && i < key_idx_num; ++i) {
+                int64_t first_timestamp = 0;
+                cell_num = cell_num_array.at(i);
+                idx = key_idx.at(i);
+                ObObj &k_obj = keys_->at(idx);
+                ObHCfRow &cf_row = rows_.at(i);
+                cf_row.cells_.set_allocator(deserialize_alloc_);
+                cf_row.real_table_name_ = real_table_name_;
+                cf_row.key_index_ = idx;
+                cf_row.is_same_timestamp_ = true;
+                if (OB_FAIL(cf_row.cells_.prepare_allocate(cell_num))) {
+                  LOG_WARN("fail to prepare allocate cells", K(ret), K(idx), K(real_table_name_), K(cell_num));
+                }
+                for (int j = 0; OB_SUCC(ret) && j < cell_num; ++j) {
+                  ObHCell &cell = cf_row.cells_.at(j);
+                  cell.set_allocator(deserialize_alloc_);
+                  OB_UNIS_DECODE(cell);
+                  if (OB_SUCC(ret)) {
+                    if (OB_FAIL(cell.set_rowkey_value(ObHTableConstants::COL_IDX_K, k_obj))) {
+                      LOG_WARN("fail to set rowkey value", K(ret), K(k_obj), K(cell));
+                    } else {
+                      ObObj *T = cell.get_cell_obj(ObHTableConstants::COL_IDX_T);
+                      if (OB_ISNULL(T)) {
+                        ret = OB_ERR_UNEXPECTED;
+                        LOG_WARN("T is null", K(ret));
+                      } else if (T->get_int() == ObHTableConstants::LATEST_TIMESTAMP) {
+                        T->set_int(now_ms_);
+                      }
+                      if (OB_SUCC(ret)) {
+                        if (j == 0) {
+                          first_timestamp = T->get_int();
+                        }
+                        if (T->get_int() != first_timestamp) {
+                          cf_row.is_same_timestamp_ = false;
+                        }
+                      }
+                    }
+                  }
+                }
+              } // end for
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObHCfRows)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(real_table_name_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObHCfRows)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(real_table_name_);
+  return len;
+}
+
+OB_DEF_SERIALIZE(ObHBaseCellResult)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, key_index_, properties_values_.count());
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < properties_values_.count(); ++i) {
+      OB_UNIS_ENCODE(properties_values_.at(i));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObHBaseCellResult)
+{
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, key_index_, properties_values_.count());
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < properties_values_.count(); ++i) {
+      OB_UNIS_ADD_LEN(properties_values_.at(i));
+    }
+  }
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObHBaseCellResult,)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(key_index_);
+  if (OB_SUCC(ret)) {
+    int64_t properties_len = 0;
+    OB_UNIS_DECODE(properties_len);
+    for (int i = 0; OB_SUCC(ret) && i < properties_len; ++i) {
+      ObObj val;
+      OB_UNIS_DECODE(val);
+      if (OB_FAIL(properties_values_.push_back(val))) {
+        LOG_WARN("fail to push back properties value", K(ret), K(val));
+      }
+    }
+  }
+  return ret;
+}
+
+ObTableEntityType ObHCell::get_entity_type() const
+{
+  return ObTableEntityType::ET_HKV_V2;
+}
+
+void ObHCell::reset()
+{
+  objs_.reset();
+  tablet_id_.reset();
+}
+
+int ObHCell::set_rowkey(const ObRowkey &rowkey)
+{
+  int ret = OB_SUCCESS;
+  if (rowkey.get_obj_cnt() != ObHTableConstants::HTABLE_ROWKEY_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowkey size is not equal to CELL_OBJS_SIZE", K(ret), K(rowkey.get_obj_cnt()));
+  } else {
+    for (int64_t i = 0; i < ObHTableConstants::HTABLE_ROWKEY_SIZE; ++i) {
+      objs_[i] = rowkey.get_obj_ptr()[i];
+    }
+  }
+  return ret;
+}
+
+int ObHCell::set_rowkey(const ObITableEntity &other)
+{
+  int ret = OB_SUCCESS;
+  if (other.get_entity_type() != ObTableEntityType::ET_HKV_V2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("other is not ObHCell", K(ret), K(other.get_entity_type()));
+  } else if (OB_FAIL(set_rowkey(static_cast<const ObHCell &>(other)))) {
+    LOG_WARN("failed to set rowkey", K(ret));
+  }
+  return ret;
+}
+
+int ObHCell::set_rowkey_value(int64_t idx, const ObObj &value)
+{
+  int ret = OB_SUCCESS;
+  if (idx < 0 || idx >= ObHTableConstants::HTABLE_ROWKEY_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx is out of range", K(ret), K(idx));
+  } else {
+    objs_[idx] = value;
+  }
+  return ret;
+}
+
+int ObHCell::add_rowkey_value(const ObObj &value)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport to add_rowkey_value", K(ret));
+  return ret;
+}
+
+int64_t ObHCell::get_rowkey_size() const
+{
+  return ObHTableConstants::HTABLE_ROWKEY_SIZE;
+}
+
+int ObHCell::get_rowkey_value(int64_t idx, ObObj &value) const
+{
+  int ret = OB_SUCCESS;
+  if (idx < 0 || idx >= ObHTableConstants::HTABLE_ROWKEY_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx is out of range", K(ret), K(idx));
+  } else {
+    value = objs_[idx];
+  }
+  return ret;
+}
+
+ObRowkey ObHCell::get_rowkey() const
+{
+  ObRowkey rowkey(const_cast<ObObj*>(&objs_[0]), ObHTableConstants::HTABLE_ROWKEY_SIZE);
+  return rowkey;
+}
+
+int64_t ObHCell::hash_rowkey() const
+{
+  uint64_t hash_val = 0;
+  for (int64_t i = 0; i < ObHTableConstants::HTABLE_ROWKEY_SIZE; ++i) {
+    objs_[i].hash(hash_val, hash_val);
+  }
+  return hash_val;
+}
+
+int ObHCell::set_property(const ObString &prop_name, const ObObj &prop_value)
+{
+  int ret = OB_SUCCESS;
+  if (prop_name.case_compare(ObHTableConstants::VALUE_CNAME) == 0) {
+    objs_[ObHTableConstants::COL_IDX_V] = prop_value;
+  } else if (prop_name.case_compare(ObHTableConstants::TTL_CNAME) == 0) {
+    if (objs_.count() <= ObHTableConstants::COL_IDX_TTL) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("current table schema has no cell TTL field", K(ret), K(prop_name));
+    } else {
+      objs_[ObHTableConstants::COL_IDX_TTL] = prop_value;
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported this property name", K(ret), K(prop_name));
+  }
+  return ret;
+}
+
+int ObHCell::get_property(const ObString &prop_name, ObObj &prop_value) const
+{
+  int ret = OB_SUCCESS;
+  if (prop_name.case_compare(ObHTableConstants::VALUE_CNAME) == 0) {
+    prop_value = objs_[ObHTableConstants::COL_IDX_V];
+  } else if (prop_name.case_compare(ObHTableConstants::TTL_CNAME) == 0) {
+    if (objs_.count() <= ObHTableConstants::COL_IDX_TTL) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("current table schema has no cell TTL field", K(ret), K(prop_name));
+    } else {
+      prop_value = objs_[ObHTableConstants::COL_IDX_TTL];
+    }
+  } else {
+    ret = OB_SEARCH_NOT_FOUND;
+  }
+  return ret;
+}
+
+int ObHCell::get_properties(ObIArray<std::pair<ObString, ObObj> > &properties) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(properties.push_back(std::make_pair(ObHTableConstants::VALUE_CNAME, objs_[ObHTableConstants::COL_IDX_V])))) {
+    LOG_WARN("failed to push back property", K(ret));
+  }
+  if (objs_.count() > ObHTableConstants::COL_IDX_TTL) {
+    if (OB_FAIL(properties.push_back(std::make_pair(ObHTableConstants::TTL_CNAME, objs_[ObHTableConstants::COL_IDX_TTL])))) {
+      LOG_WARN("failed to push back property", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHCell::get_properties_names(ObIArray<ObString> &properties) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(properties.push_back(ObHTableConstants::VALUE_CNAME))) {
+    LOG_WARN("failed to push back property", K(ret));
+  }
+  if (objs_.count() > ObHTableConstants::COL_IDX_TTL) {
+    if (OB_FAIL(properties.push_back(ObHTableConstants::TTL_CNAME))) {
+      LOG_WARN("failed to push back property", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHCell::get_properties_values(ObIArray<ObObj*> &properties_values) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(properties_values.push_back(const_cast<ObObj*>(&objs_[ObHTableConstants::COL_IDX_V])))) {
+    LOG_WARN("failed to push back property", K(ret));
+  }
+  if (objs_.count() > ObHTableConstants::COL_IDX_TTL) {
+    if (OB_FAIL(properties_values.push_back(const_cast<ObObj*>(&objs_[ObHTableConstants::COL_IDX_TTL])))) {
+      LOG_WARN("failed to push back property", K(ret));
+    }
+  }
+  return ret;
+}
+
+const ObObj &ObHCell::get_properties_value(int64_t idx) const
+{
+  int ret = OB_SUCCESS;
+  if (idx == ObHTableConstants::COL_IDX_V) {
+    return objs_[ObHTableConstants::COL_IDX_V];
+  } else if (idx == ObHTableConstants::COL_IDX_TTL) {
+    if (objs_.count() > ObHTableConstants::COL_IDX_TTL) {
+      return objs_[ObHTableConstants::COL_IDX_TTL];
+    }
+  }
+  ret = OB_SIZE_OVERFLOW; // no way to inform
+  LOG_WARN("idx size overflow objs_ array", K(ret), K(idx), K(objs_.count()));
+  return objs_[ObHTableConstants::COL_IDX_V];
+}
+
+int64_t ObHCell::get_properties_count() const
+{
+  return (objs_.count() - ObHTableConstants::HTABLE_ROWKEY_SIZE);
+}
+
+void ObHCell::set_dictionary(const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport set_dictionary", K(ret));
+  return;
+}
+
+void ObHCell::set_is_same_properties_names(bool is_same_properties_names)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport", K(ret));
+  return;
+}
+
+int ObHCell::construct_names_bitmap(const ObITableEntity& req_entity)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport to construct_names_bitmap", K(ret));
+  return ret;
+}
+
+const ObTableBitMap *ObHCell::get_rowkey_names_bitmap() const
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport to get_rowkey_names_bitmap", K(ret));
+  return nullptr;
+}
+
+const ObTableBitMap *ObHCell::get_properties_names_bitmap() const
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport to get_properties_names_bitmap", K(ret));
+  return nullptr;
+}
+
+const ObIArray<ObString>* ObHCell::get_all_rowkey_names() const
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport to get_all_rowkey_names", K(ret));
+  return nullptr;
+}
+
+const ObIArray<ObString>* ObHCell::get_all_properties_names() const
+{
+  int ret = OB_NOT_IMPLEMENT;
+  LOG_WARN("not surpport to get_all_properties_names", K(ret));
+  return nullptr;
+}
+
+ObTabletID ObHCell::get_tablet_id() const
+{
+  return tablet_id_;
+}
+
+void ObHCell::set_tablet_id(common::ObTabletID tablet_id)
+{
+  tablet_id_ = tablet_id;
+}
+
+int ObHCell::get_cell_obj(int64_t idx, ObObj &obj) const
+{
+  int ret = OB_SUCCESS;
+  if (idx < 0 || idx >= objs_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx is out of range", K(ret), K(idx));
+  } else {
+    obj = objs_[idx];
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObTableMetaRequest,
+                     credential_,
+                     meta_type_,
+                     data_);
+
+OB_SERIALIZE_MEMBER((ObTableMetaResponse, ObTableResult), data_);

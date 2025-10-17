@@ -14,10 +14,8 @@
 
 #define USING_LOG_PREFIX OBLOG
 
-
-
 #include "ob_log_trans_ctx.h"
-#include "ob_log_ls_mgr.h"                    // ObLogLSMgr
+#include "ob_log_ls_mgr.h"                      // ObLogLSMgr
 #include "ob_log_trans_ctx_mgr.h"               // IObLogTransCtxMgr
 #include "ob_log_binlog_record.h"
 
@@ -98,7 +96,7 @@ TransCtx::TransCtx() :
     total_br_count_(0),
     committed_br_count_(0),
     valid_part_trans_task_count_(0),
-    revertable_participant_count_(0),
+    revertable_ref_info_(0),
     is_trans_redo_dispatched_(false),
     is_trans_sorted_(false),
     br_out_queue_(),
@@ -132,7 +130,7 @@ void TransCtx::reset()
   total_br_count_ = 0;
   committed_br_count_ = 0;
   valid_part_trans_task_count_ = 0;
-  revertable_participant_count_ = 0;
+  revertable_ref_info_ = 0;
   is_trans_redo_dispatched_ = false;
   is_trans_sorted_ = false;
 
@@ -178,11 +176,6 @@ int TransCtx::set_ready_participant_count(const int64_t count)
   }
 
   return ret;
-}
-
-int64_t TransCtx::get_revertable_participant_count() const
-{
-  return revertable_participant_count_;
 }
 
 int TransCtx::set_ready_participant_objs(PartTransTask *part_trans_task)
@@ -509,22 +502,27 @@ int TransCtx::add_ready_participant_(
       // If the partition transaction is in the participant list, add it to the READY list
       else {
         ready_participant_count_++;
-        is_all_participants_ready = (ready_participant_count_ == participant_count_);
-
-        // If all participants are clustered, link them together in order to construct a list of participant objects
-        if (is_all_participants_ready && OB_FAIL(build_ready_participants_list_())) {
-          LOG_ERROR("build_ready_participants_list_ fail", KR(ret), K(is_all_participants_ready),
-              K(ready_participant_count_), K(participant_count_));
+        if (ready_participant_count_ > 0x3FFFFFFFFFFFFFFF) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("ready_participant_count_ is larger than 62 bits", K(ready_participant_count_));
         } else {
-          // All participants are READY to advance to the current state
-          if (is_all_participants_ready) {
-            switch_state_(TRANS_CTX_STATE_PARTICIPANT_READY);
-          }
+          is_all_participants_ready = (ready_participant_count_ == participant_count_);
 
-        ObCStringHelper helper;
-        _TCTX_DSTAT("[ADD_PART] TRANS_ID=%s READY_PARTS=%ld/%ld READY=%d",
-            helper.convert(trans_id_.get_id()), ready_participant_count_,
-            participant_count_, is_all_participants_ready);
+          // If all participants are clustered, link them together in order to construct a list of participant objects
+          if (is_all_participants_ready && OB_FAIL(build_ready_participants_list_())) {
+            LOG_ERROR("build_ready_participants_list_ fail", KR(ret), K(is_all_participants_ready),
+                K(ready_participant_count_), K(participant_count_));
+          } else {
+            // All participants are READY to advance to the current state
+            if (is_all_participants_ready) {
+              switch_state_(TRANS_CTX_STATE_PARTICIPANT_READY);
+            }
+
+            ObCStringHelper helper;
+            _TCTX_DSTAT("[ADD_PART] TRANS_ID=%s READY_PARTS=%ld/%ld READY=%d",
+                helper.convert(trans_id_.get_id()), ready_participant_count_,
+                participant_count_, is_all_participants_ready);
+          }
         }
       }
     }
@@ -690,43 +688,57 @@ int TransCtx::commit()
   return ret;
 }
 
-int TransCtx::inc_revertable_participant_count(bool &all_participant_revertable)
+int TransCtx::inc_revertable_participant_count(bool &all_participant_revertable, bool &can_recycle_trans_ctx, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  all_participant_revertable = false;
+  can_recycle_trans_ctx = false;
+
   ObSpinLockGuard guard(lock_);
 
   if (OB_UNLIKELY(TRANS_CTX_STATE_COMMITTED != state_)) {
     LOG_ERROR("state is not match which is not COMMITTED", "state", print_state());
     ret = OB_STATE_NOT_MATCH;
   } else {
-    int64_t result_count = ATOMIC_AAF(&revertable_participant_count_, 1);
-    all_participant_revertable = (result_count == ready_participant_count_);
+    // Use CAS operation to atomically update revertable_count_
+    uint64_t old_value, new_value;
+    do {
+      old_value = ATOMIC_LOAD(&revertable_ref_info_);
+      new_value = old_value + 1;  // Increment participant count
+    } while (ATOMIC_CAS(&revertable_ref_info_, old_value, new_value) != old_value && !stop_flag);
 
-    if (result_count > ready_participant_count_) {
-      LOG_ERROR("revertable participant count is larger than ready participant count",
-          "revertable_participant_count", result_count,
-          K(ready_participant_count_),
-          K(*this));
-      ret = OB_ERR_UNEXPECTED;
+    if (OB_UNLIKELY(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
+    } else {
+      int64_t revertable_participant_count = get_revertable_participant_count_(new_value);
+
+      if (revertable_participant_count > ready_participant_count_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("revertable participant count is larger than ready participant count", K(old_value),
+            K(revertable_participant_count), K(ready_participant_count_), KPC(this));
+      } else {
+        all_participant_revertable = (revertable_participant_count == ready_participant_count_);
+        // Check if TransCtx can be recycled: all participants ready AND all BEGIN/COMMIT BR released
+        can_recycle_trans_ctx = all_participant_revertable && is_begin_and_commit_br_released_(new_value);
+      }
     }
   }
 
   return ret;
 }
 
-int TransCtx::revert_participants()
+int TransCtx::revert_participants(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
 
   if (OB_UNLIKELY(TRANS_CTX_STATE_COMMITTED != state_)) {
+    ret = OB_STATE_NOT_MATCH;
     LOG_ERROR("TransCtx has not been sequenced, can not revert participants",
         "state", print_state());
+  } else if (OB_UNLIKELY(get_revertable_participant_count_(revertable_ref_info_) != ready_participant_count_)) {
     ret = OB_STATE_NOT_MATCH;
-  } else if (OB_UNLIKELY(revertable_participant_count_ != ready_participant_count_)) {
-    LOG_ERROR("revertable_participant_count does not equal to participant count",
-        K(revertable_participant_count_), K(ready_participant_count_));
-    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("revertable_participant_count does not equal to participant count", KPC(this));
   } else {
     ObCStringHelper helper;
     _TCTX_DSTAT("[REVERT_PARTICIPANTS] TRANS_ID=%s PARTICIPANTS=%ld SEQ=%ld",
@@ -734,13 +746,15 @@ int TransCtx::revert_participants()
 
     // wait redo dispatched cause dispatch_redo and sort&commit br is async steps and dispatched
     // sorted state may early than dispatched state.
-    wait_trans_redo_dispatched_();
-    // Note: All participants are recalled by external modules
-    ready_participant_objs_ = NULL;
-    ready_participant_count_ = 0;
-    revertable_participant_count_ = 0;
+    wait_trans_redo_dispatched_(stop_flag);
+    if (OB_UNLIKELY(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
+    } else {
+      // Note: All participants are recalled by external modules
+      ready_participant_objs_ = NULL;
 
-    switch_state_(TRANS_CTX_STATE_PARTICIPANT_REVERTED);
+      switch_state_(TRANS_CTX_STATE_PARTICIPANT_REVERTED);
+    }
   }
 
   return ret;
@@ -885,19 +899,90 @@ int TransCtx::pop_br_for_committer(ObLogBR *&br)
   return ret;
 }
 
-void TransCtx::wait_trans_redo_dispatched_()
+void TransCtx::wait_trans_redo_dispatched_(volatile bool &stop_flag)
 {
   static const int64_t PRINT_INTERVAL = 5 * _SEC_;
   static const int64_t WAIT_SLEEP_TIME = 10 * _MSEC_;
 
-  while (! ATOMIC_LOAD(&is_trans_redo_dispatched_)) {
-    usleep(WAIT_SLEEP_TIME);
+  while (! ATOMIC_LOAD(&is_trans_redo_dispatched_) && !stop_flag) {
+    ob_usleep(WAIT_SLEEP_TIME);
     if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
       LOG_INFO("waiting redo dispatch finish...", K_(tenant_id), K_(trans_id),
-          K_(participant_count), K_(ready_participant_count), K_(revertable_participant_count),
+          K_(participant_count), K_(ready_participant_count),
+          "revertable_participant_count", get_revertable_participant_count_(revertable_ref_info_),
           K_(total_br_count), K_(committed_br_count), K_(is_trans_sorted));
     }
   }
+  if (OB_UNLIKELY(stop_flag)) {
+    LOG_INFO("stop wait_trans_redo_dispatched_ cause stop_flag is setted", KPC(this));
+  }
+}
+
+int TransCtx::mark_begin_commit_br_released(bool is_begin_br, bool &can_recycle_trans_ctx, volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+
+  if (OB_UNLIKELY(TRANS_CTX_STATE_COMMITTED != state_ && TRANS_CTX_STATE_PARTICIPANT_REVERTED != state_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("state is not match which is not COMMITTED or PARTICIPANT_REVERTED", "state", print_state());
+  } else {
+    // Use CAS operation to atomically update revertable_count_
+    uint64_t old_value, new_value;
+    do {
+      old_value = ATOMIC_LOAD(&revertable_ref_info_);
+      new_value = old_value;
+
+      if (is_begin_br) {
+        // Set BEGIN BR released flag (bit 62)
+        new_value |= (1ULL << 62);
+      } else {
+        // Set COMMIT BR released flag (bit 63)
+        new_value |= (1ULL << 63);
+      }
+    } while (ATOMIC_CAS(&revertable_ref_info_, old_value, new_value) != old_value && !stop_flag);
+
+    if (OB_UNLIKELY(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
+    } else {
+      // Check if TransCtx can be recycled: all participants ready AND all BEGIN/COMMIT BR released
+      can_recycle_trans_ctx = get_revertable_participant_count_(new_value) == ready_participant_count_ &&
+          is_begin_and_commit_br_released_(new_value);
+    }
+  }
+
+  return ret;
+}
+
+int TransCtx::mark_dont_have_begin_commit_br(bool &can_recycle_trans_ctx, volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+
+  if (OB_UNLIKELY(TRANS_CTX_STATE_COMMITTED != state_ && TRANS_CTX_STATE_PARTICIPANT_REVERTED != state_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_ERROR("state is not match which is not COMMITTED or PARTICIPANT_REVERTED", "state", print_state());
+  } else {
+    // Use CAS operation to atomically update revertable_count_
+    uint64_t old_value, new_value;
+    do {
+      old_value = ATOMIC_LOAD(&revertable_ref_info_);
+      new_value = old_value;
+
+      // Set both BEGIN BR and COMMIT BR released flags (bits 62 and 63)
+      new_value |= (0xC000000000000000);  // 0xC = 1100 in binary, sets both high bits
+    } while (ATOMIC_CAS(&revertable_ref_info_, old_value, new_value) != old_value && !stop_flag);
+
+    if (OB_UNLIKELY(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
+    } else {
+      // Check if TransCtx can be recycled: all participants ready AND all BEGIN/COMMIT BR released
+      can_recycle_trans_ctx = get_revertable_participant_count_(new_value) == ready_participant_count_ &&
+          is_begin_and_commit_br_released_(new_value);
+    }
+  }
+
+  return ret;
 }
 
 } // namespace libobcdc

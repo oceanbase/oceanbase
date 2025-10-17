@@ -77,7 +77,7 @@ private:
 };
 
 
-//condider intersting order prefix
+//consider interesting order prefix
 /**
  * group by c2,c3,c1
  * order by c2,c3
@@ -98,7 +98,7 @@ public:
   { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
     MEMSET(filter_column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER); }
   virtual ~ObInterestOrderDim() {}
-  void set_intereting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
+  void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
   int add_const_column_info(const common::ObIArray<bool> &const_column_info);
   void set_index_back(const bool index_back) { need_index_back_ = index_back; }
@@ -175,15 +175,30 @@ public:
   friend class ObOptimizerTraceImpl;
   ObShardingInfoDim() : ObSkylineDim(SHARDING_INFO),
     sharding_info_(NULL),
-    is_single_get_(false)
+    is_single_get_(false),
+    is_global_index_(false),
+    is_index_back_(false),
+    can_extract_range_(false)
   {}
   virtual ~ObShardingInfoDim() {}
   void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
   void set_is_single_get(bool is_single_get) { is_single_get_ = is_single_get; }
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
+  void set_is_global_index(bool is_global_index) { is_global_index_ = is_global_index; }
+  void set_is_index_back(bool is_index_back) { is_index_back_ = is_index_back; }
+  void set_can_extract_range(bool can_extract_range) { can_extract_range_ = can_extract_range; }
+  /*
+   * a global index that cannot extract range and is index back is unstable,
+   * it may have highly variable cost for different queries.
+   */
+  inline bool is_unstable_global_index() const
+  { return is_global_index_ && !can_extract_range_ && is_index_back_; }
 private:
   ObShardingInfo *sharding_info_;
   bool is_single_get_;
+  bool is_global_index_;
+  bool is_index_back_;
+  bool can_extract_range_;
 };
 
 struct KeyPrefixComp
@@ -241,7 +256,7 @@ public:
                           common::ObIAllocator &allocator,
                           bool contain_always_false);
   int add_unique_range_dim(int64_t range_cnt, ObIAllocator &allocator);
-  int add_sharding_info_dim(ObShardingInfo *sharding_info, bool is_single_get, ObIAllocator &allocator);
+  int add_sharding_info_dim(ObShardingInfo *sharding_info, bool is_single_get, bool is_global_index, bool is_index_back, bool can_extract_range, ObIAllocator &allocator);
   bool can_prunning() const { return can_prunning_; }
   void set_can_prunning(const bool can) { can_prunning_ = can; }
   void set_is_get(bool is_get) { is_get_ = is_get; }
@@ -295,7 +310,7 @@ int ObSkylineDimFactory::create_skyline_dim(common::ObIAllocator &allocator,
   skyline_dim = NULL;
   if (OB_ISNULL(ptr)) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
-    SQL_OPT_LOG(WARN, "allocate momory for skyline dim failed", K(ret));
+    SQL_OPT_LOG(WARN, "allocate memory for skyline dim failed", K(ret));
   } else {
     skyline_dim = new (ptr) SkylineDimType();
   }

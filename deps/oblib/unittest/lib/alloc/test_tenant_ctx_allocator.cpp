@@ -413,8 +413,6 @@ TEST(TestTenantAllocator, MERGE_RESERVE_CTX)
 int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);
-  OB_LOGGER.set_file_name("t.log", true, true);
-  OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_disable_logging(true);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

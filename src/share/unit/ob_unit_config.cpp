@@ -84,6 +84,19 @@ int ObUnitConfig::set(
   return ret;
 }
 
+int ObUnitConfig::set(
+    const uint64_t unit_config_id,
+    const ObUnitConfigName &name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(name_.assign(name))) {
+    LOG_WARN("assign name fail", KR(ret), K(name));
+  } else {
+    unit_config_id_ = unit_config_id;
+  }
+  return ret;
+}
+
 int ObUnitConfig::init(
     const uint64_t unit_config_id,
     const ObUnitConfigName &name,

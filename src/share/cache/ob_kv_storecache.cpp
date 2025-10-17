@@ -447,8 +447,9 @@ int ObKVGlobalCache::erase_cache()
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
   } else {
-    store_.flush_washable_mbs();
-    if (OB_FAIL(map_.erase_all())) {
+    if (OB_FAIL(store_.flush_washable_mbs())) {
+      COMMON_LOG(WARN, "failed to flush washable mbs");
+    } else if (OB_FAIL(map_.erase_all())) {
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret));
     }
   }
@@ -462,8 +463,9 @@ int ObKVGlobalCache::erase_cache(const uint64_t tenant_id)
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
   } else {
-    store_.flush_washable_mbs(tenant_id);
-    if (OB_FAIL(map_.erase_tenant(tenant_id))) {
+    if (OB_FAIL(store_.flush_washable_mbs(tenant_id))) {
+      COMMON_LOG(WARN, "failed to flush washable mbs", K(tenant_id));
+    } else if (OB_FAIL(map_.erase_tenant(tenant_id))) {
       COMMON_LOG(WARN, "fail to erase cache, ", K(ret), K(tenant_id));
     }
   }
@@ -727,6 +729,10 @@ void ObKVGlobalCache::reload_priority()
         priority = common::ObServerConfig::get_instance().fuse_row_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "bf_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().bf_cache_priority;
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_external_table_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_external_column_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
       } else {
         priority = 0;
       }
@@ -890,7 +896,7 @@ int ObKVGlobalCache::get_cache_inst_info(const uint64_t tenant_id, ObIArray<ObKV
   } else if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
-  } else if (OB_FAIL(insts_.get_cache_info(tenant_id, inst_handles))) {
+  } else if (OB_FAIL(insts_.get_cache_info(inst_handles, &tenant_id))) {
     COMMON_LOG(WARN, "Fail to get all cache info", K(ret));
   }
 

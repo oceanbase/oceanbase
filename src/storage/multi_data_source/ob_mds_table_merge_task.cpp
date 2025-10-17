@@ -50,7 +50,7 @@ int ObMdsTableMergeTask::init()
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC_(dag));
   } else {
-    ObMdsTableMergeDag *mds_merge_dag = static_cast<ObMdsTableMergeDag *>(dag_);
+    ObTabletMdsMiniMergeDag *mds_merge_dag = static_cast<ObTabletMdsMiniMergeDag *>(dag_);
     const ObTabletMergeDagParam &merge_dag_param = mds_merge_dag->get_param();
     if (OB_UNLIKELY(!merge_dag_param.is_valid())) {
       ret = OB_ERR_SYS;
@@ -112,7 +112,7 @@ int ObMdsTableMergeTask::process()
     ObTabletHandle new_tablet_handle;
     mds::MdsTableHandle mds_table;
     const int64_t mds_construct_sequence = mds_merge_dag_->get_mds_construct_sequence();
-    ObTableHandleV2 table_handle;
+    ObTableHandleV2 &table_handle = ctx.merged_table_handle_;
 #ifdef OB_BUILD_SHARED_STORAGE
     ObSSTableUploadRegHandle upload_reg_handle;
 #endif
@@ -211,7 +211,14 @@ int ObMdsTableMergeTask::process()
     if (mds_table.is_valid() && OB_NO_NEED_MERGE != ret) {
       mds_table.on_flush(flush_scn, ret);
     }
-    ctx.time_guard_click(ObStorageCompactionTimeGuard::DAG_FINISH);
+    // update merge info.
+    {
+      int tmp_ret = OB_SUCCESS;
+      (void) ctx.update_and_analyze_progress();
+      if (OB_TMP_FAIL(ctx.collect_running_info())) {
+        LOG_WARN("fail to collect running info", K(tmp_ret), K(ctx.merge_info_));
+      }
+    }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
     FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx_ptr->get_merge_info(),
         "time_guard", ctx_ptr->info_collector_.time_guard_, KPC(mds_merge_dag_));
@@ -241,7 +248,7 @@ void ObMdsTableMergeTask::try_schedule_compaction_after_mds_mini(compaction::ObT
   } else if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
     if (0 == ctx.get_merge_info().get_merge_history().block_info_.macro_block_count_) {
       // no need to schedule mds minor merge
-    } else if (OB_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
+    } else if (OB_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMdsMinorMergeDag>(
         compaction::MDS_MINOR_MERGE, ctx.static_param_.ls_handle_, tablet_handle))) {
       if (OB_SIZE_OVERFLOW != ret) {
         LOG_WARN("failed to schedule special tablet minor merge which triggle mds",

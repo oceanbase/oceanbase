@@ -41,18 +41,12 @@ public:
   explicit ObCreateUDTResolver(ObResolverParams &params) : ObDDLResolver(params) {}
   virtual int resolve(const ParseNode &parse_tree);
 private:
-  int resolve_without_check_valid(const ParseNode &parse_tree);
   int create_udt_arg(obrpc::ObCreateUDTArg *&crt_udt_arg);
   int resolve_oid_clause(const ParseNode *oid_node,
                          share::schema::ObUDTTypeInfo *udt_info);
   int resolve_type_name(const ParseNode *name_node,
                         obrpc::ObCreateUDTArg* crt_udt_arg,
                         share::schema::ObUDTTypeInfo *udt_info);
-  int resolve_udt_data_type(const ParseNode *type_node,
-                        const share::schema::ObUDTTypeInfo* type_info,
-                        int64_t position,
-                        share::schema::ObUDTTypeAttr& type_attr,
-                        const ObString& db_name);
   int resolve_final_node(const ParseNode *final_node);
   int resolve_type_attr(const ParseNode *attr_node,
                         int64_t position,
@@ -76,6 +70,9 @@ private:
                           obrpc::ObCreateUDTArg &crt_udt_arg);
   int resolve_type_nested_table(const ParseNode *nested_node,
                                 obrpc::ObCreateUDTArg &crt_udt_arg);
+  int resolve_impl(const ParseNode *type_def_node,
+                   obrpc::ObCreateUDTArg &udt_arg,
+                   const ObString &object_spec);
   int resolve_type_define(const ParseNode *type_def_node,
                         obrpc::ObCreateUDTArg &crt_udt_arg,
                         const ObString &object_spec);
@@ -84,10 +81,31 @@ private:
                         obrpc::ObCreateUDTArg &crt_udt_arg,
                         const ObString &db_name,
                         const ObString &object_spec);
-  int detect_loop_dependency(const ObString &target_udt_name,
-                             uint64_t target_database_id,
-                             const ObUDTTypeInfo *udt_info,
-                             bool &has_mutual_dep);
+  static int detect_loop_dependency(ObStmtResolver &stmt_resolver,
+                                    const ObString &target_udt_name,
+                                    uint64_t target_database_id,
+                                    const ObUDTTypeInfo *udt_info,
+                                    bool &has_mutual_dep);
+public:
+  static int resolve_udt_data_type(const ParseNode *type_node,
+                                    const ObUDTTypeInfo* type_info,
+                                    int64_t position,
+                                    ObUDTTypeAttr& type_attr,
+                                    const ObString &db_name,
+                                    ObStmtResolver &stmt_resolver,
+                                    ObCreateUDTArg &udt_arg);
+  static int resolve_type_attr(const ParseNode *attr_node,
+                              int64_t position,
+                              ObUDTTypeInfo* udt_info,
+                              ObString &db_name,
+                              ObStmtResolver &stmt_resolver,
+                              ObCreateUDTArg &udt_arg,
+                              ObUDTTypeAttr &type_attr);
+  static int resolve_type_attr_duplicate_check(const common::ObIArray<ObUDTTypeAttr*> &attrs,
+                                        const ObString &attr_name);
+  int resolve_without_check_valid(const ParseNode &parse_tree,
+                                  ObIArray<ObRoutineInfo> *public_routine_infos = NULL,
+                                  bool check_priv = true);
   static int splice_udt_ddl(ObSchemaGetterGuard &schema_guard,
                             ObIAllocator &allocator,
                             const uint64_t tenant_id,
@@ -95,10 +113,10 @@ private:
                             const ObUDTTypeCode typecode,
                             ObString &udt_ddl);
   static int parse_ddl_by_plain_text(ObIAllocator &allocator,
-                                     const ObSQLSessionInfo &session_info,
-                                     const ObString &udt_ddl,
-                                     const ParseNode *&plain_parse_tree);
-public:
+                                    const ObSQLSessionInfo &session_info,
+                                    const ObString &udt_ddl,
+                                    const ParseNode *&plain_parse_tree,
+                                    bool &is_wrapped);
   static int check_udt_validation(const ObSQLSessionInfo& session_info,
                                   ObSchemaGetterGuard& schema_guard,
                                   ObResolverParams &params,
@@ -111,7 +129,9 @@ public:
                                   const ObString& db_name,
                                   const ObString& new_udt_name,
                                   ObUDTTypeCode type_code,
-                                  bool& valid);
+                                  bool& valid,
+                                  ObIArray<ObRoutineInfo> *public_routine_infos = NULL,
+                                  bool check_priv = true);
   static int package_info_to_object_info(const share::schema::ObPackageInfo &pkg_info,
                                          share::schema::ObUDTObjectType &obj_info);
   static int object_info_to_package_info(const share::schema::ObUDTObjectType &obj_info,
@@ -135,7 +155,8 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
   int resolve_type_body(const ParseNode *body_node,
                         obrpc::ObCreateUDTArg &crt_udt_arg,
-                        const share::schema::ObUDTTypeInfo *udt_info);
+                        const share::schema::ObUDTTypeInfo *udt_info,
+                        bool is_invoker_right);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUDTBodyResolver);

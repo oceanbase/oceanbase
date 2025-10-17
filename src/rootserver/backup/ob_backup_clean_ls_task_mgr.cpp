@@ -103,20 +103,26 @@ int ObBackupCleanLSTaskMgr::process(int64_t &finish_cnt)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BACKUP_CLEAN_ADD_TASK_FAIL);
 int ObBackupCleanLSTaskMgr::add_task_()
 {
   // add log stream task into task scheduler
   // then advance log stream task status to PENDING
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObBackupCleanLSTask task;
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*task_attr_, *ls_attr_))) {
     LOG_WARN("failed to build task", K(ret), KP(task_attr_), KP(ls_attr_));
-  } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("failed to advance ls task status", K(ret), K(*task_attr_));
+#ifdef ERRSIM
+  } else if (OB_FAIL(tmp_ret = ERRSIM_BACKUP_CLEAN_ADD_TASK_FAIL)) {
+    LOG_WARN("errsim add task forced fail", K(ret), K(*task_attr_), K(task));
+#endif
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
     LOG_WARN("failed to add task", K(ret), K(*task_attr_), K(task));
+  } else if (OB_FAIL(advance_ls_task_status(*backup_service_, *sql_proxy_, *ls_attr_, next_status))) {
+    LOG_WARN("failed to advance ls task status", K(ret), K(*task_attr_));
   } else {
     LOG_INFO("[BACKUP_CLEAN]success add task", K(*task_attr_), K(*ls_attr_), K(task)); 
   } 

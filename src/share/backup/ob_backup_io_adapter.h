@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace common
 {
-int switch_cos_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri);
+int switch_s3_compatible_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri);
 
 class ObBackupIoAdapter
 {
@@ -64,6 +64,10 @@ public:
       const common::ObString &uri, const common::ObObjectStorageInfo *storage_info);
   static int get_file_modify_time(const common::ObString &uri,
       const common::ObObjectStorageInfo *storage_info, int64_t &modify_time_s);
+  static int get_file_content_digest(
+      const common::ObString &uri,
+      const common::ObObjectStorageInfo *storage_info,
+      char *digest_buf, const int64_t digest_buf_len);
   /**
    * Deletes a list of specified objects (files_to_delete).
    * If some objects are deleted successfully and others fail, the function
@@ -254,6 +258,7 @@ private:
       char *buf, const int64_t offset, const int64_t size,
       const common::ObIOFd &fd,
       int64_t &read_size);
+  static int is_io_prohibited(const common::ObObjectStorageInfo *storage_info);
   static int io_manager_write(
       const char *buf, const int64_t offset, const int64_t size,
       const common::ObIOFd &fd,
@@ -314,8 +319,8 @@ private:
     int ret = OB_SUCCESS;                                                             \
     ObArenaAllocator allocator;                                                       \
     ObString new_uri;                                                                 \
-    if (OB_FAIL(switch_cos_to_s3(allocator, uri, new_uri))) {         \
-      OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(uri));       \
+    if (OB_FAIL(switch_s3_compatible_to_s3(allocator, uri, new_uri))) {               \
+      OB_LOG(WARN, "fail to switch s3 compatible protocol to s3", K(ret), K(uri));    \
     } else if (OB_FAIL(ObBackupIoAdapter::fun_name(new_uri, SHIFT_PARAMS(__VA_ARGS__)))) { \
       OB_LOG(WARN, "fail to get and init device", K(ret)); \
     }                                                                                 \
@@ -341,7 +346,7 @@ public:
     int ret = OB_SUCCESS;
     ObArenaAllocator allocator;
     ObString new_uri;
-    if (OB_FAIL(switch_cos_to_s3(allocator, uri, new_uri))) {
+    if (OB_FAIL(switch_s3_compatible_to_s3(allocator, uri, new_uri))) {
       OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(uri));
     } else if (OB_FAIL(ObBackupIoAdapter::open_with_access_type(device_handle, fd, storage_info, new_uri, access_type, storage_id_mod))) {
       OB_LOG(WARN, "fail to open with access type", K(ret), KPC(storage_info), K(new_uri), K(access_type), K(storage_id_mod));
@@ -356,7 +361,7 @@ public:
     int ret = OB_SUCCESS;
     ObArenaAllocator allocator;
     ObString new_uri;
-    if (OB_FAIL(switch_cos_to_s3(allocator, storage_type_prefix, new_uri))) {
+    if (OB_FAIL(switch_s3_compatible_to_s3(allocator, storage_type_prefix, new_uri))) {
       OB_LOG(WARN, "fail to switch cos to s3", K(ret), K(storage_type_prefix));
     } else if (OB_FAIL(ObBackupIoAdapter::get_and_init_device(device_handle, storage_info, new_uri, storage_id_mod))) {
       OB_LOG(WARN, "fail to get and init device", K(ret), KPC(storage_info), K(new_uri), K(storage_id_mod));
@@ -376,6 +381,16 @@ public:
   EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_get_file_length, const common::ObString &, uri,
                                                            const common::ObObjectStorageInfo *, storage_info,
                                                            int64_t &, file_length)
+
+  EXTERNAL_IO_ADAPTER_FUNCTION(get_file_modify_time, const common::ObString &, uri,
+                                                     const common::ObObjectStorageInfo *, storage_info,
+                                                     int64_t &, modify_time_s)
+
+  EXTERNAL_IO_ADAPTER_FUNCTION(get_file_content_digest, const common::ObString &, uri,
+                                                        const common::ObObjectStorageInfo *, storage_info,
+                                                        char *, digest_buf,
+                                                        const int64_t, digest_buf_len)
+
   EXTERNAL_IO_ADAPTER_FUNCTION(del_file, const common::ObString &, uri,
                                          const common::ObObjectStorageInfo *, storage_info)
   EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_del_file, const common::ObString &, uri,
@@ -409,7 +424,7 @@ public:
     int ret = OB_SUCCESS;
     ObArenaAllocator allocator;
     ObString new_uri;
-    if (OB_FAIL(switch_cos_to_s3(allocator, uri, new_uri))) {
+    if (OB_FAIL(switch_s3_compatible_to_s3(allocator, uri, new_uri))) {
       OB_LOG(WARN, "fail to switch cos to s3", K(ret));
     } else if (OB_FAIL(ObBackupIoAdapter::del_dir(uri, storage_info, recursive))) {
       OB_LOG(WARN, "fail to get and init device", K(ret), KPC(storage_info), K(recursive));
@@ -433,7 +448,7 @@ public:
                                        const common::ObStorageIdMod &, storage_id_mod)
 
   EXTERNAL_IO_ADAPTER_FUNCTION(seal_file, const common::ObString &, uri,
-                                          const share::ObBackupStorageInfo *, storage_info,
+                                          const common::ObObjectStorageInfo *, storage_info,
                                           const common::ObStorageIdMod &, storage_id_mod)
   static int pwrite(common::ObIODevice &device_handle,
                     common::ObIOFd &fd,

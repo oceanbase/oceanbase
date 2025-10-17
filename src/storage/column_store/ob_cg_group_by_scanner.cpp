@@ -198,6 +198,21 @@ int ObCGGroupByScanner::read_reference(const int32_t group_by_col)
   return ret;
 }
 
+int ObCGGroupByScanner::fill_group_by_col_lob_locator()
+{
+  int ret = OB_SUCCESS;
+  const bool has_lob_out_row = micro_scanner_->get_reader()->has_lob_out_row();
+  const share::schema::ObColumnParam *col_param = group_by_cell_->get_group_by_col_param();
+  if (iter_param_->has_lob_column_out() && has_lob_out_row
+    && nullptr != col_param && col_param->get_meta_type().is_lob_storage()) {
+    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, *access_ctx_, *col_param,
+          group_by_cell_->get_distinct_cnt(), group_by_cell_->get_group_by_col_datums_to_fill(), false))) {
+      LOG_WARN("Failed to fill lob locator", K(ret), K(has_lob_out_row), K(col_param), KPC(group_by_cell_), KPC(iter_param_));
+    }
+  }
+  return ret;
+}
+
 int ObCGGroupByScanner::calc_aggregate(const bool is_group_by_col)
 {
   int ret = OB_SUCCESS;
@@ -223,6 +238,8 @@ int ObCGGroupByScanner::calc_aggregate(const bool is_group_by_col)
       } else if (OB_UNLIKELY(0 == read_row_count || read_row_count > remain_row_count)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected output row count", K(ret), K(read_row_count), K(remain_row_count));
+      } else if (OB_FAIL(group_by_cell_->clear_evaluated_infos())) {
+        LOG_WARN("Failed to clear evaluated infos", K(ret), KPC_(group_by_cell));
       } else if (OB_FAIL(do_group_by_aggregate(read_row_count, is_group_by_col, ref_offset))) {
         LOG_WARN("Failed to do group by aggregate", K(ret));
       } else {

@@ -399,8 +399,8 @@ int ObTabletTableUpdater::check_tenant_status_(
   } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, tenant_dropped))) {
     LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
   } else if (!tenant_dropped) {
-    if (OB_FAIL(guard.get_tenant_info(tenant_id_, tenant_info))) {
-      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id_));
+    if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_info))) {
+      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
     } else if (OB_NOT_NULL(tenant_info) && tenant_info->is_normal()) {
       tenant_not_ready = !schema_service->is_tenant_full_schema(tenant_id);
     }

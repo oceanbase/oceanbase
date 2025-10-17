@@ -39,6 +39,7 @@
 #include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
 #include "close_modules/shared_storage/storage/shared_storage/prewarm/ob_ha_prewarm_struct.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
+#include "close_modules/shared_storage/storage/shared_storage/prewarm/ob_ha_prewarm_rpc_struct.h"
 #endif
 
 namespace oceanbase
@@ -190,12 +191,13 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(tablet_id), K_(max_major_sstable_snapshot), K_(minor_sstable_scn_range),
-      K_(ddl_sstable_scn_range));
+      K_(ddl_sstable_scn_range), K_(inc_major_ddl_sstable_end_scn));
 
   common::ObTabletID tablet_id_;
   int64_t max_major_sstable_snapshot_;
   share::ObScnRange minor_sstable_scn_range_;
   share::ObScnRange ddl_sstable_scn_range_;
+  share::SCN inc_major_ddl_sstable_end_scn_;
 };
 
 struct ObCopyTabletsSSTableInfoArg final
@@ -1108,6 +1110,10 @@ public:
   RPC_S(PR5 get_micro_block_cache_info, OB_HA_GET_MICRO_BLOCK_CACHE_INFO, (ObGetHAMicroCacheLSInfoArg), ObGetHAMicroCacheLSInfoRes);
   RPC_S(PR5 get_migration_cache_job_info, OB_HA_GET_MIGRATION_CACHE_JOB_INFO, (ObGetMigrationCacheJobInfoArg), ObGetMigrationCacheJobInfoRes);
   RPC_S(PR5 notify_sswriter_do_backfill, OB_HA_NOTIFY_SSWRITER_DO_BACKFILL, (ObNotifySSWriterDoBackfillArg), obrpc::Int64);
+  RPC_S(PR5 get_ha_local_cache_info, OB_HA_GET_LOCAL_CACHE_INFO, (storage::ObGetHALocalCacheLSInfoArg), storage::ObGetHALocalCacheLSInfoRes);
+  RPC_S(PR5 get_ha_cache_job_info, OB_HA_GET_CACHE_JOB_INFO, (storage::ObGetHACacheJobInfoArg), storage::ObGetHACacheJobInfoRes);
+  RPC_S(PR5 get_local_cache_key, OB_HA_FETCH_LOCAL_CACHE_KEYS, (ObGetLocalCacheKeyArg), ObGetLocalCacheKeyRes);
+  RPC_SS(PR5 fetch_local_cache_block, OB_HA_FETCH_LOCAL_CACHE_BLOCK, (ObHAFetchLocalCacheBlockArg), common::ObDataBuffer);
 #endif
 
 
@@ -1155,6 +1161,10 @@ public:
   virtual ~ObHAFetchMacroBlockP() {}
 protected:
   int process();
+private:
+#ifdef ERRSIM
+  void errsim_spin_wait_for_specific_tablet_();
+#endif
 private:
   int64_t total_macro_block_count_;
 };
@@ -1642,6 +1652,54 @@ protected:
   int process();
 };
 
+class ObHAGetLocalCacheInfoP:
+    public ObStorageRpcProxy::Processor<OB_HA_GET_LOCAL_CACHE_INFO>
+{
+public:
+  ObHAGetLocalCacheInfoP() = default;
+  virtual ~ObHAGetLocalCacheInfoP() {}
+protected:
+  int process();
+};
+
+class ObHAGetCacheJobInfoP:
+    public ObStorageRpcProxy::Processor<OB_HA_GET_CACHE_JOB_INFO>
+{
+public:
+  ObHAGetCacheJobInfoP() = default;
+  virtual ~ObHAGetCacheJobInfoP() {}
+protected:
+  int process();
+};
+
+class ObGetLocalCacheKeyP:
+    public ObStorageRpcProxy::Processor<OB_HA_FETCH_LOCAL_CACHE_KEYS>
+{
+public:
+  ObGetLocalCacheKeyP() = default;
+  virtual ~ObGetLocalCacheKeyP() {}
+protected:
+  int process();
+
+private:
+  int process_micro_cache_job_();
+  int process_macro_cache_job_();
+protected:
+  static const int64_t MAX_KEY_SET_SIZE = WARMUP_MAX_KEY_SET_SIZE_IN_RPC; // 4MB
+  static const int64_t KEY_SET_RESERVE_SIZE = (1LL << 13); // 8KB
+  // forbid too many iterations due to the rpc timeout
+  static const int64_t MICRO_MAX_ITER_COUNT = 3000;
+};
+
+class ObFetchLocalCacheBlockP:
+    public ObStorageStreamRpcP<OB_HA_FETCH_LOCAL_CACHE_BLOCK>
+{
+public:
+  explicit ObFetchLocalCacheBlockP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObFetchLocalCacheBlockP() {}
+protected:
+  int process();
+};
 class ObNotifySSWriterDoBackfillP:
     public ObStorageRpcProxy::Processor<OB_HA_NOTIFY_SSWRITER_DO_BACKFILL>
 {
@@ -1665,7 +1723,6 @@ protected:
 private:
   int build_sstable_info_(ObLS *ls);
 };
-
 } // obrpc
 
 
@@ -1891,12 +1948,29 @@ public:
       const ObStorageHASrcInfo &src_info,
       const ObMigrationCacheJobInfo &job_info,
       obrpc::ObGetHAMicroMetaSetRes &res);
+  virtual int get_local_cache_ls_info(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const ObStorageHASrcInfo &src_info,
+      ObSSLocalCacheLSInfo &ls_cache_info);
+  virtual int get_ls_migration_cache_job_info(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const ObStorageHASrcInfo &src_info,
+      const ObHALocalCacheTaskCount &task_count,
+      ObGetHACacheJobInfoRes &res);
   virtual int notify_sswriter_do_backfill(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const ObSSWriterType type,
       const ObStorageHASrcInfo &src_info);
+  virtual int get_local_cache_key(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const ObStorageHASrcInfo &src_info,
+      const ObHACacheJobInfo &job_info,
+      ObGetLocalCacheKeyRes &res);
 #endif
 private:
   bool is_inited_;

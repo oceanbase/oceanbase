@@ -8,31 +8,6 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
-        {
-          "name": "_io_read_redundant_limit_percentage",
-          "value": 50,
-          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
-        },
-        {
-          "name": "_io_read_batch_size",
-          "value": "128KB",
-          "comment": "Maximum batch size in one read io request"
-        },
-        {
-          "name": "max_syslog_file_count",
-          "value": 300,
-          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
-        },
-        {
-          "name": "enable_syslog_recycle",
-          "value": 1,
-          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
-        },
-        {
-          "name": "enable_record_trace_log",
-          "value": false,
-          "comment": "forbid recording sql and transaction trace event"
         }
       ],
       "tenant": [
@@ -40,11 +15,6 @@
           "name": "_tempstore_read_alignment_size",
           "value": "1MB",
           "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
-        },
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
         },
         {
           "name": "inc_sstable_upload_thread_score",
@@ -57,29 +27,29 @@
           "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
         },
         {
-          "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for simple oltp workloads"
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
         },
         {
-          "name": "_enable_filter_reordering",
-          "value": false,
-          "comment": "disable filter reordering for simple OLTP workloads"
-        },
-        {
-          "name": "direct_load_allow_fallback",
-          "value": 1,
-          "comment": "for simple OLTP workloads, fallback is allowed when direct load fails"
-        },
-        {
-          "name": "default_load_mode",
-          "value": "DISABLED",
-          "comment": "for simple OLTP workloads, the default import is not-direct load"
+          "name": "_io_read_batch_size",
+          "value": "128KB",
+          "comment": "Maximum batch size in one read io request"
         },
         {
           "name": "log_storage_compress_all",
           "value": 1,
           "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -93,6 +63,28 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
           "name": "_io_read_redundant_limit_percentage",
@@ -105,71 +97,14 @@
           "comment": "Maximum batch size in one read io request"
         },
         {
-          "name": "max_syslog_file_count",
-          "value": 300,
-          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
-        },
-        {
-          "name": "enable_syslog_recycle",
+          "name": "log_storage_compress_all",
           "value": 1,
-          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+          "comment": "specifies whether to compress logs before storing"
         },
         {
-          "name": "large_query_threshold",
-          "value": "600s",
-          "comment": "for complex OLTP scenario, some query will run for very long time."
-        },
-        {
-          "name": "enable_record_trace_log",
-          "value": false,
-          "comment": "forbid recording sql and transaction trace event"
-        }
-      ],
-      "tenant": [
-        {
-          "name": "_tempstore_read_alignment_size",
-          "value": "1MB",
-          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
-        },
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
-        {
-          "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for simple oltp workloads"
-        },
-        {
-          "name": "_enable_filter_reordering",
-          "value": false,
-          "comment": "disable filter reordering for simple OLTP workloads"
-        },
-        {
-          "name": "direct_load_allow_fallback",
-          "value": 1,
-          "comment": "for simple OLTP workloads, fallback is allowed when direct load fails"
-        },
-        {
-          "name": "default_load_mode",
-          "value": "DISABLED",
-          "comment": "for simple OLTP workloads, the default import is not-direct load"
-        },
-        {
-          "name": "log_transport_compress_all",
-          "value": 1,
-          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
-        },
-        {
-          "name": "inc_sstable_upload_thread_score",
-          "value": 30,
-          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -183,88 +118,18 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
-        },
-        {
-          "name": "max_syslog_file_count",
-          "value": 300,
-          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
-        },
-        {
-          "name": "enable_syslog_recycle",
-          "value": 1,
-          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
-        },
-        {
-          "name": "large_query_threshold",
-          "value": "0ms",
-          "comment": "disable large query detection for AP query"
-        },
-        {
-          "name": "trace_log_slow_query_watermark",
-          "value": "7d",
-          "comment": "7 days. no 'slow query' concept for AP query"
-        },
-        {
-          "name": "enable_record_trace_log",
-          "value": false,
-          "comment": "disable trace log for better AP performance"
         }
       ],
       "tenant": [
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
         {
           "name": "_tempstore_read_alignment_size",
           "value": "1MB",
           "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
         },
         {
-          "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for olap workloads, modify to delete_insert later"
-        },
-        {
-          "name": "default_table_organization",
-          "value": "HEAP",
-          "comment": "the order in which the data rows of the table are stored. For AP, the data rows of table are stored in no particular order"
-        },
-        {
-          "name": "_nested_loop_join_enabled",
-          "value": false,
-          "comment": "for classic OLAP workloads, disable nested loop join"
-        },
-        {
-          "name": "direct_load_allow_fallback",
-          "value": 0,
-          "comment": "for classic OLAP workloads, fallback is not allowed when direct load fails"
-        },
-        {
-          "name": "default_load_mode",
-          "value": "FULL_DIRECT_WRITE",
-          "comment": "for classic OLAP workloads, the default import is full direct load"
-        },
-        {
-          "name": "_io_callback_thread_count",
-          "value": 64,
-          "comment": "The number of io callback threads"
-        },
-        {
-          "name": "_io_read_redundant_limit_percentage",
-          "value": 50,
-          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
-        },
-        {
           "name": "_io_read_batch_size",
           "value": "512KB",
           "comment": "Maximum batch size in one read io request"
-        },
-        {
-          "name": "default_table_store_format",
-          "value": "column",
-          "comment": "default to column format for AP"
         },
         {
           "name": "inc_sstable_upload_thread_score",
@@ -275,6 +140,26 @@
           "name": "_enable_active_txn_transfer",
           "value": false,
           "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": 50,
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -288,11 +173,28 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
         },
         {
-          "name": "max_syslog_file_count",
-          "value": 300,
-          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
           "name": "_io_read_redundant_limit_percentage",
@@ -305,51 +207,14 @@
           "comment": "Maximum batch size in one read io request"
         },
         {
-          "name": "enable_syslog_recycle",
+          "name": "log_storage_compress_all",
           "value": 1,
-          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+          "comment": "specifies whether to compress logs before storing"
         },
         {
-          "name": "large_query_threshold",
-          "value": "0ms",
-          "comment": "disable large query detection for KV mode"
-        },
-        {
-          "name": "enable_record_trace_log",
-          "value": false,
-          "comment": "disable trace log for better KV performance"
-        }
-      ],
-      "tenant": [
-        {
-          "name": "_tempstore_read_alignment_size",
-          "value": "1MB",
-          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
-        },
-        {
-          "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for kv mode"
-        },
-        {
-          "name": "_enable_filter_reordering",
-          "value": false,
-          "comment": "disable filter reordering for KV mode"
-        },
-        {
-          "name": "log_transport_compress_all",
-          "value": 1,
-          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
-        },
-        {
-          "name": "inc_sstable_upload_thread_score",
-          "value": 30,
-          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -363,6 +228,28 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
           "name": "_io_read_redundant_limit_percentage",
@@ -375,66 +262,14 @@
           "comment": "Maximum batch size in one read io request"
         },
         {
-          "name": "max_syslog_file_count",
-          "value": 300,
-          "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
-        },
-        {
-          "name": "enable_syslog_recycle",
+          "name": "log_storage_compress_all",
           "value": 1,
-          "comment": "enable syslog auto recycle can prevent log files from filling up disk space"
+          "comment": "specifies whether to compress logs before storing"
         },
         {
-          "name": "enable_record_trace_log",
-          "value": false,
-          "comment": "disable trace log for better AP performance"
-        },
-        {
-          "name": "large_query_threshold",
-          "value": "600s",
-          "comment": "AP query exist in HTAP workload, we need it running fast too."
-        }
-      ],
-      "tenant": [
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
-        {
-          "name": "_tempstore_read_alignment_size",
-          "value": "1MB",
-          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
-        },
-        {
-          "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for htap workloads"
-        },
-        {
-          "name": "direct_load_allow_fallback",
-          "value": 1,
-          "comment": "for classic HTAP workloads, fallback is allowed when direct load fails"
-        },
-        {
-          "name": "default_load_mode",
-          "value": "DISABLED",
-          "comment": "for classic HTAP workloads, the default import is not-direct load"
-        },
-        {
-          "name": "log_transport_compress_all",
-          "value": 1,
-          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
-        },
-        {
-          "name": "inc_sstable_upload_thread_score",
-          "value": 30,
-          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -448,6 +283,23 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        }
+      ],
+      "tenant": [
+        {
+          "name": "_tempstore_read_alignment_size",
+          "value": "1MB",
+          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
+        },
+        {
+          "name": "inc_sstable_upload_thread_score",
+          "value": 30,
+          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
+        },
+        {
+          "name": "_enable_active_txn_transfer",
+          "value": false,
+          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
         },
         {
           "name": "_io_read_redundant_limit_percentage",
@@ -460,76 +312,19 @@
           "comment": "Maximum batch size in one read io request"
         },
         {
-          "name": "_lcl_op_interval",
-          "value": "0ms",
-          "comment": "closing deadlock detecting"
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
         },
         {
-          "name": "micro_block_merge_verify_level",
+          "name": "log_transport_compress_all",
           "value": 0,
-          "comment": "accelating the process of minor/mini merge"
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
-          "name": "ignore_replay_checksum_error",
-          "value": true,
-          "comment": "ignore transaction data checksum validation when submitting redo/commit log"
-        },
-        {
-          "name": "enable_record_trace_log",
-          "value": false,
-          "comment": "forbid recording sql and transaction trace event"
-        },
-        {
-          "name": "_enable_newsort",
-          "value": false,
-          "comment": "disabling the new sort algorithm can achieve 20% performance improvement for range query"
-        },
-        {
-          "name": "_enable_defensive_check",
-          "value": 0,
-          "comment": "disabling the defensive check feature in production environment can result in a 10% performance improvement for DML operations"
-        }
-      ],
-      "tenant": [
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
-        {
-          "name": "_tempstore_read_alignment_size",
-          "value": "1MB",
-          "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
-        },
-        {
-          "name": "default_table_merge_engine",
-          "value": "PARTIAL_UPDATE",
-          "comment": "use partial_update merge engine for oltp perf workloads"
-        },
-        {
-          "name": "_enable_filter_reordering",
-          "value": false,
-          "comment": "disable filter reordering for simple OLTP_PERF workloads"
-        },
-        {
-          "name": "_enable_adaptive_compaction",
-          "value": false,
-          "comment": "close adaptive compaction to reduce cpu costs of tablet major compaction"
-        },
-        {
-          "name": "default_auto_increment_mode",
-          "value": "noorder",
-          "comment": "adjust the default auto-increment mode to avoid acquiring incremental id with rpc"
-        },
-        {
-          "name": "inc_sstable_upload_thread_score",
-          "value": 30,
-          "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
-        },
-        {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }

@@ -80,8 +80,13 @@ int64_t ObSchemaHistoryRecyclerIdling::get_idle_interval_us()
 }
 
 ObSchemaHistoryRecycler::ObSchemaHistoryRecycler()
-  : inited_(false), idling_(stop_), schema_service_(NULL),
-    /*freeze_info_mgr_(NULL),*/ zone_mgr_(NULL), sql_proxy_(NULL), recycle_schema_versions_()
+  : inited_(false),
+    idling_(stop_),
+    schema_service_(NULL),
+    zone_mgr_(NULL),
+    sql_proxy_(NULL),
+    recycle_schema_versions_(),
+    last_recycle_schema_versions_()
 {
 }
 
@@ -107,6 +112,9 @@ int ObSchemaHistoryRecycler::init(
   } else if (OB_FAIL(create(schema_history_recycler_thread_cnt, "SchemaRec"))) {
     LOG_WARN("create thread failed", KR(ret), K(schema_history_recycler_thread_cnt));
   } else if (OB_FAIL(recycle_schema_versions_.create(hash::cal_next_prime(BUCKET_NUM),
+                     "RecScheHisMap", "RecScheHisMap"))) {
+    LOG_WARN("fail to init hashmap", KR(ret));
+  } else if (OB_FAIL(last_recycle_schema_versions_.create(hash::cal_next_prime(BUCKET_NUM),
                      "RecScheHisMap", "RecScheHisMap"))) {
     LOG_WARN("fail to init hashmap", KR(ret));
   } else {
@@ -187,6 +195,8 @@ void ObSchemaHistoryRecycler::run3()
     LOG_WARN("not inited", KR(ret));
   } else if (OB_FAIL(recycle_schema_versions_.clear())) {
     LOG_WARN("fail to clear recycle schema version map", KR(ret));
+  } else if (OB_FAIL(last_recycle_schema_versions_.clear())) {
+    LOG_WARN("fail to clear last recycle schema version map", KR(ret));
   } else {
     while (!stop_) {
       ObCurTraceId::init(GCTX.self_addr());
@@ -297,9 +307,23 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
           LOG_WARN("fail to get recycle schema version",
                    KR(ret), K(tenant_id), K(recycle_schema_version));
         } else if (is_valid_recycle_schema_version(recycle_schema_version)) {
-          if (OB_FAIL(try_recycle_schema_history(tenant_id, recycle_schema_version))) {
-            LOG_WARN("fail to recycle schema history by tenant",
-                     KR(ret), K(tenant_id), K(recycle_schema_version));
+          int64_t last_recycle_schema_version = OB_INVALID_VERSION;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(last_recycle_schema_versions_.get_refactored(tenant_id, last_recycle_schema_version))) {
+            last_recycle_schema_version = OB_INVALID_VERSION;
+            LOG_WARN("fail to get last recycle schema version", KR(tmp_ret), K(tenant_id));
+          }
+
+          bool exist_failed_recycle = false;
+          if (OB_INVALID_VERSION == last_recycle_schema_version || last_recycle_schema_version < recycle_schema_version) {
+            if (OB_FAIL(try_recycle_schema_history(tenant_id, recycle_schema_version, exist_failed_recycle))) {
+              LOG_WARN("fail to recycle schema history by tenant", KR(ret), K(tenant_id), K(recycle_schema_version));
+            } else if (!exist_failed_recycle && OB_FAIL(last_recycle_schema_versions_.set_refactored(tenant_id, recycle_schema_version, 1/*overwrite*/))) {
+              LOG_WARN("fail to set last recycle schema version", KR(ret), K(tenant_id), K(recycle_schema_version));
+            }
+          } else {
+            LOG_INFO("[SCHEMA_RECYCLE] skip recycle since recycle schema version not changed",
+                      K(tenant_id), K(recycle_schema_version));
           }
         }
         ret = OB_SUCCESS; // ignore tenant's failure
@@ -704,7 +728,8 @@ int ObSchemaHistoryRecycler::calc_recycle_schema_versions(
 
 int ObSchemaHistoryRecycler::try_recycle_schema_history(
     const uint64_t tenant_id,
-    const int64_t recycle_schema_version)
+    const int64_t recycle_schema_version,
+    bool &exist_failed_recycle)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -720,6 +745,7 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("schema history recycler is stopped", KR(ret));
   } else {
+    exist_failed_recycle = false;
     int64_t start_ts = ObTimeUtility::current_time();
     LOG_INFO("[SCHEMA_RECYCLE] recycle schema history by tenant start",
              KR(ret), K(tenant_id), K(recycle_schema_version));
@@ -734,6 +760,7 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                                      sql_proxy_, \
                                      this); \
     if (OB_FAIL(executor.execute())) { \
+      exist_failed_recycle = true; \
       LOG_WARN("fail to recycle schema history", \
                KR(ret), "type", #SCHEMA_TYPE, \
                K(tenant_id), K(recycle_schema_version)); \
@@ -750,6 +777,7 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                                      sql_proxy_, \
                                      this); \
     if (OB_FAIL(executor.execute())) { \
+      exist_failed_recycle = true; \
       LOG_WARN("fail to recycle schema history", \
                KR(ret), "type", #SCHEMA_TYPE, \
                K(tenant_id), K(recycle_schema_version)); \
@@ -767,6 +795,22 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                                  sql_proxy_, \
                                  this); \
     if (OB_FAIL(executor.execute())) { \
+      exist_failed_recycle = true; \
+      LOG_WARN("fail to recycle schema history", \
+               KR(ret), "type", #SCHEMA_TYPE, \
+               K(tenant_id), K(recycle_schema_version)); \
+    } \
+  }
+
+#define RECYCLE_CUSTOM_SCHEMA(RECYCLE_SCHEMA_EXECUTOR, SCHEMA_TYPE, TNAME) \
+  if (OB_SUCC(ret)) { \
+    RECYCLE_SCHEMA_EXECUTOR executor(tenant_id, \
+                                     recycle_schema_version, \
+                                     TNAME, \
+                                     sql_proxy_, \
+                                     this); \
+    if (OB_FAIL(executor.execute())) { \
+      exist_failed_recycle = true; \
       LOG_WARN("fail to recycle schema history", \
                KR(ret), "type", #SCHEMA_TYPE, \
                K(tenant_id), K(recycle_schema_version)); \
@@ -855,19 +899,8 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
     // -------------------------- system variable ----------------------------------
     // global variable only supports system variable,
     // so system variable schema history is only compressed but not recycled.
-    {
-      ObSystemVariableRecycleSchemaExecutor executor(tenant_id,
-                                                     recycle_schema_version,
-                                                     OB_ALL_SYS_VARIABLE_HISTORY_TNAME,
-                                                     sql_proxy_,
-                                                     this);
-      if (OB_FAIL(executor.execute())) { // overwrite ret
-        LOG_WARN("fail to recycle schema history",
-                 KR(ret), "type", "system_variable",
-                 K(tenant_id), K(recycle_schema_version));
-      }
-      ret = OB_SUCCESS;
-    }
+    RECYCLE_CUSTOM_SCHEMA(ObSystemVariableRecycleSchemaExecutor, system_variable, OB_ALL_SYS_VARIABLE_HISTORY_TNAME);
+    ret = OB_SUCCESS; // overwrite ret
 
     // keystore can't be recycled
     //RECYCLE_FIRST_SCHEMA(NONE, keystore, OB_ALL_TENANT_KEYSTORE_HISTORY_TNAME, keystore_id);
@@ -905,19 +938,8 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
     // (RECYCLE_AND_COMPRESS)
     // 1. sys object priv history won't be recycle.
     // 2. user object priv history will be recycled and compressed.
-    {
-      ObObjectPrivRecycleSchemaExecutor executor(tenant_id,
-                                                 recycle_schema_version,
-                                                 OB_ALL_TENANT_OBJAUTH_HISTORY_TNAME,
-                                                 sql_proxy_,
-                                                 this);
-      if (OB_FAIL(executor.execute())) { // overwrite ret
-        LOG_WARN("fail to recycle schema history",
-                 KR(ret), "type", "object_priv",
-                 K(tenant_id), K(recycle_schema_version));
-      }
-      ret = OB_SUCCESS;
-    }
+    RECYCLE_CUSTOM_SCHEMA(ObObjectPrivRecycleSchemaExecutor, object_priv, OB_ALL_TENANT_OBJAUTH_HISTORY_TNAME);
+    ret = OB_SUCCESS; // overwrite ret
 
     // --------------------------- rls ---------------------------------------------------
     RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_policy, OB_ALL_RLS_POLICY_HISTORY_TNAME,
@@ -950,21 +972,20 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          location_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- ai_model --------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ai_model, OB_ALL_AI_MODEL_HISTORY_TNAME,
+                         model_id);
+    ret = OB_SUCCESS; // overwrite ret
+
     // -------------------------- object priv --------------------------------------------
     // (RECYCLE_AND_COMPRESS)
-    {
-      ObObjectPrivMysqlRecycleSchemaExecutor executor(tenant_id,
-                                                 recycle_schema_version,
-                                                 OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME,
-                                                 sql_proxy_,
-                                                 this);
-      if (OB_FAIL(executor.execute())) { // overwrite ret
-        LOG_WARN("fail to recycle schema history",
-                 KR(ret), "type", "object_priv_mysql",
-                 K(tenant_id), K(recycle_schema_version));
-      }
-      ret = OB_SUCCESS;
-    }
+    RECYCLE_CUSTOM_SCHEMA(ObObjectPrivMysqlRecycleSchemaExecutor, object_priv_mysql, OB_ALL_TENANT_OBJAUTH_MYSQL_HISTORY_TNAME);
+    ret = OB_SUCCESS; // overwrite ret
+
+    // --------------------------- ccl ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ccl_rule, OB_ALL_CCL_RULE_HISTORY_TNAME,
+                         ccl_rule_id);
+    ret = OB_SUCCESS; // overwrite ret
 
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
@@ -1227,11 +1248,6 @@ int ObIRecycleSchemaExecutor::execute()
   int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
   LOG_INFO("[SCHEMA_RECYCLE] recycle schema history by table end",
            K(ret), K_(tenant_id), K_(table_name), K_(schema_version), K(cost_ts));
-  ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_table",
-                        "tenant_id", tenant_id_,
-                        "recycle_schema_version", schema_version_,
-                        "table_name", table_name_,
-                        "cost", cost_ts);
   return ret;
 }
 
@@ -1270,6 +1286,8 @@ bool ObRecycleSchemaExecutor::is_valid() const
   return bret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SCHEMA_RECYCLE_FAILED);
+
 int ObRecycleSchemaExecutor::execute()
 {
   int ret = OB_SUCCESS;
@@ -1285,14 +1303,13 @@ int ObRecycleSchemaExecutor::execute()
   } else if (need_compress(mode_) && OB_FAIL(compress_schema_history())) {
     LOG_WARN("fail to compress  schema history", K(ret), K_(tenant_id), K_(schema_version));
   }
+  if (OB_UNLIKELY(ERRSIM_SCHEMA_RECYCLE_FAILED)) {
+    ret = ERRSIM_SCHEMA_RECYCLE_FAILED;
+    LOG_WARN("[ERRSIM] schema recycle failed", KR(ret), K_(tenant_id));
+  }
   int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
   LOG_INFO("[SCHEMA_RECYCLE] recycle schema history by table end",
            K(ret), K_(tenant_id), K_(table_name), K_(schema_version), K(cost_ts));
-  ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_table",
-                        "tenant_id", tenant_id_,
-                        "recycle_schema_version", schema_version_,
-                        "table_name", table_name_,
-                        "cost", cost_ts);
   return ret;
 }
 

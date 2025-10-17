@@ -544,7 +544,7 @@ int ObTenantCompressTmpFileManager::remove(
               K(start_remove_ts), K(current_ts), KP(comp_tmp_file_bunch), KPC(comp_tmp_file_bunch), K(lbt()));
           sleep(2); // 2s
         } else {
-          usleep(100 * 1000); // 100ms
+          ob_usleep(100 * 1000); // 100ms
         }
       }
       ARRAY_FOREACH_N(comp_fds, i, cnt) {
@@ -577,7 +577,7 @@ int ObTenantCompressTmpFileManager::remove(
                   K(start_remove_ts), K(current_ts), KP(comp_tmp_file), KPC(comp_tmp_file), K(lbt()));
               sleep(2); // 2s
             } else {
-              usleep(100 * 1000); // 100ms
+              ob_usleep(100 * 1000); // 100ms
             }
           }
           comp_tmp_file_handle.reset();

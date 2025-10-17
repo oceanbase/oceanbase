@@ -32,9 +32,9 @@ const char *get_storage_access_type_str(const ObStorageAccessType &type)
   return str;
 }
 
-ObObjectDevice::ObObjectDevice()
+ObObjectDevice::ObObjectDevice(const bool is_local_disk)
   : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
-    storage_id_mod_()
+    storage_id_mod_(), is_local_disk_(is_local_disk)
 {
   ObMemAttr attr = SET_USE_500("ObjectDevice");
   reader_ctx_pool_.set_attr(attr);
@@ -749,6 +749,18 @@ int ObObjectDevice::inner_stat_(const char *pathname,
   common::ObString uri(pathname);
   if (OB_FAIL(util_.get_file_stat(uri, is_adaptive, statbuf))) {
     OB_LOG(WARN, "fail to get file stat!", K(ret), K(uri), K(is_adaptive));
+  }
+  return ret;
+}
+
+int ObObjectDevice::get_file_content_digest(
+    const char *pathname, char *digest_buf, const int64_t digest_buf_len)
+{
+  int ret = OB_SUCCESS;
+  const common::ObString uri(pathname);
+  if (OB_FAIL(util_.get_file_content_digest(uri, digest_buf, digest_buf_len))) {
+    OB_LOG(WARN, "fail to get file content digest!",
+        K(ret), K(uri), KP(digest_buf), K(digest_buf_len));
   }
   return ret;
 }

@@ -45,6 +45,7 @@ public:
       scan_ctdef_(nullptr),
       scan_rtdef_(nullptr),
       mbr_filters_(nullptr),
+      is_whole_range_(false),
       mbr_filter_cnt_(0),
       max_rowkey_cnt_(-1),
       allocator_(&allocator),

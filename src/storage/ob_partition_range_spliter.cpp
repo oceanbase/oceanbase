@@ -13,6 +13,9 @@
 #include "ob_partition_range_spliter.h"
 #include "compaction/ob_tablet_merge_ctx.h"
 #include "access/ob_multiple_scan_merge.h"
+#include "blocksstable/ob_micro_block_row_scanner.h"
+
+#define USING_LOG_PREFIX STORAGE
 
 namespace oceanbase
 {
@@ -24,459 +27,53 @@ using namespace compaction;
 namespace storage
 {
 
-ObEndkeyIterator::ObEndkeyIterator()
-  : endkeys_(),
-    cur_idx_(0),
-    iter_idx_(0),
-    is_inited_(false)
-{
-
-}
-
-void ObEndkeyIterator::reset()
-{
-  endkeys_.reset();
-  cur_idx_ = 0;
-  iter_idx_ = 0;
-  is_inited_ = false;
-}
-
-int ObEndkeyIterator::open(
-    const int64_t skip_cnt,
-    const int64_t iter_idx,
-    ObSSTable &sstable,
-    ObRangeSplitInfo &range_info)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "ObMacroEndkeyIterator init twice", K(ret), K(*this));
-  } else if (OB_UNLIKELY(
-      iter_idx < 0
-      || skip_cnt < 0
-      || !sstable.is_valid()
-      || !range_info.is_valid()
-      || !range_info.index_read_info_->is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to open ObEndkeyIterator",
-        K(ret), K(skip_cnt), K(iter_idx), K(sstable), K(range_info));
-  } else {
-    ObDatumRowkey sstable_endkey;
-    ObArenaAllocator temp_allocator;
-    ObDatumRange datum_range;
-    const ObITableReadInfo *index_read_info = range_info.index_read_info_;
-    const ObStorageDatumUtils &datum_utils = index_read_info->get_datum_utils();
-    int cmp_ret = 0;
-    // Sample start from a specified point
-    if (OB_FAIL(datum_range.from_range(*range_info.store_range_, temp_allocator))) {
-      STORAGE_LOG(WARN, "Failed to transfer store range", K(ret), K(range_info));
-    } else if (OB_FAIL(sstable.get_last_rowkey(temp_allocator, sstable_endkey))) {
-      STORAGE_LOG(WARN, "Failed to get last rowkey from sstable");
-    } else if (OB_FAIL(sstable_endkey.compare(datum_range.get_start_key(), datum_utils, cmp_ret))) {
-      STORAGE_LOG(WARN, "Failed to compare sstable endkey with range start key",
-          K(ret), K(datum_range), K(sstable_endkey), K(datum_utils));
-    } else if (cmp_ret < 0) {
-      // sstable not in range
-      STORAGE_LOG(DEBUG, "Skip empty range", K(ret), K(range_info));
-    } else if (OB_FAIL(init_endkeys(skip_cnt, range_info, datum_range, sstable))) {
-      STORAGE_LOG(WARN, "Fail to scan secondary meta", K(ret), K(range_info));
-    }
-    if (OB_SUCC(ret)) {
-      cur_idx_ = 0;
-      iter_idx_ = iter_idx;
-      is_inited_ = true;
-    }
-  }
-  return ret;
-}
-
-int ObEndkeyIterator::get_endkey_cnt(int64_t &endkey_cnt) const
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObEndkeyIterator is not init", K(ret));
-  } else {
-    endkey_cnt = endkeys_.count();
-  }
-
-  return ret;
-}
-
-int ObEndkeyIterator::get_next_macro_block_endkey(ObMacroEndkey &endkey)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObMacroEndkeyIterator is not init", K(ret));
-  } else if (cur_idx_ >= endkeys_.count()) {
-    ret = OB_ITER_END;
-  } else {
-    endkey.reset();
-    endkey.rowkey_ = &endkeys_[cur_idx_];
-    endkey.iter_idx_ = iter_idx_;
-    ++cur_idx_;
-  }
-  return ret;
-}
-
-int ObEndkeyIterator::push_rowkey(
-    const int64_t rowkey_col_cnt,
-    const common::ObIArray<share::schema::ObColDesc> &col_descs,
-    const blocksstable::ObDatumRowkey &end_key,
-    ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  ObDatumRowkey rowkey;
-  ObStoreRowkey endkey;
-  ObStoreRowkey newkey;
-
-  if (OB_UNLIKELY(rowkey_col_cnt <= 0 || end_key.datum_cnt_ < rowkey_col_cnt)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected rowkey_col_cnt", K(ret), K(rowkey_col_cnt), K(end_key));
-  } else if (OB_FAIL(rowkey.assign(end_key.datums_, rowkey_col_cnt))) {
-    STORAGE_LOG(WARN, "Fail to construct src rowkey", K(ret), K(end_key));
-  } else if (OB_FAIL(rowkey.to_store_rowkey(col_descs, allocator, endkey))) {
-    STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(rowkey));
-  } else if (OB_UNLIKELY(!endkey.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected invalid endkey", K(ret), K(endkey));
-  } else if (OB_FAIL(endkey.deep_copy(newkey, allocator))) {
-    STORAGE_LOG(WARN, "fail to deep copy endkey", K(ret), K(endkey));
-  } else if (OB_FAIL(endkeys_.push_back(newkey))) {
-    STORAGE_LOG(WARN, "Fail to push endkey in searray", K(ret), K(endkey));
-  } else {
-    endkey.reset();
-  }
-  return ret;
-}
-
-
-int ObMacroEndkeyIterator::init_endkeys(
-      const int64_t skip_cnt,
-      const ObRangeSplitInfo &range_info,
-      const blocksstable::ObDatumRange &datum_range,
-      blocksstable::ObSSTable &sstable)
-{
-  int ret = OB_SUCCESS;
-  ObIAllocator *key_allocator = range_info.key_allocator_;
-  ObSSTableSecMetaIterator *macro_iter = nullptr;
-  const ObITableReadInfo *index_read_info = range_info.index_read_info_;
-  ObDataMacroBlockMeta macro_meta;
-
-  if (OB_UNLIKELY(
-      skip_cnt <= 0
-      || !sstable.is_valid()
-      || !range_info.is_valid()
-      || nullptr == range_info.key_allocator_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to open ObEndkeyIterator",
-        K(ret), K(skip_cnt), K(sstable), K(range_info));
-  } else if (OB_FAIL(sstable.scan_secondary_meta(*key_allocator, datum_range,
-        *index_read_info, DATA_BLOCK_META, macro_iter, false, skip_cnt))) {
-      STORAGE_LOG(WARN, "Fail to scan secondary meta", K(ret), K(range_info));
-  } else {
-    const ObIArray<share::schema::ObColDesc> &col_descs = index_read_info->get_columns_desc();
-
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(macro_iter->get_next(macro_meta))) {
-        if (OB_LIKELY(OB_ITER_END == ret)) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          STORAGE_LOG(WARN, "Fail to get next macro meta", K(ret));
-        }
-      } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "Invalid data macro meta", K(ret), K(macro_meta));
-      }  else if (OB_FAIL(push_rowkey(index_read_info->get_schema_rowkey_count(), col_descs, macro_meta.end_key_, *key_allocator))) {
-        STORAGE_LOG(WARN, "Fail to push rowkey", K(ret), K(macro_meta));
-      }
-    }
-
-    if (OB_NOT_NULL(macro_iter)) {
-      macro_iter->~ObSSTableSecMetaIterator();
-      key_allocator->free(macro_iter);
-      macro_iter = nullptr;
-    }
-  }
-
-  return ret;
-}
-
-int ObMicroEndkeyIterator::init_endkeys(
-      const int64_t skip_cnt,
-      const ObRangeSplitInfo &range_info,
-      const blocksstable::ObDatumRange &datum_range,
-      blocksstable::ObSSTable &sstable)
-{
-  int ret = OB_SUCCESS;
-  const ObITableReadInfo *index_read_info = range_info.index_read_info_;
-  ObIAllocator *key_allocator = range_info.key_allocator_;
-  ObIMacroBlockIterator *macro_block_iter = nullptr;
-
-  if (OB_UNLIKELY(
-      skip_cnt <= 0
-      || !sstable.is_valid()
-      || !range_info.is_valid()
-      || nullptr == range_info.key_allocator_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to open ObEndkeyIterator",
-        K(ret), K(sstable), K(range_info));
-  } else if (OB_FAIL(sstable.scan_macro_block(datum_range,
-                                      *index_read_info,
-                                      *key_allocator,
-                                      macro_block_iter,
-                                      false,
-                                      true,
-                                      false))) {
-    STORAGE_LOG(WARN, "failed to scan macro block", K(ret), K(sstable), K(datum_range), KPC(index_read_info));
-  } else if (OB_UNLIKELY(nullptr == macro_block_iter)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected macro block iter", K(ret), KPC(macro_block_iter), K(sstable), K(datum_range));
-  } else {
-    blocksstable::ObMacroBlockDesc curr_block_desc;
-    const ObIArray<share::schema::ObColDesc> &col_descs = index_read_info->get_columns_desc();
-
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(macro_block_iter->get_next_macro_block(curr_block_desc))) {
-        if (OB_UNLIKELY(ret != OB_ITER_END)) {
-          STORAGE_LOG(WARN, "failed to get next macro block", K(ret), KPC(macro_block_iter));
-        } else {
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else {
-        const ObIArray<ObDatumRowkey> &micro_endkeys = macro_block_iter->get_micro_endkeys();
-
-        for (int64_t i = skip_cnt - 1; OB_SUCC(ret) && i < micro_endkeys.count(); i += skip_cnt) {
-          if (OB_FAIL(push_rowkey(index_read_info->get_schema_rowkey_count(), col_descs, micro_endkeys.at(i), *key_allocator))) {
-            STORAGE_LOG(WARN, "failed to push rowkey", K(ret), K(i), K(micro_endkeys), K(col_descs), K(index_read_info->get_schema_rowkey_count()));
-          }
-        }
-      }
-    }
-
-    if (macro_block_iter != nullptr) {
-      macro_block_iter->~ObIMacroBlockIterator();
-      key_allocator->free(macro_block_iter);
-      macro_block_iter = nullptr;
-    }
-  }
-
-  return ret;
-}
-
-ObPartitionParallelRanger::ObPartitionParallelRanger(ObArenaAllocator &allocator)
-  : store_range_(nullptr),
-    endkey_iters_(),
-    allocator_(allocator),
-    comparor_(),
-    range_heap_(comparor_),
-    last_macro_endkey_(nullptr),
-    total_endkey_cnt_(0),
-    sample_cnt_(0),
-    parallel_target_count_(0),
-    is_micro_level_(false),
-    col_cnt_(0),
-    is_inited_(false)
-{
-}
-
-ObPartitionParallelRanger::~ObPartitionParallelRanger()
-{
-  reset();
-}
-
-void ObPartitionParallelRanger::reset()
-{
-  ObEndkeyIterator *endkey_iter = nullptr;
-  for (int64_t i = 0; i < endkey_iters_.count(); i++) {
-    if (OB_NOT_NULL(endkey_iter = endkey_iters_.at(i)))  {
-      endkey_iter->~ObEndkeyIterator();
-      allocator_.free(endkey_iter);
-    }
-  }
-  store_range_ = nullptr;
-  endkey_iters_.reset();
-  range_heap_.reset();
-  comparor_.reset();
-  last_macro_endkey_ = nullptr;
-  total_endkey_cnt_ = 0;
-  sample_cnt_ = 0;
-  parallel_target_count_ = 0;
-  is_micro_level_ = false;
-  col_cnt_ = 0;
-  is_inited_ = false;
-}
-
-int ObPartitionParallelRanger::init(ObRangeSplitInfo &range_info, const bool for_compaction)
+int ObIndexBlockTreeTraverser::init(ObSSTable &sstable, const ObITableReadInfo &index_read_info)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "ObPartitionParallelRanger is inited twice", K(ret));
-  } else if (OB_UNLIKELY(!range_info.is_valid())) {
+    LOG_WARN("Init twice for index block tree traverser", KR(ret));
+  } else if (OB_UNLIKELY(!sstable.is_valid() || !index_read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to init ObPartitionParallelRanger", K(ret), K(range_info));
-  } else if (parallel_target_count_ == 1) {
-    //  construct single range
-  } else if (OB_FAIL(calc_sample_count(for_compaction, range_info))) {
-    STORAGE_LOG(WARN, "Failed to calculate sample count", K(ret), K(range_info));
-  } else if (sample_cnt_ == 0) {
-    // no enough block count, construct single range
-  } else if (OB_FAIL(init_macro_iters(range_info))) {
-    STORAGE_LOG(WARN, "Failed to init macro iters", K(ret), K(range_info));
-  } else if (OB_FAIL(build_parallel_range_heap())) {
-    STORAGE_LOG(WARN, "Failed to build parallel range heap", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    store_range_ = range_info.store_range_;
-    parallel_target_count_ = range_info.parallel_target_count_;
-    col_cnt_ = store_range_->get_start_key().get_obj_cnt();
+    LOG_WARN("Invalid argument for index block tree traverser",
+             KR(ret),
+             K(sstable),
+             K(index_read_info));
+  } else {
+    sstable_ = &sstable;
+    read_info_ = &index_read_info;
+    context_ = nullptr;
+    visited_node_count_ = 0;
+    visited_macro_node_count_ = 0;
+    avg_range_visited_node_cnt_ = 0;
+    remain_can_visited_node_cnt_ = 0;
     is_inited_ = true;
-    STORAGE_LOG(DEBUG, "succ to init partition parallel ranger", K(*this));
   }
 
   return ret;
 }
 
-int ObPartitionParallelRanger::calc_sample_count(const bool for_compaction, ObRangeSplitInfo &range_info)
+void ObIndexBlockTreeTraverser::reuse()
 {
-  int ret = OB_SUCCESS;
-  // decide sample count due to the largest minor sstable
-  if (OB_UNLIKELY(0 == range_info.parallel_target_count_
-      || range_info.max_macro_block_count_ <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid range split info", K(ret), K(range_info));
-  } else {
-    sample_cnt_ = range_info.max_macro_block_count_ / range_info.parallel_target_count_;
-    if (sample_cnt_ > 2) {
-      sample_cnt_ /= 2;
-    }
-    if (sample_cnt_ == 0 && !for_compaction) {
-      is_micro_level_ = true;
-      sample_cnt_ = range_info.max_estimate_micro_block_cnt_ / range_info.parallel_target_count_;
-      if (sample_cnt_ > 2) {
-        sample_cnt_ /= 2;
-      } else if (sample_cnt_ == 0) {
-        sample_cnt_ = 1;
-      }
-    } else {
-      is_micro_level_ = false;
-    }
-    STORAGE_LOG(DEBUG, "finish calc sample cnt", K(range_info), K_(sample_cnt));
-  }
-
-  return ret;
+  allocator_.reuse();
+  visited_node_count_ = 0;
+  visited_macro_node_count_ = 0;
+  avg_range_visited_node_cnt_ = 0;
+  remain_can_visited_node_cnt_ = 0;
 }
 
-int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
+int ObIndexBlockTreeTraverser::handle_overflow_ranges()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(sample_cnt_ <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected sample count to init macro endkey iters", K(ret), K_(sample_cnt));
-  } else {
-    ObEndkeyIterator *endkey_iter = nullptr;
-    total_endkey_cnt_ = 0;
-    int64_t iter_idx = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < range_info.tables_->count(); i++) {
-      int64_t endkey_cnt = 0;
-      void *buf = nullptr;
-      ObITable *table = nullptr;
-      if (OB_ISNULL(table = range_info.tables_->at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null pointer to table", K(ret), KP(table));
-      } else if (OB_UNLIKELY(!table->is_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected table type", K(ret), KPC(table));
-      } else if (is_micro_level_ && !table->is_ddl_mem_sstable()) { // ddl kv not support endkey iterator of micro block
-        if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroEndkeyIterator)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));
-        } else {
-          endkey_iter = new (buf) ObMicroEndkeyIterator();
-        }
+  // overflow ranges are out of index block tree, just call next range
+  while (OB_SUCC(ret) && !context_->is_ended()) {
+    if (OB_FAIL(context_->next_range())) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("Fail to go to next range", KR(ret), KPC(context_));
       } else {
-        if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMacroEndkeyIterator)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));
-        } else {
-          endkey_iter = new (buf) ObMacroEndkeyIterator();
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(endkey_iter->open(
-          sample_cnt_, iter_idx, *(static_cast<ObSSTable *>(table)), range_info))) {
-        STORAGE_LOG(WARN, "Failed to open endkey iter", K(ret), KP(table), K(sample_cnt_), K(iter_idx));
-      } else if (!is_micro_level_ && endkey_iter->is_empty() && sample_cnt_ >= 3) {
-        //Open again with a smaller sample_cnt_
-        endkey_iter->reset();
-        if (OB_FAIL(endkey_iter->open(
-          sample_cnt_ / 3, iter_idx, *(static_cast<ObSSTable *>(table)), range_info))) {
-          STORAGE_LOG(WARN, "Failed to open endkey iter", K(ret), KP(table), K(sample_cnt_), K(iter_idx));
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(endkey_iters_.push_back(endkey_iter))) {
-        STORAGE_LOG(WARN, "Failed to push back macro block iter", K(ret));
-      } else if (OB_FAIL(endkey_iter->get_endkey_cnt(endkey_cnt))) {
-        STORAGE_LOG(WARN, "Failed to get endkey count from ite", K(ret));
-      } else {
-        STORAGE_LOG(DEBUG, "succ to init sample macro iter",
-            KP(table), K_(sample_cnt), K(endkey_cnt), K(iter_idx));
-        // last macro block should be ignored
-        total_endkey_cnt_ += endkey_cnt;
-        iter_idx++;
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      for (int64_t i = 0; i < endkey_iters_.count(); i++) {
-        if (OB_NOT_NULL(endkey_iter = endkey_iters_.at(i)))  {
-          endkey_iter->~ObEndkeyIterator();
-          allocator_.free(endkey_iter);
-        }
-      }
-      endkey_iters_.reset();
-    }
-  }
-
-  return ret;
-}
-
-int ObPartitionParallelRanger::build_parallel_range_heap()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(endkey_iters_.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to build parallel range heap", K(ret), K_(endkey_iters));
-  } else {
-    ObEndkeyIterator *endkey_iter = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < endkey_iters_.count(); i++) {
-      ObMacroEndkey endkey;
-      if (OB_ISNULL(endkey_iter = endkey_iters_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null macro block iter", K(ret), K(i));
-      } else if (OB_FAIL(endkey_iter->get_next_macro_block_endkey(endkey))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          STORAGE_LOG(WARN, "Failed to get next macro block endkey", K(ret), K(i));
-        }
-      } else if (OB_UNLIKELY(!endkey.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected invalid macro block endkey", K(ret), K(endkey));
-      } else  if (OB_FAIL(range_heap_.push(endkey))) {
-        STORAGE_LOG(WARN, "Failed to push macro endkey to merge heap", K(ret), K(i), K(endkey));
-      } else if (OB_FAIL(comparor_.get_error_code())) {
-        STORAGE_LOG(WARN, "Failed to compare macro endkeys", K(ret));
+        ret = OB_SUCCESS;
       }
     }
   }
@@ -484,1147 +81,2075 @@ int ObPartitionParallelRanger::build_parallel_range_heap()
   return ret;
 }
 
-int ObPartitionParallelRanger::get_next_macro_endkey(ObStoreRowkey &rowkey)
+int ObIndexBlockTreeTraverser::traverse(ObIMultiRangeEstimateContext &context,
+                                        const int64_t open_index_micro_block_limit)
 {
   int ret = OB_SUCCESS;
+
+  ObMicroBlockData root_index_block;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObPartitionParallelRanger is not inited", K(ret), K(*this));
+    LOG_WARN("Not init traverser", KR(ret));
+  } else if (OB_UNLIKELY(!context.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid context", KR(ret), K(context));
+  } else if (FALSE_IT(context_ = &context)) {
+  } else if (FALSE_IT(avg_range_visited_node_cnt_ = 1.0 * open_index_micro_block_limit / context.get_ranges_count())) {
+  } else if (FALSE_IT(remain_can_visited_node_cnt_ = 0)) {
+  } else if (sstable_->is_empty()) {
+    // skip
+  } else if (OB_FAIL(sstable_->get_index_tree_root(root_index_block))) {
+    LOG_WARN("Fail to get index tree root", KR(ret), KPC(context_));
+  } else if (OB_FAIL(path_caches_.load_root(root_index_block, *this))) {
+    LOG_WARN("Fail to load root node to path caches", KR(ret));
+  } else if (OB_FAIL(inner_node_traverse(nullptr, PathInfo(), 0, avg_range_visited_node_cnt_))) {
+    LOG_WARN("Fail to traverse index block tree", KR(ret), K(root_index_block), KPC(context_));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(handle_overflow_ranges())) {
+    LOG_WARN("Fail to handle overflow ranges", KR(ret), KPC(context_));
+  }
+
+  LOG_TRACE("Traverse index block tree, stats:", K(visited_node_count_), K(visited_macro_node_count_));
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::is_range_cover_node_end_key(const ObDatumRange &range,
+                                                           const ObMicroIndexInfo &micro_index_info,
+                                                           bool &is_over)
+{
+  int ret = OB_SUCCESS;
+
+  int endkey_cmp_ret = 0;
+
+  // Don't compare multi version column
+  // cmp_ret < 0         cmp_ret == 0 && range.is_right_closed()
+  // node:  (.., 50]     (..., 100]
+  // range: (0, 100)     (0  , 100]
+  if (OB_FAIL(micro_index_info.endkey_.compare(range.get_end_key(),
+                                               read_info_->get_datum_utils(),
+                                               endkey_cmp_ret,
+                                               /* compare_datum_cnt */ false))) {
+    LOG_WARN("Fail to compare endkey", KR(ret), K(range), KPC(read_info_));
   } else {
-    ObMacroEndkey endkey;
-    ObEndkeyIterator *endkey_iter = nullptr;
-    // already get last row from merge heap
-    if (OB_NOT_NULL(last_macro_endkey_) && last_macro_endkey_->is_valid()) {
-      if (OB_ISNULL(endkey_iter = endkey_iters_.at(last_macro_endkey_->iter_idx_))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null macro block iter", K(ret), K_(last_macro_endkey));
-      } else if (OB_UNLIKELY(last_macro_endkey_->iter_idx_ != endkey_iter->iter_idx_)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected iter idx", K(ret), K(*last_macro_endkey_), K(*endkey_iter));
-      } else if (OB_FAIL(endkey_iter->get_next_macro_block_endkey(endkey))) {
-        if (OB_ITER_END != ret) {
-          STORAGE_LOG(WARN, "Failed to get next macro block endkey", K(ret));
-        } else if (OB_FAIL(range_heap_.pop())) {
-          STORAGE_LOG(WARN, "Failed to pop the last macro endkey", K(ret));
-        } else if (OB_FAIL(comparor_.get_error_code())) {
-          STORAGE_LOG(WARN, "Failed compare macro endkeys", K(ret));
-        }
-      } else if (OB_UNLIKELY(!endkey.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected invalid macro block endkey", K(ret), K(endkey));
-      } else if (OB_FAIL(range_heap_.replace_top(endkey))) {
-        STORAGE_LOG(WARN, "Failed to replace top of the merge heap", K(ret), K(endkey));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (range_heap_.empty()) {
-        ret = OB_ITER_END;
-        last_macro_endkey_ = nullptr;
-      } else if (OB_FAIL(range_heap_.top(last_macro_endkey_))) {
-        STORAGE_LOG(WARN, "Failed to get top macro endkey from heap", K(ret), KPC(last_macro_endkey_));
-      } else if (OB_ISNULL(last_macro_endkey_) || OB_UNLIKELY(!last_macro_endkey_->is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected invalid macro endkey", K(ret), KPC(last_macro_endkey_));
-      } else if (OB_FAIL(rowkey.assign(
-          last_macro_endkey_->rowkey_->get_obj_ptr(),
-          last_macro_endkey_->rowkey_->get_obj_cnt()))) {
-        STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), KPC(last_macro_endkey_));
-      }
-    }
+    is_over = endkey_cmp_ret < 0 || (endkey_cmp_ret == 0 && range.is_right_closed());
   }
 
   return ret;
 }
 
-int ObPartitionParallelRanger::check_rowkey_equal(const ObStoreRowkey &rowkey1, const ObStoreRowkey &rowkey2, bool &equal)
+int ObIndexBlockTreeTraverser::goto_next_level_node(const ObMicroIndexInfo &micro_index_info,
+                                                    const PathInfo &path_info,
+                                                    const int64_t level,
+                                                    double open_index_micro_block_limit)
 {
   int ret = OB_SUCCESS;
-  equal = false;
-  if (OB_UNLIKELY(!rowkey1.is_valid() || !rowkey2.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to check rowkey equal", K(ret), K(rowkey1), K(rowkey2));
-  } else if (rowkey1.is_min()) {
-    equal = rowkey2.is_min();
-  } else if (rowkey1.is_max()) {
-    equal = rowkey2.is_max();
-  } else if (0 == rowkey1.compare(rowkey2)) {
-    equal = true;
-  }
-  return ret;
-}
 
+  bool borrow_from_parent = false;
+  bool should_estimate = false;
+  bool is_in_cache = false;
 
-int ObPartitionParallelRanger::check_continuous(ObIArray<ObStoreRange> &range_array)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(range_array.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to check continuous for range spliter", K(ret), K(range_array));
+  // in SS mode, get one index micro block maybe need 10ms, which is too slow
+  // so we won't open the leaf node in index-block-tree, unless there is only one macro_block (in range)
+  // TODO(menglan): must need prefetch for perf
+  if (GCTX.is_shared_storage_mode() && micro_index_info.is_leaf_block() && path_info.path_count_ > 1) {
+    should_estimate = true;
+  } else if (micro_index_info.is_data_block() && micro_index_info.get_row_count() <= OPEN_DATA_MICRO_BLOCK_ROW_LIMIT) {
+    should_estimate = true;
   } else {
-    bool equal = false;
-    ObStoreRowkey macro_endkey = store_range_->get_start_key();
-    for (int64_t i = 0; OB_SUCC(ret) && i < range_array.count(); i++) {
-      if (OB_UNLIKELY(!range_array.at(i).is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected invalid range", K(ret), K(i), K(range_array.at(i)));
-      } else if (OB_FAIL(check_rowkey_equal(range_array.at(i).get_start_key(), macro_endkey, equal))) {
-        STORAGE_LOG(WARN, "Failed to check rowkey equal", K(ret), K(i));
-      } else if (!equal) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected range array which is not continuous", K(ret), K(i),
-            K(range_array.at(i)), K(macro_endkey), KPC(store_range_));
+    if (OB_FAIL(path_caches_.find(level, &micro_index_info, is_in_cache))) {
+      if (ret != OB_NOT_SUPPORTED) {
+        LOG_WARN("Fail to find node in path caches", KR(ret), K(micro_index_info));
       } else {
-        macro_endkey = range_array.at(i).get_end_key();
+        ret = OB_SUCCESS;
+        should_estimate = true;
+      }
+    } else if (!is_in_cache) {
+      should_estimate = (remain_can_visited_node_cnt_ < 1);
+      if (should_estimate && remain_can_visited_node_cnt_ + open_index_micro_block_limit >= 1) {
+        borrow_from_parent = true;
+        should_estimate = false;
+        open_index_micro_block_limit = remain_can_visited_node_cnt_ + open_index_micro_block_limit - 1;
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(check_rowkey_equal(store_range_->get_end_key(), macro_endkey, equal))) {
-      STORAGE_LOG(WARN, "Failed to check rowkey equal", K(ret));
-    } else if (!equal) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected range array which is not continuous", K(ret), K(macro_endkey), KPC(store_range_));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (should_estimate) {
+    if (OB_FAIL(context_->on_node_estimate(micro_index_info, path_info.in_middle_))) {
+      LOG_WARN("Fail to do context on leaf node estimate", KR(ret), K(micro_index_info));
+    } else {
+      remain_can_visited_node_cnt_ += open_index_micro_block_limit;
+    }
+  } else {
+    if (!is_in_cache) {
+      borrow_from_parent ? remain_can_visited_node_cnt_ = 0 : remain_can_visited_node_cnt_--;
+    }
+
+    if (micro_index_info.is_leaf_block()) {
+      visited_macro_node_count_++;
+    }
+    visited_node_count_++;
+
+    if (OB_FAIL(micro_index_info.is_data_block()
+                    ? leaf_node_traverse(micro_index_info, path_info, level)
+                    : inner_node_traverse(&micro_index_info, path_info, level, open_index_micro_block_limit))) {
+      LOG_WARN("Fail to traverse next level node", KR(ret));
     }
   }
+
   return ret;
 }
 
-int ObPartitionParallelRanger::split_ranges(
-    const bool for_compaction,
-    ObIAllocator &allocator,
-    ObIArray<ObStoreRange> &range_array)
+int ObIndexBlockTreeTraverser::leaf_node_traverse(const ObMicroIndexInfo &micro_index_info,
+                                                  const PathInfo &path_info,
+                                                  const int64_t level)
 {
   int ret = OB_SUCCESS;
-  ObStoreRange split_range;
 
-  range_array.reset();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObPartitionParallelRanger is not init", K(ret));
-  } else if (sample_cnt_ == 0 || parallel_target_count_ == 1) {
-    if (OB_FAIL(construct_single_range(allocator,
-                                       store_range_->get_start_key(),
-                                       store_range_->get_end_key(),
-                                       store_range_->get_border_flag(),
-                                       for_compaction,
-                                       split_range))) {
-      STORAGE_LOG(WARN, "failed to construct single range", K(ret), KPC(store_range_));
-    } else if (OB_FAIL(range_array.push_back(split_range))) {
-      STORAGE_LOG(WARN, "failed to push back merge range", K(ret), K(split_range));
-    } else {
-      STORAGE_LOG(DEBUG, "build single range", K(split_range), K_(sample_cnt), K_(parallel_target_count),
-                  K_(total_endkey_cnt));
-    }
+  PathNodeCaches::CacheNode *cache_node = nullptr;
+  bool is_in_cache = false;
+  ObMicroBlockRowScanner scanner(allocator_);
+  const ObDatumRange &range = context_->get_curr_range();
+  ObPartitionEst est;
+
+  if (OB_FAIL(path_caches_.get(level, &micro_index_info, *this, cache_node, is_in_cache))) {
+    LOG_WARN("Fail to get node in path caches", KR(ret), K(micro_index_info));
+  } else if (OB_FAIL(scanner.estimate_row_count(*read_info_, cache_node->micro_data_, range, false, est))) {
+    LOG_WARN("Fail to estimate row count", KR(ret), K(cache_node->micro_data_), KPC(context_));
+  } else if (OB_FAIL(context_->on_leaf_node(micro_index_info, est))) {
+    LOG_WARN("Fail to do context on leaf node", KR(ret), K(micro_index_info), KPC(context_));
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::inner_node_traverse(const ObMicroIndexInfo *micro_index_info,
+                                                   const PathInfo &path_info,
+                                                   const int64_t level,
+                                                   const double open_index_micro_block_limit)
+{
+  // open_index_micro_block_limit is the number of index micro blocks that can be opened in current subtree
+
+  int ret = OB_SUCCESS;
+
+  PathNodeCaches::CacheNode *cache_node = nullptr;
+  TreeNodeContext *node = nullptr;
+  ObMicroIndexInfo index_row;
+  bool is_in_cache = false;
+
+  if (OB_FAIL(path_caches_.get(level, micro_index_info, *this, cache_node, is_in_cache))) {
+    LOG_WARN("Fail to get node in path caches", KR(ret), KPC(micro_index_info));
   } else {
-    ObStoreRowkey macro_endkey;
-    ObStoreRowkey last_macro_endkey = store_range_->get_start_key();
-    const int64_t range_skip_cnt = parallel_target_count_ > total_endkey_cnt_ + 1 ?
-                        1 : total_endkey_cnt_ / parallel_target_count_;
-    const int64_t endkey_left_cnt = parallel_target_count_ > total_endkey_cnt_ + 1 ?
-                        0 : total_endkey_cnt_ % parallel_target_count_;
-    int64_t iter_cnt = 0;
-    int64_t range_skip_revise_cnt = endkey_left_cnt > 0 ? 1 : 0;
-    ObBorderFlag border_flag;
-    border_flag.set_data(store_range_->get_border_flag().get_data());
-    border_flag.set_inclusive_end();
+    node = &cache_node->context_;
+  }
 
-    STORAGE_LOG(DEBUG, "start to iter endkeys to split range", KPC(store_range_), K_(total_endkey_cnt),
-                K_(parallel_target_count), K(range_skip_cnt), K(endkey_left_cnt), K(range_skip_revise_cnt));
+  while (OB_SUCC(ret) && !context_->is_ended()) {
+    const ObDatumRange &range = context_->get_curr_range();
+    const int64_t curr_range_idx = context_->get_curr_range_idx();
+    int64_t index_row_count = 0;
 
-    while (OB_SUCC(ret) && OB_SUCC(get_next_macro_endkey(macro_endkey))) {
-      if (macro_endkey.compare(store_range_->get_end_key()) >= 0) {
-        // meet endkey which larger than endkey of the store_range, break
+    // step 1. locate range in multi index row
+    if (OB_FAIL(node->locate_range(range, index_row_count))) {
+      if (ret != OB_BEYOND_THE_RANGE) {
+        LOG_WARN("Fail to locate range", KR(ret));
+      } else {
+        // beyond the range, the remain ranges are all larger than node
+        ret = OB_SUCCESS;
         break;
-      } else if (++iter_cnt < range_skip_cnt + range_skip_revise_cnt) {
-        // too many split ranges, need skip
-      } else if (macro_endkey.compare(last_macro_endkey) <= 0) {
-        // duplicate rowkey due to we change last start key with max trans version
-        // continue
-      } else if (OB_FAIL(construct_single_range(
-          allocator, last_macro_endkey, macro_endkey, border_flag, for_compaction, split_range))) {
-        STORAGE_LOG(WARN, "failed to construct single range",
-            K(ret), K(last_macro_endkey), K(macro_endkey));
-      } else if (OB_FAIL(range_array.push_back(split_range))) {
-        STORAGE_LOG(WARN, "failed to push back merge range", K(ret), K(split_range));
-      } else {
-        border_flag.unset_inclusive_start();
-        split_range.reset();
-        range_skip_revise_cnt = range_array.count() < endkey_left_cnt ? 1 : 0;
-        iter_cnt = 0;
-        last_macro_endkey = macro_endkey;
-        if (range_array.count() == parallel_target_count_ - 1) {
-          // enough ranges break and add the last range with max value
-          break;
-        }
       }
     }
-    if (OB_FAIL(ret) && OB_ITER_END != ret) {
-      STORAGE_LOG(WARN, "Failed to get next macro endkey", K(ret), K(macro_endkey));
+
+    // The path_info indicates which child of the parent node the current node is in (within the
+    // interval being traverse). It could be the leftmost child, a middle child, or the rightmost
+    // child. See the figure below.
+    //                              start_key end_key
+    //  C: coverd                       │       │
+    //  N: partial coverage             ▼       ▼
+    //                                  ─────────
+    //                                 ┌─┬─┬─┬─┬─┐
+    //                                 │N│C│C│C│N│
+    //                                 │ │ │ │ │ │
+    //                                 └┬┴─┴┬┴─┴┬┘
+    //             ┌────────────────────┘   │   └──────────────────┐
+    // left_most◄──┤                        ├──►in_middle          ├──►right_most
+    //          ┌─┬┴┬─┐                  ┌─┬┴┬─┐                ┌─┬┴┬─┐
+    //          │ │N│C│                  │C│C│C│                │C│C│N│
+    //          │ │ │ ├──┐               │ │ │ │                │ │ │ │
+    //          └─┴─┴─┘  │               └─┴─┴─┘                └─┴─┴─┘
+    //             ───   │                                    i: 0 1 2
+    //                   ▼
+    //                still_estimating
+
+    // step 2. iterate the index row to sum row count
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_row_count; i++) {
+      if (OB_FAIL(node->get_next_index_row(index_row))) {
+        LOG_WARN("Fail to get next index row", KR(ret), K(i), K(index_row_count));
+      }
+
+      // we can combine path_info information and compare endkey to check whether current range is
+      // coverd the index row.
+      bool is_coverd_by_range = false;
+      PathInfo next_level_node_path_info(index_row_count, i, path_info);
+      if (OB_FAIL(ret)) {
+      } else if (next_level_node_path_info.in_middle_) {
+        is_coverd_by_range = true;
+      } else if (next_level_node_path_info.left_most_ && !next_level_node_path_info.right_most_) {
+        is_coverd_by_range = range.get_start_key().is_min_rowkey();
+      } else if (next_level_node_path_info.right_most_ && !next_level_node_path_info.left_most_) {
+        if (range.get_end_key().is_max_rowkey()) {
+          is_coverd_by_range = true;
+        } else if (OB_FAIL(is_range_cover_node_end_key(range, index_row, is_coverd_by_range))) {
+          LOG_WARN("Fail to compare range endkey and index row", KR(ret));
+        }
+      } else if (next_level_node_path_info.right_most_ && next_level_node_path_info.left_most_) {
+        // locate range only hit node
+        // is_coverd_by_range = false;
+      }
+
+      ObIMultiRangeEstimateContext::ObTraverserOperationType operation;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(context_->on_inner_node(index_row, is_coverd_by_range, operation))) {
+        LOG_WARN("Fail to do on inner node", KR(ret), K(is_coverd_by_range), K(index_row), KPC(context_));
+      } else {
+        switch (operation) {
+        case ObIMultiRangeEstimateContext::GOTO_NEXT_LEVEL:
+          if (OB_FAIL(goto_next_level_node(index_row, PathInfo(index_row_count, i, path_info), level + 1, 1.0 * open_index_micro_block_limit / index_row_count))) {
+            LOG_WARN("Fail to goto next level", KR(ret), K(index_row));
+          }
+          break;
+        case ObIMultiRangeEstimateContext::NOTHING:
+          // we averagly allocate open_index_micro_block_limit for current node's children
+          remain_can_visited_node_cnt_ += 1.0 * open_index_micro_block_limit / index_row_count;
+          break;
+        };
+      }
+    }
+
+    // step 3. continue to traverse next range
+    if (OB_FAIL(ret)) {
+    } else if (micro_index_info != nullptr) {
+      // only root node can call next range
+      break;
+    } else if (OB_FAIL(context_->next_range())) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("Fail to advance context", KR(ret), KPC(context_));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else {
+      remain_can_visited_node_cnt_
+          += avg_range_visited_node_cnt_ * (context_->get_curr_range_idx() - curr_range_idx);
+    }
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::PathNodeCaches::load_root(const ObMicroBlockData &block_data,
+                                                         ObIndexBlockTreeTraverser &traverser)
+{
+  int ret = OB_SUCCESS;
+
+  if (caches_[0].is_inited_) {
+    // is inited, skip
+  } else if (FALSE_IT(caches_[0].micro_data_ = block_data)) {
+  } else if (OB_FAIL(caches_[0].context_.init(block_data, nullptr, traverser))) {
+    LOG_WARN("Fail to init root node context", KR(ret), K(block_data));
+  } else {
+    caches_[0].is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::PathNodeCaches::find(const int64_t level,
+                                                    const ObMicroIndexInfo *micro_index_info,
+                                                    bool &is_in_cache)
+{
+  int ret = OB_SUCCESS;
+
+  is_in_cache = false;
+
+  if (OB_UNLIKELY(level >= MAX_CACHE_LEVEL)) {
+    ret = OB_NOT_SUPPORTED;
+  } else if (!caches_[level].is_inited_) {
+    is_in_cache = false;
+  } else if (micro_index_info == nullptr) {
+    // root node
+    is_in_cache = caches_[0].is_inited_;
+  } else {
+    ObMicroBlockCacheKey key(MTL_ID(), *micro_index_info);
+    is_in_cache = (key == caches_[level].key_);
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::PathNodeCaches::get(const int64_t level,
+                                                   const ObMicroIndexInfo *micro_index_info,
+                                                   ObIndexBlockTreeTraverser &traverser,
+                                                   CacheNode *&cache_node,
+                                                   bool &is_in_cache)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(find(level, micro_index_info, is_in_cache))) {
+    LOG_WARN("Fail to find node in cache", KR(ret), KPC(micro_index_info));
+  } else if (is_in_cache) {
+    cache_node = &caches_[level];
+  } else {
+    // not in cache, should load it
+    cache_node = &caches_[level];
+
+    if (micro_index_info == nullptr) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Must load root node at first", KR(ret), K(level));
+    } else if (cache_node->is_inited_) {
+      cache_node->reuse();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(prefetch(*micro_index_info, cache_node->micro_handle_))) {
+      LOG_WARN("Fail to prefetch next level micro block data", KR(ret), K(micro_index_info));
+    } else if (OB_FAIL(cache_node->micro_handle_.get_micro_block_data(
+                  &cache_node->macro_block_reader_, cache_node->micro_data_, micro_index_info->is_data_block()))) {
+      LOG_WARN("Fail to get index block data", KR(ret), K(cache_node->micro_data_));
+    } else if (!micro_index_info->is_data_block()
+               && OB_FAIL(
+                   cache_node->is_inited_
+                       ? cache_node->context_.open(cache_node->micro_data_, micro_index_info)
+                       : cache_node->context_.init(cache_node->micro_data_, micro_index_info, traverser))) {
+      LOG_WARN("Fail to init root node context", KR(ret), K(cache_node->micro_data_));
+    } else if (OB_FAIL(
+                   cache_node->key_.assign(ObMicroBlockCacheKey(MTL_ID(), *micro_index_info)))) {
+      LOG_WARN("Fail to assign cache key", KR(ret), KPC(micro_index_info));
+    } else {
+      cache_node->is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::PathNodeCaches::prefetch(const ObMicroIndexInfo &micro_index_info,
+                                                        ObMicroBlockDataHandle &micro_handle)
+{
+  int ret = OB_SUCCESS;
+
+  bool found = false;
+  micro_handle.reset();
+  micro_handle.allocator_ = &allocator_;
+
+  ObMicroBlockCacheKey key(MTL_ID(), micro_index_info);
+  ObIMicroBlockCache *cache
+      = micro_index_info.is_data_block()
+            ? &blocksstable::ObStorageCacheSuite::get_instance().get_block_cache()
+            : &blocksstable::ObStorageCacheSuite::get_instance().get_index_block_cache();
+
+  if (OB_ISNULL(cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to get block cache because of null", KR(ret), KP(cache));
+  } else if (OB_FAIL(cache->get_cache_block(key, micro_handle.cache_handle_))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("Fail to get cache block", KR(ret));
     } else {
       ret = OB_SUCCESS;
-      macro_endkey = store_range_->get_end_key();
-      if (!store_range_->get_border_flag().inclusive_end()) {
-        border_flag.unset_inclusive_end();
-      }
-      if (OB_FAIL(construct_single_range(
-          allocator, last_macro_endkey, macro_endkey, border_flag, for_compaction, split_range))) {
-        STORAGE_LOG(WARN, "Failed to construct single range",
-            K(ret), K(last_macro_endkey), K(macro_endkey));
-      } else if (OB_FAIL(range_array.push_back(split_range))) {
-        STORAGE_LOG(WARN, "Failed to push back merge range", K(ret), K(split_range));
-      }
     }
-
-    //check all ranges continuous
-    if (OB_SUCC(ret) && OB_FAIL(check_continuous(range_array))) {
-      STORAGE_LOG(WARN, "Failed to check range array continuous", K(ret), K(range_array));
-    }
-  }
-
-  return ret;
-}
-
-int ObPartitionParallelRanger::build_bound_rowkey(const bool is_max, common::ObIAllocator &allocator, common::ObStoreRowkey &new_rowkey)
-{
-  int ret = OB_SUCCESS;
-  char *ptr = nullptr;
-
-  if (OB_UNLIKELY(col_cnt_ == 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected col cnt", K(ret));
-  } else if (OB_ISNULL(ptr = reinterpret_cast<char *>(allocator.alloc(sizeof(ObObj) * col_cnt_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "Failed to allocate memory", K(ret), K(sizeof(ObObj) * col_cnt_));
   } else {
-    ObObj *obj_ptr = reinterpret_cast<ObObj *>(ptr);
-    for (int64_t i = 0; i < col_cnt_; i++) {
-      if (is_max) {
-        obj_ptr[i].set_max_value();
-      } else {
-        obj_ptr[i].set_min_value();
-      }
-    }
+    found = true;
+    micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
+  }
 
-    if (OB_FAIL(new_rowkey.assign(obj_ptr, col_cnt_))) {
-      STORAGE_LOG(WARN, "Failed to assign new rowkey", K(ret));
+  if (OB_SUCC(ret) && !found) {
+    if (OB_FAIL(micro_index_info.row_header_->fill_micro_des_meta(true /* deep_copy_key */,
+                                                                  micro_handle.des_meta_))) {
+      LOG_WARN("Fail to fill micro block deserialize meta", KR(ret));
+    } else if (OB_FAIL(cache->prefetch(MTL_ID(),
+                                       micro_index_info.get_macro_id(),
+                                       micro_index_info,
+                                       /* use_cache */ true,
+                                       ObTabletID(ObTabletID::INVALID_TABLET_ID),
+                                       micro_handle.io_handle_,
+                                       &allocator_))) {
+      LOG_WARN("Fail to prefetch data micro block", KR(ret), K(micro_index_info));
+    } else if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
+      micro_handle.tenant_id_ = MTL_ID();
+      micro_handle.macro_block_id_ = micro_index_info.get_macro_id();
+      micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;
+      micro_handle.micro_info_.set(micro_index_info.get_block_offset(),
+                                   micro_index_info.get_block_size(),
+                                   micro_index_info.get_logic_micro_id(),
+                                   micro_index_info.get_data_checksum());
     }
   }
 
   return ret;
 }
 
-int ObPartitionParallelRanger::build_new_rowkey(const ObStoreRowkey &rowkey,
-                                                const bool for_compaction,
-                                                ObIAllocator &allocator,
-                                                ObStoreRowkey &new_rowkey)
+int ObIndexBlockTreeTraverser::TreeNodeContext::init(const ObMicroBlockData &block_data,
+                                                     const ObMicroIndexInfo *micro_index_info,
+                                                     ObIndexBlockTreeTraverser &traverser)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!rowkey.is_valid())) {
+
+  ObQueryFlag query_flag(ObQueryFlag::Forward,
+                         false,  /* is daily merge scan*/
+                         false,  /* is read multiple macro block*/
+                         false,  /* sys task scan, read one macro block in single io*/
+                         false,  /* is full row scan*/
+                         false,  /* index back */
+                         false); /* query stat */
+
+  if (OB_UNLIKELY(!traverser.is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Invalid traverser", KR(ret));
+  } else if (OB_FAIL(scanner_.init(traverser.get_read_info()->get_datum_utils(),
+                                   allocator_,
+                                   query_flag,
+                                   traverser.get_sstable()->get_macro_offset()))) {
+    LOG_WARN("Fail to init scanner", KR(ret), K(traverser));
+  } else if (OB_FAIL(open(block_data, micro_index_info))) {
+    LOG_WARN("Fail to open index block", KR(ret), K(scanner_));
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::TreeNodeContext::open(const ObMicroBlockData &block_data,
+                                                     const ObMicroIndexInfo *micro_index_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(scanner_.open(micro_index_info == nullptr
+                                ? ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID
+                                : micro_index_info->get_macro_id(),
+                            block_data))) {
+    LOG_WARN("Fail to open index block", KR(ret), K(scanner_));
+  }
+
+  return ret;
+}
+
+void ObIndexBlockTreeTraverser::TreeNodeContext::reuse()
+{
+  scanner_.reuse();
+}
+
+int ObIndexBlockTreeTraverser::TreeNodeContext::locate_range(const ObDatumRange &range,
+                                                             int64_t &index_row_count)
+{
+  int ret = OB_SUCCESS;
+
+  index_row_count = 0;
+
+  if (OB_FAIL(scanner_.locate_range(range, true, true))) {
+    if (ret != OB_BEYOND_THE_RANGE) {
+      LOG_WARN("Fail to locate range", KR(ret), K(range));
+    }
+  } else if (OB_FAIL(scanner_.get_index_row_count(index_row_count))) {
+    LOG_WARN("Fail to get index row count", KR(ret), K(scanner_));
+  }
+
+  return ret;
+}
+
+int ObIndexBlockTreeTraverser::TreeNodeContext::get_next_index_row(ObMicroIndexInfo &idx_block_row)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(scanner_.get_next(idx_block_row))) {
+    LOG_WARN("Fail to get next index row", KR(ret), K(scanner_));
+  }
+
+  return ret;
+}
+
+template <typename Range>
+int ObRangeCompartor::is_sorted(const ObIArray<Range> &ranges, ObRangeCompartor &compartor, bool &is_sorted)
+{
+  int ret = OB_SUCCESS;
+
+  is_sorted = true;
+
+  for (int64_t i = 1; OB_SUCC(ret) && is_sorted && i < ranges.count(); i++) {
+    is_sorted = compartor.operator()(ranges.at(i - 1), ranges.at(i));
+    if (OB_FAIL(compartor.sort_ret_)) {
+      LOG_WARN("Fail to compare range", KR(ret), K(ranges), K(i));
+    }
+  }
+
+  return ret;
+}
+
+template int ObRangeCompartor::is_sorted<ObRangeInfo>(const ObIArray<ObRangeInfo> &ranges, ObRangeCompartor &compartor, bool &is_sorted);
+template int ObRangeCompartor::is_sorted<ObPairStoreAndDatumRange>(const ObIArray<ObPairStoreAndDatumRange> &ranges, ObRangeCompartor &compartor, bool &is_sorted);
+
+int ObMultiRangeRowEstimateContext::init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
+                                         const ObITableReadInfo &read_info,
+                                         const bool need_sort,
+                                         const ObRangePrecision &range_precision,
+                                         const bool can_goto_micro_level)
+{
+  int ret = OB_SUCCESS;
+
+  // push all range's reference to range info array
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("Init estimate context twice", KR(ret));
+  } else if (OB_UNLIKELY(ranges.empty() || !range_precision.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to build new rowkey", K(ret), K(rowkey));
+    LOG_WARN("Invalid argument for context", KR(ret), K(ranges), K(range_precision));
+  } else if (OB_FAIL(ranges_.reserve(ranges.count()))) {
+    LOG_WARN("Fail to reserve range info array", KR(ret), K(ranges));
+  } else if (FALSE_IT(range_precision_ = range_precision)) {
+  } else if (OB_FAIL(range_precision_.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
   } else {
-    const int64_t extra_rowkey_cnt =
-        for_compaction ? ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() : 0;
-    const int64_t rowkey_col_cnt = rowkey.get_obj_cnt() + extra_rowkey_cnt;
-    const int64_t total_size = rowkey.get_deep_copy_size() + sizeof(ObObj) * extra_rowkey_cnt;
-    char *ptr = nullptr;
-    if (OB_ISNULL(ptr = reinterpret_cast<char *>(allocator.alloc(total_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "Failed to allocate memory", K(ret), K(total_size));
-    } else {
-      ObObj *obj_ptr = reinterpret_cast<ObObj *>(ptr);
-      int64_t pos = sizeof(ObObj) * rowkey_col_cnt;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey.get_obj_cnt(); i++) {
-        if (OB_FAIL(obj_ptr[i].deep_copy(rowkey.get_obj_ptr()[i], ptr, total_size, pos))) {
-          STORAGE_LOG(WARN, "Failed to deep copy object", K(ret), K(i), K(rowkey), K(total_size), K(pos));
-        }
-      }
-      for (int64_t i = rowkey.get_obj_cnt(); OB_SUCC(ret) && i < rowkey_col_cnt; i++) {
-        obj_ptr[i].set_max_value();
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(new_rowkey.assign(obj_ptr, rowkey_col_cnt))) {
-          STORAGE_LOG(WARN, "Failed to assign new rowkey", K(ret));
-        }
+    curr_range_idx_ = 0;
+    sample_step_ = range_precision_.get_sample_step();
+    can_goto_micro_level_ = can_goto_micro_level;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
+      if (OB_FAIL(ranges_.push_back(ObRangeInfo(&ranges.at(i).datum_range_)))) {
+        LOG_WARN("Fail to push back to range array", KR(ret), K(ranges), K(i));
       }
     }
   }
-  return ret;
-}
 
-int ObPartitionParallelRanger::construct_single_range(ObIAllocator &allocator,
-                                                      const ObStoreRowkey &start_key,
-                                                      const ObStoreRowkey &end_key,
-                                                      const ObBorderFlag  &border_flag,
-                                                      const bool for_compaction,
-                                                      ObStoreRange &range)
-{
-  int ret = OB_SUCCESS;
-
-  if (end_key.compare(start_key) < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid keys to construct range", K(ret), K(start_key), K(end_key));
-  } else if (start_key.is_min()) {
-    if (for_compaction) {
-      range.get_start_key().set_min();
-    } else if (OB_FAIL(build_bound_rowkey(false /* is max */, allocator, range.get_start_key()))) {
-      STORAGE_LOG(WARN, "fail to build bound rowkey", K(ret));
-    }
-  } else if (OB_FAIL(build_new_rowkey(start_key, for_compaction, allocator, range.get_start_key()))) {
-    STORAGE_LOG(WARN, "Failed to deep copy macro start endkey", K(ret), K(start_key));
-  }
+  // sort range info array by start key
   if (OB_FAIL(ret)) {
-  } else if (end_key.is_max()) {
-    if (for_compaction) {
-      range.get_end_key().set_max();
-    } else if (OB_FAIL(build_bound_rowkey(true /* is max */, allocator, range.get_end_key()))) {
-      STORAGE_LOG(WARN, "fail to build bound rowkey", K(ret));
+  } else if (need_sort) {
+    ObRangeCompartor compartor(read_info);
+    bool is_sorted = false;
+
+    if (OB_FAIL(ObRangeCompartor::is_sorted(ranges_, compartor, is_sorted))) {
+      LOG_WARN("Fail to check if ranges is sorted", KR(ret), K(ranges_));
+    } else if (!is_sorted) {
+      lib::ob_sort(ranges_.begin(), ranges_.end(), compartor);
+      if (OB_FAIL(compartor.sort_ret_)) {
+        LOG_WARN("Fail to sort range array", KR(ret), K(ranges_));
+      }
     }
-  } else if (OB_FAIL(build_new_rowkey(end_key, for_compaction, allocator, range.get_end_key()))) {
-    STORAGE_LOG(WARN, "Failed to deep copy macro end endkey", K(ret), K(start_key));
   }
-  if (OB_SUCC(ret)) {
-    range.set_border_flag(border_flag);
-    if (start_key.is_min()) {
-      range.set_left_open();
+
+  is_inited_ = OB_SUCC(ret);
+
+  return ret;
+}
+
+int ObMultiRangeRowEstimateContext::on_node_estimate(const ObMicroIndexInfo &index_row,
+                                                     const bool is_coverd_by_range)
+{
+  ranges_.at(curr_range_idx_).row_count_
+      += is_coverd_by_range ? index_row.get_row_count() : index_row.get_row_count() >> 1;
+  ranges_.at(curr_range_idx_).macro_block_count_
+      += max(1ll,
+             is_coverd_by_range ? index_row.get_macro_block_count()
+                                : index_row.get_macro_block_count() >> 1);
+  return OB_SUCCESS;
+}
+
+int ObMultiRangeRowEstimateContext::on_leaf_node(const ObMicroIndexInfo &index_row,
+                                                 const ObPartitionEst &est)
+{
+  ranges_.at(curr_range_idx_).row_count_ += est.physical_row_count_;
+  return OB_SUCCESS;
+}
+
+int ObMultiRangeRowEstimateContext::on_inner_node(const ObMicroIndexInfo &index_row,
+                                                  const bool is_coverd_by_range,
+                                                  ObTraverserOperationType &operation)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_coverd_by_range) {
+    ranges_.at(curr_range_idx_).row_count_ += index_row.get_row_count();
+    ranges_.at(curr_range_idx_).macro_block_count_ += index_row.get_macro_block_count();
+    operation = NOTHING;
+  } else if (index_row.get_row_count() < (ranges_.at(curr_range_idx_).row_count_ / SHOULD_ESTIMATE_RATIO)
+             || (!can_goto_micro_level_ && index_row.is_leaf_block())) {
+    // If the node's row count is significantly smaller than the current range's row count, it is suitable for estimating the current range.
+    // if we can't goto micro level, we only estimate on leaf node
+    ranges_.at(curr_range_idx_).row_count_ += index_row.get_row_count() >> 1;
+    ranges_.at(curr_range_idx_).macro_block_count_ += max(1ll, index_row.get_macro_block_count() >> 1);
+    operation = NOTHING;
+  } else {
+    operation = ObTraverserOperationType::GOTO_NEXT_LEVEL;
+  }
+
+  return ret;
+}
+
+int ObMultiRangeRowEstimateContext::next_range()
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t next_index = curr_range_idx_ + sample_step_;
+  do {
+    if (curr_range_idx_ + 1 >= ranges_.count()) {
+      curr_range_idx_ = ranges_.count();
+      ret = OB_ITER_END;
+      break;
+    } else {
+      ++curr_range_idx_;
+      if (curr_range_idx_ < next_index) {
+        ranges_.at(curr_range_idx_).row_count_
+            = curr_range_idx_ - 1 >= 0 ? ranges_.at(curr_range_idx_ - 1).row_count_ : 0;
+        ranges_.at(curr_range_idx_).macro_block_count_
+            = curr_range_idx_ - 1 >= 0 ? ranges_.at(curr_range_idx_ - 1).macro_block_count_ : 0;
+      }
     }
-    if (end_key.is_max()) {
-      range.set_right_open();
+  } while (OB_SUCC(ret) && curr_range_idx_ < next_index);
+
+  return ret;
+}
+
+int64_t ObMultiRangeRowEstimateContext::get_row_count_sum() const
+{
+  int64_t sum = 0;
+
+  for (int64_t i = 0; i < ranges_.count(); i++) {
+    sum += ranges_.at(i).row_count_;
+  }
+
+  return sum;
+}
+
+int64_t ObMultiRangeRowEstimateContext::get_macro_block_count_sum() const
+{
+  int64_t sum = 0;
+
+  for (int64_t i = 0; i < ranges_.count(); i++) {
+    sum += ranges_.at(i).macro_block_count_;
+  }
+
+  return sum;
+}
+
+void ObMultiRangeRowEstimateContext::reuse()
+{
+  for (int64_t i = 0; i < ranges_.count(); i++) {
+    ranges_.at(i).row_count_ = 0;
+    ranges_.at(i).macro_block_count_ = 0;
+  }
+  curr_range_idx_ = 0;
+}
+
+int ObMultiRangeInfoEstimateContext::on_node_estimate(const ObMicroIndexInfo &index_row,
+                                                      const bool is_coverd_by_range)
+{
+  int64_t estimate_factor = is_coverd_by_range ? 0 : 1;
+
+  total_size_ += calc_estimate_size(index_row, is_coverd_by_range);
+  total_row_count_ += index_row.get_row_count() >> estimate_factor;
+  total_macro_block_count_ += (index_row.get_macro_id() != last_macro_block_id_
+                               || index_row.get_block_offset() != last_index_row_in_block_offset_)
+                                  ? max(1ll, index_row.get_macro_block_count() >> estimate_factor)
+                                  : 0;
+  last_macro_block_id_ = index_row.get_macro_id();
+  last_index_row_in_block_offset_ = index_row.get_block_offset();
+  return OB_SUCCESS;
+}
+
+int ObMultiRangeInfoEstimateContext::on_leaf_node(const ObMicroIndexInfo &index_row,
+                                                  const ObPartitionEst &est)
+{
+  if (index_row.get_row_count() > 0) {
+    total_size_ += est.physical_row_count_ * index_row.get_block_size() / index_row.get_row_count();
+  }
+  total_row_count_ += est.physical_row_count_;
+  total_macro_block_count_ += (index_row.get_macro_id() != last_macro_block_id_
+                               || index_row.get_block_offset() != last_index_row_in_block_offset_)
+                                  ? 1
+                                  : 0;
+  last_macro_block_id_ = index_row.get_macro_id();
+  last_index_row_in_block_offset_ = index_row.get_block_offset();
+  return OB_SUCCESS;
+}
+
+int ObMultiRangeInfoEstimateContext::on_inner_node(const ObMicroIndexInfo &index_row,
+                                                   const bool is_coverd_by_range,
+                                                   ObTraverserOperationType &operation)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_coverd_by_range) {
+    total_size_ += calc_estimate_size(index_row, is_coverd_by_range);
+    total_row_count_ += index_row.get_row_count();
+    total_macro_block_count_ += (index_row.get_macro_id() != last_macro_block_id_
+                                 || index_row.get_block_offset() != last_index_row_in_block_offset_)
+                                    ? index_row.get_macro_block_count()
+                                    : 0;
+    last_macro_block_id_ = index_row.get_macro_id();
+    last_index_row_in_block_offset_ = index_row.get_block_offset();
+    operation = NOTHING;
+  } else {
+    if (index_row.get_macro_block_count() >= 1) {
+      avg_micro_block_size_ = index_row.get_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE
+                              / index_row.get_micro_block_count();
     }
-    if (OB_NOT_NULL(store_range_)) {
-      range.set_table_id(store_range_->get_table_id());
+    operation = ObTraverserOperationType::GOTO_NEXT_LEVEL;
+  }
+
+  // adapt now sql implement, macro level is enough
+  if (operation == GOTO_NEXT_LEVEL && index_row.is_leaf_block()) {
+    if (OB_FAIL(on_node_estimate(index_row, is_coverd_by_range))) {
+      LOG_WARN("Fail to on node estimate", KR(ret), K(index_row));
+    } else {
+      operation = NOTHING;
     }
   }
 
   return ret;
 }
 
-ObRangeSplitInfo::ObRangeSplitInfo()
-  : store_range_(nullptr),
-    index_read_info_(nullptr),
-    tables_(nullptr),
-    total_size_(0),
-    parallel_target_count_(1),
-    max_macro_block_count_(0),
-    max_estimate_micro_block_cnt_(0),
-    key_allocator_(nullptr),
-    is_sstable_(false)
-{}
-
-ObRangeSplitInfo::~ObRangeSplitInfo()
-{
-  reset();
-}
-
-void ObRangeSplitInfo::reset()
-{
-  store_range_ = nullptr;
-  index_read_info_ = nullptr;
-  tables_ = nullptr;
-  total_size_ = 0;
-  parallel_target_count_ = 1;
-  max_macro_block_count_ = 0;
-  max_estimate_micro_block_cnt_ = 0;
-  key_allocator_ = nullptr;
-  is_sstable_ = false;
-}
-
-ObPartitionRangeSpliter::ObPartitionRangeSpliter()
-  : allocator_("RangeSpliter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    parallel_ranger_(allocator_)
-{
-}
-
-ObPartitionRangeSpliter::~ObPartitionRangeSpliter()
-{
-  reset();
-}
-
-void ObPartitionRangeSpliter::reset()
-{
-  parallel_ranger_.reset();
-  allocator_.reset();
-}
-
-int ObPartitionRangeSpliter::get_range_split_info(ObIArray<ObITable *> &tables,
-                                                  const ObITableReadInfo &index_read_info,
-                                                  const ObStoreRange &store_range,
-                                                  ObRangeSplitInfo &range_info)
+int ObMultiRangeSplitContext::init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
+                                   const ObITableReadInfo &read_info,
+                                   const int64_t split_row_limit,
+                                   ObIAllocator &allocator,
+                                   const ObIArray<ObRangeInfo> &range_infos,
+                                   ObIArray<ObSplitRangeInfo> &split_ranges,
+                                   const bool need_sort,
+                                   const ObRangePrecision &range_precision,
+                                   const bool can_goto_micro_level)
 {
   int ret = OB_SUCCESS;
-  range_info.reset();
 
-  if (OB_UNLIKELY(tables.empty() || !store_range.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to init ObPartitionRangeSpliter", K(ret), K(tables), K(store_range));
+  if (OB_FAIL(ObMultiRangeRowEstimateContext::init(ranges, read_info, need_sort, range_precision, can_goto_micro_level))) {
+    LOG_WARN("Fail to init base context", KR(ret));
   } else {
-    // build range paras
-    range_info.store_range_ = &store_range;
-    range_info.tables_ = &tables;
-    ObArenaAllocator temp_range_allocator;
-    bool is_sstable = false;
-    int64_t size = 0;
-    int64_t macro_block_cnt = 0;
-    int64_t estimate_micro_block_cnt = 0;
-    ObQueryFlag query_flag(ObQueryFlag::Forward,
-        false, /*is daily merge scan*/
-        false, /*is read multiple macro block*/
-        false, /*sys task scan, read one macro block in single io*/
-        false /*is full row scan?*/,
-        false,
-        false);
-    const ObIndexSSTableEstimateContext context(index_read_info, query_flag);
-    ObIndexBlockScanEstimator scan_estimator(context);
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
-      ObITable *table = tables.at(i);
-      macro_block_cnt = 0;
-      estimate_micro_block_cnt = 0;
-      if (OB_ISNULL(table)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "Invalid null table pointer", K(ret), KP(table));
-      } else if (i == 0) {
-        is_sstable = table->is_sstable();
+    split_row_limit_ = split_row_limit;
+    split_row_upper_limit_ = split_row_limit * SPLIT_ROW_UPPER_RATIO;
+    allocator_ = &allocator;
+    range_infos_ = &range_infos;
+    split_ranges_ = &split_ranges;
+    read_info_ = &read_info;
+  }
+
+  return ret;
+}
+
+int ObMultiRangeSplitContext::try_to_add_new_split_range(int64_t &curr_row_count,
+                                                         const int64_t add_row_count,
+                                                         const ObCommonDatumRowkey &rowkey)
+{
+  //              start                       end
+  //               ──────────────────────────────
+  //                       ▲         ▲       ▲
+  //                       │         │       │
+  // Info 1: split_rowkey──┘         │       │
+  //                                 │       │
+  // Info 2: split_rowkey────────────┘       │
+  //                                         │
+  // Info 3: split_rowkey────────────────────┘
+  // ......
+
+  int ret = OB_SUCCESS;
+
+  ObSplitRangeInfo *info = nullptr;
+  curr_row_count += add_row_count;
+
+  if (curr_row_count < split_row_limit_) {
+  } else if (OB_ISNULL(info = split_ranges_->alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to alloc place holder", KR(ret));
+  } else {
+    int cmp_ret = 0;
+    info->row_count_ = curr_row_count;
+    info->origin_range_ = ranges_.at(curr_range_idx_).range_;
+    curr_row_count = 0;
+
+    // split_rowkey = min(range.endkey, rowkey)
+    if (OB_FAIL(rowkey.compare(info->origin_range_->get_end_key(),
+                               read_info_->get_datum_utils(),
+                               cmp_ret,
+                               /* compare datum cnt */ false))) {
+      LOG_WARN("Fail to compare end rowkey", KR(ret));
+    } else if (cmp_ret >= 0) {
+      if (OB_FAIL(info->origin_range_->get_end_key().deep_copy(info->split_rowkey_, *allocator_))) {
+        LOG_WARN("Fail to deep copy rowkey", KR(ret), K(ranges_), K(curr_range_idx_));
+      } else {
+        info->is_range_end_split_ = true;
       }
+    } else {
+      if (OB_FAIL(rowkey.deep_copy(info->split_rowkey_, *allocator_))) {
+        LOG_WARN("Fail to deep copy rowkey", KR(ret), K(rowkey));
+      } else {
+        info->is_range_end_split_ = false;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObMultiRangeSplitContext::on_node_estimate(const ObMicroIndexInfo &index_row,
+                                               const bool is_coverd_by_range)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(try_to_add_new_split_range(ranges_.at(curr_range_idx_).row_count_,
+                                         is_coverd_by_range ? index_row.get_row_count()
+                                                            : index_row.get_row_count() >> 1,
+                                         index_row.endkey_))) {
+    LOG_WARN("Fail to add new split range", KR(ret), K(index_row), K(ranges_), K(curr_range_idx_));
+  }
+
+  return ret;
+}
+
+int ObMultiRangeSplitContext::on_leaf_node(const ObMicroIndexInfo &index_row,
+                                           const ObPartitionEst &est)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(try_to_add_new_split_range(ranges_.at(curr_range_idx_).row_count_,
+                                         est.physical_row_count_,
+                                         index_row.endkey_))) {
+    LOG_WARN("Fail to add new split range",
+             KR(ret),
+             K(index_row),
+             K(est),
+             K(ranges_),
+             K(curr_range_idx_));
+  }
+
+  return ret;
+}
+
+int ObMultiRangeSplitContext::on_inner_node(const ObMicroIndexInfo &index_row,
+                                            const bool is_coverd_by_range,
+                                            ObTraverserOperationType &operation)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t &curr_row_count = ranges_.at(curr_range_idx_).row_count_;
+  int64_t inc_row_count = 0;
+
+  if (is_coverd_by_range) {
+    inc_row_count = index_row.get_row_count();
+    operation = curr_row_count + inc_row_count > split_row_upper_limit_ ? GOTO_NEXT_LEVEL : NOTHING;
+  } else if (index_row.get_row_count() < (curr_row_count / SHOULD_ESTIMATE_RATIO)) {
+    inc_row_count = index_row.get_row_count() >> 1;
+    operation = NOTHING;
+  } else {
+    operation = GOTO_NEXT_LEVEL;
+  }
+
+  if (operation == GOTO_NEXT_LEVEL && !can_goto_micro_level_ && index_row.is_leaf_block()) {
+    inc_row_count = is_coverd_by_range ? index_row.get_row_count() : index_row.get_row_count() >> 1;
+    operation = NOTHING;
+  }
+
+  if (operation == NOTHING) {
+    if (OB_FAIL(try_to_add_new_split_range(curr_row_count, inc_row_count, index_row.endkey_))) {
+      LOG_WARN("Fail to add new split range",
+               KR(ret),
+               K(index_row),
+               K(curr_row_count),
+               K(is_coverd_by_range),
+               K(split_row_limit_));
+    }
+  }
+
+  return ret;
+}
+
+int ObMultiRangeSplitContext::next_range()
+{
+  int ret = OB_SUCCESS;
+
+  int64_t next_index = curr_range_idx_ + sample_step_;
+  do {
+    if (!is_ended()) {
+      ObRangeInfo &curr_range = ranges_.at(curr_range_idx_);
+      const ObSplitRangeInfo *last_split_info
+          = split_ranges_->empty() ? nullptr : &split_ranges_->at(split_ranges_->count() - 1);
+
+      if (last_split_info && last_split_info->origin_range_ == curr_range.range_
+          && last_split_info->is_range_end_split_) {
+        // if there are NOT remaining part, skip
+      } else {
+        ObSplitRangeInfo *info = nullptr;
+        if (OB_ISNULL(info = split_ranges_->alloc_place_holder())) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to alloc place holder", KR(ret));
+        } else if (OB_FAIL(curr_range.range_->get_end_key().deep_copy(info->split_rowkey_,
+                                                                      *allocator_))) {
+          LOG_WARN("Fail to deep copy rowkey", KR(ret), K(ranges_), K(curr_range_idx_));
+        } else {
+          info->row_count_ = curr_range.row_count_;
+          info->origin_range_ = curr_range.range_;
+          info->is_range_end_split_ = true;
+          curr_range.row_count_ = 0;
+        }
+      }
+
       if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(0 != i && !is_sstable)) {
-        // Multi memtable
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected multi memtable range info",
-          K(ret), K(range_info), KPC(table), K(is_sstable), K(i));
-      } else if (OB_UNLIKELY(!is_sstable && table->is_sstable())) {
-        // Memtable/sstable mixed up
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected memtable and sstable mixed up",
-          K(ret), K(range_info), KPC(table), K(is_sstable), K(i));
-      } else if (OB_FAIL(get_single_range_info(scan_estimator, temp_range_allocator, *range_info.store_range_,
-              index_read_info, table, size, macro_block_cnt, estimate_micro_block_cnt))) {
-        STORAGE_LOG(WARN, "Failed to get single range info", K(ret), K(i), KPC(table));
+      } else if (curr_range_idx_ + 1 >= ranges_.count()) {
+        curr_range_idx_ = ranges_.count();
+        ret = OB_ITER_END;
+        break;
       } else {
-        if (table->is_co_sstable()) {
-          ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-          if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_cgs_empty_co_table()) {
-            size = size * (co_sstable->get_cs_meta().occupy_size_ / co_sstable->get_occupy_size());
-          }
-        }
-        range_info.total_size_ += size;
-        range_info.index_read_info_ = &index_read_info;
-        range_info.max_macro_block_count_ = MAX(macro_block_cnt, range_info.max_macro_block_count_);
-        range_info.max_estimate_micro_block_cnt_ = MAX(estimate_micro_block_cnt, range_info.max_estimate_micro_block_cnt_);
-      }
-      STORAGE_LOG(DEBUG, "get range para from one table",
-          K(ret), K(i), KP(table), K(size), K(macro_block_cnt));
-    }
-    if (OB_SUCC(ret)) {
-      range_info.is_sstable_ = is_sstable;
-    }
-    STORAGE_LOG(DEBUG, "Get range split info", K(ret), K(range_info));
-  }
-
-  return ret;
-}
-
-int ObPartitionRangeSpliter::get_single_range_info(ObIndexBlockScanEstimator &scan_estimator,
-                                                   ObIAllocator &allocator,
-                                                   const ObStoreRange &store_range,
-                                                   const ObITableReadInfo &index_read_info,
-                                                   ObITable *table,
-                                                   int64_t &total_size,
-                                                   int64_t &macro_block_cnt,
-                                                   int64_t &estimate_micro_block_cnt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid table pointer", K(ret), KP(table));
-  } else if (table->is_data_memtable()) {
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-    int64_t row_count = 0;
-    if (OB_FAIL(memtable->estimate_phy_size(&store_range.get_start_key(),
-                                            &store_range.get_end_key(),
-                                            total_size,
-                                            row_count))) {
-      STORAGE_LOG(WARN, "Failed to get single range info from memtable", K(ret), K(store_range));
-    } else {
-      macro_block_cnt = estimate_micro_block_cnt = 0;
-    }
-  } else if (table->is_sstable()) {
-    ObSSTable *sstable = static_cast<ObSSTable *>(table);
-    if (store_range.is_whole_range()) {
-      ObSSTableMetaHandle meta_handle;
-      const ObSSTableMeta *sstable_meta = nullptr;
-      if (OB_FAIL(sstable->get_meta(meta_handle))) {
-        STORAGE_LOG(WARN, "fail to get meta", K(ret));
-      } else if (OB_FAIL(meta_handle.get_sstable_meta(sstable_meta))) {
-        STORAGE_LOG(WARN, "fail to get sstable meta", K(ret));
-      } else {
-        total_size = sstable->get_occupy_size();
-        macro_block_cnt = sstable->get_data_macro_block_count();
-        estimate_micro_block_cnt = sstable_meta->get_data_micro_block_count();
-      }
-    } else if (0 == sstable->get_data_macro_block_count()) {
-      total_size = 0;
-      macro_block_cnt = 0;
-      estimate_micro_block_cnt = 0;
-    } else {
-      ObDatumRange datum_range;
-      ObDatumRowkey sstable_endkey;
-      allocator.reuse();
-      const ObStorageDatumUtils &datum_utils = index_read_info.get_datum_utils();
-      int cmp_ret = 0;
-      if (OB_FAIL(datum_range.from_range(store_range, allocator))) {
-        STORAGE_LOG(WARN, "Failed to transfer store range", K(ret), K(store_range));
-      } else if (OB_FAIL(sstable->get_last_rowkey(allocator, sstable_endkey))) {
-        STORAGE_LOG(WARN, "Failed to get last rowkey from sstable");
-      } else if (OB_FAIL(sstable_endkey.compare(datum_range.get_start_key(), datum_utils, cmp_ret))) {
-        STORAGE_LOG(WARN, "Failed to compare sstable endkey with range start key",
-            K(ret), K(datum_range), K(sstable_endkey), K(datum_utils));
-      } else if (cmp_ret < 0) {
-        // sstable not in range
-        STORAGE_LOG(DEBUG, "Skip empty range", K(ret), K(datum_range), KPC(sstable));
-      } else {
-        scan_estimator.reuse();
-        if (OB_FAIL(scan_estimator.estimate_block_count(*sstable, datum_range, macro_block_cnt, estimate_micro_block_cnt))) {
-          STORAGE_LOG(WARN, "Fail to estimate cost of scan.", K(ret));
-        } else {
-          total_size = macro_block_cnt * OB_DEFAULT_MACRO_BLOCK_SIZE;
-          STORAGE_LOG(DEBUG, "estimate_scan_cost", K(ret), K(datum_range), K(total_size),
-              K(macro_block_cnt), K(estimate_micro_block_cnt));
+        ++curr_range_idx_;
+        if (curr_range_idx_ < next_index) {
+          // when range precision is less than 100, some range will be skip estimate and split
+          // just copy the row_count (estimated by row estimate context) and split it as a whole range
+          ranges_.at(curr_range_idx_).row_count_ = range_infos_->at(curr_range_idx_).row_count_;
+        } else if (curr_range_idx_ == next_index
+                   && range_infos_->at(curr_range_idx_).row_count_ < split_row_limit_) {
+          // if the range's row count is less than split row limit
+          // just split it as a whole range and skip it
+          ranges_.at(curr_range_idx_).row_count_ = range_infos_->at(curr_range_idx_).row_count_;
+          next_index++;
         }
       }
+    } else {
+      ret = OB_ITER_END;
+      break;
     }
-  } else if (table->is_direct_load_memtable()) {
-    // TODO : @suzhi.yt 可能会导致划分range不均衡, 后续实现
-    total_size = 0;
-    macro_block_cnt = 0;
-    estimate_micro_block_cnt = 0;
-  }
-  return ret;
-}
-
-int ObPartitionRangeSpliter::build_single_range(const bool for_compaction,
-                                                ObRangeSplitInfo &range_info,
-                                                ObIAllocator &allocator,
-                                                ObIArray<ObStoreRange> &range_array)
-{
-  int ret = OB_SUCCESS;
-  ObStoreRange dst_range;
-
-  if (!for_compaction) {
-    dst_range = *range_info.store_range_;
-  } else if (OB_FAIL(parallel_ranger_.construct_single_range(allocator,
-          range_info.store_range_->get_start_key(),
-          range_info.store_range_->get_end_key(),
-          range_info.store_range_->get_border_flag(),
-          for_compaction,
-          dst_range))) {
-    STORAGE_LOG(WARN, "failed to construct single range", K(ret), K(range_info));
-  } else {
-    dst_range.set_table_id(range_info.store_range_->get_table_id());
-  }
-  if (FAILEDx(range_array.push_back(dst_range))) {
-    STORAGE_LOG(WARN, "failed to push back merge range", K(ret), K(dst_range));
-  }
+  } while (OB_SUCC(ret) && curr_range_idx_ < next_index);
 
   return ret;
 }
 
-int ObPartitionRangeSpliter::split_ranges(ObRangeSplitInfo &range_info,
-                                          ObIAllocator &allocator,
-                                          const bool for_compaction,
-                                          ObIArray<ObStoreRange> &range_array)
-{
-  int ret = OB_SUCCESS;
-  parallel_ranger_.reset();
-  range_array.reset();
-
-  if (OB_UNLIKELY(!range_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to split ranges", K(ret), K(range_info));
-  } else if (FALSE_IT(parallel_ranger_.set_col_cnt(range_info.store_range_->get_start_key().get_obj_cnt()))) {
-  } else if (range_info.parallel_target_count_ == 1
-      || range_info.store_range_->is_single_rowkey()) {
-    if (OB_FAIL(build_single_range(for_compaction, range_info, allocator, range_array))) {
-      STORAGE_LOG(WARN, "Failed to build single range", K(ret));
-    } else {
-      STORAGE_LOG(DEBUG, "try to make single split range", K(range_info), K(range_array));
-    }
-  } else if (range_info.is_sstable()) {
-    range_info.key_allocator_ = &allocator;
-    if (OB_FAIL(parallel_ranger_.init(range_info, for_compaction))) {
-      STORAGE_LOG(WARN, "Failed to init parallel ranger", K(ret), K(range_info));
-    } else if (OB_FAIL(parallel_ranger_.split_ranges(for_compaction, allocator, range_array))) {
-      STORAGE_LOG(WARN, "Failed to split ranges", K(ret));
-    } else {
-      STORAGE_LOG(DEBUG, "splite ranges with sstable", K(range_info), K(range_array));
-    }
-  } else if (OB_UNLIKELY(for_compaction)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Split memtable ranges for compaction should not enter here",
-        K(ret), K(for_compaction), K(range_info));
-  } else if (OB_FAIL(split_ranges_memtable(range_info, allocator, range_array))) {
-    STORAGE_LOG(WARN, "Failed to split ranges for memtable", K(ret), K(range_info));
-  }
-
-
-  return ret;
-}
-int ObPartitionRangeSpliter::split_ranges_memtable(ObRangeSplitInfo &range_info,
-                                                   ObIAllocator &allocator,
-                                                   ObIArray<ObStoreRange> &range_array)
-{
-  int ret = OB_SUCCESS;
-  ObITable *table = range_info.tables_->at(0);
-  if (OB_UNLIKELY(!range_info.is_valid() || range_info.is_sstable())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid range info to split ranges for memtable", K(ret));
-  } else if (OB_UNLIKELY(range_info.tables_->count() != 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected table count for memtable range info", K(ret), K(range_info));
-  } else if (OB_ISNULL(table)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected null table", K(ret), KP(table), K(range_info));
-  } else if (table->is_data_memtable()) {
-    ObSEArray<ObStoreRange, 16> store_ranges;
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-
-    if (OB_ISNULL(memtable)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected null memtable", K(ret), KP(memtable), K(range_info));
-    } else if (OB_FAIL(memtable->get_split_ranges(
-                   *range_info.store_range_, range_info.parallel_target_count_, store_ranges))) {
-      STORAGE_LOG(WARN, "Failed to get split ranges from memtable", K(ret));
-    } else {
-      ObStoreRange store_range;
-      for (int64_t i = 0; OB_SUCC(ret) && i < store_ranges.count(); i++) {
-        if (OB_FAIL(store_ranges.at(i).deep_copy(allocator, store_range))) {
-          STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), K(store_ranges));
-        } else if (FALSE_IT(store_range.set_table_id(range_info.store_range_->get_table_id()))) {
-        } else if (OB_FAIL(range_array.push_back(store_range))) {
-          STORAGE_LOG(WARN, "Failed to push back store range", K(ret), K(store_range));
-        }
-      }
-    }
-    STORAGE_LOG(DEBUG, "splite ranges with memtable", K(range_info), K(range_array));
-  } else if (table->is_direct_load_memtable()) {
-    // TODO : @suzhi.yt 可能会导致划分range不均衡, 后续实现
-    if (OB_FAIL(build_single_range(false/*for compaction*/, range_info, allocator, range_array))) {
-      STORAGE_LOG(WARN, "Failed to build single range", K(ret));
-    } else {
-      STORAGE_LOG(DEBUG, "try to make single split range for memtable", K(range_info), K(range_array));
-    }
-  }
-
-  return ret;
-}
-
-int ObPartitionMultiRangeSpliter::get_split_tables(ObTableStoreIterator &table_iter,
-                                                   ObIArray<ObITable *> &tables)
+int ObPartitionMultiRangeSpliter::get_tables(ObTableStoreIterator &table_iter,
+                                             ObIArray<ObITable *> &tables)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(0 == table_iter.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to get split tables", K(ret), K(table_iter));
-  } else {
-    int64_t major_size = 0;
-    int64_t minor_size = 0;
-    int64_t memtable_size = 0;
-    ObITable *max_memtable = nullptr;
-    ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> minor_sstables;
-    ObITable *last_major_sstable = nullptr;
+  ObITable *last_major_sstable = nullptr;
+  int64_t major_size = 0;
+  int64_t major_row_count = 0;
+
+  tables.reset();
+
+  while (OB_SUCC(ret)) {
     ObITable *table = nullptr;
-    tables.reset();
 
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(table_iter.get_next(table))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          STORAGE_LOG(WARN, "Fail to get next table", K(ret), K(table_iter));
-        } else {
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null table", K(ret), K(table_iter));
-      } else if (table->is_major_sstable()) {
-        if (table->is_co_sstable()) {
-          ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-          if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_cgs_empty_co_table()) {
-            major_size = co_sstable->get_cs_meta().occupy_size_;
-          } else {
-            major_size = co_sstable->get_occupy_size();
-          }
-        } else {
-          major_size = static_cast<ObSSTable *>(table)->get_occupy_size();
-        }
-        last_major_sstable = table;
-      } else if (table->is_minor_sstable()) {
-        if (OB_FAIL(minor_sstables.push_back(table))) {
-          STORAGE_LOG(WARN, "Fail to cache minor sstables", K(ret), KP(table));
-        } else {
-          minor_size += static_cast<ObSSTable *>(table)->get_occupy_size();
-        }
-      } else if (table->is_data_memtable()) {
-        int64_t mem_rows = 0;
-        int64_t mem_size = 0;
-        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-        if (OB_FAIL(memtable->estimate_phy_size(nullptr, nullptr, mem_size, mem_rows))) {
-          STORAGE_LOG(WARN, "Failed to get estimate size from memtable", K(ret));
-        } else {
-          memtable_size = MAX(mem_size, memtable_size);
-          max_memtable = table;
-        }
-      } else if (table->is_direct_load_memtable()) {
-        // TODO : @suzhi.yt 可能会导致划分range不均衡, 后续实现
-      }
-    }
-
-    bool split_by_memtable = false;
-    if (OB_FAIL(ret)) {
-    } else if (memtable_size > (major_size + minor_size) * MEMTABLE_SIZE_AMPLIFICATION_FACTOR) {
-      //too big memtable size, use memtable to range split
-      split_by_memtable = true;
-      if (OB_ISNULL(max_memtable)) {
-        ret = OB_ERR_SYS;
-        STORAGE_LOG(WARN, "Unexpected null max memtable", K(ret), KP(max_memtable));
-      } else if (OB_FAIL(tables.push_back(max_memtable))) {
-        STORAGE_LOG(WARN, "Failed to push back max memtable", K(ret));
+    if (OB_FAIL(table_iter.get_next(table))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("Fail to get next table", KR(ret), K(table_iter));
       } else {
-        STORAGE_LOG(DEBUG, "use big memtable to split range", K(memtable_size), K(major_size), K(minor_size));
+        ret = OB_SUCCESS;
+        break;
       }
-    } else if (minor_size > MIN_SPLIT_TARGET_SSTABLE_SIZE && minor_size > major_size / 2) {
-      // Add all minor sstables
-      if (OB_FAIL(tables.reserve(minor_sstables.count() + 1))) {
-        STORAGE_LOG(WARN, "Fail to reserve space for sstables", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
-        if (OB_FAIL(tables.push_back(minor_sstables.at(i)))) {
-          STORAGE_LOG(WARN, "Fail to add minor sstable", K(ret), KPC(table));
+    } else if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Fail to get valid table", KR(ret), K(table_iter));
+    } else if (table->is_major_sstable()) {
+      if (table->is_co_sstable()) {
+        ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
+        if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_cgs_empty_co_table()) {
+          major_size = co_sstable->get_cs_meta().occupy_size_;
+        } else {
+          major_size = co_sstable->get_occupy_size();
         }
+      } else {
+        major_size = static_cast<ObSSTable *>(table)->get_occupy_size();
       }
-    }
-
-    if (OB_FAIL(ret) || split_by_memtable) {
-    } else if (major_size > MIN_SPLIT_TARGET_SSTABLE_SIZE) {
-      // Add last major sstable
-      if (OB_ISNULL(last_major_sstable)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Fail to get last major sstable", K(ret));
-      } else if (OB_FAIL(tables.push_back(last_major_sstable))) {
-        STORAGE_LOG(WARN, "Fail to add last major sstable", K(ret), KPC(last_major_sstable));
+      major_row_count = static_cast<ObSSTable *>(table)->get_row_count();
+      last_major_sstable = table;
+    } else if (table->is_minor_sstable()) {
+      if (static_cast<ObSSTable *>(table)->get_occupy_size() <= MIN_SPLIT_TABLE_SIZE
+          && static_cast<ObSSTable *>(table)->get_row_count() <= MIN_SPLIT_TABLE_ROW_COUNT) {
+        // very small table, skip
+      } else if (OB_FAIL(tables.push_back(table))) {
+        LOG_WARN("Fail to add minor sstable", KR(ret), KPC(table));
       }
+    } else if (table->is_data_memtable()) {
+      int64_t mem_rows = 0;
+      int64_t mem_size = 0;
+      memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+      if (OB_FAIL(memtable->estimate_phy_size(nullptr, nullptr, mem_size, mem_rows))) {
+        STORAGE_LOG(WARN, "Failed to get estimate size from memtable", K(ret));
+      } else if (mem_size <= MIN_SPLIT_TABLE_SIZE
+                 && mem_rows <= MIN_SPLIT_TABLE_ROW_COUNT) {
+        // very small table, skip
+      } else if (OB_FAIL(tables.push_back(table))) {
+        LOG_WARN("Fail to add minor sstable", KR(ret), KPC(table));
+      }
+    } else if (table->is_direct_load_memtable()) {
+      // TODO: @suzhi.yt 可能会导致划分range不均衡, 后续实现
     }
-    STORAGE_LOG(DEBUG, "get range split tables", K(ret), K(memtable_size), K(major_size), K(minor_size), K(tables));
   }
 
-  return ret;
-}
-
-int ObPartitionMultiRangeSpliter::get_multi_range_size(
-    const ObIArray<ObStoreRange> &range_array,
-    const ObITableReadInfo &index_read_info,
-    ObTableStoreIterator &table_iter,
-    int64_t &total_size)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObITable *, DEFAULT_STORE_CNT_IN_STORAGE> tables;
-  total_size = 0;
-  int64_t estimate_size = 0, range_size = 0;
-
-  if (OB_UNLIKELY(0 == table_iter.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to get multi range size", K(ret), K(table_iter),
-                K(range_array));
-  } else if (0 == range_array.count()) {
-    total_size = estimate_size;
-  } else if (OB_FAIL(get_split_tables(table_iter, tables))) {
-    STORAGE_LOG(WARN, "Failed to get all sstables", K(ret), K(table_iter));
-  } else if (OB_FAIL(try_estimate_range_size(range_array, tables, estimate_size))) {
-    STORAGE_LOG(WARN, "fail to estimate range size");
-  } else if (tables.empty()) {
-    // only small tables, can not support arbitrary range split
-    total_size = estimate_size;
-  } else {
-    RangeSplitInfoArray range_info_array;
-   bool all_single_rowkey = false;
-    if (OB_FAIL(get_range_split_infos(tables, index_read_info, range_array, range_info_array, range_size, all_single_rowkey))) {
-      STORAGE_LOG(WARN, "Failed to get range split info array", K(ret));
-    } else {
-      total_size = estimate_size + range_size;
+  if (OB_SUCC(ret) && (major_size > MIN_SPLIT_TABLE_SIZE || major_row_count > MIN_SPLIT_TABLE_ROW_COUNT)) {
+    if (OB_FAIL(tables.push_back(last_major_sstable))) {
+      LOG_WARN("Fail to add last major sstable", KR(ret), KPC(last_major_sstable));
     }
   }
 
   return ret;
 }
 
-int ObPartitionMultiRangeSpliter::try_estimate_range_size(
-    const common::ObIArray<common::ObStoreRange> &range_array,
-    ObIArray<ObITable *> &tables,
-    int64_t &total_size)
-{
-  int ret = OB_SUCCESS;
-  total_size = 0;
-
-  if (OB_UNLIKELY(range_array.count() >= RANGE_COUNT_THRESOLD)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
-      const ObITable * table = tables.at(i);
-      if (table->is_sstable()
-           && static_cast<const ObSSTable *>(table)->get_data_macro_block_count() * FAST_ESTIMATE_THRESOLD / 100 <= range_array.count()) {
-        total_size += static_cast<const ObSSTable *>(table)->get_occupy_size();
-        if (OB_FAIL(tables.remove(i))) {
-          STORAGE_LOG(WARN, "fail to remove table", K(ret), K(i));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObPartitionMultiRangeSpliter::split_multi_ranges(RangeSplitInfoArray &range_info_array,
-                                                     const int64_t expected_task_count,
-                                                     const int64_t total_size,
-                                                     common::ObIAllocator &allocator,
-                                                     ObArrayArray<ObStoreRange> &multi_range_split_array)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(range_info_array.empty() || total_size <= 0 || expected_task_count <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to calc parallel target array", K(ret), K(range_info_array),
-                K(total_size), K(expected_task_count));
-  } else {
-    ObArenaAllocator local_allocator("RangeSpliter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    const int64_t avg_task_size = MAX(total_size / expected_task_count, 1);
-    const int64_t split_task_size = MAX(avg_task_size / 2, 1);
-    const int64_t task_size_high_watermark = MAX(avg_task_size *
-                                                 SPLIT_TASK_SIZE_HIGH_WATER_MARK_FACTOR / 100, 1);
-    const int64_t task_size_low_watermark = max(avg_task_size * SPLIT_TASK_SIZE_LOW_WATER_MARK_FACTOR /
-                                                100, 1);
-    int64_t sum_size = 0;
-    RangeSplitArray range_split_array;
-    RangeSplitArray refra_range_split_array;
-    int64_t total_size = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < range_info_array.count(); i++) {
-      ObRangeSplitInfo &range_info = range_info_array.at(i);
-      int64_t  cur_avg_task_size = 0;
-      if (range_info.empty() || range_info.total_size_ < avg_task_size
-          || sum_size + range_info.total_size_ < task_size_high_watermark) {
-        range_info.set_parallel_target(1);
-        cur_avg_task_size = MAX(range_info.total_size_, 1);
-      } else {
-        int64_t parallel = range_info.total_size_ / split_task_size;
-        if (range_info.max_macro_block_count_ > 0 && (range_info.total_size_ / range_info.max_macro_block_count_) < avg_task_size) {
-          parallel = MIN(parallel, range_info.max_macro_block_count_);
-        }
-        range_info.set_parallel_target(parallel);
-        cur_avg_task_size = range_info.total_size_ / parallel;
-      }
-#ifdef ERRSIM
-      if (OB_SUCC(ret)) {
-        ret = OB_E(EventTable::EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE) ret;
-        if (OB_FAIL(ret)) {
-          int64_t parallel = 2;
-          range_info.set_parallel_target(parallel);
-          cur_avg_task_size = range_info.total_size_ / parallel;
-          STORAGE_LOG(INFO, "set EN_COMPACTION_MEDIUM_INIT_PARALLEL_RANGE with errsim", K(range_info));
-          ret = OB_SUCCESS;
-        }
-      }
-#endif
-      STORAGE_LOG(DEBUG, "start to split range array", K(range_info), K(cur_avg_task_size),
-                  K(avg_task_size));
-      range_spliter_.reset();
-      range_split_array.reset();
-      if (OB_FAIL(range_spliter_.split_ranges(range_info, local_allocator, false, range_split_array))) {
-        STORAGE_LOG(WARN, "Failed to split ranges", K(ret), K(range_info));
-      } else {
-        STORAGE_LOG(DEBUG, "get split ranges", K(range_split_array));
-        if (range_info.parallel_target_count_ != range_split_array.count()) {
-          cur_avg_task_size = range_info.total_size_ / range_split_array.count();
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < range_split_array.count(); i++) {
-          const int64_t cur_range_count = multi_range_split_array.count() + 1;
-          if (cur_range_count < expected_task_count
-            && total_size + sum_size + cur_avg_task_size > cur_range_count * avg_task_size
-            && (sum_size >= avg_task_size
-              || (sum_size >= task_size_low_watermark
-                  && sum_size + cur_avg_task_size >= task_size_high_watermark))) {
-            if (OB_FAIL(merge_and_push_range_array(refra_range_split_array, allocator,
-                                                   multi_range_split_array))) {
-              STORAGE_LOG(WARN, "Failed to merge and push split range array", K(ret), K(refra_range_split_array));
-            } else {
-              STORAGE_LOG(DEBUG, "succ to build refra split ranges", K(refra_range_split_array), K(sum_size),
-                          K(avg_task_size));
-              refra_range_split_array.reset();
-              total_size += sum_size;
-              sum_size = 0;
-            }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(refra_range_split_array.push_back(range_split_array.at(i)))) {
-            STORAGE_LOG(WARN, "Failed to push back store range", K(ret), K(range_split_array.at(i)));
-          } else {
-            sum_size += cur_avg_task_size;
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret) && refra_range_split_array.count() > 0) {
-      if (OB_FAIL(merge_and_push_range_array(refra_range_split_array, allocator,
-                                             multi_range_split_array))) {
-        STORAGE_LOG(WARN, "Failed to merge and push split range array", K(ret), K(refra_range_split_array));
-      } else {
-        STORAGE_LOG(DEBUG, "succ to build refra split ranges", K(refra_range_split_array), K(sum_size),
-                    K(avg_task_size));
-        refra_range_split_array.reset();
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObPartitionMultiRangeSpliter::merge_and_push_range_array(
-    const RangeSplitArray &src_range_split_array,
-    ObIAllocator &allocator,
-    ObArrayArray<ObStoreRange> &multi_range_split_array)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(src_range_split_array.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to merge range array", K(ret), K(src_range_split_array));
-  } else {
-    const ObStoreRange *last_range = nullptr;
-    RangeSplitArray dst_range_array;
-    ObStoreRange dst_range;
-    for (int64_t i = 0; OB_SUCC(ret) && i < src_range_split_array.count(); i++) {
-      const ObStoreRange &cur_range = src_range_split_array.at(i);
-      if (OB_NOT_NULL(last_range) && cur_range.get_start_key().compare(last_range->get_end_key()) == 0)  {
-        // continous range
-        if (!cur_range.get_border_flag().inclusive_end()) {
-          // stop find next range
-          if (OB_FAIL(cur_range.get_end_key().deep_copy(dst_range.get_end_key(), allocator))) {
-            STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), K(cur_range));
-          } else if (FALSE_IT(dst_range.get_border_flag().unset_inclusive_end())) {
-          } else if (OB_FAIL(dst_range_array.push_back(dst_range))) {
-            STORAGE_LOG(WARN, "Failed to push back dst range array", K(ret), K(dst_range));
-          } else {
-            dst_range.reset();
-            last_range = nullptr;
-          }
-        } else {
-          last_range = &cur_range;
-        }
-      } else {
-        if (OB_NOT_NULL(last_range)) {
-          // break range
-          if (OB_FAIL(last_range->get_end_key().deep_copy(dst_range.get_end_key(), allocator))) {
-            STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), KPC(last_range));
-          } else if (FALSE_IT(dst_range.get_border_flag().set_inclusive_end())) {
-          } else if (OB_FAIL(dst_range_array.push_back(dst_range))) {
-            STORAGE_LOG(WARN, "Failed to push back dst range array", K(ret), K(dst_range));
-          } else {
-            dst_range.reset();
-            last_range = nullptr;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          dst_range.set_table_id(cur_range.get_table_id());
-          dst_range.set_border_flag(cur_range.get_border_flag());
-          if (!cur_range.get_border_flag().inclusive_end()) {
-            // only deal with right close | left open situation
-            if (OB_FAIL(cur_range.deep_copy(allocator, dst_range))) {
-              STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), K(cur_range));
-            } else if (OB_FAIL(dst_range_array.push_back(dst_range))) {
-              STORAGE_LOG(WARN, "Failed to push back dst range array", K(ret), K(dst_range));
-            } else {
-              dst_range.reset();
-            }
-          } else if (OB_FAIL(cur_range.get_start_key().deep_copy(dst_range.get_start_key(), allocator))) {
-            STORAGE_LOG(WARN, "Failed to deep copy start key", K(ret), K(cur_range));
-          } else {
-            last_range = &cur_range;
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(last_range)) {
-      if (OB_FAIL(last_range->get_end_key().deep_copy(dst_range.get_end_key(), allocator))) {
-        STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), KPC(last_range));
-      } else if (FALSE_IT(dst_range.get_border_flag().set_inclusive_end())) {
-      } else if (OB_FAIL(dst_range_array.push_back(dst_range))) {
-        STORAGE_LOG(WARN, "Failed to push back dst range array", K(ret), K(dst_range));
-      } else {
-        dst_range.reset();
-        last_range = nullptr;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(multi_range_split_array.push_back(dst_range_array))) {
-        STORAGE_LOG(WARN, "Failed to push back range split array", K(ret), K(dst_range_array));
-      } else {
-        STORAGE_LOG(DEBUG, "succ to merge range split array", K(ret), K(src_range_split_array),
-                    K(dst_range_array));
-      }
-    }
-
-  }
-
-  return ret;
-}
-
+template <typename ObRange>
 int ObPartitionMultiRangeSpliter::fast_build_range_array(
-    const ObIArray<ObStoreRange> &range_array,
+    const ObIArray<ObStoreRange> &ranges,
     const int64_t expected_task_cnt,
     ObIAllocator &allocator,
-    ObArrayArray<ObStoreRange> &multi_range_split_array)
+    ObArrayArray<ObRange> &multi_range_split_array)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(range_array.empty() || expected_task_cnt > range_array.count())) {
+  if (OB_UNLIKELY(expected_task_cnt > ranges.count())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to build single range array", K(ret), K(range_array));
+    LOG_WARN("Invalid argument to build single range array", KR(ret), K(ranges));
+  } else if (OB_FAIL(multi_range_split_array.reserve(expected_task_cnt))) {
+    LOG_WARN("Fail to reserve array memory", KR(ret));
   } else {
-    RangeSplitArray range_split_array;
-    ObStoreRange store_range;
-    int64_t avg_range_cnt = range_array.count() / expected_task_cnt, remain_range_cnt = range_array.count() % expected_task_cnt;
+    ObSEArray<ObRange, 4> one_task_ranges;
+    ObRange range;
+    int64_t avg_range_cnt = ranges.count() / expected_task_cnt,
+            remain_range_cnt = ranges.count() % expected_task_cnt;
 
-    for (int64_t i =0 ; OB_SUCC(ret) && i < range_array.count(); i++) {
-      int64_t task_range_cnt = avg_range_cnt + (multi_range_split_array.count() < remain_range_cnt ? 1 : 0);
-      if (OB_FAIL(range_array.at(i).deep_copy(allocator, store_range))) {
-        STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), K(i), K(range_array.at(i)));
-      } else if (OB_FAIL(range_split_array.push_back(store_range))) {
-        STORAGE_LOG(WARN, "Failed to push back store range", K(ret), K(store_range));
-      } else if (range_split_array.count() >=  task_range_cnt) {
-        if (OB_FAIL(multi_range_split_array.push_back(range_split_array))) {
-          STORAGE_LOG(WARN, "Failed to push range split array", K(ret), K(range_split_array));
-        } else {
-          range_split_array.reset();
-          STORAGE_LOG(DEBUG, "Fast split for single task", K(range_array));
+    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
+      int64_t task_range_cnt
+          = avg_range_cnt + (multi_range_split_array.count() < remain_range_cnt ? 1 : 0);
+
+      if constexpr (std::is_same_v<ObRange, ObStoreRange>) {
+        if (OB_FAIL(ranges.at(i).deep_copy(allocator, range))) {
+          LOG_WARN("Fail to deep copy store range", KR(ret), K(i), K(ranges.at(i)));
         }
+      } else if constexpr (std::is_same_v<ObRange, ObDatumRange>) {
+        ObStoreRange tmp_range;
+        if (OB_FAIL(ranges.at(i).deep_copy(allocator, tmp_range))) {
+          LOG_WARN("Fail to deep copy store range", KR(ret), K(i), K(ranges.at(i)));
+        } else if (OB_FAIL(range.from_range(tmp_range, allocator))) {
+          LOG_WARN("Fail to deep copy store range", KR(ret), K(i), K(ranges.at(i)));
+        }
+      } else {
+        static_assert(std::is_same_v<ObRange, ObStoreRange>
+                          || std::is_same_v<ObRange, ObDatumRange>,
+                      "only support ObDatumRange and ObStoreRange");
       }
 
-      store_range.reset();
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(one_task_ranges.push_back(range))) {
+        LOG_WARN("Fail to push back store range", KR(ret), K(range));
+      } else if (one_task_ranges.count() >= task_range_cnt) {
+        if (OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+          LOG_WARN("Fail to push range split array", KR(ret), K(one_task_ranges));
+        } else {
+          one_task_ranges.reset();
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!range_split_array.empty() || multi_range_split_array.count() != expected_task_cnt) {
+    } else if (!one_task_ranges.empty() || multi_range_split_array.count() != expected_task_cnt) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected multi_range_split_array cnt", K(ret), K(multi_range_split_array.count()), K(expected_task_cnt), K(range_array.count()), K(range_split_array.empty()));
+      LOG_WARN("Fail to fast build range array",
+               KR(ret),
+               K(multi_range_split_array),
+               K(expected_task_cnt),
+               K(ranges),
+               K(one_task_ranges));
     }
   }
 
   return ret;
 }
 
+int ObPartitionMultiRangeSpliter::transform_to_datum_range_and_sort(
+    const ObIArray<ObStoreRange> &ranges,
+    const ObITableReadInfo &read_info,
+    ObIAllocator &allocator,
+    ObIArray<ObPairStoreAndDatumRange> &sorted_ranges)
+{
+  int ret = OB_SUCCESS;
+
+  sorted_ranges.reset();
+  if (OB_FAIL(sorted_ranges.reserve(ranges.count()))) {
+    LOG_WARN("Fail to reserve range array", KR(ret));
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
+    ObPairStoreAndDatumRange *range = nullptr;
+    if (OB_ISNULL(range = sorted_ranges.alloc_place_holder())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to alloc place holder for datum range", KR(ret));
+    } else if (OB_FAIL(range->datum_range_.from_range(ranges.at(i), allocator))) {
+      LOG_WARN("Fail to transform store range to datum range", KR(ret), K(ranges.at(i)));
+    } else {
+      range->origin_store_range_ = &ranges.at(i);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    ObRangeCompartor cmp(read_info);
+    bool is_sorted = false;
+
+    if (OB_FAIL(ObRangeCompartor::is_sorted(sorted_ranges, cmp, is_sorted))) {
+      LOG_WARN("Fail to check if ranges is sorted", KR(ret), K(sorted_ranges));
+    } else if (!is_sorted) {
+      lib::ob_sort(sorted_ranges.get_data(), sorted_ranges.get_data() + sorted_ranges.count(), cmp);
+      if (OB_FAIL(cmp.sort_ret_)) {
+        LOG_WARN("Fail to sort range array", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliterHelper::init(ObIAllocator &allocator,
+                                             const ObITableReadInfo &read_info,
+                                             const ObIArray<ObStoreRange> &ranges)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("Fail to init spliter helper", KR(ret));
+  } else if (OB_UNLIKELY(!read_info.is_valid() || ranges.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid read info or ranges", KR(ret), K(ranges), K(read_info));
+  } else {
+    allocator_ = &allocator;
+    read_info_ = &read_info;
+    table_id_ = ranges.at(0).get_table_id();
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+template <typename ObTemplateRowkey>
+int ObPartitionMultiRangeSpliterHelper::deepcopy_rowkey(const ObDatumRowkey &rowkey,
+                                                        const bool for_compaction,
+                                                        ObTemplateRowkey &target)
+{
+  int ret = OB_SUCCESS;
+
+  if constexpr (std::is_same_v<ObStoreRowkey, ObTemplateRowkey>) {
+    if (for_compaction) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Fail to deepcopy rowkey, type must be datum rowkey when for compaction", KR(ret));
+    } else if (rowkey.is_min_rowkey()) {
+      target.set_min();
+    } else if (rowkey.is_max_rowkey()) {
+      target.set_max();
+    } else if (OB_FAIL(rowkey.deep_copy(target,
+                                        *allocator_,
+                                        read_info_->get_columns_desc(),
+                                        read_info_->get_schema_rowkey_count(),
+                                        0))) {
+      LOG_WARN("Fail to deepcopy rowkey (datum -> store)", KR(ret), K(for_compaction), K(rowkey));
+    }
+  } else if constexpr (std::is_same_v<ObDatumRowkey, ObTemplateRowkey>) {
+    ObDatumRowkey tmp_rowkey;
+    if (!for_compaction) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Fail to deepcopy rowkey, type must be store rowkey when not for compaction", KR(ret));
+    } else if (rowkey.is_min_rowkey()) {
+      target.set_min_rowkey();
+    } else if (rowkey.is_max_rowkey()) {
+      target.set_max_rowkey();
+    } else if (OB_FAIL(target.assign(const_cast<ObStorageDatum *>(rowkey.get_datum_ptr()),
+                                     read_info_->get_schema_rowkey_count()))) {
+      LOG_WARN("Fail to assign tmp rowkey", KR(ret), K(for_compaction), K(rowkey));
+    } else if (OB_FAIL(target.deep_copy(tmp_rowkey, *allocator_))) {
+      LOG_WARN("Fail to deepcopy rowkey (datum -> datum)", KR(ret), K(for_compaction), K(rowkey));
+    } else if (OB_FAIL(tmp_rowkey.to_multi_version_rowkey(/* min_value */ false, *allocator_, target))) {
+      LOG_WARN("Fail to transform to multi version rowkey");
+    }
+  } else {
+    static_assert(std::is_same_v<ObTemplateRowkey, ObStoreRowkey>
+                      || std::is_same_v<ObTemplateRowkey, ObDatumRowkey>,
+                  "only support ObDatumRowkey and ObStoreRowkey");
+  }
+
+  return ret;
+}
+
+template <typename ObRange>
+int ObPartitionMultiRangeSpliterHelper::construct_range(const ObDatumRowkey &start_key,
+                                                        const ObDatumRowkey &end_key,
+                                                        const ObBorderFlag &flag,
+                                                        const bool for_compaction,
+                                                        ObRange &range)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init spliter helper", KR(ret));
+  } else if (OB_FAIL(deepcopy_rowkey(start_key,
+                                     for_compaction,
+                                     const_cast<ObRange &>(range).get_start_key()))) {
+    LOG_WARN("Fail to transform start key to store range", KR(ret));
+  } else if (OB_FAIL(deepcopy_rowkey(end_key,
+                                     for_compaction,
+                                     const_cast<ObRange &>(range).get_end_key()))) {
+    LOG_WARN("Fail to transform end key to store range", KR(ret));
+  } else {
+    range.set_border_flag(flag);
+
+    if constexpr (std::is_same_v<ObRange, ObStoreRange>) {
+      range.set_table_id(table_id_);
+    }
+  }
+
+  return ret;
+}
+
+template <typename ObRange>
+int ObPartitionMultiRangeSpliterHelper::construct_and_push_range(
+    const ObDatumRowkey *start_key,
+    const ObDatumRowkey *end_key,
+    const ObBorderFlag &flag,
+    const bool for_compaction,
+    ObIArray<ObRange> &ranges)
+{
+  int ret = OB_SUCCESS;
+
+  ObRange range;
+  bool is_equal = false;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init spliter helper", KR(ret));
+  } else if (OB_ISNULL(start_key) || OB_ISNULL(end_key)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Invalid start key or end key", KR(ret), KPC(start_key), KPC(end_key));
+  } else if (OB_FAIL(start_key->equal(*end_key, read_info_->get_datum_utils(), is_equal))) {
+    LOG_WARN("Fail to compare start key and end key", KR(ret), KPC(start_key), KPC(end_key));
+  } else if (is_equal && !(flag.inclusive_start() && flag.inclusive_end())) {
+    // empty range
+  } else if (OB_FAIL(construct_range(*start_key, *end_key, flag, for_compaction, range))) {
+    LOG_WARN("Fail to construct store range", KR(ret));
+  } else if (OB_FAIL(ranges.push_back(range))) {
+    LOG_WARN("Fail to push back store range", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::estimate_ranges_row_and_split(
+    const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
+    const int64_t expected_task_count,
+    const ObITableReadInfo &read_info,
+    const ObIArray<ObITable *> &tables,
+    ObIAllocator &allocator,
+    ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+    int64_t &estimate_rows_sum,
+    const int64_t max_time,
+    const ObRangePrecision &range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  estimate_rows_sum = 0;
+
+  if (OB_FAIL(heap_element_iters.reserve(tables.count()))) {
+    LOG_WARN("Fail to reserve heap element iters", KR(ret));
+  }
+
+  int64_t total_macro_block_cnt = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+    ObITable *table = tables.at(i);
+    if (table->is_sstable()) {
+      ObSSTable *sstable = static_cast<ObSSTable *>(table);
+      total_macro_block_cnt += sstable->get_data_macro_block_count();
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+    ObITable *table = tables.at(i);
+    if (table->is_sstable()) {
+      ObSSTable *sstable = static_cast<ObSSTable *>(table);
+      int64_t open_index_block_limit
+          = max(1,
+                INDEX_BLOCK_PER_TIME * max_time * sstable->get_data_macro_block_count()
+                    / max(1, total_macro_block_cnt));
+      if (OB_FAIL(split_ranges_for_sstable(sorted_ranges,
+                                           read_info,
+                                           expected_task_count,
+                                           open_index_block_limit,
+                                           *sstable,
+                                           allocator,
+                                           heap_element_iters,
+                                           estimate_rows_sum,
+                                           range_precision))) {
+        LOG_WARN("Fail to split ranges for sstable", KR(ret));
+      }
+    } else if (table->is_data_memtable()) {
+      memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+      if (OB_FAIL(split_ranges_for_memtable(sorted_ranges,
+                                            expected_task_count,
+                                            *memtable,
+                                            allocator,
+                                            heap_element_iters,
+                                            estimate_rows_sum,
+                                            range_precision))) {
+        LOG_WARN("Fail to split ranges for memtable", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
+    const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
+    const ObITableReadInfo &read_info,
+    const int64_t expected_task_count,
+    const int64_t open_index_block_limit,
+    ObSSTable &sstable,
+    ObIAllocator &allocator,
+    ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+    int64_t &estimate_rows_sum,
+    const ObRangePrecision &range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  ObIndexBlockTreeTraverser traverser;
+  ObMultiRangeRowEstimateContext row_estimate_context;
+  ObMultiRangeSplitContext split_context;
+  ObSplitRangeHeapElementIter *iter = nullptr;
+  bool can_goto_micro_level = false;
+
+  if (OB_ISNULL(iter = heap_element_iters.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to alloc place holder", KR(ret));
+  } else if (OB_FAIL(row_estimate_context.init(
+                 sorted_ranges, read_info, /* need_sort */ false, range_precision, /* can_goto_micro_level */ false))) {
+    LOG_WARN("Fail to init row estimate context", KR(ret));
+  } else if (OB_FAIL(traverser.init(sstable, read_info))) {
+    LOG_WARN("Fail to init row estimate traverser", KR(ret));
+  } else if (OB_FAIL(traverser.traverse(row_estimate_context, open_index_block_limit))) {
+    LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
+  } else if (row_estimate_context.get_macro_block_count_sum() < expected_task_count * SPLIT_RANGE_FACTOR) {
+    can_goto_micro_level = true;
+    row_estimate_context.reuse();
+    row_estimate_context.set_can_goto_micro_level(true);
+    traverser.reuse();
+
+    if (OB_FAIL(traverser.traverse(row_estimate_context, open_index_block_limit))) {
+      LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(estimate_rows_sum += row_estimate_context.get_row_count_sum())) {
+  } else if (OB_FAIL(
+                 split_context.init(sorted_ranges,
+                                    read_info,
+                                    calc_row_split_limit(row_estimate_context.get_row_count_sum(),
+                                                         expected_task_count,
+                                                         sorted_ranges.count()),
+                                    allocator,
+                                    row_estimate_context.get_ranges(),
+                                    iter->get_split_ranges(),
+                                    /* need_sort */ false,
+                                    range_precision,
+                                    can_goto_micro_level))) {
+    LOG_WARN("Fail to init split context", KR(ret));
+  } else if (FALSE_IT(traverser.reuse())) {
+  } else if (OB_FAIL(traverser.traverse(split_context, open_index_block_limit))) {
+    LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::split_ranges_for_memtable(
+    const ObIArray<ObPairStoreAndDatumRange> &ranges,
+    const int64_t expected_task_count,
+    memtable::ObMemtable &memtable,
+    ObIAllocator &allocator,
+    ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+    int64_t &estimate_rows_sum,
+    const ObRangePrecision &range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  ObSplitRangeHeapElementIter *iter = nullptr;
+  ObArray<int64_t> range_estimate_rows;
+  int64_t rows_sum = 0;
+
+  if (OB_ISNULL(iter = heap_element_iters.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to alloc place holder", KR(ret));
+  }
+
+  // step 1. estimate rows
+  int64_t sample_step = range_precision.get_sample_step();
+  int64_t next_sample_point = 0;
+  int64_t last_estimate_rows = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
+    int64_t estimate_bytes = 0;
+    int64_t estimate_rows = 0;
+    if (i >= next_sample_point) {
+      if (OB_FAIL(memtable.estimate_phy_size(&ranges.at(i).origin_store_range_->get_start_key(),
+                                             &ranges.at(i).origin_store_range_->get_end_key(),
+                                             estimate_bytes,
+                                             estimate_rows))) {
+        LOG_WARN("Fail to estimate rows for memtable", KR(ret), K(ranges.at(i)), K(memtable));
+      } else {
+        last_estimate_rows = estimate_rows;
+        next_sample_point += sample_step;
+      }
+    } else {
+      estimate_rows = last_estimate_rows;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(range_estimate_rows.push_back(estimate_rows))) {
+      LOG_WARN("Fail to push back estimate rows", KR(ret), K(estimate_rows), K(memtable));
+    } else {
+      rows_sum += estimate_rows;
+    }
+  }
+
+  // step 2. split range
+  int64_t row_split_limit = calc_row_split_limit(rows_sum, expected_task_count, ranges.count());
+  next_sample_point = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
+    ObSEArray<ObStoreRange, 8> store_ranges;
+    int64_t avg_split_range_rows = range_estimate_rows.at(i);
+
+    if (i >= next_sample_point) {
+      int64_t split_count = range_estimate_rows.at(i) / row_split_limit + 1;
+      if (OB_FAIL(memtable.get_split_ranges(
+              *ranges.at(i).origin_store_range_, split_count, store_ranges))) {
+        LOG_WARN("Fail to split range for memtable", KR(ret), K(ranges.at(i)), K(memtable));
+      } else {
+        avg_split_range_rows = range_estimate_rows.at(i) / split_count;
+        next_sample_point += sample_step;
+      }
+    } else {
+      if (OB_FAIL(store_ranges.push_back(*ranges.at(i).origin_store_range_))) {
+        LOG_WARN("Fail to push back to store ranges", KR(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else {
+      for (int j = 0; OB_SUCC(ret) && j < store_ranges.count(); j++) {
+        ObSplitRangeInfo *info = nullptr;
+
+        if (OB_ISNULL(info = iter->get_split_ranges().alloc_place_holder())) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("Fail to alloc place holder", KR(ret));
+        } else if (OB_FAIL(info->split_rowkey_.from_rowkey(
+                       store_ranges.at(j).get_end_key().get_rowkey(), allocator))) {
+          LOG_WARN("Fail to transform store rowkey to datum rowkey", KR(ret), K(info));
+        } else {
+          info->row_count_ = avg_split_range_rows;
+          info->origin_range_ = &ranges.at(i).datum_range_;
+          info->is_range_end_split_ = (j == store_ranges.count() - 1);
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    estimate_rows_sum += rows_sum;
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::build_heap(
+    ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
+    ObBinaryHeap<ObSplitRangeHeapElement, ObSplitRangeHeapElementCompator> &heap)
+{
+  int ret = OB_SUCCESS;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < heap_element_iters.count(); i++) {
+    ObSplitRangeHeapElementIter &iter = heap_element_iters.at(i);
+    ObSplitRangeHeapElement element;
+    if (OB_FAIL(iter.get_next(element))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("Fail to get next element", KR(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(heap.push(element))) {
+      LOG_WARN("Fail to push element to heap", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
+template <typename ObRange>
+int ObPartitionMultiRangeSpliter::do_task_split_algorithm(
+    const ObIArray<ObStoreRange> &ranges,
+    const ObITableReadInfo &read_info,
+    const int64_t expected_task_count,
+    const int64_t avg_task_row_count,
+    ObIAllocator &allocator,
+    ObBinaryHeap<ObSplitRangeHeapElement, ObSplitRangeHeapElementCompator> &heap,
+    ObArrayArray<ObRange> &multi_range_split_array,
+    const bool for_compaction)
+{
+  int ret = OB_SUCCESS;
+
+  ObPartitionMultiRangeSpliterHelper helper;
+
+  ObSEArray<ObRange, 8> one_task_ranges;
+  const ObDatumRange *last_origin_range = nullptr;
+  const ObDatumRowkey *start_key = nullptr, *end_key = nullptr;
+  ObBorderFlag flag;
+  int64_t curr_task_rows_sum = 0;
+  int64_t pushed_task_count = 0;
+
+  int64_t total_row_count = avg_task_row_count * expected_task_count;
+  int64_t curr_avg_row_count = avg_task_row_count;
+  int64_t high_task_row_count = max(1.0, (1.0 + (1.0 / SPLIT_RANGE_FACTOR / 2.0)) * curr_avg_row_count);
+  int64_t low_task_row_count = max(1.0, (1.0 - (1.0 / SPLIT_RANGE_FACTOR / 2.0)) * curr_avg_row_count);
+
+  if (OB_FAIL(helper.init(allocator, read_info, ranges))) {
+    LOG_WARN("Fail to init spliter helper", KR(ret));
+  }
+
+  while (OB_SUCC(ret) && !heap.empty()) {
+    ObSplitRangeHeapElement element = heap.top();
+
+    if (pushed_task_count == expected_task_count - 1) {
+      // all remain range should push into the last task
+    } else if (curr_task_rows_sum >= curr_avg_row_count
+               || (curr_task_rows_sum >= low_task_row_count
+                   && curr_task_rows_sum + element.split_range_info_->row_count_ >= high_task_row_count)) {
+      // split one task
+      if (OB_FAIL(helper.construct_and_push_range(
+              start_key, end_key, flag, for_compaction, one_task_ranges))) {
+        LOG_WARN("Fail to construct store range", KR(ret));
+      } else if (OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+        LOG_WARN("Fail to push back one task ranges", KR(ret));
+      } else {
+        total_row_count -= curr_task_rows_sum;
+
+        pushed_task_count++;
+        one_task_ranges.reset();
+        curr_task_rows_sum = 0;
+        start_key = end_key;
+        flag.unset_inclusive_start();
+        flag.unset_inclusive_end();
+
+        curr_avg_row_count = max(1, total_row_count / (expected_task_count - pushed_task_count));
+        high_task_row_count = max(1.0, (1.0 + (1.0 / SPLIT_RANGE_FACTOR / 2.0)) * curr_avg_row_count);
+        low_task_row_count = max(1.0, (1.0 - (1.0 / SPLIT_RANGE_FACTOR / 2.0)) * curr_avg_row_count);
+      }
+    }
+
+    // the range is broken, must be separated
+    if (OB_FAIL(ret)) {
+    } else if (last_origin_range != nullptr
+               && element.split_range_info_->origin_range_ != last_origin_range) {
+      if (OB_FAIL(helper.construct_and_push_range(
+              start_key, end_key, flag, for_compaction, one_task_ranges))) {
+        LOG_WARN("Fail to construct store range", KR(ret));
+      }
+      last_origin_range = nullptr;
+      start_key = end_key = nullptr;
+      flag.unset_inclusive_start();
+      flag.unset_inclusive_end();
+    }
+
+    // a separated new range, do init
+    if (OB_FAIL(ret)) {
+    } else if (nullptr == last_origin_range) {
+      last_origin_range = element.split_range_info_->origin_range_;
+      start_key = &element.split_range_info_->origin_range_->get_start_key();
+      element.split_range_info_->origin_range_->is_left_closed() ? flag.set_inclusive_start()
+                                                                 : flag.unset_inclusive_start();
+    }
+
+    // update curr endkey and curr_task_rows_sum
+    if (OB_FAIL(ret)) {
+    } else {
+      end_key = &element.split_range_info_->split_rowkey_;
+      curr_task_rows_sum += element.split_range_info_->row_count_;
+
+      if (element.split_range_info_->is_range_end_split_) {
+        element.split_range_info_->origin_range_->is_right_closed() ? flag.set_inclusive_end()
+                                                                    : flag.unset_inclusive_end();
+      } else {
+        flag.set_inclusive_end();
+      }
+    }
+
+    // push new element
+    ObSplitRangeHeapElement new_element;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(heap.pop())) {
+      LOG_WARN("Fail to pop element in heap", KR(ret));
+    } else if (OB_FAIL(element.iter_->get_next(new_element))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("Fail to get next element in iter", KR(ret), K(element));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(heap.push(new_element))) {
+      LOG_WARN("Fail to push element to heap", KR(ret));
+    }
+  }
+
+  // make remain ranges into a task
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(helper.construct_and_push_range(
+            start_key, end_key, flag, for_compaction, one_task_ranges))) {
+      LOG_WARN("Fail to transform to store rowkey", KR(ret));
+    } else if (!one_task_ranges.empty() && OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+      LOG_WARN("Fail to push back one task ranges", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
+template <typename ObRange>
+int ObPartitionMultiRangeSpliter::build_range_array(const ObIArray<ObStoreRange> &ranges,
+                                                    const int64_t expected_task_count,
+                                                    const ObITableReadInfo &index_read_info,
+                                                    const ObIArray<ObITable *> &tables,
+                                                    ObIAllocator &allocator,
+                                                    ObArrayArray<ObRange> &multi_range_split_array,
+                                                    const bool for_compaction,
+                                                    const int64_t max_time,
+                                                    const ObRangePrecision &range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator tmp_allocator;
+  ObArray<ObPairStoreAndDatumRange> sorted_ranges;
+  ObArray<ObSplitRangeHeapElementIter> heap_element_iters;
+  ObSplitRangeHeapElementCompator cmp(index_read_info);
+  ObBinaryHeap<ObSplitRangeHeapElement, ObSplitRangeHeapElementCompator> heap(cmp);
+
+  int64_t estimate_rows_sum = 0;
+
+  if (OB_FAIL(transform_to_datum_range_and_sort(ranges, index_read_info, allocator, sorted_ranges))) {
+    LOG_WARN("Fail to transform store range array to datum range array", KR(ret));
+  } else if (OB_FAIL(estimate_ranges_row_and_split(sorted_ranges,
+                                                   expected_task_count,
+                                                   index_read_info,
+                                                   tables,
+                                                   tmp_allocator,
+                                                   heap_element_iters,
+                                                   estimate_rows_sum,
+                                                   max_time,
+                                                   range_precision))) {
+    LOG_WARN("Fail to estimate row and split", KR(ret));
+  } else if (OB_FAIL(build_heap(heap_element_iters, heap))) {
+    LOG_WARN("Fail to build heap for task split", KR(ret));
+  } else if (OB_FAIL(do_task_split_algorithm(ranges,
+                                             index_read_info,
+                                             expected_task_count,
+                                             max(1, estimate_rows_sum / expected_task_count),
+                                             allocator,
+                                             heap,
+                                             multi_range_split_array,
+                                             for_compaction))) {
+    LOG_WARN("Fail to do task split algorithm", KR(ret));
+  }
+
+  return ret;
+}
+
+bool ObPartitionMultiRangeSpliter::all_range_is_single_rowkey(const ObIArray<ObStoreRange> &ranges)
+{
+  bool all_single_rowkey = true;
+
+  for (int i = 0; i < ranges.count(); i++) {
+    if (!ranges.at(i).is_single_rowkey()) {
+      all_single_rowkey = false;
+      break;
+    }
+  }
+
+  return all_single_rowkey;
+}
+
+int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
+                                                       const ObITableReadInfo &index_read_info,
+                                                       const ObIArray<ObITable *> &tables,
+                                                       int64_t &total_size,
+                                                       const int64_t max_time,
+                                                       const int64_t range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  total_size = 0;
+  int64_t unused_total_row_count = 0;
+  int64_t unused_total_macro_block_count = 0;
+  ObRangePrecision recalc_range_precision(range_precision);
+
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to get multi range size",
+             KR(ret),
+             K(index_read_info),
+             K(range_precision),
+             K(max_time));
+  } else if (ranges.empty()) {
+    // do nothing
+  } else if (tables.empty()) {
+    // only small tables
+  } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
+  } else if (OB_FAIL(estimate_ranges_info(ranges,
+                                          index_read_info,
+                                          tables,
+                                          total_size,
+                                          unused_total_row_count,
+                                          unused_total_macro_block_count,
+                                          max_time,
+                                          recalc_range_precision))) {
+    LOG_WARN("Fail to build range array", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::get_multi_ranges_row_count(const ObIArray<ObStoreRange> &ranges,
+                                                            const ObITableReadInfo &index_read_info,
+                                                            ObTableStoreIterator &table_iter,
+                                                            int64_t &row_count,
+                                                            int64_t &macro_block_count,
+                                                            const int64_t max_time,
+                                                            const int64_t range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  ObRangePrecision recalc_range_precision(range_precision);
+  int64_t unused_total_size = 0;
+  row_count = 0;
+  macro_block_count = 0;
+
+  ObSEArray<ObITable *, 8> tables;
+
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0
+                  || !table_iter.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to get multi ranges row count",
+             KR(ret),
+             K(index_read_info),
+             K(range_precision),
+             K(max_time),
+             K(table_iter));
+  } else if (OB_FAIL(get_tables(table_iter, tables))) {
+    LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
+  } else if (ranges.empty()) {
+    // do nothing
+  } else if (tables.empty()) {
+    // only small tables
+    row_count = ranges.count();
+    macro_block_count = 1;
+  } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
+  } else if (OB_FAIL(estimate_ranges_info(ranges,
+                                          index_read_info,
+                                          tables,
+                                          unused_total_size,
+                                          row_count,
+                                          macro_block_count,
+                                          max_time,
+                                          recalc_range_precision))) {
+    LOG_WARN("Fail to estimate ranges size", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
+                                                       const ObITableReadInfo &index_read_info,
+                                                       ObTableStoreIterator &table_iter,
+                                                       int64_t &total_size,
+                                                       const int64_t max_time,
+                                                       const int64_t range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  total_size = 0;
+
+  ObSEArray<ObITable *, 8> tables;
+
+  if (OB_UNLIKELY(!index_read_info.is_valid() || max_time <= 0 || !table_iter.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to get multi ranges size",
+             KR(ret),
+             K(index_read_info),
+             K(range_precision),
+             K(max_time),
+             K(table_iter));
+  } else if (OB_FAIL(get_tables(table_iter, tables))) {
+    LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
+  } else if (ranges.empty()) {
+    // do nothing
+  } else if (tables.empty()) {
+    // only small tables
+  } else if (OB_FAIL(get_multi_range_size(
+                 ranges, index_read_info, tables, total_size, max_time, range_precision))) {
+    LOG_WARN("Fail to get multi range size", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRange> &ranges,
+                                                       const ObITableReadInfo &read_info,
+                                                       const ObIArray<ObITable *> &tables,
+                                                       int64_t &total_size,
+                                                       int64_t &total_row_count,
+                                                       int64_t &total_macro_block_count,
+                                                       const int64_t max_time,
+                                                       const ObRangePrecision &range_precision)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator allocator;
+  ObArray<ObStoreRange> sampled_ranges;
+  ObArray<ObPairStoreAndDatumRange> sorted_ranges;
+
+  total_size = 0;
+  total_row_count = 0;
+  total_macro_block_count = 0;
+  int64_t memtable_total_size = 0;
+  int64_t sstable_total_macro_block_count = 0;
+
+  if (OB_FAIL(sampled_ranges.reserve(ranges.count()))) {
+    LOG_WARN("Fail to reserve sampled ranges", KR(ret));
+  } else {
+    int64_t sample_step = range_precision.get_sample_step();
+    for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i += sample_step) {
+      if (OB_FAIL(sampled_ranges.push_back(ranges.at(i)))) {
+        LOG_WARN("Fail to push back sampled range", KR(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(transform_to_datum_range_and_sort(
+                 sampled_ranges, read_info, allocator, sorted_ranges))) {
+    LOG_WARN("Fail to transform store range array to datum range array", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+      ObITable *table = tables.at(i);
+      if (table->is_sstable()) {
+        ObSSTable *sstable = static_cast<ObSSTable *>(table);
+        sstable_total_macro_block_count += sstable->get_data_macro_block_count();
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+      ObITable *table = tables.at(i);
+      if (table->is_sstable()) {
+        ObSSTable *sstable = static_cast<ObSSTable *>(table);
+        ObIndexBlockTreeTraverser traverser;
+        ObMultiRangeInfoEstimateContext info_estimate_context;
+
+        if (sstable->is_empty() || sstable_total_macro_block_count == 0) {
+          // empty sstable, skip
+        } else if (OB_FAIL(info_estimate_context.init(sorted_ranges, read_info, false))) {
+          LOG_WARN("Fail to init info estimate context", KR(ret));
+        } else if (OB_FAIL(traverser.init(*sstable, read_info))) {
+          LOG_WARN("Fail to init info estimate traverser", KR(ret));
+        } else if (OB_FAIL(traverser.traverse(
+                       info_estimate_context,
+                       max(1,
+                           INDEX_BLOCK_PER_TIME * max_time * sstable->get_data_macro_block_count()
+                               / sstable_total_macro_block_count)))) {
+          LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
+        } else {
+          total_size += info_estimate_context.get_total_size();
+          total_row_count += info_estimate_context.get_total_row_count();
+          total_macro_block_count += info_estimate_context.get_total_macro_block_count();
+        }
+      } else if (table->is_data_memtable()) {
+        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+
+        for (int64_t j = 0; OB_SUCC(ret) && j < sampled_ranges.count(); j++) {
+          int64_t estimate_bytes = 0;
+          int64_t estimate_rows = 0;
+
+          if (OB_FAIL(memtable->estimate_phy_size(&sampled_ranges.at(j).get_start_key(),
+                                                  &sampled_ranges.at(j).get_end_key(),
+                                                  estimate_bytes,
+                                                  estimate_rows))) {
+            LOG_WARN("Fail to estimate rows for memtable",
+                     KR(ret),
+                     K(sampled_ranges.at(j)),
+                     K(memtable));
+          } else {
+            memtable_total_size += estimate_bytes;
+            total_size += estimate_bytes;
+            total_row_count += estimate_rows;
+            // total_macro_block_count += 0; // memtable don't have macro block
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    total_size = total_size * ranges.count() / sampled_ranges.count();
+    total_row_count = total_row_count * ranges.count() / sampled_ranges.count();
+    total_macro_block_count
+        = min(total_macro_block_count >= sampled_ranges.count()
+                  ? total_macro_block_count * ranges.count() / sampled_ranges.count()
+                  : total_macro_block_count,
+              sstable_total_macro_block_count);
+
+    // TODO(menglan): adapt now sql implement
+    constexpr int64_t ONE_TASK_ROW_COUNT = 32768;
+    if (GCTX.is_shared_storage_mode()) {
+      total_size = max(total_size,
+                       total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size);
+    } else {
+      total_size
+          = max(total_size,
+                max(total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size,
+                    (total_row_count / ONE_TASK_ROW_COUNT + 1) * OB_DEFAULT_MACRO_BLOCK_SIZE));
+    }
+
+    LOG_TRACE("Finish estimate ranges info",
+              K(total_size),
+              K(total_row_count),
+              K(total_macro_block_count),
+              K(memtable_total_size));
+  }
+
+  return ret;
+}
+
+template <typename ObRange>
 int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
-    const common::ObIArray<common::ObStoreRange> &range_array,
+    const ObIArray<ObStoreRange> &ranges,
+    const int64_t expected_task_count,
+    const ObITableReadInfo &index_read_info,
+    const ObIArray<ObITable *> &tables,
+    ObIAllocator &allocator,
+    ObArrayArray<ObRange> &multi_range_split_array,
+    const bool for_compaction,
+    const int64_t max_time,
+    const int64_t range_precision)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time_ms = ObTimeUtility::current_time_ms();
+
+  multi_range_split_array.reset();
+
+  int64_t fast_split_range_task_count = 0;
+  ObRangePrecision recalc_range_precision(range_precision);
+
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0 || expected_task_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to get split multi ranges",
+             KR(ret),
+             K(expected_task_count),
+             K(range_precision),
+             K(max_time));
+  } else if (ranges.empty()) {
+    // do nothing
+  } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
+  } else if (tables.empty()) {
+    // only small tables
+    fast_split_range_task_count = 1;
+  } else if (OB_UNLIKELY(expected_task_count == 1)) {
+    // only one task
+    fast_split_range_task_count = 1;
+  } else if (all_range_is_single_rowkey(ranges)) {
+    // all single rowkey
+    fast_split_range_task_count = min(ranges.count(), expected_task_count);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (fast_split_range_task_count > 0) {
+    if (OB_FAIL(fast_build_range_array(
+            ranges, fast_split_range_task_count, allocator, multi_range_split_array))) {
+      LOG_WARN("Fail to fast build range array", KR(ret));
+    }
+  } else if (OB_FAIL(build_range_array(ranges,
+                                       expected_task_count,
+                                       index_read_info,
+                                       tables,
+                                       allocator,
+                                       multi_range_split_array,
+                                       for_compaction,
+                                       max_time,
+                                       recalc_range_precision))) {
+    LOG_WARN("Fail to build range array", KR(ret));
+  }
+
+  int64_t end_time_ms = ObTimeUtility::current_time_ms();
+  LOG_TRACE("Finish split multi ranges",
+            KR(ret),
+            K(end_time_ms - start_time_ms),
+            K(expected_task_count),
+            K(multi_range_split_array));
+  return ret;
+}
+
+template <typename ObRange>
+int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
+    const ObIArray<ObStoreRange> &ranges,
     const int64_t expected_task_count,
     const ObITableReadInfo &index_read_info,
     ObTableStoreIterator &table_iter,
-    common::ObIAllocator &allocator,
-    common::ObArrayArray<common::ObStoreRange> &multi_range_split_array)
+    ObIAllocator &allocator,
+    ObArrayArray<ObRange> &multi_range_split_array,
+    const bool for_compaction,
+    const int64_t max_time,
+    const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObITable *, DEFAULT_STORE_CNT_IN_STORAGE> tables;
-  int64_t fast_range_array_cnt = 0;
+
+  ObSEArray<ObITable *, 8> tables;
+
   multi_range_split_array.reset();
 
-  if (OB_UNLIKELY(0 == table_iter.count() || expected_task_count <= 0)) {
+  if (OB_UNLIKELY(!table_iter.is_valid() || !index_read_info.is_valid() || max_time <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to get split multi ranges", K(ret), K(table_iter),
-                K(range_array), K(expected_task_count));
-  } else if (range_array.empty()) {
+    LOG_WARN("Invalid argument to get split multi ranges", KR(ret), K(table_iter));
+  } else if (ranges.empty()) {
     // do nothing
-  } else if (OB_UNLIKELY(expected_task_count == 1)) {
-    STORAGE_LOG(DEBUG, "Unexpected only one split task", K(expected_task_count), K(range_array));
-    fast_range_array_cnt = 1;
-  } else if (OB_FAIL(get_split_tables(table_iter, tables))) {
-    STORAGE_LOG(WARN, "Failed to get split tables", K(ret), K(table_iter));
-  } else if (tables.empty()) {
-    // only small tables, no need split
-    STORAGE_LOG(DEBUG, "empty split tables", K(table_iter));
-    fast_range_array_cnt = 1;
-  } else {
-    RangeSplitInfoArray range_info_array;
-    int64_t total_size = 0;
-    bool all_single_rowkey = false;
-    if (OB_FAIL(get_range_split_infos(tables, index_read_info, range_array, range_info_array, total_size, all_single_rowkey))) {
-      STORAGE_LOG(WARN, "Failed to get range split info array", K(ret));
-    } else if (total_size == 0) {
-      STORAGE_LOG(DEBUG, "too small tables to split range", K(total_size), K(range_info_array));
-      fast_range_array_cnt = 1;
-    } else if (all_single_rowkey) {
-      fast_range_array_cnt = MIN(range_array.count(), expected_task_count);
-    } else if (OB_FAIL(split_multi_ranges(range_info_array, expected_task_count, total_size, allocator,
-                                          multi_range_split_array))) {
-      STORAGE_LOG(WARN, "Failed to split multi ranges", K(ret));
-    }
+  } else if (OB_FAIL(get_tables(table_iter, tables))) {
+    LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
+  } else if (OB_FAIL(get_split_multi_ranges(ranges,
+                                            expected_task_count,
+                                            index_read_info,
+                                            tables,
+                                            allocator,
+                                            multi_range_split_array,
+                                            for_compaction,
+                                            max_time,
+                                            range_precision))) {
+    LOG_WARN("Fail to split multi ranges", KR(ret), K(table_iter));
   }
 
-  if (OB_SUCC(ret) && fast_range_array_cnt > 0) {
-    if (OB_FAIL(fast_build_range_array(range_array, fast_range_array_cnt, allocator, multi_range_split_array))) {
-      STORAGE_LOG(WARN, "Failed to build single range array", K(ret));
-    }
-  }
-
-  STORAGE_LOG(TRACE, "finish split multi ranges", K(ret), K(expected_task_count), K(range_array), K(multi_range_split_array.count()), K(multi_range_split_array));
   return ret;
 }
 
-int ObPartitionMultiRangeSpliter::get_range_split_infos(ObIArray<ObITable *> &tables,
-                                                        const ObITableReadInfo &index_read_info,
-                                                        const ObIArray<ObStoreRange> &range_array,
-                                                        RangeSplitInfoArray &range_info_array,
-                                                        int64_t &total_size,
-                                                        bool &all_single_rowkey)
-{
-  int ret = OB_SUCCESS;
-  all_single_rowkey = true;
+template int ObPartitionMultiRangeSpliter::get_split_multi_ranges(const ObIArray<ObStoreRange> &,
+                                                                  const int64_t,
+                                                                  const ObITableReadInfo &,
+                                                                  ObTableStoreIterator &,
+                                                                  ObIAllocator &,
+                                                                  ObArrayArray<ObStoreRange> &,
+                                                                  const bool,
+                                                                  const int64_t,
+                                                                  const int64_t);
 
-  if (OB_UNLIKELY(tables.empty() || range_array.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to get range split info", K(ret), K(tables), K(range_array));
-  } else {
-    ObRangeSplitInfo range_info;
-    const int64_t sample_cnt = MAX(1, range_array.count() / RANGE_COUNT_THRESOLD);
-    for (int64_t i = 0; OB_SUCC(ret) && i < range_array.count(); i++) {
-      const bool need_sample = i < RANGE_COUNT_THRESOLD
-                              || ((i - RANGE_COUNT_THRESOLD) % sample_cnt == 0);
-      if (range_array.at(i).is_single_rowkey()) {
-        range_info.reset();
-        range_info.store_range_ = &range_array.at(i);
-        range_info.tables_ = &tables;
-        range_info.index_read_info_ = &index_read_info;
-        range_info.total_size_ = DEFAULT_MICRO_BLOCK_SIZE;
-        range_info.max_macro_block_count_ = 1;
-        range_info.max_estimate_micro_block_cnt_ = 1;
-      } else if (need_sample) {
-        range_info.reset();
-        range_spliter_.reset();
-        all_single_rowkey = false;
-        if (OB_FAIL(range_spliter_.get_range_split_info(
-                tables, index_read_info, range_array.at(i), range_info))) {
-          STORAGE_LOG(WARN, "Failed to get range split info", K(ret), K(i), K(range_array.at(i)));
-        }
-      } else {
-        all_single_rowkey = false;
-        range_info.store_range_ = &range_array.at(i);
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(range_info_array.push_back(range_info))) {
-        STORAGE_LOG(WARN, "Failed to push back range info", K(ret), K(range_info));
-      } else {
-        STORAGE_LOG(DEBUG, "get single range split info", K(range_info));
-        total_size += range_info.total_size_;
-      }
-    }
-    STORAGE_LOG(DEBUG, "get total range split info", K(total_size), K(tables), K(range_info_array));
-  }
-  return ret;
-}
+template int ObPartitionMultiRangeSpliter::get_split_multi_ranges(const ObIArray<ObStoreRange> &,
+                                                                  const int64_t,
+                                                                  const ObITableReadInfo &,
+                                                                  ObTableStoreIterator &,
+                                                                  ObIAllocator &,
+                                                                  ObArrayArray<ObDatumRange> &,
+                                                                  const bool,
+                                                                  const int64_t,
+                                                                  const int64_t);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

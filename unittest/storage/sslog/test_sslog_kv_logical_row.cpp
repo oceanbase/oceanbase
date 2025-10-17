@@ -11,6 +11,7 @@
  */
 #include "lib/ob_errno.h"
 #include "share/ob_errno.h"
+#include "share/scn.h"
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -96,26 +97,6 @@ private:
 
 TEST_F(TestSSLogKVLogicalRow, basic_insert)
 {
-  // ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
-  // std::string meta_key_str("ID_META");
-  // ObString META_KEY;
-  // META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
-  //
-  // std::string meta_val_str("ID_META_TEST_VAL");
-  // std::string extra_info_str("ID_META_EXTRA_INFO");
-  // ObString META_VAL;
-  // ObString EXTRA_INFO;
-  // META_VAL.assign_ptr(meta_val_str.c_str(), meta_val_str.size());
-  // EXTRA_INFO.assign_ptr(extra_info_str.c_str(), extra_info_str.size());
-  //
-  // const bool IS_PREFIX_READ = false;
-  //
-  // ObSSLogTableLogicalRow logical_row;
-  //
-  // ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
-  // ASSERT_EQ(logical_row.insert_new_row(META_VAL, EXTRA_INFO), OB_SUCCESS);
-  // ASSERT_EQ(logical_row.insert_new_row(META_VAL, EXTRA_INFO), OB_ENTRY_EXIST);
-
   INIT_AND_INSERT_ROW(1, OB_SUCCESS);
   INIT_AND_INSERT_ROW(1, OB_ENTRY_EXIST);
 
@@ -136,50 +117,63 @@ TEST_F(TestSSLogKVLogicalRow, basic_update)
 
   INIT_AND_UPDATE_ROW(1, 4, update_param);
 
-  // ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
-  // std::string meta_key_str("ID_META_1");
-  // ObString META_KEY;
-  // META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
-  //
-  // std::string meta_val_str("ID_META_TEST_VAL");
-  // std::string meta_val_str_V2("ID_META_TEST_VAL_V2");
-  // std::string meta_val_str_V3("ID_META_TEST_VAL_V3");
-  // std::string meta_val_str_V4("ID_META_TEST_VAL_V4");
-  // std::string extra_info_str("ID_META_EXTRA_INFO");
-  // std::string extra_info_str_V2("ID_META_EXTRA_INFO_V2");
-  // std::string extra_info_str_V4("ID_META_EXTRA_INFO_V4");
-  // ObString META_VAL;
-  // ObString META_VAL_V2;
-  // ObString META_VAL_V3;
-  // ObString META_VAL_V4;
-  // ObString EXTRA_INFO;
-  // ObString EXTRA_INFO_V2;
-  // ObString EXTRA_INFO_V4;
-  // META_VAL.assign_ptr(meta_val_str.c_str(), meta_val_str.size());
-  // META_VAL_V2.assign_ptr(meta_val_str_V2.c_str(), meta_val_str_V2.size());
-  // META_VAL_V3.assign_ptr(meta_val_str_V3.c_str(), meta_val_str_V3.size());
-  // META_VAL_V4.assign_ptr(meta_val_str_V4.c_str(), meta_val_str_V4.size());
-  // EXTRA_INFO.assign_ptr(extra_info_str.c_str(), extra_info_str.size());
-  // EXTRA_INFO_V2.assign_ptr(extra_info_str_V2.c_str(), extra_info_str_V2.size());
-  // EXTRA_INFO_V4.assign_ptr(extra_info_str_V4.c_str(), extra_info_str_V4.size());
-  //
-  // const bool IS_PREFIX_READ = false;
-  //
-  // ObSSLogTableLogicalRow logical_row;
-  //
-  // ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
-  // ASSERT_EQ(logical_row.insert_new_row(META_VAL, EXTRA_INFO), OB_ENTRY_EXIST);
-  //
-  // std::string extra_info_for_check("ID_META_EXTRA_INFO_V2");
-  // ObString EXTRA_INFO_FOR_CHECK;
-  // EXTRA_INFO_FOR_CHECK.assign_ptr(extra_info_for_check.c_str(), extra_info_for_check.length());
-  // ObSSLogWriteParam update_param(false, false, EXTRA_INFO_FOR_CHECK);
-  //
-  // ASSERT_EQ(logical_row.update_row(update_param, META_VAL_V2, EXTRA_INFO_V2), OB_SUCCESS);
-  // ASSERT_EQ(logical_row.update_row(update_param, META_VAL_V3, EXTRA_INFO), OB_SUCCESS);
-  // ASSERT_EQ(logical_row.update_row(update_param, META_VAL_V4, EXTRA_INFO_V4), OB_SUCCESS);
-
   PALF_KV.print_all_kv("UPDATE_VAL");
+}
+
+TEST_F(TestSSLogKVLogicalRow, update_without_watch_key)
+{
+  std::string extra_info_for_check("ID_META_EXTRA_INFO_V2");
+  ObString EXTRA_INFO_FOR_CHECK;
+  EXTRA_INFO_FOR_CHECK.assign_ptr(extra_info_for_check.c_str(), extra_info_for_check.length());
+  ObSSLogWriteParam update_param(false, false, EXTRA_INFO_FOR_CHECK);
+  INIT_AND_INSERT_ROW(1, OB_SUCCESS);
+  INIT_AND_UPDATE_ROW(1, 2, update_param);
+  INIT_AND_UPDATE_ROW(1, 3, update_param);
+  INIT_AND_UPDATE_ROW(1, 4, update_param);
+
+
+  PALF_KV.watch_key_errsim_ = true;
+  const int before_watch_kv_cnt = PALF_KV.map_.size();
+
+  // -- update 5
+  ObSSLogMetaType META_TYPE_1 = ObSSLogMetaType::SSLOG_LS_META;
+  std::string meta_key_str_1("ID_META_1");
+  ObString META_KEY_1;
+  META_KEY_1.assign_ptr(meta_key_str_1.c_str(), meta_key_str_1.size());
+
+  std::string meta_val_str_1("ID_META_TEST_VAL_5");
+  std::string extra_info_str_1("ID_META_EXTRA_INFO_5");
+  ObString META_VAL_1;
+  ObString EXTRA_INFO_1;
+  META_VAL_1.assign_ptr(meta_val_str_1.c_str(), meta_val_str_1.size());
+  EXTRA_INFO_1.assign_ptr(extra_info_str_1.c_str(), extra_info_str_1.size());
+
+  const bool IS_PREFIX_READ_1 = false;
+
+  ObSSLogTableLogicalRow logical_row_1;
+  ASSERT_EQ(logical_row_1.init(&PALF_KV, META_TYPE_1, META_KEY_1, IS_PREFIX_READ_1), OB_SUCCESS);
+  ASSERT_EQ(logical_row_1.update_row(update_param, META_VAL_1, EXTRA_INFO_1), OB_ENTRY_NOT_EXIST);
+
+  PALF_KV.watch_key_errsim_ = false;
+
+  PALF_KV.print_all_kv("UPDATE_WITH_WATCH_KEY_ERROR");
+
+  // -- GC unused version
+  const uint64_t tenant_id = 500;
+  share::SCN max_gc_scn = share::SCN::min_scn();
+  ObMockFirstVersionIterator first_version_iter(tenant_id, &PALF_KV);
+  ObMockUserKeyAllVersionBaseIterator user_key_version_iter(tenant_id);
+  user_key_version_iter.delay_unused_kv_gc_time_ = 0;
+  ASSERT_EQ(OB_SUCCESS, ObPhysicalRowInnerTool::gc_data_version_kv(
+                            &PALF_KV, &first_version_iter, &user_key_version_iter, max_gc_scn));
+
+  // retry update 5
+  INIT_AND_UPDATE_ROW(1, 5, update_param);
+
+  const int after_watch_kv_cnt = PALF_KV.map_.size();
+
+  ASSERT_EQ(after_watch_kv_cnt, before_watch_kv_cnt + 1);
+
 }
 
 TEST_F(TestSSLogKVLogicalRow, basic_delete)

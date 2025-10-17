@@ -23,6 +23,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "sql/engine/table/ob_odps_table_utils.h"
+#include "sql/engine/connector/ob_odps_jni_connector.h"
 
 namespace oceanbase {
 namespace sql {
@@ -30,7 +31,6 @@ namespace sql {
 class ObODPSTableRowIterator : public ObExternalTableRowIterator {
 public:
   static const int64_t READER_HASH_MAP_BUCKET_NUM = 1 << 7;
-  static const int64_t ODPS_BLOCK_DOWNLOAD_SIZE = 1 << 18;
 public:
   struct StateValues {
     StateValues() :
@@ -91,15 +91,50 @@ public:
   };
 
   struct OdpsColumn {
-    OdpsColumn() {}
-    OdpsColumn(std::string name, apsara::odps::sdk::ODPSColumnTypeInfo type_info) :
-      name_(name),
-      type_info_(type_info)
-    {
-    }
     std::string name_;
     apsara::odps::sdk::ODPSColumnTypeInfo type_info_;
+    const apsara::odps::sdk::ODPSColumnTypeInfo* this_type_info_;
+    bool is_child_; // 指向父级type_info的指针
+    OdpsColumn();
+    OdpsColumn(const std::string name, const apsara::odps::sdk::ODPSColumnTypeInfo& type_info);
+    // shallow copy of name_ the variable cannot live longer than the object
+    OdpsColumn operator=(const OdpsColumn& other);
+    OdpsColumn(const OdpsColumn& other);
+
+    const ObString get_name() const {
+      return ObString(name_.c_str());
+    }
+
+    bool is_child() const { return is_child_; }
+
+
+    int32_t get_precision() const {
+      return this_type_info_->mPrecision;
+    }
+
+    int32_t get_scale() const {
+      return this_type_info_->mScale;
+    }
+
+    int32_t get_length() const {
+      return this_type_info_->mSpecifiedLength;
+    }
+
+    int32_t get_child_columns_size() const {
+      return this_type_info_->mSubTypes.size();
+    }
+    const OdpsColumn get_child_column(int32_t index) const;
+    ObOdpsJniConnector::OdpsType get_odps_type() const;
+
     TO_STRING_KV(K(ObString(name_.c_str())), K(type_info_.mType), K(type_info_.mPrecision), K(type_info_.mScale), K(type_info_.mSpecifiedLength));
+  private:
+    OdpsColumn(const apsara::odps::sdk::ODPSColumnTypeInfo* type_info) :
+      this_type_info_(type_info)
+    {
+      name_ = "";
+      is_child_ = true;
+    }
+
   };
 public:
   ObODPSTableRowIterator() :
@@ -153,7 +188,10 @@ public:
   }
   virtual void reset() override;
   int init_tunnel(const sql::ObODPSGeneralFormat &odps_format, bool need_decrypt = true);
-  int create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader);
+  int create_downloader(const ObString &part_spec, apsara::odps::sdk::IDownloadPtr &downloader, const ObString &session_id);
+  apsara::odps::sdk::IODPSTablePtr get_table_handle() {
+    return table_handle_;
+  }
   int pull_partition_info();
   inline ObIArray<OdpsPartition>& get_partition_info() { return partition_list_; }
   inline bool is_part_table() { return is_part_table_; }
@@ -215,6 +253,7 @@ class ObOdpsPartitionDownloaderMgr
 {
 public:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> OdpsMgrMap;
+  ObOdpsPartitionDownloaderMgr() : inited_(false), is_download_(true) {}
   struct OdpsPartitionDownloader {
     OdpsPartitionDownloader() :
       odps_driver_(),
@@ -250,6 +289,36 @@ public:
     OB_INLINE bool err_occurred() { return err_ != ErrType::SUCCESS; }
     OB_INLINE int get_err() { return static_cast<int>(err_); }
   };
+  int init_downloader(int64_t bucket_size);
+  /*0 get row count, 1 get size*/
+  static int init_odps_driver(const bool get_part_table_size, ObSQLSessionInfo *session,
+                              const ObString &properties, ObODPSTableRowIterator &odps_driver);
+  static int fetch_row_count(const ObString &part_spec,
+                             const bool get_part_table_size,
+                             ObODPSTableRowIterator &odps_driver,
+                             int64_t &row_count);
+  OB_INLINE OdpsMgrMap &get_odps_map() { return odps_mgr_map_; }
+  OB_INLINE ObIAllocator &get_allocator() { return fifo_alloc_; }
+
+
+  int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader);
+
+  int reset();
+  OB_INLINE bool is_download_mgr_inited() { return inited_ && is_download_; }
+
+private:
+  bool inited_;
+  bool is_download_;
+  OdpsMgrMap odps_mgr_map_;
+  common::ObConcurrentFIFOAllocator fifo_alloc_;
+  common::ObArenaAllocator arena_alloc_;
+ };
+
+class ObOdpsPartitionUploaderMgr
+{
+public:
+  typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::SpinReadWriteDefendMode> OdpsMgrMap;
+  ObOdpsPartitionUploaderMgr() :  need_commit_(true), inited_(false), ref_(0) {}
   struct OdpsUploader {
     OdpsUploader() : upload_(NULL), record_writer_(NULL) {}
     ~OdpsUploader() {
@@ -259,32 +328,17 @@ public:
     apsara::odps::sdk::IUploadPtr upload_;
     apsara::odps::sdk::IRecordWriterPtr record_writer_;
   };
-  ObOdpsPartitionDownloaderMgr() : inited_(false), is_download_(true), ref_(0), need_commit_(true) {}
-  int init_downloader(int64_t bucket_size);
-  OB_INLINE OdpsMgrMap &get_odps_map() { return odps_mgr_map_; }
-  OB_INLINE ObIAllocator &get_allocator() { return fifo_alloc_; }
-  int init_uploader(const ObString &properties,
+  int init_uploader(const sql::ObODPSGeneralFormat &odps_format,
                     const ObString &external_partition,
                     bool is_overwrite,
                     int64_t parallel);
-  static int fetch_row_count(uint64_t tenant_id,
-                             const ObString &properties,
-                             ObIArray<ObExternalFileInfo> &external_table_files,
-                             bool &use_partition_gi);
-  static int fetch_row_count(const ObString part_spec,
-                             const ObString &properties,
-                             int64_t &row_count);
   static int create_upload_session(const sql::ObODPSGeneralFormat &odps_format,
                                    const ObString &external_partition,
                                    bool is_overwrite,
                                    apsara::odps::sdk::IUploadPtr &upload);
-  int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader);
   int get_odps_uploader(int64_t block_id,
                         apsara::odps::sdk::IUploadPtr &upload,
                         apsara::odps::sdk::IRecordWriterPtr &record_writer);
-  int commit_upload();
-  int reset();
-  OB_INLINE bool is_download_mgr_inited() { return inited_ && is_download_; }
   inline int64_t inc_ref()
   {
     return ATOMIC_FAA(&ref_, 1);
@@ -297,14 +351,14 @@ public:
   {
     ATOMIC_STORE(&need_commit_, false);
   }
+  int commit_upload();
+  int reset();
+  bool need_commit_;
 private:
   bool inited_;
-  bool is_download_;
-  OdpsMgrMap odps_mgr_map_;
-  common::ObConcurrentFIFOAllocator fifo_alloc_;
-  common::ObArenaAllocator arena_alloc_;
   int64_t ref_;
-  bool need_commit_;
+  OdpsMgrMap odps_mgr_map_;
+  common::ObArenaAllocator arena_alloc_;
 };
 
 } // sql

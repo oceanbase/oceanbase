@@ -28,10 +28,12 @@ thread_local int64_t Thread::loop_ts_ = 0;
 thread_local pthread_t Thread::thread_joined_ = 0;
 thread_local int64_t Thread::sleep_us_ = 0;
 thread_local int64_t Thread::blocking_ts_ = 0;
+thread_local bool Thread::is_doing_ddl_ = false;
 thread_local ObAddr Thread::rpc_dest_addr_;
 thread_local obrpc::ObRpcPacketCode Thread::pcode_ = obrpc::ObRpcPacketCode::OB_INVALID_RPC_CODE;
 thread_local uint8_t Thread::wait_event_ = 0;
 thread_local Thread* Thread::current_thread_ = nullptr;
+thread_local int64_t Thread::event_no_ = 0;
 int64_t Thread::total_thread_count_ = 0;
 
 Thread &Thread::current()
@@ -383,7 +385,7 @@ int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
     if ((fd = ::open(stat_path, O_RDONLY)) < 0) {
       ret = OB_IO_ERROR;
       LOG_WARN("open file error", K((const char *)stat_path), K(errno), KERRMSG, K(ret));
-    } else if ((read_size = read(fd, stat_content, MAX_LINE_LENGTH)) < 0) {
+    } else if ((read_size = read(fd, stat_content, MAX_LINE_LENGTH - 1)) < 0) {
       ret = OB_IO_ERROR;
       LOG_WARN("read file error",
           K((const char *)stat_path),
@@ -393,7 +395,8 @@ int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
           KERRMSG,
           K(ret));
     } else {
-      // do nothing
+      // make sure stat_content is null terminated
+      stat_content[read_size] = '\0';
     }
     if (fd >= 0) {
       close(fd);

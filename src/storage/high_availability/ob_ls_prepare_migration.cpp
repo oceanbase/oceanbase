@@ -237,9 +237,9 @@ bool ObLSPrepareMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSPrepareMigrationDagNet::hash() const
+uint64_t ObLSPrepareMigrationDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
@@ -297,7 +297,6 @@ int ObLSPrepareMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_le
 int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
   ObLSMigrationHandler *ls_migration_handler = nullptr;
@@ -307,24 +306,28 @@ int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls prepare migration dag net do not init", K(ret));
-  } else if (OB_FAIL(ctx_.get_result(result))) {
-    LOG_WARN("failed to get result", K(ret), K(ctx_));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("ls should not be NULL", K(ret), K(ctx_));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), K(ctx_));
   } else {
-    if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
-    } else if (OB_TMP_FAIL(ls_migration_handler->set_result(result))) {
-      LOG_WARN("failed to set result", K(ret), K(tmp_ret), K(ctx_));
+    if (OB_FAIL(ctx_.get_result(result))) {
+      LOG_WARN("failed to get result", K(ret), K(ctx_));
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
+      LOG_WARN("failed to set result", K(ret), K(ctx_));
     }
 
     ctx_.finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_.finish_ts_ - ctx_.start_ts_;
     FLOG_INFO("finish ls prepare migration dag net", "ls id", ctx_.arg_.ls_id_, "type", ctx_.arg_.type_, K(cost_ts));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -379,10 +382,10 @@ bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObPrepareMigrationDag::hash() const
+uint64_t ObPrepareMigrationDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ha_dag_net_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_));

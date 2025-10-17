@@ -19,7 +19,7 @@
 | ObNormalDllUdfRawExpr | 712 |
 | ObCollectionConstructRawExpr | 584 |
 | ObObjectConstructRawExpr | 712 |
-| ObUDFRawExpr | 1552 |
+| ObUDFRawExpr | 1776 |
 | ObPLIntegerCheckerRawExpr | 248 |
 | ObPLGetCursorAttrRawExpr | 280 |
 | ObPLSQLCodeSQLErrmRawExpr | 256 |
@@ -30,9 +30,9 @@
 | ObMultiSetRawExpr | 240 |
 | ObCollPredRawExpr | 240 |
 | ObWinFunRawExpr | 680 |
-| ObPseudoColumnRawExpr | 232 |
+| ObPseudoColumnRawExpr | 240 |
 | ObOpPseudoColumnRawExpr | 184 |
-| ObMatchFunRawExpr | 464 |
+| ObMatchFunRawExpr | 744 |
 | ObUnpivotRawExpr | 360 |
 | ObPlQueryRefRawExpr | 512 |
 | ObUDTConstructorRawExpr | 496 |

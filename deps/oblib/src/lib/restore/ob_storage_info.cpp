@@ -327,9 +327,8 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
     ret = OB_INIT_TWICE;
     LOG_WARN("storage info init twice", K(ret));
   } else if (FALSE_IT(device_type_ = device_type)){
-
-  } else if (OB_ISNULL(storage_info)) {
-    // file/hdfs的storage info为空时传进来的会是个空指针
+  } else if (OB_ISNULL(storage_info) || strlen(storage_info) == 0) {
+    // when device_type is file or hdfs, storage_info can be empty
     if (OB_STORAGE_FILE != device_type_ && OB_STORAGE_HDFS != device_type_) {
       ret = OB_INVALID_BACKUP_DEST;
       LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
@@ -337,17 +336,21 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else if (strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
-  } else if (0 == strlen(storage_info)) {
-    // Only file/hdfs storage could be with empty storage_info.
-    if (OB_STORAGE_FILE != device_type_ && OB_STORAGE_HDFS != device_type_) {
-      ret = OB_INVALID_BACKUP_DEST;
-      LOG_WARN("storage info is empty", K(ret), K_(device_type));
+  } else {
+    if (OB_STORAGE_AZBLOB == device_type_) {
+      if (OB_ISNULL(cluster_state_mgr_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("cluster_version_mgr is null", K(ret), KP(cluster_state_mgr_));
+      } else if (OB_FAIL(cluster_state_mgr_->is_supported_azblob_version())) {
+        LOG_WARN("azblob version is not supported", K(ret), K(device_type));
+      }
     }
-  } else if (OB_FAIL(parse_storage_info_(storage_info, has_needed_extension))) {
-    LOG_WARN("parse storage info failed", K(ret), KP(storage_info), K_(device_type));
-  } else if (OB_FAIL(validate_arguments())) {
-    ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("invalid arguments after parse storage info", K(ret), KPC(this));
+
+    if (FAILEDx(parse_storage_info_(storage_info, has_needed_extension))) {
+      LOG_WARN("parse storage info failed", K(ret), KP(storage_info), K_(device_type));
+    } else if (OB_FAIL(validate_arguments())) {
+      LOG_WARN("invalid arguments after parse storage info", K(ret), KPC(this));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -521,7 +524,9 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           LOG_WARN("failed to set enable worm", K(ret), K(token));
         }
       } else if (0 == strncmp(ROLE_ARN, token, strlen(ROLE_ARN))) {
-        if (ObStorageType::OB_STORAGE_FILE == device_type_) {
+        if (ObStorageType::OB_STORAGE_FILE == device_type_
+            || ObStorageType::OB_STORAGE_AZBLOB == device_type_
+            || is_use_obdal()) {
           ret = OB_INVALID_BACKUP_DEST;
           LOG_WARN("OB_STORAGE_FILE don't support assume role yet",
               K(ret), K_(device_type), KP(token));
@@ -642,11 +647,29 @@ bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
       || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
 }
 
-bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type)
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type)
 {
-  return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO
-      || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+  bool ret = true;
+  if (storage_type == OB_STORAGE_S3) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_CRC32_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  } else if (storage_type == OB_STORAGE_OSS) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  } else if (storage_type == OB_STORAGE_AZBLOB) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  } else {
+    ret = false;
+  }
+  return ret;
 }
 
 int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
@@ -728,20 +751,7 @@ int ObObjectStorageInfo::clone(
     common::ObIAllocator &allocator,
     ObObjectStorageInfo *&storage_info) const
 {
-  int ret = OB_SUCCESS;
-  storage_info = nullptr;
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("storage info is invalid", K(ret), KPC(this));
-  } else if (OB_ISNULL(storage_info = OB_NEWx(ObObjectStorageInfo, &allocator))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new ObObjectStorageInfo", K(ret), KPC(this));
-  } else if (OB_FAIL(storage_info->ObObjectStorageInfo::assign(*this))) {
-    LOG_WARN("fail to assign storage info", K(ret), KPC(this));
-    OB_DELETEx(ObObjectStorageInfo, &allocator, storage_info);
-    storage_info = nullptr;
-  }
-  return ret;
+  return clone_impl_<ObObjectStorageInfo>(allocator, *this, storage_info);
 }
 
 int ObObjectStorageInfo::get_info_str_(char *storage_info, const int64_t info_len) const

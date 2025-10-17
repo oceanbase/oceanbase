@@ -1545,18 +1545,17 @@ Warnings:
 Warning	1292	Truncated incorrect DECIMAL value: 'B'
 explain select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
 Query Plan
-==========================================================
-|ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |       |14      |6           |
-|1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
-|2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
-==========================================================
+=========================================================
+|ID|OPERATOR              |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |HASH RIGHT OUTER JOIN |       |14      |8           |
+|1 |├─TABLE FULL SCAN     |t8(idx)|6       |3           |
+|2 |└─TABLE FULL SCAN     |t9(idx)|7       |3           |
+=========================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.b], [t8.c], [t9.b], [t9.c]), filter(nil), rowset=16
       equal_conds([t8.b = t9.b]), other_conds(nil)
-      merge_directions([ASC])
   1 - output([t8.b], [t8.c]), filter(nil), rowset=16
       access([t8.b], [t8.c]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -1567,39 +1566,39 @@ Outputs & filters:
       range_key([t9.b], [t9.c], [t9.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+leading(t8, t9)*/ t8.b,t8.c,t9.b,t9.c from t8 right join t9 on t8.b = t9.b;
 b	c	b	c
-2	1	2	1
-2	2	2	1
 2	3	2	1
-2	1	2	2
-2	2	2	2
 2	3	2	2
-2	1	2	3
-2	2	2	3
 2	3	2	3
 NULL	NULL	3	1
-4	1	4	1
-4	2	4	1
 4	3	4	1
-4	1	4	2
-4	2	4	2
 4	3	4	2
-4	1	4	3
-4	2	4	3
 4	3	4	3
+2	2	2	1
+2	2	2	2
+2	2	2	3
+4	2	4	1
+4	2	4	2
+4	2	4	3
+2	1	2	1
+2	1	2	2
+2	1	2	3
+4	1	4	1
+4	1	4	2
+4	1	4	3
 ************ 测试left join
 
 explain select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 Query Plan
-=========================================================
-|ID|OPERATOR                 |NAME|EST.ROWS|EST.TIME(us)|
----------------------------------------------------------
-|0 |SORT                     |    |13      |14          |
-|1 |└─MERGE RIGHT OUTER JOIN |    |13      |10          |
-|2 |  ├─SORT                 |    |5       |4           |
-|3 |  │ └─TABLE FULL SCAN    |t7  |5       |3           |
-|4 |  └─SORT                 |    |13      |6           |
-|5 |    └─TABLE FULL SCAN    |t2  |13      |3           |
-=========================================================
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |SORT                 |    |13      |15          |
+|1 |└─MERGE OUTER JOIN   |    |13      |11          |
+|2 |  ├─SORT             |    |13      |6           |
+|3 |  │ └─TABLE FULL SCAN|t2  |13      |3           |
+|4 |  └─SORT             |    |5       |4           |
+|5 |    └─TABLE FULL SCAN|t7  |5       |3           |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t2.a], [t2.b], [t2.c], [t7.a], [t7.b], [t7.c], [t7.d]), filter(nil), rowset=16
@@ -1607,18 +1606,18 @@ Outputs & filters:
   1 - output([t2.a], [t2.b], [t7.a], [t7.b], [t2.c], [t7.c], [t7.d]), filter(nil), rowset=16
       equal_conds([cast(t2.b, DECIMAL(-1, -1)) = cast(t7.a, DECIMAL(10, 0))], [t2.c = t7.d]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  2 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=16
-      sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
-  3 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=16
-      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t7.__pk_increment]), range(MIN ; MAX)always true
-  4 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=16
+  2 - output([t2.a], [t2.b], [t2.c], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=16
       sort_keys([cast(t2.b, DECIMAL(-1, -1)), ASC], [t2.c, ASC])
-  5 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=16
+  3 - output([t2.b], [t2.c], [t2.a], [cast(t2.b, DECIMAL(-1, -1))]), filter(nil), rowset=16
       access([t2.b], [t2.c], [t2.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t7.a], [t7.b], [t7.c], [t7.d], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=16
+      sort_keys([cast(t7.a, DECIMAL(10, 0)), ASC], [t7.d, ASC])
+  5 - output([t7.a], [t7.d], [t7.b], [t7.c], [cast(t7.a, DECIMAL(10, 0))]), filter(nil), rowset=16
+      access([t7.a], [t7.d], [t7.b], [t7.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t7.__pk_increment]), range(MIN ; MAX)always true
 select /*+use_merge(t2,t7)*/* from t2 left join t7 on t2.b = t7.a and t2.c = t7.d order by t2.a,t2.b,t7.a,t7.b;
 a	b	c	a	b	c	d
 1	1	1.0000000000	NULL	NULL	NULL	NULL
@@ -1856,26 +1855,26 @@ a	b	c	a	b	c
 6	4	3	NULL	NULL	NULL
 explain select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
 Query Plan
-==========================================================
-|ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |       |8       |6           |
-|1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
-|2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
-==========================================================
+====================================================
+|ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |MERGE OUTER JOIN |       |8       |7           |
+|1 |├─TABLE FULL SCAN|t9(idx)|7       |3           |
+|2 |└─TABLE FULL SCAN|t8(idx)|6       |3           |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
       equal_conds([t8.b = t9.b], [t8.c = t9.c]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  1 - output([t8.a], [t8.c], [t8.b]), filter(nil), rowset=16
-      access([t8.a], [t8.c], [t8.b]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t8.b], [t8.c], [t8.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  2 - output([t9.a], [t9.c], [t9.b]), filter(nil), rowset=16
+  1 - output([t9.a], [t9.c], [t9.b]), filter(nil), rowset=16
       access([t9.a], [t9.c], [t9.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t9.b], [t9.c], [t9.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  2 - output([t8.a], [t8.c], [t8.b]), filter(nil), rowset=16
+      access([t8.a], [t8.c], [t8.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t8.b], [t8.c], [t8.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
 a	b	c	a	b	c
 1	2	1	1	2	1
@@ -1887,32 +1886,32 @@ NULL	NULL	NULL	4	3	1
 6	4	3	7	4	3
 explain select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 right join t9 on t8.a = t9.b and t8.b = t9.a;
 Query Plan
-==========================================================
-|ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |       |7       |8           |
-|1 |├─SORT                 |       |6       |4           |
-|2 |│ └─TABLE FULL SCAN    |t8(idx)|6       |3           |
-|3 |└─SORT                 |       |7       |4           |
-|4 |  └─TABLE FULL SCAN    |t9(idx)|7       |3           |
-==========================================================
+======================================================
+|ID|OPERATOR           |NAME   |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |MERGE OUTER JOIN   |       |7       |8           |
+|1 |├─SORT             |       |7       |4           |
+|2 |│ └─TABLE FULL SCAN|t9(idx)|7       |3           |
+|3 |└─SORT             |       |6       |4           |
+|4 |  └─TABLE FULL SCAN|t8(idx)|6       |3           |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
-      equal_conds([t8.b = t9.a], [t8.a = t9.b]), other_conds(nil)
+      equal_conds([t8.a = t9.b], [t8.b = t9.a]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  1 - output([t8.a], [t8.b], [t8.c]), filter(nil), rowset=16
-      sort_keys([t8.b, ASC], [t8.a, ASC]), prefix_pos(1)
-  2 - output([t8.a], [t8.b], [t8.c]), filter(nil), rowset=16
-      access([t8.a], [t8.b], [t8.c]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t8.b], [t8.c], [t8.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  3 - output([t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
-      sort_keys([t9.a, ASC])
-  4 - output([t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
+  1 - output([t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
+      sort_keys([t9.b, ASC], [t9.a, ASC]), prefix_pos(1)
+  2 - output([t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
       access([t9.a], [t9.b], [t9.c]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t9.b], [t9.c], [t9.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  3 - output([t8.a], [t8.b], [t8.c]), filter(nil), rowset=16
+      sort_keys([t8.a, ASC])
+  4 - output([t8.a], [t8.b], [t8.c]), filter(nil), rowset=16
+      access([t8.a], [t8.b], [t8.c]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t8.b], [t8.c], [t8.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+index(t8 idx), index(t9 idx), use_merge(t8 t9)*/ * from t8 right join t9 on t8.a = t9.b and t8.b = t9.a;
 a	b	c	a	b	c
 NULL	NULL	NULL	1	2	1
@@ -1924,26 +1923,26 @@ NULL	NULL	NULL	6	4	2
 NULL	NULL	NULL	7	4	3
 explain select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
 Query Plan
-==========================================================
-|ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |       |8       |6           |
-|1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
-|2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
-==========================================================
+====================================================
+|ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |MERGE OUTER JOIN |       |8       |7           |
+|1 |├─TABLE FULL SCAN|t9(idx)|7       |3           |
+|2 |└─TABLE FULL SCAN|t8(idx)|6       |3           |
+====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t8.a], [t8.b], [t8.c], [t9.a], [t9.b], [t9.c]), filter(nil), rowset=16
       equal_conds([t8.b = t9.b], [t8.c = t9.c]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  1 - output([t8.a], [t8.c], [t8.b]), filter(nil), rowset=16
-      access([t8.a], [t8.c], [t8.b]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t8.b], [t8.c], [t8.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  2 - output([t9.a], [t9.c], [t9.b]), filter(nil), rowset=16
+  1 - output([t9.a], [t9.c], [t9.b]), filter(nil), rowset=16
       access([t9.a], [t9.c], [t9.b]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t9.b], [t9.c], [t9.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  2 - output([t8.a], [t8.c], [t8.b]), filter(nil), rowset=16
+      access([t8.a], [t8.c], [t8.b]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t8.b], [t8.c], [t8.a]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select /*+use_merge(t8 t9)*/ * from t8 right join t9 on t8.c = t9.c and t8.b = t9.b;
 a	b	c	a	b	c
 1	2	1	1	2	1

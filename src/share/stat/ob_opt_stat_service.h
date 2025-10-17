@@ -20,8 +20,15 @@
 #include "share/stat/ob_opt_ds_stat.h"
 #include "share/stat/ob_opt_ds_stat_cache.h"
 #include "share/stat/ob_opt_system_stat_cache.h"
+#include "share/stat/ob_opt_external_table_stat.h"
+#include "share/stat/ob_opt_external_column_stat.h"
+#include "share/stat/ob_opt_external_table_stat_cache.h"
+#include "share/stat/ob_opt_external_column_stat_cache.h"
 
 namespace oceanbase {
+namespace sql {
+class ObSqlSchemaGuard;
+}
 namespace common {
 class ObOptStatService
 {
@@ -75,7 +82,75 @@ public:
 
   int erase_system_stat(const ObOptSystemStat::Key &key);
 
+  int load_external_table_stat_and_put_cache(const uint64_t tenant_id,
+                                             const uint64_t catalog_id,
+                                             const uint64_t table_id,
+                                             sql::ObSqlSchemaGuard &schema_guard,
+                                             ObIArray<ObString> &key_partition_names,
+                                             const ObIArray<ObString> &all_partition_names,
+                                             ObOptExternalTableStatHandle &handle,
+                                             ObIArray<ObOptExternalColumnStatHandle> &column_handles);
+
+  int get_external_table_stat(const uint64_t tenant_id,
+                              const ObOptExternalTableStat::Key &key,
+                              ObOptExternalTableStatHandle &handle);
+
+  int get_external_column_stat(const uint64_t tenant_id,
+                               const ObOptExternalColumnStat::Key &key,
+                               ObOptExternalColumnStatHandle &handle);
+
+  int get_external_column_stats(const uint64_t tenant_id,
+                                ObIArray<ObOptExternalColumnStat::Key> &keys,
+                                ObIArray<ObOptExternalColumnStatHandle> &handles);
+
 private:
+  /**
+   * @brief Extract all column names from table schema
+   */
+  int extract_column_names_from_table_schema(const share::schema::ObTableSchema &table_schema,
+                                             ObIArray<ObString> &column_names);
+
+  /**
+   * @brief Fetch external table statistics via catalog getter
+   */
+  int fetch_external_table_statistics_from_catalog(ObIAllocator &allocator,
+                                                   sql::ObSqlSchemaGuard &schema_guard,
+                                                   const share::ObILakeTableMetadata *lake_table_metadata,
+                                                   const ObIArray<ObString> &partition_names,
+                                                   const ObIArray<ObString> &column_names,
+                                                   ObOptExternalTableStat *&external_table_stat,
+                                                   ObIArray<ObOptExternalColumnStat *> &external_column_stats);
+
+  /**
+   * @brief Put external table statistics to cache
+   */
+  int put_external_table_stats_to_cache(const uint64_t tenant_id,
+                                        const uint64_t catalog_id,
+                                        const uint64_t table_id,
+                                        const ObIArray<ObString> &partition_names,
+                                        ObOptExternalTableStat *external_table_stat,
+                                        const ObIArray<ObOptExternalColumnStat *> &external_column_stats,
+                                        ObOptExternalTableStatHandle &handle,
+                                        ObIArray<ObOptExternalColumnStatHandle> &column_handles);
+
+  /**
+   * @brief Generate default external table statistics when actual stats are not available
+   */
+  int generate_default_external_table_statistics(ObIAllocator &allocator,
+                                                 const share::ObILakeTableMetadata *lake_table_metadata,
+                                                 const ObIArray<ObString> &partition_names,
+                                                 const ObIArray<ObString> &column_names,
+                                                 ObOptExternalTableStat *&external_table_stat,
+                                                 ObIArray<ObOptExternalColumnStat *> &external_column_stats);
+
+  /**
+   * @brief Generate missing external column statistics for columns that don't have stats
+   */
+  int generate_missing_external_column_statistics(ObIAllocator &allocator,
+                                                  const share::ObILakeTableMetadata *lake_table_metadata,
+                                                  const ObIArray<ObString> &partition_names,
+                                                  const ObIArray<ObString> &column_names,
+                                                  ObIArray<ObOptExternalColumnStat *> &external_column_stats);
   /**
     * 接口load_and_put_cache(key, handle)的实现，外部不应该直接调用这个函数
     * new_entry是在栈上分配的空间，用于临时存放统计信息
@@ -101,7 +176,7 @@ private:
   int batch_load_table_stats_and_put_cache(const uint64_t tenant_id,
                                            ObIArray<const ObOptTableStat::Key *> &keys,
                                            ObIArray<ObOptTableStatHandle> &handles,
-                                           ObSEArray<int64_t, 4> regather_handles_indices);
+                                           ObIArray<int64_t> &regather_handles_indices);
 
 protected:
   bool inited_;
@@ -115,6 +190,8 @@ protected:
   ObOptColumnStatCache column_stat_cache_;
   ObOptDSStatCache ds_stat_cache_;
   ObOptSystemStatCache system_stat_cache_;
+  ObOptExternalTableStatCache external_table_stat_cache_;
+  ObOptExternalColumnStatCache external_column_stat_cache_;
 };
 
 }

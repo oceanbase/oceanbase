@@ -143,7 +143,7 @@ public:
   }
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
@@ -182,7 +182,7 @@ public:
   explicit ObTabletGroupRestoreDag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObTabletGroupRestoreDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   ObTabletGroupRestoreCtx *get_ctx() const { return static_cast<ObTabletGroupRestoreCtx *>(ha_dag_net_ctx_); }
 
@@ -358,7 +358,7 @@ public:
   ObTabletRestoreDag();
   virtual ~ObTabletRestoreDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;

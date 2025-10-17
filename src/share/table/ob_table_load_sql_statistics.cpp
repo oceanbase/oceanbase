@@ -37,9 +37,11 @@ void ObTableLoadSqlStatistics::reset()
   table_stat_array_.reset();
   allocator_.reset();
   sample_helper_.reset();
+  selector_ = nullptr;
+  selector_size_ = 0;
 }
 
-int ObTableLoadSqlStatistics::create(int64_t column_count)
+int ObTableLoadSqlStatistics::create(const int64_t column_count, const int64_t max_batch_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(column_count <= 0)) {
@@ -58,6 +60,15 @@ int ObTableLoadSqlStatistics::create(int64_t column_count)
       ObOptOSGColumnStat *osg_col_stat = nullptr;
       if (OB_FAIL(allocate_col_stat(osg_col_stat))) {
         LOG_WARN("fail to allocate col stat", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret) && max_batch_size > 0) {
+      if (OB_ISNULL(selector_ = static_cast<uint16_t *>(
+                      allocator_.alloc(sizeof(uint16_t) * max_batch_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc mem", KR(ret), K(max_batch_size));
+      } else {
+        selector_size_ = max_batch_size;
       }
     }
   }
@@ -291,6 +302,63 @@ int ObTableLoadSqlStatistics::get_col_stats(ColStatIndMap &col_stats) const
           ret = OB_ENTRY_EXIST;
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSqlStatistics::sample_batch(int64_t &size, const uint16_t *&selector)
+{
+  int ret = OB_SUCCESS;
+  selector = nullptr;
+  if (OB_ISNULL(selector_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(size <= 0 || size > selector_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(size), K(selector_size_));
+  } else {
+    bool ignore = false;
+    int64_t sample_size = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+      if (OB_FAIL(sample_helper_.sample_row(ignore))) {
+        LOG_WARN("failed to sample row", KR(ret));
+      } else if (!ignore) {
+        selector_[sample_size] = i;
+        ++sample_size;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      selector = selector_;
+      size = sample_size;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSqlStatistics::sample_selective(const uint16_t *&selector, int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(selector_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(nullptr == selector || size <= 0 || size > selector_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(selector), K(size), K(selector_size_));
+  } else {
+    bool ignore = false;
+    int64_t sample_size = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+      if (OB_FAIL(sample_helper_.sample_row(ignore))) {
+        LOG_WARN("failed to sample row", KR(ret));
+      } else if (!ignore) {
+        selector_[sample_size] = selector[i];
+        ++sample_size;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      selector = selector_;
+      size = sample_size;
     }
   }
   return ret;

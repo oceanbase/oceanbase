@@ -447,6 +447,12 @@ bool ObDupTableLSCheckpoint::contain_all_readable_on_replica() const
                   K(contain_all_readable), KPC(this));
   }
 
+  if (GCTX.is_shared_storage_mode()) {
+    contain_all_readable = false;
+    DUP_TABLE_LOG(INFO, "[CKPT] rebuild readable set in the shared storage mode",
+                  K(contain_all_readable), KPC(this));
+  }
+
   return contain_all_readable;
 }
 

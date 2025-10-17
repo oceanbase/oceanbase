@@ -23,6 +23,7 @@
 #include "rootserver/ddl_task/ob_vec_index_build_task.h"
 #include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
 #include "rootserver/ddl_task/ob_fts_index_build_task.h"
+#include "rootserver/ddl_task/ob_drop_fts_index_task.h"
 
 const bool OB_DDL_TASK_ENABLE_TRACING = false;
 
@@ -155,7 +156,8 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const bool is_unique_index,
                                                  const bool is_global_index,
                                                  const bool is_pre_split,
-                                                 const bool is_no_logging)
+                                                 const bool is_no_logging,
+                                                 const int64_t target_cg_cnt)
 {
   task_version_ = task_version;
   parallelism_ = parallelism;
@@ -164,6 +166,7 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
   is_abort_ = is_abort;
   sub_task_trace_id_ = sub_task_trace_id;
   is_no_logging_ = is_no_logging;
+  target_cg_cnt_ = target_cg_cnt;
   is_unique_index_ = is_unique_index;
   is_global_index_ = is_global_index;
   is_pre_split_ = is_pre_split;
@@ -181,6 +184,7 @@ void ObDDLTaskSerializeField::reset()
   is_global_index_ = false;
   is_pre_split_ = false;
   is_no_logging_ = false;
+  target_cg_cnt_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
@@ -193,7 +197,8 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     is_unique_index_,
                     is_global_index_,
                     is_pre_split_,
-                    is_no_logging_);
+                    is_no_logging_,
+                    target_cg_cnt_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
@@ -726,7 +731,7 @@ int ObFTSDDLChildTaskInfo::deep_copy_from_other(
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObFTSDDLChildTaskInfo, index_name_, table_id_);
+OB_SERIALIZE_MEMBER(ObFTSDDLChildTaskInfo, index_name_, table_id_, task_id_);
 
 
 int ObVecIndexDDLChildTaskInfo::deep_copy_from_other(
@@ -774,6 +779,7 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_CREATE_VEC_IVFFLAT_INDEX:
     case DDL_CREATE_VEC_IVFSQ8_INDEX:
     case DDL_CREATE_VEC_IVFPQ_INDEX:
+    case DDL_CREATE_VEC_SPIV_INDEX:
       ddl_type_str =  "create vec index";
       break;
     case DDL_REBUILD_INDEX:
@@ -1023,7 +1029,8 @@ int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, in
 {
   int ret = OB_SUCCESS;
   ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_,
-                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_, is_no_logging_);
+                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_, is_no_logging_,
+                                          target_cg_cnt_);
 
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1056,6 +1063,7 @@ int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const c
     is_global_index_ = serialize_field.is_global_index_;
     is_pre_split_ = serialize_field.is_pre_split_;
     is_no_logging_ = serialize_field.is_no_logging_;
+    target_cg_cnt_ = serialize_field.target_cg_cnt_;
   }
   return ret;
 }
@@ -1063,7 +1071,8 @@ int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const c
 int64_t ObDDLTask::get_serialize_param_size() const
 {
   ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_,
-                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_, is_no_logging_);
+                                          sub_task_trace_id_, is_unique_index_, is_global_index_, is_pre_split_, is_no_logging_,
+                                          target_cg_cnt_);
   return serialize_field.get_serialize_size();
 }
 
@@ -1248,6 +1257,13 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       delay_schedule_time_ = 0; // when status changed, schedule immediately
       clear_old_status_context();
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
+    }
+
+    if (old_status != real_new_status) {
+      if (OB_TMP_FAIL(inner_refresh_task_context(real_new_status))) {
+        LOG_WARN("fail to inner refresh task context", K(tmp_ret), K(ret), K(real_new_status));
+      }
+      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
 
     if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_) {
@@ -3049,6 +3065,33 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
       } else if (OB_FAIL(task.update_task_message(proxy))) {
         LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
       }
+    } else if (DDL_CREATE_VEC_SPIV_INDEX == task_record.ddl_type_) {
+      SMART_VAR(ObFtsIndexBuildTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to init ObFtsIndexBuildTask", K(ret), K(task_record));
+        } else if (UPDATE_CREATE_INDEX_ID == update_type) {
+          if (index_schema.is_rowkey_doc_id()) {
+            task.set_rowkey_doc_aux_table_id(target_table_id);
+            task.set_rowkey_doc_aux_task_id(target_task_id);
+            task.set_rowkey_doc_task_submitted(true);
+          } else if (index_schema.is_doc_id_rowkey()) {
+            task.set_doc_rowkey_aux_table_id(target_table_id);
+            task.set_doc_rowkey_aux_task_id(target_task_id);
+            task.set_doc_rowkey_task_submitted(true);
+          } else if (index_schema.is_vec_spiv_index_aux()) {
+            task.set_fts_index_aux_table_id(target_table_id);
+            task.set_fts_index_aux_task_id(target_task_id);
+            task.set_fts_index_aux_task_submitted(true);
+          }
+        } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
+          task.set_drop_index_task_id(target_task_id);
+          task.set_drop_index_task_submitted(true);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(task.update_task_message(proxy))) {
+        LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+      }
     } else if (task_record.ddl_type_ == DDL_CREATE_VEC_IVFFLAT_INDEX ||
                task_record.ddl_type_ == DDL_CREATE_VEC_IVFSQ8_INDEX ||
                task_record.ddl_type_ == DDL_CREATE_VEC_IVFPQ_INDEX) {
@@ -3097,6 +3140,26 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(task.update_task_message(proxy))) {
         LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+      }
+    } else if (task_record.ddl_type_ == DDL_DROP_FTS_INDEX) {
+      SMART_VAR(ObDropFTSIndexTask, task) {
+        if (OB_FAIL(task.init(task_record))) {
+          LOG_WARN("fail to initialize the drop fulltext index task", K(ret), K(task_record));
+        } else if (UPDATE_DROP_INDEX_TASK_ID == update_type) {
+          if (index_schema.is_fts_index_aux()) {
+            task.set_drop_domain_index_task_id(target_task_id);
+          } else if (index_schema.is_fts_doc_word_aux()) {
+            task.set_drop_doc_word_task_id(target_task_id);
+          } else if (index_schema.is_doc_id_rowkey()) {
+            task.set_drop_doc_rowkey_task_id(target_task_id);
+          } else if (index_schema.is_rowkey_doc_id()) {
+            task.set_drop_rowkey_doc_task_id(target_task_id);
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(task.update_task_message(proxy))) {
+          LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
+        }
       }
     } else {
       // TODO: other ddl type need to be update parent task message, now skip.
@@ -4418,7 +4481,8 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
         } else if (!sql_exec_addrs.at(i).is_valid()) {
           if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
+              " and id != connection_id()",
               OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
               spec_charater,
               trace_id_like,
@@ -4439,7 +4503,8 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
             LOG_WARN("ip to string failed", K(ret), K(sql_exec_addrs.at(i)));
           } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
+              " and id != connection_id()",
               OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
               spec_charater,
               trace_id_like,
@@ -4528,7 +4593,8 @@ int ObDDLTaskRecordOperator::get_running_tasks_inner_sql(
       } else if (!sql_exec_addr.is_valid()) {
         if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id like \"%c%s\""
             " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-            " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\" ",
+            " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\""
+            " and id != connection_id()",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
             spec_charater,
             trace_id_like,
@@ -4550,7 +4616,8 @@ int ObDDLTaskRecordOperator::get_running_tasks_inner_sql(
           LOG_WARN("ip to string failed", K(ret), K(sql_exec_addr));
         } else if (OB_FAIL(sql_string.assign_fmt(" SELECT info FROM %s WHERE trace_id like \"%c%s\""
             " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-            " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\" ",
+            " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%cPARTITION%c%ld%c\""
+            " and id != connection_id()",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
             spec_charater,
             trace_id_like,
@@ -4615,6 +4682,17 @@ int ObDDLTask::init_ddl_task_monitor_info(const uint64_t target_table_id)
     LOG_WARN("failed to get ddl type str", K(ret));
   } else if (OB_FAIL(stat_info_.init(ddl_type_str, target_table_id))) {
     LOG_WARN("failed to init stat info", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLTask::inner_refresh_task_context(const share::ObDDLTaskStatus status)
+{
+  int ret = OB_SUCCESS;
+  // you can refresh the shared context of ddl task here
+  // inherit the refresh_task_comtext function to refresh the task specific context
+  if (OB_FAIL(refresh_task_context(status))) {
+    LOG_WARN("fail to refresh task context", K(ret));
   }
   return ret;
 }

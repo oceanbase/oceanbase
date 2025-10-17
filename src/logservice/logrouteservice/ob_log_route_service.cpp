@@ -47,7 +47,8 @@ ObLogRouteService::ObLogRouteService() :
     blacklist_survival_time_penalty_period_min_(0),
     blacklist_history_overdue_time_min_(0),
     blacklist_history_clear_interval_min_(0),
-    ls_svr_list_last_update_time_(OB_INVALID_TIMESTAMP)
+    ls_svr_list_last_update_time_(OB_INVALID_TIMESTAMP),
+    logservice_model_info_()
 {
 }
 
@@ -130,6 +131,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
 #endif
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
+  } else if (OB_FAIL(systable_queryer_.get_logservice_model_info(source_tenant_id, logservice_model_info_))) {
+    LOG_WARN("failed to get logservice model info", KR(ret), K(source_tenant_id));
   } else {
     cluster_id_ = cluster_id;
     source_tenant_id_ = source_tenant_id;
@@ -238,6 +241,7 @@ void ObLogRouteService::destroy()
   blacklist_history_overdue_time_min_ = 0;
   blacklist_history_clear_interval_min_ = 0;
   ls_svr_list_last_update_time_ = OB_INVALID_TIMESTAMP;
+  logservice_model_info_.reset(false);
 
   is_tenant_mode_ = false;
   is_inited_ = false;
@@ -798,6 +802,21 @@ int ObLogRouteService::async_server_query_req(
       LOG_WARN("registered task failed", KR(ret), K(cluster_id_), K(tenant_id), K(ls_id));
     }
   } else {}
+
+  return ret;
+}
+
+int ObLogRouteService::get_logservice_model_info(
+  ObLogserviceModelInfo &logservice_model_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogRouteService has not been inited", KR(ret));
+  } else {
+    logservice_model_info = logservice_model_info_;
+  }
 
   return ret;
 }

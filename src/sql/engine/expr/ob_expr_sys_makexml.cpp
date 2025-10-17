@@ -98,7 +98,6 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
    MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObString full_xml_data;
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
@@ -110,6 +109,10 @@ int ObExprSysMakeXML::eval_sys_makexml(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     LOG_WARN("input type error", K(xml_arg->datum_meta_));
   } else if (OB_FAIL(allocator.eval_arg(xml_arg, ctx, xml_datum))) {
     LOG_WARN("eval xml arg failed", K(ret));
+  }
+
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
+  if (OB_FAIL(ret)) {
   } else if (xml_datum->is_null()) {
     res.set_null();
   } else if (xml_arg->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN) {

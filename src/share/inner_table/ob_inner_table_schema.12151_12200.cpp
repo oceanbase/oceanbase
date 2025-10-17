@@ -6007,6 +6007,21 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_schema(ObTableSchema &table
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("RAW_PROFILE", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_BINARY, //column_collation_type
+      65536, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);
@@ -6175,7 +6190,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6193,7 +6208,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6211,7 +6226,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6229,7 +6244,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
-      true);//is_storing_column 
+      true);//is_storing_column
   }
 
   if (OB_SUCC(ret)) {
@@ -6844,7 +6859,24 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 45);
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("RAW_PROFILE", //column_name
+      column_id + 46, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_BINARY, //column_collation_type
+      65536, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false,//is_nullable
+      false,//is_autoincrement
+      false,//is_hidden
+      true);//is_storing_column
+  }
+
+  table_schema.set_max_used_column_id(column_id + 46);
   return ret;
 }
 

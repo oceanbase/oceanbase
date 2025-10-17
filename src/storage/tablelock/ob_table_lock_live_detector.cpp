@@ -325,7 +325,7 @@ int ObTableLockDetectFuncList::get_owner_id_list_from_table_(ObIAllocator &alloc
       for (int64_t i = 0; i < tmp_owner_ids.count() && OB_SUCC(ret); i++) {
         if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObTableLockOwnerID)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory for ObTableLockOwnerID failed", K(ret), K(is_new_table), K(owner_ids.at(i)));
+          LOG_WARN("allocate memory for ObTableLockOwnerID failed", K(ret), K(is_new_table), K(tmp_owner_ids.at(i)));
         } else if (FALSE_IT(new_owner_id = new (ptr) ObTableLockOwnerID(static_cast<unsigned char>(tmp_owner_ids.at(i).element<0>()), tmp_owner_ids.at(i).element<1>()))) {
         } else if (OB_FAIL(owner_ids.push_back(new_owner_id))) {
           LOG_WARN("add owner_id into list failed", K(ret), K(new_owner_id), K(is_new_table));
@@ -352,7 +352,7 @@ int ObTableLockDetectFuncList::get_owner_id_list_from_table_(ObIAllocator &alloc
 
         if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObTableLockOwnerID)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory for ObTableLockOwnerID failed", K(ret), K(is_new_table), K(owner_ids.at(i)));
+          LOG_WARN("allocate memory for ObTableLockOwnerID failed", K(ret), K(is_new_table), K(tmp_owner_ids.at(i)));
         } else if (FALSE_IT(new_owner_id = new (ptr) ObTableLockOwnerID(static_cast<unsigned char>(old_owner_id.type()), old_owner_id.id()))) {
         } else if (OB_FAIL(owner_ids.push_back(new_owner_id))) {
           LOG_WARN("add owner_id into list failed", K(ret), K(new_owner_id), K(is_new_table));

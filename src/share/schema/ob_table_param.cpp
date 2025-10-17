@@ -1260,7 +1260,8 @@ int ObTableParam::construct_columns_and_projector(
           LOG_WARN("push back failed", K(ret));
         }
       }
-      if (OB_SUCC(ret) && 0 == output_count && 0 < tmp_output_sel_mask.count()) {
+      if (OB_SUCC(ret) && 0 == output_count && 0 < tmp_output_sel_mask.count() &&
+          !table_schema.is_external_table()) {
         // make sure one output expr at least
         tmp_output_sel_mask.at(0) = true;
       }
@@ -1439,12 +1440,15 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
                                    const ObIArray<uint64_t> &output_column_ids,
                                    const common::ObIArray<uint64_t> &aggregate_column_ids,
                                    const common::ObIArray<uint64_t> &group_by_column_ids,
+                                   const common::ObIArray<share::ObAggrParamProperty> &aggregate_param_props,
                                    const sql::ObStoragePushdownFlag &pd_pushdown_flag)
 {
   int ret = OB_SUCCESS;
   if (aggregate_column_ids.count() > 0) {
-     if (OB_FAIL(aggregate_projector_.init(aggregate_column_ids.count()))) {
+    if (OB_FAIL(aggregate_projector_.init(aggregate_column_ids.count()))) {
       LOG_WARN("failed to init aggregate projector", K(ret), K(aggregate_column_ids.count()));
+    } else if (OB_FAIL(aggregate_param_props_.assign(aggregate_param_props))) {
+      LOG_WARN("failed to assign aggregate param mono array", K(ret), K(aggregate_param_props));
     }
     for (int32_t i = 0; OB_SUCC(ret) && i < aggregate_column_ids.count(); ++i) {
       if (OB_COUNT_AGG_PD_COLUMN_ID == aggregate_column_ids.at(i)) {
@@ -1746,7 +1750,9 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(is_mlog_table),
        K_(is_enable_semistruct_encoding),
        K_(is_safe_filter_with_di),
-       K_(access_virtual_col_cnt));
+       K_(aggregate_param_props),
+       K_(access_virtual_col_cnt),
+       K_(plan_enable_rich_format));
   J_OBJ_END();
 
   return pos;

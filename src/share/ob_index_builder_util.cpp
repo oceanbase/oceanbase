@@ -139,7 +139,7 @@ int ObIndexBuilderUtil::add_column(
       if (column.is_spatial_generated_column()) {
         column.set_geo_col_id(data_column->get_geo_col_id());
       }
-      if (table_schema.is_fts_index() || (table_schema.is_multivalue_index())) {
+      if (table_schema.is_fts_index() || (table_schema.is_multivalue_index()) || (table_schema.is_vec_spiv_index())) {
         ObObj default_value;
         column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
         if (column.is_word_segment_column()) {
@@ -421,7 +421,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fts arg index type not expected", K(ret));
     }
-  } else { // not fts index
+  } else { // not fts index or multivalue index
     HEAP_VAR(ObRowDesc, row_desc) {
       bool is_index_column = false;
       // index columns
@@ -734,8 +734,8 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
     } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(1)))) {
       LOG_WARN("push back mbr column to gen columns failed", K(ret));
     }
-  } else if (ObIndexBuilderUtil::is_do_create_dense_vec_index(arg.index_type_)) {
-    if (OB_FAIL(ObVecIndexBuilderUtil::check_vec_index_allowed(data_schema))) {
+  } else if (ObIndexBuilderUtil::is_do_create_dense_vec_index(arg.index_type_) || is_vec_spiv_index_aux(arg.index_type_)) {
+    if (OB_FAIL(ObVecIndexBuilderUtil::check_vec_index_allowed(arg.index_type_, data_schema))) {
       LOG_WARN("fail to check vector index allowed", K(ret));
     } else if (OB_FAIL(ObVecIndexBuilderUtil::adjust_vec_args(arg, data_schema, allocator, gen_columns))) {
       LOG_WARN("failed to adjust vec index args", K(ret), K(arg.index_type_));
@@ -1128,6 +1128,9 @@ int ObIndexBuilderUtil::generate_prefix_column(
           prefix_column.set_data_type(ObVarcharType);
           prefix_column.set_data_scale(0);
         }
+        // data_schema 为 not null时，会拦截掉null写入。 所以不需要设置前缀列的not null属性。
+        prefix_column.set_nullable(true);
+        prefix_column.drop_not_null_cst();
         prefix_column.set_rowkey_position(0); //非主键列
         prefix_column.set_index_position(0); //非索引列
         prefix_column.set_tbl_part_key_pos(0); //非partition key
@@ -1135,6 +1138,8 @@ int ObIndexBuilderUtil::generate_prefix_column(
         int32_t data_len = static_cast<int32_t>(min(sort_item.prefix_len_, old_column->get_data_length()));
         prefix_column.set_data_length(data_len);
         prefix_column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        // Clear skip index attribute for virtual generated columns to avoid validation errors
+        prefix_column.set_skip_index_attr(0);
         if (is_pad_char_to_full_length(sql_mode)) {
           prefix_column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
         }
@@ -1372,6 +1377,56 @@ int ObIndexBuilderUtil::generate_spatial_mbr_column(
     }
   }
 
+  return ret;
+}
+int ObIndexBuilderUtil::check_index_for_if_not_exist(const uint64_t tenant_id, const uint64_t index_id, int64_t &task_id)
+{
+  int ret = OB_SUCCESS;
+  task_id = 0;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_INVALID_ID == index_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index id invalid", KR(ret), K(index_id));
+  } else {
+    sqlclient::ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    if (OB_FAIL(sql.append_fmt("SELECT (SELECT index_status FROM %s where tenant_id = %lu and table_id = %lu) as index_status,"
+                                      "(SELECT task_id FROM %s where target_object_id = %lu) as task_id",
+                                       OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, index_id, OB_ALL_DDL_TASK_STATUS_TNAME, index_id))) {
+      LOG_WARN("fail to append fmt", KR(ret));
+    } else {
+      ObIndexStatus index_status = INDEX_STATUS_MAX;
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("fail to read sql", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_TABLE_NOT_EXIST;
+          } else {
+            LOG_WARN("fail to get next", KR(ret));
+          }
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "index_status", index_status, ObIndexStatus);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "task_id", task_id,
+                                                     int64_t, true /*skip null error*/,
+                                                     false /*skip column error*/, -1);
+          if (OB_SUCC(ret)) {
+            if (ObIndexStatus::INDEX_STATUS_AVAILABLE == index_status) {
+              // do nothing
+            } else if (-1 == task_id) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("index status not available but ddl task not exist not expected", KR(ret), K(tenant_id), K(index_id));
+            }
+          }
+        }
+      } // end smart var
+    }
+  }
   return ret;
 }
 

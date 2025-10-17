@@ -257,14 +257,20 @@ bool ObFilePreBuffer::RangeCacheEntry::is_read_cache_range_end(const ReadRange &
   return range.offset_ + range.length_ >= range_.offset_ + range_.length_;
 }
 
-int ObFilePreBuffer::RangeCacheEntry::wait()
+int ObFilePreBuffer::RangeCacheEntry::wait(ObLakeTablePreBufferMetrics &metrics)
 {
   int ret = OB_SUCCESS;
   if (is_waited_) {
-  } else if (OB_FAIL(io_handle_.wait())) {
-    LOG_WARN("failed to wait io handle", K(ret));
   } else {
-    is_waited_ = true;
+    const int64_t start_ts = ObTimeUtility::current_time();
+    if (OB_FAIL(io_handle_.wait())) {
+      LOG_WARN("failed to wait io handle", K(ret));
+    } else {
+      is_waited_ = true;
+      const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+      metrics.total_io_wait_time_us_ += cost_ts;
+      metrics.max_io_wait_time_us_ = MAX(metrics.max_io_wait_time_us_, cost_ts);
+    }
   }
   return ret;
 }
@@ -320,7 +326,7 @@ int ObFilePreBuffer::reset()
     if (nullptr == cache_entry) {
     } else if (nullptr != cache_entry->buf_) {
       // ignore ret
-      cache_entry->wait();
+      cache_entry->wait(metrics_);
       SAFE_DELETE(cache_entry->buf_);
       cache_entry->~RangeCacheEntry();
       cache_entry = nullptr;
@@ -348,12 +354,14 @@ int ObFilePreBuffer::async_read_range(RangeCacheEntry &cache_range)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", KR(ret));
   } else {
-    const int64_t io_timeout_ms = (timeout_ts_ - ObTimeUtility::current_time()) / 1000;
+    const int64_t io_timeout_ms = MAX(0, (timeout_ts_ - ObTimeUtility::current_time()) / 1000);
     ObExternalReadInfo read_info(cache_range.range_.offset_, cache_range.buf_,
                                  cache_range.range_.length_, io_timeout_ms);
     if (OB_FAIL(file_reader_.async_read(read_info, cache_range.io_handle_))) {
       LOG_WARN("fail to read file", K(ret), K(cache_range));
     } else {
+      ++metrics_.async_io_count_;
+      metrics_.async_io_size_ += cache_range.range_.length_;
       LOG_TRACE("async read range", K(cache_range.range_));
     }
     if (OB_FAIL(ret) && nullptr != cache_range.buf_ ) {
@@ -502,6 +510,8 @@ int ObFilePreBuffer::pre_buffer(const ColumnRangeSlicesList &range_list)
       LOG_WARN("failed to read all column ranges", K(ret));
     }
   }
+  ++metrics_.prebuffer_count_;
+  EVENT_INC(EXTERNAL_TABLE_PREBUFFER_CNT);
   return ret;
 }
 
@@ -514,10 +524,12 @@ int ObFilePreBuffer::read(int64_t position, int64_t length, void* out)
     std::lower_bound(cache_entries_.begin(), cache_entries_.end(), read_range, RangeEntryCmp());
   if (iter != cache_entries_.end() && (*iter)->range_.contains(read_range)
       && nullptr != (*iter)->buf_) {
+    ++metrics_.hit_count_;
     RangeCacheEntry *entry = (*iter);
-    if (OB_FAIL(entry->wait())) {
+    if (OB_FAIL(entry->wait(metrics_))) {
       LOG_WARN("failed to wait io handle", K(ret));
     } else {
+      metrics_.total_read_size_ += length;
       ColumnRangeCacheEntry *column_cache_entry = entry->col_cache_entry_;
       MEMCPY(out, (char *)entry->buf_ + (position - entry->range_.offset_), length);
       if (entry->is_read_cache_range_end(read_range)) {
@@ -546,6 +558,8 @@ int ObFilePreBuffer::read(int64_t position, int64_t length, void* out)
       }
     }
   } else {
+    ++metrics_.miss_count_;
+    EVENT_INC(EXTERNAL_TABLE_PREBUFFER_MISS_CNT);
     ret = OB_ENTRY_NOT_EXIST;
     LOG_TRACE("cache did not find matching cache entry", K(read_range));
   }
@@ -578,6 +592,16 @@ int ObFilePreBuffer::coalesce_ranges(const ColumnRangeSlicesList &range_list,
     } else {
       dump_coalesce_ranges(range_entries);
     }
+  }
+  return ret;
+}
+
+int ObFilePreBuffer::register_metrics(ObLakeTableReaderProfile &reader_profile,
+                                      const ObString &label)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(reader_profile.register_metrics(&metrics_, label))) {
+    LOG_WARN("failed to register metrics", K(ret));
   }
   return ret;
 }

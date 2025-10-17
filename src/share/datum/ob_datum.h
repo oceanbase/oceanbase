@@ -228,6 +228,7 @@ public:
   inline bool is_min() const { return is_ext() && extend_obj_->is_min_value(); }
   inline bool is_max() const { return is_ext() && extend_obj_->is_max_value(); }
   inline bool is_nop() const { return is_ext() && extend_obj_->is_nop_value(); }
+  inline bool is_null_or_nop() const { return is_null() || is_nop(); }
   inline int8_t get_int8() const { return  *(reinterpret_cast<const int8_t*> (int_)); }
   inline int8_t get_tinyint() const { return *(reinterpret_cast<const int8_t*> (int_)); }
   inline int16_t get_smallint() const { return *(reinterpret_cast<const int16_t*> (int_)); }

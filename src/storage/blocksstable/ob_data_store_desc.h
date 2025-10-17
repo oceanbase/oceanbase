@@ -19,6 +19,7 @@
 #include "common/ob_store_format.h"
 #include "share/ob_ls_id.h"
 #include "share/scn.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -94,7 +95,8 @@ public:
       K_(is_delete_insert_table),
       K_(encoding_granularity),
       K_(reorganization_scn),
-      K_(semistruct_encoding_type));
+      K_(semistruct_properties),
+      K_(micro_block_format_version));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -131,8 +133,9 @@ public:
   bool need_submit_io_;
   bool is_delete_insert_table_;
   uint64_t encoding_granularity_;
+  int64_t micro_block_format_version_;
   share::SCN reorganization_scn_;
-  share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
+  share::ObSemistructProperties semistruct_properties_;
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -167,6 +170,7 @@ struct ObColDataStoreDesc
 private:
   // simplified do not generate skip index, do not init agg_meta_array
   int generate_skip_index_meta(
+      const bool is_major,
       const share::schema::ObMergeSchema &schema,
       const storage::ObStorageColumnGroupSchema *cg_schema,
       const int64_t major_working_cluster_version);
@@ -219,7 +223,7 @@ public:
   bool encoding_enabled() const { return ObStoreFormat::is_row_store_type_with_encoding(row_store_type_); }
   void force_flat_store_type()
   {
-    row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(static_desc_->micro_block_format_version_);
     is_force_flat_store_type_ = true;
   }
   bool is_store_type_valid() const;
@@ -253,6 +257,7 @@ public:
     OB_ASSERT_MSG(contain_full_col_descs(), "ObDataStoreDesc dose not promise a full stored col descs");
     return col_desc_->col_desc_array_;
   }
+  const ObColDataStoreDesc *get_col_desc() const { return col_desc_; }
   bool contain_full_col_descs() const
   {
     return get_row_column_count() == get_col_desc_array().count();
@@ -273,6 +278,12 @@ public:
   bool is_delete_insert_merge() const
   { return get_is_delete_insert_table() && !is_major_merge_type(); }
   bool enable_macro_block_bloom_filter() const;
+
+  OB_INLINE int64_t get_micro_block_format_version() const
+  {
+    return static_desc_->micro_block_format_version_;
+  }
+
   int update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta);
   /* GET FUNC */
   #define STORE_DESC_DEFINE_POINT_FUNC(var_type, desc, var_name) \
@@ -319,13 +330,13 @@ public:
   OB_INLINE int64_t get_encrypt_key_size() const { return sizeof(static_desc_->encrypt_key_); }
   OB_INLINE int64_t get_micro_block_size() const { return micro_block_size_; }
   OB_INLINE common::ObRowStoreType get_row_store_type() const { return row_store_type_; }
-  OB_INLINE const share::schema::ObSemiStructEncodingType& get_semistruct_encoding_type() const { return static_desc_->semistruct_encoding_type_; }
+  OB_INLINE const share::ObSemistructProperties& get_semistruct_properties() const { return static_desc_->semistruct_properties_; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;
   static const uint64_t EMERGENCY_LS_ID_MAGIC = 0;
   static const ObTabletID EMERGENCY_TABLET_ID_MAGIC;
-
+  void simple_to_string(char *buf, const int64_t buf_len, int64_t &pos) const;
   TO_STRING_KV(
       KPC_(static_desc),
       "row_store_type", ObStoreFormat::get_row_store_name(row_store_type_),
@@ -341,10 +352,11 @@ private:
   int inner_init(
       const share::schema::ObMergeSchema &schema,
       const ObRowStoreType row_store_type);
-  int cal_row_store_type(
-      const ObRowStoreType row_store_type,
-      const compaction::ObMergeType merge_type);
-  int get_emergency_row_store_type();
+  int cal_row_store_type(const ObMergeSchema &merge_schema,
+                         const ObRowStoreType row_store_type,
+                         const compaction::ObMergeType merge_type);
+  int get_emergency_row_store_type(const ObMergeSchema &merge_schema);
+
 public:
   ObStaticDataStoreDesc *static_desc_;
   ObColDataStoreDesc *col_desc_;
@@ -401,6 +413,7 @@ struct ObWholeDataStoreDesc
   int assign(const ObWholeDataStoreDesc &desc);
   ObStaticDataStoreDesc &get_static_desc() { return static_desc_; }
   ObColDataStoreDesc &get_col_desc() {return col_desc_; }
+  const ObColDataStoreDesc &get_col_desc() const {return col_desc_; }
   ObDataStoreDesc &get_desc() { return desc_; }
   const ObDataStoreDesc &get_desc() const { return desc_; }
   bool is_valid() const
@@ -418,6 +431,18 @@ private:
   ObStaticDataStoreDesc static_desc_;
   ObColDataStoreDesc col_desc_;
   ObDataStoreDesc desc_;
+};
+
+struct ObSimplePrintDataStoreDesc
+{
+  ObSimplePrintDataStoreDesc(const ObDataStoreDesc &desc)
+    : desc_(desc)
+  {}
+  ~ObSimplePrintDataStoreDesc() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  const ObDataStoreDesc &desc_;
+  DISALLOW_COPY_AND_ASSIGN(ObSimplePrintDataStoreDesc);
 };
 
 

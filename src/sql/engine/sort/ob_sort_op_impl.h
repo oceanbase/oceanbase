@@ -276,7 +276,7 @@ public:
   virtual void reuse();
   // reset to state before init
   virtual void reset();
-  void destroy() { reset(); }
+  void destroy() { unregister_profile(); reset(); }
 
   // Add row and return the stored row.
   int add_row(const common::ObIArray<ObExpr*> &expr,
@@ -715,7 +715,7 @@ protected:
   bool need_dump()
   {
     return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound()
-        || mem_context_->used() >= profile_.get_max_bound();
+        || mem_context_->used() >= profile_.get_global_bound_size();
   }
   int preprocess_dump(bool &dumped);
   // before add row process: update date used memory, try dump ...
@@ -797,7 +797,7 @@ protected:
                           const int64_t batch_size,
                           const uint16_t selector[],
                           const int64_t size);
-  bool use_compact_store() { return use_compact_format_ || compress_type_ != NONE_COMPRESSOR; }
+  bool use_compact_store() { return use_compact_format_; }
   template<typename ArrayType>
   int prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num);
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);

@@ -196,7 +196,7 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
           break;
         }
       }
-      usleep(1000 * 1000); // 1s
+      ob_usleep(1000 * 1000); // 1s
     }
   }
 

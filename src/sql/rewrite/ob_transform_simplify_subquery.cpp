@@ -58,7 +58,10 @@ int ObTransformSimplifySubquery::transform_one_stmt(common::ObIArray<ObParentDML
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(add_limit_for_exists_subquery(stmt, is_happened))) {
+    // add limit for exists before version 441
+    if (!is_add_limit_for_exists_subquery_enabled(stmt->get_query_ctx()->optimizer_features_enable_version_)) {
+      LOG_TRACE("add limit for exists subquery is disabled after 4.4.1.0");
+    } else if (OB_FAIL(add_limit_for_exists_subquery(stmt, is_happened))) {
       LOG_WARN("failed to add limit for exists subquery", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -459,6 +462,7 @@ int ObTransformSimplifySubquery::check_subquery_valid(ObSelectStmt &stmt,
     } else if (0 == stmt.get_group_expr_size() &&
                0 == stmt.get_rollup_expr_size() &&
                0 == stmt.get_having_expr_size() &&
+               0 == stmt.get_grouping_sets_items_size() &&
                sel_expr->has_flag(CNT_AGG)) {
       is_valid = true;
     }
@@ -1315,6 +1319,8 @@ int ObTransformSimplifySubquery::subquery_can_be_eliminated_in_exists(const ObIt
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
+  } else if (stmt->is_recursive_union_branch()) {
+    // do not eliminate left branch of recursive union
   } else if (stmt->is_set_stmt()) {
     if (ObSelectStmt::UNION == stmt->get_set_op() && !stmt->is_recursive_union()) {
       const ObIArray<ObSelectStmt*> &child_stmts = stmt->get_set_query();
@@ -1356,6 +1362,7 @@ bool ObTransformSimplifySubquery::is_subquery_not_empty(const ObSelectStmt &stmt
             && 0 == stmt.get_condition_size())
           || (0 == stmt.get_group_expr_size()
              && !stmt.has_rollup()
+             && !stmt.has_grouping_sets()
              && stmt.get_aggr_item_size() > 0
              && !stmt.has_having());
 }
@@ -1579,7 +1586,9 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
       // do nothing
     } else if (OB_FAIL(check_limit(op_type, subquery, has_limit))) {
       LOG_WARN("failed to check subquery has unremovable limit", K(ret));
-    } else if(!has_limit && NULL != subquery->get_limit_expr() &&
+    } else if(!has_limit
+              && is_add_limit_for_exists_subquery_enabled(stmt->get_query_ctx()->optimizer_features_enable_version_)
+              && NULL != subquery->get_limit_expr() &&
               OB_FAIL(ObTransformUtils::add_compare_int_constraint(ctx_, subquery->get_limit_expr(), T_OP_GE, 1))) {
       LOG_WARN("failed to add const param constraints", K(ret));
     } else if (!has_limit) {
@@ -1630,7 +1639,9 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
       // do nothing
     } else if(OB_FAIL(check_limit(op_type, subquery, has_invalid_limit))) {
       LOG_WARN("failed to check limit constraints", K(ret));
-    } else if(!has_invalid_limit && NULL != subquery->get_limit_expr() &&
+    } else if(!has_invalid_limit
+              && is_add_limit_for_exists_subquery_enabled(stmt->get_query_ctx()->optimizer_features_enable_version_)
+              && NULL != subquery->get_limit_expr() &&
               OB_FAIL(ObTransformUtils::add_compare_int_constraint(ctx_, subquery->get_limit_expr(), T_OP_GE, 1))) {
       LOG_WARN("failed to add const param constraints", K(ret));
     }
@@ -1742,6 +1753,11 @@ int ObTransformSimplifySubquery::eliminate_distinct_in_any_all(ObSelectStmt *sub
     trans_happened = true;
   } else { /* do nothing */ }
   return ret;
+}
+
+bool ObTransformSimplifySubquery::is_add_limit_for_exists_subquery_enabled(const uint64_t compat_version)
+{
+  return compat_version < COMPAT_VERSION_4_4_1;
 }
 
 int ObTransformSimplifySubquery::add_limit_for_any_all_subquery(ObRawExpr *expr, bool &trans_happened)

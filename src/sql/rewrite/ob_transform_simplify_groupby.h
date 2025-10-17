@@ -104,7 +104,20 @@ private:
                             bool &trans_happened);
   int check_can_prune_rollup(ObIArray<ObParentDMLStmt> &parent_stmts,
                              ObSelectStmt *stmt,
-                             int64_t &pruned_expr_idx);
+                             int64_t &pruned_expr_ids);
+  int prune_grouping_sets(ObIArray<ObParentDMLStmt> &parent_stmts,
+                          ObDMLStmt *stmt,
+                          bool &trans_happened);
+  int check_can_prune_grouping_sets(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                    ObSelectStmt &select_stmt,
+                                    ObIArray<int64_t> &prune_idx);
+  int check_prune_grouping_sets_by_self(ObSelectStmt &select_stmt, ObIArray<int64_t> &prune_ids);
+  int check_prune_grouping_sets_by_parent(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                          ObSelectStmt &stmt, ObIArray<int64_t> &prune_ids);
+  int get_null_grouping_exprs(ObGroupingSetsItem &grouping_set_item, const int64_t group_id,
+                              const ObIArray<ObRawExpr *> &all_group_exprs,
+                              ObSqlBitSet<> &null_exprs_idx);
+  int do_prune_grouping_sets(ObSelectStmt &stmt, ObIArray<int64_t> &prune_ids);
   int check_rollup_pruned_by_self(ObSelectStmt *stmt,
                                   int64_t &pruned_expr_idx);
   int check_rollup_pruned_by_parent(ObIArray<ObParentDMLStmt> &parent_stmts,

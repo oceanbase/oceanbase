@@ -233,6 +233,14 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
       }
     }
 
+    if (OB_SUCC(ret) && update_stmt->is_returning() && update_stmt->get_returning_aggr_item_size() <= 0) {
+      if (OB_FAIL(candi_allocate_material_for_dml())) {
+        LOG_WARN("failed to allocate material operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate material op for dml returning", K(candidates_.candidate_plans_.count()));
+      }
+    }
+
     // allocate root exchange
     if (OB_SUCC(ret)) {
       if (OB_FAIL(candi_allocate_root_exchange())) {
@@ -525,7 +533,7 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table schema", K(table_info), K(ret));
   } else if (!update_stmt->has_instead_of_trigger() &&
-             OB_FAIL(check_update_primary_key(index_schema, table_dml_info))) {
+             OB_FAIL(check_update_primary_key(*schema_guard, index_schema, table_dml_info))) {
     LOG_WARN("failed to check update unique key", K(ret));
   } else if (!table_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
@@ -580,7 +588,7 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
         LOG_WARN("failed to init assignment info", K(ret));
       } else if (OB_FAIL(check_update_unique_key(index_schema, index_dml_info))) {
         LOG_WARN("failed to check update unique key", K(ret));
-      } else if (OB_FAIL(check_update_primary_key(index_schema, index_dml_info))) {
+      } else if (OB_FAIL(check_update_primary_key(*schema_guard, index_schema, index_dml_info))) {
         LOG_WARN("failed to check update primary key", K(ret));
       } else if (!table_info.is_link_table_ &&
                  OB_FAIL(check_update_part_key(index_schema, index_dml_info))) {

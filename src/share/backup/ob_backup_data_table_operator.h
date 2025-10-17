@@ -84,6 +84,17 @@ public:
       const int64_t expired_time,
       const char *backup_path_str,
       common::ObIArray<ObBackupSetFileDesc> &backup_set_descs);
+  static int get_oldest_full_backup_set(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    ObBackupSetFileDesc &oldest_backup_desc);
+  static int get_latest_full_backup_set_with_limit(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const char *backup_path_str,
+    const int64_t backup_set_id_limit,
+    ObBackupSetFileDesc &latest_backup_desc);
   static int get_all_backup_set_between(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -106,6 +117,12 @@ private:
   static int parse_backup_sets_(
       sqlclient::ObMySQLResult &result, 
       common::ObIArray<ObBackupSetFileDesc> &backup_set_descs);
+  static int get_boundary_full_backup_set_(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const char *backup_path_str,
+      const bool get_latest, // true: get latest, false: get oldest
+      ObBackupSetFileDesc &boundary_desc);
 };
 
 class ObBackupJobOperator : public ObBackupBaseTableOperator

@@ -355,7 +355,7 @@ private:
   class DDLScanTask : public common::ObTimerTask
   {
   public:
-    explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler), tg_id_(-1) {}
+    explicit DDLScanTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler), tg_id_(-1), last_schedule_time_(0) {}
     virtual ~DDLScanTask() {};
     int init();
     int schedule();
@@ -368,6 +368,7 @@ private:
   private:
     ObDDLScheduler &ddl_scheduler_;
     int tg_id_;
+    int64_t last_schedule_time_;
   };
 
   class HeartBeatCheckTask : public common::ObTimerTask
@@ -675,8 +676,7 @@ int create_partition_split_task(
   int remove_task_from_longops_mgr(ObDDLTask *ddl_task);
   int remove_ddl_task(ObDDLTask *ddl_task);
   void add_event_info(const ObDDLTaskRecord &ddl_record, const ObString &ddl_event_stmt);
-  int check_conflict_with_upgrade(
-      const uint64_t tenant_id);
+  int check_conflict_with_upgrade();
 
 private:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;

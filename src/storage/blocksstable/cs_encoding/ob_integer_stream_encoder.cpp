@@ -19,7 +19,7 @@ namespace blocksstable
 {
 using namespace oceanbase::common;
 
-template<int32_t store_len_V, bool has_null_V, bool has_base_V, bool is_decimal_V>
+template<int32_t store_len_V, bool has_null_or_nop_V, bool has_base_V, bool is_decimal_V>
 struct ConvertDatumToUint_T
 {
   using StoreIntType = typename ObCSEncodingStoreTypeInference<store_len_V>::Type;
@@ -43,7 +43,7 @@ struct ConvertDatumToUint_T
       // TODO oushen, use simd gather instruntion to optimize later
       while (OB_SUCC(datum_iter.get_next(datum))) {
         uint64_t ele = 0;
-        if (has_null_V && datum->is_null()) {
+        if (has_null_or_nop_V && datum->is_null_or_nop()) {
           // if not use null_replaced_value, null_replaced_value_ must be 0,
           // in this case, just use 0 to occupancy space
           ele = null_replace_value;
@@ -168,10 +168,15 @@ int ObIntegerStreamEncoder::encode_stream_meta(ObMicroBufferWriter &buf_writer)
   char *buf = buf_writer.current();
   int64_t buf_len = buf_writer.remain_buffer_size();
   int64_t pos = 0;
-  if (OB_FAIL(ctx_->meta_.serialize(buf, buf_len, pos))) {
+  if (!ctx_->meta_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid stream meta", K(*ctx_));
+  } else if (OB_FAIL(ctx_->meta_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize stream meta", K(ret), K(pos), KP(buf), K(buf_len));
   } else if (OB_FAIL(buf_writer.advance(pos))) {
     LOG_WARN("fail to advance", KR(ret), K(buf_writer), K(pos));
+  } else {
+    LOG_INFO("encode stream meta", K(buf_writer.length()), K(ctx_->meta_));
   }
 
   return ret;

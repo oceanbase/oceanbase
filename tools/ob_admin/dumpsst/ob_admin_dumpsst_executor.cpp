@@ -163,7 +163,7 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
   int ret = OB_SUCCESS;
 
   int opt = 0;
-  const char* opt_string = "d:hf:a:i:n:qxk:m:t:o:s:p:";
+  const char* opt_string = "d:hf:a:i:n:qxk:m:t:o:s:p:l:";
 
   struct option longopts[] = {
     // commands
@@ -184,6 +184,7 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
     { "offset", 1, NULL, 'p'},
     // long options
     { "prewarm_index", 1, NULL, 1000},
+    { "hex_length", 1, NULL, 'l'},
     { 0, 0, 0, 0}, // end of array, don't change
   };
 
@@ -276,6 +277,10 @@ int ObAdminDumpsstExecutor::parse_cmd(int argc, char *argv[])
       dump_macro_context_.scn_ = strtoll(optarg, NULL, 10);
       break;
     }
+    case 'l': {
+      dump_macro_context_.hex_length_ = strtoll(optarg, NULL, 10);
+      break;
+    }
     case 1000: {
       STRCPY(dump_macro_context_.prewarm_index_, optarg);
       break;
@@ -314,7 +319,7 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.offset_ = 0;
   read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
-  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
   STORAGE_LOG(INFO, "begin dump macro block", K(macro_block_context));
   if (OB_UNLIKELY(!macro_block_context.is_valid())) {
@@ -352,18 +357,19 @@ void ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &mac
         buf_size = macro_handle.get_data_size();
       }
     }
+    const ObDumpMacroBlockParam param(dump_macro_context_, hex_print_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(common_header.deserialize(macro_buf, buf_size, pos))) {
       STORAGE_LOG(ERROR, "deserialize common header fail", K(ret), K(pos));
     } else if (OB_FAIL(common_header.check_integrity())) {
       STORAGE_LOG(ERROR, "invalid common header", K(ret), K(common_header));
     } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
-      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(dump_macro_context_, macro_buf, buf_size))) {
-        STORAGE_LOG(ERROR, "dump shared block fail", K(ret));
+      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(param, macro_buf, buf_size))) {
+        STORAGE_LOG(ERROR, "dump shared block fail", K(ret), K(param));
       }
     } else {
-      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(dump_macro_context_, macro_buf, buf_size))) {
-        STORAGE_LOG(ERROR, "dump single block fail", K(ret));
+      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(param, macro_buf, buf_size))) {
+        STORAGE_LOG(ERROR, "dump single block fail", K(ret), K(param));
       }
     }
   }
@@ -696,6 +702,7 @@ void ObAdminDumpsstExecutor::print_usage()
   printf(HELP_FMT, "-s,--scn", "macro block logical version");
   printf(HELP_FMT, "-o,--object_file", "object file path");
   printf(HELP_FMT, "-p,--offset", "data offset in object file");
+  printf(HELP_FMT, "-l,--hex_length", "max length of hex string");
 
   printf("SN mode commands:\n");
   printf("  dump all rows in data macro block: \n");

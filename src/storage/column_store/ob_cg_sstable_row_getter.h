@@ -89,9 +89,6 @@ public:
       access_ctx_(nullptr),
       iter_param_(nullptr),
       reader_(nullptr),
-      flat_reader_(nullptr),
-      encode_reader_(nullptr),
-      cs_encode_reader_(nullptr),
       micro_getter_(nullptr),
       row_idx_datum_(),
       row_idx_key_(),
@@ -131,9 +128,7 @@ private:
   ObTableAccessContext *access_ctx_;
   const ObTableIterParam *iter_param_;
   ObIMicroBlockGetReader *reader_;
-  ObMicroBlockGetReader *flat_reader_;
-  ObEncodeBlockGetReader *encode_reader_;
-  ObCSEncodeBlockGetReader *cs_encode_reader_;
+  ObMicroBlockGetReaderHelper reader_helper_;
   blocksstable::ObMicroBlockRowGetter *micro_getter_;
   ObStorageDatum row_idx_datum_;
   blocksstable::ObDatumRowkey row_idx_key_;

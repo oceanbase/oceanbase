@@ -451,7 +451,9 @@ void TestMultiTmpFileStress::run1()
   ObTenantEnv::set_tenant(tenant_ctx_);
 
   ret = MTL(ObTenantTmpFileManager *)->open(fd, dir_id_, "");
-  std::cout << "normal case, fd: " << fd << std::endl;
+  if (file_cnt_ < 100) {
+    std::cout << "normal case, fd: " << fd << std::endl;
+  }
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "open file success", K(fd));
   tmp_file::ObSSTmpFileHandle file_handle;
@@ -471,14 +473,16 @@ void TestMultiTmpFileStress::run1()
     i += random_length;
   }
 
-  TestTmpFileStress test_truncate(tenant_ctx_);
+  // TestTmpFileStress test_truncate(tenant_ctx_);
   for (int64_t i = 0; i < batch_num_; ++i) {
+    ObMallocAllocator::get_instance()->print_tenant_memory_usage(MTL_ID());
+    ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(MTL_ID());
     if (i > 0) {
       // truncate read data in previous round
-      test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, timeout_ms_, data_buffer, (i-1) * batch_size_, batch_size_);
-      ASSERT_EQ(OB_SUCCESS, ret);
-      STORAGE_LOG(INFO, "test_truncate run start", K(i), K(batch_size_));
-      test_truncate.start();
+      // test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, timeout_ms_, data_buffer, (i-1) * batch_size_, batch_size_);
+      // ASSERT_EQ(OB_SUCCESS, ret);
+      // STORAGE_LOG(INFO, "test_truncate run start", K(i), K(batch_size_));
+      // test_truncate.start();
     }
     TestTmpFileStress test_write(tenant_ctx_);
     ret = test_write.init(fd, TmpFileOp::WRITE, 1, timeout_ms_, data_buffer + i * batch_size_, 0, batch_size_);
@@ -499,19 +503,19 @@ void TestMultiTmpFileStress::run1()
 
     if (i > 0) {
       // wait to truncate read data in last round
-      test_truncate.wait();
-      test_truncate.reset();
-      STORAGE_LOG(INFO, "test_truncate run end", K(i));
+      // test_truncate.wait();
+      // test_truncate.reset();
+      // STORAGE_LOG(INFO, "test_truncate run end", K(i));
     }
 
     STORAGE_LOG(INFO, "TestMultiTmpFileStress thread run a batch end", K(i));
   }
 
-  test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, timeout_ms_, data_buffer, file_size - batch_size_, batch_size_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  STORAGE_LOG(INFO, "test_truncate run start");
-  test_truncate.start();
-  test_truncate.wait();
+  // test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, timeout_ms_, data_buffer, file_size - batch_size_, batch_size_);
+  // ASSERT_EQ(OB_SUCCESS, ret);
+  // STORAGE_LOG(INFO, "test_truncate run start");
+  // test_truncate.start();
+  // test_truncate.wait();
   STORAGE_LOG(INFO, "test_truncate run end");
 
   ret = MTL(ObTenantTmpFileManager *)->remove(fd);

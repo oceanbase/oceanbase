@@ -34,6 +34,7 @@ public:
   {
     INVALID_TYPE = 0,
     JAVA_JAR_TYPE = 1,
+    PYTHON_PY_TYPE = 2,
   };
 
 public:

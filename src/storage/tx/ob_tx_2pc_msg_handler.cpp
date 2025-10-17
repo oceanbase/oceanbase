@@ -673,28 +673,30 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
 int ObPartTransCtx::handle_tx_2pc_prepare_req(const Ob2pcPrepareReqMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(submit_parallel_redo_before_commit_())) {
+  if (sub_state_.is_commit_submitting_redo()) {
+    // no need to commit
+  } else if (OB_FAIL(submit_parallel_redo_before_commit_())) {
     TRANS_LOG(WARN, "submit redo before 2pc commit fail", KR(ret), K(*this));
-  }
-  CtxLockGuard guard(lock_);
-  ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
-  exec_info_.trans_type_ = TransType::DIST_TRANS;
+  } else {
+    CtxLockGuard guard(lock_);
+    ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
+    exec_info_.trans_type_ = TransType::DIST_TRANS;
 
-  msg_2pc_cache_ = &msg;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
-    TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
-  } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
-    TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
-  } else if (OB_FAIL(handle_2pc_req(msg_type))) {
-    TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
-  }
-  msg_2pc_cache_ = nullptr;
+    msg_2pc_cache_ = &msg;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
+      TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
+    } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
+      TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
+    } else if (OB_FAIL(handle_2pc_req(msg_type))) {
+      TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
+    }
+    msg_2pc_cache_ = nullptr;
 
-  if (OB_SUCC(ret)) {
-    part_trans_action_ = ObPartTransAction::COMMIT;
+    if (OB_SUCC(ret)) {
+      part_trans_action_ = ObPartTransAction::COMMIT;
+    }
   }
-
   return ret;
 }
 
@@ -1161,6 +1163,9 @@ int ObPartTransCtx::post_tx_commit_resp_(const int status)
     build_tx_common_msg_(SCHEDULER_LS, msg);
     msg.commit_version_ = commit_version;
     msg.ret_ = status;
+    if (OB_SUCCESS == status) {
+      msg.need_wait_interval_us_ = get_remaining_wait_interval_us_();
+    }
     if (OB_FAIL(post_msg_(exec_info_.scheduler_, msg))) {
       TRANS_LOG(WARN, "rpc post msg failed", K(*this), K(msg));
     } else {

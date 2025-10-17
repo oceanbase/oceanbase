@@ -16,6 +16,8 @@
 #include "lib/container/ob_fixed_array.h"
 #include "common/row/ob_row_iterator.h"
 #include "sql/das/iter/ob_das_iter_define.h"
+#include "sql/das/ob_das_define.h"
+#include "share/ob_i_tablet_scan.h"
 
 namespace oceanbase
 {
@@ -26,6 +28,7 @@ namespace sql
 class ObDASDomainIdMergeIter;
 class ObEvalCtx;
 class ObExecContext;
+class ObDASScanCtDef;
 struct ObDASIterParam
 {
 public:
@@ -117,6 +120,11 @@ public:
   virtual void reset() override {}
   // for compatibility with ObNewRowIterator
 
+  virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,
+                              const ObIArray<ObExpr *> &rowkey_exprs,
+                              const ObDASScanCtDef *lookup_ctdef,
+                              ObIAllocator *alloc,
+                              int64_t group_id) { return OB_NOT_IMPLEMENT; }
   int get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge_iter);
 protected:
   virtual int inner_init(ObDASIterParam &param) = 0;

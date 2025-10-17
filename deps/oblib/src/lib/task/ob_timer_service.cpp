@@ -470,6 +470,9 @@ bool ObTimerService::task_exist(const ObTimer *timer, const ObTimerTask &task)
     TaskToken *token = priority_task_queue_.at(idx);
     exist = has_same_task_and_timer(token, timer, &task);
   }
+  if (!exist) {
+    exist = find_task_in_set(running_task_set_, timer, &task);
+  }
   return exist;
 }
 
@@ -498,15 +501,15 @@ int ObTimerService::mtl_start(ObTimerService *&timer_service)
 
 void ObTimerService::mtl_stop(ObTimerService *&timer_service)
 {
-  if (nullptr != timer_service) {
-    timer_service->stop();
-    OB_LOG(INFO, "success to stop timer service");
-  }
+  UNUSED(timer_service);
+  OB_LOG(INFO, "delay to stop timer service");
 }
 
 void ObTimerService::mtl_wait(ObTimerService *&timer_service)
 {
   if (nullptr != timer_service) {
+    timer_service->stop();
+    OB_LOG(INFO, "success to stop timer service");
     timer_service->wait();
     OB_LOG(INFO, "success to wait timer service");
   }

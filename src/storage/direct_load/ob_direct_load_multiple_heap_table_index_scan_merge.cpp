@@ -93,7 +93,7 @@ int ObDirectLoadMultipleHeapTableIndexScanMerge::init_rows_merger(int64_t count)
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(rows_merger_->init(count, allocator_))) {
+    if (OB_FAIL(rows_merger_->init(MAX_SCANNER_COUNT, count, allocator_))) {
       LOG_WARN("fail to init rows merger", KR(ret), K(count));
     } else if (FALSE_IT(rows_merger_->reuse())) {
     } else if (OB_FAIL(rows_merger_->open(count))) {

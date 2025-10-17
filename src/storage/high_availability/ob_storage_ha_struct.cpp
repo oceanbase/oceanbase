@@ -406,7 +406,7 @@ int ObMigrationStatusHelper::set_ls_migrate_gc_status_(
     LOG_WARN("failed to set migration status", K(ret));
   } else if (!allow_gc) {
     LOG_INFO("ls is not allow gc", K(ret), K(ls));
-  } else if (OB_FAIL(ls.get_log_handler()->disable_sync())) {
+  } else if (!ls.get_log_handler()->is_in_stop_state() && OB_FAIL(ls.get_log_handler()->disable_sync())) {
     LOG_WARN("failed to disable replay", K(ret));
   }
   return ret;
@@ -1549,6 +1549,8 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_UNEXPECTED_TABLET_STATUS :
     case OB_TABLET_TRANSFER_SEQ_NOT_MATCH :
     case OB_MIGRATE_TX_DATA_NOT_CONTINUES :
+    case OB_TRANS_CTX_NOT_EXIST:
+    case OB_LS_NOT_IN_LEARNER_LIST:
       bret = false;
       break;
     default:

@@ -213,11 +213,11 @@ int ObTransService::reuse_tx(ObTxDesc &tx, const uint64_t data_version)
         TRANS_LOG(WARN, "blocking to wait tx referent quiescent cost too much time",
                   "tx_id", orig_tx_id, KP(&tx), K(final_ref_cnt), K(spin_cnt), K(tx.get_ref()), K(cb_tid));
         tx.print_trace();
-        usleep(2000000); // 2s
+        ob_usleep(2000000); // 2s
       } else if (spin_cnt > 200) {
-        usleep(2000);    // 2ms
+        ob_usleep(2000);    // 2ms
       } else if (spin_cnt > 100) {
-        usleep(200);     // 200us
+        ob_usleep(200);     // 200us
       }
 #ifdef ENABLE_DEBUG_LOG
       if (spin_cnt > 2300) {
@@ -582,6 +582,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
         tx.state_ == ObTxDesc::State::ACTIVE ||
         tx.state_ == ObTxDesc::State::IMPLICIT_ACTIVE)) {
       ObTxDesc::State state0 = tx.state_;
+      tx.commit_expire_ts_ = expire_ts;
       tx.state_ = ObTxDesc::State::IN_TERMINATE;
       // record trace_info
       if (OB_NOT_NULL(trace_info) &&

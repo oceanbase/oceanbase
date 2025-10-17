@@ -449,14 +449,25 @@ int ObPrimaryLSService::check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo
 int ObPrimaryLSService::process_all_ls_status_to_steady_(const share::schema::ObTenantSchema &tenant_schema)
 {
   int ret = OB_SUCCESS;
+  ObAllTenantInfo all_tenant_info;
+  ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   if (!is_user_tenant(tenant_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls recovery thread must run on user tenant", KR(ret),
              K(tenant_id_));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_info_loader is null", KR(ret), KP(tenant_info_loader));
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(all_tenant_info))) {
+    LOG_WARN("fail to get tenant_info", KR(ret));
+  } else if (!(all_tenant_info.is_primary() && all_tenant_info.is_normal_status())) {
+    ret = OB_NEED_WAIT;
+    LOG_WARN("The tenant role should be PRIMARY and the switchover status should be normal", KR(ret), K(all_tenant_info));
   } else {
     ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema, tenant_id_);
-    if (OB_FAIL(ObLSServiceHelper::process_status_to_steady(false, share::NORMAL_SWITCHOVER_STATUS, tenant_info))) {
-      LOG_WARN("failed to process status to steady", KR(ret));
+    if (OB_FAIL(ObLSServiceHelper::process_status_to_steady(false,
+        all_tenant_info.get_switchover_status(), all_tenant_info.get_switchover_epoch(), tenant_info))) {
+      LOG_WARN("failed to process status to steady", KR(ret), K(all_tenant_info));
     }
   }
   LOG_INFO("[PRIMARY_LS_SERVICE] finish process all ls status to steady", KR(ret), K(tenant_id_));
@@ -494,8 +505,12 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
   } else if (!tenant_schema.is_creating()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only creating tenant can create user ls", KR(ret), K(tenant_schema));
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
+    // in standalone deployment, there's only one user ls.
+    // memory is enough to create ls, so it's no need to check mini mode
   } else if (OB_FAIL(check_mini_mode_create_ls())) {
     LOG_WARN("failed to check mini mode create ls", KR(ret));
+#endif
   } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
           primary_zone, unit_group_array))) {
     LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_schema));
@@ -512,10 +527,8 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
       //nothing
     } else {
       uint64_t ls_group_id = OB_INVALID_ID;
-      ObLSID ls_id;
       share::ObLSAttr new_ls;
       share::ObLSFlag flag;
-      SCN create_scn;
       for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_array.count(); ++i) {
         if (unit_group_array.at(i).is_active()) {
           //create ls
@@ -523,17 +536,9 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
             LOG_WARN("failed to fetch new LS group id", KR(ret), K(tenant_id_));
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < primary_zone.count(); j++) {
-            if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(GCTX.sql_proxy_, tenant_id_, ls_id))) {
-              LOG_WARN("failed to fetch new LS id", KR(ret), K(tenant_id_));
-            } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id_, create_scn))) {
-              LOG_WARN("failed to get tenant gts", KR(ret), K(tenant_id_));
-            } else if (OB_FAIL(new_ls.init(ls_id, ls_group_id, flag, share::OB_LS_CREATING,
-                           share::OB_LS_OP_CREATE_PRE, create_scn))) {
-              LOG_WARN("failed to init new operation", KR(ret), K(create_scn),
-                       K(ls_id), K(ls_group_id));
-            } else if (OB_FAIL(ls_operator.insert_ls(
-                           new_ls, share::NORMAL_SWITCHOVER_STATUS, &trans))) {
-              LOG_WARN("failed to insert new operation", KR(ret), K(new_ls));
+            if (OB_FAIL(ObLSServiceHelper::create_ls_in_user_tenant(tenant_id_, ls_group_id, flag,
+                ls_operator, new_ls, &trans))) {
+              LOG_WARN("failed to execute create_ls_in_user_tenant", KR(ret), K(tenant_id_), K(ls_group_id));
             }
           }//end for each ls group
         }
@@ -714,7 +719,6 @@ int ObPrimaryLSService::create_duplicate_ls()
   LOG_INFO("[LS_MGR] create duplicate ls", KR(ret), K(new_ls));
   return ret;
 }
-
 int ObDupLSCreateHelper::init(
     const uint64_t tenant_id,
     common::ObISQLClient *sql_proxy,

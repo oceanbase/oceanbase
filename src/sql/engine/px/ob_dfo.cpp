@@ -14,6 +14,7 @@
 #include "ob_dfo.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
+#include "sql/engine/px/exchange/ob_px_transmit_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -67,7 +68,9 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     monitoring_info_,
                     branch_id_base_,
                     partition_random_affinitize_,
-                    locations_order_);
+                    locations_order_,
+                    px_tablets_info_,
+                    lake_table_file_desc_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -88,7 +91,7 @@ OB_SERIALIZE_MEMBER(ObPxRpcInitTaskResponse,
 OB_SERIALIZE_MEMBER(ObPxRpcInitSqcResponse,
                     rc_,
                     reserved_thread_count_,
-                    partitions_info_,
+                    px_tablets_info_, // FARM COMPAT WHITELIST for partitions_info_
                     sqc_order_gi_tasks_);
 OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     table_location_key_,
@@ -154,6 +157,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("fail to assign qc monitoring info", K(ret));
   } else if (OB_FAIL(locations_order_.assign(other.locations_order_))) {
     LOG_WARN("fail to assign qc locations order", K(ret));
+  } else if (OB_FAIL(lake_table_file_desc_.assign(other.lake_table_file_desc_))) {
+    LOG_WARN("fail to assign lake table file desc", K(ret));
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;
@@ -200,6 +205,10 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
       LOG_WARN("fail to push back", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(px_tablets_info_.assign(other.px_tablets_info_))) {
+    LOG_WARN("failed to assign px_tablets_info_");
+  }
   return ret;
 }
 
@@ -228,24 +237,6 @@ int ObDfo::get_sqc(int64_t idx, ObPxSqcMeta *&sqc)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("idx and sqc id mismatch", K(idx), "id", sqc->get_sqc_id(), K(ret));
     }
-  }
-  return ret;
-}
-
-int ObDfo::get_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < sqcs_.count(); ++i) {
-    ret = sqcs.push_back(&sqcs_.at(i));
-  }
-  return ret;
-}
-
-int ObDfo::get_sqcs(common::ObIArray<const ObPxSqcMeta *> &sqcs) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < sqcs_.count(); ++i) {
-    ret = sqcs.push_back(&sqcs_.at(i));
   }
   return ret;
 }
@@ -368,159 +359,6 @@ int ObDfo::build_tasks()
   return ret;
 }
 
-int ObDfo::alloc_data_xchg_ch()
-{
-  int ret = OB_SUCCESS;
-
-  if (is_root_dfo()) {
-    // root dfo 无需设置 data transmit channels
-  } else {
-    for (int64_t t = 0; t < tasks_.count() && OB_SUCC(ret); ++t) {
-      ObPxTaskChSet ch_set;
-      ch_set.set_exec_addr(tasks_.at(t).get_exec_addr());
-      ch_set.set_sqc_id(tasks_.at(t).get_sqc_id());
-      ch_set.set_task_id(tasks_.at(t).get_task_id());
-      ret = transmit_ch_sets_.push_back(ch_set);
-    }
-  }
-
-  LOG_TRACE("init receive_ch_sets_map_", KP(this), K_(dfo_id), K(lbt()));
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_dfos_.count(); ++i) {
-    int64_t child_dfo_id = child_dfos_.at(i)->get_dfo_id();
-    if (child_dfo_id < 0 || child_dfo_id >= MAX_DFO_ID) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("child dfo id is invalid", K(child_dfo_id), K(ret));
-    } else if (child_dfo_id >= receive_ch_sets_map_.count() &&
-               OB_FAIL(receive_ch_sets_map_.prepare_allocate(child_dfo_id * 2 + 1))) {
-      LOG_WARN("fail to reserve receive_ch_sets_map", K(ret));
-    } else if (NULL != receive_ch_sets_map_.at(child_dfo_id)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL map entry expected. can not init twice", K(ret));
-    } else {
-      void *ptr = NULL;
-      ObPxTaskChSets *receive_ch_sets = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObPxTaskChSets)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail alloc mem", "size", sizeof(ObPxTaskChSets), K(ret));
-      } else if (OB_ISNULL(receive_ch_sets = new (ptr) ObPxTaskChSets())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        receive_ch_sets_map_.at(child_dfo_id) = receive_ch_sets;
-        for (int64_t t = 0; t < tasks_.count() && OB_SUCC(ret); ++t) {
-          ObPxTaskChSet ch_set;
-          ch_set.set_exec_addr(tasks_.at(t).get_exec_addr());
-          ch_set.set_sqc_id(tasks_.at(t).get_sqc_id());
-          ch_set.set_task_id(tasks_.at(t).get_task_id());
-          if (OB_FAIL(receive_ch_sets->push_back(ch_set))) {
-            LOG_WARN("fail push back ch_set", K(ch_set), K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDfo::get_task_transmit_chs_for_update(ObIArray<ObPxTaskChSet *> &ch_sets)
-{
-  int ret = OB_SUCCESS;
-  ch_sets.reuse();
-  for (int64_t i = 0; i < transmit_ch_sets_.count() && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(ch_sets.push_back(&transmit_ch_sets_.at(i)))) {
-      LOG_WARN("fail push back channel set", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDfo::get_task_receive_chs_for_update(int64_t child_dfo_id, ObIArray<ObPxTaskChSet *> &ch_sets)
-{
-  int ret = OB_SUCCESS;
-
-  LOG_TRACE("use gfu receive_ch_sets_map_", KP(this), K_(dfo_id), K(lbt()));
-  ch_sets.reuse();
-
-  if (child_dfo_id < 0 || child_dfo_id >= MAX_DFO_ID) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == receive_ch_sets_map_.at(child_dfo_id)) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("can't find any entry for child dfo id", K(child_dfo_id), K(ret));
-  } else {
-    ObPxTaskChSets &receive_ch_sets = *receive_ch_sets_map_.at(child_dfo_id);
-    for (int64_t i = 0; i < receive_ch_sets.count() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(ch_sets.push_back(&receive_ch_sets.at(i)))) {
-        LOG_WARN("fail push back info", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (receive_ch_sets.count() <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("array size unexpected.should not be zero",
-                 K(child_dfo_id), "ch_sets", receive_ch_sets.count(), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDfo::get_task_transmit_chs(ObPxTaskChSets &ch_sets,
-                                 TaskFilterFunc filter) const
-{
-  int ret = OB_SUCCESS;
-  ch_sets.reuse();
-  for (int64_t i = 0; i < transmit_ch_sets_.count() && OB_SUCC(ret); ++i) {
-    if (filter(transmit_ch_sets_.at(i))) {
-      if (OB_FAIL(ch_sets.push_back(transmit_ch_sets_.at(i)))) {
-        LOG_WARN("fail push back channel set", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDfo::get_task_receive_chs(int64_t child_dfo_id, ObPxTaskChSets &ch_sets) const
-{
-  return get_task_receive_chs(child_dfo_id,
-                              ch_sets,
-                              [](const ObPxTaskChSet &){return true;});
-
-}
-
-int ObDfo::get_task_receive_chs(int64_t child_dfo_id,
-                                ObPxTaskChSets &ch_sets,
-                                TaskFilterFunc filter) const
-{
-  int ret = OB_SUCCESS;
-
-  LOG_TRACE("use receive_ch_sets_map_", KP(this), K_(dfo_id), K(lbt()));
-  ch_sets.reuse();
-
-  if (child_dfo_id < 0 || child_dfo_id >= MAX_DFO_ID) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (NULL == receive_ch_sets_map_.at(child_dfo_id)) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("can't find any entry for child dfo id", K(child_dfo_id), K(ret));
-  } else {
-    ObPxTaskChSets &receive_ch_sets = *receive_ch_sets_map_.at(child_dfo_id);
-    for (int64_t i = 0; i < receive_ch_sets.count() && OB_SUCC(ret); ++i) {
-      if (filter(receive_ch_sets.at(i))) {
-        if (OB_FAIL(ch_sets.push_back(receive_ch_sets.at(i)))) {
-          LOG_WARN("fail push back info", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (receive_ch_sets.count() <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("array size unexpected.should not be zero",
-                 K(child_dfo_id), "ch_sets", receive_ch_sets.count(), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 // child dfo保存是child和parent的sqc信息，parent直接从child拿就可以
 int ObDfo::get_dfo_ch_info(int64_t sqc_idx, ObDtlChTotalInfo *&ch_info)
 {
@@ -603,21 +441,29 @@ int ObPxRpcInitSqcArgs::serialize_common_parts_2(
       MEMCPY(buf + pos, ser_cache.buf2_, ser_cache.len2_);
       pos += ser_cache.len2_;
     }
+  } else if (OB_ISNULL(op_spec_root_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: op root is null", K(ret));
   } else {
     int64_t old_pos = pos;
     // 序列化Task的核心部分到远端：sub plan tree
-    const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
-    if (OB_ISNULL(op_spec_root_)) {
+    const ObExprFrameInfo *frame_info = NULL;
+    if (OB_UNLIKELY(!IS_PX_TRANSMIT(op_spec_root_->type_))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: op root is null", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info(
-                buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
+      LOG_WARN("unexpected spec type", K(ret), K(op_spec_root_->type_));
+    } else {
+      frame_info = static_cast<ObPxTransmitSpec *>(op_spec_root_)->dfo_expr_frame_info_;
+    }
+    frame_info = NULL == frame_info ? &ser_phy_plan_->get_expr_frame_info() : frame_info;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info<true>(
+                buf, buf_len, pos, *exec_ctx_, *frame_info))) {
       LOG_WARN("failed to serialize rt expr", K(ret));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
-                buf, buf_len, pos, *op_spec_root_, sqc_.is_fulltree(), sqc_.get_exec_addr(), &seri_ctx))) {
+                buf, buf_len, pos, *op_spec_root_, false /* is_fulltree */, sqc_.get_exec_addr(), &seri_ctx))) {
       LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
-                buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store(), sqc_.is_fulltree()))) {
+                buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store()))) {
       LOG_WARN("failed to deserialize kit store", K(ret));
     }
 
@@ -695,11 +541,12 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected status: op root is null", K(ret));
       } else {
-        const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
-        len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info));
-        len += ObPxTreeSerializer::get_tree_serialize_size(*op_spec_root_, sqc_.is_fulltree(), &seri_ctx);
+        const ObExprFrameInfo *frame_info = static_cast<ObPxTransmitSpec *>(op_spec_root_)->dfo_expr_frame_info_;
+        frame_info = NULL == frame_info ? &ser_phy_plan_->get_expr_frame_info() : frame_info;
+        len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_, *frame_info);
+        len += ObPxTreeSerializer::get_tree_serialize_size(*op_spec_root_, false /* is_fulltree */, &seri_ctx);
         len += ObPxTreeSerializer::get_serialize_op_input_size(
-            *op_spec_root_, exec_ctx_->get_kit_store(), sqc_.is_fulltree());
+            *op_spec_root_, exec_ctx_->get_kit_store());
       }
       LOG_TRACE("trace get ser rpc init sqc args size", K(len));
       ser_cache.slen_ = len;
@@ -771,15 +618,14 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
       LST_DO_CODE(OB_UNIS_DECODE, sqc_);
 
       LOG_TRACE("deserialize sqc", K_(sqc));
-
       if (OB_SUCC(ret)) {
         const ObExprFrameInfo *frame_info = &des_phy_plan_->get_expr_frame_info();
-        if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info(
-            buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
-          LOG_WARN("failed to serialize rt expr", K(ret));
+        if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
+            buf, data_len, pos, *exec_ctx_, *frame_info))) {
+          LOG_WARN("failed to serialize rt expr", K(ret), K(sqc_));
         } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
             buf, data_len, pos, *des_phy_plan_, op_spec_root_, scan_spec_ops_))) {
-          LOG_WARN("fail deserialize tree", K(ret));
+          LOG_WARN("fail deserialize tree", K(ret), K(sqc_));
         } else if (OB_FAIL(op_spec_root_->create_op_input(*exec_ctx_))) {
           LOG_WARN("create operator from spec failed", K(ret));
         } else if (OB_FAIL(ObPxTreeSerializer::deserialize_op_input(buf, data_len, pos, exec_ctx_->get_kit_store()))) {
@@ -787,6 +633,25 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
         } else {
           des_phy_plan_->set_root_op_spec(op_spec_root_);
           exec_ctx_->reference_my_plan(des_phy_plan_);
+#ifndef NDEBUG
+          const ObIArray<ObExpr> &exprs = frame_info->rt_exprs_;
+          const ObIArray<ObFrameInfo> &datum_frame = frame_info->datum_frame_;
+          int64_t batch_size = std::max<int64_t>(des_phy_plan_->get_batch_size(), 1);
+          for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+            const ObExpr &expr = exprs.at(i);
+            for (int64_t j = 0; j < datum_frame.count() && OB_SUCC(ret); j++) {
+              const ObFrameInfo &frame_info = datum_frame.at(j);
+              if (expr.frame_idx_ == frame_info.frame_idx_) {
+                int64_t max_offset = ObStaticEngineExprCG::frame_max_offset(expr, batch_size, frame_info.use_rich_format_);
+                if (OB_UNLIKELY(max_offset > frame_info.frame_size_)) {
+                  ret = OB_SIZE_OVERFLOW;
+                  LOG_WARN("unexpected frame size", K(ret), K(frame_info), K(batch_size),
+                           K(max_offset), K(expr), K(expr.batch_result_), K(expr.offset_off_), K(expr.cont_buf_off_), K(expr.null_bitmap_off_));
+                }
+              }
+            }
+          }
+#endif
         }
       }
     }
@@ -820,7 +685,6 @@ int ObPxRpcInitSqcArgs::assign(ObPxRpcInitSqcArgs &other)
 
 
 ////// ObPxRpcInitTaskArgs ////////
-
 OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
 {
   int ret = OB_SUCCESS;
@@ -832,29 +696,53 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
   }
   uint64_t sqc_task_ptr_val = reinterpret_cast<uint64_t>(sqc_task_ptr_);
   uint64_t sqc_handler_ptr_val = reinterpret_cast<uint64_t>(sqc_handler_);
+  bool use_share_plan = ser_phy_plan_->px_worker_share_plan_enabled();
+  LST_DO_CODE(OB_UNIS_ENCODE, use_share_plan);
+  if (!use_share_plan) {
+    LST_DO_CODE(OB_UNIS_ENCODE, *ser_phy_plan_);
+    LST_DO_CODE(OB_UNIS_ENCODE, *exec_ctx_);
+    LST_DO_CODE(OB_UNIS_ENCODE, task_);
+    LST_DO_CODE(OB_UNIS_ENCODE, sqc_task_ptr_val);
+    LST_DO_CODE(OB_UNIS_ENCODE, sqc_handler_ptr_val);
 
-  LST_DO_CODE(OB_UNIS_ENCODE, *ser_phy_plan_);
-  LST_DO_CODE(OB_UNIS_ENCODE, *exec_ctx_);
-  LST_DO_CODE(OB_UNIS_ENCODE, task_);
-  LST_DO_CODE(OB_UNIS_ENCODE, sqc_task_ptr_val);
-  LST_DO_CODE(OB_UNIS_ENCODE, sqc_handler_ptr_val);
+    LOG_TRACE("serialize task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
+    // 序列化Task的核心部分到执行端：sub plan tree
+    if (OB_SUCC(ret)) {
+      const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
+      if (OB_ISNULL(op_spec_root_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: op root is null", K(ret));
+      } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info<true>(
+          buf, buf_len, pos, *exec_ctx_, *frame_info))) {
+        LOG_WARN("failed to serialize rt expr", K(ret));
+      } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
+                  buf, buf_len, pos, *op_spec_root_, false /* is_fulltree */, task_.get_exec_addr()))) {
+        LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
+      } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
+          buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store()))) {
+        LOG_WARN("failed to deserialize kit store", K(ret));
+      }
+    }
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE, *exec_ctx_);
+    LST_DO_CODE(OB_UNIS_ENCODE, task_);
+    LST_DO_CODE(OB_UNIS_ENCODE, sqc_task_ptr_val);
+    LST_DO_CODE(OB_UNIS_ENCODE, sqc_handler_ptr_val);
 
-  LOG_TRACE("serialize task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
-  // 序列化Task的核心部分到执行端：sub plan tree
-  if (OB_SUCC(ret)) {
-    const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
-    if (OB_ISNULL(op_spec_root_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status: op root is null", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info(
-        buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
-      LOG_WARN("failed to serialize rt expr", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
-                buf, buf_len, pos, *op_spec_root_, task_.is_fulltree(), task_.get_exec_addr()))) {
-      LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
-    } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
-        buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store(), task_.is_fulltree()))) {
-      LOG_WARN("failed to deserialize kit store", K(ret));
+    LOG_TRACE("serialize task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
+    // 序列化Task的核心部分到执行端：sub plan tree
+    if (OB_SUCC(ret)) {
+      const ObExprFrameInfo &frame_info = ser_phy_plan_->get_expr_frame_info();
+      if (OB_ISNULL(op_spec_root_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: op root is null", K(ret));
+      } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info<false>(
+          buf, buf_len, pos, *exec_ctx_, frame_info))) {
+        LOG_WARN("fail serialize expr frames", K(ret), K(buf_len), K(pos));
+      } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
+          buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store()))) {
+        LOG_WARN("failed to deserialize kit store", K(ret));
+      }
     }
   }
   return ret;
@@ -863,7 +751,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
 OB_DEF_DESERIALIZE(ObPxRpcInitTaskArgs)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(exec_ctx_) || OB_ISNULL(des_phy_plan_) || OB_ISNULL(des_allocator_)) {
+  if (OB_ISNULL(exec_ctx_) || OB_ISNULL(inner_phy_plan_) || OB_ISNULL(des_allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("task not init", K(ret), K_(exec_ctx), K_(des_phy_plan), K_(des_allocator));
   } else if (OB_UNLIKELY(NULL != op_spec_root_)) {
@@ -886,38 +774,73 @@ OB_DEF_DESERIALIZE(ObPxRpcInitTaskArgs)
     MEMCPY(tmp_buf, buf, data_len);
     buf = tmp_buf;
   }
+  bool use_share_plan = false;
+  LST_DO_CODE(OB_UNIS_DECODE, use_share_plan);
+  if (OB_FAIL(ret)) {
+  } else if (!use_share_plan) {
+    LST_DO_CODE(OB_UNIS_DECODE, *inner_phy_plan_);
+    LST_DO_CODE(OB_UNIS_DECODE, *exec_ctx_);
+    LST_DO_CODE(OB_UNIS_DECODE, task_);
 
-  LST_DO_CODE(OB_UNIS_DECODE, *des_phy_plan_);
-  LST_DO_CODE(OB_UNIS_DECODE, *exec_ctx_);
-  LST_DO_CODE(OB_UNIS_DECODE, task_);
+    uint64_t sqc_task_ptr_val = 0;
+    uint64_t sqc_handler_ptr_val = 0;
+    LST_DO_CODE(OB_UNIS_DECODE, sqc_task_ptr_val);
+    LST_DO_CODE(OB_UNIS_DECODE, sqc_handler_ptr_val);
+    sqc_task_ptr_ = reinterpret_cast<ObPxTask *>(sqc_task_ptr_val);
+    sqc_handler_ = reinterpret_cast<ObPxSqcHandler *>(sqc_handler_ptr_val);
 
-  uint64_t sqc_task_ptr_val = 0;
-  uint64_t sqc_handler_ptr_val = 0;
-  LST_DO_CODE(OB_UNIS_DECODE, sqc_task_ptr_val);
-  LST_DO_CODE(OB_UNIS_DECODE, sqc_handler_ptr_val);
-  sqc_task_ptr_ = reinterpret_cast<ObPxTask *>(sqc_task_ptr_val);
-  sqc_handler_ = reinterpret_cast<ObPxSqcHandler *>(sqc_handler_ptr_val);
+    LOG_TRACE("deserialized task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
 
-  LOG_TRACE("deserialized task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
+    if (OB_SUCC(ret)) {
+      const ObExprFrameInfo *expr_frame_info = &inner_phy_plan_->get_expr_frame_info();
+      if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
+          buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo*>(expr_frame_info)))) {
+        LOG_WARN("failed to serialize rt expr", K(ret));
+      } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
+                  buf, data_len, pos, *inner_phy_plan_, inner_op_spec_root_))) {
+        LOG_WARN("fail deserialize tree", K(ret));
+      } else if (OB_FAIL(inner_op_spec_root_->create_op_input(*exec_ctx_))) {
+        LOG_WARN("create operator from spec failed", K(ret));
+      } else if (OB_FAIL(ObPxTreeSerializer::deserialize_op_input(buf, data_len, pos, exec_ctx_->get_kit_store()))) {
+            LOG_WARN("failed to deserialize kit store", K(ret));
+      } else {
+        inner_phy_plan_->set_root_op_spec(inner_op_spec_root_);
+        exec_ctx_->reference_my_plan(inner_phy_plan_);
+        des_phy_plan_ = inner_phy_plan_;
+        op_spec_root_ = inner_op_spec_root_;
+      }
+    }
+  } else if (OB_ISNULL(des_phy_plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("des phy plan is NULL", K(ret));
+  } else {
+    op_spec_root_ = des_phy_plan_->get_root_op_spec();
+    LST_DO_CODE(OB_UNIS_DECODE, *exec_ctx_);
+    LST_DO_CODE(OB_UNIS_DECODE, task_);
 
-  if (OB_SUCC(ret)) {
-    const ObExprFrameInfo *expr_frame_info = &des_phy_plan_->get_expr_frame_info();
-    if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info(
-        buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo*>(expr_frame_info)))) {
-      LOG_WARN("failed to serialize rt expr", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
-                buf, data_len, pos, *des_phy_plan_, op_spec_root_))) {
-      LOG_WARN("fail deserialize tree", K(ret));
-    } else if (OB_FAIL(op_spec_root_->create_op_input(*exec_ctx_))) {
-      LOG_WARN("create operator from spec failed", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::deserialize_op_input(buf, data_len, pos, exec_ctx_->get_kit_store()))) {
-          LOG_WARN("failed to deserialize kit store", K(ret));
-    } else {
-      des_phy_plan_->set_root_op_spec(op_spec_root_);
-      exec_ctx_->reference_my_plan(des_phy_plan_);
+    uint64_t sqc_task_ptr_val = 0;
+    uint64_t sqc_handler_ptr_val = 0;
+    LST_DO_CODE(OB_UNIS_DECODE, sqc_task_ptr_val);
+    LST_DO_CODE(OB_UNIS_DECODE, sqc_handler_ptr_val);
+    sqc_task_ptr_ = reinterpret_cast<ObPxTask *>(sqc_task_ptr_val);
+    sqc_handler_ = reinterpret_cast<ObPxSqcHandler *>(sqc_handler_ptr_val);
+
+    LOG_TRACE("deserialized task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
+
+    if (OB_SUCC(ret)) {
+      const ObExprFrameInfo &expr_frame_info = des_phy_plan_->get_expr_frame_info();
+      if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<false>(
+          buf, data_len, pos, *exec_ctx_, expr_frame_info))) {
+        LOG_WARN("failed to deserialize expr frames", K(ret));
+      } else if (OB_FAIL(op_spec_root_->create_op_input(*exec_ctx_))) {
+        LOG_WARN("create operator from spec failed", K(ret));
+      } else if (OB_FAIL(ObPxTreeSerializer::deserialize_op_input(buf, data_len, pos, exec_ctx_->get_kit_store()))) {
+            LOG_WARN("failed to deserialize kit store", K(ret));
+      } else {
+        exec_ctx_->reference_my_plan(des_phy_plan_);
+      }
     }
   }
-
   return ret;
 }
 
@@ -931,21 +854,38 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitTaskArgs)
   } else {
     uint64_t sqc_task_ptr_val = reinterpret_cast<uint64_t>(sqc_task_ptr_);
     uint64_t sqc_handler_ptr_val = reinterpret_cast<uint64_t>(sqc_handler_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, *ser_phy_plan_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, *exec_ctx_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, task_);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_task_ptr_val);
-    LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_handler_ptr_val);
-    if (OB_ISNULL(op_spec_root_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected status: op root is null", K(ret));
+    bool use_share_plan = ser_phy_plan_->px_worker_share_plan_enabled();
+    LST_DO_CODE(OB_UNIS_ADD_LEN, use_share_plan);
+    if (!use_share_plan) {
+      LST_DO_CODE(OB_UNIS_ADD_LEN, *ser_phy_plan_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, *exec_ctx_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, task_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_task_ptr_val);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_handler_ptr_val);
+      if (OB_ISNULL(op_spec_root_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected status: op root is null", K(ret));
+      } else {
+        const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
+        len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_, *frame_info);
+        len += ObPxTreeSerializer::get_tree_serialize_size(*op_spec_root_, false /* is_fulltree */);
+        len += ObPxTreeSerializer::get_serialize_op_input_size(
+          *op_spec_root_, exec_ctx_->get_kit_store());
+      }
     } else {
-      const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
-      len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info));
-      len += ObPxTreeSerializer::get_tree_serialize_size(*op_spec_root_, task_.is_fulltree());
-      len += ObPxTreeSerializer::get_serialize_op_input_size(
-        *op_spec_root_, exec_ctx_->get_kit_store(), task_.is_fulltree()
-      );
+      LST_DO_CODE(OB_UNIS_ADD_LEN, *exec_ctx_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, task_);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_task_ptr_val);
+      LST_DO_CODE(OB_UNIS_ADD_LEN, sqc_handler_ptr_val);
+      if (OB_ISNULL(op_spec_root_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected status: op root is null", K(ret));
+      } else {
+        const ObExprFrameInfo &frame_info = ser_phy_plan_->get_expr_frame_info();
+        len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<false>(*exec_ctx_, frame_info);
+        len += ObPxTreeSerializer::get_serialize_op_input_size(
+          *op_spec_root_, exec_ctx_->get_kit_store());
+      }
     }
   }
   return len;
@@ -970,11 +910,12 @@ void ObPxRpcInitTaskArgs::set_deserialize_param(ObExecContext &exec_ctx,
   des_allocator_ = des_allocator;
 }
 
-int ObPxRpcInitTaskArgs::init_deserialize_param(lib::MemoryContext &mem_context, const observer::ObGlobalContext &gctx)
+int ObPxRpcInitTaskArgs::init_deserialize_param(const ObPxRpcInitTaskArgs &arg, lib::MemoryContext &mem_context, const observer::ObGlobalContext &gctx)
 {
   int ret = OB_SUCCESS;
   void *plan_buf = NULL;
   void *ctx_buf = NULL;
+  des_phy_plan_ = arg.ser_phy_plan_;
   if (OB_ISNULL(plan_buf = mem_context->get_arena_allocator().alloc(sizeof(ObPhysicalPlan)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
@@ -982,7 +923,7 @@ int ObPxRpcInitTaskArgs::init_deserialize_param(lib::MemoryContext &mem_context,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
-    des_phy_plan_ = new (plan_buf) ObPhysicalPlan(mem_context);
+    inner_phy_plan_ = new (plan_buf) ObPhysicalPlan(mem_context);
     exec_ctx_ = new (ctx_buf) ObDesExecContext(mem_context->get_arena_allocator(), gctx.session_mgr_);
     des_allocator_ = &mem_context->get_arena_allocator();
   }
@@ -1001,11 +942,12 @@ int ObPxRpcInitTaskArgs::deep_copy_assign(ObPxRpcInitTaskArgs &src,
   int64_t des_pos = 0;
   void *ser_ptr = NULL;
   int64_t ser_arg_len = src.get_serialize_size();
+
   if (OB_ISNULL(ser_ptr = alloc.alloc(ser_arg_len))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail alloc memory", K(ser_arg_len), KP(ser_ptr), K(ret));
   } else if (OB_ISNULL(des_allocator_)
-             || OB_ISNULL(des_phy_plan_)
+             || OB_ISNULL(inner_phy_plan_)
              || OB_ISNULL(exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("deserialize args not init", K(ret));
@@ -1032,7 +974,6 @@ void ObDfo::reset_resource(ObDfo *dfo)
   if (nullptr != dfo) {
     dfo->sqcs_.reset();
     dfo->child_dfos_.reset();
-    dfo->tasks_.reset();
     for (int64_t j = 0; j < dfo->receive_ch_sets_map_.count(); ++j) {
       if (OB_NOT_NULL(dfo->receive_ch_sets_map_.at(j))) {
         dfo->receive_ch_sets_map_.at(j)->reset();
@@ -1052,13 +993,4 @@ bool ObDfo::check_root_valid()
     invalid = IS_PX_COORD(root_op_spec_->type_);
   }
   return invalid;
-}
-
-const ObPhysicalPlan* ObDfo::get_plan_by_root()
-{
-  const ObPhysicalPlan *plan = nullptr;
-  if (nullptr != root_op_spec_) {
-    plan = root_op_spec_->get_phy_plan();
-  }
-  return plan;
 }

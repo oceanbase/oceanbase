@@ -57,7 +57,7 @@ public:
     virtual int set_property(const ObString &prop_name, const ObObj &prop_value) override;
     virtual int get_properties(ObIArray<std::pair<ObString, ObObj> > &properties) const override;
     virtual int get_properties_names(ObIArray<ObString> &properties) const override;
-    virtual int get_properties_values(ObIArray<ObObj> &values) const override;
+    virtual int get_properties_values(ObIArray<ObObj*> &values) const override;
     virtual int64_t get_properties_count() const override;
 
     OB_INLINE virtual const ObObj &get_properties_value(int64_t idx) const

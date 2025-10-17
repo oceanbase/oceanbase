@@ -230,6 +230,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   //                                         ::oceanbase::storage::mds::MdsCtx, \
   //                                         43,\
   //                                         SYNC_TTL_FILTER_INFO)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObDirectLoadAutoIncSeqMdsHelpler,\
+  //                                         ::oceanbase::storage::mds::MdsCtx,\
+  //                                         44,\
+  //                                         DIRECT_LOAD_AUTO_INC_SEQ)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
@@ -304,15 +308,18 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::ObTruncateInfoKey,\
                     ::oceanbase::storage::ObTruncateInfo,\
                     false)
-  GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  GENERATE_MDS_UNIT(::oceanbase::storage::ObTabletDDLCompleteMdsUserDataKey,\
                     ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
-                    false)
+                    false) // FARM COMPAT WHITELIST
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::storage::ObTabletSplitInfoMdsUserData,\
                     false)
   GENERATE_MDS_UNIT(::oceanbase::storage::ObTTLFilterInfoKey,\
                     ::oceanbase::storage::ObTTLFilterInfo,\
                     false)
+  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  //                   ::oceanbase::storage::ObDirectLoadAutoIncSeqData,\
+  //                   false)
   // # 余留位置（此行之前占位）
 #endif
 

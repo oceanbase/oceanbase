@@ -403,7 +403,7 @@ void ObLogMain::run()
         if (OB_SUCC(ret)) {
           if (OB_UNLIKELY(delay_release_)) {
             static const int64_t delay_release_time = 200; // 200 us, output 5K RPS at most
-            usleep(delay_release_time);
+            ob_usleep(delay_release_time);
           }
           obcdc_instance_->release_record(br);
           br = NULL;

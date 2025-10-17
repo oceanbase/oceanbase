@@ -62,8 +62,7 @@ int ObListFile::inner_open()
     ret = OB_LOCATION_OBJ_NOT_EXIST;
     LOG_WARN("location_schema is null", K(ret), K(location_id));
   } else {
-    ObArray<ObString> file_urls;
-    ObArray<int64_t> file_sizes;
+    ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
     ObSqlString tmp;
     ObExprRegexpSessionVariables regexp_vars;
     if (ObSQLUtils::is_external_files_on_local_disk(location_schema->get_location_url())) {
@@ -92,23 +91,15 @@ int ObListFile::inner_open()
       regexp_vars,
       *allocator_,
       tmp,
-      file_urls,
-      file_sizes));
-    if (OB_SUCC(ret) && file_urls.count() == file_sizes.count()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
-        const ObString &file_url = file_urls.at(i);
-        int64_t file_size = file_sizes.at(i);
-        if (OB_FAIL(fill_row_cells(location_id, sub_path, pattern, file_url, file_size))) {
-          LOG_WARN("fail to fill row cells", K(ret), K(file_url));
-        } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-          LOG_WARN("fail to add row", K(ret), K(cur_row_));
-        }
+      basic_file_infos));
+    for (int64_t i = 0; OB_SUCC(ret) && i < basic_file_infos.count(); i++) {
+      const ObString &file_url = basic_file_infos.at(i).url_;
+      int64_t file_size = basic_file_infos.at(i).size_;
+      if (OB_FAIL(fill_row_cells(location_id, sub_path, pattern, file_url, file_size))) {
+        LOG_WARN("fail to fill row cells", K(ret), K(file_url));
+      } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
+        LOG_WARN("fail to add row", K(ret), K(cur_row_));
       }
-    } else {
-      if (file_urls.count() != file_sizes.count()) {
-        ret = OB_ERR_UNEXPECTED;
-      }
-      LOG_WARN("file_url does'nt match file_size", K(file_urls.count()), K(file_sizes.count()));
     }
   }
   if (OB_SUCC(ret)) {

@@ -726,6 +726,12 @@ int ObTabletGCHandler::gc_tablets(const common::ObIArray<ObTabletHandle> &delete
           if (OB_OBJECT_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
             STORAGE_LOG(INFO, "tablet_meta has been gc, or create tablet abort", KR(ret), KPC(this), KPC(ls_), K(tablet_id), K(transfer_scn));
+#ifdef ERRSIM
+            SERVER_EVENT_SYNC_ADD("tablet_gc", "create_tablet_abort",
+                                  "tenant_id", MTL_ID(),
+                                  "ls_id", ls_id.id(),
+                                  "tablet_id", tablet_id.id());
+#endif
           } else {
             STORAGE_LOG(WARN, "failed to update_tablet_to_empty_shell", KR(ret), KPC(this), KPC(ls_), K(tablet_id), K(transfer_scn));
           }

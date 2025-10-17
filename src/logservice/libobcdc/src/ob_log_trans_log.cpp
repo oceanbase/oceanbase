@@ -257,7 +257,7 @@ void RedoSortedProgress::set_sorted_row_seq_no(const transaction::ObTxSEQ &row_s
 {
   if (row_seq_no < sorted_row_seq_no_.atomic_load()) {
     // TODO PDML may cause row_seq_no rollback
-    LOG_WARN_RET(OB_STATE_NOT_MATCH, "row_seq_no rollbacked! check if PDML sence", K(row_seq_no), K_(sorted_row_seq_no));
+    OBLOG_SORTER_LOG_RET(DEBUG, OB_STATE_NOT_MATCH, "row_seq_no rollbacked! check if PDML sence", K(row_seq_no), K_(sorted_row_seq_no));
   }
   sorted_row_seq_no_.atomic_store(row_seq_no);
 }

@@ -163,7 +163,8 @@ void TestLSTabletService::construct_and_get_tablet_list(
   ret = ls_tablet_service_->get_tablet(node_tablet_id, tmp_tablet_handle_tail);
   ASSERT_EQ(OB_SUCCESS, ret);
   const uint64_t data_version = DATA_CURRENT_VERSION;
-  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tmp_tablet_handle_head.get_obj()->get_transfer_seq());
+  const int64_t tablet_meta_version = 0;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tmp_tablet_handle_head.get_obj()->get_transfer_seq(), tablet_meta_version);
 
   ret = ObTabletPersister::persist_and_transform_tablet(persist_param, *tmp_tablet_handle_head.get_obj(), tablet_handle_head);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -280,7 +281,8 @@ TEST_F(TestLSTabletService, test_serialize_tablet)
 
   ObTabletHandle tiny_tablet_handle;
   const uint64_t data_version = DATA_CURRENT_VERSION;
-  const ObTabletPersisterParam persist_param(data_version, ls_id_,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, orig_tablet->get_transfer_seq());
+  const int64_t tablet_meta_version = 0;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, orig_tablet->get_transfer_seq(), tablet_meta_version);
   ret = ObTabletPersister::persist_and_transform_tablet(persist_param, *orig_tablet, tiny_tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
 

@@ -51,6 +51,7 @@ public:
 
 protected:
   int store_null_bitamp(ObMicroBufferWriter &buf_writer);
+  int store_nop_bitmap(ObMicroBufferWriter &buf_writer);
 
 private:
   int init_common_(const ObColumnCSEncodingCtx &ctx,

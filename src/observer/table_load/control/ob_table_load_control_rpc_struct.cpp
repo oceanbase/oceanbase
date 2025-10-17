@@ -72,7 +72,8 @@ ObDirectLoadControlPreBeginArg::ObDirectLoadControlPreBeginArg()
     load_mode_(ObDirectLoadMode::INVALID_MODE),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     online_sample_percent_(1.),
-    allocator_("TLD_pre_begin")
+    allocator_("TLD_pre_begin"),
+    enable_inc_major_(false)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -136,7 +137,8 @@ OB_DEF_SERIALIZE(ObDirectLoadControlPreBeginArg)
               load_mode_,
               compressor_type_,
               online_sample_percent_,
-              exec_ctx_serialized_str_);
+              exec_ctx_serialized_str_,
+              enable_inc_major_);
   return ret;
 }
 
@@ -169,7 +171,8 @@ OB_DEF_DESERIALIZE(ObDirectLoadControlPreBeginArg)
               load_mode_,
               compressor_type_,
               online_sample_percent_,
-              exec_ctx_serialized_str_);
+              exec_ctx_serialized_str_,
+              enable_inc_major_);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ob_write_string(allocator_, exec_ctx_serialized_str_, exec_ctx_serialized_str_))) {
@@ -210,7 +213,8 @@ OB_DEF_SERIALIZE_SIZE(ObDirectLoadControlPreBeginArg)
               load_mode_,
               compressor_type_,
               online_sample_percent_,
-              exec_ctx_serialized_str_);
+              exec_ctx_serialized_str_,
+              enable_inc_major_);
   return len;
 }
 

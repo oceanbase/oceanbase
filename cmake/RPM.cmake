@@ -45,7 +45,7 @@ set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
 set(CPACK_RPM_DEFAULT_USER "admin")
 set(CPACK_RPM_DEFAULT_GROUP "admin")
-if (OB_BUILD_OPENSOURCE AND NOT BUILD_CDC_ONLY)
+if ((OB_BUILD_OPENSOURCE AND NOT BUILD_CDC_ONLY) OR OB_BUILD_STANDALONE)
   set(DEBUG_INSTALL_POST "mv $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell %{_builddir}/obshell; %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir}; mv %{_builddir}/obshell $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell; %{nil}")
 else()
   set(DEBUG_INSTALL_POST "%{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}")
@@ -119,6 +119,12 @@ else()
     DEPENDS ${BITCODE_TO_ELF_LIST})
   add_custom_target(ob_table ALL
     DEPENDS obtable obtable_static)
+endif()
+
+if (OB_BUILD_STANDALONE)
+  set(CPACK_COMPONENTS_ALL server libs)
+  # specify relocatable paths
+  set(CPACK_RPM_RELOCATION_PATHS "/usr/bin")
 endif()
 
 # add software package info

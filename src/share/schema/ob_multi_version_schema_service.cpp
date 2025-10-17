@@ -357,11 +357,7 @@ int ObMultiVersionSchemaService::get_latest_schema(
       schema = new_schema;
     } else {
       ObTableSchema *new_table = static_cast<ObTableSchema *>(new_schema);
-      if (MATERIALIZED_VIEW == new_table->get_table_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view is");
-        LOG_WARN("not support to fetch latest mv", KR(ret), "table_id", schema_id);
-      } else if (is_hardcode_schema_table(schema_id)) {
+      if (is_hardcode_schema_table(schema_id)) {
         // do-nothing
       } else if (!need_construct_aux_infos_(*new_table)) {
         // do-nothing
@@ -4454,7 +4450,8 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *d
                                                          sql::ObSQLSessionInfo *session_info,
                                                          const ObString &dblink_name,
                                                          bool is_reverse_link,
-                                                         uint64_t *current_scn)
+                                                         uint64_t *current_scn,
+                                                         bool &is_under_oracle12c)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema_service_)) {
@@ -4466,7 +4463,8 @@ int ObMultiVersionSchemaService::fetch_link_table_schema(const ObDbLinkSchema *d
                                                             session_info,
                                                             dblink_name,
                                                             is_reverse_link,
-                                                            current_scn))) {
+                                                            current_scn,
+                                                            is_under_oracle12c))) {
     LOG_WARN("get link table schema failed", K(ret), K(is_reverse_link));
   }
   return ret;

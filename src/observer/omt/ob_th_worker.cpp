@@ -98,7 +98,7 @@ ObThWorker::ObThWorker()
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
       last_wakeup_ts_(0), blocking_ts_(nullptr),
-      idle_us_(0)
+      idle_us_(0), is_doing_ddl_(nullptr)
 {
   module_name_[0] = '\0';
 }
@@ -319,6 +319,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   procor_.th_created();
   blocking_ts_ = &Thread::blocking_ts_;
   ObDisableDiagnoseGuard disable_guard;
+  is_doing_ddl_ = &Thread::is_doing_ddl_;
 
   ObTLTaGuard ta_guard(tenant_->id());
   ObMemVersionNodeGuard mem_version_node_guard;
@@ -387,6 +388,9 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
                     req->get_type() == ObRequest::OB_MYSQL
                         ? reinterpret_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
                         : req->get_diagnostic_info();
+                if (OB_SUCCESS != acquire_diagnostic_info(di, req)) {
+                  // ignore diagnostic info error
+                }
                 ObDiagnosticInfoSwitchGuard guard(di);
                 if (di) {
                   di->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
@@ -503,6 +507,63 @@ int ObThWorker::check_status()
         ret = OB_KILLED_BY_THROTTLING;
       }
     }
+  }
+  return ret;
+}
+
+int ObThWorker::acquire_diagnostic_info(ObDiagnosticInfo *&di, rpc::ObRequest *req)
+{
+  int ret = OB_SUCCESS;
+  if (di != nullptr) {
+    //do nothing
+  } else if (req->get_type() == ObRequest::OB_RPC && oceanbase::lib::is_diagnose_info_enabled()) {
+    int64_t session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
+    const obrpc::ObRpcPacket &pkt
+        = reinterpret_cast<const obrpc::ObRpcPacket &>(req->get_packet());
+    const uint64_t tenant_id = pkt.get_tenant_id();
+    const uint64_t group_id = pkt.get_group_id();
+    if (OB_INVALID_TENANT_ID != tenant_id && OB_DTL_TENANT_ID != tenant_id) {
+      MTL_SWITCH(tenant_id)
+      {
+        if (OB_FAIL(MTL(common::ObDiagnosticInfoContainer *)
+                        ->acquire_diagnostic_info(tenant_id, group_id, session_id, di))) {
+          OB_ASSERT(di == nullptr);
+          LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id), K(session_id));
+        } else {
+          OB_ASSERT(di != nullptr);
+          di->get_ash_stat().pcode_ = pkt.get_pcode();
+          di->get_ash_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
+          snprintf(di->get_ash_stat().program_, ASH_PROGRAM_STR_LEN, "T%ld_RPC_REQUEST", tenant_id);
+          di->get_ash_stat().module_[0] = '\0';
+          di->get_ash_stat().action_[0] = '\0';
+          di->get_ash_stat().trace_id_ = req->generate_trace_id(GCTX.self_addr());
+          req->set_diagnostic_info(di);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObThWorker::try_add_stream_rpc_session_wait_cnt(int cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(tenant_)) {
+    if (cnt <= 0) {
+      IGNORE_RETURN ATOMIC_FAA(&tenant_->stream_rpc_wait_cnt_, cnt);
+    } else {
+      int64_t cur_wait_cnt = ATOMIC_FAA(&tenant_->stream_rpc_wait_cnt_, cnt);
+      int64_t limit = ATOMIC_LOAD(&tenant_->stream_rpc_wait_cnt_limit_);
+      if (cur_wait_cnt > limit) {
+        ret = OB_EAGAIN;
+        ATOMIC_FAA(&tenant_->stream_rpc_wait_cnt_, -cnt);
+        LOG_WARN("current stream rpc wait thread count is over the limit,",
+                "need to expand the max_cpu of tenant config or reduce the concurrency of remote sql"
+                K(tenant_->id()), K(cur_wait_cnt), K(limit));
+      }
+    }
+  } else {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant is NULL, unexpected");
   }
   return ret;
 }

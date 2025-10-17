@@ -45,6 +45,7 @@
 #include "lib/signal/ob_signal_handlers.h"
 #include "common/ob_common_utility.h"
 #include "lib/oblog/ob_log_dba_event.h"
+#include "lib/ob_abort.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 64
 #define OB_LOG_MAX_SUB_MOD_SIZE 64
@@ -59,11 +60,9 @@ namespace oceanbase
 {
 namespace common
 {
-class ObVSliceAlloc;
-class ObBlockAllocMgr;
-class ObFIFOAllocator;
 class ObPLogItem;
 class ObLogCompressor;
+template<int ARENA_NUM> class ObVSliceAllocT;
 
 extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
@@ -247,6 +246,27 @@ enum class ProbeAction
  PROBE_STACK,
 };
 
+class ObSyncLogGuard
+{
+public:
+  ObSyncLogGuard()
+    : last_(enable_tl_sync_log())
+  {
+    enable_tl_sync_log() = true;
+  }
+  ~ObSyncLogGuard()
+  {
+    enable_tl_sync_log() = last_;
+  }
+  static bool &enable_tl_sync_log()
+  {
+    static __thread bool tl_enable = false;
+    return tl_enable;
+  }
+private:
+  const bool last_;
+};
+
 //@class ObLogger
 //@brief main class of logging facilities. Provide base function, for example log_message(),
 //parse_set().
@@ -274,9 +294,8 @@ public:
   static const int32_t MAX_LOG_FILE_COUNT = 10 * 1024;
 
   static const int64_t MAX_LOG_HEAD_SIZE = 256;
+  static const int64_t BASE_LOG_SIZE = 4 * 1024; //4kb
   static const int64_t MAX_LOG_SIZE = 64 * 1024; //64kb
-  static const int64_t LOCAL_BUF_SIZE = 65 * 1024; //64kb
-
   static const int64_t GROUP_COMMIT_MAX_WAIT_US = 500*1000;//0.5s
   static const int64_t GROUP_COMMIT_MIN_ITEM_COUNT = 1;
   static const int64_t GROUP_COMMIT_MAX_ITEM_COUNT = 4;
@@ -392,7 +411,7 @@ public:
   int64_t get_wait_us(const int32_t level);
 
   //@brief thread buffer for printing log
-  TraceBuffer *get_trace_buffer();
+  TraceBuffer *&get_trace_buffer();
 
   //@brief set thread trace mode
   void set_trace_mode(bool trace_mode);
@@ -780,7 +799,7 @@ private:
 
   int try_upgrade_log_item(ObPLogItem *&log_item, bool &upgrade_result);
 
-  void check_log_end(ObPLogItem &log_item, int64_t pos);
+  int check_log_end(ObPLogItem &log_item, int64_t pos);
 
   int backtrace_if_needed(ObPLogItem &log_item, const bool force);
   int check_tl_log_limiter(const uint64_t location_hash_val, const int32_t level, const int errcode,
@@ -791,8 +810,7 @@ private:
   void free_log_item(ObPLogItem *log_item);
   void inc_dropped_log_count(const int32_t level);
   template<typename Function>
-  void do_log_message(const bool is_async,
-                      const char *mod_name,
+  void do_log_message(const char *mod_name,
                       const char *dba_event,
                       int32_t level,
                       const char *file,
@@ -880,13 +898,10 @@ private:
   int64_t dropped_count_[MAX_TASK_LOG_TYPE + 1];//last one is force allow count
   int64_t written_count_[MAX_TASK_LOG_TYPE + 1];
   int64_t current_written_count_[MAX_TASK_LOG_TYPE + 1];
-  ObBlockAllocMgr* log_mem_limiter_;
-  ObVSliceAlloc* allocator_;
-  ObFIFOAllocator* error_allocator_;
+  ObVSliceAllocT<32> *log_allocator_;
   ObLogCompressor* log_compressor_;
   // juse use it for test promise log print
   bool enable_log_limit_;
-  RLOCAL_STATIC(ByteBuf<LOCAL_BUF_SIZE>, local_buf_);
   struct {
     ProbeAction action_;
     char file_[128];
@@ -966,15 +981,17 @@ inline int8_t& ObThreadLogLevelUtils::get_level_()
   return level;
 }
 
-inline void ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
+inline int ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
 {
+  int ret = OB_SUCCESS;
   const int64_t buf_size = log_item.get_buf_size();
   if (buf_size > 0) {
-    if (pos < 0) {
-      pos = 0;
-    } else if (pos > buf_size - 2) {
+    DEBUG_ASSERT(pos >=0 && pos <= buf_size);
+    if (pos > buf_size - 2) {
       pos = buf_size - 2;
+      ret = OB_SIZE_OVERFLOW;
     }
+    // ret==OB_SIZE_OVERFLOW will be ignored
     char *data = log_item.get_buf();
     if (pos > 0 && data[pos - 1] != '\n') {
       data[pos++] = '\n';
@@ -982,6 +999,7 @@ inline void ObLogger::check_log_end(ObPLogItem &log_item, int64_t pos)
     data[pos] = '\0';
     log_item.set_data_len(pos);
   }
+  return ret;
 }
 
 template<typename Function>
@@ -1029,7 +1047,7 @@ void ObLogger::log_it(const char *mod_name,
           }
         }
       } else {
-        do_log_message(is_async_log_used(), mod_name, dba_event, level, file, line, function, true,
+        do_log_message(mod_name, dba_event, level, file, line, function, true,
                        location_hash_val, errcode, log_data_func);
       }
     }
@@ -1205,8 +1223,7 @@ inline void ObLogger::check_probe(
 }
 
 template<typename Function>
-inline void ObLogger::do_log_message(const bool is_async,
-                                     const char *mod_name,
+inline void ObLogger::do_log_message(const char *mod_name,
                                      const char *dba_event,
                                      int32_t level,
                                      const char *file,
@@ -1233,6 +1250,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   limited_left_log_size_ = 0;
   BASIC_TIME_GUARD(tg, "ObLog");
   int64_t start_ts = OB_TSC_TIMESTAMP.current_time();
+  ObPLogItem *log_item = NULL;
   if (is_queue_full()) {
     // do-nothing
   } else if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
@@ -1242,49 +1260,54 @@ inline void ObLogger::do_log_message(const bool is_async,
     inc_dropped_log_count(level);
   } else {
     ++curr_logging_seq_;
-    // format to local buf
-    ObPLogItem *log_item = new (local_buf_) ObPLogItem();
-    log_item->set_buf_size(MAX_LOG_SIZE);
-    log_item->set_log_level(level);
-    log_item->set_timestamp(start_ts);
-    log_item->set_tl_type(tl_type_);
-    log_item->set_force_allow(is_force_allows());
-    log_item->set_fd_type(fd_type);
-
-    char *buf = log_item->get_buf();
-    int64_t buf_len = log_item->get_buf_size();
-    int64_t pos = log_item->get_data_len();
-    if (with_head) {
-      if (OB_FAIL(log_head(start_ts, mod_name, dba_event, level, file, line, function, errcode,
-                           buf, buf_len, pos))) {
-        LOG_STDERR("log_header error ret = %d\n", ret);
+    const int64_t buf_len_array[] = {BASE_LOG_SIZE, MAX_LOG_SIZE};
+    for (int i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(buf_len_array); ++i) {
+      const int64_t buf_len = buf_len_array[i];
+      if (NULL != log_item ) {
+        free_log_item(log_item);
+        log_item = NULL;
       }
-    }
-    if (OB_SUCC(ret)) {
-      log_item->set_data_len(pos);
-      log_item->set_header_len(pos);
-      if (OB_FAIL(log_data_func(buf, buf_len, pos))) {
-        LOG_STDERR("log data error ret = %d\n", ret);
-      }
-      check_log_end(*log_item, pos);
-      if (OB_UNLIKELY(OB_SIZE_OVERFLOW == ret)) {
-        log_item->set_size_overflow();
-        ret = OB_SUCCESS;
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(backtrace_if_needed(*log_item, force_bt))) {
-          LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && !allow) {
-      int64_t pos = log_item->get_header_len();
-      if (OB_FAIL(logdata_print_info(log_item->get_buf(), log_item->get_buf_size(), pos,
-                                     limiter_info))) {
-        // do nothing
+      if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + buf_len, log_item))) {
+        LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
       } else {
-        check_log_end(*log_item, pos);
+        // format to local buf
+        log_item->set_buf_size(buf_len);
+        log_item->set_log_level(level);
+        log_item->set_timestamp(start_ts);
+        log_item->set_tl_type(tl_type_);
+        log_item->set_force_allow(is_force_allows());
+        log_item->set_fd_type(fd_type);
+        char *buf = log_item->get_buf();
+        int64_t pos = 0;
+        if (with_head && OB_FAIL(log_head(start_ts, mod_name, dba_event, level,
+              file, line, function, errcode, buf, buf_len, pos))) {
+          LOG_STDERR("log_header error ret = %d\n", ret);
+        } else {
+          log_item->set_data_len(pos);
+          log_item->set_header_len(pos);
+          if (allow) {
+            if (OB_FAIL(log_data_func(buf, buf_len, pos)) && buf_len == MAX_LOG_SIZE) {
+              LOG_STDERR("log data error ret = %d\n", ret);
+            } else if (OB_FAIL(check_log_end(*log_item, pos))) {
+              // do nothing
+            } else if (OB_FAIL(backtrace_if_needed(*log_item, force_bt)) && buf_len == MAX_LOG_SIZE) {
+              LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
+            }
+          } else {
+            int64_t pos = log_item->get_header_len();
+            if (OB_FAIL(logdata_print_info(buf, buf_len, pos, limiter_info))) {
+              // do nothing
+            } else if (OB_FAIL(check_log_end(*log_item, pos))) {
+              // do nothing
+            }
+          }
+        }
+        if (OB_SIZE_OVERFLOW == ret) {
+          log_item->set_size_overflow();
+          ret = OB_SUCCESS;
+        } else {
+          break;
+        }
       }
     }
     BASIC_TIME_GUARD_CLICK("FORMAT_END");
@@ -1292,53 +1315,33 @@ inline void ObLogger::do_log_message(const bool is_async,
 
     if (OB_SUCC(ret)) {
       limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
+      const bool is_async = !ObSyncLogGuard::enable_tl_sync_log() && is_async_log_used();
       if (is_async) {
-        // clone by data_size
-        ObPLogItem *new_log_item = nullptr;
-        if (OB_FAIL(alloc_log_item(level, LOG_ITEM_SIZE + log_item->get_data_len(), new_log_item))) {
-          LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
+        const int32_t tl_type = log_item->get_tl_type();
+        if (OB_FAIL(append_log(*log_item))) {
+          LOG_STDERR("append_log error ret = %d\n", ret);
         } else {
-_Pragma("GCC diagnostic push")
-#ifdef __clang__
-_Pragma("GCC diagnostic ignored \"-Wdynamic-class-memaccess\"")
-#endif
-          MEMCPY((void *)new_log_item, (void *)log_item, LOG_ITEM_SIZE + log_item->get_data_len());
-_Pragma("GCC diagnostic pop")
-            // update buf_size
-          new_log_item->set_buf_size(log_item->get_data_len());
-          log_item = new_log_item;
-          BASIC_TIME_GUARD_CLICK("ALLOC_END");
-        }
-
-        if (OB_SUCC(ret)) {
-          const int32_t tl_type = log_item->get_tl_type();
-          if (OB_FAIL(append_log(*log_item))) {
-            LOG_STDERR("append_log error ret = %d\n", ret);
-          } else {
-            // can't access log_item after append_log
-            if (tl_type >= 0 && tl_type < MAX_TASK_LOG_TYPE) {
-              (void)ATOMIC_AAF(current_written_count_ + tl_type, 1);
-            }
-            last_logging_seq_ = curr_logging_seq_;
-            BASIC_TIME_GUARD_CLICK("APPEND_END");
+          // can't access log_item after append_log
+          if (tl_type >= 0 && tl_type < MAX_TASK_LOG_TYPE) {
+            (void)ATOMIC_AAF(current_written_count_ + tl_type, 1);
           }
+          last_logging_seq_ = curr_logging_seq_;
+          BASIC_TIME_GUARD_CLICK("APPEND_END");
         }
       } else {
         flush_logs_to_file(&log_item, 1);
         BASIC_TIME_GUARD_CLICK("FLUSH_END");
       }
-
       // stat
       if (OB_FAIL(ret)) {
         inc_dropped_log_count(level);
-        if ((char*)log_item != local_buf_) {
-          free_log_item(log_item);
-        }
-        log_item = NULL;
-        BASIC_TIME_GUARD_CLICK("FREE_END");
       }
       check_reset_force_allows();
+      if (!is_async || OB_FAIL(ret)) {
+        free_log_item(log_item);
+      }
     } /* not allow */
+    BASIC_TIME_GUARD_CLICK("FREE_END");
   }
 #ifndef OB_BUILD_PACKAGE
   const int64_t threshold_us = 500 * 1000;

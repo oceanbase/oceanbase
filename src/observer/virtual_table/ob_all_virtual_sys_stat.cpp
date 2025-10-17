@@ -95,6 +95,7 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDi
     SERVER_LOG(WARN, "Fail to get cache size", K(ret));
   } else {
     int64_t unused = 0;
+    int64_t unused_throttle_trigger;
     //ignore ret
     if (is_virtual_tenant_id(tenant_id)) {
       ObVirtualTenantManager &tenant_mgr = common::ObVirtualTenantManager::get_instance();
@@ -104,11 +105,12 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDi
     } else {
         storage::ObTenantFreezer *freezer = MTL(storage::ObTenantFreezer *);
         freezer->get_tenant_memstore_cond(
-            stat_events.get(ObStatEventIds::ACTIVE_MEMSTORE_USED - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
-            stat_events.get(ObStatEventIds::TOTAL_MEMSTORE_USED - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
-            stat_events.get(ObStatEventIds::MAJOR_FREEZE_TRIGGER - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
-            stat_events.get(ObStatEventIds::MEMSTORE_LIMIT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
-            unused);
+            stat_events.get(ObStatEventIds::ACTIVE_MEMSTORE_USED - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_,
+            stat_events.get(ObStatEventIds::TOTAL_MEMSTORE_USED - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_,
+            stat_events.get(ObStatEventIds::MAJOR_FREEZE_TRIGGER - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_,
+            stat_events.get(ObStatEventIds::MEMSTORE_LIMIT - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_,
+            unused,
+            unused_throttle_trigger);
         freezer->get_tenant_mem_limit(
             stat_events.get(ObStatEventIds::MIN_MEMORY_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
             stat_events.get(ObStatEventIds::MAX_MEMORY_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_);
@@ -279,6 +281,26 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDi
         SERVER_LOG(ERROR, "fail to set ss stats", KR(ret), KR(tmp_ret), K(tenant_id));
       }
 #endif
+    }
+
+    if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
+      int tmp_ret = OB_SUCCESS;
+      sql::ObPCachedExternalFileService *ext_file_service = MTL(sql::ObPCachedExternalFileService *);
+      if (OB_NOT_NULL(ext_file_service)) {
+        ObStorageCacheHitStat hit_stat;
+        if (OB_TMP_FAIL(ext_file_service->get_hit_stat(hit_stat))) {
+          SERVER_LOG(WARN, "fail to get external table cache hit stat", KR(ret), KR(tmp_ret));
+        } else {
+          stat_events.get(ObStatEventIds::EXTERNAL_TABLE_DISK_CACHE_HIT_CNT - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_ =
+              hit_stat.cache_hit_cnt_;
+          stat_events.get(ObStatEventIds::EXTERNAL_TABLE_DISK_CACHE_MISS_CNT - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_ =
+              hit_stat.cache_miss_cnt_;
+          stat_events.get(ObStatEventIds::EXTERNAL_TABLE_DISK_CACHE_HIT_BYTES - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_ =
+              hit_stat.cache_hit_bytes_;
+          stat_events.get(ObStatEventIds::EXTERNAL_TABLE_DISK_CACHE_MISS_BYTES - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_ =
+              hit_stat.cache_miss_bytes_;
+        }
+      }
     }
 
     ret = ret_bk;

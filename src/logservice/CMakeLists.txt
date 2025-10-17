@@ -97,8 +97,8 @@ ob_set_subtarget(ob_logservice logrouteservice
 
 ob_set_subtarget(ob_logservice ipalf
   ipalf/ipalf_env.cpp
-  ipalf/ipalf_iterator.cpp
   ipalf/ipalf_log_entry.cpp
+  ipalf/ipalf_log_group_entry.cpp
 )
 
 ob_set_subtarget(ob_logservice palf
@@ -203,6 +203,7 @@ ob_set_subtarget(ob_logservice restoreservice
 
 ob_set_subtarget(ob_logservice data_dictionary
   data_dictionary/ob_data_dict_utils.cpp
+  data_dictionary/ob_data_dict_scheduler.cpp
   data_dictionary/ob_data_dict_struct.cpp
   data_dictionary/ob_data_dict_service.cpp
   data_dictionary/ob_data_dict_sql_client.cpp

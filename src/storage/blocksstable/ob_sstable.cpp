@@ -20,6 +20,7 @@
 #include "storage/access/ob_sstable_row_getter.h"
 #include "storage/access/ob_sstable_row_multi_getter.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/blocksstable/index_block/ob_sstable_index_scanner.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
@@ -748,6 +749,41 @@ int ObSSTable::scan_secondary_meta(
   return ret;
 }
 
+int ObSSTable::scan_index(
+    const ObDatumRange &range,
+    const ObSSTableIndexScanParam &scan_param,
+    ObIAllocator &allocator,
+    ObSSTableIndexScanner *&index_scanner)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObSSTableIndexScanner *iter = nullptr;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
+  } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSSTableIndexScanner)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to allocate memory for index scanner", K(ret));
+  } else if (OB_ISNULL(iter = new (buf) ObSSTableIndexScanner)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr on constructor", K(ret));
+  } else if (OB_FAIL(iter->init(range, scan_param, *this, allocator))) {
+    LOG_WARN("Fail to init index scanner", K(ret), K(range), K(scan_param), KPC(this));
+  } else {
+    index_scanner = iter;
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(iter)) {
+      iter->~ObSSTableIndexScanner();
+    }
+    if (OB_NOT_NULL(buf)) {
+      allocator.free(buf);
+    }
+  }
+
+  return ret;
+}
 int ObSSTable::bf_may_contain_rowkey(const ObDatumRowkey &rowkey, bool &contain)
 {
   int ret = OB_SUCCESS;
@@ -1019,6 +1055,9 @@ int ObSSTable::serialize_full_table(const uint64_t data_version, char *buf, cons
       && SSTABLE_WRITE_BUILDING != meta_handle.get_sstable_meta().get_status())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("non-ready sstable for read can't be serialized.", K(ret), K_(valid_for_reading), K(meta_handle));
+  } else if (OB_UNLIKELY(is_co_sstable() && typeid(*this) != typeid(ObCOSSTableV2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("co sstable serialization should use ObCOSSTableV2 class", K(ret), KPC(this));
   } else if (FALSE_IT(status.set_with_meta())) {
   } else if (OB_FAIL(ObITable::serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize table key", K(ret), K(buf_len), K(pos));
@@ -1075,6 +1114,9 @@ int ObSSTable::serialize(const uint64_t data_version, char *buf, const int64_t b
   } else if (OB_UNLIKELY(!addr_.is_valid() || (!addr_.is_memory() && !addr_.is_block()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable's addr_ is invalid", K(ret), K(addr_));
+  } else if (OB_UNLIKELY(is_co_sstable() && typeid(*this) != typeid(ObCOSSTableV2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("co sstable serialization should use ObCOSSTableV2 class", K(ret), KPC(this));
   } else if (OB_FAIL(ObITable::serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize table key", K(ret), K(buf_len), K(pos));
   } else {
@@ -1330,7 +1372,13 @@ void ObSSTable::dec_macro_ref() const
     ret = get_meta(meta_handle, &safe_allocator);
   } while (ignore_ret(ret));
   if (OB_FAIL(ret)) {
-    LOG_ERROR("fail to get sstable meta", K(ret));
+    if (OB_STATE_NOT_MATCH == ret) {
+      // When the observer exits, the io manager will stop sending io requests and return a -4109 error.
+      // If the error level is printed, it will affect the graceful exit case in vostest.
+      LOG_WARN("fail to get sstable meta", K(ret));
+    } else {
+      LOG_ERROR("fail to get sstable meta", K(ret));
+    }
   } else if (OB_UNLIKELY(!meta_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("meta handle is invalid", K(ret), K(meta_handle));

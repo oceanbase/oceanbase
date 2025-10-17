@@ -14,6 +14,7 @@
 
 #include "rootserver/ob_root_utils.h"       // for rootserver::ObRootUtils::get_rs_default_timeout_ctx
 #include "ob_ls_table_operator.h"   // for declarations of functions in this cpp
+#include "observer/ob_service.h"
 
 namespace oceanbase
 {
@@ -57,6 +58,7 @@ int ObLSTableOperator::set_use_memory_ls_(ObIRsListChangeCb &rs_list_change_cb)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else {
+    int tmp_ret = OB_SUCCESS;
     if (OB_UNLIKELY(!inmemory_ls_.is_inited())) {
       if (OB_FAIL(inmemory_ls_.init(rs_list_change_cb))) {
         LOG_WARN("inmemory_ls_ init failed", KR(ret));
@@ -226,11 +228,7 @@ int ObLSTableOperator::get_ls_table_(
     } else if (ls_id.is_sslog_ls()) {
       // 1. The information of the SYS tenant SSLOG LS is persisted in the inner table of 1 LS.
       // 2. In order to solve the circular dependency problem, the SYS tenant SSLOG LS information is obtained based on RPC by default.
-      if (is_for_get) {
-        ls_table = static_cast<ObLSTable *>(&rpc_ls_);
-      } else {
-        ls_table = static_cast<ObLSTable *>(&persistent_ls_);
-      }
+      ls_table = static_cast<ObLSTable *>(&rpc_ls_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sys tenant unexpected ls", KR(ret), K(tenant_id), K(ls_id));

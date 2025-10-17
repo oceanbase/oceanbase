@@ -219,7 +219,6 @@ void ObSignalWorker::run1()
             );
             ObMemAttr attr;
             attr.label_ = "TraceProcessor";
-            attr.prio_ = lib::OB_HIGH_ALLOC;
             switch (req->code_)
             {
               case VERB_LEVEL_1:

@@ -20,6 +20,7 @@
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
 #include "share/schema/ob_mlog_info.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -431,7 +432,7 @@ int ObIndexBuildTask::init(
     }
     if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
         share::schema::is_vec_rowkey_vid_type(create_index_arg_.index_type_)) {
-      if (snapshot_version_ <= 0) {
+      if (snapshot_version_ <= 0 && !create_index_arg_.is_offline_rebuild_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("snapshot version is not valid", K(ret), K(snapshot_version_), K(create_index_arg_.index_type_));
       }
@@ -791,6 +792,12 @@ int ObIndexBuildTask::hold_snapshot(
     } else if (need_acquire_lob && data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+    } else if (index_table_schema->is_vec_vid_rowkey_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
+    } else if (index_table_schema->is_vec_index_snapshot_data_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
     } else if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
@@ -819,6 +826,7 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
     ObSEArray<ObTabletID, 2> tablet_ids;
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *data_table_schema = nullptr;
+    const ObTableSchema *index_table_schema = nullptr;
     ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
@@ -855,6 +863,20 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
       } else {
         LOG_WARN("failed to get data lob piece table snapshot", K(ret));
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, index_table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(object_id_));
+    } else if (OB_ISNULL(index_table_schema)) {
+      // ignore ret
+      LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(index_table_schema));
+    } else if (index_table_schema->is_vec_vid_rowkey_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
+    } else if (index_table_schema->is_vec_index_snapshot_data_type() &&
+              OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
+      LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
     }
 
     if (OB_SUCC(ret) && tablet_ids.count() > 0 && OB_FAIL(batch_release_snapshot(snapshot, tablet_ids))) {
@@ -1084,7 +1106,7 @@ int ObIndexBuildTask::wait_data_complement()
     LOG_WARN("not init", KR(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (OB_UNLIKELY(snapshot_version_ <= 0)) {
+  } else if (OB_UNLIKELY(snapshot_version_ <= 0 && !create_index_arg_.is_offline_rebuild_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   }
@@ -1209,6 +1231,7 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     if (OB_FAIL(check_build_local_index_single_replica(is_request_end))) {
       LOG_WARN("fail to check build single replica", K(ret));
     } else if (is_request_end) {
+      ret = complete_sstable_job_ret_code_;
       state_finished = true;
     }
   }
@@ -1217,15 +1240,14 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     uint64_t src_table_id = object_id_;
     bool dummy_equal = false;
     bool need_verify_checksum = true;
-    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
-        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
-      need_verify_checksum = false;
-    }
 #ifdef ERRSIM
     // when the major compaction is delayed, skip verify column checksum
     need_verify_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
 #endif
-
+    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
+        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
+      need_verify_checksum = false;
+    }
     ObArray<int64_t> ignore_col_ids;
     const ObTableSchema *data_table_schema = nullptr;
     uint64_t doc_id_col_id = OB_INVALID_ID;
@@ -1288,7 +1310,8 @@ int ObIndexBuildTask::create_schedule_queue()
     parallelism_,
     snapshot_version_,
     trace_id_,
-    index_tablet_ids))) {
+    index_tablet_ids,
+    data_format_version_))) {
     LOG_WARN("failed to init tablet scheduler", K(ret), K(tenant_id_), K(index_table_id_), K(index_tablet_ids));
   } else {
     is_sstable_complete_task_submitted_ = true;

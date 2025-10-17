@@ -155,7 +155,7 @@ void ObDictValueIterator::build_decode_by_ref_func_()
     ref_bitset->init(bitset_size); \
   } \
 
-int ObDictColumnDecoder::get_null_count(
+int ObDictColumnDecoder::inner_get_null_count(
     const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
@@ -1041,8 +1041,13 @@ int ObDictColumnDecoder::sorted_comparison_for_ref(
   const ObDatum &filter_datum = filter.get_datums().at(0);
   ObDictValueIterator begin_it = ObDictValueIterator(&ctx, 0, filter.is_padding_mode());
   ObDictValueIterator end_it = ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode());
-
-  bool can_fast_cmp = cs_dict_fast_cmp_funcs_inited;
+  // Since bound ref may be 1 greater than the maximum ref, if it is calculated based on the
+  // width of the ref, it will overflow to 0, resulting in a filter error, so we must
+  // ensure that the width_size of 'bound ref' should be equal to ref_width_size
+  const bool can_fast_cmp = cs_dict_fast_cmp_funcs_inited
+                        && ((ref_width_size == 1 && dict_val_cnt < UINT8_MAX)
+                            || (ref_width_size == 2 && dict_val_cnt < UINT16_MAX)
+                            || (ref_width_size == 4 && dict_val_cnt < UINT32_MAX));
 
   int64_t bound_ref = -1;
   switch (op_type) {
@@ -1078,7 +1083,6 @@ int ObDictColumnDecoder::sorted_comparison_for_ref(
       break;
     }
   }
-
 
   // NOTICE: for LE, we use upper_bound, the result should not contain this bound, thus convert to LT;
   //         for GT, we use upper_bound, the result shoud contain this bound, thus convert to GE

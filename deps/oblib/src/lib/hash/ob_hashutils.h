@@ -1478,6 +1478,40 @@ private:
   lock_type lock_;
   Allocer allocer_;
 };
+
+template <class T, class Allocator>
+class SliceAllocer
+{
+public:
+  SliceAllocer() : allocator_(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_NODE)) {}
+  virtual ~SliceAllocer() {};
+
+  void set_attr(const ObMemAttr &attr) { allocator_.set_attr(attr); }
+
+  template <class ... TYPES>
+  T *alloc(TYPES&... args)
+  {
+    T *ret = NULL;
+    if (OB_ISNULL(ret = (T *)allocator_.alloc(sizeof(T)))) {
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed");
+    } else {
+      new(ret) T(args...);
+    }
+    return ret;
+  }
+  void free(T *data)
+  {
+    if (NULL == data) {
+      HASH_WRITE_LOG_RET(HASH_FATAL, OB_INVALID_ARGUMENT, "invalid null pointer");
+    } else {
+      data->~T();
+      allocator_.free(data);
+    }
+  }
+private:
+  Allocator allocator_;
+};
+
 }
 }
 }

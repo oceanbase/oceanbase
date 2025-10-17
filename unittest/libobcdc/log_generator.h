@@ -62,7 +62,7 @@ private:
 };
 
 // usage example: generate a log_entry with redo+commit_info
-// LogEntry log_entry;
+// ipalf::ILogEntry log_entry;
 // palf::LSN lsn;
 // ObTxLogGenerator log_generator(xxx);
 // log_generator.gen_redo_log()
@@ -100,8 +100,9 @@ public:
 public:
   static const int64_t ENTRY_BUF_SIZE = 1 << 21;
 public:
-  int gen_log_entry(LogEntry &log_entry, LSN &lsn)
+  int gen_log_entry(ipalf::ILogEntry &ilog_entry, LSN &lsn)
   {
+    LogEntry &log_entry = ilog_entry.palf_log_entry_;
     int ret = OB_SUCCESS;
     log_entry.reset();
     lsn = last_lsn_();
@@ -147,8 +148,9 @@ public:
     return ret;
   }
 
-  int gen_ls_offline_log_entry(LogEntry &log_entry, LSN &lsn)
+  int gen_ls_offline_log_entry(ipalf::ILogEntry &ilog_entry, LSN &lsn)
   {
+    LogEntry &log_entry = ilog_entry.palf_log_entry_;
     int ret = OB_SUCCESS;
     int64_t pos = 0;
     lsn = last_lsn_();

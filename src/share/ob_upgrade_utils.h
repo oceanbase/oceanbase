@@ -58,11 +58,18 @@ private:
       const uint64_t tenant_id,
       common::ObArray<int64_t> &update_list,
       common::ObArray<int64_t> &add_list);
+  static int batch_update_sys_var_(
+             obrpc::ObCommonRpcProxy &rpc_proxy,
+             const uint64_t tenant_id,
+             const bool is_update,
+             common::ObArray<int64_t> &update_list);
   static int update_sys_var_(
              obrpc::ObCommonRpcProxy &rpc_proxy,
              const uint64_t tenant_id,
              const bool is_update,
              common::ObArray<int64_t> &update_list);
+  static int get_sys_param_(const uint64_t &tenant_id, const int64_t &var_store_idx,
+      share::schema::ObSysVarSchema &sys_var);
   /* upgrade sys variable end */
   static int filter_sys_stat(
       common::ObISQLClient &sql_client,
@@ -186,7 +193,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 33;
+  static const int64_t DATA_VERSION_NUM = 39;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -265,6 +272,8 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 2)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 3)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 4)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 5)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 6)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 7)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)
 
@@ -365,7 +374,28 @@ private:
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 3)
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 4)
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 5, 5)
+
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 0, 0)
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 0, 1)
+
+class ObUpgradeFor4410Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4410Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4410Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int post_upgrade_for_replace_tenant_();
+  int post_upgrade_for_scheduled_trigger_partition_balance();
+  int post_upgrade_for_scheduled_trigger_dump_data_dict();
+  int post_upgrade_for_upload_cluster_info_();
+};
 
 /* =========== special upgrade processor end   ============= */
 

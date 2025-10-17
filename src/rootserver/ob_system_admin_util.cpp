@@ -773,7 +773,7 @@ int ObAdminSetConfig::verify_config(obrpc::ObAdminSetConfigArg &arg)
     } else {
       ObConfigItem *ci = nullptr;
       ObString config_name(item->name_.size(), item->name_.ptr());
-      bool is_default_table_organization_config = (0 == config_name.case_compare(DEFAULT_TABLE_ORAGNIZATION));
+      bool is_default_table_organization_config = (0 == config_name.case_compare(DEFAULT_TABLE_ORGANIZATION));
       if (OB_SYS_TENANT_ID != item->exec_tenant_id_ || item->tenant_name_.size() > 0) {
         // tenants(user or sys tenants) modify tenant level configuration
         item->want_to_set_tenant_config_ = true;
@@ -1706,6 +1706,9 @@ int ObAdminUpgradeVirtualSchema::execute(
     int64_t &upgrade_cnt)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  ObArrayArray<ObTableSchema> hard_code_tables;
   if (OB_UNLIKELY(!ctx_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -1718,16 +1721,88 @@ int ObAdminUpgradeVirtualSchema::execute(
              || OB_ISNULL(ctx_.ddl_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(ctx_.root_inspection_), KP(ctx_.ddl_service_));
+  } else if (OB_FAIL(generate_hard_code_schemas_(tenant_id, hard_code_tables))) {
+    LOG_WARN("failed to generate all hard code tables", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(drop_not_exist_tables_(tenant_id, hard_code_tables))) {
+    LOG_WARN("failed to drop not exist tables", KR(ret), K(tenant_id));
   }
+  // upgrade tables in hard code tables
+  for (int64_t i = 0; OB_SUCC(ret) && i < hard_code_tables.count(); i++) {
+    ObIArray<ObTableSchema> &tables = hard_code_tables.at(i);
+    if (OB_FAIL(batch_upgrade_(tenant_id, tables, upgrade_cnt))) {
+      LOG_WARN("failed to batch upgrade virtual schema", KR(ret), K(tenant_id));
+    }
+  }
+  LOG_INFO("[UPGRADE] upgrade virtual schema", KR(ret), K(tenant_id),
+      "cost", ObTimeUtility::current_time() - start_ts);
+  return ret;
+}
 
+int ObAdminUpgradeVirtualSchema::drop_not_exist_tables_(
+    const uint64_t &tenant_id,
+    const ObArrayArray<ObTableSchema> &hard_code_tables)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  LOG_INFO("[UPGRADE] upgrade virtual schema: drop not exist tables begin", K(tenant_id));
+  ObHashSet<uint64_t> table_id_set;
+  ObSchemaGetterGuard schema_guard;
+  ObArray<uint64_t> tids;
+  if (OB_ISNULL(ctx_.ddl_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is NULL", KR(ret), KP(ctx_.ddl_service_));
+  } else if (OB_FAIL(generate_table_id_set_(hard_code_tables, table_id_set))) {
+    LOG_WARN("failed to generate table id set", KR(ret));
+  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("get_schema_guard failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, tids))) {
+    LOG_WARN("get_table_ids_in_tenant failed", KR(ret), K(tenant_id));
+  } else {
+    LOG_INFO("begin to check table exist", KR(ret), K(tenant_id));
+    FOREACH_CNT_X(tid, tids, OB_SUCC(ret)) {
+      const ObTableSchema *in_mem_table = NULL;
+      if (!is_inner_table(*tid) || is_sys_table(*tid)) {
+        continue;
+      } else if (OB_HASH_EXIST == table_id_set.exist_refactored(*tid)) {
+        // table exists in hard_code_tables, do nothing
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, *tid, in_mem_table))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(*tid));
+      } else if (OB_ISNULL(in_mem_table)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", KR(ret), K(tenant_id), K(*tid));
+      } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(NULL, *in_mem_table))) {
+        LOG_WARN("drop table schema failed", KR(ret), K(tenant_id), KPC(in_mem_table));
+      } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
+        LOG_WARN("refresh_schema failed", KR(ret), K(tenant_id));
+      } else {
+        LOG_INFO("drop not exist table", KR(ret), K(*tid));
+      }
+    }
+  }
+  LOG_INFO("[UPGRADE] upgrade virtual schema: drop not exist tables end", KR(ret), K(tenant_id),
+      "cost", ObTimeUtility::current_time() - start_ts);
+  return ret;
+}
+
+int ObAdminUpgradeVirtualSchema::generate_hard_code_schemas_(
+    const int64_t &tenant_id,
+    ObArrayArray<ObTableSchema> &hard_code_tables)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  LOG_INFO("[UPGRADE] upgrade virtual schema: generate hard_code_tables begin", KR(ret), K(tenant_id));
   const schema_create_func *creator_ptr_array[] = {
-        share::virtual_table_schema_creators,
-        share::sys_view_schema_creators, NULL };
-  ObArray<ObTableSchema> hard_code_tables;
+    share::virtual_table_schema_creators,
+    share::virtual_table_index_schema_creators,
+    share::sys_view_schema_creators, NULL };
   ObTableSchema table_schema;
-
+    int64_t array_idx = 0;
+  ObArray<ObTableSchema> empty_schemas;
   for (const schema_create_func **creator_ptr_ptr = creator_ptr_array;
-       OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr_ptr); ++creator_ptr_ptr) {
+      OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr_ptr); ++creator_ptr_ptr, ++array_idx) {
+    if (OB_FAIL(hard_code_tables.push_back(empty_schemas))) {
+      LOG_WARN("failed to push_back empty_schema array", KR(ret));
+    }
     for (const schema_create_func *creator_ptr = *creator_ptr_ptr;
         OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
       table_schema.reset();
@@ -1735,86 +1810,203 @@ int ObAdminUpgradeVirtualSchema::execute(
       if (OB_FAIL((*creator_ptr)(table_schema))) {
         LOG_WARN("create table schema failed", KR(ret));
       } else if (!is_sys_tenant(tenant_id)
-                 && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
-                            tenant_id, table_schema))) {
+          && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
+              tenant_id, table_schema))) {
         LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
       } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
-                 tenant_id, table_schema, exist))) {
+              tenant_id, table_schema, exist))) {
         LOG_WARN("fail to check inner table exist",
-                 KR(ret), K(tenant_id), K(table_schema));
+            KR(ret), K(tenant_id), K(table_schema));
       } else if (!exist) {
         // skip
       } else if (is_sys_table(table_schema.get_table_id())) {
         // only check and upgrade virtual table && sys views
-      } else if (OB_FAIL(hard_code_tables.push_back(table_schema))) {
+      } else if (OB_FAIL(hard_code_tables.push_back(array_idx, table_schema))) {
         LOG_WARN("push_back failed", KR(ret), K(tenant_id));
       }
     }
   }
-
-  // remove tables not exist on hard code tables
-  ObSchemaGetterGuard schema_guard;
-  ObArray<uint64_t> tids;
-  if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("get_schema_guard failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, tids))) {
-    LOG_WARN("get_table_ids_in_tenant failed", KR(ret), K(tenant_id));
+  LOG_INFO("[UPGRADE] upgrade virtual schema: generate hard_code_tables end", KR(ret), K(tenant_id),
+      "cost", ObTimeUtility::current_time() - start_ts);
+  return ret;
+}
+int ObAdminUpgradeVirtualSchema::generate_table_id_set_(
+    const ObArrayArray<ObTableSchema> &hard_code_tables,
+    common::hash::ObHashSet<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  int64_t capacity = 0;
+  for (int64_t i = 0; i < hard_code_tables.count(); i++) {
+    capacity += hard_code_tables.count(i);
+  }
+  if (OB_FAIL(table_ids.create(hash::cal_next_prime(capacity)))) {
+    LOG_WARN("failed to create table ids set", KR(ret), K(capacity));
   } else {
-    FOREACH_CNT_X(tid, tids, OB_SUCC(ret)) {
-      const ObTableSchema *in_mem_table = NULL;
-      if (!is_inner_table(*tid) || is_sys_table(*tid)) {
-        continue;
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, *tid, in_mem_table))) {
-        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(*tid));
-      } else if (OB_ISNULL(in_mem_table)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("table not exist", KR(ret), K(tenant_id), K(*tid));
-      } else {
-        bool exist = false;
-        FOREACH_CNT_X(hard_code_table, hard_code_tables, OB_SUCC(ret) && !exist) {
-          if (OB_ISNULL(hard_code_table)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("hard code table is null", KR(ret), K(tenant_id));
-          } else if (in_mem_table->get_table_id() == hard_code_table->get_table_id()) {
-            exist = true;
-          }
-        }
-        if (!exist) {
-          if (FAILEDx(ctx_.ddl_service_->drop_inner_table(*in_mem_table))) {
-            LOG_WARN("drop table schema failed", KR(ret), K(tenant_id), KPC(in_mem_table));
-          } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
-            LOG_WARN("refresh_schema failed", KR(ret), K(tenant_id));
-          }
+    for (int64_t i = 0; OB_SUCC(ret) && i < hard_code_tables.count(); i++) {
+      const ObIArray<ObTableSchema> &tables = hard_code_tables.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < tables.count(); j++) {
+        const ObTableSchema &table = tables.at(j);
+        const uint64_t table_id = table.get_table_id();
+        if (OB_FAIL(table_ids.set_refactored(table_id))) {
+          LOG_WARN("failed to add table_id to set", KR(ret), K(table_id));
         }
       }
     }
-  }
-
-  // upgrade tables
-  FOREACH_CNT_X(hard_code_table, hard_code_tables, OB_SUCC(ret)) {
-    if (OB_ISNULL(hard_code_table)) {
+    if (OB_SUCC(ret) && table_ids.size() != capacity) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("hard code table is null", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(ctx_.root_inspection_->check_table_schema(tenant_id, *hard_code_table))) {
-      if (OB_SCHEMA_ERROR != ret) {
-        LOG_WARN("check table schema failed", KR(ret), K(tenant_id), K(*hard_code_table));
-      } else {
-        LOG_INFO("table schema need upgrade", K(tenant_id), K(*hard_code_table));
-        if (OB_FAIL(upgrade_(tenant_id, *hard_code_table))) {
-          LOG_WARN("upgrade failed", KR(ret), K(tenant_id), K(*hard_code_table));
-        } else {
-          LOG_INFO("update table schema success", K(tenant_id), K(*hard_code_table));
-          upgrade_cnt++;
-        }
-      }
+      LOG_WARN("duplicated table_id in hard_code_tables", KR(ret), K(table_ids));
     }
   }
   return ret;
 }
 
-int ObAdminUpgradeVirtualSchema::upgrade_(
-    const uint64_t tenant_id,
-    share::schema::ObTableSchema &table)
+int ObAdminUpgradeVirtualSchema::batch_upgrade_(const uint64_t tenant_id,
+    ObIArray<share::schema::ObTableSchema> &hard_code_tables,
+    int64_t &upgrade_cnt)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t count = 0;
+  LOG_INFO("[UPGRADE] batch upgrade virtual schema begin", KR(ret), K(tenant_id));
+  if (OB_UNLIKELY(!ctx_.is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(ctx_.ddl_service_) || OB_ISNULL(ctx_.schema_service_) || OB_ISNULL(ctx_.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(ctx_.root_inspection_), KP(ctx_.ddl_service_),
+        KP(ctx_.schema_service_), KP(ctx_.sql_proxy_));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObArray<int64_t> upgrade_table_idx;
+    ObDDLSQLTransaction trans(ctx_.schema_service_,
+        true/*need_end_signal*/, true/*enable_query_stash*/);
+    ObSchemaGetterGuard schema_guard;
+    int64_t refreshed_schema_version = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < hard_code_tables.count(); i++) {
+      const share::schema::ObTableSchema &hard_code_table = hard_code_tables.at(i);
+      if (OB_FAIL(ObSysTableInspection::check_table_schema(tenant_id, hard_code_table))) {
+        if (OB_SCHEMA_ERROR != ret) {
+          LOG_WARN("check table schema failed", KR(ret), K(tenant_id), K(hard_code_table));
+        } else {
+          LOG_INFO("table schema need upgrade", K(tenant_id), K(hard_code_table));
+          if (OB_FAIL(upgrade_table_idx.push_back(i))) {
+            LOG_WARN("failed push upgrade table idx", KR(ret), K(tenant_id), K(hard_code_table), K(i));
+          }
+        }
+      }
+    }
+    if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
+            tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to get refreshed_schema_version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.start(ctx_.sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(batch_upgrade_inner_tables_(trans, tenant_id, schema_guard, hard_code_tables,
+            upgrade_table_idx))) {
+      LOG_WARN("failed to batch upgrade inner tables", KR(ret), K(tenant_id), K(upgrade_table_idx));
+    }
+    if (trans.is_started()) {
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN_RET(tmp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
+        ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+      }
+    }
+    if (OB_TMP_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
+      LOG_WARN_RET(tmp_ret, "refresh schema failed", KR(tmp_ret), K(tenant_id));
+      ret = OB_SUCC(ret)? tmp_ret: ret;
+    }
+    count = upgrade_table_idx.count();
+    upgrade_cnt += upgrade_table_idx.count();
+    DEBUG_SYNC(AFTER_UPGRADE_VIRTUAL_SCHEMA_REFRESH_SCHEMA);
+  }
+  LOG_INFO("[UPGRADE] batch upgrade virtual schema end", KR(ret), K(tenant_id), K(count),
+      "cost", ObTimeUtility::current_time() - start_ts);
+  return ret;
+}
+
+int ObAdminUpgradeVirtualSchema::batch_upgrade_inner_tables_(
+    ObDDLSQLTransaction &trans,
+    const uint64_t &tenant_id,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    ObIArray<share::schema::ObTableSchema> &hard_code_tables,
+    const ObIArray<int64_t> &upgrade_idxs)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!ctx_.is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(ctx_.ddl_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(ctx_.ddl_service_));
+  } else if (upgrade_idxs.empty()) {
+    // upgrade_idxs is empty, do nothing
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    ObHashSet<uint64_t> dropped_table_ids;
+    if (OB_FAIL(dropped_table_ids.create(hash::cal_next_prime(upgrade_idxs.count())))) {
+      LOG_WARN("failed to create dropped_table_ids set", KR(ret));
+    }
+    FOREACH_CNT_X(it, upgrade_idxs, OB_SUCC(ret)) {
+      if (*it < 0 || *it >= hard_code_tables.count()) {
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("upgrade idx out of range", KR(ret), K(*it), K(hard_code_tables.count()));
+      } else {
+        share::schema::ObTableSchema &table = hard_code_tables.at(*it);
+        if (OB_FAIL(check_and_drop_inner_table_(trans, tenant_id, table, dropped_table_ids))) {
+          LOG_WARN("failed to drop inner table", KR(ret), K(tenant_id), K(table), K(*it), K(dropped_table_ids));
+        }
+      }
+    }
+    // double check to avoid dropped user table or sys table
+    FOREACH_X(it, dropped_table_ids, OB_SUCC(ret)) {
+      const uint64_t table_id = it->first;
+      if (!common::is_inner_table(table_id) || common::is_sys_table(table_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dropped table is unexpected", KR(ret), K(table_id));
+      }
+    }
+    FOREACH_CNT_X(it, upgrade_idxs, OB_SUCC(ret)) {
+      if (*it < 0 || *it >= hard_code_tables.count()) {
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("upgrade idx out of range", KR(ret), K(*it), K(hard_code_tables.count()));
+      } else {
+        share::schema::ObTableSchema &table = hard_code_tables.at(*it);
+        if (OB_FAIL(ctx_.ddl_service_->add_table_schema(&trans, table, schema_guard))) {
+          LOG_WARN("failed to create inner table", KR(ret), K(tenant_id), K(table), K(*it));
+        }
+      }
+    }
+  }
+  LOG_INFO("[UPGRADE] upgrade virtual schema: upgrade tables", KR(ret), K(tenant_id),
+      "cost", ObTimeUtility::current_time() - start_ts);
+  return ret;
+}
+
+bool ObAdminUpgradeVirtualSchema::check_table_dropped(const share::schema::ObSimpleTableSchemaV2 &table,
+      const common::hash::ObHashSet<uint64_t> &dropped_table_ids)
+{
+  bool dropped = false;
+  if (dropped_table_ids.exist_refactored(table.get_table_id()) == OB_HASH_EXIST) {
+    dropped = true;
+  } else if (table.is_index_table()) {
+    const uint64_t data_table_id = table.get_data_table_id();
+    if (dropped_table_ids.exist_refactored(data_table_id) == OB_HASH_EXIST) {
+      dropped = true;
+    }
+  }
+  return dropped;
+}
+
+int ObAdminUpgradeVirtualSchema::check_and_drop_inner_table_(
+    rootserver::ObDDLSQLTransaction &trans,
+    const uint64_t &tenant_id,
+    share::schema::ObTableSchema &table,
+    ObHashSet<uint64_t> &dropped_table_ids)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *exist_schema = NULL;
@@ -1822,9 +2014,7 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
   if (OB_UNLIKELY(!ctx_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(
-             is_virtual_tenant_id(tenant_id)
-             || OB_INVALID_TENANT_ID == tenant_id)) {
+  } else if (OB_UNLIKELY(is_virtual_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(
@@ -1837,6 +2027,7 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl service is null", KR(ret));
   }
+  LOG_INFO("[UPGRADE] drop inner table begin", KR(ret), K(table.get_table_id()), K(table.is_index_table()));
   // 1. check table name duplicated
   if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
       tenant_id, schema_guard))) {
@@ -1877,17 +2068,23 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
       }
     } else if (OB_ISNULL(exist_schema)) {
       // no duplicate table name
-    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema, false/*delete_priv*/))) {
+    } else if (check_table_dropped(*exist_schema, dropped_table_ids)) {
+      // the table is dropped in this trans
+
+      // avoid drop priv in oracle
+    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(&trans, *exist_schema, false/*delete_priv*/))) {
       LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
                "table", table.get_table_name(), "table_id", table.get_table_id());
-    } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-               tenant_id, schema_guard))) {
-      LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(dropped_table_ids.set_refactored(exist_schema->get_table_id()))) {
+      LOG_WARN("failed to add table_id to dropped_table_id set", KR(ret), KPC(exist_schema));
     }
   }
   // 2. try drop table first
   exist_schema = NULL;
-  if (FAILEDx(schema_guard.get_table_schema(tenant_id,
+  if (OB_FAIL(ret)) {
+  } else if (check_table_dropped(table, dropped_table_ids)) {
+    // the table is dropped in this trans
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                             table.get_table_id(),
                                             exist_schema))) {
     LOG_WARN("get table schema failed", KR(ret), "table", table.get_table_name(),
@@ -1902,19 +2099,11 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
     // here the exist_schema will be upgraded, and it will be dropped and created again.
     // then the priv on it will be lost
     // so do not delete the priv on it here.
-  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema, false/*delete_priv*/))) {
+  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(&trans, *exist_schema, false/*delete_priv*/))) {
     LOG_WARN("drop table schema failed", KR(ret), "table_schema", *exist_schema);
-  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-             tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(dropped_table_ids.set_refactored(table.get_table_id()))) {
+    LOG_WARN("failed to add table_id to dropped_table_id set", KR(ret), K(table));
   }
-  // 3. create table
-  if (FAILEDx(ctx_.ddl_service_->add_table_schema(table, schema_guard))) {
-    LOG_WARN("add table schema failed", KR(ret), K(tenant_id), K(table));
-  } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
-    LOG_WARN("refresh schema failed", KR(ret), K(tenant_id));
-  }
-
   return ret;
 }
 
@@ -2393,6 +2582,7 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg &arg)
           fc_arg.sql_id_ = arg.sql_id_;
           fc_arg.is_fine_grained_ = arg.is_fine_grained_;
           fc_arg.schema_id_ = arg.schema_id_;
+          fc_arg.sequence_name_ = arg.sequence_name_;
           for(int64_t j=0; OB_SUCC(ret) && j<arg.db_ids_.count(); j++) {
             if (OB_FAIL(fc_arg.push_database(arg.db_ids_.at(j)))) {
               LOG_WARN("fail to add db ids", KR(ret));

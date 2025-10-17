@@ -15,12 +15,39 @@
 #include "lib/restore/ob_object_device.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "share/io/ob_io_manager.h"
- 
+#include "observer/omt/ob_multi_tenant.h"
+#include "share/backup/ob_backup_connectivity.h"
+
 namespace oceanbase
 {
 namespace common
 {
 extern const char *OB_STORAGE_ACCESS_TYPES_STR[];
+
+int ObBackupIoAdapter::is_io_prohibited(const common::ObObjectStorageInfo *storage_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_io_prohibited = false;
+  share::ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
+  if (OB_ISNULL(dest_io_permission_mgr = MTL(share::ObBackupDestIOPermissionMgr*))) {
+    //do nothing
+    //Currently, threads without tenant resources do not support the backup zone feature.
+    //For example, when restoring a tenant, filling in the backup path is performed thread without tenant resources.
+  } else if (OB_FAIL(dest_io_permission_mgr->is_io_prohibited(storage_info, is_io_prohibited))) {
+    OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
+  } else {
+    if (is_io_prohibited) {
+      ret = OB_BACKUP_IO_PROHIBITED;
+      if (REACH_THREAD_TIME_INTERVAL(20_s)) {
+        OB_LOG(ERROR, "observer is not in locality that has access to the target path of the task,"
+        "please check backup zone configuration.", K(ret), K(storage_info), K(is_io_prohibited));
+      } else {
+        OB_LOG(WARN, "io prohibited, please check!", K(ret), K(storage_info), K(is_io_prohibited));
+      }
+    }
+  }
+  return ret;
+}
 static constexpr char OB_STORAGE_IO_ADAPTER[] = "io_adapter";
 
 static int release_device(ObIODevice *&dev_handle)
@@ -101,6 +128,12 @@ int ObBackupIoAdapter::open_with_access_type(ObIODevice*& device_handle, ObIOFd 
   if (access_type >= OB_STORAGE_ACCESS_MAX_TYPE) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid access type!", KR(ret), K(access_type));
+  } else if (OB_FAIL(is_io_prohibited(storage_info))) {
+    if (OB_BACKUP_IO_PROHIBITED == ret) {
+      OB_LOG(WARN, "io prohibited, please check!", K(ret), K(storage_info));
+    } else {
+      OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
+    }
   } else {
     iod_opts.opts_[0].set("AccessType", OB_STORAGE_ACCESS_TYPES_STR[access_type]);
     if (access_type == OB_STORAGE_ACCESS_APPENDER)
@@ -169,7 +202,10 @@ int ObBackupIoAdapter::get_and_init_device(ObIODevice *&dev_handle,
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "storage info is invalid",
         KR(ret), KPC(storage_info), K(storage_type_prefix), K(storage_id_mod));
+  } else if (OB_FAIL(is_io_prohibited(storage_info))) {
+    OB_LOG(WARN, "fail to check io prohibited!", K(ret), K(storage_info));
   }
+
   if (OB_FAIL(ret)) {
     /* do nothing */
   } else if (OB_LIKELY(storage_info->is_hdfs_storage())) {
@@ -293,6 +329,36 @@ int ObBackupIoAdapter::get_file_modify_time(const common::ObString &uri,
   return ret;
 }
 
+int ObBackupIoAdapter::get_file_content_digest(
+    const common::ObString &uri,
+    const common::ObObjectStorageInfo *storage_info,
+    char *digest_buf, const int64_t digest_buf_len)
+{
+  int ret = OB_SUCCESS;
+  ObIODFileStat statbuf;
+  DeviceGuard device_guard;
+  if (OB_ISNULL(storage_info) || OB_ISNULL(digest_buf)
+      || OB_UNLIKELY(uri.empty() || digest_buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", KR(ret),
+        K(uri), KPC(storage_info), KP(digest_buf), K(digest_buf_len));
+  } else if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_UNLIKELY(!device_guard.device_handle_->is_object_device())) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "only object storage have file content digest",
+        KR(ret), K(uri), KPC(storage_info), K(device_guard));
+  } else {
+    ObObjectDevice *object_device_handle = static_cast<ObObjectDevice *>(device_guard.device_handle_);
+    if (OB_FAIL(object_device_handle->get_file_content_digest(
+        device_guard.uri_cstr_, digest_buf, digest_buf_len))) {
+      OB_LOG(WARN, "fail to get file content digest!",
+          KR(ret), K(uri), KPC(storage_info), K(device_guard));
+    }
+  }
+  return ret;
+}
+
 // if the uri's object does not exist, del_file will return OB_SUCCESS
 int ObBackupIoAdapter::del_file(const common::ObString &uri, const common::ObObjectStorageInfo *storage_info)
 {
@@ -370,6 +436,8 @@ int ObBackupIoAdapter::mk_parent_dir(const common::ObString &uri, const common::
   int ret = OB_SUCCESS;
   char path[OB_MAX_URI_LENGTH];
   ObIODevice *device_handle = NULL;
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
 
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -492,7 +560,8 @@ int ObBackupIoAdapter::seal_file(
   int tmp_ret = OB_SUCCESS;
   ObIOFd fd;
   ObIODevice *device_handle = nullptr;
-
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
   if (OB_FAIL(open_with_access_type(device_handle, fd,
       storage_info, uri, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, storage_id_mod))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), KR(ret));
@@ -1216,6 +1285,8 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
     prefix = OB_FILE_PREFIX;
   } else if (OB_STORAGE_HDFS == device_type) {
     prefix = OB_HDFS_PREFIX;
+  } else if (OB_STORAGE_AZBLOB == device_type) {
+    prefix = OB_AZBLOB_PREFIX;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid device type!", K(device_type), K(ret), K(uri));
@@ -1733,24 +1804,32 @@ int ObDirPrefixLSIDFilter::func(const dirent *entry)
 }
 
 
-int switch_cos_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri)
+int switch_s3_compatible_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri)
 {
   int ret = OB_SUCCESS;
   const ObString::obstr_size_t src_len = src_uri.length();
+  const char *replace_prefix = nullptr;
   char *ptr = nullptr;
-  ObStorageType src_type = ObStorageType::OB_STORAGE_MAX_TYPE;
   if (OB_UNLIKELY(src_uri.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(src_len));
   } else if (src_uri.prefix_match(OB_COS_PREFIX)) {
-    int64_t cos_prefix_len = STRLEN(OB_COS_PREFIX);
-    int64_t dest_uri_len = src_len - cos_prefix_len + STRLEN(OB_S3_PREFIX);
+    replace_prefix = OB_COS_PREFIX;
+  } else if (src_uri.prefix_match(OB_S3A_PREFIX)) {
+    replace_prefix = OB_S3A_PREFIX;
+  } else if (src_uri.prefix_match(OB_S3N_PREFIX)) {
+    replace_prefix = OB_S3N_PREFIX;
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(replace_prefix)) {
+    const int64_t replace_prefix_len = STRLEN(replace_prefix);
+    const int64_t dest_uri_len = src_len - replace_prefix_len + STRLEN(OB_S3_PREFIX);
     if (OB_ISNULL(ptr = static_cast<char *>(allocator.alloc(dest_uri_len + 1)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to alloc memory", K(ret), K(src_uri));
     } else {
       MEMCPY(ptr, OB_S3_PREFIX, STRLEN(OB_S3_PREFIX));
-      MEMCPY(ptr + STRLEN(OB_S3_PREFIX), src_uri.ptr() + cos_prefix_len, src_len - cos_prefix_len);
+      MEMCPY(ptr + STRLEN(OB_S3_PREFIX), src_uri.ptr() + replace_prefix_len, src_len - replace_prefix_len);
       ptr[dest_uri_len] = '\0';
       dest_uri.assign_ptr(ptr, dest_uri_len);
     }

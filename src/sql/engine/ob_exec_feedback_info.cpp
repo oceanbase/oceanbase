@@ -11,6 +11,7 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "share/ob_define.h"
 
 
 using namespace oceanbase::common;
@@ -26,7 +27,19 @@ OB_SERIALIZE_MEMBER(ObExecFeedbackNode,
                     db_time_,
                     block_time_,
                     worker_count_,
-                    pdml_op_write_rows_);
+                    pdml_op_write_rows_,
+                    ssstore_read_row_count_,
+                    memstore_read_row_count_,
+                    das_local_index_scan_time_,
+                    das_local_index_scan_rows_,
+                    das_local_data_scan_time_,
+                    das_local_data_scan_rows_,
+                    das_remote_index_scan_time_,
+                    das_remote_index_scan_rows_,
+                    das_remote_data_scan_time_,
+                    das_remote_data_scan_rows_,
+                    das_index_rpc_count_,
+                    das_data_rpc_count_);
 
 OB_SERIALIZE_MEMBER(ObExecFeedbackInfo,
                     nodes_,

@@ -1,14 +1,14 @@
 /**
- * Copyright (c) 2021 OceanBase
- * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software according to the terms and conditions of the Mulan PubL v2.
- * You may obtain a copy of Mulan PubL v2 at:
- *          http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PubL v2 for more details.
- */
+* Copyright (c) 2021 OceanBase
+* OceanBase CE is licensed under Mulan PubL v2.
+* You can use this software according to the terms and conditions of the Mulan PubL v2.
+* You may obtain a copy of Mulan PubL v2 at:
+*          http://license.coscl.org.cn/MulanPubL-2.0
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+* See the Mulan PubL v2 for more details.
+*/
 
 #ifndef OCEANBASE_ENCODING_OB_SEMISTRUCT_JSON_H_
 #define OCEANBASE_ENCODING_OB_SEMISTRUCT_JSON_H_
@@ -25,63 +25,146 @@ namespace oceanbase
 namespace blocksstable
 {
 
-class ObFlatJson
+class ObSemiJsonNode;
+
+class ObSemiObjectPair final
 {
 public:
-  ObFlatJson():
-    path_(),
-    json_type_(ObJsonNodeType::J_NULL),
-    obj_type_(ObObjType::ObNullType),
-    value_(),
-    prec_(-1),
-    scale_(-1)
+ObSemiObjectPair() {}
+  explicit ObSemiObjectPair(const ObString &key, ObSemiJsonNode *value)
+      : key_(key),
+        value_(value)
+  {
+  }
+  ~ObSemiObjectPair() {}
+  OB_INLINE common::ObString get_key() const { return key_; }
+  OB_INLINE ObSemiJsonNode *get_value() const { return value_; }
+  TO_STRING_KV(K_(key), KPC(value_));
+private:
+  common::ObString key_;
+  ObSemiJsonNode *value_;
+};
+
+typedef common::ObList<ObSemiObjectPair, common::ObIAllocator> ObJsonObjectList;
+typedef common::ObList<ObSemiJsonNode*, common::ObIAllocator> ObJsonArrayList;
+
+class ObSemiSchemaNode
+{
+public:
+  ObSemiSchemaNode():
+    path_cnt_(1),
+    col_id_(0),
+    need_stop_visit_(false)
   {}
 
-  void reuse()
-  {
-    path_.reuse();
-  }
+  virtual ~ObSemiSchemaNode() {}
 
-  int add_path_item(const share::ObSubColumnPathItem::Type type, ObString name)
-  {
-    return path_.add_path_item(type, name);
+  virtual ObJsonNodeType json_type() const = 0;
+  virtual ObObjType obj_type() const = 0;
+  virtual uint32_t get_path_cnt() { return path_cnt_; }
+  virtual void inc_path_cnt() { path_cnt_++; }
+  virtual void set_col_id(uint16_t col_id) { col_id_ = col_id; }
+  uint16_t get_col_id() const { return col_id_; }
+  virtual bool is_freq_column() const { return false; }
+  virtual ObPrecision get_precision() const { return 0; }
+  virtual ObScale get_scale() const { return 0; }
+  bool check_need_stop_visit(int row_cnt, uint8_t threshold) {
+    need_stop_visit_ = path_cnt_ * 100 / row_cnt < threshold;
+    return need_stop_visit_;
   }
-  int add_path_item(const share::ObSubColumnPathItem::Type type, int64_t array_idx)
-  {
-    return path_.add_path_item(type, array_idx);
-  }
-  void pop_back()
-  {
-    path_.pop_back();
-  }
-
-  int set_value(const ObJsonNodeType &json_type, const ObObjType& obj_type, const ObDatum& value)
-  {
-    json_type_ = json_type;
-    obj_type_ = obj_type;
-    value_ = value;
-    return OB_SUCCESS;
-  }
-
-  OB_INLINE void set_precision(ObPrecision prec) { prec_ = prec; }
-  OB_INLINE ObPrecision get_precision() const { return prec_; }
-  OB_INLINE void set_scale(ObScale scale) { scale_ = scale; }
-  OB_INLINE ObScale get_scale() const { return scale_; }
-
-  const ObDatum& get_value() const { return value_; }
-  const share::ObSubColumnPath& get_path() const { return path_; }
-  ObObjType obj_type() const { return obj_type_; }
-  ObJsonNodeType json_type() const { return json_type_; }
-  TO_STRING_KV(K_(path), K_(json_type), K_(obj_type), K_(value), K_(prec), K_(scale));
+  bool get_need_stop_visit() const { return need_stop_visit_; }
+  TO_STRING_KV(K_(path_cnt), K_(col_id), K_(need_stop_visit));
 
 private:
-  share::ObSubColumnPath path_;
-  ObJsonNodeType json_type_;
+  uint32_t path_cnt_;
+  uint16_t col_id_;
+  bool need_stop_visit_;
+};
+
+class ObSemiSchemaObject : public ObSemiSchemaNode
+{
+public:
+  ObSemiSchemaObject(ObIAllocator &allocator):
+    ObSemiSchemaNode(),
+    object_list_(allocator),
+    has_nop_(false)
+  {}
+
+  ~ObSemiSchemaObject() {}
+  ObJsonObjectList &get_object_list() { return object_list_; }
+  virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_OBJECT; }
+  virtual ObObjType obj_type() const override { return ObJsonType; }
+  bool has_nop() const { return has_nop_; }
+  void set_has_nop() { has_nop_ = true; }
+  INHERIT_TO_STRING_KV("ObSemiSchemaNode", ObSemiSchemaNode, K_(object_list), K_(has_nop));
+
+private:
+  ObJsonObjectList object_list_;
+  bool has_nop_;
+};
+
+class ObSemiSchemaArray : public ObSemiSchemaNode
+{
+public:
+  friend class ObJsonReassembler;
+public:
+  ObSemiSchemaArray(ObIAllocator &allocator):
+    ObSemiSchemaNode(),
+    array_list_(allocator),
+    has_nop_(false)
+  {}
+
+  ~ObSemiSchemaArray() {}
+
+  OB_INLINE ObJsonArrayList &get_array_list() { return array_list_; }
+  virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_ARRAY; }
+  virtual ObObjType obj_type() const override { return ObJsonType; }
+  bool has_nop() const { return has_nop_; }
+  void set_has_nop() { has_nop_ = true; }
+  INHERIT_TO_STRING_KV("ObSemiSchemaNode", ObSemiSchemaNode, K_(array_list), K_(has_nop));
+
+private:
+  ObJsonArrayList array_list_;
+  bool has_nop_;
+};
+
+class ObSemiSchemaScalar : public ObSemiSchemaNode
+{
+public:
+  ObSemiSchemaScalar(const ObObjType &obj_type, const ObJsonNodeType &json_type):
+    ObSemiSchemaNode(),
+    obj_type_(obj_type),
+    json_type_(json_type),
+    min_len_(-1),
+    max_len_(-1),
+    prec_(INT16_MIN),
+    scale_(INT16_MIN),
+    is_freq_column_(false)
+  {}
+
+  virtual ~ObSemiSchemaScalar() {}
+  virtual ObObjType obj_type() const override { return obj_type_; }
+  void set_json_type(const ObJsonNodeType &json_type) { json_type_ = json_type; }
+  virtual ObJsonNodeType json_type() const override { return json_type_; }
+  void set_obj_type(const ObObjType obj_type) {  obj_type_ = obj_type; }
+  void set_freq_column(bool is_freq_column) { is_freq_column_ = is_freq_column; }
+  virtual bool is_freq_column() const override { return is_freq_column_; }
+  OB_INLINE int32_t get_min_len() const { return min_len_; }
+  OB_INLINE int32_t get_max_len() const { return max_len_; }
+  void set_min_len(int32_t min_len) { min_len_ = min_len; }
+  void set_max_len(int32_t max_len) { max_len_ = max_len; }
+  virtual ObPrecision get_precision() const override { return prec_; }
+  virtual ObScale get_scale() const override { return scale_; }
+  void set_precision_and_scale(const ObPrecision prec, const ObScale scale) { prec_ = prec; scale_ = scale; }
+  INHERIT_TO_STRING_KV("ObSemiSchemaNode", ObSemiSchemaNode, K_(obj_type), K_(json_type), K_(min_len), K_(max_len), K_(prec), K_(scale), K_(is_freq_column));
+private:
   ObObjType obj_type_;
-  ObDatum value_;
-  // used for number type
+  ObJsonNodeType json_type_;
+  int32_t min_len_;
+  int32_t max_len_;
   ObPrecision prec_;
   ObScale scale_;
+  bool is_freq_column_;
 };
 
 struct ObSemiStructSubColumn
@@ -95,6 +178,16 @@ public:
     path_(),
     prec_(-1),
     scale_(-1)
+  {}
+
+  ObSemiStructSubColumn(ObJsonNodeType json_type, ObObjType obj_type):
+  flags_(0),
+  json_type_(json_type),
+  obj_type_(obj_type),
+  sub_col_id_(0),
+  path_(),
+  prec_(-1),
+  scale_(-1)
   {}
 
   int init(const share::ObSubColumnPath& path, const ObJsonNodeType json_type, const ObObjType type, const int64_t sub_col_id);
@@ -164,113 +257,210 @@ private:
 };
 
 class ObSemiStructSubSchema;
-class ObSimpleSubSchema
+class ObSemiJsonNode
 {
 public:
-  static const int32_t DEFAUTL_FREQ_COLUMN_THRESHOLD = 100;
-  static inline bool need_store_as_spare_column(const int32_t ocur_cnt, const int32_t row_cnt, const int32_t threshold)
-  {
-    return ocur_cnt * 100 / row_cnt < threshold;
-  }
-
-  static bool is_int_len(const int len)
-  {
-    return sizeof(uint8_t) == len || sizeof(uint16_t) == len || sizeof(uint32_t) == len || sizeof(uint64_t) == len;
-  }
-
-public:
-  struct ObSimpleSubColumn
-  {
-    ObSimpleSubColumn(): col_(nullptr), cnt_(0), min_len_(0), max_len_(0) {}
-    ObSimpleSubColumn(ObSemiStructSubColumn *col, int32_t cnt): col_(col), cnt_(cnt), min_len_(0), max_len_(0) {}
-    void reset();
-    int compare(const ObSimpleSubColumn &other, const bool use_lexicographical_order) const { return col_->compare(*other.col_, use_lexicographical_order); }
-    ObJsonNodeType get_json_type() const { return col_->get_json_type(); }
-    ObObjType get_obj_type() const { return col_->get_obj_type(); }
-    TO_STRING_KV(K_(cnt), KPC_(col), K_(min_len), K_(max_len));
-
-    ObSemiStructSubColumn* col_;
-    int32_t cnt_;
-    int32_t min_len_;
-    int32_t max_len_;
-  };
-
-public:
-  ObSimpleSubSchema(ObIAllocator *allocator):
-    allocator_(allocator),
-    freq_col_threshold_(DEFAUTL_FREQ_COLUMN_THRESHOLD),
-    use_lexicographical_order_(false),
-    columns_(*allocator)
+  ObSemiJsonNode(ObIAllocator &allocator) :
+    scalar_node_(nullptr),
+    object_node_(nullptr),
+    array_node_(nullptr),
+    allocator_(allocator)
   {}
 
-  ~ObSimpleSubSchema();
-  void reuse();
-  void reset();
-  int64_t get_column_count() const { return columns_.size(); }
-  ObList<ObSimpleSubColumn, common::ObIAllocator>& get_columns() { return columns_; }
-  int add_column(const ObFlatJson &flat_json);
-  int add_column(const share::ObSubColumnPath& path, const ObJsonNodeType json_type, const ObObjType obj_type);
-  int merge(ObSimpleSubSchema &other);
-  int build_sub_schema(ObSemiStructSubSchema& sub_schema, const int64_t row_cnt) const;
-  int build_freq_and_spare_cols(ObIAllocator &allocator, ObIArray<ObSemiStructSubColumn> &freq_cols, ObIArray<ObSemiStructSubColumn> &spare_cols, const int64_t row_cnt) const;
-  int build_key_dict(ObSemiStructSubSchema& sub_schema, const int64_t row_cnt) const;
-  int encode_column_path_with_dict(ObSubSchemaKeyDict &key_dict, ObSemiStructSubColumn &sub_column) const;
-  int handle_null_type(ObSemiStructSubColumn& sub_column) const;
-  int handle_string_to_uint(const int32_t len, ObSemiStructSubColumn& sub_column) const;
-  void set_use_lexicographical_order(const bool v) { use_lexicographical_order_ = v; }
+  ~ObSemiJsonNode()
+  {
+    reset();
+  }
 
-  TO_STRING_KV(K_(columns));
+  void reset() {
+    OB_DELETEx(ObSemiSchemaScalar, &allocator_, scalar_node_);
+    OB_DELETEx(ObSemiSchemaObject, &allocator_, object_node_);
+    OB_DELETEx(ObSemiSchemaArray, &allocator_, array_node_);
+    use_lexicographical_order_ = false;
+  }
+
+public:
+  bool contain_json_type(ObJsonNodeType json_type);
+  void set_node(ObSemiSchemaNode *json_node);
+  int inc_path_cnt(ObJsonNodeType &json_type);
+  bool is_heterogeneous_column();
+  TO_STRING_KV(K_(use_lexicographical_order), KPC(scalar_node_), KPC(object_node_), KPC(array_node_));
+
+public:
+  ObSemiSchemaScalar *scalar_node_;
+  ObSemiSchemaObject *object_node_;
+  ObSemiSchemaArray *array_node_;
 
 private:
-  ObIAllocator *allocator_;
-  int32_t freq_col_threshold_;
+  ObIAllocator &allocator_;
   bool use_lexicographical_order_;
-  ObList<ObSimpleSubColumn, common::ObIAllocator> columns_;
 };
 
-class ObSemiStructSubSchema
+struct ObSemiSchemaInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSemiSchemaInfo() : flags_(0) {}
+  ObSemiSchemaInfo(int64_t flags) : flags_(flags) {}
+  ~ObSemiSchemaInfo() {}
+  ObJsonNodeType json_type() const { return ObJsonNodeType(json_type_); }
+  int handle_string_to_uint(const int32_t len);
+
+  union {
+    struct {
+      int64_t json_type_ : 8;
+      int64_t obj_type_ : 8;
+      int64_t is_freq_column_ : 1;
+      int64_t prec_ : 16;
+      int64_t scale_ : 16;
+      int64_t reserved_ : 15;
+    };
+    int64_t flags_;
+  };
+  TO_STRING_KV(K_(json_type), K_(obj_type), K_(is_freq_column), K_(prec), K_(scale), K_(reserved));
+};
+static_assert(sizeof(ObSemiSchemaInfo) == 8, "size of ObSemiSchemaInfo isn't equal to 8");
+
+class ObJsonSchemaFlatter;
+class ObSemiSchemaAbstract
 {
 public:
-  friend class ObSimpleSubSchema;
-  static const int64_t SCHEMA_VERSION = 1;
+  ObSemiSchemaAbstract(uint8_t version) :
+    version_(version),
+    allocator_("SemiSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    base_node_(allocator_),
+    is_inited_(false)
+  {}
 
-  ObSemiStructSubSchema():
-    is_inited_(false),
-    version_(SCHEMA_VERSION),
+  virtual ~ObSemiSchemaAbstract() {}
+  virtual void reset() {
+    base_node_.reset();
+    allocator_.reset();
+    is_inited_ = false;
+  }
+  virtual uint16_t get_store_column_cnt() const = 0;
+  virtual int get_sub_column_type(const uint16_t column_idx, ObObjType &type) const = 0;
+  virtual uint16_t get_freq_column_cnt() const = 0;
+  virtual int get_column_id(const share::ObSubColumnPath& path, uint16_t &sub_col_idx) const = 0;
+  bool is_freq_column(uint16_t &sub_col_idx) {  return sub_col_idx >= 0 && sub_col_idx < get_freq_column_cnt(); }
+  virtual bool use_lexicographical_order() const = 0;
+  virtual void set_use_lexicographical_order(const bool v) = 0;
+  virtual bool has_spare_column() const = 0;
+  virtual int check_can_pushdown(const sql::ObSemiStructWhiteFilterNode &filter_node, uint16_t &sub_col_idx, bool &can_pushdown);
+  virtual int encode(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
+  virtual int decode(const char *buf, const int64_t data_len, int64_t &pos) = 0;
+  virtual int64_t get_encode_size() const = 0;
+  OB_INLINE uint8_t get_version() const { return version_; }
+  OB_INLINE ObIAllocator &get_allocator() { return allocator_; }
+  OB_INLINE ObSemiJsonNode *get_base_node() { return &base_node_; }
+  OB_INLINE bool is_inited() { return is_inited_; }
+  void set_inited(bool v) { is_inited_ = v; }
+  TO_STRING_KV(KP(this), K_(version), K(base_node_), K_(is_inited));
+
+protected:
+  uint8_t version_;
+  ObArenaAllocator allocator_;
+  ObSemiJsonNode base_node_;
+  bool is_inited_;
+};
+
+class ObSemiNewSchema : public ObSemiSchemaAbstract
+{
+public:
+  static const int64_t NEW_SCHEMA_VERSION = 2;
+public:
+  ObSemiNewSchema() :
+    ObSemiSchemaAbstract(NEW_SCHEMA_VERSION),
+    schema_header_(0),
+    semi_schema_infos_(nullptr),
+    schema_buf_()
+  {}
+
+  ~ObSemiNewSchema() {}
+
+  virtual void reset() override;
+  OB_INLINE uint16_t get_element_cnt() const { return element_cnt_; }
+  virtual int get_sub_column_type(const uint16_t column_idx, ObObjType &type) const override;
+  int get_column_id(const share::ObSubColumnPath& path, uint16_t &sub_col_idx) const override;
+  OB_INLINE uint16_t get_freq_column_cnt() const override { return freq_column_cnt_; }
+  OB_INLINE bool use_lexicographical_order() const override { return use_lexicographical_order_; }
+  OB_INLINE bool col_id_valid(const uint16_t sub_col_id) const { return sub_col_id < element_cnt_; }
+  int get_sub_column_json_type(const uint16_t sub_col_id, ObJsonNodeType &type) const;
+  const ObSemiSchemaInfo *get_semi_schema_infos() const { return semi_schema_infos_; }
+  OB_INLINE ObString get_schema_buf() const { return schema_buf_; }
+  OB_INLINE int64_t get_schema_header() const { return schema_header_; }
+  OB_INLINE uint16_t get_store_column_cnt() const override { return freq_column_cnt_ + (element_cnt_ != freq_column_cnt_ ? 1 : 0); }
+  virtual bool has_spare_column() const override { return element_cnt_ != freq_column_cnt_; };
+  OB_INLINE void set_element_cnt(uint16_t element_cnt) { element_cnt_ = element_cnt; }
+  OB_INLINE void set_freq_column_cnt(uint16_t freq_column_cnt) { freq_column_cnt_ = freq_column_cnt; }
+  OB_INLINE void set_use_lexicographical_order(const bool v) override { use_lexicographical_order_ = v; }
+  OB_INLINE void set_schema_buf(ObString schema_buf) { schema_buf_.assign(schema_buf.ptr(), schema_buf.length()); }
+  int set_schema_infos_ptr(ObSEArray<ObSemiSchemaInfo, 16> &schema_info_arr);
+
+  int encode(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  int decode(const char *buf, const int64_t data_len, int64_t &pos) override;
+  int64_t get_encode_size() const override;
+
+  INHERIT_TO_STRING_KV("ObSemiSchemaAbstract", ObSemiSchemaAbstract, K_(element_cnt), K_(freq_column_cnt),
+                K_(use_lexicographical_order), K_(reserved), KPC_(semi_schema_infos), K_(schema_buf));
+
+private:
+  union {
+    struct {
+      int64_t element_cnt_ : 16;
+      int64_t freq_column_cnt_ : 16;
+      int64_t  use_lexicographical_order_: 1;
+      int64_t reserved_ : 31;
+    };
+    int64_t schema_header_;
+  };
+  const ObSemiSchemaInfo *semi_schema_infos_;
+  ObString schema_buf_;
+};
+
+class ObSemiStructSubSchema : public ObSemiSchemaAbstract
+{
+public:
+  static const int64_t SCHEMA_VERSION = 1;
+public:
+  ObSemiStructSubSchema() :
+    ObSemiSchemaAbstract(SCHEMA_VERSION),
     flags_(0),
-    allocator_("SemiSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    spare_col_(ObJsonNodeType::J_OBJECT, ObJsonType)
   {}
   ~ObSemiStructSubSchema() {}
-  void reset();
-  bool is_inited() const { return is_inited_; }
+  virtual void reset() override;
   int get_store_column(const int64_t idx, const ObSemiStructSubColumn*& sub_column) const;
-  int get_column(const int64_t col_idx, const share::ObSubColumnPath& path, const ObSemiStructSubColumn*& sub_column) const;
-  int get_column(const share::ObSubColumnPath& path, const ObSemiStructSubColumn*& sub_column) const;
+  virtual int get_sub_column_type(const uint16_t column_idx, ObObjType &type) const override;
+  int get_column_id(const share::ObSubColumnPath& path, uint16_t &sub_col_idx) const override;
   int get_key_str(const int64_t idx, ObString &key) const { return key_dict_.get(idx, key); }
   int get_key_id(const ObString &key, int64_t &idx) const { return key_dict_.get(key, idx); }
+  int handle_string_to_uint(const int32_t len, ObSemiStructSubColumn& sub_column) const;
+  int handle_null_type(ObSemiStructSubColumn& sub_column) const;
+  int add_freq_column(const ObJsonSchemaFlatter &flatter, ObSemiSchemaScalar *node);
+  int add_spare_column(const ObJsonSchemaFlatter &flatter, ObSemiSchemaNode *node);
   int make_column_path(const share::ObSubColumnPath& path, share::ObSubColumnPath& result) const;
-  int64_t get_store_column_count() const { return columns_.count() + has_spare_column(); }
-  int64_t get_freq_column_count() const { return columns_.count(); }
-  int64_t get_spare_column_count() const { return spare_columns_.count(); }
+  virtual uint16_t get_store_column_cnt() const override { return columns_.count() + has_spare_column(); }
+  virtual uint16_t get_freq_column_cnt() const override { return columns_.count(); }
   int find_column(const ObIArray<ObSemiStructSubColumn>& cols, const share::ObSubColumnPath& path, const ObSemiStructSubColumn*& sub_column) const;
-  bool has_spare_column() const { return spare_columns_.count() > 0; }
+  virtual bool has_spare_column() const override { return spare_columns_.count() > 0; }
   const ObIArray<ObSemiStructSubColumn> &get_freq_columns() const { return columns_; }
   const ObIArray<ObSemiStructSubColumn> &get_spare_columns() const { return spare_columns_; }
   bool has_key_dict() const { return has_key_dict_; }
-  const ObSubSchemaKeyDict& get_key_dict() const { return key_dict_; }
-  bool use_lexicographical_order() const { return use_lexicographical_order_; }
+  ObSubSchemaKeyDict& get_key_dict() { return key_dict_; }
+  virtual bool use_lexicographical_order() const override { return use_lexicographical_order_; }
+  void set_use_lexicographical_order(const bool v) { use_lexicographical_order_ = v; }
 
   // serialize(encode) & deserialize(decode)
   int encode(char *buf, const int64_t buf_len, int64_t &pos) const;
   int decode(const char *buf, const int64_t data_len, int64_t &pos);
-  int64_t get_encode_size() const;
+  int64_t get_encode_size() const override;
 
-  TO_STRING_KV(KP(this), K_(is_inited), K_(version), K_(has_key_dict), K_(use_lexicographical_order), K_(flags), K_(key_dict), K_(columns), K_(spare_columns));
+  INHERIT_TO_STRING_KV("ObSemiSchemaAbstract", ObSemiSchemaAbstract, KP(this), K_(has_key_dict),
+                K_(use_lexicographical_order), K_(flags), K_(key_dict), K_(columns), K_(spare_columns));
 
 private:
   // not serialize & deserialize
-  bool is_inited_;
-  uint8_t version_;
   union {
     struct {
       uint32_t has_key_dict_ : 1;
@@ -279,18 +469,18 @@ private:
     };
     uint32_t flags_;
   };
-  ObArenaAllocator allocator_;
   ObSubSchemaKeyDict key_dict_;
   ObSEArray<ObSemiStructSubColumn, 10> columns_;
   ObSEArray<ObSemiStructSubColumn, 10> spare_columns_;
   // not serialize & deserialize
   ObSemiStructSubColumn spare_col_;
+
 };
 
 class ObJsonBinVisitor
 {
 public:
-  ObJsonBinVisitor(ObIAllocator *allocator):
+  ObJsonBinVisitor(ObIAllocator *allocator, int64_t min_data_version):
     allocator_(allocator),
     ptr_(nullptr),
     len_(0),
@@ -300,7 +490,11 @@ public:
     total_cnt_(0),
     null_cnt_(0),
     visited_bytes_(0),
-    use_lexicographical_order_(false)
+    use_lexicographical_order_(false),
+    json_key_cmp_(use_lexicographical_order_),
+    row_index_(0),
+    freq_column_count_(0),
+    min_data_version_(min_data_version)
   {}
 
   int init(const ObString& data);
@@ -308,15 +502,17 @@ public:
   void reuse();
 
   virtual int visit(const ObString& data) = 0;
-  int do_visit(const ObString& data, ObFlatJson &flat_json);
-  int visit_value(ObFlatJson &flat_json);
-  int visit_object(ObFlatJson &flat_json);
-  int visit_array(ObFlatJson &flat_json);
-  int visit_scalar(ObFlatJson &flat_json);
+  virtual int do_visit(const ObString& data) = 0;
+  int visit_value(ObSemiJsonNode *&json_node);
+  virtual int visit_object(ObSemiSchemaObject *&json_node) = 0;
+  virtual int visit_array(ObSemiSchemaArray *&json_node) = 0;
+  virtual int visit_scalar(ObSemiSchemaScalar *&json_node) = 0;
   // virtual int handle(ObFlatJson &flat_json) = 0;
   int to_bin(ObJsonBin &bin);
   OB_INLINE bool get_boolean() const { return static_cast<bool>(uint_val_); }
   OB_INLINE double get_double() const { return double_val_; }
+  OB_INLINE uint16_t get_freq_column_count() const { return freq_column_count_; }
+  OB_INLINE void set_freq_column_count(uint16_t freq_column_count) { freq_column_count_ = freq_column_count; }
   OB_INLINE float get_float() const { return float_val_; };
   OB_INLINE int64_t get_int() const { return int_val_; }
   OB_INLINE uint64_t get_uint() const { return uint_val_; }
@@ -336,22 +532,21 @@ public:
     nmb.shadow_copy(number_);
     return nmb;
   }
+  bool get_use_lexicographical_order() const { return use_lexicographical_order_; }
   OB_INLINE ObPrecision get_decimal_precision() const { return prec_; }
   OB_INLINE ObScale get_decimal_scale() const { return scale_; }
   OB_INLINE uint64_t element_count() const { return meta_.element_count(); }
+  void set_semi_json_node(ObSemiJsonNode *node) { base_node_ = node; }
   OB_INLINE ObJsonNodeType json_type() const { return meta_.json_type(); }
 
   int flat_datums(const ObColDatums &datums);
   int flat_datum(const ObDatum &datum);
 
 protected:
-  virtual int add(const ObFlatJson &flat_json) = 0;
   virtual int handle_null() = 0;
-  virtual int add_object_key(const ObString &key, ObFlatJson &flat_json);
-
-private:
   int read_type();
-
+  int deserialize_bin_header();
+  int deserialize_doc_header();
   int deserialize();
   int deserialize_decimal();
   int deserialize_int();
@@ -359,8 +554,6 @@ private:
   int deserialize_string();
   int deserialize_opaque();
   int deserialize_boolean();
-  int deserialize_doc_header();
-  int deserialize_bin_header();
   static int get_key_entry(const ObJsonBinMeta &meta, const char* buf_ptr, int index, ObString &key);
   static int get_value_entry(
       const ObJsonBinMeta &meta, const char* buf_ptr,
@@ -394,69 +587,120 @@ protected:
   int32_t null_cnt_;
   int64_t visited_bytes_;
   bool use_lexicographical_order_;
-  ObFlatJson flat_json_;
   ObStorageDatum datum_;
+  ObSemiJsonNode *base_node_;
+  ObJsonKeyCompare json_key_cmp_;
+  int64_t row_index_;
+  uint16_t freq_column_count_;
+  int64_t min_data_version_;
 };
 
 class ObJsonDataFlatter : public ObJsonBinVisitor
 {
 public:
-  ObJsonDataFlatter(ObIAllocator *allocator):
-    ObJsonBinVisitor(allocator),
+  static ObStorageDatum NOP_DATUM;
+
+public:
+  ObJsonDataFlatter(ObIAllocator *allocator, int64_t min_data_version):
+    ObJsonBinVisitor(allocator, min_data_version),
     sub_schema_(nullptr),
     sub_col_datums_(nullptr),
-    col_cnt_(0),
-    spare_data_allocator_("SemiEncTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    spare_col_(nullptr)
+    spare_col_(nullptr),
+    spare_data_allocator_("SemiEncTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
+  void reset();
+  int init(const ObSemiSchemaAbstract *sub_schema, ObArray<ObColDatums *> &sub_col_datums);
+  virtual int visit(const ObString& data) override;
+  virtual int do_visit(const ObString& data) override;
+  virtual int visit_object(ObSemiSchemaObject *&json_node) override;
+  virtual int visit_array(ObSemiSchemaArray *&json_node) override;
+  virtual int visit_scalar(ObSemiSchemaScalar *&json_node) override;
+  int handle_stop_container(uint16_t col_id, ObJsonNodeType json_type);
 
-  int init(const ObSemiStructSubSchema& sub_schema, ObArray<ObColDatums *> &sub_col_datums);
-  virtual int visit(const ObString& data);
-
-  TO_STRING_KV(KP(this), KP_(allocator), KPC_(sub_schema), KPC_(sub_col_datums), K_(col_cnt));
+  TO_STRING_KV(KP(this), KP_(allocator), KPC_(sub_col_datums));
 
 protected:
-  virtual int add(const ObFlatJson &flat_json);
-  virtual int add_object_key(const ObString &key, ObFlatJson &flat_json);
+  // virtual int add(const ObFlatJson &flat_json);
   virtual int handle_null();
 
 private:
-  int add_spare_col(const ObFlatJson &flat_json, const ObSemiStructSubColumn &sub_column);
-  int copy_datum(const ObFlatJson &flat_json, ObDatum &dest);
+  int copy_datum(ObDatum &src, ObDatum &dest);
+  int gen_spare_key(const uint16_t col_id, ObString &key);
+  int add_spare_col(ObSemiSchemaScalar *&scalar_node);
 private:
-  const ObSemiStructSubSchema *sub_schema_;
+  const ObSemiSchemaAbstract *sub_schema_;
   ObArray<ObColDatums *> *sub_col_datums_;
-  int32_t col_cnt_;
-  ObArenaAllocator spare_data_allocator_;
   ObJsonObject *spare_col_;
+  ObArenaAllocator spare_data_allocator_;
 };
 
 class ObJsonSchemaFlatter : public ObJsonBinVisitor
 {
 public:
-  ObJsonSchemaFlatter(ObIAllocator *allocator):
-    ObJsonBinVisitor(allocator),
-    sub_schema_(allocator),
-    tmp_sub_schema_(allocator)
+  ObJsonSchemaFlatter(ObIAllocator *allocator, ObIAllocator &schema_alloc, int64_t min_data_version):
+    ObJsonBinVisitor(allocator, min_data_version),
+    schema_alloc_(schema_alloc),
+    row_cnt_(1),
+    spare_col_idx_(0),
+    schema_info_arr_(),
+    freq_col_idx_(0)
   {}
 
-  int init();
-  int build_sub_schema(ObSemiStructSubSchema &result) const;
-  const ObSimpleSubSchema& get_sub_schema() const { return sub_schema_; }
-  virtual int visit(const ObString& data);
+  int init(const uint8_t freq_threshold);
+  int visit(const ObString& data) override;
+  int do_visit(const ObString& data) override;
+  int alloc_node(ObIAllocator &allocator, const uint8_t obj_type, ObSemiSchemaNode *&node);
+  virtual int visit_object(ObSemiSchemaObject *&json_node) override;
+  virtual int visit_array(ObSemiSchemaArray *&json_node) override;
+  virtual int visit_scalar(ObSemiSchemaScalar *&json_node) override;
+  int build_sub_schema(ObSemiSchemaArray *array_node, ObSemiStructSubSchema &result);
+  int build_sub_schema(ObSemiSchemaScalar *scalar_node, ObSemiStructSubSchema &result);
+  int build_sub_schema(ObSemiSchemaObject *object_node, ObSemiStructSubSchema &result);
+  int build_sub_schema(ObSemiJsonNode *json_node, ObSemiStructSubSchema &result);
 
-  TO_STRING_KV(KP(this), KP_(allocator), K_(sub_schema), K_(tmp_sub_schema));
+// ---------------------------- for new schema --------------------------------
+  int build_new_sub_schema(ObSemiNewSchema &new_schema, ObSemiSchemaArray *array_node, ObJsonNode &parent);
+  int build_new_sub_schema(ObSemiNewSchema &new_schema, ObSemiSchemaObject *object_node, ObJsonNode &parent);
+  int handle_hete_col(ObSemiNewSchema &new_schema, ObSemiJsonNode *semi_node, ObJsonHeteCol &parent);
+  int build_schema_child_node(ObSemiNewSchema &new_schema, ObSemiJsonNode *json_node, ObJsonNode *&child_node);
+  int build_sub_schema(ObSemiNewSchema &schema_str_buf);
+  int add_schema_info(ObSemiSchemaNode &schema_node, ObSemiNewSchema &new_schema);
+  const share::ObSubColumnPath get_path() const { return path_; }
+  TO_STRING_KV(KP(this), KP_(allocator));
+  void set_row_cnt(int64_t row_cnt) { row_cnt_ = row_cnt; }
+  uint16_t get_store_column_count() { return freq_column_count_ + (spare_col_idx_ == freq_column_count_ ? 0 : 1); }
 
 protected:
-  virtual int add(const ObFlatJson &flat_json);
+  // virtual int add(const ObFlatJson &flat_json);
   virtual int handle_null() { return OB_SUCCESS; };
+  bool need_store_as_freq_column(int32_t cur_cnt) { return cur_cnt * 100 / (row_cnt_ - null_cnt_) >= freq_col_threshold_; }
+
 
 private:
-  ObSimpleSubSchema sub_schema_;
-  ObSimpleSubSchema tmp_sub_schema_;
+  ObIAllocator &schema_alloc_;
+  uint8_t freq_col_threshold_;
+  int64_t row_cnt_;
+  uint16_t spare_col_idx_;
+  share::ObSubColumnPath path_;
+  ObSEArray<ObSemiSchemaInfo, 16> schema_info_arr_;
+  uint16_t freq_col_idx_;
 };
 
-class ObSemiStructScalar;
+class ObSemiHetCol : public ObJsonNode
+{
+public:
+  ObSemiHetCol(ObIAllocator *allocator)
+    : ObJsonNode(allocator)
+  {}
+
+private:
+  ObJsonScalar *scalar_node_;
+  bool has_object_nop_;
+  ObJsonObject *object_node_;
+  bool has_array_nop_;
+  ObJsonArray *array_node_;
+};
+
 class ObSemiStructObject : public ObJsonNode
 {
 public:
@@ -556,7 +800,7 @@ public:
   {}
 
   virtual ~ObSemiStructScalar() {}
-  int init(const ObSemiStructSubColumn& sub_column);
+  int init(ObPrecision prec, ObScale scale);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   OB_INLINE bool is_scalar() const { return true; }
   OB_INLINE uint32_t depth() const override { return 1; }
@@ -597,17 +841,18 @@ private:
 class ObJsonReassembler
 {
 public:
-  ObJsonReassembler(ObSemiStructSubSchema *sub_schema, ObIAllocator* decode_allocator):
+  ObJsonReassembler(ObSemiSchemaAbstract *sub_schema, ObIAllocator* decode_allocator):
     allocator_("SemiJson", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tmp_allocator_("SemiJsonTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     decode_allocator_(decode_allocator),
     sub_schema_(sub_schema),
-    json_(nullptr)
+    json_(nullptr),
+    is_inited_(false)
   {}
   void reset();
   int init();
+  inline bool is_inited() const { return is_inited_; }
   int serialize(const ObDatumRow &row, ObString &result);
-  ObDatumRow& get_sub_row() { return sub_row_; }
 
 public:
   static int prepare_lob_common(ObJsonBuffer &result);
@@ -616,10 +861,17 @@ private:
   int fill_freq_column(const ObDatumRow &row);
   int fill_spare_column(const ObDatumRow &row);
   int alloc_container_node(const share::ObSubColumnPathItem& item, const int child_cnt, ObIJsonBase *&node);
+  int alloc_container_node(int real_child_cnt, int child_cnt, ObJsonNodeType type, ObSemiNewSchema &schema,
+            ObIJsonBase **child_schemas, ObString *keys,  ObJsonNode *&current);
   int alloc_scalar_json_node(const ObSemiStructSubColumn& sub_column, ObIJsonBase *&node);
+  int alloc_scalar_json_node(uint16_t col_id, ObSemiNewSchema &schema, ObJsonNode *&node);
   int add_child(ObIJsonBase *parent, ObIJsonBase *child, const share::ObSubColumnPathItem &item);
-  int reassemble(const int start, const int end, const int depth, ObIJsonBase *&current);
+  bool is_heterigeneous_column(const share::ObSubColumnPathItem &item, ObIJsonBase *&current);
+  int reassemble(const int start, const int end, const int depth, ObIJsonBase *&current, int &real_end);
   int merge_sub_cols();
+  int deserialize_new_schema();
+  int json_to_schema(ObIJsonBase &json_base, ObSemiNewSchema &semi_schema, ObJsonNode **&current);
+  int build_schema_tree(ObIJsonBase &json_base, ObSemiNewSchema &semi_schema, ObIJsonBase *&parent);
   int reshape(ObIJsonBase *node);
   bool has_value(ObIJsonBase *node) const;
 
@@ -627,12 +879,12 @@ private:
   ObArenaAllocator allocator_;
   ObArenaAllocator tmp_allocator_;
   ObIAllocator* decode_allocator_;
-  ObSemiStructSubSchema *sub_schema_;
+  ObSemiSchemaAbstract *sub_schema_;
   ObIJsonBase *json_;
   ObSEArray<ObSemiStructScalar*, 10> leaves_;
   ObSEArray<ObSemiStructScalar*, 10> spare_leaves_;
-  ObDatumRow sub_row_;
   ObSEArray<const ObSemiStructSubColumn*, 10> sub_cols_;
+  bool is_inited_;
 };
 
 }  // end namespace blocksstable

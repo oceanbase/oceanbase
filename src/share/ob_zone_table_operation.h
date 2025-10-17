@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "common/ob_zone.h"
+#include "common/ob_idc.h"
 #include "share/ob_lease_struct.h"
 #include "share/schema/ob_schema_struct.h"
 
@@ -64,6 +65,8 @@ public:
   static int remove_zone_info(common::ObISQLClient &sql_client, const common::ObZone &zone);
   static int get_region_list(
       common::ObISQLClient &sql_client, common::ObIArray<common::ObRegion> &region_list);
+  static int get_idc_list(
+      common::ObISQLClient &sql_client, common::ObIArray<common::ObIDC> &idc_list);
   static int check_encryption_zone(
       common::ObISQLClient &sql_client,
       const common::ObZone &zone,

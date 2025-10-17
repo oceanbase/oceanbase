@@ -35,6 +35,7 @@ ObTableIterParam::ObTableIterParam()
       out_cols_project_(NULL),
       agg_cols_project_(NULL),
       group_by_cols_project_(NULL),
+      aggr_param_props_(nullptr),
       pushdown_filter_(nullptr),
       op_(nullptr),
       sstable_index_filter_(nullptr),
@@ -61,6 +62,7 @@ ObTableIterParam::ObTableIterParam()
       is_tablet_spliting_(false),
       is_column_replica_table_(false),
       is_delete_insert_(false),
+      plan_enable_rich_format_(false),
       need_update_tablet_param_(nullptr)
 {}
 
@@ -71,6 +73,11 @@ ObTableIterParam::~ObTableIterParam()
     pushdown_filter_->clear();
     pushdown_filter_ = nullptr;
   }
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
+}
+
+void ObTableIterParam::reuse()
+{
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
@@ -87,6 +94,7 @@ void ObTableIterParam::reset()
   out_cols_project_ = NULL;
   agg_cols_project_ = NULL;
   group_by_cols_project_ = NULL;
+  aggr_param_props_ = nullptr;
   is_multi_version_minor_merge_ = false;
   need_scn_ = false;
   need_trans_info_ = false;
@@ -115,6 +123,7 @@ void ObTableIterParam::reset()
   is_tablet_spliting_ = false;
   is_column_replica_table_ = false;
   is_delete_insert_ = false;
+  plan_enable_rich_format_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   need_update_tablet_param_ = nullptr;
 }
@@ -196,6 +205,7 @@ DEF_TO_STRING(ObTableIterParam)
        KPC_(out_cols_project),
        KPC_(agg_cols_project),
        KPC_(group_by_cols_project),
+       KPC_(aggr_param_props),
        KPC_(pushdown_filter),
        KP_(op),
        KP_(sstable_index_filter),
@@ -222,6 +232,7 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_tablet_spliting),
        K_(is_column_replica_table),
        K_(is_delete_insert),
+       K_(plan_enable_rich_format),
        KP_(need_update_tablet_param));
   J_OBJ_END();
   return pos;
@@ -242,6 +253,11 @@ ObTableAccessParam::ObTableAccessParam()
 
 ObTableAccessParam::~ObTableAccessParam()
 {
+}
+
+void ObTableAccessParam::reuse()
+{
+  iter_param_.reuse();
 }
 
 void ObTableAccessParam::reset()
@@ -293,6 +309,9 @@ int ObTableAccessParam::init(
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.group_by_cols_project_ = &table_param.get_group_by_projector();
+    iter_param_.plan_enable_rich_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0
+      ? table_param.plan_enable_rich_format() : (nullptr != scan_param.op_ && scan_param.op_->enable_rich_format_);
+    iter_param_.aggr_param_props_ = &table_param.get_aggr_param_props();
     iter_param_.need_scn_ = scan_param.need_scn_ || OB_INVALID_INDEX != table_param.get_read_info().get_trans_col_index();
     iter_param_.is_for_foreign_check_ = scan_param.is_for_foreign_check_;
     padding_cols_ = &table_param.get_pad_col_projector();

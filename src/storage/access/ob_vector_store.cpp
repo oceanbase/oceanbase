@@ -245,7 +245,7 @@ int ObVectorStore::alloc_group_by_cell(const ObTableAccessParam &param)
   int ret = OB_SUCCESS;
   if (param.iter_param_.enable_pd_group_by()) {
     void *buf = nullptr;
-    if (param.iter_param_.use_new_format()) {
+    if (param.iter_param_.plan_use_new_format()) {
       if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(ObGroupByCellVec)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc datum buf", K(ret));
@@ -349,9 +349,7 @@ int ObVectorStore::fill_output_rows(
     blocksstable::ObIMicroBlockRowScanner &scanner,
     int64_t &begin_index,
     const int64_t end_index,
-    const ObFilterResult &res,
-    const bool need_set_end,
-    const bool need_init_vector)
+    const ObFilterResult &res)
 {
   int ret = OB_SUCCESS;
   int64_t row_capacity = 0;
@@ -361,7 +359,8 @@ int ObVectorStore::fill_output_rows(
   } else if (0 != count_) {
     // defense code: data cross fuse and micro block is banned
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected vector store count", K(ret), K(count_));
+    LOG_WARN("Unexpected vector store count", K(ret), K(count_), K(group_idx),
+      K(begin_index), K(end_index), K(res), K(scanner), KPC(this));
   } else if (OB_FAIL(get_row_ids(scanner.get_reader(), begin_index, end_index, row_capacity, true, res))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get row ids", K(ret), K(begin_index), K(end_index));
@@ -378,8 +377,7 @@ int ObVectorStore::fill_output_rows(
                                                   len_array_,
                                                   exprs_,
                                                   &default_datums_,
-                                                  is_pad_char_to_full_length(context_.sql_mode_),
-                                                  need_init_vector))) {
+                                                  is_pad_char_to_full_length(context_.sql_mode_)))) {
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
   } else if (OB_FAIL(scanner.get_rows_for_old_format(cols_projector_,
@@ -398,9 +396,7 @@ int ObVectorStore::fill_output_rows(
     count_ = row_capacity;
     eval_ctx_.set_batch_idx(count_);
     // todo: support data cross microblocks in vectorized
-    if (need_set_end) {
-      set_end();
-    }
+    set_end();
     if (OB_FAIL(fill_group_idx(group_idx))) {
       LOG_WARN("Failed to fill group idx", K(ret));
     } else {
@@ -502,6 +498,20 @@ int ObVectorStore::check_can_group_by(
   return ret;
 }
 
+int ObVectorStore::fill_group_by_col_lob_locator(const bool has_lob_out_row)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObColumnParam *col_param = group_by_cell_->get_group_by_col_param();
+  if (iter_param_->has_lob_column_out() && has_lob_out_row
+    && nullptr != col_param && col_param->get_meta_type().is_lob_storage()) {
+    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, context_, *col_param,
+          group_by_cell_->get_distinct_cnt(), group_by_cell_->get_group_by_col_datums_to_fill(), false))) {
+      LOG_WARN("Failed to fill lob locator", K(ret), K(has_lob_out_row), K(col_param), KPC(group_by_cell_), KPC(iter_param_));
+    }
+  }
+  return ret;
+}
+
 int ObVectorStore::do_group_by(
     const int64_t group_idx,
     blocksstable::ObIMicroBlockReader *reader,
@@ -514,9 +524,14 @@ int ObVectorStore::do_group_by(
   blocksstable::ObIMicroBlockDecoder *decoder = static_cast<blocksstable::ObIMicroBlockDecoder*>(reader);
   const int32_t group_by_col_offset = group_by_cell_->get_group_by_col_offset();
   const char **cell_data = group_by_cell_->get_cell_datas();
+  if (nullptr != context_.lob_locator_helper_) {
+    context_.lob_locator_helper_->reuse();
+  }
   if (OB_FAIL(decoder->read_distinct(group_by_col_offset, nullptr == cell_data ? cell_data_ptrs_ : cell_data,
       is_pad_char_to_full_length(context_.sql_mode_), *group_by_cell_))) {
     LOG_WARN("Failed to read distinct", K(ret));
+  } else if (OB_FAIL(fill_group_by_col_lob_locator(reader->has_lob_out_row()))) {
+    LOG_WARN("Failed to fill lob locator", K(ret));
   } else if (group_by_cell_->need_read_reference()) {
     const bool need_extract_distinct = group_by_cell_->need_extract_distinct();
     const bool need_do_aggregate = group_by_cell_->need_do_aggregate();
@@ -536,12 +551,15 @@ int ObVectorStore::do_group_by(
       } else if (need_do_aggregate) {
         if (OB_FAIL(group_by_cell_->check_distinct_and_ref_valid())) {
           LOG_WARN("Failed to check valid", K(ret));
-        } else if (iter_param_->use_new_format()) {
-          if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
-                          0, default_datums_, len_array_, eval_ctx_, *static_cast<ObGroupByCellVec *>(group_by_cell_)))) {
+        } else if (iter_param_->plan_use_new_format()) {
+          ObGroupByCellVec *group_by_cell_vec = static_cast<ObGroupByCellVec *>(group_by_cell_);
+          if (OB_FAIL(group_by_cell_vec->clear_evaluated_infos())) {
+            LOG_WARN("Failed to clear evaluated infos", K(ret), KPC(group_by_cell_vec));
+          } else if (OB_FAIL(decoder->get_group_by_aggregate_result(*iter_param_, context_, row_ids_, cell_data_ptrs_, row_capacity,
+              0, default_datums_, len_array_, eval_ctx_, *group_by_cell_vec, iter_param_->use_new_format()))) {
             LOG_WARN("Failed to get aggregate result", K(ret));
           }
-        } else if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
+        } else if (OB_FAIL(decoder->get_group_by_aggregate_result(*iter_param_, context_, row_ids_, cell_data_ptrs_, row_capacity,
                                *static_cast<ObGroupByCell *>(group_by_cell_)))) {
           LOG_WARN("Failed to get aggregate result", K(ret));
         }

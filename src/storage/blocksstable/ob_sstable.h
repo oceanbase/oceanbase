@@ -34,6 +34,8 @@ namespace blocksstable
 {
 extern const char *DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
 extern const int64_t DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
+class ObSSTableIndexScanParam;
+class ObSSTableIndexScanner;
 class ObSSTableSecMetaIterator;
 class ObIMacroBlockIterator;
 struct ObMacroBlocksWriteCtx;
@@ -178,6 +180,11 @@ public:
       blocksstable::ObSSTableSecMetaIterator *&meta_iter,
       const bool is_reverse_scan = false,
       const int64_t sample_step = 0) const;
+  int scan_index(
+      const ObDatumRange &scan_range,
+      const ObSSTableIndexScanParam &scan_param,
+      ObIAllocator &allocator,
+      ObSSTableIndexScanner *&idx_scanner);
   int bf_may_contain_rowkey(const ObDatumRowkey &rowkey, bool &contain);
   int fill_column_ckm_array(ObIArray<int64_t> &column_checksums) const;
   // For transaction

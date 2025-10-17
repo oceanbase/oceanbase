@@ -47,6 +47,9 @@ public:
 
   // Override methods
   virtual int assign(const ObObjectStorageInfo &storage_info) override;
+  virtual int clone(
+      common::ObIAllocator &allocator,
+      common::ObObjectStorageInfo *&storage_info) const override;
   virtual void reset() override;
   // virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const override;
 

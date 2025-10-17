@@ -37,6 +37,7 @@ namespace oceanbase
 {
 namespace observer
 {
+#define RPC_DI_LIMIT_NUM 1000
 ObString extract_user_name(const ObString &in);
 int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name);
 int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id);
@@ -489,17 +490,18 @@ int ObSrvDeliver::init_queue_threads()
 }
 
 int ObSrvDeliver::acquire_diagnostic_info_object(int64_t tenant_id, int64_t group_id,
-    int64_t session_id, ObDiagnosticInfo *&di, bool using_cache)
+    int64_t session_id, ObDiagnosticInfo *&di, bool using_cache, bool check_throttle, omt::ObTenant *tenant)
 {
   int ret = OB_SUCCESS;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     if (OB_INVALID_TENANT_ID == tenant_id || OB_DTL_TENANT_ID == tenant_id) {
       ret = OB_ERROR;
     } else {
-      MTL_SWITCH(tenant_id) {
-        if (OB_FAIL(
-                MTL(common::ObDiagnosticInfoContainer *)
-                    ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
+      MTL_TENANT(tenant_id) {
+        if (check_throttle && MTL_TENANT_GET(common::ObDiagnosticInfoContainer *)->get_rpc_size() > RPC_DI_LIMIT_NUM) {
+          ret = OB_EAGAIN;
+        } else if (OB_FAIL(MTL_TENANT_GET(common::ObDiagnosticInfoContainer *)
+                           ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
           OB_ASSERT(di == nullptr);
           LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id),
               K(session_id));
@@ -564,7 +566,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     }
   } else if (OB_RENEW_LEASE == pkt.get_pcode()) {
     queue = &lease_queue_->queue_;
-  } else if (10 == pkt.get_priority()) {
+  } else if (ORPR_DDL == pkt.get_priority()) {
     if (rootserver::is_parallel_ddl(pkt.get_pcode())) {
       queue = &ddl_parallel_queue_->queue_;
     } else {
@@ -574,7 +576,14 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     const uint64_t priv_tenant_id = pkt.get_priv_tenant_id();
     if (NULL != gctx_.omt_) {
       tenant = NULL;
-      if (OB_FAIL(gctx_.omt_->get_tenant(tenant_id, tenant)) || NULL == tenant) {
+      if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC) {
+        // pkt-nio has locked the omt tenants, so use `get_tenant_unsafe`
+        if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(tenant_id, tenant)) || NULL == tenant) {
+          if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(priv_tenant_id, tenant)) || NULL == tenant) {
+            ret = OB_TENANT_NOT_IN_SERVER;
+          }
+        }
+      } else if (OB_FAIL(gctx_.omt_->get_tenant(tenant_id, tenant)) || NULL == tenant) {
         if (OB_FAIL(gctx_.omt_->get_tenant(priv_tenant_id, tenant)) || NULL == tenant) {
           ret = OB_TENANT_NOT_IN_SERVER;
         }
@@ -615,8 +624,9 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       if (!using_cache) {
         session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
       }
+      const bool using_rpc_throttle = ObDiagnosticInfoContainer::get_di_experimental_feature_flag().rpc_throttle();
       if (OB_SUCCESS != acquire_diagnostic_info_object(tenant_id, group_id, session_id, di,
-                            using_cache)) {
+                            using_cache, using_rpc_throttle, tenant)) {
         // ignore diagnostic info error
       } else {
         di->get_ash_stat().pcode_ = pkt.get_pcode();
@@ -633,7 +643,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
         di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), pkt.get_request_level(), 0);
       }
     }
-    ObTenantDiagnosticInfoSummaryGuard g(nullptr == di ? nullptr : di->get_summary_slot());
+    ObTenantDiagnosticInfoSummaryGuard guard(tenant_id, group_id);
     if (need_update_stat) {
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES,
@@ -915,4 +925,20 @@ int ObSrvDeliver::deliver(rpc::ObRequest &req)
   }
 
   return ret;
+}
+
+int ObSrvDeliver::lock_tenant_list()
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(NULL != gctx_.omt_)) {
+    ret = gctx_.omt_->lock_tenant_list();
+  } else {
+    ret = OB_NOT_INIT;
+  }
+  return ret;
+}
+
+int ObSrvDeliver::unlock_tenant_list()
+{
+  return gctx_.omt_->unlock_tenant_list();
 }

@@ -878,7 +878,8 @@ int ObLogExchange::add_px_table_location(ObLogicalOperator *op,
     bool has_exec_param = false;
     OZ(find_table_location_exprs(drop_expr_idxs, table_scan->get_range_conditions(), exprs, has_exec_param));
     OZ(find_table_location_exprs(drop_expr_idxs, table_scan->get_filter_exprs(), exprs, has_exec_param));
-    if (OB_SUCC(ret) && !exprs.empty() && has_exec_param) {
+    if (OB_SUCC(ret) && !exprs.empty() && has_exec_param &&
+        ObTableLocation::can_use_table_location(table_scan->get_lake_table_type())) {
       SMART_VAR(ObTableLocation, table_location) {
         const ObDMLStmt *cur_stmt = NULL;
         const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(

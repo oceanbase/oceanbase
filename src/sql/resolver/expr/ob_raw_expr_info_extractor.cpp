@@ -148,19 +148,19 @@ int ObRawExprInfoExtractor::visit(ObColumnRefRawExpr &expr)
 int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObExprInfo &expr_info = expr.get_expr_info();
+  const ObExprInfo &expr_info = expr.get_expr_info();
   bool is_implicit_cast = expr_info.has_member(IS_OP_OPERAND_IMPLICIT_CAST);
   bool is_self_param = expr_info.has_member(IS_UDT_UDF_SELF_PARAM);
   bool is_auto_part_expr = expr_info.has_member(IS_AUTO_PART_EXPR);
-  expr_info.reset();
+  expr.reset_flag();
   if (is_implicit_cast) {
-    OZ(expr_info.add_member(IS_OP_OPERAND_IMPLICIT_CAST));
+    OZ(expr.add_flag(IS_OP_OPERAND_IMPLICIT_CAST));
   }
   if (is_self_param) {
-    OZ(expr_info.add_member(IS_UDT_UDF_SELF_PARAM));
+    OZ(expr.add_flag(IS_UDT_UDF_SELF_PARAM));
   }
   if (is_auto_part_expr) {
-    OZ(expr_info.add_member(IS_AUTO_PART_EXPR));
+    OZ(expr.add_flag(IS_AUTO_PART_EXPR));
   }
   return ret;
 }
@@ -546,6 +546,10 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
               || T_FUN_SYS_UUID_SHORT == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));
+      }
+    } else if (T_FUN_TMP_FILE_OPEN == expr.get_expr_type()) {
+      if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
+        LOG_WARN("failed to add flag IS_RAND_FUNC for T_FUN_TMP_FILE_OPEN", K(ret));
       }
     } else if (T_FUN_SYS_ROWNUM == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_ROWNUM))) {

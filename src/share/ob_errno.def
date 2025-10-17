@@ -289,7 +289,7 @@ DEFINE_ERROR(OB_WAIT_MAJOR_FREEZE_RESPONSE_TIMEOUT, -4215, -1, "HY000", "wait ma
 DEFINE_ERROR_DEP(OB_CURL_ERROR, -4216, -1, "HY000", "curl error");
 DEFINE_ERROR_EXT(OB_MAJOR_FREEZE_NOT_ALLOW, -4217, -1, "HY000", "Major freeze not allowed now", "%s");
 DEFINE_ERROR(OB_PREPARE_FREEZE_FAILED, -4218, -1, "HY000", "prepare freeze failed");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_DATE_VALUE, -4219, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", "Incorrect datetime value: '%.*s' for column '%s'", 1861, "literal does not match format string", "literal does not match format string: '%.*s' for column '%s'");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_DATE_VALUE, -4219, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", "Incorrect datetime value: '%.*s'%s", 1861, "literal does not match format string", "literal does not match format string: '%.*s' for column '%s'");
 DEFINE_OTHER_MSG_FMT(OB_ERR_INVALID_DATE_MSG_FMT_V2, OB_INVALID_DATE_VALUE, "Incorrect datetime value for column '%.*s' at row %ld", "Incorrect datetime value for column '%.*s' at row %ld")
 DEFINE_ERROR_DEP(OB_INACTIVE_SQL_CLIENT, -4220, -1, "HY000", "Inactive sql client, only read allowed");
 DEFINE_ERROR_DEP(OB_INACTIVE_RPC_PROXY, -4221, -1, "HY000", "Inactive rpc proxy, can not send RPC request");
@@ -476,9 +476,10 @@ DEFINE_ERROR(OB_IMPROPER_OS_PARAM, -4403, -1, "HY000", "OS params check failed, 
 DEFINE_ERROR(OB_IO_TIMEOUT, -4404, 4012, "HY000", "IO timeout");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_LICENSE, -4405, -1, "HY000", "license is invalid", "license is invalid because: %s");
 DEFINE_ERROR(OB_LICENSE_EXPIRED, -4406, -1, "HY000", "license is expired");
-DEFINE_ERROR_EXT_DEP(OB_LICENSE_SCOPE_EXCEEDED, -4407, -1, "HY000", "current license does not allow this operation", "current license does not allow this operation: %s");
+DEFINE_ERROR_EXT_DEP(OB_LICENSE_SCOPE_EXCEEDED, -4407, -1, "HY000", "The current license does not include this feature module", "The current license does not include this feature module: %s");
 DEFINE_ERROR(OB_MIGRATE_TX_DATA_NOT_CONTINUES, -4408, -1, "HY000", "migrate tx data not continues");
 DEFINE_ERROR(OB_INVALID_ZERO_DATE, -4409, -1, "HY000", "invalid zero date in no_zero_date mode");
+DEFINE_ERROR(OB_LS_NOT_IN_LEARNER_LIST, -4410, -1, "HY000", "ls not in learner list");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // 通用错误码值域[-4000, -4500)，含sstable等
@@ -2282,7 +2283,7 @@ DEFINE_ERROR(OB_AGENT_HAS_SUSPENDED, -9065, -1, "HY000", "agent has suspended");
 DEFINE_ERROR_EXT(OB_BACKUP_CONFLICT_VALUE, -9066, -1, "HY000", "Conflict value", "%.*s is conflict with %.*s");
 
 DEFINE_ERROR(OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, -9069, -1, "HY000", "deleting backup piece is not allowed");
-DEFINE_ERROR(OB_BACKUP_DEST_NOT_CONNECT, -9070, -1, "HY000", "can not connect to backup destination");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEST_NOT_CONNECT, -9070, -1, "HY000", "can not connect to backup destination", "please check server %s");
 DEFINE_ERROR_DEP(OB_BACKUP_PERMISSION_DENIED, -9071, -1, "HY000", "no I/O operation permission at the backup destination");
 
 DEFINE_ERROR(OB_ESI_SESSION_CONFLICTS, -9072, -1, "HY000", "obesi process session conflicts");
@@ -2375,6 +2376,13 @@ DEFINE_ERROR(OB_UNEXPECTED_MACRO_CACHE_FILE, -9144, -1, "HY000", "unexpected mac
 
 DEFINE_ERROR(OB_OBJECT_STORAGE_CONDITION_NOT_MATCH, -9145, -1, "HY000", "object storage condition not match");
 DEFINE_ERROR_DEP(OB_SSLOG_LS_NOT_EXIST, -9146, -1, "HY000", "sslog ls do not exist");
+DEFINE_ERROR_DEP(OB_CANNOT_ACCESS_BACKUP_SET, -9147, -1, "HY000", "can not access backup set file");
+DEFINE_ERROR(OB_DISK_QUOTA_EXCEEDED, -9148, -1, "HY000", "disk quota is exceeded");
+DEFINE_ERROR(OB_BACKUP_DEST_NOT_ALLOWED_TO_SET, -9149, -1, "HY000", "backup dest is not allowed to set when log_only policy exists");
+DEFINE_ERROR(OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET, -9150, -1, "HY000", "log_only policy is not allowed to set when backup dest exists");
+DEFINE_ERROR_EXT(OB_BACKUP_CLEAN_CAN_NOT_START, -9151, -1, "HY000", "backup clean can not start", "backup clean can not start, because %s");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_MOUNTED, -9152, -1, "HY000", "backup device may be not mounted", "backup device may be not mounted, %s did not read any data written by %s");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT, -9153, -1, "HY000", "backup device is not read & write strongly consistent", "backup device is not read and write strongly consistent. %s did not read the latest data written by %s.");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2734,6 +2742,16 @@ DEFINE_ORACLE_ERROR(OB_UTL_HTTP_REQUEST_FAILED, -9821, -1, "HY000", "HTTP reques
 DEFINE_ORACLE_ERROR(OB_UTL_HTTP_TOO_MANY_REQUESTS, -9822, -1, "HY000", "too many open HTTP requests", 29270, "too many open HTTP requests");
 DEFINE_ORACLE_ERROR(OB_UTL_HTTP_TRANSFER_TIMEOUT, -9823, -1, "HY000", "transfer timeout", 29276, "transfer timeout");
 DEFINE_ORACLE_ERROR(OB_UTL_HTTP_UNKNOWN_SCHEME, -9824, -1, "HY000", "unknown or unsupported URL scheme", 29264, "unknown or unsupported URL scheme");
+DEFINE_ORACLE_ERROR(OB_ERR_EXECUTE_CODE_COVERAGE, -9825, -1, "HY000", "error executing PL/SQL code coverage", 8402, "error executing PL/SQL code coverage");
+DEFINE_ERROR_DEP(OB_PYTHON_ENV_ERROR, -9826, -1, "HY000", "Python env could not be found")
+DEFINE_ERROR_EXT(OB_PYTHON_PARAMS_ERROR, -9827, -1, "HY000", "python params error", "%s");
+DEFINE_ERROR_EXT(OB_PYTHON_EXEC_ERROR, -9828, -1, "HY000", "python execute error", "%s");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_NOT_EXIST, -9829, -1, "HY000", "attribute or method does not exist", "attribute or method by name '%.*s' does not exist", 715, "attribute or method does not exist", "attribute or method by name '%.*s' does not exist");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_LENGTH_ILLEGAL, -9830, -1, "HY000", "only widening of attribute constraints is allowed", "only widening of attribute '%.*s' constraints is allowed", 719, "only widening of attribute constraints is allowed", "only widening of attribute '%.*s' constraints is allowed");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_DUPLICATE, -9831, -1, "HY000", "Attribute/method can occur only once in an ALTER TYPE statement", "Attribute/method '%.*s' can occur only once in an ALTER TYPE statement", 716, "Attribute/method can occur only once in an ALTER TYPE statement", "Attribute/method '%.*s' can occur only once in an ALTER TYPE statement");
+DEFINE_ERROR(OB_ERR_ALTER_INVALID_UDT, -9832, -1, "HY000", "cannot alter a type that is not valid");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_TYPE_ILLEGAL, -9833, -1, "HY000", "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute", 718, "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute");
+DEFINE_ERROR(OB_ERR_ALTER_HAS_DEPENDENT, -9834, -1, "HY000", "must specify either CASCADE or INVALIDATE option");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
@@ -2776,6 +2794,7 @@ DEFINE_ERROR_EXT(OB_KV_TABLE_NOT_ENABLED, -10520, -1, "HY000", "OBKV fail to ena
 DEFINE_ERROR_EXT(OB_KV_HBASE_NAMESPACE_NOT_FOUND, -10521, -1, "HY000", "OBKV Hbase fail to find namespace", "namespace '%.*s' is not found");
 DEFINE_ERROR_EXT(OB_KV_HBASE_TABLE_EXISTS, -10522, -1, "HY000", "OBKV Hbase table already exists", "table '%.*s' already exists");
 DEFINE_ERROR_EXT(OB_KV_HBASE_TABLE_NOT_FOUND, -10523, -1, "HY000", "OBKV Hbase table not found", "table '%.*s' not found");
+DEFINE_ERROR_EXT(OB_KV_SESS_NOT_EXIST, -10524, -1, "HY000", "OBKV Hbase scan session not exist", "Hbase scan session not exist, session id is: %lu");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
@@ -2911,6 +2930,15 @@ DEFINE_ERROR_EXT(OB_INVALID_HMS_METASTORE, -11108, -1, "HY000", "Invalid HMS met
 DEFINE_ERROR(OB_HMS_PARTITION_ERROR, -11109, -1, "HY000", "HMS partition error");
 DEFINE_ERROR_EXT(OB_HMS_DB_NOT_FOUND, -11110, -1, "HY000", "HMS database not found", "HMS database: '%.*s' not found");
 DEFINE_ERROR_EXT(OB_HMS_TABLE_NOT_FOUND, -11111, -1, "HY000", "HMS table not found", "HMS table: '%.*s' not found");
+DEFINE_ERROR_EXT(OB_AI_FUNC_ENDPOINT_NOT_FOUND, -11112, -1, "HY000", "This ai model endpoint is not found in the tenant", "This ai model endpoint \'%.*s\' not found in the tenant");
+DEFINE_ERROR_EXT(OB_AI_FUNC_ENDPOINT_EXISTS, -11113, -1, "HY000", "This ai model endpoint is already exists", "This ai model endpoint \'%.*s\' is already exists");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_EMPTY, -11114, -1, "HY000", "The param is empty or null", "The param \'%.*s\' is empty or null");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_INVALID, -11115, -1, "HY000", "The param is invalid", "The param \'%.*s\' is invalid");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_VALUE_INVALID, -11116, -1, "HY000", "The param value is invalid", "The value of param \'%.*s\' is invalid");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_TYPE_INVALID, -11117, -1, "HY000", "This param type is invalid", "This type of param \'%.*s\' is invalid, should be %.*s");
+DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_NOT_FOUND, -11118, -1, "HY000", "This ai model is not found in the tenant", "This ai model \'%.*s\' not found in the tenant");
+DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_EXISTS, -11119, -1, "HY000", "This ai model is already exists", "This ai model \'%.*s\' is already exists");
+DEFINE_ERROR_EXT(OB_ERROR_DURING_COMMIT, -11120, ER_ERROR_DURING_COMMIT, "HY000", "Got error during COMMIT", "Got error during COMMIT: %s");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

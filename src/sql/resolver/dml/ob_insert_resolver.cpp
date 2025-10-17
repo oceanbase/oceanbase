@@ -86,7 +86,7 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
 
   // resolve outline data hints first
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_outline_data_hints())) {
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
       LOG_WARN("failed to resolve hints", K(ret));
@@ -552,6 +552,12 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
 
   OZ(remove_dup_dep_cols_for_heap_table(insert_stmt->get_insert_table_info().part_generated_col_dep_cols_,
                                         insert_stmt->get_values_desc()));
+
+  if (OB_ISNULL(table_item) || session_info_->is_inner() ) {
+  } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+  }
   return ret;
 }
 
@@ -564,7 +570,7 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
   if (OB_ISNULL(insert_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid insert stmt", K(ret), K(insert_stmt));
-  } else if (OB_FAIL(resolve_assignments(assign_list, tables_assign, current_scope_))) {
+  } else if (OB_FAIL(resolve_assignments(assign_list, tables_assign, current_scope_, true))) {
     LOG_WARN("resolve insert set assignment list failed", K(ret));
   } else {
     ObArray<ObRawExpr*> value_row;

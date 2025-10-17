@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <limits>
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/stat/ob_diagnose_info.h"
 

@@ -16,4 +16,7 @@ else()
   ob_unittest(test_vector_index_serialize)
   ob_unittest(test_kmeans)
   ob_unittest(test_simd_vector_op)
+  ob_unittest(test_hybrid_search)
 endif()
+
+ob_unittest(test_vsag_adaptor)

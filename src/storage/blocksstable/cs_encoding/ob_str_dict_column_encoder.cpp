@@ -35,7 +35,7 @@ int ObStrDictColumnEncoder::init(
     column_header_.type_ = type_;
     dict_encoding_meta_.distinct_val_cnt_ = ctx.ht_->distinct_val_cnt();
     dict_encoding_meta_.ref_row_cnt_ = row_count_;
-    if (ctx_->null_cnt_ > 0) {
+    if (ctx_->null_or_nop_cnt_ > 0) {
       dict_encoding_meta_.set_has_null();
     }
     if (OB_FAIL(build_string_dict_encoder_ctx_())) {
@@ -58,7 +58,7 @@ int ObStrDictColumnEncoder::build_string_dict_encoder_ctx_()
   int ret = OB_SUCCESS;
   int32_t int_stream_idx = -1;
 
-  if (row_count_ == ctx_->null_cnt_) { // empty dict
+  if (row_count_ == ctx_->null_or_nop_cnt_) { // empty dict
     if (dict_encoding_meta_.distinct_val_cnt_ != 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected dict count", K(ret), KPC_(ctx), K_(dict_encoding_meta));
@@ -71,6 +71,7 @@ int ObStrDictColumnEncoder::build_string_dict_encoder_ctx_()
       int_stream_idx = 0;
     }
     ObPreviousColumnEncoding *pre_col_encoding = nullptr;
+    // has_nop is marked in dict meta
     if (OB_FAIL(string_dict_enc_ctx_.build_string_stream_meta(
         ctx_->fix_data_size_, false/*use_zero_len_as_null*/, ctx_->dict_var_data_size_))) {
       LOG_WARN("fail to build_string_stream_meta", K(ret));
@@ -127,6 +128,8 @@ int ObStrDictColumnEncoder::store_column_meta(ObMicroBufferWriter &buf_writer)
     LOG_WARN("fail to do_sort_dict", K(ret));
   } else if (OB_FAIL(store_dict_encoding_meta_(buf_writer))) {
     LOG_WARN("fail to store dict encoding meta", K(ret), K_(dict_encoding_meta));
+  } else if (OB_FAIL(store_nop_bitmap(buf_writer))) {
+    LOG_WARN("fail to store nop bitmap", K(ret));
   }
   return ret;
 }

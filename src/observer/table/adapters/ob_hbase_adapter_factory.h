@@ -16,7 +16,7 @@
 #include "ob_i_adapter.h"
 #include "ob_hbase_normal_adapter.h"
 #include "ob_hbase_series_adapter.h"
-#include "observer/table/ob_htable_utils.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 namespace oceanbase
 {
@@ -26,10 +26,9 @@ namespace table
 class ObHbaseAdapterFactory
 {
 public:
-  static int alloc_hbase_adapter(ObIAllocator &alloc, const ObTableExecCtx &exec_ctx, ObIHbaseAdapter *&adapter)
+  static int alloc_hbase_adapter(ObIAllocator &alloc, ObHbaseModeType mode_type, ObIHbaseAdapter *&adapter)
   {
     int ret = OB_SUCCESS;
-    ObHbaseModeType mode_type = exec_ctx.get_schema_cache_guard().get_hbase_mode_type();
     if (mode_type == ObHbaseModeType::OB_INVALID_MODE_TYPE) {
       ret = OB_SCHEMA_ERROR;
       SERVER_LOG(WARN, "invalid hbase mode type", K(ret));
@@ -57,20 +56,19 @@ public:
 class ObHbaseAdapterGuard
 {
 public:
-  ObHbaseAdapterGuard(ObIAllocator &alloc, const ObTableExecCtx &exec_ctx)
-    : allocator_(alloc), exec_ctx_(exec_ctx), hbase_adapter_(nullptr)
+  ObHbaseAdapterGuard(ObIAllocator &alloc)
+    : allocator_(alloc),
+      hbase_adapter_(nullptr)
   {}
   ~ObHbaseAdapterGuard()
   {
     OB_DELETEx(ObIHbaseAdapter, &allocator_, hbase_adapter_);
   }
-  int get_hbase_adapter(ObIHbaseAdapter *&hbase_adapter);
+  int get_hbase_adapter(ObIHbaseAdapter *&hbase_adapter, ObHbaseModeType mode_type);
 private:
   common::ObIAllocator &allocator_;
-  const ObTableExecCtx &exec_ctx_;
   ObIHbaseAdapter *hbase_adapter_;
 };
-
 
 } // end of namespace table
 } // end of namespace oceanbase

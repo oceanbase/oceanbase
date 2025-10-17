@@ -265,6 +265,25 @@ public:
     TASK_TYPE_CO_MERGE_PERSIST = 110,
     TASK_TYPE_CO_MERGE_REPLAY = 111,
     TASK_TYPE_CO_MERGE_FINISH = 112,
+    TASK_TYPE_DDL_PREPARE_SCAN = 113,
+    TASK_TYPE_DDL_WRITE_CG_MACRO_BLOCK = 114,
+    TASK_TYPE_DDL_BUILD_MAJOR_SSTABLE = 115,
+    TASK_TYPE_DIRECT_LOAD_WRITE_OP = 116,
+    TASK_TYPE_DIRECT_LOAD_MEM_SORT_OP = 117,
+    TASK_TYPE_DIRECT_LOAD_COMPACT_TABLE_OP = 118,
+    TASK_TYPE_DIRECT_LOAD_INSERT_SSTABLE_OP = 119,
+    TASK_TYPE_DDL_WRITE_PIPELINE = 120,
+    TASK_TYPE_DDL_WRITE_USING_TMP_FILE_PIPELINE = 121,
+    TASK_TYPE_DDL_VECTOR_INDEX_APPEND_PIPELINE = 122,
+    TASK_TYPE_DDL_VECTOR_INDEX_BUILD_AND_WRITE_PIPELINE = 123,
+    TASK_TYPE_DIRECT_LOAD_DIRECT_WRITE = 124,
+    TASK_TYPE_DDL_MERGE_PREPARE = 125,
+    TASK_TYPE_DDL_MERGE_CG_SLICE = 126,
+    TASK_TYPE_DDL_MERGE_ASSEMBLE = 127,
+    TASK_TYPE_DDL_MERGE_GUARD = 128,
+    TASK_TYPE_DIRECT_LOAD_WRITE_MACRO_BLOCK_PIPELINE = 129,
+    TASK_TYPE_DDL_GROUP_WRITE_TASK= 130,
+    TASK_TYPE_DDL_CG_GROUP_WRITE_TASK= 131,
     TASK_TYPE_MAX,
   };
 
@@ -389,9 +408,9 @@ public:
 
   const static char *ObIDagStatusStr[];
 
-  static const int64_t MergeDagPrioCnt = 3;
+  static const int64_t MergeDagPrioCnt = 5;
   static const ObDagPrio::ObDagPrioEnum MergeDagPrio[];
-  static const int64_t MergeDagTypeCnt = 7;
+  static const int64_t MergeDagTypeCnt = 9;
   static const ObDagType::ObDagTypeEnum MergeDagType[];
 
   explicit ObIDag(const ObDagType::ObDagTypeEnum type);
@@ -412,6 +431,7 @@ public:
   void set_dag_status(const ObDagStatus status) { dag_status_ = status; }
   ObDagStatus get_dag_status() const { return dag_status_; }
   bool is_dag_failed() const { return ObIDag::DAG_STATUS_NODE_FAILED == dag_status_; }
+  bool is_inactive_status() const { return is_stop_ || is_dag_failed() || is_finish_status(dag_status_); }
   void set_add_time() { add_time_ = ObTimeUtility::fast_current_time(); }
   int64_t get_add_time() const { return add_time_; }
   ObDagPrio::ObDagPrioEnum get_priority() const { return priority_; }
@@ -443,6 +463,8 @@ public:
       diagnose_type = ObDiagnoseTabletType::TYPE_TX_TABLE_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINI_MERGE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINI_MERGE;
+    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MDS_MINOR_MERGE == type) {
+      diagnose_type = ObDiagnoseTabletType::TYPE_MDS_MINOR_MERGE;
     } else if (is_batch_exec_dag(type)) {
       diagnose_type = ObDiagnoseTabletType::TYPE_BATCH_EXECUTE;
     }
@@ -491,6 +513,7 @@ public:
     lib::ObMutexGuard guard(lock_);
     max_retry_times_ = max_retry_times;
   }
+  void reset_task_list_for_retry();
   virtual int inner_reset_status_for_retry()
   { // The internal state(clear all tasks) of Dag needs to be traced back to after init in this func
     return common::OB_NOT_SUPPORTED;
@@ -524,7 +547,7 @@ public:
   int add_child_without_inheritance(ObIDag &child);
   int add_child_without_inheritance(const common::ObIArray<ObINodeWithChild*> &child_array);
   int get_next_ready_task(ObITask *&task);
-  int finish_task(ObITask &task);
+  int finish_task(ObITask *&task);
   bool has_finished();
   virtual int report_result()
   {
@@ -547,7 +570,7 @@ public:
   DISABLE_COPY_ASSIGN(ObIDag);
 public:
   virtual bool operator == (const ObIDag &other) const = 0;
-  virtual int64_t hash() const = 0;
+  virtual uint64_t hash() const = 0;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const = 0;
   virtual int init_by_param(const ObIDagInitParam *param)
@@ -585,7 +608,7 @@ private:
   void clear_task_list();
   void clear_running_info();
   // See ObIDag::finish_task, free_task must be called together with task_list_.remove, otherwise task will be double freed when ~ObIDag
-  void free_task(ObITask &task);
+  void free_task(ObITask *&task);
   int check_cycle();
   void inc_running_task_cnt() { ++running_task_cnt_; }
   void dec_running_task_cnt() { --running_task_cnt_; }
@@ -697,7 +720,7 @@ public:
   virtual bool is_valid() const = 0;
   virtual int start_running() = 0;
   virtual bool operator == (const ObIDagNet &other) const = 0;
-  virtual int64_t hash() const = 0;
+  virtual uint64_t hash() const = 0;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const = 0;
   virtual int fill_comment(char *buf, const int64_t buf_len) const = 0;
@@ -757,6 +780,7 @@ public:
     DAG_COUNT,
     DAG_NET_COUNT,
     RUNNING_TASK_CNT,
+    ADAPTIVE_LIMIT,
     VALUE_TYPE_MAX,
   };
   static const char *ObValueTypeStr[VALUE_TYPE_MAX];
@@ -1015,7 +1039,7 @@ public:
     compaction::ObDiagnoseTabletCompProgress &progress);
 
   template <typename T>
-  int get_dag_progress(const T &dag, int64_t &row_inserted, int64_t &physical_row_count)
+  int get_dag_progress(const T &dag, int64_t &row_inserted, int64_t &cg_row_inserted, int64_t &physical_row_count)
   {
     int ret = OB_SUCCESS;
     lib::ObMutexGuard guard(prio_lock_);
@@ -1035,6 +1059,7 @@ public:
     } else {
       row_inserted = static_cast<T*>(stored_dag)->get_context().row_inserted_;
       physical_row_count = static_cast<T*>(stored_dag)->get_context().physical_row_count_;
+      cg_row_inserted = static_cast<T*>(stored_dag)->get_context().cg_row_inserted_;
     }
     return ret;
   }
@@ -1043,12 +1068,13 @@ public:
   int get_complement_data_dag_progress(const ObIDag &dag,
     int64_t &row_scanned,
     int64_t &row_inserted);
-  int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
+  int deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
   int check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency);
   int64_t get_limit();
   int64_t get_adaptive_limit();
+  void set_adaptive_limit(const int64_t limit);
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
@@ -1075,7 +1101,9 @@ private:
   {
     return ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority_
         || ObDagPrio::DAG_PRIO_COMPACTION_MID == priority_
-        || ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority_;
+        || ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority_
+        || ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH == priority_
+        || ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID == priority_;
   }
   int sys_task_start(ObIDag &dag);
   // Please lock prio_lock_ before calling the function with _ suffix
@@ -1106,12 +1134,12 @@ private:
   int add_dag_warning_info_into_dag_net_(ObIDag &dag, bool &need_add);
   int finish_dag_(
     const ObIDag::ObDagStatus status,
-    ObIDag &dag,
+    ObIDag *&dag,
     const bool try_move_child);
   int try_move_child_to_ready_list_(ObIDag &dag);
   int erase_dag_(ObIDag &dag);
-  int deal_with_fail_dag_(ObIDag &dag, const int errcode, bool &retry_flag);
-  int finish_task_in_dag_(ObITask &task, ObIDag &dag);
+  int deal_with_fail_dag_(ObIDag &dag, ObITask *&cur_task, const int errcode, bool &retry_flag);
+  int finish_task_in_dag_(ObITask *&task, ObIDag *&dag);
   void pause_worker_(ObTenantDagWorker &worker);
   bool check_need_load_shedding_(const bool for_schedule);
 
@@ -1233,6 +1261,7 @@ public:
   int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
   int get_limit(const int64_t prio, int64_t &limit);
   int get_adaptive_limit(const int64_t prio, int64_t &limit);
+  int set_adaptive_limit(const int64_t prio, const int64_t limit);
   int check_dag_exist(const ObIDag *dag, bool &exist, bool &is_emergency);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag *dag, const bool force_cancel = false);
@@ -1250,6 +1279,7 @@ public:
       const compaction::ObTabletMergeDagParam &param,
       ObIArray<share::ObScnRange> &merge_range_array);
   int diagnose_minor_exe_dag(
+      const ObDagPrio::ObDagPrioEnum dag_prio /* maybe mds minor dag or minor dag */,
       const compaction::ObMergeDagHash *merge_dag_info,
       compaction::ObDiagnoseTabletCompProgress &progress);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
@@ -1270,13 +1300,14 @@ public:
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
-  int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
+  int deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
   void finish_dag_net(ObIDagNet *dag_net);
   template <typename T>
   int get_dag_progress(const T *dag,
                       int64_t &row_inserted,
+                      int64_t &cg_row_inserted,
                       int64_t &physical_row_count)
   {
     int ret = OB_SUCCESS;
@@ -1289,7 +1320,7 @@ public:
         && ObDagType::DAG_TYPE_LOB_SPLIT != dag->get_type())) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid arugment", K(ret), KPC(dag));
-    } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_dag_progress(*dag, row_inserted, physical_row_count))) {
+    } else if (OB_FAIL(prio_sche_[dag->get_priority()].get_dag_progress(*dag, row_inserted, cg_row_inserted, physical_row_count))) {
       COMMON_LOG(WARN, "fail to get dag progress", K(ret), KPC(dag));
     }
     return ret;
@@ -1326,7 +1357,10 @@ private:
       int64_t &idx);
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
-
+  void inner_reload_config();
+#ifdef OB_BUILD_SHARED_STORAGE
+  #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
+#endif
 private:
   bool is_inited_;
   bool fast_schedule_dag_net_;
@@ -1375,8 +1409,9 @@ int ObIDag::alloc_task(T *&task)
     ntask->set_dag(*this);
     {
       lib::ObMutexGuard guard(lock_);
-      if (is_stop_) {
+      if (is_inactive_status()) {
         ret = OB_CANCELED;
+        COMMON_LOG(WARN, "dag is inactive", K(ret), K_(is_stop), K_(dag_status));
       } else if (!task_list_.add_last(ntask)) {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Failed to add task", K(task), K_(id));

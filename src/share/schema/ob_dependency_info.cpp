@@ -364,6 +364,31 @@ int ObDependencyInfo::get_insert_value_str(ObSqlString &value_str)
   return ret;
 }
 
+int ObDependencyInfo::remove_duplicated_dep_infos(ObIArray<ObDependencyInfo> &deps,
+                                                 ObIArray<ObDependencyInfo> &source_deps)
+{
+  int ret = OB_SUCCESS;
+  bool duplicated = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < deps.count();) {
+    duplicated = false;
+    for (int64_t j = 0; OB_SUCC(ret) && j < source_deps.count(); j++) {
+      if (deps.at(i).get_dep_obj_type() == source_deps.at(j).get_dep_obj_type()
+          && deps.at(i).get_ref_obj_id() == source_deps.at(j).get_ref_obj_id()
+          && deps.at(i).get_ref_obj_type() == source_deps.at(j).get_ref_obj_type()) {
+        duplicated = true;
+        break;
+      }
+    }
+    if (duplicated) {
+      OZ (deps.remove(i));
+    } else {
+      OX (deps.at(i).set_order(source_deps.count() + i));
+      i++;
+    }
+  }
+  return ret;
+}
+
 int ObDependencyInfo::collect_dep_info(ObIArray<ObDependencyInfo> &deps,
                                        ObObjectType dep_obj_type,
                                        int64_t ref_obj_id,
@@ -674,7 +699,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t> (share::schema::ObObjectType::INVALID);
           EXTRACT_INT_FIELD_MYSQL(*result, "dep_obj_id", tmp_obj_id, int64_t);
@@ -768,7 +793,7 @@ int ObDependencyInfo::collect_all_dep_objs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           int64_t tmp_obj_id = OB_INVALID_ID;
           int64_t tmp_type = static_cast<int64_t>(share::schema::ObObjectType::INVALID);
           int64_t tmp_schema_version = OB_INVALID_VERSION;

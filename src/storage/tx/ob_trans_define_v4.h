@@ -323,6 +323,7 @@ public:
   ObSEArray<ObTxLSEpochPair, 1> parts_;
 public:
   void init_weak_read(const share::SCN snapshot);
+  void init_weak_read(const share::SCN snapshot, const ObTransID tx_id);
   void init_special_read(const share::SCN snapshot);
   void init_none_read() { valid_ = true; source_ = SRC::NONE; }
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);

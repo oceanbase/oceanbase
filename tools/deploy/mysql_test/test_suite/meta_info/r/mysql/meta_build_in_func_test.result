@@ -2714,7 +2714,7 @@ def					abs(5-5)	8	5	1	N	32897	0	63
 +----------+
 select abs(-0.1*3);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1*3)	246	25	3	N	32897	1	63
+def					abs(-0.1*3)	246	9	3	N	32897	1	63
 +-------------+
 | abs(-0.1*3) |
 +-------------+

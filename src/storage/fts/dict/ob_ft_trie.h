@@ -65,18 +65,17 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(children_)) {
-      if (OB_ISNULL(children_ = static_cast<ListType *>(
-                        alloc_.alloc(sizeof(ObList<NodeIndex, ObIAllocator>))))) {
+      if (OB_ISNULL(children_ = OB_NEWx(ListType, &alloc_, alloc_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_FTS_LOG(WARN, "Failed to alloc children vector", K(ret));
       } else {
-        new (children_) ObList<NodeIndex, ObIAllocator>(alloc_);
       }
     } else {
     }
 
     if (OB_SUCC(ret) && OB_FAIL(children_->push_back(node))) {
       STORAGE_FTS_LOG(WARN, "Failed to push back child", K(ret));
+      OB_DELETEx(ListType, &alloc_, children_);
     }
     return ret;
   }

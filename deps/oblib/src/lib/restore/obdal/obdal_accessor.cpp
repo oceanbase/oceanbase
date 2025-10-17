@@ -33,13 +33,25 @@ void opendal_bytes_init(opendal_bytes &bytes, const char *buf, const int64_t buf
 class ObDalWrapper
 {
 public:
-  static opendal_error *obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s)
+  static opendal_error *obdal_init_env(
+      void *malloc,
+      void *free,
+      void *log_handler,
+      const int32_t log_level,
+      const int64_t thread_cnt,
+      const int64_t pool_max_idle_per_host,
+      const int64_t pool_max_idle_time_s,
+      const int64_t connect_timeout_s)
   {
-    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s);
+    return opendal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s);
   }
   static void obdal_fin_env()
   {
     opendal_fin_env();
+  }
+  static void obdal_get_tenant_id(int64_t &tenant_id)
+  {
+    tenant_id = opendal_get_tenant_id();
   }
   // span
   static void obdal_span_new(ObSpan *&span, const int64_t tenant_id, const char *trace_id)
@@ -203,6 +215,10 @@ public:
   static void obdal_metadata_last_modified(const opendal_metadata *metadata, int64_t &last_modified_time_s)
   {
     last_modified_time_s = opendal_metadata_last_modified_ms(metadata) / 1000LL;
+  }
+  static void obdal_metadata_etag(const opendal_metadata *metadata, char *&etag)
+  {
+    etag = opendal_metadata_etag(metadata);
   }
   static void obdal_metadata_free(opendal_metadata *metadata)
   {
@@ -392,10 +408,18 @@ public:
     }
   }
 public:
-  static int obdal_init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s)
+  static int obdal_init_env(
+      void *malloc,
+      void *free,
+      void *log_handler,
+      const int32_t log_level,
+      const int64_t thread_cnt,
+      const int64_t pool_max_idle_per_host,
+      const int64_t pool_max_idle_time_s,
+      const int64_t connect_timeout_s)
   {
     int ret = OB_SUCCESS;
-    opendal_error *error = ObDalWrapper::obdal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s);
+    opendal_error *error = ObDalWrapper::obdal_init_env(malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s);
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
@@ -630,6 +654,10 @@ public:
   static void obdal_metadata_last_modified(const opendal_metadata *metadata, int64_t &last_modified_time_s)
   {
     ObDalWrapper::obdal_metadata_last_modified(metadata, last_modified_time_s);
+  }
+  static void obdal_metadata_etag(const opendal_metadata *metadata, char *&etag)
+  {
+    ObDalWrapper::obdal_metadata_etag(metadata, etag);
   }
   static void obdal_metadata_free(opendal_metadata *metadata)
   {
@@ -906,15 +934,16 @@ int ObDalAccessor::init_env(
     const int32_t log_level,
     const int64_t thread_cnt,
     const int64_t pool_max_idle_per_host,
-    const int64_t pool_max_idle_time_s)
+    const int64_t pool_max_idle_time_s,
+    const int64_t connect_timeout_s)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(malloc) || OB_ISNULL(free) || OB_ISNULL(log_handler)
       || OB_UNLIKELY(log_level < 0 || log_level >= OB_LOG_LEVEL_MAX)
-      || OB_UNLIKELY(thread_cnt <= 0 || pool_max_idle_per_host <= 0 || pool_max_idle_time_s <= 0)) {
+      || OB_UNLIKELY(thread_cnt <= 0 || pool_max_idle_per_host <= 0 || pool_max_idle_time_s <= 0 || connect_timeout_s <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "invalid argument", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
-  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s))) {
+    OB_LOG(WARN, "invalid argument", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s), K(connect_timeout_s));
+  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_init_env, malloc, free, log_handler, log_level, thread_cnt, pool_max_idle_per_host, pool_max_idle_time_s, connect_timeout_s))) {
     OB_LOG(WARN, "failed init obdal env", K(ret), KP(malloc), KP(free), KP(log_handler), K(log_level), K(thread_cnt), K(pool_max_idle_per_host), K(pool_max_idle_time_s));
   }
   return ret;
@@ -926,6 +955,13 @@ void ObDalAccessor::fin_env()
   if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_fin_env))) {
     OB_LOG(WARN, "failed to fin obdal env", K(ret));
   }
+}
+
+int64_t ObDalAccessor::obdal_get_tenant_id()
+{
+  int64_t tenant_id = OB_SERVER_TENANT_ID;
+  ObDalWrapper::obdal_get_tenant_id(tenant_id);
+  return tenant_id;
 }
 
 int ObDalAccessor::obdal_operator_options_new(opendal_operator_options *&options)
@@ -1405,6 +1441,23 @@ int ObDalAccessor::obdal_metadata_last_modified(
     OB_LOG(WARN, "invalid argument", K(ret), KP(metadata));
   } else if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_metadata_last_modified, metadata, std::ref(last_modified_time_s)))) {
     OB_LOG(WARN, "failed to get metadata last modified", K(ret));
+  }
+  return ret;
+}
+
+int ObDalAccessor::obdal_metadata_etag(const opendal_metadata *metadata, char *&etag)
+{
+  ObDalLogSpanGuard obdal_span;
+  int ret = OB_SUCCESS;
+  etag = nullptr;
+  if (OB_ISNULL(metadata)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(metadata));
+  } else if (OB_FAIL(do_safely_without_ret(ObDalRetryLayer::obdal_metadata_etag, metadata, std::ref(etag)))) {
+    OB_LOG(WARN, "failed to get metadata etag", K(ret));
+  } else if (OB_ISNULL(etag)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "failed to get metadata etag, return nullptr", K(ret));
   }
   return ret;
 }

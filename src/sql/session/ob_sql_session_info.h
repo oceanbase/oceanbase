@@ -60,6 +60,7 @@ class ObPieceCache;
 }
 namespace pl
 {
+class ObUtlHttp;
 class ObPLPackageState;
 class ObPL;
 struct ObPLExecRecursionCtx;
@@ -75,7 +76,7 @@ class ObPLDebugger;
 #endif // OB_BUILD_ORACLE_PL
 
 class ObPLProfiler;
-
+class ObPLCodeCoverage;
 } // namespace pl
 
 namespace obmysql
@@ -586,7 +587,10 @@ typedef common::LinkHashValue<SessionInfoKey> SessionInfoHashValue;
 // ObSQLSessionInfo存储其他执行时状态信息，远程执行SQL执行计划时，**不需要**序列化到远端
 class ObSQLSessionInfo: public common::ObVersionProvider, public ObBasicSessionInfo, public SessionInfoHashValue
 {
-  OB_UNIS_VERSION(1);
+  // master version is 3, 42x version is 2.
+  // compatibility handling based on the version number during deserialization.
+  // notice: Do not modify the version number arbitrarily.
+  OB_UNIS_VERSION(3);
 public:
   friend class LinkExecCtxGuard;
   // notice!!! register exec ctx to session for later access
@@ -595,9 +599,9 @@ public:
   class ExecCtxSessionRegister
   {
   public:
-    ExecCtxSessionRegister(ObSQLSessionInfo &session, ObExecContext &exec_ctx)
+    ExecCtxSessionRegister(ObSQLSessionInfo &session, ObExecContext *exec_ctx)
     {
-      session.set_cur_exec_ctx(&exec_ctx);
+      session.set_cur_exec_ctx(exec_ctx);
     }
   };
   friend class ExecCtxSessionRegister;
@@ -778,6 +782,8 @@ public:
                                  pc_adaptive_effectiveness_ratio_threshold_(0),
                                  enable_adaptive_plan_cache_(false),
                                  enable_ps_parameterize_(true),
+                                 enable_seq_wrap_around_flush_cache_(false),
+                                 enable_sql_ccl_rule_(true),
                                  session_(session)
     {
     }
@@ -807,6 +813,7 @@ public:
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
     bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
+    bool enable_seq_wrap_around_flush_cache() const { return enable_seq_wrap_around_flush_cache_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
     bool enable_immediate_row_conflict_check() const { return ATOMIC_LOAD(&enable_immediate_row_conflict_check_); }
     bool force_enable_plan_tracing() const
@@ -824,6 +831,10 @@ public:
     bool enable_plan_cache_adaptive() const
     {
       return enable_adaptive_plan_cache_;
+    }
+    bool enable_sql_ccl_rule() const
+    {
+      return enable_sql_ccl_rule_;
     }
 
     bool enable_ps_parameterize() const { return enable_ps_parameterize_; }
@@ -863,6 +874,8 @@ public:
     int64_t pc_adaptive_effectiveness_ratio_threshold_;
     bool enable_adaptive_plan_cache_;
     bool enable_ps_parameterize_;
+    bool enable_seq_wrap_around_flush_cache_;
+    bool enable_sql_ccl_rule_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1083,6 +1096,7 @@ public:
   void set_pl_debugger (pl::debugger::ObPLDebugger *pl_debugger) {pl_debugger_ = pl_debugger; };
 
   int alloc_pl_profiler(int32_t run_id);
+  int alloc_pl_code_coverage(int32_t run_id);
 #endif
   bool is_pl_debug_on();
   inline pl::ObPLProfiler *get_pl_profiler() const
@@ -1095,7 +1109,16 @@ public:
 
     return profiler;
   }
+  inline pl::ObPLCodeCoverage *get_pl_code_coverage() const
+  {
+    pl::ObPLCodeCoverage *code_coverage_ = nullptr;
 
+#ifdef OB_BUILD_ORACLE_PL
+    code_coverage_ = pl_code_coverage_;
+#endif // OB_BUILD_ORACLE_PL
+
+    return code_coverage_;
+  }
   inline void set_pl_attached_id(uint32_t id) { pl_attach_session_id_ = id; }
   inline uint32_t get_pl_attached_id() const { return pl_attach_session_id_; }
 
@@ -1277,13 +1300,15 @@ public:
   }
   void reset_pl_debugger_resource();
   void reset_pl_profiler_resource();
+  int collect_pl_code_coverage_info();
+  void reset_pl_code_coverage_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
   int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
   int reset_all_serially_package_state();
   bool is_package_state_changed() const;
   bool get_changed_package_state_num() const;
-  int add_changed_package_info(ObExecContext &exec_ctx);
+  int add_changed_package_info();
 
   // 当前 session 上发生的 sequence.nextval 读取 sequence 值，
   // 都会由 ObSequence 算子将读取结果保存在当前 session 上
@@ -1421,7 +1446,24 @@ public:
   int get_spm_mode(int64_t &spm_mode);
   bool is_enable_new_query_range() const;
   bool is_sqlstat_enabled();
-
+  // To avoid frequent ObSchemaMgr access in check_lazy_guard,
+  // refresh ccl_cnt every 5s
+  int has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard,
+    bool &has_ccl_rules)
+  {
+    int ret = OB_SUCCESS;
+    int64_t cur_time = ObTimeUtility::fast_current_time();
+    if (-1 == last_update_ccl_cnt_time_ || 5 * 1000 * 1000LL < (cur_time - last_update_ccl_cnt_time_)) {
+      uint64_t ccl_cnt = 0;
+      last_update_ccl_cnt_time_ = cur_time;
+      if (OB_FAIL(schema_guard->get_ccl_rule_count(get_effective_tenant_id(), ccl_cnt))) {
+        SQL_SESSION_LOG(WARN, "fail to get ccl rule count", K(ret));
+      }
+      has_ccl_rule_ = (ccl_cnt > 0);
+    }
+    has_ccl_rules = has_ccl_rule_;
+    return ret;
+  }
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1580,6 +1622,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_enum_set_subschema();
   }
+  bool is_enable_seq_wrap_around_flush_cache()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_seq_wrap_around_flush_cache();
+  }
   bool get_tenant_ob_sqlstat_enable()
   {
     cached_tenant_config_info_.refresh();
@@ -1610,6 +1657,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_ps_parameterize();
+  }
+  bool is_enable_sql_ccl_rule()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_sql_ccl_rule();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
@@ -1661,6 +1713,7 @@ public:
   bool get_failover_mode() const { return failover_mode_; }
   void set_failover_mode(const bool failover_mode) { failover_mode_ = failover_mode; }
   void reset_service_name() { service_name_.reset(); }
+  bool has_ccl_rule_checked() const { return has_ccl_rule_; }
   int set_service_name(const ObString& service_name);
   int check_service_name_and_failover_mode() const;
   int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
@@ -1835,6 +1888,7 @@ private:
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
   pl::ObPLProfiler *pl_profiler_;
+  pl::ObPLCodeCoverage *pl_code_coverage_;
 #endif
 #ifdef OB_BUILD_SPM
   ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
@@ -1997,6 +2051,15 @@ private:
   ObExecutingSqlStatRecord executing_sql_stat_record_;
   uint64_t unit_gc_min_sup_proxy_version_;
   void *external_resource_schema_cache_;
+  bool has_ccl_rule_;
+  int64_t last_update_ccl_cnt_time_;
+
+  private:
+  pl::ObUtlHttp* ob_utl_http_info_ = NULL;
+
+  public:
+  pl::ObUtlHttp* get_ob_utl_http_info() {return ob_utl_http_info_;}
+  void set_ob_utl_http_info(pl::ObUtlHttp* ob_utl_http_info_ptr) { ob_utl_http_info_ = ob_utl_http_info_ptr;}
 };
 
 

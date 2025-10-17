@@ -53,6 +53,10 @@ public:
       const ObIVector &vector,
       const int64_t vec_idx,
       const ObDatum &datum);
+  static bool verify_vector_and_datum_match_nop(
+      const ObIVector &vector,
+      const int64_t vec_idx,
+      const ObDatum &datum);
   static bool need_test_vec_with_type(
       const VectorFormat &format,
       const VecValueTypeClass &vec_tc);
@@ -2217,6 +2221,27 @@ bool VectorDecodeTestUtil::verify_vector_and_datum_match(
   int bret = false;
   ObDatum vec_datum;
   if (datum.is_null()) {
+    bret = vector.is_null(vec_idx);
+  } else {
+    ObLength length = vector.get_length(vec_idx);
+    vec_datum.len_ = length;
+    vec_datum.ptr_ = vector.get_payload(vec_idx);
+    bret = ObDatum::binary_equal(vec_datum, datum);
+  }
+  if (!bret) {
+    LOG_INFO("datum not match with datum from vector", K(vec_idx), K(datum), K(vec_datum));
+  }
+  return bret;
+}
+
+bool VectorDecodeTestUtil::verify_vector_and_datum_match_nop(
+    const ObIVector &vector,
+    const int64_t vec_idx,
+    const ObDatum &datum)
+{
+  int bret = false;
+  ObDatum vec_datum;
+  if (datum.is_null_or_nop()) {
     bret = vector.is_null(vec_idx);
   } else {
     ObLength length = vector.get_length(vec_idx);

@@ -101,9 +101,7 @@ inline bool can_switch_access_mode_(const AccessMode &src_access_mode, const Acc
       (dst_access_mode == AccessMode::PREPARE_FLASHBACK || dst_access_mode == AccessMode::FLASHBACK)) {
     // can not switch from APPEND to FLASHBACK
     bool_ret = false;
-  } else if ((src_access_mode == AccessMode::PREPARE_FLASHBACK || src_access_mode == AccessMode::FLASHBACK) &&
-      dst_access_mode == AccessMode::RAW_WRITE) {
-    // can not switch from FLASHBACK to RAW_WRITE
+  } else if (src_access_mode == AccessMode::PREPARE_FLASHBACK && dst_access_mode == AccessMode::RAW_WRITE) {
     bool_ret = false;
   } else if (src_access_mode == AccessMode::FLASHBACK && dst_access_mode == AccessMode::PREPARE_FLASHBACK) {
     bool_ret = false;

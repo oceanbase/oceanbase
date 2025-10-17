@@ -75,8 +75,9 @@ void TestSSMicroCache::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30))); // 1G
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), (1L << 30), 1/*micro_split_cnt*/)); // 1G
   ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  micro_cache->micro_meta_mgr_.enable_save_meta_mem_ = false;
 }
 
 void TestSSMicroCache::TearDown()
@@ -185,13 +186,65 @@ int TestSSMicroCache::add_micro_block(
   return ret;
 }
 
+/*
+  Limit memory size, and add a lot of micro block to memory.
+  Then test whether all micro block is read correctly.
+*/
+TEST_F(TestSSMicroCache, test_add_block_with_small_mem_size)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_add_block_with_small_mem_size");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
+  const int64_t macro_cnt = 1 << 8;
+  const int64_t micro_cnt = 1 << 9;
+  const int64_t total_micro_cnt = macro_cnt * micro_cnt;
+
+  // Decrease memory size
+  const int64_t before_mtl_mem_size = MTL_MEM_SIZE();
+  LOG_INFO("before adjust mem_limit_size: ", K(MTL_MEM_SIZE()));
+  // Set unit_memory_size to 50MB, and micro_cache accounts for about 20% of unit_memory_size in the system, which is 10MB.
+  // We need to write micro_blocks with the total number of total_micro_cnt(128K), and the total micro_memory space required is about 16MB.
+  // Since 16MB > 10MB, these micro_blocks cannot be written completely,
+  // so we can analyze the result of writing a large number of micro_blocks when memory is limited.
+  const int64_t this_case_mtl_mem_size = 50 << 20; // 50MB
+  ObTenantBase *tenant_base = MTL_CTX();
+  ObTenantEnv::set_tenant(tenant_base);
+  tenant_base->set_unit_memory_size(this_case_mtl_mem_size);
+  const int64_t cur_mem_limit_size = ObSSMicroCacheUtil::calc_micro_cache_mem_limit_size(MTL_ID());
+  LOG_INFO("this case MTL_MEM_SIZE: ", K(MTL_MEM_SIZE()), K(cur_mem_limit_size));
+  sleep(3);
+
+  // Add data
+  const int64_t block_size = phy_blk_mgr.block_size_;
+  const int32_t min_micro_size = 4 << 10;
+  const int32_t max_micro_size = 4 << 10;
+  ObHashMap<ObSSMicroBlockCacheKey, int64_t> micro_key_map; // only save the micro_block_keys that are successfully added into micro_cache
+  ASSERT_EQ(OB_SUCCESS, micro_key_map.create(1 << 11,  ObMemAttr(MTL_ID(), "test")));
+  ASSERT_EQ(OB_SUCCESS, add_micro_block(macro_cnt, micro_cnt, 1, 1, true, micro_key_map));
+
+  // Check result
+  ASSERT_LT(0, micro_key_map.size());
+  ASSERT_LT(micro_key_map.size(), total_micro_cnt);
+  for (auto iter = micro_key_map.begin(); iter != micro_key_map.end(); ++iter) {
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(iter->first, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  tenant_base->set_unit_memory_size(before_mtl_mem_size);
+  sleep(3);
+}
+
 TEST_F(TestSSMicroCache, test_get_micro_block)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_get_micro_block");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
-  arc_task.is_inited_ = false;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
 
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
@@ -288,8 +341,8 @@ TEST_F(TestSSMicroCache, test_parallel_get_micro_block)
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_parallel_get_micro_block");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
-  arc_task.is_inited_ = false;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
 
   const int64_t total_macro_blk_cnt = 40;
   ObArray<TestSSCommonUtil::MicroBlockInfo> micro_block_info_arr;
@@ -487,8 +540,8 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache)
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
-  ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
-  arc_task.is_inited_ = false;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
 
   // Scenario 1
   const int64_t micro_size = 128;
@@ -547,8 +600,8 @@ TEST_F(TestSSMicroCache, test_parallel_add_micro_block_randomly)
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
-  ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
-  arc_task.is_inited_ = false;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
 
   ObHashMap<ObSSMicroBlockCacheKey, int64_t> micro_key_map;
   ASSERT_EQ(OB_SUCCESS, micro_key_map.create(1024,  ObMemAttr(MTL_ID(), "test")));
@@ -638,8 +691,8 @@ TEST_F(TestSSMicroCache, test_get_not_exist_micro_blocks)
   LOG_INFO("TEST_CASE: start test_get_not_exist_micro_blocks");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
-  ObSSReleaseCacheTask &arc_task = micro_cache->task_runner_.release_cache_task_;
-  arc_task.is_inited_ = false;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
+  release_cache_task.is_inited_ = false;
 
   ObHashMap<ObSSMicroBlockCacheKey, int64_t> micro_key_map;
   ASSERT_EQ(OB_SUCCESS, micro_key_map.create(1024,  ObMemAttr(MTL_ID(), "test")));
@@ -1220,7 +1273,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   task_runner.persist_meta_task_.cur_interval_us_ = ori_persist_micro_us;
   task_runner.schedule_persist_meta_task(ori_persist_micro_us);
 
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   ASSERT_EQ(0, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(0, cache_stat.micro_stat().valid_micro_cnt_);
   ASSERT_EQ(0, micro_meta_mgr.micro_meta_map_.count());
@@ -1289,14 +1342,14 @@ TEST_F(TestSSMicroCache, test_parallel_clear_micro_cache)
   }
 
   ob_usleep(5 * 1000);
-  micro_cache->clear_micro_cache();
+  IGNORE_RETURN micro_cache->clear_micro_cache();
   for (int64_t i = 0; i < thread_num; ++i) {
     ths[i].join();
   }
   ASSERT_LT(0, fail_cnt); // failed due to stop micro cache when clear_micro_cache
 
   // in case there still exists some micro_block in cache, we clear it again
-  micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
+  IGNORE_RETURN micro_cache->clear_micro_cache();//2025-05-26 15:17:15.841926
 
   // check micro meta
   ASSERT_EQ(0, micro_cache->flying_req_cnt_);
@@ -1410,6 +1463,8 @@ int main(int argc, char **argv)
   system("rm -f ./test_ss_micro_cache.log*");
   OB_LOGGER.set_file_name("test_ss_micro_cache.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

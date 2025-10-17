@@ -591,14 +591,15 @@ int ObFreezer::wait_ls_freeze_finish()
     // this means that all memtables can be dumped
     int64_t time_counter = 0;
     while (!get_ls_data_checkpoint()->ls_freeze_finished()) {
-      if (TC_REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+      // check pend replay condition each 100ms
+      if (TC_REACH_TIME_INTERVAL(100LL * 1000LL /* 10 ms */)) {
         ++time_counter;
 
         // check pend condition every second
         (void)pend_replay_helper.check_pend_condition_once();
 
         // check resubmit log condition and report some debug info every 5 seconds
-        if (time_counter >= 5 && time_counter % 5 == 0) {
+        if (time_counter >= 50 && time_counter % 50 == 0) {
           (void)resubmit_log_if_needed_(start_time, false /* is_tablet_freeze */, false /* is_try */);
         }
       }
@@ -1047,7 +1048,7 @@ int ObFreezer::set_tablet_freeze_flag_(const int64_t trace_id,
     while (OB_FAIL(frozen_memtable_handles.push_back(frozen_memtable_handle))) {
       TRANS_LOG(ERROR, "[Freezer] fail to push_back", K(ret), K(tablet_id));
       stat_.add_diagnose_info("fail to push_back");
-      usleep(100 * 1000);  // sleep 100ms
+      ob_usleep(100 * 1000);  // sleep 100ms
     }
   }
 
@@ -1362,14 +1363,15 @@ int ObFreezer::wait_memtable_ready_for_flush_(ObITabletMemtable *tablet_memtable
       } else if (FALSE_IT(ready_for_flush = tablet_memtable->ready_for_flush())) {
       } else if (FALSE_IT(is_force_released = tablet_memtable->is_force_released())) {
       } else if (!ready_for_flush && !is_force_released) {
-        if (TC_REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+        // check pend replay condition each 100ms
+        if (TC_REACH_TIME_INTERVAL(100LL * 1000LL /* 100 ms */)) {
           ++time_counter;
 
           // check pend condition every second
           (void)pend_replay_helper.check_pend_condition_once();
 
           // check resubmit log condition and report some debug info every 5 seconds
-          if (time_counter >= 5 && time_counter % 5 == 0) {
+          if (time_counter >= 50 && time_counter % 50 == 0) {
             (void)resubmit_log_if_needed_(start_time, true /* is_tablet_freeze */, false /* is_try */, tablet_memtable);
           }
         }

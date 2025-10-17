@@ -205,36 +205,6 @@ int ObSystemConfig::update_value(const ObSystemConfigKey &key, const ObSystemCon
   return ret;
 }
 
-int ObSystemConfig::reload(FILE *fp)
-{
-  int ret = OB_SUCCESS;
-  size_t cnt = 0;
-  if (OB_ISNULL(fp)) {
-    ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(ERROR, "Got NULL file pointer", K(ret));
-  } else {
-    ObSystemConfigKey key;
-    SMART_VAR(ObSystemConfigValue, value) {
-      while (1) { // 设计上单个config reload失败不影响下一个,故未判断OB_SUCC(ret)
-        if (1 != (cnt = fread(&key, sizeof(key), 1, fp))) {
-          if (0 == cnt) {
-            break;
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            SHARE_LOG(WARN, "fail to read config from file", KERRMSG, K(ret));
-          }
-        } else if (1 != (cnt = fread(&value, sizeof(value), 1, fp))) {
-          ret = OB_ERR_UNEXPECTED;
-          SHARE_LOG(WARN, "fail to read config from file", KERRMSG, K(ret));
-        } else {
-          ret = update_value(key, value);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObSystemConfig::read_int32(const ObSystemConfigKey &key,
                                int32_t &value,
                                const int32_t &def) const

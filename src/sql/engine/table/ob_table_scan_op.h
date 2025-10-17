@@ -34,6 +34,7 @@
 #include "sql/das/iter/ob_das_group_fold_iter.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "sql/rewrite/ob_range_generator.h"
 
 namespace oceanbase
 {
@@ -78,7 +79,6 @@ public:
       rows_(nullptr),
       domain_row_index_(0),
       mbr_buffer_(nullptr),
-      docid_buffer_(nullptr),
       geo_idx_(0),
       cell_idx_(0),
       mbr_idx_(0),
@@ -93,7 +93,6 @@ public:
   blocksstable::ObDatumRow *rows_;
   uint32_t domain_row_index_;
   void *mbr_buffer_;
-  ObDocId* docid_buffer_;
   uint32_t geo_idx_;
   uint32_t cell_idx_;
   uint32_t mbr_idx_;
@@ -154,7 +153,10 @@ typedef common::ObFixedArray<GroupRescanParamInfo, common::ObIAllocator> GroupRe
 
 struct ObTableScanCtDef
 {
-  OB_UNIS_VERSION(1);
+  // master version is 3, 42x version is 2.
+  // compatibility handling based on the version number during deserialization.
+  // notice: Do not modify the version number arbitrarily.
+  OB_UNIS_VERSION(3);
 public:
   ObTableScanCtDef(common::ObIAllocator &allocator)
     : pre_query_range_(allocator),
@@ -241,7 +243,8 @@ public:
       uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
       uint64_t use_index_merge_              : 1; // whether use index merge
       uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
-      uint64_t reserved_                     : 61;
+      uint64_t enable_new_false_range_       : 1; // whether use new false range
+      uint64_t reserved_                     : 60;
     };
   };
 };
@@ -254,7 +257,7 @@ struct ObTableScanRtDef
       lookup_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
-      fast_final_nlj_range_ctx_(),
+      fast_final_nlj_range_ctx_(allocator),
       group_size_(0),
       max_group_size_(0),
       attach_rtinfo_(nullptr),
@@ -367,6 +370,8 @@ public:
   inline bool is_spatial_ddl() const { return is_spatial_ddl_; }
   inline void set_multivalue_ddl(bool is_multivalue_ddl) { is_multivalue_ddl_ = is_multivalue_ddl; }
   inline bool is_multivalue_ddl() const { return is_multivalue_ddl_; }
+  inline void set_spiv_ddl(bool is_spiv_ddl) { is_spiv_ddl_ = is_spiv_ddl; }
+  inline bool is_spiv_ddl() const { return is_spiv_ddl_; }
   void set_est_cost_simple_info(const ObCostTableScanSimpleInfo &info)
   {
     est_cost_simple_info_ = info;
@@ -374,6 +379,17 @@ public:
   ObCostTableScanSimpleInfo& get_est_cost_simple_info() { return est_cost_simple_info_; }
   const ObCostTableScanSimpleInfo& get_est_cost_simple_info() const { return est_cost_simple_info_; }
   ObQueryFlag get_query_flag() const { return tsc_ctdef_.scan_flags_; }
+  bool is_ob_external_table() const
+  {
+    return is_external_table_ && lake_table_format_ != share::ObLakeTableFormat::ICEBERG
+           && lake_table_format_ != share::ObLakeTableFormat::HIVE;
+  }
+  bool is_lake_external_table() const
+  {
+    return is_external_table_
+           && (lake_table_format_ == share::ObLakeTableFormat::ICEBERG
+               || lake_table_format_ == share::ObLakeTableFormat::HIVE);
+  }
 
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -466,7 +482,8 @@ public:
       uint64_t is_multivalue_ddl_               : 1;
       uint64_t can_be_paused_                   : 1;
       uint64_t need_check_outrow_lob_           : 1;
-      uint64_t reserved_                        : 48;
+      uint64_t is_spiv_ddl_                     : 1;
+      uint64_t reserved_                        : 47;
     };
   };
   int64_t tenant_id_col_idx_;
@@ -477,6 +494,7 @@ public:
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   ExprFixedArray pseudo_column_exprs_;
   int64_t lob_inrow_threshold_;
+  share::ObLakeTableFormat lake_table_format_;
 };
 
 // for random batch_size & skip
@@ -560,7 +578,7 @@ protected:
   // NOTE: set $iter_end_ if no task found.
   int get_access_tablet_loc(ObGranuleTaskInfo &info);
   // Assign GI task ranges to INPUT
-  int reassign_task_ranges(ObGranuleTaskInfo &info);
+  int reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_range);
 
   int local_iter_reuse();
   int set_batch_iter(int64_t group_id);
@@ -618,8 +636,28 @@ protected:
                                uint32_t& rowkey_start,
                                uint32_t& rowkey_end,
                                uint32_t& record_num,
-                               bool& is_save_rowkey);
+                               bool& is_save_rowkey,
+                               bool& use_docid);
   int inner_get_next_multivalue_index_row();
+  int init_spiv_index_rows();
+  int get_sparse_vector_index_column_idxs(int64_t &sparse_vec_idx,
+                                          int64_t &dim_idx,
+                                          int64_t &docid_idx,
+                                          int64_t &value_idx);
+  int generate_sparse_vector_index_row(ObIAllocator &allocator,
+                                       const int64_t dim_idx,
+                                       const int64_t docid_idx,
+                                       const int64_t value_idx,
+                                       const int64_t vec_idx,
+                                       ObDatum &docid_datum,
+                                       ObString &sparse_vec,
+                                       bool &need_ignore_null);
+  int get_sparse_vector_data(ObIAllocator &allocator,
+                             int64_t sparse_vec_idx,
+                             int64_t docid_idx,
+                             ObString &sparse_vector,
+                             ObDatum &docid_datum);
+  int inner_get_next_spiv_index_row();
   int set_need_check_outrow_lob();
   void set_real_rescan_cnt(int64_t real_rescan_cnt) { group_rescan_cnt_ = real_rescan_cnt; }
   int64_t get_real_rescan_cnt() { return group_rescan_cnt_; }
@@ -806,6 +844,8 @@ protected:
   ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
   bool need_check_outrow_lob_;
+  ObDasExecuteLocalInfo das_execute_local_info_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 private:
   ObRandScanProcessor rand_scan_processor_;
  };

@@ -46,6 +46,7 @@ int ObMultipleScanMerge::open(const ObDatumRange &range)
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid range, ", K(range), K(ret));
   } else if (OB_FAIL(ObMultipleMerge::open())) {
     STORAGE_LOG(WARN, "Fail to open ObMultipleMerge, ", K(ret));
@@ -194,7 +195,7 @@ int ObMultipleScanMerge::construct_iters()
         "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
     STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(tables), KPC_(access_param));
+                K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;
@@ -681,6 +682,7 @@ int ObMultipleScanMerge::prepare_blockscan(ObStoreRowIterator &iter)
 int ObMultipleScanMerge::set_rows_merger(const int64_t table_cnt)
 {
   int ret = OB_SUCCESS;
+  const int64_t max_table_cnt = 2 * common::MAX_TABLE_CNT_IN_STORAGE;
   if (table_cnt <= ObScanSimpleMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT) {
     STORAGE_LOG(DEBUG, "Use simple rows merger", K(table_cnt));
     if (nullptr == simple_merge_) {
@@ -703,7 +705,7 @@ int ObMultipleScanMerge::set_rows_merger(const int64_t table_cnt)
 
   if (OB_SUCC(ret)) {
     if (!rows_merger_->is_inited()) {
-      if (OB_FAIL(rows_merger_->init(table_cnt, *long_life_allocator_))) {
+      if (OB_FAIL(rows_merger_->init(max_table_cnt, table_cnt, *long_life_allocator_))) {
         STORAGE_LOG(WARN, "Failed to init rows merger", K(ret), K(table_cnt));
       }
     } else if (FALSE_IT(rows_merger_->reuse())) {

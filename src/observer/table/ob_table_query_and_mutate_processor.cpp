@@ -36,7 +36,9 @@ int ObTableQueryAndMutateP::deserialize()
   arg_.query_and_mutate_.set_entity_factory(&default_entity_factory_);
 
   int ret = ParentType::deserialize();
-  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+  if(OB_FAIL(ret)) {
+    // do nothing and return
+  } else if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
     // For HKV table, modify the timestamp value to be negative
     ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
     const int64_t N = mutations.count();
@@ -49,6 +51,18 @@ int ObTableQueryAndMutateP::deserialize()
       } else if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(*entity))) {
         LOG_WARN("failed to negate timestamp value", K(ret));
       }
+    } // end for
+  } else if (ObTableEntityType::ET_KV == arg_.entity_type_) {
+    // For KV table, set entity allocator
+    ObTableBatchOperation &mutations = arg_.query_and_mutate_.get_mutations();
+    const int64_t N = mutations.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
+      ObITableEntity *entity = nullptr;
+      table::ObTableOperation &mutation = const_cast<table::ObTableOperation &>(mutations.at(i));
+      if (OB_FAIL(mutation.get_entity(entity))) {
+        LOG_WARN("failed to get entity", K(ret), K(i));
+      }
+      entity->set_allocator(&allocator_);
     } // end for
   }
   return ret;
@@ -105,6 +119,7 @@ void ObTableQueryAndMutateP::reset_ctx()
 int ObTableQueryAndMutateP::before_process()
 {
   is_tablegroup_req_ = ObHTableUtils::is_tablegroup_req(arg_.table_name_, arg_.entity_type_);
+  retry_policy_.allow_route_retry_ = arg_.server_can_retry();
   return ParentType::before_process();
 }
 
@@ -145,6 +160,18 @@ int32_t ObTableQueryAndMutateP::get_stat_process_type(bool is_hkv, bool is_check
   return process_type;
 }
 
+int ObTableQueryAndMutateP::check_heap_table()
+{
+  int ret = OB_SUCCESS;
+  bool is_check_and_execute = arg_.query_and_mutate_.is_check_and_execute();
+  if (schema_cache_guard_.get_schema_flags().is_heap_table_ && is_check_and_execute) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use checkAndInsUp");
+    LOG_WARN("heap table use checkAndInsUp is not supported", K(ret));
+  }
+  return ret;
+}
+
 int ObTableQueryAndMutateP::old_try_process()
 {
   int ret = OB_SUCCESS;
@@ -168,6 +195,8 @@ int ObTableQueryAndMutateP::old_try_process()
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("arg table id is not equal to schema table id", K(ret), K(table_id_),
       K(simple_table_schema_->get_table_id()));
+  } else if (OB_FAIL(check_heap_table())) {
+    LOG_WARN("fail to check heap table", K(ret));
   } else if (OB_FAIL(check_mode_type(schema_cache_guard_))) {
     LOG_WARN("fail to check mode type", K(ret));
   } else if (OB_FAIL(get_tablet_id(simple_table_schema_, arg_.tablet_id_, arg_.table_id_, tablet_id_))) {
@@ -228,8 +257,10 @@ int ObTableQueryAndMutateP::new_try_process()
   int ret = OB_SUCCESS;
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
 
-  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
+  if (OB_FAIL(init_table_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(check_heap_table())) {
+    LOG_WARN("fail to check heap table", K(ret));
   } else if (schema_cache_guard_.get_hbase_mode_type() == OB_HBASE_SERIES_TYPE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("hbase series type not support query and mutate", K(ret));
@@ -240,6 +271,7 @@ int ObTableQueryAndMutateP::new_try_process()
     exec_ctx_.set_table_name(arg_.table_name_);
     exec_ctx_.set_table_id(arg_.table_id_);
     exec_ctx_.set_audit_ctx(audit_ctx_);
+    exec_ctx_.set_table_schema(table_schema_);
     ObModelGuard model_guard;
     ObIModel *model = nullptr;
     if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {
@@ -256,6 +288,10 @@ int ObTableQueryAndMutateP::new_try_process()
                                    get_timeout_ts(),
                                    !exec_ctx_.get_ls_id().is_valid()/*need_global_snapshot*/))) {
       LOG_WARN("fail to start readonly transaction", K(ret));
+    } else if (!trans_param_.tx_snapshot_.is_ls_snapshot()
+               && tablet_id_.is_valid()
+               && OB_FAIL(check_local_execute(tablet_id_))) {
+      LOG_WARN("fail to check local execute", K(ret));
     } else if (OB_FAIL(model->work(exec_ctx_, arg_, result_))) {
       LOG_WARN("model fail to work", K(ret), K_(arg), K_(result));
     }
@@ -313,6 +349,7 @@ int ObTableQueryAndMutateP::try_process()
 bool ObTableQueryAndMutateP::is_new_try_process()
 {
   return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
-         !arg_.tablet_id_.is_valid() &&
+         (!arg_.tablet_id_.is_valid() ||
+         (arg_.tablet_id_.is_valid() && arg_.distribute_need_tablet_id())) &&
          TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute();
 }

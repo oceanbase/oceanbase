@@ -23,6 +23,8 @@ using namespace common;
 
 namespace compaction
 {
+ERRSIM_POINT_DEF(ERRSIM_MDS_CTX_RESET);
+
 class ObTabletMediumClogReplayExecutor final : public logservice::ObTabletReplayExecutor
 {
 public:
@@ -96,10 +98,11 @@ ObTabletMediumCompactionInfoRecorder::ObTabletMediumCompactionInfoRecorder()
     tablet_handle_ptr_(nullptr),
     medium_info_(nullptr),
     allocator_(nullptr),
-    mds_ctx_(nullptr)
+    mds_ctx_(nullptr),
+    retry_times_(0)
 {
 #if defined(__x86_64__)
-  STATIC_ASSERT(sizeof(ObTabletMediumCompactionInfoRecorder) <= 104, "size of medium recorder is oversize");
+  STATIC_ASSERT(sizeof(ObTabletMediumCompactionInfoRecorder) <= 112, "size of medium recorder is oversize");
 #endif
 }
 
@@ -116,12 +119,14 @@ void ObTabletMediumCompactionInfoRecorder::destroy()
   free_allocated_info();
   ls_id_.reset();
   tablet_id_.reset();
+  retry_times_ = 0;
 }
 
 void ObTabletMediumCompactionInfoRecorder::reset()
 {
   if (is_inited_) {
     ObIStorageClogRecorder::reset();
+    retry_times_ = 0;
   }
 }
 
@@ -173,6 +178,38 @@ int ObTabletMediumCompactionInfoRecorder::submit_medium_compaction_info(
   medium_info_ = nullptr;
   if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_BLOCK_FROZEN == ret) {
     ret = OB_EAGAIN;
+  }
+  return ret;
+}
+
+int ObTabletMediumCompactionInfoRecorder::reset_for_retry_in_lock()
+{
+  int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  int tmp_ret = OB_SUCCESS;
+  bool force_reset = false;
+  if (OB_TMP_FAIL(ERRSIM_MDS_CTX_RESET)) {
+    force_reset = true;
+    LOG_INFO("ERRSIM ERRSIM_MDS_CTX_RESET force reset mds ctx", K(ret));
+  }
+#endif
+  if (OB_ISNULL(mds_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid mds ctx", K(ret), K_(tablet_id));
+#ifdef ERRSIM
+  } else if (force_reset && retry_times_ <= 1) {
+#else
+  } else if (OB_UNLIKELY(!mds_ctx_->can_write())) {
+#endif
+    retry_times_++;
+    if (retry_times_ >= MAX_RETRY_TIMES) {
+      ret = OB_EAGAIN;
+      LOG_WARN("reach max retry times", K(ret), K_(tablet_id), K_(mds_ctx));
+    } else {
+      mds_ctx_->~MdsCtx();
+      mds_ctx_ = new(mds_ctx_) mds::MdsCtx(mds::MdsWriter(mds::WriterType::MEDIUM_INFO));
+      LOG_INFO("reset mds ctx when update medium info", K(ret), KPC_(mds_ctx));
+    }
   }
   return ret;
 }

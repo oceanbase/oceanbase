@@ -16,6 +16,8 @@
 #include "ob_das_iter.h"
 #include "lib/container/ob_loser_tree.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/das/ob_das_ir_define.h"
+#include "sql/das/iter/ob_das_text_retrieval_iter.h"
 
 namespace oceanbase
 {
@@ -25,7 +27,7 @@ struct ObDASIRScanCtDef;
 struct ObDASIRScanRtDef;
 class ObDASTextRetrievalIterator;
 class ObFtsEvalNode;
-class ObDASTextRetrievalIter;
+class ObDocIdExt;
 
 static const int64_t OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT = 256;
 
@@ -35,10 +37,9 @@ struct ObIRIterLoserTreeItem
   ObIRIterLoserTreeItem();
   ~ObIRIterLoserTreeItem() = default;
 
-  TO_STRING_KV(K_(iter_idx), K_(relevance), K_(doc_id), K(doc_id_.get_string()));
+  TO_STRING_KV(K_(iter_idx), K_(relevance));
 
   double relevance_;
-  ObDocId doc_id_;
   int64_t iter_idx_;
 };
 
@@ -47,13 +48,14 @@ struct ObIRIterLoserTreeCmp
   ObIRIterLoserTreeCmp();
   virtual ~ObIRIterLoserTreeCmp();
 
-  int init();
+  int init(ObDatumMeta doc_id_meta, const ObIArray<ObDocIdExt> *iter_doc_ids);
   int cmp(const ObIRIterLoserTreeItem &l, const ObIRIterLoserTreeItem &r, int64_t &cmp_ret);
 private:
   common::ObDatumCmpFuncType cmp_func_;
+  const ObIArray<ObDocIdExt> *iter_doc_ids_;
   bool is_inited_;
 };
-typedef common::ObLoserTree<ObIRIterLoserTreeItem, ObIRIterLoserTreeCmp, OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT> ObIRIterLoserTree;
+typedef common::ObLoserTree<ObIRIterLoserTreeItem, ObIRIterLoserTreeCmp> ObIRIterLoserTree;
 
 
 
@@ -108,7 +110,7 @@ public:
 
   virtual int do_table_scan() override;
   virtual int rescan() override;
-  void set_doc_id_idx_tablet_id(const ObTabletID &tablet_id) { doc_id_idx_tablet_id_ = tablet_id; }
+  void set_domain_id_idx_tablet_id(const ObTabletID &tablet_id) { domain_id_idx_tablet_id_ = tablet_id; }
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   storage::ObTableScanParam &get_doc_agg_param() { return whole_doc_agg_param_; }
   int set_related_tablet_ids(const share::ObLSID &ls_id, const ObDASFTSTabletID &related_tablet_ids);
@@ -116,7 +118,7 @@ public:
   const ObIArray<ObString> &get_query_tokens() { return query_tokens_; }
   bool is_taat_mode() { return RetrievalProcType::TAAT == processing_type_; }
   static int build_query_tokens(const ObDASIRScanCtDef *ir_ctdef, ObDASIRScanRtDef *ir_rtdef, common::ObIAllocator &alloc, ObArray<ObString> &query_tokens, ObFtsEvalNode *&root_node);
-  virtual int set_rangkey_and_selector(const common::ObIArray<std::pair<ObDocId, int>> &virtual_rangkeys);
+  virtual int set_rangkey_and_selector(const common::ObIArray<std::pair<ObDocIdExt, int>> &virtual_rangkeys);
   void set_boolean_compute_node(ObFtsEvalNode *root_node) { root_node_ = root_node;}
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
@@ -126,8 +128,8 @@ protected:
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) override;
 protected:
   virtual int check_and_prepare();
-  int project_result(const ObDocId &docid, const double relevance);
-  int project_relevance(const ObDocId &docid, const double relevance);
+  int project_result(const ObDocIdExt &docid, const double relevance);
+  int project_relevance(const ObDocIdExt &docid, const double relevance);
   int project_docid();
   void clear_evaluated_infos();
   int init_iters(
@@ -138,6 +140,14 @@ protected:
   void release_iters();
   int init_total_doc_cnt_param(transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot *snapshot);
   int do_total_doc_cnt();
+  inline static void set_datum_int(ObDatum &datum, const ObDocIdExt &docid)
+  {
+    datum.set_int(docid.get_datum().get_int());
+  }
+  inline static void set_datum_shallow(ObDatum &datum, const ObDocIdExt &docid)
+  {
+    datum.set_datum(docid.get_datum());
+  }
 protected:
   static const int64_t OB_DEFAULT_QUERY_TOKEN_ITER_CNT = 4;
   typedef ObSEArray<ObDASTextRetrievalIter *, OB_DEFAULT_QUERY_TOKEN_ITER_CNT> ObDASTokenRetrievalIterArray;
@@ -150,10 +160,10 @@ protected:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
   share::ObLSID ls_id_;
-  common::ObTabletID doc_id_idx_tablet_id_;
+  common::ObTabletID domain_id_idx_tablet_id_;
   ObArray<ObString> query_tokens_;
   ObDASTokenRetrievalIterArray token_iters_;
-  ObFixedArray<ObDocId, ObIAllocator> cache_doc_ids_;
+  ObFixedArray<ObDocIdExt, ObIAllocator> cache_doc_ids_;
   ObFixedArray<int64_t, ObIAllocator> hints_; // the postion of the cur idx cache doc in output exprs
   ObFixedArray<double, ObIAllocator> cache_relevances_; // cache the relevances_ in func lookup
   ObFixedArray<int64_t, ObIAllocator> reverse_hints_; // the postion of the cur output doc in cache doc
@@ -166,9 +176,11 @@ protected:
   common::ObLimitParam limit_param_;
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
+  ObDocIdExt default_docid_; // for function lookup
   bool force_return_docid_; // for function lookup
   bool doc_cnt_calculated_;
   bool doc_cnt_iter_acquired_;
+  void (*set_datum_func_)(ObDatum &, const ObDocIdExt &);
   bool is_inited_;
 };
 
@@ -196,17 +208,18 @@ protected:
   int fill_chunk_store_by_tr_iter();
   int reset_query_token(const ObString &query_token);
 protected:
+  typedef hash::ObHashMap<ObDocIdExt, double> ObDASTRTaatHashMap;
   static const int64_t OB_MAX_HASHMAP_COUNT = 20;
   static const int64_t OB_HASHMAP_DEFAULT_SIZE = 1000;
-  hash::ObHashMap<ObDocId, double> **hash_maps_;
+  ObDASTRTaatHashMap **hash_maps_;
   sql::ObChunkDatumStore **datum_stores_;
   sql::ObChunkDatumStore::Iterator **datum_store_iters_;
   int64_t hash_map_size_;
-  hash::ObHashMap<ObDocId, double>::iterator *cur_map_iter_;
+  ObDASTRTaatHashMap::iterator *cur_map_iter_;
   int64_t total_doc_cnt_;
   int64_t next_clear_map_idx_;
   int64_t cur_map_idx_;
-  ObDocId cache_first_docid_;
+  ObDocIdExt cache_first_docid_;
   bool is_chunk_store_inited_;
   bool is_hashmap_inited_;
 };
@@ -247,6 +260,7 @@ protected:
 protected:
   ObIRIterLoserTreeCmp loser_tree_cmp_;
   ObIRIterLoserTree *iter_row_heap_;
+  ObFixedArray<ObDocIdExt, ObIAllocator> iter_doc_ids_;
   ObFixedArray<int64_t, ObIAllocator> next_batch_iter_idxes_;
   int64_t next_batch_cnt_;
 };

@@ -773,7 +773,7 @@ bool ObTransferBackfillTXDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObTransferBackfillTXDagNet::hash() const
+uint64_t ObTransferBackfillTXDagNet::hash() const
 {
   int64_t hash_value = 0;
 
@@ -928,7 +928,7 @@ bool ObBaseTransferBackfillTXDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBaseTransferBackfillTXDag::hash() const
+uint64_t ObBaseTransferBackfillTXDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;
@@ -1277,7 +1277,9 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
     ObITable *last_minor_mini_sstable = table_store.get_minor_sstables().get_boundary_table(true /*is_last*/);
     if (OB_FAIL(check_memtable_max_end_scn_(*tablet))) {
       LOG_WARN("failed to check memtable max end scn", K(ret), KPC(tablet));
-    } else if (OB_FAIL(get_transfer_sstables_info_(filled_table_handle_array, filled_max_minor_end_scn))) {
+    } else if (OB_FAIL(get_transfer_sstables_info_(filled_table_handle_array,
+                                                   tablet->get_clog_checkpoint_scn(),
+                                                   filled_max_minor_end_scn))) {
       LOG_WARN("failed to get transfer sstables info", K(ret), KPC(tablet));
     } else if (OB_NOT_NULL(last_minor_mini_sstable) && last_minor_mini_sstable->get_end_scn() > filled_max_minor_end_scn) {
       ret = OB_EAGAIN;
@@ -1740,17 +1742,6 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "tablet_status", ObTabletStatus::get_str(user_data.tablet_status_),
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
 #endif
-#ifdef OB_BUILD_SHARED_STORAGE
-    // need put shared major tables into shared tablet
-    // FIXME: this is a temporary impl @jyx441808
-    if (GCTX.is_shared_storage_mode() && OB_SUCC(ret)) {
-      if (OB_FAIL(put_sstables_to_shared_tablet_(param, *tablet))) {
-        LOG_WARN("failed to put sstables to shared tablet", K(ret));
-      } else {
-        LOG_INFO("success to put sstables to shared tablet");
-      }
-    }
-#endif
     if (FAILEDx(ls->build_tablet_with_batch_tables(tablet_info.tablet_id_, param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(param), K(tablet_info));
     } else {
@@ -1759,6 +1750,9 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
 
     // report restore stat
     if (OB_FAIL(ret)) {
+#ifdef ERRSIM
+    } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_TRASNFER_TABLET_RESTORE_STAT))) {
+#endif
     } else if (ObTabletRestoreStatus::is_minor_and_major_meta(param.restore_status_)
                || ObTabletRestoreStatus::is_remote(param.restore_status_)) {
       ObTransferUtils::transfer_tablet_restore_stat(ctx_->tenant_id_, ctx_->src_ls_id_, ctx_->dest_ls_id_);
@@ -1941,10 +1935,12 @@ int ObTransferReplaceTableTask::build_transfer_backfill_tablet_param_(
 
 int ObTransferReplaceTableTask::get_transfer_sstables_info_(
     const ObTablesHandleArray &table_handle_array,
+    const share::SCN &tablet_clog_checkpoint_scn,
     share::SCN &max_minor_end_scn)
 {
   int ret = OB_SUCCESS;
   max_minor_end_scn = SCN::min_scn();
+  bool has_minor_sstable = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1958,6 +1954,7 @@ int ObTransferReplaceTableTask::get_transfer_sstables_info_(
       } else if (table->is_major_sstable() || table->is_mds_sstable()) {
         //do nothing
       } else if (table->is_minor_sstable()) {
+        has_minor_sstable = true;
         max_minor_end_scn = SCN::max(table->get_end_scn(), max_minor_end_scn);
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -1965,6 +1962,13 @@ int ObTransferReplaceTableTask::get_transfer_sstables_info_(
       }
     }
   }
+
+  if (OB_SUCC(ret) && !has_minor_sstable) {
+    LOG_INFO("tablet has no minor sstable, use tablet clog checkpoint scn as max minor end scn",
+      K(tablet_info_), K(table_handle_array), K(tablet_clog_checkpoint_scn));
+    max_minor_end_scn = tablet_clog_checkpoint_scn;
+  }
+
   return ret;
 }
 

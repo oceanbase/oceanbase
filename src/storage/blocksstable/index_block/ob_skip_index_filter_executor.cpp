@@ -55,6 +55,14 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
   } else if (FALSE_IT(meta_.col_type_ = SK_IDX_MAX)) {
   } else if (OB_FAIL(agg_row_reader_.read(meta_, param.max_datum_, param.is_max_prefix_))) {
     LOG_WARN("Failed read agg max datum", K(ret), K(meta_));
+  } else if (OB_UNLIKELY(ob_is_string_type(obj_meta.get_type())
+      && ObCharset::usemb(obj_meta.get_collation_type())
+      && !param.max_datum_.is_null()
+      && !agg_row_reader_.has_correct_max_prefix()
+      && param.max_datum_.len_ > ObSkipIndexColMeta::SAFE_MBCHARSET_PREFIX_MAX_LEN)) {
+    // Invalid agg result for string type whose prefix max might not accurate on mbcharset
+    param.min_datum_.set_null();
+    param.max_datum_.set_null();
   } else if (!param.min_datum_.is_null() &&
              OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.min_datum_))) {
     LOG_WARN("Failed to pad column on min datum", K(ret));
@@ -105,7 +113,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
                                         filter.is_padding_mode(), param))) {
             LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
           } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
-              param, dynamic_filter, allocator))) {
+              param, dynamic_filter))) {
             LOG_WARN("Failed to filter on min_max for dynamic filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_white_node()) {
@@ -117,7 +125,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
                                         filter.is_padding_mode(), param))) {
             LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
           } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
-              param, white_filter, allocator))) {
+              param, white_filter))) {
             LOG_WARN("Failed to filter on min_max for white filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_black_node()) {
@@ -127,7 +135,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
                             filter.is_padding_mode(), param))) {
             LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
           } else if (OB_FAIL(black_filter_on_min_max(col_idx, index_info.get_row_count(),
-              param, black_filter, allocator, use_vectorize))) {
+              param, black_filter, use_vectorize))) {
             LOG_WARN("Failed to filter on min_max for black filter", K(ret), K(col_idx));
           }
         }
@@ -148,7 +156,6 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
     const int64_t row_count,
     ObMinMaxFilterParam &param,
     sql::ObPhysicalFilterExecutor &filter,
-    common::ObIAllocator &allocator,
     const bool use_vectorize)
 {
   int ret = OB_SUCCESS;
@@ -170,7 +177,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
           } else if (dynamic_filter.is_cmp_op_with_null_ref_value()) {
             filter.get_filter_bool_mask().set_always_false();
           } else if (OB_FAIL(filter_on_min_max(col_idx, row_count,
-              param, dynamic_filter, allocator))) {
+              param, dynamic_filter))) {
             LOG_WARN("Failed to filter on min_max for dynamic filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_white_node()) {
@@ -179,14 +186,14 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
           if (white_filter.is_cmp_op_with_null_ref_value()) {
             filter.get_filter_bool_mask().set_always_false();
           } else if (OB_FAIL(filter_on_min_max(col_idx, row_count,
-              param, white_filter, allocator))) {
+              param, white_filter))) {
             LOG_WARN("Failed to filter on min_max for white filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_black_node()) {
           sql::ObBlackFilterExecutor &black_filter =
             static_cast<sql::ObBlackFilterExecutor &>(filter);
           if (OB_FAIL(black_filter_on_min_max(col_idx, row_count,
-              param, black_filter, allocator, use_vectorize))) {
+              param, black_filter, use_vectorize))) {
             LOG_WARN("Failed to filter on min_max for black filter", K(ret), K(col_idx));
           }
         }
@@ -205,8 +212,7 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
     const uint32_t col_idx,
     const uint64_t row_count,
     const ObMinMaxFilterParam &param,
-    sql::ObWhiteFilterExecutor &filter,
-    common::ObIAllocator &allocator)
+    sql::ObWhiteFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
   sql::ObBoolMask &fal_desc = filter.get_filter_bool_mask();
@@ -676,7 +682,6 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
   const uint64_t row_count,
   ObMinMaxFilterParam &param,
   sql::ObBlackFilterExecutor &filter,
-  common::ObIAllocator &allocator,
   const bool use_vectorize)
 {
   int ret = OB_SUCCESS;

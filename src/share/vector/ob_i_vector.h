@@ -483,6 +483,10 @@ public:
 
 public:
   static const int64_t MAX_VECTOR_STRUCT_SIZE = 64;
+
+  // Indicates whether to use memcpy for performance optimization.
+  // Based on benchmarks, memcpy is faster when copying more than 10 elements.
+  static const int64_t MEMCPY_THRESHOLD = 10;
   virtual VectorFormat get_format() const = 0;
 
   virtual void get_payload(const int64_t idx,

@@ -40,7 +40,57 @@ int ObHSeriesAdapter::put(ObTableExecCtx &ctx, const ObITableEntity &cell)
   return ret;
 }
 
-int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEntity *> &cells)
+int ObHSeriesAdapter::put(ObTableCtx &ctx, const ObHCfRows &rows)
+{
+  int ret = OB_SUCCESS;
+  ObFixedArray<ObTabletID, ObIAllocator> tablet_ids;
+  ObFixedArray<const ObITableEntity*, ObIAllocator> normal_cells;
+  ObFixedArray<const ObITableEntity*, ObIAllocator> series_cells;
+  tablet_ids.set_allocator(&ctx.get_allocator());
+  normal_cells.set_allocator(&ctx.get_allocator());
+  series_cells.set_allocator(&ctx.get_allocator());
+  ctx.set_batch_tablet_ids(&tablet_ids);
+  ctx.set_batch_entities(&series_cells);
+
+  if (OB_FAIL(tablet_ids.init(rows.get_cell_count()))) {
+    LOG_WARN("fail to init tablet ids", K(ret), K(rows.get_cell_count()));
+  } else if (OB_FAIL(normal_cells.init(rows.get_cell_count()))) {
+    LOG_WARN("fail to init normal cells", K(ret), K(rows.get_cell_count()));
+  } else if (OB_FAIL(series_cells.init(rows.get_cell_count()))) {
+    LOG_WARN("fail to init series cells", K(ret), K(rows.get_cell_count()));
+  }
+
+  for (int64_t i = 0; i < rows.count() && OB_SUCC(ret); i++) {
+    const ObHCfRow &row = rows.get_cf_row(i);
+    for (int64_t j = 0; j < row.cells_.count() && OB_SUCC(ret); j++) {
+      const ObHCell &cell = row.cells_.at(j);
+      if (OB_FAIL(normal_cells.push_back(&cell))) {
+        LOG_WARN("fail to push back normal cell", K(ret), K(cell));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(convert_normal_to_series(normal_cells, series_cells, tablet_ids))) {
+      LOG_WARN("fail to convert normal to series", K(ret), K(normal_cells));
+    } else if (series_cells.count() != tablet_ids.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("series cells count is not equal to tablet ids count", K(ret), K(series_cells), K(tablet_ids));
+    } else if (series_cells.count() == 1) {
+      ObTableOperationResult result;
+      ctx.set_tablet_id(tablet_ids.at(0));
+      if (OB_FAIL(ObTableApiService::insert(ctx, *series_cells.at(0), result))) {
+        LOG_WARN("fail to insert", K(ret), K(series_cells.at(0)));
+      }
+    } else if (OB_FAIL(ObTableApiService::multi_insert(ctx, series_cells))) {
+      LOG_WARN("fail to multi insert", K(ret), K(ctx), K(series_cells));
+    }
+  }
+
+  return ret;
+}
+
+int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITableEntity *> &cells)
 {
   int ret = OB_SUCCESS;
   uint64_t cells_count = cells.count();
@@ -51,7 +101,7 @@ int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<ObITableEnti
     ret = OB_ERR_UNDEFINED;
     LOG_WARN("multy put cells is empty", K(ret), K(cells));
   } else {
-    ObSEArray<ObITableEntity *, 8> series_cells;
+    ObSEArray<const ObITableEntity *, 8> series_cells;
     ObSEArray<ObTabletID, 8> real_tablet_ids;
     series_cells.set_attr(ObMemAttr(tenant_id, "MulPutSerCel"));
     real_tablet_ids.set_attr(ObMemAttr(tenant_id, "MulPutSertblt"));
@@ -396,9 +446,9 @@ int ObHSeriesAdapter::get_normal_rowkey(const ObITableEntity &normal_cell,
 }
 
 int ObHSeriesAdapter::add_series_rowkey(ObITableEntity &series_cell,
-                                        ObObj &rowkey_obj,
-                                        ObObj &timestamp_obj,
-                                        ObObj &seq_obj)
+                                        const ObObj &rowkey_obj,
+                                        const ObObj &timestamp_obj,
+                                        const ObObj &seq_obj)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(series_cell.add_rowkey_name(ObHTableConstants::ROWKEY_CNAME_STR))) {
@@ -449,8 +499,8 @@ int ObHSeriesAdapter::convert_normal_to_series(const ObITableEntity &cell,
   return ret;
 }
 
-int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<ObITableEntity *> &cells,
-                                               ObIArray<ObITableEntity *> &series_cells,
+int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<const ObITableEntity *> &cells,
+                                               ObIArray<const ObITableEntity *> &series_cells,
                                                ObIArray<common::ObTabletID> &real_tablet_ids)
 {
   int ret = OB_SUCCESS;
@@ -468,7 +518,7 @@ int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<ObITableEntity *> 
     // 1. agg same kt entity
     for (int i = 0; OB_SUCC(ret) && i < cells.count(); i++) {
       ObObj rowkey_obj, qualifier_obj, timestamp_obj, value_obj;
-      ObITableEntity *entity = cells.at(i);
+      const ObITableEntity *entity = cells.at(i);
       if (OB_ISNULL(entity)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("entity is null", K(ret));
@@ -553,7 +603,7 @@ int ObHSeriesAdapter::convert_normal_to_series(const ObIArray<ObITableEntity *> 
           LOG_WARN("failed to set tablet_id", K(ret), K(node.tablet_id_));
         } else if (OB_FAIL(real_tablet_ids.push_back(node.tablet_id_))) {
           LOG_WARN("fail to push back tablet_id", K(ret), K(node.tablet_id_));
-        } else if (OB_FAIL(series_cells.push_back(series_cell))) {
+        } else if (OB_FAIL(series_cells.push_back(const_cast<ObTableEntity*>(series_cell)))) {
           LOG_WARN("fail to push back series cell", K(ret), KPC(series_cell));
         }
       }

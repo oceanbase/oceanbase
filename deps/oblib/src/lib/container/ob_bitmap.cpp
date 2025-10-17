@@ -728,12 +728,19 @@ int ObBitmap::init(const size_type valid_bytes, const bool is_all_true)
 
 int ObBitmap::copy_from(const ObBitmap &bitmap, const int64_t start, const int64_t count)
 {
+  return append(0, bitmap, start, count);
+}
+
+int ObBitmap::append(const int64_t offset, const ObBitmap &bitmap, const int64_t start, const int64_t count)
+{
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(valid_bytes_ < count || start + count > bitmap.size())) {
+  if (OB_UNLIKELY(valid_bytes_ - offset < count || start + count > bitmap.size())) {
     ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(WARN, "Unexpected copy info", K(ret), K_(valid_bytes), K(start), K(count), K(bitmap.size()));
+    LIB_LOG(WARN, "Unexpected copy info", K(ret), K_(valid_bytes), K(start),
+                                          K(count), K(bitmap.size()), K(offset));
   } else {
-    MEMCPY(static_cast<void*>(data_), static_cast<const void*>(bitmap.get_data() + start), count);
+    MEMCPY(static_cast<void*>(data_ + offset),
+           static_cast<const void*>(bitmap.get_data() + start), count);
   }
   return ret;
 }

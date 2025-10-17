@@ -18,17 +18,17 @@ namespace oceanbase
 {
 namespace table
 {
-int ObHbaseAdapterGuard::get_hbase_adapter(ObIHbaseAdapter *&hbase_adapter)
+int ObHbaseAdapterGuard::get_hbase_adapter(ObIHbaseAdapter *&hbase_adapter, ObHbaseModeType mode_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(hbase_adapter_)) {
     if (OB_FAIL(ObHbaseAdapterFactory::alloc_hbase_adapter(allocator_,
-                                                           exec_ctx_,
+                                                           mode_type,
                                                            hbase_adapter_))) {
-      LOG_WARN("failed to alloc hbase adapter", K(ret));
+      LOG_WARN("failed to alloc hbase adapter", K(ret), K(mode_type));
     } else if (OB_ISNULL(hbase_adapter_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null hbase adapter", K(ret));
+      LOG_WARN("unexpected null hbase adapter", K(ret), K(mode_type));
     }
   }
 
@@ -37,5 +37,6 @@ int ObHbaseAdapterGuard::get_hbase_adapter(ObIHbaseAdapter *&hbase_adapter)
   }
   return ret;
 }
+
 } // end of namespace table
 } // end of namespace oceanbase

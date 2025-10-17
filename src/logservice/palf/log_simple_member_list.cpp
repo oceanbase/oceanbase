@@ -62,7 +62,7 @@ int64_t LogSimpleMemberList::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   databuff_printf(buf, buf_len , pos, "%ld", static_cast<int64_t>(count_));
   for (int64_t i = 0; i < count_; i++) {
-    pos += server_[i].to_string(buf+pos, buf_len);
+    pos += server_[i].to_string(buf+pos, buf_len-pos);
     databuff_printf(buf, buf_len, pos, "%s", ";");
   }
   return pos;

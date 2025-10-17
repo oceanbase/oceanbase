@@ -260,6 +260,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
     ObBasicCostInfo &cost_info = cost_infos.at(0);
     card = cost_info.rows_ * sel;
     cost_info.rows_ = ObJoinOrder::calc_single_parallel_rows(cost_info.rows_, param.need_parallel_);
+    cost_info.rows_ = max(cost_info.rows_, 1.0);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     ObSubplanFilterCostInfo info(cost_infos, get_onetime_idxs(), get_initplan_idxs());
     if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, op_cost, opt_ctx))) {
@@ -521,17 +522,16 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
       right_allocated_exchange |= child->is_exchange_allocated();
     }
   }
-  if (OB_FAIL(ret) || !can_batch || !has_rescan_subquery) {
+  if (OB_FAIL(ret) || !can_batch || !has_rescan_subquery || right_allocated_exchange) {
     can_batch = false;
   } else if (DistAlgo::DIST_BASIC_METHOD == dist_algo_
              || DistAlgo::DIST_NONE_ALL == dist_algo_
              || DistAlgo::DIST_HASH_ALL == dist_algo_
              || DistAlgo::DIST_RANDOM_ALL == dist_algo_
              || (DistAlgo::DIST_PARTITION_WISE == dist_algo_
-                 && !left_allocated_exchange
-                 && !right_allocated_exchange)) {
+                 && !left_allocated_exchange)) {
     can_batch = true;
-  } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_ && !right_allocated_exchange) {
+  } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     can_batch = true;
   } else {
     can_batch = false;

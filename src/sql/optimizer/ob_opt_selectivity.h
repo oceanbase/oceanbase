@@ -37,6 +37,7 @@ namespace common
 class ObOptStatManager;
 class ObHistogram;
 class ObOptColumnStatHandle;
+class ObLakeColumnStat;
 }
 namespace sql
 {
@@ -472,6 +473,15 @@ public:
            const OptSelectivityCtx &ctx,
            const ObTablePartitionInfo *table_partition_info,
            const ObTableMetaInfo *base_meta_info);
+  int init_lake_table(const uint64_t table_id,
+                      const uint64_t ref_table_id,
+                      const int64_t rows,
+                      const int64_t last_analyzed,
+                      const OptTableStatType stat_type,
+                      ObIArray<uint64_t> &column_ids,
+                      const ObIArray<common::ObLakeColumnStat*> &column_stats,
+                      const OptSelectivityCtx &ctx,
+                      const ObTableMetaInfo *base_meta_info);
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
   int add_column_meta_no_dup(const ObIArray<uint64_t> &column_id, const OptSelectivityCtx &ctx);
@@ -537,6 +547,11 @@ private:
   int init_column_meta(const OptSelectivityCtx &ctx,
                        const ObIArray<uint64_t> &column_ids,
                        ObIArray<OptColumnMeta> &column_metas);
+
+  int init_lake_column_meta(const OptSelectivityCtx &ctx,
+                            const ObIArray<uint64_t> &column_ids,
+                            const ObIArray<common::ObLakeColumnStat*> &column_stats,
+                            ObIArray<OptColumnMeta> &column_metas);
 
   int refine_column_meta(const OptSelectivityCtx &ctx,
                          const uint64_t column_id,
@@ -621,6 +636,16 @@ public:
                                const ObTablePartitionInfo *table_partition_info,
                                const ObTableMetaInfo *base_meta_info,
                                bool stale_stats);
+
+  int add_lake_table_meta_info(OptSelectivityCtx &ctx,
+                               const uint64_t table_id,
+                               const uint64_t ref_table_id,
+                               const int64_t rows,
+                               const int64_t last_analyzed,
+                               ObIArray<uint64_t> &column_ids,
+                               const ObIArray<ObLakeColumnStat*> &column_stats,
+                               const OptTableStatType stat_type,
+                               const ObTableMetaInfo *base_meta_info);
 
   int add_set_child_stmt_meta_info(const ObSelectStmt *parent_stmt,
                                    const ObSelectStmt *child_stmt,

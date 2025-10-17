@@ -17,6 +17,7 @@
 #include "lib/container/ob_fixed_array.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/engine/basic/ob_batch_result_holder.h"
+#include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/ob_phy_operator_type.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/ob_operator_reg.h"
@@ -29,6 +30,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
 #include "common/ob_common_utility.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -211,7 +213,7 @@ public:
   int set_dynamic_param(ObEvalCtx &eval_ctx, common::ObObjParam *&param) const;
   int update_dynamic_param(ObEvalCtx &eval_ctx, common::ObDatum &datum) const;
 
-  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, ObExpr &expr);
+  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, const ObExpr &expr);
 
 public:
   int64_t param_idx_; // param idx in param store
@@ -358,6 +360,90 @@ public:
   virtual int post_visit(const ObOpSpec &spec) = 0;
 };
 
+class ObOutputPtrChecker
+{
+public:
+  ObOutputPtrChecker() : use_rich_format_(true), skip_(nullptr) {}
+  virtual ~ObOutputPtrChecker() {}
+  int init(const ObOpSpec &spec, ObEvalCtx &eval_ctx, ObIAllocator *alloc)
+  {
+    int ret = OB_SUCCESS;
+    use_rich_format_ = spec.use_rich_format_;
+    int64_t batch_size = (spec.max_batch_size_ > 0) ? spec.max_batch_size_ : 1;
+    int64_t alloc_size = use_rich_format_ ?
+                         sizeof(ObVectorsResultHolder) :
+                         sizeof(ObBatchResultHolder);
+    void * ptr = alloc->alloc(alloc_size);
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_ENG_LOG(WARN, "allocation failed for brs_checker_", K(ret), K(alloc_size));
+    } else {
+      if (use_rich_format_) {
+        brs_vec_checker_ = new(ptr) ObVectorsResultHolder();
+        if (OB_FAIL(brs_vec_checker_->init(spec.output_, eval_ctx))) {
+          SQL_ENG_LOG(WARN, "brs_vec_checker init failed", K(ret));
+        }
+      } else {
+        brs_checker_ = new(ptr) ObBatchResultHolder();
+        if (OB_FAIL(brs_checker_->init(spec.output_, eval_ctx))) {
+          SQL_ENG_LOG(WARN, "brs_checker init failed", K(ret));
+        }
+      }
+      void *mem = alloc->alloc(ObBitVector::memory_size(batch_size));
+      if (OB_ISNULL(mem)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_ENG_LOG(WARN, "allocate memory failed", K(ret));
+      } else {
+        skip_ = to_bit_vector(mem);
+        skip_->init(batch_size);
+      }
+    }
+    return ret;
+  }
+  int save(const ObBatchRows &brs)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(brs_vec_checker_) || OB_ISNULL(brs_checker_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "brs checker is null", K(ret));
+    } else if (use_rich_format_ && OB_FAIL(brs_vec_checker_->save(brs.size_))) {
+      SQL_ENG_LOG(WARN, "brs vec checker save failed", K(ret));
+    } else if (!use_rich_format_ && OB_FAIL(brs_checker_->save(brs.size_))) {
+      SQL_ENG_LOG(WARN, "brs checker save failed", K(ret));
+    }
+    if (OB_SUCCESS == ret) {
+      skip_->deep_copy(*(brs.skip_), brs.size_);
+    }
+    return ret;
+  }
+  int check()
+  {
+    int ret = OB_SUCCESS;
+    if (brs_vec_checker_ && use_rich_format_
+        && OB_FAIL(brs_vec_checker_->check_vec_modified(*skip_))) {
+      SQL_ENG_LOG(WARN, "check output vec failed", K(ret));
+    } else if (brs_checker_ && !use_rich_format_
+                && OB_FAIL(brs_checker_->check_datum_modified())) {
+      SQL_ENG_LOG(WARN, "check output datum failed", K(ret));
+    }
+    return ret;
+  }
+  void reset()
+  {
+    if (use_rich_format_ && brs_vec_checker_) {
+      brs_vec_checker_->reset();
+    } else if (brs_checker_) {
+      brs_checker_->reset();
+    }
+  }
+  bool use_rich_format_;
+  union {
+    ObBatchResultHolder *brs_checker_ = nullptr;
+    ObVectorsResultHolder *brs_vec_checker_;
+  };
+  ObBitVector *skip_;
+};
+
 // Physical operator, mutable in execution.
 // (same with the old ObPhyOperatorCtx)
 class ObOperator
@@ -369,7 +455,7 @@ public:
   const static int64_t REAL_TIME_MONITOR_THRESHOLD = 1000000; //1s
   const static uint64_t REAL_TIME_MONITOR_TRY_TIMES = 256;
   const static uint64_t SMART_CALL_CLOSE_RETRY_TIMES = 10;
-
+  typedef ObOpProfile<ObMetric> ObProfile;
 public:
   ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObOperator();
@@ -600,6 +686,8 @@ private:
   int output_nested_expr_sanity_check_batch(const ObExpr &expr);
   int output_expr_decint_datum_len_check();
   int output_expr_decint_datum_len_check_batch();
+  int check_brs();
+  int save_brs();
   int setup_op_feedback_info();
   // child can implement this interface, but can't call this directly
   virtual int inner_drain_exch() { return common::OB_SUCCESS; };
@@ -646,7 +734,9 @@ protected:
   // batch rows struct for get_next_row result.
   ObBatchRows brs_;
   ObBatchRowIter *br_it_ = nullptr;
-  ObBatchResultHolder *brs_checker_= nullptr;
+  bool need_check_brs_{false};
+  ObBatchRows backup_brs_;
+  ObOutputPtrChecker output_ptr_checker_;
 
   // handling cases where inner_get_next_batch output row cnt more than max_row_cnt.
   ObBatchRows stash_brs_;
@@ -696,6 +786,7 @@ protected:
   char *dummy_ptr_;
   #endif
   bool check_stack_overflow_;
+  ObProfile profile_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 

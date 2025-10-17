@@ -30,6 +30,65 @@
 #include "storage/init_basic_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
+namespace oceanbase
+{
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
+namespace sslog
+{
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+} // namespace sslog
+} // namespace oceanbase
 
 uint64_t tenant_id = 0;
 
@@ -613,6 +672,7 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store)
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*try read local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     ls_id_,
                                     tablet_id,
@@ -835,6 +895,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_meta_snapshot_read)
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*try read local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     ls_id,
                                     cur_tablet_id,
@@ -912,6 +973,7 @@ TEST_F(ObTestSSLogMetaService, test_ls_ids_snapshot_read)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::TENANT_PREFIX,
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
+                                true,
                                 ObSSLogMetaType::SSLOG_LS_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -947,6 +1009,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_ids_snapshot_read)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
+                                true,
                                 ObSSLogMetaType::SSLOG_TABLET_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -984,6 +1047,7 @@ TEST_F(ObTestSSLogMetaService, test_get_tablet_iter)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                true,
                                 ObSSLogMetaType::SSLOG_TABLET_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -1020,6 +1084,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   ObSSMetaReadParam read_param;
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                true, /*read_local*/
                                 ObSSLogMetaType::SSLOG_TABLET_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());
@@ -1056,6 +1121,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   // tablet raw row range read.
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                    true, /*read_local*/
                                     ObSSLogMetaType::SSLOG_TABLET_META,
                                     sslog_meta_key.tablet_meta_key_.ls_id_,
                                     sslog_meta_key.tablet_meta_key_.tablet_id_,
@@ -1077,6 +1143,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   // 4. get the ls meta row
   read_param.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
+                                true, /*read_local*/
                                 ObSSLogMetaType::SSLOG_LS_META,
                                 ls_id_);
   EXPECT_EQ(true, read_param.is_valid());

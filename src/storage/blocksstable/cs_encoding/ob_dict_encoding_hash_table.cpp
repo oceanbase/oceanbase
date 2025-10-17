@@ -38,13 +38,21 @@ bool ObDictNodeCmp::operator()(const ObDictHashNode &lhs, const ObDictHashNode &
 }
 
 ObDictEncodingHashTable::ObDictEncodingHashTable()
-  : is_created_(false), is_sorted_(false),
-    bucket_num_(0), node_num_(0), distinct_node_cnt_(0),
-    buckets_(NULL), nodes_(NULL),
-    row_refs_(nullptr), refs_permutation_(nullptr), null_node_(nullptr),
-    alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
-{
-}
+    : is_created_(false),
+      is_sorted_(false),
+      bucket_num_(0),
+      node_num_(0),
+      distinct_node_cnt_(0),
+      buckets_(NULL),
+      nodes_(NULL),
+      row_refs_(nullptr),
+      refs_permutation_(nullptr),
+      null_node_(),
+      nop_node_(),
+      alloc_(blocksstable::OB_ENCODING_LABEL_HASH_TABLE,
+             OB_MALLOC_NORMAL_BLOCK_SIZE,
+             MTL_ID())
+{}
 
 ObDictEncodingHashTable::~ObDictEncodingHashTable()
 {
@@ -71,7 +79,6 @@ int ObDictEncodingHashTable::create(const int64_t bucket_num, const int64_t node
     const int64_t bucket_size = bucket_num_ * static_cast<int64_t>(sizeof(HashBucket));
     const int64_t nodes_size = node_num_ * static_cast<int64_t>(sizeof(HashNode));
     const int64_t refs_size = node_num_ * sizeof(*row_refs_);
-    const int64_t refs_permutation_size = node_num_ * sizeof(*refs_permutation_);
 
     if (OB_ISNULL(buckets_ = reinterpret_cast<HashBucket *>(alloc_.alloc(bucket_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -82,14 +89,11 @@ int ObDictEncodingHashTable::create(const int64_t bucket_num, const int64_t node
     } else if (OB_ISNULL(row_refs_ = reinterpret_cast<int32_t *>(alloc_.alloc(refs_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for row refs", K(ret), K(refs_size));
-    } else if (OB_ISNULL(refs_permutation_ = reinterpret_cast<int32_t *>(alloc_.alloc(refs_permutation_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory for refs permutation", K(ret), K(refs_permutation_size));
     } else {
       MEMSET(buckets_, 0, bucket_size);
       // nodes_ no need to memset;
-      null_node_ = &nodes_[node_num_ -1]; // last node in nodes_ is used for null datum
-      null_node_->reset();
+      null_node_.reset();
+      nop_node_.reset();
       is_created_ = true;
     }
   }
@@ -105,7 +109,8 @@ void ObDictEncodingHashTable::reset()
   buckets_ = NULL;
   nodes_ = NULL;
   row_refs_ = nullptr;
-  null_node_ = nullptr;
+  null_node_.reset();
+  nop_node_.reset();
   is_created_ = false;
   is_sorted_ = false;
 }
@@ -115,7 +120,8 @@ void ObDictEncodingHashTable::reuse()
   MEMSET(buckets_, 0, bucket_num_ * sizeof(HashBucket));
   // nodes_ no need to reset
   // row_refs_ no need to reset
-  null_node_->reset();
+  null_node_.reset();
+  nop_node_.reset();
   distinct_node_cnt_ = 0;
   is_sorted_ = false;
 }
@@ -134,19 +140,21 @@ int ObDictEncodingHashTable::sort_dict(ObCmpFunc &cmp_func)
   }
 
   if (OB_SUCC(ret)) {
+    // refs_permutation use the memory of buckets_ which is safe because the buckets_ will be not used when sort
+    int32_t *refs_permutation = (int32_t *)buckets_;
     for (int64_t i = 0; i < distinct_node_cnt_; i++) {
-      refs_permutation_[nodes_[i].dict_ref_] = i;
+      refs_permutation[nodes_[i].dict_ref_] = i;
     }
     // calc new dict_ref if dict is sorted
-    if (null_node_->duplicate_cnt_ > 0) { // has null
+    if (null_node_.duplicate_cnt_ + nop_node_.duplicate_cnt_ > 0) { // has null
       for(int64_t i = 0; i < row_count_; i++) {
         if (row_refs_[i] < distinct_node_cnt_) {
-          row_refs_[i] = refs_permutation_[row_refs_[i]];
+          row_refs_[i] = refs_permutation[row_refs_[i]];
         }
       }
     } else {
       for(int64_t i = 0; i < row_count_; i++) {
-        row_refs_[i] = refs_permutation_[row_refs_[i]];
+        row_refs_[i] = refs_permutation[row_refs_[i]];
       }
     }
     is_sorted_ = true;
@@ -166,50 +174,86 @@ int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const O
   } else {
     row_count_ = col_datums.count();
     const uint64_t mask = (bucket_num_ - 1);
-
-    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count_; ++row_idx) {
-      const ObDatum &datum = col_datums.at(row_idx);
-      if (datum.is_null()) {
-        null_node_->duplicate_cnt_++;
-        row_refs_[row_idx] = NULL_REF;
-      } else if (datum.is_ext()) {
-        ret = common::OB_NOT_SUPPORTED;
-        STORAGE_LOG(WARN, "not supported extend object type",
-                    K(ret), K(row_idx), K(datum), K(*datum.extend_obj_));
-      } else {
-        // add to table
-        uint64_t pos = ::murmurhash2(datum.ptr_, datum.len_, 0/*seed*/);
-        pos = pos & mask;
-        HashNode *node = buckets_[pos];
-        bool is_equal = false;
-        while (OB_SUCC(ret) && nullptr != node) {
-          // binary equal for store types need char case or precision handling
-          if (node->datum_.pack_ != datum.pack_) {
-            is_equal = false;
-          } else {
-            is_equal = (0 == MEMCMP(node->datum_.ptr_, datum.ptr_, datum.len_));
+    ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
+    const bool is_integer = store_class == ObIntSC || store_class == ObUIntSC;
+    if (is_integer) {
+      for (int64_t row_idx = 0; row_idx < row_count_; ++row_idx) {
+        const ObDatum &datum = col_datums.at(row_idx);
+        if (datum.is_null()) {
+          null_node_.duplicate_cnt_++;
+          row_refs_[row_idx] = NULL_REF;
+        } else if (datum.is_nop()) {
+          nop_node_.duplicate_cnt_++;
+          // nop is considered as null in dict encoding
+          // use nop bitmap to distinguish nop and null if needed
+          row_refs_[row_idx] = NULL_REF;
+        } else {
+          uint64_t pos = (datum.get_uint64() * 0x5bd1e995ULL) & mask; // simple hash
+          HashNode *node = buckets_[pos];
+          while (nullptr != node) {
+            if (node->datum_.get_uint64() == datum.get_uint64()) { // is_equal
+              node->duplicate_cnt_++;
+              row_refs_[row_idx] = node->dict_ref_;
+              break;
+            } else {
+              node = node->next_;
+            }
           }
-          if (is_equal) {
-            node->duplicate_cnt_++;
+          if (nullptr == node) {
+            node = &nodes_[distinct_node_cnt_];
+            node->init(datum, distinct_node_cnt_, buckets_[pos]);
+            distinct_node_cnt_++;
+            buckets_[pos] = node;
             row_refs_[row_idx] = node->dict_ref_;
-            break;
-          } else {
-            node = node->next_;
           }
         }
-        if (OB_SUCC(ret) && nullptr == node) {
-          node = &nodes_[distinct_node_cnt_];
-          node->init(datum, distinct_node_cnt_, buckets_[pos]);
-          distinct_node_cnt_++;
-          buckets_[pos] = node;
-          row_refs_[row_idx] = node->dict_ref_;
+      }
+    } else {
+      for (int64_t row_idx = 0; row_idx < row_count_; ++row_idx) {
+        const ObDatum &datum = col_datums.at(row_idx);
+        if (datum.is_null()) {
+          null_node_.duplicate_cnt_++;
+          row_refs_[row_idx] = NULL_REF;
+        } else if (datum.is_nop()) {
+          nop_node_.duplicate_cnt_++;
+          // nop is considered as null in dict encoding
+          // use nop bitmap to distinguish nop and null if needed
+          row_refs_[row_idx] = NULL_REF;
+        } else {
+          // add to table
+          uint64_t pos = ::murmurhash2(datum.ptr_, datum.len_, 0/*seed*/);
+          pos = pos & mask;
+          HashNode *node = buckets_[pos];
+          bool is_equal = false;
+          while (nullptr != node) {
+            // binary equal for store types need char case or precision handling
+            if (node->datum_.pack_ != datum.pack_) {
+              is_equal = false;
+            } else {
+              is_equal = (0 == MEMCMP(node->datum_.ptr_, datum.ptr_, datum.len_));
+            }
+            if (is_equal) {
+              node->duplicate_cnt_++;
+              row_refs_[row_idx] = node->dict_ref_;
+              break;
+            } else {
+              node = node->next_;
+            }
+          }
+          if (nullptr == node) {
+            node = &nodes_[distinct_node_cnt_];
+            node->init(datum, distinct_node_cnt_, buckets_[pos]);
+            distinct_node_cnt_++;
+            buckets_[pos] = node;
+            row_refs_[row_idx] = node->dict_ref_;
+          }
         }
       }
     }
 
-    if (OB_SUCC(ret) && null_node_->duplicate_cnt_ > 0) {
-      null_node_->datum_.set_null();
-      null_node_->dict_ref_ = distinct_node_cnt_;
+    if (OB_SUCC(ret) && (null_node_.duplicate_cnt_ + nop_node_.duplicate_cnt_ > 0)) {
+      null_node_.datum_.set_null();
+      null_node_.dict_ref_ = distinct_node_cnt_;
       for (int64_t i = 0; i < row_count_; i++) {
         if (row_refs_[i] == NULL_REF) {
           row_refs_[i] = distinct_node_cnt_; // use distinct_node_cnt_ as null replaced ref

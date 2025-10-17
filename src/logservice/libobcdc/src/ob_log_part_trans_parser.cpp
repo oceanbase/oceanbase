@@ -1069,6 +1069,9 @@ int ObLogPartTransParser::check_row_need_ignore_(
         "tls_id", part_trans_task.get_tls_id(),
         "trans_id", part_trans_task.get_trans_id(),
         "row_seq_no", row.get_seq_no());
+  } else if (OB_UNLIKELY(tablet_id.is_ls_inner_tablet())) {
+    need_filter = true;
+    filter_reason = "LS_INNER_TABLET";
   } else if (OB_FAIL(get_table_info_of_tablet_(tenant, part_trans_task, tablet_id, table_info))) {
     LOG_ERROR("get_table_info_of_tablet_ failed", KR(ret), K(tablet_id), K(part_trans_task), K(redo_log_entry_task), K(row));
   } else if (table_info.is_index_table()) {

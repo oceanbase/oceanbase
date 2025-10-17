@@ -535,6 +535,8 @@ public:
 public:
   bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
   int check_is_delete_insert_table(bool &is_delete_insert_table) const;
+  int check_is_mv_major_refresh_tablet(bool &val) const;
+  int check_micro_block_format_version(int64_t &micro_block_format_version) const;
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(
       const ObDirectLoadType direct_load_type,
@@ -590,6 +592,8 @@ public:
   int get_updating_tablet_pointer_param(
       ObUpdateTabletPointerParam &param,
       const bool need_tablet_attr_and_cache = true) const;
+  /// @brief: only used for SS private tablet meta
+  int get_updating_tablet_pointer_param_for_meta_version(ObUpdateTabletPointerParam &param) const;
 
   int submit_medium_compaction_clog(
       compaction::ObMediumCompactionInfo &medium_info,
@@ -601,13 +605,23 @@ public:
       int64_t &pos);
 
   int fetch_tablet_autoinc_seq_cache(
+      const ObLSSwitchChecker &ls_switch_checker,
       const uint64_t cache_size,
       share::ObTabletAutoincInterval &result);
 
-  int update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool is_tablet_creating);
+  int update_tablet_autoinc_seq(
+      const ObLSSwitchChecker &ls_switch_checker,
+      const uint64_t autoinc_seq,
+      const bool is_tablet_creating);
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
-      ObStorageSnapshotInfo &snapshot_info) const;
+      ObStorageSnapshotInfo &snapshot_info,
+      const bool skip_tablet_snapshot_and_undo_retention = false) const;
+  int get_kept_and_old_snapshot_info(
+      const int64_t min_reserved_snapshot_on_ls,
+      ObStorageSnapshotInfo &snapshot_info,
+      ObStorageSnapshotInfo &old_snapshot_info,
+      const bool skip_tablet_snapshot_and_undo_retention) const;
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,
@@ -691,6 +705,9 @@ public:
       const int64_t snapshot_version,
       const uint64_t data_format_version);
   int check_tx_data_can_explain_user_data(const share::SCN &tx_data_table_filled_tx_scn);
+
+  static bool is_snapshot_not_advance(const ObStorageSnapshotInfo &snapshot_info,
+                         const int64_t snapshot_version);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }
@@ -996,11 +1013,13 @@ private:
       storage::ObMetaDiskAddr &addr,
       char *&buf);
   int get_kept_snapshot_for_split(int64_t &min_split_snapshot) const;
+
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;
   static constexpr int32_t VERSION_V3 = 3;
   static constexpr int32_t VERSION_V4 = 4;
+
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible
@@ -1083,6 +1102,17 @@ inline bool ObTablet::is_valid() const
           && storage_schema_addr_.addr_.is_none()
           && nullptr == rowkey_read_info_); // judgement case 2
 }
+
+inline bool ObTablet::is_snapshot_not_advance(const ObStorageSnapshotInfo &snapshot_info,
+                         const int64_t snapshot_version)
+{
+  bool shold_skip_snapshot_condition = (snapshot_info.snapshot_type_ == ObStorageSnapshotInfo::SNAPSHOT_FOR_MAJOR_FREEZE_TS
+                                      || snapshot_info.snapshot_ == 1
+                                      || snapshot_info.snapshot_ >= snapshot_version);
+  bool is_snapshot_timeout = ((snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min);
+  return !shold_skip_snapshot_condition && is_snapshot_timeout;
+}
+
 
 inline int ObTablet::allow_to_read_()
 {

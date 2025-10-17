@@ -119,5 +119,11 @@ int ObLogHandlerBase::get_role_atomically(common::ObRole &role) const
   role = ATOMIC_LOAD(&role_);
   return ret;
 }
+
+bool ObLogHandlerBase::is_in_stop_state() const
+{
+  RLockGuard guard(lock_);
+  return is_in_stop_state_;
+}
 } // end namespace logservice
 } // end namespace oceanbase

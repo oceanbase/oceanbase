@@ -354,7 +354,7 @@ COLLATION_NAME	varchar(64)	NO
 DTD_IDENTIFIER	longtext	NO			
 ROUTINE_BODY	varchar(8)	NO			
 ROUTINE_DEFINITION	longtext	NO			
-EXTERNAL_NAME	varchar(64)	NO			
+EXTERNAL_NAME	longtext	NO			
 EXTERNAL_LANGUAGE	varchar(64)	NO			
 PARAMETER_STYLE	varchar(8)	NO			
 IS_DETERMINISTIC	varchar(3)	NO			
@@ -976,6 +976,8 @@ PLSQL_COMPILE_TIME	bigint(20)	NO		NULL
 INSERT_DUPLICATE_ROW_COUNT	bigint(20)	YES		NULL	
 USER_CLIENT_PORT	bigint(20)	NO		NULL	
 TRANS_STATUS	varchar(256)	NO		NULL	
+CCL_RULE_ID	bigint(20)	YES		NULL	
+CCL_MATCH_TIME	bigint(20)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_SQL_AUDIT|%') then 2
@@ -1391,6 +1393,8 @@ PLSQL_COMPILE_TIME	bigint(20)	NO
 INSERT_DUPLICATE_ROW_COUNT	bigint(20)	NO			
 USER_CLIENT_PORT	bigint(20)	NO			
 TRANS_STATUS	varchar(256)	NO			
+CCL_RULE_ID	bigint(20)	NO			
+CCL_MATCH_TIME	bigint(20)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_SQL_AUDIT|%') then 2
@@ -1616,6 +1620,7 @@ OTHER_XML	varchar(255)	NO
 PLAN_OPERATION_INACTIVE	bigint(0) unsigned	NO			
 OUTPUT_BATCHES	bigint(20)	NO		NULL	
 SKIPPED_ROWS_COUNT	bigint(20)	NO		NULL	
+PROFILE	varchar(65535)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$SQL_PLAN_MONITOR|%') then 2
@@ -1714,6 +1719,7 @@ OTHER_XML	varchar(255)	NO
 PLAN_OPERATION_INACTIVE	bigint(0) unsigned	NO			
 OUTPUT_BATCHES	bigint(20)	NO			
 SKIPPED_ROWS_COUNT	bigint(20)	NO			
+PROFILE	varchar(65535)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$SQL_PLAN_MONITOR|%') then 2
@@ -3111,6 +3117,8 @@ UNIT_NUM	bigint(20)	NO
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
+COMMENT	varchar(4096)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_TENANTS|%') then 2
@@ -3147,6 +3155,7 @@ MIN_IOPS	bigint(20)	NO		NULL
 IOPS_WEIGHT	bigint(20)	NO		NULL	
 MAX_NET_BANDWIDTH	bigint(20)	NO			
 NET_BANDWIDTH_WEIGHT	bigint(20)	NO			
+REPLICA_TYPE	varchar(7)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_UNITS|%') then 2
@@ -3602,6 +3611,7 @@ IN_RECYCLEBIN	varchar(3)	NO
 COLLATION	varchar(128)	NO			
 READ_ONLY	varchar(3)	NO		NULL	
 COMMENT	varchar(2048)	NO		NULL	
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_DATABASES|%') then 2
@@ -3620,6 +3630,7 @@ IN_RECYCLEBIN	varchar(3)	NO
 COLLATION	varchar(128)	NO			
 READ_ONLY	varchar(3)	NO		NULL	
 COMMENT	varchar(2048)	NO		NULL	
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_DATABASES|%') then 2
@@ -5063,6 +5074,7 @@ DATA_DISK_SIZE	bigint(20)	YES		NULL
 DATA_DISK_IN_USE	bigint(20)	NO		NULL	
 STATUS	varchar(64)	NO		NULL	
 CREATE_TIME	timestamp(6)	NO		NULL	
+REPLICA_TYPE	varchar(7)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_UNITS|%') then 2
@@ -5096,6 +5108,7 @@ DATA_DISK_SIZE	bigint(20)	NO
 DATA_DISK_IN_USE	bigint(20)	NO			
 STATUS	varchar(64)	NO			
 CREATE_TIME	timestamp(6)	NO			
+REPLICA_TYPE	varchar(7)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_UNITS|%') then 2
@@ -5200,6 +5213,8 @@ SERVICE_NAME	varchar(64)	YES		NULL
 TOTAL_CPU_TIME	bigint(21)	NO		NULL	
 TOP_INFO	varchar(262143)	YES		NULL	
 MEMORY_USAGE	bigint(20)	YES		NULL	
+TOP_TIME	double	NO		NULL	
+TOP_TRACE_ID	varchar(64)	YES			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_PROCESSLIST|%') then 2
@@ -5254,6 +5269,8 @@ SERVICE_NAME	varchar(64)	NO
 TOTAL_CPU_TIME	bigint(21)	NO			
 TOP_INFO	varchar(262143)	NO			
 MEMORY_USAGE	bigint(20)	NO			
+TOP_TIME	double	NO			
+TOP_TRACE_ID	varchar(64)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_PROCESSLIST|%') then 2
@@ -5817,7 +5834,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	timestamp(6)	NO		NULL	
+PARAMETER	varchar(8209)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -5845,7 +5862,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	timestamp(6)	NO		NULL	
+PARAMETER	varchar(8209)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -5949,6 +5966,7 @@ LAST_CHECK_TIMESTAMP	timestamp(6)	YES
 MAX_IOPS	bigint(20)	NO			
 MAX_BANDWIDTH	bigint(20)	NO			
 MAX_BANDWIDTH_DISPLAY	varchar(29)	NO			
+STATUS	varchar(64)	YES			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_BACKUP_STORAGE_INFO|%') then 2
@@ -5968,12 +5986,12 @@ PARTITION_POSITION	decimal(10,0)	NO
 SUBPARTITION_NAME	varchar(128)	NO			
 SUBPARTITION_POSITION	decimal(10,0)	NO			
 OBJECT_TYPE	varchar(12)	NO			
-NUM_ROWS	decimal(10,0)	NO		NULL	
+NUM_ROWS	decimal(20,0)	NO			
 BLOCKS	decimal(10,0)	NO			
 EMPTY_BLOCKS	decimal(10,0)	NO			
 AVG_SPACE	decimal(10,0)	NO			
 CHAIN_CNT	decimal(10,0)	NO			
-AVG_ROW_LEN	decimal(10,0)	NO		NULL	
+AVG_ROW_LEN	decimal(10,0)	NO			
 AVG_SPACE_FREELIST_BLOCKS	decimal(10,0)	NO			
 NUM_FREELIST_BLOCKS	decimal(10,0)	NO			
 AVG_CACHED_BLOCKS	decimal(10,0)	NO			
@@ -5982,8 +6000,8 @@ IM_IMCU_COUNT	decimal(10,0)	NO
 IM_BLOCK_COUNT	decimal(10,0)	NO			
 IM_STAT_UPDATE_TIME	datetime	NO			
 SCAN_RATE	decimal(10,0)	NO			
-SAMPLE_SIZE	decimal(20,0)	YES		NULL	
-LAST_ANALYZED	datetime(6)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO			
+LAST_ANALYZED	datetime(6)	NO			
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 STATTYPE_LOCKED	varchar(5)	NO			
@@ -6004,14 +6022,14 @@ Field	Type	Null	Key	Default	Extra
 OWNER	varchar(128)	NO			
 TABLE_NAME	varchar(128)	NO			
 COLUMN_NAME	varchar(128)	NO			
-NUM_DISTINCT	decimal(10,0)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
 LOW_VALUE	varchar(128)	NO		NULL	
 HIGH_VALUE	varchar(128)	NO		NULL	
-DENSITY	decimal(10,0)	NO		NULL	
-NUM_NULLS	decimal(10,0)	NO		NULL	
-NUM_BUCKETS	decimal(10,0)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
-SAMPLE_SIZE	decimal(10,0)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 NOTES	varchar(80)	NO			
@@ -6034,12 +6052,12 @@ OWNER	varchar(128)	NO
 TABLE_NAME	varchar(128)	NO			
 PARTITION_NAME	varchar(128)	NO			
 COLUMN_NAME	varchar(128)	NO			
-NUM_DISTINCT	decimal(10,0)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
 LOW_VALUE	varchar(128)	NO		NULL	
 HIGH_VALUE	varchar(128)	NO		NULL	
-DENSITY	decimal(10,0)	NO		NULL	
-NUM_NULLS	decimal(10,0)	NO		NULL	
-NUM_BUCKETS	decimal(10,0)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
 SAMPLE_SIZE	decimal(10,0)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
@@ -6063,14 +6081,14 @@ OWNER	varchar(128)	NO
 TABLE_NAME	varchar(128)	NO			
 SUBPARTITION_NAME	varchar(128)	NO			
 COLUMN_NAME	varchar(128)	NO			
-NUM_DISTINCT	decimal(10,0)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
 LOW_VALUE	varchar(128)	NO		NULL	
 HIGH_VALUE	varchar(128)	NO		NULL	
-DENSITY	decimal(10,0)	NO		NULL	
-NUM_NULLS	decimal(10,0)	NO		NULL	
-NUM_BUCKETS	decimal(10,0)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
-SAMPLE_SIZE	decimal(10,0)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 NOTES	varchar(80)	NO			
@@ -6183,10 +6201,10 @@ DISTINCT_KEYS	decimal(10,0)	NO
 AVG_LEAF_BLOCKS_PER_KEY	decimal(10,0)	NO			
 AVG_DATA_BLOCKS_PER_KEY	decimal(10,0)	NO			
 CLUSTERING_FACTOR	decimal(10,0)	NO			
-NUM_ROWS	decimal(10,0)	NO		NULL	
+NUM_ROWS	decimal(20,0)	NO		NULL	
 AVG_CACHED_BLOCKS	decimal(10,0)	NO			
 AVG_CACHE_HIT_RATIO	decimal(10,0)	NO			
-SAMPLE_SIZE	decimal(10,0)	NO			
+SAMPLE_SIZE	decimal(20,0)	NO			
 LAST_ANALYZED	datetime(6)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
@@ -6831,6 +6849,7 @@ LAST_CHECK_TIMESTAMP	timestamp(6)	YES
 MAX_IOPS	bigint(20)	NO			
 MAX_BANDWIDTH	bigint(20)	NO			
 MAX_BANDWIDTH_DISPLAY	varchar(29)	NO			
+STATUS	varchar(64)	YES			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_BACKUP_STORAGE_INFO|%') then 2
@@ -6887,7 +6906,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	timestamp(6)	NO		NULL	
+PARAMETER	varchar(8209)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -6914,7 +6933,7 @@ INITIATOR_TENANT_ID	bigint(20)	NO		NULL
 INITIATOR_JOB_ID	bigint(20)	NO		NULL	
 EXECUTOR_TENANT_ID	varchar(65536)	NO		NULL	
 TYPE	varchar(64)	NO		NULL	
-PARAMETER	timestamp(6)	NO		NULL	
+PARAMETER	varchar(8209)	NO			
 JOB_LEVEL	varchar(64)	NO		NULL	
 START_TIMESTAMP	timestamp(6)	NO		NULL	
 END_TIMESTAMP	timestamp(6)	NO			
@@ -7916,6 +7935,7 @@ OBJECT_ID	bigint(20)	NO
 TABLEGROUP_NAME	varchar(128)	NO		NULL	
 TABLEGROUP_ID	bigint(20)	NO		NULL	
 SHARDING	varchar(10)	NO			
+INDEX_TYPE	varchar(6)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_TABLE_LOCATIONS|%') then 2
@@ -7950,6 +7970,7 @@ OBJECT_ID	bigint(20)	NO
 TABLEGROUP_NAME	varchar(128)	NO		NULL	
 TABLEGROUP_ID	bigint(20)	NO		NULL	
 SHARDING	varchar(10)	NO			
+INDEX_TYPE	varchar(6)	NO			
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_TABLE_LOCATIONS|%') then 2
@@ -14124,7 +14145,7 @@ TENANT_ID	varchar(128)	NO		NULL
 TENANT_NAME	varchar(128)	NO		NULL	
 SERVER_IP	varchar(46)	NO		NULL	
 SERVER_PORT	bigint(20)	NO		NULL	
-SPACE_TYPE	varchar(9)	NO			
+SPACE_TYPE	varchar(14)	NO			
 DATA_BYTES	decimal(42,0)	NO		NULL	
 USAGE_BYTES	decimal(42,0)	NO		NULL	
 set @query_type = (select 
@@ -14653,7 +14674,6 @@ BASELINE_EXEC_COUNT	bigint(20)	YES		NULL
 BASELINE_CPU_TIME	bigint(20)	YES		NULL	
 EVO_PLAN_HASH	bigint(20) unsigned	YES		NULL	
 BASELINE_PLAN_HASH	bigint(20) unsigned	YES		NULL	
-EVO_EXEC_INFO	varbinary(2048)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_SPM_EVO_RESULT|%') then 2
@@ -14683,7 +14703,6 @@ BASELINE_EXEC_COUNT	bigint(20)	YES		NULL
 BASELINE_CPU_TIME	bigint(20)	YES		NULL	
 EVO_PLAN_HASH	bigint(20) unsigned	YES		NULL	
 BASELINE_PLAN_HASH	bigint(20) unsigned	YES		NULL	
-EVO_EXEC_INFO	varbinary(2048)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_SPM_EVO_RESULT|%') then 2
@@ -14860,6 +14879,55 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.proc limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_OBJECT_BALANCE_WEIGHT;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(20)	NO		NULL	
+PARTITION_ID	bigint(20)	NO		NULL	
+SUBPARTITION_ID	bigint(20)	NO		NULL	
+WEIGHT	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+PARTITION_NAME	varchar(64)	NO			
+SUBPARTITION_NAME	varchar(64)	NO			
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
+DATABASE_ID	bigint(20)	NO			
+TABLEGROUP_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_OBJECT_BALANCE_WEIGHT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_OBJECT_BALANCE_WEIGHT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_OBJECT_BALANCE_WEIGHT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_OBJECT_BALANCE_WEIGHT limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_OBJECT_BALANCE_WEIGHT;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+PARTITION_ID	bigint(20)	NO		NULL	
+SUBPARTITION_ID	bigint(20)	NO		NULL	
+WEIGHT	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+PARTITION_NAME	varchar(64)	NO			
+SUBPARTITION_NAME	varchar(64)	NO			
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
+DATABASE_ID	bigint(20)	NO			
+TABLEGROUP_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_OBJECT_BALANCE_WEIGHT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_OBJECT_BALANCE_WEIGHT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_OBJECT_BALANCE_WEIGHT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_OBJECT_BALANCE_WEIGHT limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_CS_REPLICA_STATS;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	
@@ -14949,6 +15017,63 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLUGINS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_TENANT_FLASHBACK_LOG_SCN;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TIMESTAMP	timestamp(6)	NO		NULL	
+SWITCHOVER_EPOCH	bigint(20)	NO		NULL	
+OP_TYPE	varchar(64)	NO		NULL	
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_TENANT_FLASHBACK_LOG_SCN|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_TENANT_FLASHBACK_LOG_SCN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TENANT_FLASHBACK_LOG_SCN|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANT_FLASHBACK_LOG_SCN limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TENANT_FLASHBACK_LOG_SCN;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TIMESTAMP	timestamp(6)	NO		NULL	
+SWITCHOVER_EPOCH	bigint(20)	NO		NULL	
+OP_TYPE	varchar(64)	NO		NULL	
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_TENANT_FLASHBACK_LOG_SCN|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_TENANT_FLASHBACK_LOG_SCN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_TENANT_FLASHBACK_LOG_SCN|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TENANT_FLASHBACK_LOG_SCN limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_LICENSE;
+Field	Type	Null	Key	Default	Extra
+END_USER	varchar(512)	NO		NULL	
+LICENSE_ID	varchar(128)	NO		NULL	
+LICENSE_CODE	varchar(128)	NO		NULL	
+LICENSE_TYPE	varchar(128)	NO		NULL	
+PRODUCT_TYPE	varchar(128)	NO		NULL	
+ISSUANCE_DATE	timestamp(6)	NO			
+ACTIVATION_TIME	timestamp(6)	NO			
+EXPIRED_TIME	timestamp(6)	NO			
+OPTIONS	varchar(1024)	NO		NULL	
+NODE_NUM	bigint(20)	NO		NULL	
+CLUSTER_ULID	varchar(30)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_LICENSE|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_LICENSE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LICENSE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LICENSE limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_VECTOR_INDEX_TASKS;
 Field	Type	Null	Key	Default	Extra
 TABLE_ID	bigint(20)	NO		NULL	
@@ -14962,6 +15087,7 @@ TASK_TYPE	bigint(20)	NO		NULL
 TASK_SCN	bigint(20)	NO		NULL	
 RET_CODE	bigint(20)	NO		NULL	
 TRACE_ID	varchar(512)	NO		NULL	
+PROGRESS_INFO	varchar(512)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_VECTOR_INDEX_TASKS|%') then 2
@@ -14986,6 +15112,7 @@ TASK_TYPE	bigint(20)	NO		NULL
 TASK_SCN	bigint(20)	NO		NULL	
 RET_CODE	bigint(20)	NO		NULL	
 TRACE_ID	varchar(512)	NO		NULL	
+PROGRESS_INFO	varchar(512)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_VECTOR_INDEX_TASKS|%') then 2
@@ -15133,6 +15260,94 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_LOCAL_CACHE limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_CCL_RULES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+CCL_RULE_NAME	varchar(128)	NO		NULL	
+AFFECT_USER_NAME	varchar(64)	NO		NULL	
+AFFECT_HOST	varchar(128)	NO		NULL	
+AFFECT_FOR_ALL_DATABASES	tinyint(4)	NO			
+AFFECT_FOR_ALL_TABLES	tinyint(4)	NO			
+AFFECT_DATABASE	varchar(128)	YES		NULL	
+AFFECT_TABLE	varchar(256)	YES		NULL	
+AFFECT_DML	bigint(20)	NO			
+AFFECT_SCOPE	bigint(20)	NO			
+CCL_KEYWORDS	varchar(1048576)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_CCL_RULES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_CCL_RULES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_CCL_RULES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_CCL_RULES limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_CCL_RULES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+CCL_RULE_NAME	varchar(128)	NO		NULL	
+AFFECT_USER_NAME	varchar(64)	NO		NULL	
+AFFECT_HOST	varchar(128)	NO		NULL	
+AFFECT_FOR_ALL_DATABASES	tinyint(4)	NO			
+AFFECT_FOR_ALL_TABLES	tinyint(4)	NO			
+AFFECT_DATABASE	varchar(128)	YES		NULL	
+AFFECT_TABLE	varchar(256)	YES		NULL	
+AFFECT_DML	bigint(20)	NO			
+AFFECT_SCOPE	bigint(20)	NO			
+CCL_KEYWORDS	varchar(1048576)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_CCL_RULES|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_CCL_RULES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_CCL_RULES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_CCL_RULES limit 1);
+cnt
+1
+desc oceanbase.GV$OB_SQL_CCL_STATUS;
+Field	Type	Null	Key	Default	Extra
+CON_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+FORMAT_SQLID	varchar(32)	NO		NULL	
+CURRENT_CONCURRENCY	bigint(20)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_SQL_CCL_STATUS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|GV$OB_SQL_CCL_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SQL_CCL_STATUS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQL_CCL_STATUS limit 1);
+cnt
+1
+desc oceanbase.V$OB_SQL_CCL_STATUS;
+Field	Type	Null	Key	Default	Extra
+CON_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+FORMAT_SQLID	varchar(32)	NO		NULL	
+CURRENT_CONCURRENCY	bigint(20)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_SQL_CCL_STATUS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_SQL_CCL_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SQL_CCL_STATUS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQL_CCL_STATUS limit 1);
+cnt
+1
 desc oceanbase.DBA_MVIEW_RUNNING_JOBS;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	
@@ -15264,6 +15479,7 @@ desc oceanbase.DBA_OB_EXTERNAL_RESOURCES;
 Field	Type	Null	Key	Default	Extra
 RESOURCE_ID	bigint(20)	NO		NULL	
 DATABASE_ID	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
 NAME	varchar(256)	NO		NULL	
 TYPE	varchar(12)	NO		NULL	
 CONTENT	longblob	NO		NULL	
@@ -15319,6 +15535,366 @@ when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_SS_SSTABLES|%') then 3
 when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SS_SSTABLES|%') then 4
 else 1
 end a);
+desc oceanbase.GV$OB_VECTOR_MEMORY;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+VECTOR_MEM_HOLD	bigint(22)	NO		NULL	
+VECTOR_MEM_USED	bigint(22)	NO		NULL	
+VECTOR_MEM_LIMIT	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_VECTOR_MEMORY|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|GV$OB_VECTOR_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_VECTOR_MEMORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.V$OB_VECTOR_MEMORY;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+VECTOR_MEM_HOLD	bigint(22)	NO			
+VECTOR_MEM_USED	bigint(22)	NO			
+VECTOR_MEM_LIMIT	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_VECTOR_MEMORY|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_VECTOR_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_VECTOR_MEMORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.GV$OB_HNSW_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+DATA_TABLE_ID	bigint(20)	NO		NULL	
+DATA_TABLET_ID	bigint(20)	NO		NULL	
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+ROLE	varchar(8)	NO		NULL	
+INDEX_PARAM	varchar(512)	YES		NULL	
+MEMORY_USED	bigint(22)	NO			
+MEMORY_HOLD	bigint(22)	NO			
+INCR_MEM_HOLD	bigint(21)	YES		NULL	
+SNAP_MEM_HOLD	bigint(21)	YES		NULL	
+INCR_INDEX_CNT	bigint(21)	YES		NULL	
+SNAP_INDEX_CNT	bigint(21)	YES		NULL	
+INCR_DATA_SCN	bigint(21) unsigned	YES		NULL	
+SNAP_DATA_SCN	bigint(21) unsigned	YES		NULL	
+LAST_SUCC_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_CODE	bigint(21)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_HNSW_INDEX_INFO|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|GV$OB_HNSW_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_HNSW_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_HNSW_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.V$OB_HNSW_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+DATA_TABLE_ID	bigint(20)	NO			
+DATA_TABLET_ID	bigint(20)	NO			
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+ROLE	varchar(8)	NO			
+INDEX_PARAM	varchar(512)	NO			
+MEMORY_USED	bigint(22)	NO			
+MEMORY_HOLD	bigint(22)	NO			
+INCR_MEM_HOLD	bigint(21)	NO			
+SNAP_MEM_HOLD	bigint(21)	NO			
+INCR_INDEX_CNT	bigint(21)	NO			
+SNAP_INDEX_CNT	bigint(21)	NO			
+INCR_DATA_SCN	bigint(21) unsigned	NO			
+SNAP_DATA_SCN	bigint(21) unsigned	NO			
+LAST_SUCC_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_SYNC_TIME	timestamp(6)	NO			
+LAST_FAILED_CODE	bigint(21)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_HNSW_INDEX_INFO|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_HNSW_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_HNSW_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HNSW_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.GV$OB_IVF_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+DATA_TABLE_ID	bigint(20)	NO		NULL	
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+INDEX_TABLE_ID	bigint(20)	NO		NULL	
+INDEX_TABLET_ID	bigint(20)	NO		NULL	
+INDEX_PARAM	varchar(512)	YES		NULL	
+CACHE_TYPE	varchar(29)	NO			
+IS_INIT	varchar(5)	NO			
+MEMORY_USED	bigint(10)	NO			
+MEMORY_HOLD	bigint(10)	NO			
+CACHE_INFO	varchar(512)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_IVF_INDEX_INFO|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|GV$OB_IVF_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_IVF_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_IVF_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.V$OB_IVF_INDEX_INFO;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+DATA_TABLE_ID	bigint(20)	NO			
+TABLE_NAME	varchar(256)	NO			
+INDEX_NAME	varchar(256)	NO			
+INDEX_TABLE_ID	bigint(20)	NO			
+INDEX_TABLET_ID	bigint(20)	NO			
+INDEX_PARAM	varchar(512)	NO			
+CACHE_TYPE	varchar(29)	NO			
+IS_INIT	varchar(5)	NO			
+MEMORY_USED	bigint(10)	NO			
+MEMORY_HOLD	bigint(10)	NO			
+CACHE_INFO	varchar(512)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_IVF_INDEX_INFO|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_IVF_INDEX_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_IVF_INDEX_INFO|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_IVF_INDEX_INFO limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SS_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TENANT_NAME	varchar(128)	NO		NULL	
+ENDPOINT	varchar(128)	NO		NULL	
+PATH	varchar(128)	NO		NULL	
+STORAGE_TYPE	varchar(32)	NO		NULL	
+VALUE	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_SS_SPACE_USAGE|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_SS_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_SS_SPACE_USAGE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SS_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SS_SPACE_USAGE;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT	varchar(128)	NO		NULL	
+PATH	varchar(128)	NO		NULL	
+STORAGE_TYPE	varchar(32)	NO		NULL	
+VALUE	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SS_SPACE_USAGE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SS_SPACE_USAGE limit 1);
+cnt
+1
+desc oceanbase.GV$OB_HMS_CLIENT_POOL_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+CATALOG_ID	bigint(20)	NO		NULL	
+TOTAL_CLIENTS	bigint(20)	NO		NULL	
+IN_USE_CLIENTS	bigint(20)	NO		NULL	
+IDLE_CLIENTS	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_HMS_CLIENT_POOL_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_HMS_CLIENT_POOL_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_HMS_CLIENT_POOL_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+CATALOG_ID	bigint(20)	NO			
+TOTAL_CLIENTS	bigint(20)	NO			
+IN_USE_CLIENTS	bigint(20)	NO			
+IDLE_CLIENTS	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_HMS_CLIENT_POOL_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HMS_CLIENT_POOL_STAT limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_MODELS;
+Field	Type	Null	Key	Default	Extra
+MODEL_ID	bigint(20)	NO		NULL	
+NAME	varchar(128)	NO		NULL	
+TYPE	varchar(16)	NO		NULL	
+MODEL_NAME	varchar(128)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_MODELS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_MODELS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODELS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODELS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_AI_MODEL_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+ENDPOINT_ID	bigint(20)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO		NULL	
+AI_MODEL_NAME	varchar(128)	NO		NULL	
+SCOPE	varchar(128)	NO		NULL	
+URL	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+PROVIDER	varchar(128)	YES		NULL	
+REQUEST_MODEL_NAME	varchar(128)	YES		NULL	
+PARAMETERS	varchar(2048)	YES		NULL	
+REQUEST_TRANSFORM_FN	varchar(64)	YES		NULL	
+RESPONSE_TRANSFORM_FN	varchar(64)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AI_MODEL_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AI_MODEL_ENDPOINTS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_MODELS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+MODEL_ID	bigint(20)	NO		NULL	
+NAME	varchar(128)	NO		NULL	
+TYPE	varchar(16)	NO		NULL	
+MODEL_NAME	varchar(128)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_MODELS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_MODELS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_MODELS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_MODELS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_AI_MODEL_ENDPOINTS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+ENDPOINT_ID	bigint(20)	NO		NULL	
+ENDPOINT_NAME	varchar(128)	NO		NULL	
+AI_MODEL_NAME	varchar(128)	NO		NULL	
+SCOPE	varchar(128)	NO		NULL	
+URL	varchar(2048)	YES		NULL	
+ACCESS_KEY	varchar(2048)	YES		NULL	
+PROVIDER	varchar(128)	YES		NULL	
+REQUEST_MODEL_NAME	varchar(128)	YES		NULL	
+PARAMETERS	varchar(2048)	YES		NULL	
+REQUEST_TRANSFORM_FN	varchar(64)	YES		NULL	
+RESPONSE_TRANSFORM_FN	varchar(64)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_AI_MODEL_ENDPOINTS|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_AI_MODEL_ENDPOINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_AI_MODEL_ENDPOINTS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_AI_MODEL_ENDPOINTS limit 1);
+cnt
+1
+desc oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+OBJECT_TYPE	varchar(128)	NO		NULL	
+MODE	varchar(32)	NO		NULL	
+READ_CNT	bigint(20)	NO		NULL	
+READ_SIZE	bigint(20)	NO		NULL	
+READ_FAIL_CNT	bigint(20)	NO		NULL	
+READ_IOPS	bigint(20)	NO		NULL	
+WRITE_CNT	bigint(20)	NO		NULL	
+WRITE_SIZE	bigint(20)	NO		NULL	
+WRITE_FAIL_CNT	bigint(20)	NO		NULL	
+WRITE_IOPS	bigint(20)	NO		NULL	
+DELETE_CNT	bigint(20)	NO		NULL	
+DELETE_FAIL_CNT	bigint(20)	NO		NULL	
+DELETE_IOPS	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|GV$OB_SS_OBJECT_TYPE_IO_STAT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|GV$OB_SS_OBJECT_TYPE_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SS_OBJECT_TYPE_IO_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT limit 1);
+cnt
+1
+desc oceanbase.V$OB_SS_OBJECT_TYPE_IO_STAT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+OBJECT_TYPE	varchar(128)	NO			
+MODE	varchar(32)	NO			
+READ_CNT	bigint(20)	NO			
+READ_SIZE	bigint(20)	NO			
+READ_FAIL_CNT	bigint(20)	NO			
+READ_IOPS	bigint(20)	NO			
+WRITE_CNT	bigint(20)	NO			
+WRITE_SIZE	bigint(20)	NO			
+WRITE_FAIL_CNT	bigint(20)	NO			
+WRITE_IOPS	bigint(20)	NO			
+DELETE_CNT	bigint(20)	NO			
+DELETE_FAIL_CNT	bigint(20)	NO			
+DELETE_IOPS	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|V$OB_SS_OBJECT_TYPE_IO_STAT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|V$OB_SS_OBJECT_TYPE_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SS_OBJECT_TYPE_IO_STAT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SS_OBJECT_TYPE_IO_STAT limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

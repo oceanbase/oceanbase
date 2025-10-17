@@ -35,6 +35,7 @@
 #include "lib/compress/ob_compress_util.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "storage/ob_micro_block_format_version_helper.h"
+#include "share/semistruct/ob_semistruct_properties.h"
 namespace oceanbase
 {
 
@@ -57,6 +58,7 @@ namespace common
 
 namespace share
 {
+enum class ObLakeTableFormat;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -311,6 +313,12 @@ enum ObTableReferencedByFastLSMMVFlag
   IS_REFERENCED_BY_FAST_LSM_MV = 1
 };
 
+enum ObMvCntProctimeTableFlag
+{
+  MV_NOT_CNT_PROCTIME_TABLE = 0,
+  MV_CNT_PROCTIME_TABLE = 1
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -481,7 +489,10 @@ private:
   static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS = 1;
   static const uint32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK =
       (1U << MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS) - 1;
-  static const int32_t MM_RESERVED = 62;
+  static const int32_t MM_CNT_PROCTIME_TABLE_OFFSET = 2;
+  static const int32_t MM_CNT_PROCTIME_TABLE_BITS = 1;
+  static const uint32_t MM_CNT_PROCTIME_TABLE_MASK = (1U << MM_CNT_PROCTIME_TABLE_BITS) - 1;
+  static const int32_t MM_RESERVED = 61;
 public:
   ObMvMode() { reset(); }
   virtual ~ObMvMode() { reset(); }
@@ -501,6 +512,11 @@ public:
         (mv_mode >> MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET) &
         MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK);
   }
+  static ObMvCntProctimeTableFlag get_cnt_proctime_table_flag(int64_t mv_mode)
+  {
+    return (ObMvCntProctimeTableFlag)((mv_mode >> MM_CNT_PROCTIME_TABLE_OFFSET) &
+                                       MM_CNT_PROCTIME_TABLE_MASK);
+  }
   union
   {
     int64_t mode_;
@@ -508,21 +524,19 @@ public:
     {
       uint64_t mv_major_refresh_flag_ : MM_MV_MAJOR_REFRESH_BITS;
       uint64_t table_referenced_by_fast_lsm_mv_flag_ : MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS;
+      uint64_t cnt_proctime_table_ : MM_CNT_PROCTIME_TABLE_BITS;
       uint64_t reserved_ : MM_RESERVED;
     };
   };
   TO_STRING_KV("mv_major_refresh_flag", mv_major_refresh_flag_,
-               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_);
+               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_,
+               "cnt_proctime_table", cnt_proctime_table_);
 };
 
 struct ObSemiStructEncodingType
 {
   OB_UNIS_VERSION(1);
 public:
-  enum Mode {
-    NONE = 0,
-    ENCODING = 1
-  };
 
 public:
   ObSemiStructEncodingType():
@@ -531,10 +545,13 @@ public:
 
   ~ObSemiStructEncodingType() { reset(); }
 
-  void reset() { flags_ = 0;}
-  bool is_enable_semistruct_encoding() const { return ENCODING == mode_; }
+  void reset() { flags_ = 0; }
+  bool is_enable_semistruct_encoding() const {
+    return ObSemistructProperties::MAX_MODE > mode_ && ObSemistructProperties::NONE < mode_;
+  }
   int64_t get_deep_copy_size() const { return sizeof(ObSemiStructEncodingType); }
 
+public:
   union
   {
     int64_t flags_;
@@ -544,6 +561,7 @@ public:
       uint64_t reserved_ : 56;
     };
   };
+
   TO_STRING_KV(K_(mode), K_(reserved));
 };
 
@@ -666,6 +684,7 @@ public:
   virtual inline uint64_t get_master_key_id() const { return OB_INVALID_ID; }
   virtual inline bool is_use_bloomfilter() const { return false; }
   virtual inline bool get_enable_macro_block_bloom_filter() const { return false; }
+  virtual inline int64_t get_micro_block_format_version() const { return storage::ObMicroBlockFormatVersionHelper::DEFAULT_VERSION; }
   virtual inline bool is_primary_aux_vp_table() const { return false; }
   virtual inline bool is_primary_vp_table() const { return false; }
   virtual inline bool is_aux_vp_table() const { return false; }
@@ -770,6 +789,10 @@ public:
   {
     UNUSED(type);
     return common::OB_NOT_SUPPORTED;
+  }
+  virtual const common::ObString& get_semistruct_properties() const
+  {
+    return EMPTY_STRING;
   }
   DECLARE_PURE_VIRTUAL_TO_STRING;
   const static int64_t INVAID_RET = -1;
@@ -982,6 +1005,10 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  int get_part_idx_by_tablets(
+      const ObIArray<uint64_t> &tablet_ids,
+      ObIArray<int64_t> &part_idx,
+      ObIArray<int64_t> &subpart_idx) const;
   int get_part_id_by_tablet(
       const ObTabletID &tablet_id,
       int64_t &part_id,
@@ -1280,7 +1307,8 @@ public:
     const bool heap_case =  is_index_local_storage() && data_table_schema.is_table_without_pk();
     const bool fts_case = is_partitioned_table() && is_index_local_storage() && (is_fts_index_aux() || is_fts_doc_word_aux());
     const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
-    const bool vec_case = is_partitioned_table() && is_index_local_storage() && (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type());
+    const bool vec_case = is_partitioned_table() && is_index_local_storage() &&
+                          (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type() || is_vec_spiv_index_aux());
     return heap_case || fts_case || vec_case || multivalue_case;
   }
   inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
@@ -1657,6 +1685,8 @@ public:
   inline int64_t get_dop() const  { return table_dop_; }
   inline void set_catalog_id(const uint64_t catalog_id) { catalog_id_ = catalog_id; }
   inline uint64_t get_catalog_id() const { return catalog_id_; }
+  inline void set_lake_table_format(share::ObLakeTableFormat lake_table_format) { lake_table_format_ = lake_table_format; }
+  share::ObLakeTableFormat get_lake_table_format() const { return lake_table_format_; }
   const ObString &get_external_file_location() const { return external_file_location_; }
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   uint64_t get_external_location_id() const { return external_location_id_; }
@@ -1715,6 +1745,11 @@ public:
   {
     enable_macro_block_bloom_filter_ = enable_macro_block_bloom_filter;
   }
+  inline int64_t get_micro_block_format_version() const override { return micro_block_format_version_; }
+  inline void set_micro_block_format_version(const int64_t micro_block_format_version)
+  {
+    micro_block_format_version_ = micro_block_format_version;
+  }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }
   inline const_column_iterator column_end() const { return NULL == column_array_ ? NULL : &(column_array_[column_cnt_]); }
@@ -1750,7 +1785,11 @@ public:
   bool has_generated_and_partkey_column() const;
   int check_is_stored_generated_column_base_column(uint64_t column_id, bool &is_stored_base_col) const;
   // Check whether the data table column has prefix index column deps.
-  int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
+  int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema,
+                                       ObSchemaGetterGuard &schema_guard,
+                                       bool &has_prefix_idx_col_deps,
+                                       bool &can_change_prefix_column_length,
+                                       const ObColumnSchemaV2 *&prefix_column) const;
   int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
   int check_column_has_multivalue_index_depend(const ObColumnSchemaV2 &data_column_schema, bool &has_func_idx_col_deps) const;
   int add_base_table_id(uint64_t base_table_id) { return base_table_ids_.push_back(base_table_id); }
@@ -1772,7 +1811,10 @@ public:
       const bool no_virtual = false) const;
   int get_spatial_geo_column_id(uint64_t &geo_column_id) const;
   int get_spatial_index_column_ids(common::ObIArray<uint64_t> &column_ids) const;
-  int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const;
+  int get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const
+      __attribute__((deprecated("Use get_fulltext_typed_col_ids() which adapt to more docid type.")));
+
+  int get_fulltext_typed_col_ids(uint64_t &doc_id_col_id, ObDocIDType &type, uint64_t &ft_col_id) const;
   int get_multivalue_column_id(uint64_t &multivalue_col_id) const;
 
   int get_sparse_vec_index_column_id(uint64_t &sparse_vec_col_id) const;
@@ -2086,6 +2128,8 @@ public:
   void set_aux_lob_meta_tid(const uint64_t& table_id) { aux_lob_meta_tid_ = table_id; }
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   int get_rowkey_doc_tid(uint64_t &index_table_id) const;
+
+  // NOTE: here you can get a **generated** doc id column id.
   int get_docid_col_id(uint64_t &docid_col_id) const;
   int get_rowkey_vid_tid(uint64_t &index_table_id) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
@@ -2160,15 +2204,29 @@ public:
   {
     mv_mode_.table_referenced_by_fast_lsm_mv_flag_ = flag;
   }
-  void set_semistruct_encoding_type(const int64_t type) { semistruct_encoding_type_.flags_ = type; }
-  void set_semistruct_encoding_type(const ObSemiStructEncodingType& type) { semistruct_encoding_type_ = type; }
-  const ObSemiStructEncodingType& get_semistruct_encoding_type() const { return semistruct_encoding_type_; }
-  int64_t get_semistruct_encoding_flags() const { return semistruct_encoding_type_.flags_; }
-  virtual int get_semistruct_encoding_type(ObSemiStructEncodingType& type) const
+  inline int set_semistruct_properties(const common::ObString &semistruct_properties)
+  {
+    return deep_copy_str(semistruct_properties, semistruct_properties_);
+  }
+  virtual const common::ObString& get_semistruct_properties() const override
+  {
+    return semistruct_properties_;
+  }
+  void set_semistruct_encoding_type(const uint64_t &flags)
+  {
+    semistruct_encoding_type_.flags_ = flags;
+  }
+  inline void set_semistruct_encoding_type(const ObSemiStructEncodingType &type)
+  {
+    semistruct_encoding_type_ = type;
+  }
+  virtual int get_semistruct_encoding_type(ObSemiStructEncodingType& type) const override
   {
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
   }
+  int64_t get_semistruct_encoding_flags() const { return semistruct_encoding_type_.flags_; }
+  inline const ObSemiStructEncodingType& get_semistruct_encoding_type() const { return semistruct_encoding_type_; }
   inline int set_dynamic_partition_policy(const common::ObString &dynamic_partition_policy)
   {
     return deep_copy_str(dynamic_partition_policy, dynamic_partition_policy_);
@@ -2360,6 +2418,7 @@ protected:
 
   //external table
   uint64_t catalog_id_ = OB_INTERNAL_CATALOG_ID; // do not need to serialized
+  share::ObLakeTableFormat lake_table_format_; // do not need to serialized
   common::ObString external_file_format_;
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;
@@ -2399,6 +2458,7 @@ protected:
   uint64_t external_location_id_;
   common::ObString external_sub_path_;
   uint64_t tmp_mlog_tid_;
+  common::ObString semistruct_properties_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
@@ -2706,7 +2766,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_vec_ivfflat_centroid_index(index_type) ||
          share::schema::is_vec_ivfpq_centroid_index(index_type) ||
          share::schema::is_vec_ivfsq8_centroid_index(index_type) ||
-         share::schema::is_vec_dim_docid_value_type(index_type);
+         share::schema::is_vec_dim_docid_value_type(index_type) ||
+         share::schema::is_hybrid_vec_index(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const
@@ -2732,7 +2793,8 @@ inline bool ObSimpleTableSchemaV2::should_check_major_merge_progress() const
   return is_normal_schema() && (is_sys_table()
           || is_user_table()
           || is_tmp_table()
-          || is_aux_lob_table());
+          || is_aux_lob_table()
+          || is_mlog_table());
 }
 
 inline int64_t ObTableSchema::get_id_hash_array_mem_size(const int64_t column_cnt) const

@@ -1574,13 +1574,22 @@ bool ObDDLKV::is_frozen_memtable()
   return bool_ret;
 }
 
+// only for inc_direct_load
 int ObDDLKV::flush(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
 
   int64_t cur_time = ObTimeUtility::current_time();
+  ObLSHandle ls_handle;
   if (get_is_flushed()) {
     ret = OB_NO_NEED_UPDATE;
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    TRANS_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
+  } else if (ls_handle.get_ls()->flush_is_disabled()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      FLOG_INFO("DDLKV(inc direct memtable) flush is disabled", K(ls_handle.get_ls()->get_ls_id()));
+    }
   } else {
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id;

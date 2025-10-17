@@ -75,9 +75,17 @@ int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
     }
   } else if (OB_FAIL(init_after_create_tenant_schema_())) {
     LOG_WARN("failed to init after create tenant schema", KR(ret));
-    // 2. create tenant sys ls
+  } else if (OB_FAIL(save_data_version_in_palf_kv_())) {
+    LOG_WARN("failed to store data version in palf kv", KR(ret));
+     // 2. create tenant sys ls
   } else if (CLICK_FAIL(create_tenant_sys_ls_())) {
     LOG_WARN("failed to create tenant sys ls", KR(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (CLICK_FAIL(upload_root_key_())) {
+    LOG_WARN("failed to upload root key", KR(ret));
+#endif
+#endif
   } else {
     tenant_id = user_tenant_schema_.get_tenant_id();
     ObParallelCreateNormalTenantProxy proxy(*common_rpc_, &ObCommonRpcProxy::parallel_create_normal_tenant);
@@ -105,6 +113,27 @@ int ObParallelCreateTenantExecutor::execute(obrpc::UInt64 &tenant_id)
   }
   FLOG_INFO("[CREATE_TENANT] finish create tenant", KR(ret), K(tenant_id), K(create_tenant_arg_),
       "cost", ObTimeUtility::fast_current_time() - start_time);
+  return ret;
+}
+
+int ObParallelCreateTenantExecutor::save_data_version_in_palf_kv_()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  // tenant data_version has publish in create_tenant_scheama(include backup and recovery tenant)
+  // no need check data_version.
+  const uint64_t user_tenant_id = user_tenant_schema_.get_tenant_id();
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+  uint64_t user_data_version = (create_tenant_arg_.is_restore_tenant() || create_tenant_arg_.is_clone_tenant())
+                               ? create_tenant_arg_.compatible_version_ : DATA_CURRENT_VERSION;
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(user_tenant_id, user_data_version))) {
+    LOG_WARN("fail to store data version in palf kv", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(ObServerZoneOpService::store_data_version_in_palf_kv(meta_tenant_id, DATA_CURRENT_VERSION))) {
+    LOG_WARN("fail to store data version in palf kv", KR(ret), K(meta_tenant_id));
+  }
+  FLOG_INFO("[CREATE_TENANT] store data version in palf kv", KR(ret), K(user_tenant_id), KDV(user_data_version), KDV(DATA_CURRENT_VERSION));
+#endif
   return ret;
 }
 
@@ -141,8 +170,8 @@ int ObParallelCreateTenantExecutor::wait_all_(
       // To avoid load_sys_package and tenant DDL operations competing for DDL threads
       // wait for all load_sys_package tasks to complete before returning to the user.
       // ObCompatibilityMode::OCEANBASE_MODE means wait both mysql and oracle sys package
-    } else if (OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_,
-            ObCompatibilityMode::OCEANBASE_MODE))) {
+    } else if (!GCONF._enable_async_load_sys_package &&
+        OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_, ObCompatibilityMode::OCEANBASE_MODE))) {
       LOG_WARN("failed to wait sys package ready", KR(ret), K(ctx_));
     }
   }
@@ -679,5 +708,42 @@ int ObParallelCreateTenantExecutor::check_inner_stat_()
   }
   return ret;
 }
+
+#ifdef OB_BUILD_TDE_SECURITY
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObParallelCreateTenantExecutor::upload_root_key_()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t user_tenant_id = user_tenant_schema_.get_tenant_id();
+  const uint64_t meta_tenant_id = meta_tenant_schema_.get_tenant_id();
+  const int64_t timeout = ctx_.get_timeout();
+  ObAddr leader;
+
+  if (!GCTX.is_shared_storage_mode()) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+  } else if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else {
+    FLOG_INFO("[CREATE_TENANT] start upload root key", K(user_tenant_id));
+    // Since any replica can upload root key and the sys ls leader may not be ready yet,
+    // let the server where the sslog ls leader is located do it.
+    if (OB_FAIL(location_service_->get_leader(GCONF.cluster_id,
+                                              meta_tenant_id,
+                                              SSLOG_LS,
+                                              FALSE,
+                                              leader))) {
+      LOG_WARN("failed to get sslog ls leader", KR(ret), K(meta_tenant_id));
+    } else if (OB_FAIL(rpc_proxy_->to(leader).timeout(timeout)
+          .by(user_tenant_id).notify_upload_root_key(user_tenant_id))) {
+      LOG_WARN("failed to upload root key", KR(ret), K(user_tenant_id), K(leader));
+    }
+
+    FLOG_INFO("[CREATE_TENANT] finish upload root key", KR(ret), K(user_tenant_id), K(leader));
+  }
+
+  return ret;
+}
+#endif
+#endif
 }
 }

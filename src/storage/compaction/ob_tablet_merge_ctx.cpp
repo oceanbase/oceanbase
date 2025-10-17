@@ -260,7 +260,7 @@ int ObTabletMiniMergeCtx::try_report_tablet_stat_after_mini()
 
   if (tablet_id.is_special_merge_tablet()) {
     // no need report
-  } else if (ObTabletStat::MERGE_REPORT_MIN_ROW_CNT >= tnode_stat.get_dml_count()) {
+  } else if (ObTabletStat::MERGE_MIN_ROW_CNT >= tnode_stat.get_dml_count()) {
     // insufficient data, skip to report
   } else {
     ObTabletStat report_stat;
@@ -480,6 +480,8 @@ int ObTabletExeMergeCtx::prepare_tx_table_compaction_filter_()
   if (OB_UNLIKELY(!get_tablet_id().is_ls_tx_data_tablet())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only tx data tablet can execute minor merge", KR(ret), "param", get_dag_param());
+  } else if (GCTX.is_shared_storage_mode() && is_local_exec_mode(get_exec_mode())) {
+    // shared-storage mode, local minor do not filter tx data
   } else if (!static_param_.scn_range_.start_scn_.is_base_scn()) {
     FLOG_INFO ("Skip filtering because this minor merge does not contain the oldest minor sstable",
       K(static_param_.scn_range_));

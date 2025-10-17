@@ -557,8 +557,8 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
   char *pattern_buf = nullptr;
   ObIAllocator *exec_cal_buf = exec_allocator;
   InstrInfo &instr_info = like_ctx.instr_info_;
-  if (cs_type != CS_TYPE_UTF8MB4_BIN) {
-    //we optimize the case in which cs_type == CS_TYPE_UTF8MB4_BIN only
+  if (cs_type != CS_TYPE_UTF8MB4_BIN && cs_type != CS_TYPE_UTF8MB4_0900_BIN) {
+    //we optimize the case in which cs_type == CS_TYPE_UTF8MB4_BIN/CS_TYPE_UTF8MB4_0900_BIN only
     //just let it go
   } else if (OB_UNLIKELY(OB_ISNULL(cs = ObCharset::get_charset(cs_type)) ||
                   OB_ISNULL(cs->cset))) {
@@ -671,7 +671,7 @@ int ObExprLike::calc_with_instr_mode(T &result,
   const InstrInfo instr_info = like_ctx.instr_info_;
   void *string_searcher = like_ctx.string_searcher_;
   const int32_t text_len = text.length();
-  if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN)) {
+  if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN && cs_type != CS_TYPE_UTF8MB4_0900_BIN)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument(s)", K(ret), K(cs_type), K(text));
   } else if (OB_UNLIKELY(instr_info.empty())) {
@@ -1647,7 +1647,7 @@ int ObExprLike::eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_
   // the third arg escape must be varchar
   } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("eval text batch failed", K(ret));
-  }  else {
+  } else {
     VectorFormat text_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     if (VEC_DISCRETE == text_format && VEC_DISCRETE == res_format) {
@@ -1679,5 +1679,8 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprLike, raw_expr) {
   return ret;
 }
 
+template int64_t ObExprLike::match_with_instr_mode<true, true>(const ObString &text,
+                                                               const InstrInfo instr_info,
+                                                               void *string_searcher);
 }
 }

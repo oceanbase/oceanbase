@@ -43,10 +43,12 @@ ObTabletPointer::ObTabletPointer()
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
-    attr_()
+    attr_(),
+    next_meta_version_(0),
+    last_gc_version_(-1)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTabletPointer, 408>();
+  check_size<ObTabletPointer, 432>();
 #endif
 }
 
@@ -71,7 +73,9 @@ ObTabletPointer::ObTabletPointer(
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
     old_version_chain_(nullptr),
-    attr_()
+    attr_(),
+    next_meta_version_(0),
+    last_gc_version_(-1)
 {
 }
 
@@ -106,6 +110,8 @@ void ObTabletPointer::reset()
   ls_handle_.reset();
   flying_ = false;
   attr_.reset();
+  next_meta_version_ = 0;
+  last_gc_version_ = -1;
 }
 
 void ObTabletPointer::reset_obj()
@@ -118,7 +124,7 @@ void ObTabletPointer::reset_obj()
       const int64_t ref_cnt = obj_.ptr_->dec_ref();
       if (0 == ref_cnt) {
         if (nullptr != obj_.pool_) {
-          obj_.pool_->free_obj(obj_.ptr_);
+          STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "release pool obj at ObTabletPointer is unexpected", K_(obj));
         } else {
           obj_.ptr_->~ObTablet();
           obj_.allocator_->free(obj_.ptr_);
@@ -198,7 +204,6 @@ int ObTabletPointer::hook_obj(ObTablet *&t,  ObTabletHandle &guard)
     t->set_tablet_addr(phy_addr_);
     obj_.ptr_ = t;
     guard.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, obj_);
-    guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
     ObMetaObjBufferHelper::set_in_map(reinterpret_cast<char *>(t), true/*in_map*/);
   }
 
@@ -224,7 +229,6 @@ int ObTabletPointer::get_in_memory_obj(ObTabletHandle &guard)
     STORAGE_LOG(ERROR, "object isn't in memory, not support", K(ret), K(phy_addr_));
   } else {
     guard.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, obj_);
-    guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
   }
   return ret;
 }
@@ -232,7 +236,6 @@ int ObTabletPointer::get_in_memory_obj(ObTabletHandle &guard)
 void ObTabletPointer::get_obj(ObTabletHandle &guard)
 {
   guard.set_obj(ObTabletHandle::ObTabletHdlType::FROM_T3M, obj_);
-  guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
 }
 
 bool ObTabletBasePointer::is_in_memory() const
@@ -353,7 +356,7 @@ int ObTabletPointer::dump_meta_obj(ObTabletHandle &guard, void *&free_obj)
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
     guard.get_obj(meta_obj);
-    const ObTabletPersisterParam param(0/*data_version*/, ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq());
+    const ObTabletPersisterParam param(0/*data_version*/, ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq(), 0);
     ObTablet *tmp_obj = obj_.ptr_;
     if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);
@@ -766,6 +769,10 @@ int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
   if (OB_UNLIKELY(!attr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(attr));
+  } else if (OB_UNLIKELY(attr_.is_valid() && attr_.last_match_tablet_meta_version_ > attr.last_match_tablet_meta_version_)) {
+    // check if unexpected rollback of last_match_tablet_meta_version
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("new attr's last_tablet_meta_version is less than current's", K(ret), K(attr_), K(attr), K(common::lbt()));
   } else {
     attr_ = attr;
   }
@@ -780,6 +787,53 @@ int64_t ObTabletPointer::get_auto_part_size() const
 void ObTabletPointer::set_auto_part_size(const int64_t auto_part_size)
 {
   ATOMIC_STORE(&attr_.auto_part_size_, auto_part_size);
+}
+
+int ObTabletPointer::init_next_meta_version()
+{
+  int ret = OB_SUCCESS;
+  int64_t current_version = 0;
+  if (OB_UNLIKELY(!phy_addr_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid phy_addr", K(ret), K_(phy_addr));
+  } else if (FALSE_IT(current_version = static_cast<int64_t>(phy_addr_.block_id().meta_version_id()))) {
+  } else if (OB_UNLIKELY(!attr_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid attr", K(ret), K_(attr));
+  } else if (OB_UNLIKELY(attr_.last_match_tablet_meta_version_ < current_version)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("FATAL ERROR!!! last_match_tablet_meta_version must be greater than(or equal to)"
+              "current_version", KR(ret), K_(attr_.last_match_tablet_meta_version), K(current_version));
+  } else {
+    next_meta_version_ = attr_.last_match_tablet_meta_version_ + META_VERSION_ABORT_INTERNVAL + 1;
+    LOG_DEBUG("init_next_meta_version succeed", K_(next_meta_version), K_(attr), K(current_version));
+  }
+  return ret;
+}
+
+int ObTabletPointer::try_alloc_meta_version(int64_t &version)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("try alloc tablet meta version", K_(phy_addr), K_(next_meta_version), K_(attr_.last_match_tablet_meta_version), K(common::lbt()));
+  if (next_meta_version_ - attr_.last_match_tablet_meta_version_ > META_VERSION_ABORT_INTERNVAL) {
+    ret = OB_EAGAIN;
+    int64_t current_version = static_cast<int64_t>(get_addr().block_id().meta_version_id());
+    LOG_WARN("failed to alloc meta version"
+              "(the gap of current_version and next_meta_version is"
+              " too large, maybe retry too much time or the server"
+              " has just restarted)", K(ret), K_(phy_addr), K_(next_meta_version),
+              "last_match_tablet_meta_version", attr_.last_match_tablet_meta_version_,
+              K(current_version));
+  } else {
+    version = next_meta_version_++;
+  }
+  return ret;
+}
+
+void ObTabletPointer::update_last_gc_version(const int64_t new_gc_version)
+{
+  last_gc_version_ = max(last_gc_version_, new_gc_version);
+  LOG_INFO("update last_gc_version", K_(phy_addr), K_(last_gc_version), K(new_gc_version), K(common::lbt()));
 }
 
 void ObSSTabletDummyPointer::set_obj(const ObTabletHandle &guard)

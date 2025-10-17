@@ -439,9 +439,9 @@ bool ObTabletMergeDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObMergeDagHash::inner_hash() const
+uint64_t ObMergeDagHash::inner_hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   // make two merge type same
   hash_value = common::murmurhash(&merge_type_, sizeof(merge_type_), hash_value);
   hash_value = common::murmurhash(&ls_id_, sizeof(ls_id_), hash_value);
@@ -459,7 +459,7 @@ bool ObMergeDagHash::belong_to_same_tablet(const ObMergeDagHash *other) const
   return bret;
 }
 
-int64_t ObTabletMergeDag::hash() const
+uint64_t ObTabletMergeDag::hash() const
 {
   return inner_hash();
 }
@@ -659,6 +659,12 @@ int ObTabletMergeDag::create_first_task()
 
 ObTabletMergeExecuteDag::ObTabletMergeExecuteDag()
   : ObTabletMergeDag(ObDagType::DAG_TYPE_MERGE_EXECUTE),
+    result_()
+{
+}
+
+ObTabletMergeExecuteDag::ObTabletMergeExecuteDag(const share::ObDagType::ObDagTypeEnum type)
+  : ObTabletMergeDag(type),
     result_()
 {
 }
@@ -1209,6 +1215,17 @@ int ObTabletMergeTask::process()
   if (OB_FAIL(ret)) {
     STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_MERGE_TASK", K(ret));
     return ret;
+  }
+  // check if the table is mlog table, inject mlog merge failed error
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx_)) {
+    const ObStorageSchema *storage_schema = ctx_->get_schema();
+    if (OB_NOT_NULL(storage_schema) && storage_schema->is_mlog_table()) {
+      ret = OB_E(EventTable::EN_COMPACTION_MLOG_MERGE_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_MLOG_MERGE_FAILED for mlog table", K(ret), K(ctx_->get_tablet_id()));
+        return ret;
+      }
+    }
   }
   if (OB_NOT_NULL(ctx_) && ctx_->get_tablet_id().id() > ObTabletID::MIN_USER_TABLET_ID) {
     DEBUG_SYNC(MERGE_TASK_PROCESS);

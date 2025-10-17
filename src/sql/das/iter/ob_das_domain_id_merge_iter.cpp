@@ -143,6 +143,19 @@ void ObDASDomainIdMergeIter::clear_evaluated_flag()
   }
 }
 
+int ObDASDomainIdMergeIter::set_scan_rowkey(ObEvalCtx *eval_ctx,
+                                            const ObIArray<ObExpr *> &rowkey_exprs,
+                                            const ObDASScanCtDef *lookup_ctdef,
+                                            ObIAllocator *alloc,
+                                            int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_data_table_iter()->set_scan_rowkey(eval_ctx, rowkey_exprs, lookup_ctdef, alloc, group_id))) {
+    LOG_WARN("failed to set scan rowkey of data table iter", K(ret));
+  }
+  return ret;
+}
+
 int ObDASDomainIdMergeIter::inner_init(ObDASIterParam &param)
 {
   int ret = OB_SUCCESS;
@@ -351,6 +364,7 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
         scan_param.ls_id_ = rowkey_domain_ls_id_;
         scan_param.sample_info_ = data_table_iter_->get_scan_param().sample_info_;
         scan_param.scan_flag_.scan_order_ = data_table_iter_->get_scan_param().scan_flag_.scan_order_;
+        scan_param.enable_new_false_range_ = data_table_iter_->get_scan_param().enable_new_false_range_;
         if (!data_table_iter_->get_scan_param().need_switch_param_) {
           scan_param.need_switch_param_ = false;
         }
@@ -394,7 +408,7 @@ int ObDASDomainIdMergeIter::init_rowkey_domain_scan_param(
   } else {
     scan_param.tablet_id_ = tablet_id;
     scan_param.ls_id_ = ls_id;
-    scan_param.scan_allocator_ = &get_arena_allocator();
+    scan_param.scan_allocator_ = &rtdef->scan_allocator_;
     scan_param.allocator_ = &rtdef->stmt_allocator_;
     scan_param.tx_lock_timeout_ = rtdef->tx_lock_timeout_;
     scan_param.index_id_ = ctdef->ref_table_id_;
@@ -411,7 +425,8 @@ int ObDASDomainIdMergeIter::init_rowkey_domain_scan_param(
     scan_param.ext_file_column_exprs_ = &(ctdef->pd_expr_spec_.ext_file_column_exprs_);
     scan_param.ext_mapping_column_exprs_ = &(ctdef->pd_expr_spec_.ext_mapping_column_exprs_);
     scan_param.ext_mapping_column_ids_ = &(ctdef->pd_expr_spec_.ext_mapping_column_ids_);
-    scan_param.ext_column_convert_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    scan_param.ext_column_dependent_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    scan_param.ext_enable_late_materialization_ = ctdef->pd_expr_spec_.ext_enable_late_materialization_;
     scan_param.calc_exprs_ = &(ctdef->pd_expr_spec_.calc_exprs_);
     scan_param.table_param_ = &(ctdef->table_param_);
     scan_param.op_ = rtdef->p_pd_expr_op_;

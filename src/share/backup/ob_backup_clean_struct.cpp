@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_clean_struct.h"
+#include "share/backup/ob_backup_clean_util.h"
 using namespace oceanbase;
 using namespace share;
 
@@ -70,8 +71,8 @@ int ObBackupCleanStatus::set_status(const char *str)
 
 static const char *new_backup_clean_type_str[] = {
     "EMPTY",
-    "DELETE BACKUP SET",
-    "DELETE BACKUP PIECE",
+    "DELETE BACKUPSET",
+    "DELETE ARCHIVELOG_PIECE",
     "DELETE BACKUP ALL",
     "DELETE OBSOLETE BACKUP",
     "DELETE OBSOLETE BACKUP BACKUP",
@@ -146,11 +147,12 @@ ObBackupCleanJobAttr::ObBackupCleanJobAttr()
     executor_tenant_id_(),
     clean_type_(ObNewBackupCleanType::MAX),
     expired_time_(0),
-    backup_set_id_(0),
-    backup_piece_id_(0),
+    backup_set_ids_(),
+    backup_piece_ids_(),
     dest_id_(0),
     job_level_(),
     backup_path_(),
+    backup_path_type_(share::ObBackupDestType::DEST_TYPE_MAX),
     start_ts_(0),
     end_ts_(0),   
     status_(),
@@ -159,7 +161,8 @@ ObBackupCleanJobAttr::ObBackupCleanJobAttr()
     retry_count_(0),
     can_retry_(true),
     task_count_(0),
-    success_task_count_(0)
+    success_task_count_(0),
+    failure_reason_()
 {
 }
 
@@ -173,10 +176,11 @@ void ObBackupCleanJobAttr::reset()
   executor_tenant_id_.reset(); 
   clean_type_ = ObNewBackupCleanType::MAX;
   expired_time_ = 0;
-  backup_set_id_ = 0;
-  backup_piece_id_ = 0;
+  backup_set_ids_.reset();
+  backup_piece_ids_.reset();
   dest_id_ = 0;
   backup_path_.reset();
+  backup_path_type_ = share::ObBackupDestType::DEST_TYPE_MAX;
   start_ts_ = 0;
   end_ts_ = 0;
   description_.reset();
@@ -185,6 +189,7 @@ void ObBackupCleanJobAttr::reset()
   can_retry_ = true;
   task_count_ = 0;
   success_task_count_ = 0;
+  failure_reason_.reset();
 }
 
 int ObBackupCleanJobAttr::assign(const ObBackupCleanJobAttr &other)
@@ -199,6 +204,12 @@ int ObBackupCleanJobAttr::assign(const ObBackupCleanJobAttr &other)
     LOG_WARN("failed to assign description", K(ret), K(other.description_));
   } else if (OB_FAIL(executor_tenant_id_.assign(other.executor_tenant_id_))) {
     LOG_WARN("failed to assign executor tenant id", K(ret), K(other.executor_tenant_id_)); 
+  } else if (OB_FAIL(backup_set_ids_.assign(other.backup_set_ids_))) {
+    LOG_WARN("failed to assign backup set id", K(ret), K(other.backup_set_ids_));
+  } else if (OB_FAIL(backup_piece_ids_.assign(other.backup_piece_ids_))) {
+    LOG_WARN("failed to assign backup piece id", K(ret), K(other.backup_piece_ids_));
+  } else if (OB_FAIL(failure_reason_.assign(other.failure_reason_))) {
+    LOG_WARN("failed to assign failure reason", K(ret), K(other.failure_reason_));
   } else {
     job_id_ = other.job_id_;
     tenant_id_ = other.tenant_id_;
@@ -207,8 +218,6 @@ int ObBackupCleanJobAttr::assign(const ObBackupCleanJobAttr &other)
     initiator_job_id_ = other.initiator_job_id_;
     clean_type_ = other.clean_type_;
     expired_time_ = other.expired_time_;
-    backup_set_id_ = other.backup_set_id_;
-    backup_piece_id_ = other.backup_piece_id_;
     dest_id_ = other.dest_id_;
     job_level_.level_ = other.job_level_.level_;
     start_ts_ = other.start_ts_;
@@ -219,6 +228,7 @@ int ObBackupCleanJobAttr::assign(const ObBackupCleanJobAttr &other)
     can_retry_ = other.can_retry_;
     task_count_ = other.task_count_;
     success_task_count_ = other.success_task_count_;
+    backup_path_type_ = other.backup_path_type_;
   }
   return ret;
 }
@@ -236,52 +246,99 @@ bool ObBackupCleanJobAttr::is_valid() const
     is_valid = false;
   } else if (!status_.is_valid()) {
     is_valid = false;
+  } else if (!ObNewBackupCleanType::is_valid(clean_type_)) {
+    is_valid = false;
   } else {
-    is_valid = ObNewBackupCleanType::is_valid(clean_type_)
-        && ((is_delete_obsolete_backup() && expired_time_ > 0)
-            || (is_delete_backup_set() && backup_set_id_ > 0)
-            || (is_delete_backup_piece() && backup_piece_id_ > 0));
+    switch (clean_type_) {
+    case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP:
+    case ObNewBackupCleanType::CANCEL_DELETE: {
+        break;
+    }
+    case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
+        if (backup_path_.is_empty() || !ObBackupDestType::is_clean_valid(backup_path_type_)) {
+          is_valid = false;
+        }
+        break;
+    }
+    case ObNewBackupCleanType::DELETE_BACKUP_SET: {
+        if (backup_set_ids_.count() <= 0) {
+          is_valid = false;
+        } else {
+          for (int64_t i = 0; is_valid && i < backup_set_ids_.count(); ++i) {
+            if (backup_set_ids_.at(i) <= 0) {
+              is_valid = false;
+            }
+          }
+        }
+        break;
+    }
+    case ObNewBackupCleanType::DELETE_BACKUP_PIECE: {
+        if (backup_piece_ids_.count() <= 0) {
+          is_valid = false;
+        } else {
+          for (int64_t i = 0; is_valid && i < backup_piece_ids_.count(); ++i) {
+            if (backup_piece_ids_.at(i) <= 0) {
+              is_valid = false;
+            }
+          }
+        }
+        break;
+    }
+    default: {
+        is_valid = false;
+        LOG_INFO("unsupported backup clean type", K(clean_type_));
+        break;
+    }
+    }
   }
   return is_valid;
 }
 
-int ObBackupCleanJobAttr::get_clean_parameter(int64_t &parameter) const
+int ObBackupCleanJobAttr::set_clean_parameter(const ObString &str)
 {
   int ret = OB_SUCCESS;
-  parameter = 0;
-  if (!is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("backup clean is invalid", K(*this));
-  } else if (is_delete_obsolete_backup()) {
-    parameter = expired_time_;
-  } else if (is_delete_backup_set()) {
-    parameter = backup_set_id_;
-  } else if (is_delete_backup_piece()) {
-    parameter = backup_piece_id_;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("can not get clean paramater", K(ret), K(*this));
+  ObArray<int64_t> parameter_list;
+  if (OB_FAIL(ObBackupCleanUtil::parse_int64_list(str, parameter_list))) {
+    LOG_WARN("failed to parse clean parameter", K(ret), K(str));
+  } else if (OB_FAIL(set_clean_parameter(parameter_list))) {
+    LOG_WARN("Fail to set_clean_parameter", K(ret), K(parameter_list));
   }
   return ret;
 }
 
-int ObBackupCleanJobAttr::set_clean_parameter(const int64_t parameter)
+int ObBackupCleanJobAttr::set_clean_parameter(const ObIArray<int64_t> &parameter_list)
 {
   int ret = OB_SUCCESS;
-  if (parameter < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("set clean parameter get invalid argument", K(ret), K(parameter));
+  for (int64_t i = 0; OB_SUCC(ret) && i < parameter_list.count(); ++i) {
+    if (parameter_list.at(i) < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("set clean parameter get invalid argument", K(ret), "parameter", parameter_list.at(i));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to set clean parameter", K(ret), K(parameter_list));
   } else if (is_delete_obsolete_backup()) {
-    expired_time_ = parameter;
+    if (1 != parameter_list.count()) {
+      expired_time_ = 0;
+      LOG_INFO("delete obsolete backup parameter count is not 1, set expired time to 0", K(ret), "tenant_id", tenant_id_, "expired_time", expired_time_);
+    } else {
+      expired_time_ = parameter_list.at(0); // sys job will set the expired time for user tenant
+      LOG_INFO("delete obsolete backup parameter count is 1, set expired time", K(ret), "tenant_id", tenant_id_, "expired_time", expired_time_);
+    }
   } else if (is_delete_backup_set()) {
-    backup_set_id_ = parameter;
+    if (OB_FAIL(backup_set_ids_.assign(parameter_list))) {
+      LOG_WARN("fail to assign backup set ids", K(ret), K(parameter_list));
+    }
   } else if (is_delete_backup_piece()) {
-    backup_piece_id_ = parameter;
+    if (OB_FAIL(backup_piece_ids_.assign(parameter_list))) {
+      LOG_WARN("fail to assign backup piece ids", K(ret), K(parameter_list));
+    }
+  } else if (is_delete_backup_all()) {
+    // do nothing
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup clean info is invalid, can not set parameter", K(ret), K(*this), K(parameter));
+    LOG_WARN("backup clean info is invalid, can not set parameter", K(ret), K(*this), K(parameter_list));
   }
-
   return ret;
 }
 
@@ -315,6 +372,36 @@ int ObBackupCleanJobAttr::check_backup_clean_job_match(
   return ret;
 }
 
+int ObBackupCleanJobAttr::get_parameter_list_str(char *buffer, int64_t buffer_size, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buffer) || buffer_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid buffer", K(ret), KP(buffer), K(buffer_size));
+  } else if (is_delete_obsolete_backup()) {
+    if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%ld", expired_time_))) {
+      LOG_WARN("fail to print expired time", K(ret));
+    }
+  } else if (is_delete_backup_set()) {
+    if (OB_FAIL(ObBackupCleanUtil::format_int64_list(backup_set_ids_, buffer, buffer_size, pos))) {
+      LOG_WARN("failed to format backup set ids", K(ret));
+    }
+  } else if (is_delete_backup_piece()) {
+    if (OB_FAIL(ObBackupCleanUtil::format_int64_list(backup_piece_ids_, buffer, buffer_size, pos))) {
+      LOG_WARN("failed to format backup piece ids", K(ret));
+    }
+  } else if (is_delete_backup_all()) {
+    if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%ld", dest_id_))) {
+      LOG_WARN("fail to print dest id", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unknown clean type", K(ret), K(*this));
+  }
+
+  return ret;
+}
 
 int ObBackupCleanJobAttr::get_executor_tenant_id_str(share::ObDMLSqlSplicer &dml) const
 {
@@ -322,19 +409,8 @@ int ObBackupCleanJobAttr::get_executor_tenant_id_str(share::ObDMLSqlSplicer &dml
   char tmp_path[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = { 0 };
   MEMSET(tmp_path, '\0', sizeof(tmp_path));
   int64_t cur_pos = 0;
-  for (int i = 0; OB_SUCC(ret) && i < executor_tenant_id_.count(); ++i) {
-    const uint64_t tenant_id = executor_tenant_id_.at(i);
-    if (0 == i) {
-      if (OB_FAIL(databuff_printf(tmp_path, sizeof(tmp_path), cur_pos, "%lu", tenant_id))) {
-        LOG_WARN("fail to databuff printf tenant id", K(ret));
-      } 
-    } else {
-      if (OB_FAIL(databuff_printf(tmp_path, sizeof(tmp_path), cur_pos, ",%lu", tenant_id))) {
-        LOG_WARN("fail to databuff printf tenant id", K(ret));
-      } 
-    }
-  }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ObBackupCleanUtil::format_uint64_list(executor_tenant_id_, tmp_path, sizeof(tmp_path), cur_pos))) {
+    LOG_WARN("failed to format executor tenant ids", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_EXECUTOR_TENANT_ID, tmp_path))) {
     LOG_WARN("fail to add column", K(ret));
   }
@@ -345,36 +421,11 @@ int ObBackupCleanJobAttr::get_executor_tenant_id_str(share::ObDMLSqlSplicer &dml
 int ObBackupCleanJobAttr::set_executor_tenant_id(const ObString &str)
 {
   int ret = OB_SUCCESS;
-  char tmp_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = { 0 };
-  if (str.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invlaid argument", K(ret));
-  } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%s", str.ptr()))) {
-    LOG_WARN("failed to set dir name", K(ret), K(str));
-  } else {
-    char *token = nullptr;
-    char *saveptr = nullptr;
-    char *p_end = nullptr;
-    token = ::STRTOK_R(tmp_str, ",", &saveptr);
-    while (OB_SUCC(ret) && nullptr != token) {
-      uint64_t tenant_id;
-      if (OB_FAIL(ob_strtoull(token, p_end, tenant_id))) {
-        LOG_WARN("failed to get value from string", K(ret), K(*token));
-      } else if ('\0' == *p_end) {
-        if (OB_FAIL(executor_tenant_id_.push_back(tenant_id))) {
-          LOG_WARN("fail to push back tenant id", K(ret), K(tenant_id));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("set tenant id error", K(*token));
-      }
-      token = STRTOK_R(nullptr, ",", &saveptr);
-      p_end = nullptr;
-    }
+  if (OB_FAIL(ObBackupCleanUtil::parse_uint64_list(str, executor_tenant_id_))) {
+    LOG_WARN("failed to parse executor tenant id", K(ret), K(str));
   }
   return ret;
 }
-
 
 ObBackupCleanTaskAttr::ObBackupCleanTaskAttr()
   : task_id_(0), 

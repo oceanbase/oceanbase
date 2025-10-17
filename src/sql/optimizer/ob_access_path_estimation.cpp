@@ -58,36 +58,21 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
                                                                 ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
-  const OptSelectivityCtx* sel_ctx = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-    ObSEArray<double, 4> selectivities;
+    double prefix_filter_sel = 0.0;
     double sum_child_sel = 0.0;
     double sum_child_row = 0.0;
-    const ObTableMetaInfo *table_meta_info = NULL;
-    if (OB_ISNULL(paths.at(i)) || OB_ISNULL(paths.at(i)->root_)
-        || OB_ISNULL(sel_ctx = paths.at(i)->est_cost_info_.sel_ctx_)
-        || OB_ISNULL(table_meta_info = paths.at(i)->est_cost_info_.table_meta_info_)) {
+    if (OB_ISNULL(paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), KPC(paths.at(i)), K(sel_ctx), K(table_meta_info));
+      LOG_WARN("get unexpected null", K(ret), KPC(paths.at(i)));
     } else if (OB_FAIL(ObOptEstCost::calculate_filter_selectivity(*paths.at(i)))) {
       LOG_WARN("failed to calculate filter selectivity", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < paths.at(i)->root_->children_.count(); ++j) {
-      ObIndexMergeNode *child = paths.at(i)->root_->children_.at(j);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null child node", K(ret), KPC(child));
-      } else if (child->is_merge_node()) {
-        // do nothing
-      } else if (OB_ISNULL(child->ap_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null ap", K(ret));
-      } else if (OB_FAIL(selectivities.push_back(1.0 - child->ap_->est_cost_info_.prefix_filter_sel_))) {
-        LOG_WARN("failed to push back selectivity", K(ret));
-      } else {
-        sum_child_sel += child->ap_->est_cost_info_.prefix_filter_sel_;
-        sum_child_row += child->ap_->est_cost_info_.output_row_count_;
-      }
+    } else if (OB_FAIL(estimate_one_index_merge_node(paths.at(i)->root_,
+                                                     paths.at(i)->est_cost_info_.sel_ctx_,
+                                                     prefix_filter_sel,
+                                                     sum_child_sel,
+                                                     sum_child_row))) {
+      LOG_WARN("failed to estimate one index merge node", K(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (sum_child_sel < OB_DOUBLE_EPSINON) {
@@ -100,12 +85,58 @@ int ObAccessPathEstimation::inner_estimate_index_merge_rowcount(common::ObIArray
       paths.at(i)->est_cost_info_.est_method_ = method;
     } else {
       paths.at(i)->est_cost_info_.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
-      paths.at(i)->est_cost_info_.prefix_filter_sel_ = 1.0 - sel_ctx->get_correlation_model().combine_filters_selectivity(selectivities);
+      paths.at(i)->est_cost_info_.prefix_filter_sel_ = prefix_filter_sel;
       paths.at(i)->est_cost_info_.index_back_row_count_ = (paths.at(i)->est_cost_info_.prefix_filter_sel_ / sum_child_sel) * sum_child_row;
       paths.at(i)->est_cost_info_.phy_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;
       paths.at(i)->est_cost_info_.logical_query_range_row_count_ = paths.at(i)->est_cost_info_.index_back_row_count_;
-      paths.at(i)->est_cost_info_.output_row_count_ = (paths.at(i)->est_cost_info_.table_filter_sel_  / paths.at(i)->est_cost_info_.prefix_filter_sel_) * paths.at(i)->est_cost_info_.index_back_row_count_;
+      paths.at(i)->est_cost_info_.output_row_count_ = 0.0 == paths.at(i)->est_cost_info_.prefix_filter_sel_ ? 1.0
+                                                      : (paths.at(i)->est_cost_info_.table_filter_sel_ / paths.at(i)->est_cost_info_.prefix_filter_sel_) * paths.at(i)->est_cost_info_.index_back_row_count_;
       paths.at(i)->est_cost_info_.est_method_ = method;
+    }
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::estimate_one_index_merge_node(const ObIndexMergeNode *node,
+                                                          const OptSelectivityCtx *sel_ctx,
+                                                          double &selectivity,
+                                                          double &sum_child_sel,
+                                                          double &sum_child_row)
+{
+  int ret = OB_SUCCESS;
+  selectivity = 0.0;
+  if (OB_ISNULL(node) || OB_ISNULL(sel_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KPC(node), K(sel_ctx));
+  } else if (node->is_scan_node()) {
+    if (OB_ISNULL(node->ap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null ap", K(ret), KPC(node));
+    } else {
+      selectivity = node->ap_->est_cost_info_.prefix_filter_sel_;
+      sum_child_sel += node->ap_->est_cost_info_.prefix_filter_sel_;
+      sum_child_row += node->ap_->est_cost_info_.output_row_count_;
+    }
+  } else { // is merge node
+    ObSEArray<double, 4> child_selectivities;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
+      double child_sel = 0.0;
+      if (OB_FAIL(SMART_CALL(estimate_one_index_merge_node(node->children_.at(i),
+                                                           sel_ctx,
+                                                           child_sel,
+                                                           sum_child_sel,
+                                                           sum_child_row)))) {
+        LOG_WARN("failed to estimate one index merge node", K(ret));
+      } else if (OB_FAIL(child_selectivities.push_back(INDEX_MERGE_UNION == node->node_type_ ?
+                                                       1.0 - child_sel : child_sel))) {
+        LOG_WARN("failed to push back selectivity", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (INDEX_MERGE_UNION == node->node_type_) {
+      selectivity = 1.0 - sel_ctx->get_correlation_model().combine_filters_selectivity(child_selectivities);
+    } else {
+      selectivity = sel_ctx->get_correlation_model().combine_filters_selectivity(child_selectivities);
     }
   }
   return ret;
@@ -179,7 +210,7 @@ int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
   }
 
   if (OB_SUCC(ret) && (method & EST_STAT)) {
-    if (OB_FAIL(process_statistics_estimation(paths))) {
+    if (OB_FAIL(process_statistics_estimation(ctx, paths))) {
       LOG_WARN("failed to process statistics estimation", K(ret));
     }
   }
@@ -375,10 +406,18 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   bool is_complex_scene = false;
   bool can_use_ds = valid_methods & (EST_DS_FULL | EST_DS_BASIC);
   bool can_use_storage = valid_methods & EST_STORAGE;
+  ObJoinOrder *join_order = nullptr;
+  ObLogPlan *log_plan = nullptr;
+  const ObDMLStmt *stmt = nullptr;
+  const OptSelectivityCtx* sel_ctx = nullptr;
 
-  if (OB_ISNULL(ctx.get_session_info())) {
+  if (OB_ISNULL(ctx.get_session_info()) || OB_UNLIKELY(paths.empty()) ||
+      OB_ISNULL(paths.at(0)) || OB_ISNULL(join_order = paths.at(0)->parent_) ||
+      OB_ISNULL(log_plan = join_order->get_plan()) ||
+      OB_ISNULL(stmt = log_plan->get_stmt()) ||
+      OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null param", K(ret));
+    LOG_WARN("unexpected null param", K(ret), K(paths), K(join_order), K(log_plan), K(stmt));
   }
 
   // check is simple scene
@@ -394,11 +433,13 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   }
   is_simple_scene = is_table_get;
   if (OB_SUCC(ret) && !is_simple_scene && can_use_ds) {
-    ObLogPlan *log_plan = paths.at(0)->parent_->get_plan();
     ObSEArray<ObRawExpr*, 16> ds_col_exprs;
     if (!(valid_methods & EST_STORAGE)) {
       // path which can not use storage estimation is not simple
-    } else if (OB_FAIL(get_need_dynamic_sampling_columns(paths.at(0)->parent_->get_plan(),
+    } else if ((!filter_exprs.empty() && stmt->has_multi_base_tables()) ||
+               log_plan->get_need_accurate_cardinality()) {
+      // need accurate join table rowcount
+    } else if (OB_FAIL(get_need_dynamic_sampling_columns(log_plan,
                                                          paths.at(0)->table_id_,
                                                          filter_exprs, true, true,
                                                          ds_col_exprs))) {
@@ -413,13 +454,6 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   // check is complex scene
   if (OB_SUCC(ret) && !is_simple_scene && !is_complex_scene && (valid_methods & EST_DS_FULL)) {
     ObSelEstimatorFactory factory(ctx.get_session_info()->get_effective_tenant_id());
-    const OptSelectivityCtx* sel_ctx = NULL;
-    if (OB_UNLIKELY(paths.empty()) ||
-        OB_ISNULL(paths.at(0)) ||
-        OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpeted param", K(paths));
-    }
     for (int64_t i = 0; OB_SUCC(ret) && !is_complex_scene && i < filter_exprs.count(); ++i) {
       const ObRawExpr *filter = filter_exprs.at(i);
       ObSelEstimator *estimator = NULL;
@@ -614,7 +648,7 @@ int ObAccessPathEstimation::process_table_default_estimation(ObOptimizerContext 
       } else if (i == 0 && OB_FAIL(update_table_stat_info_by_default(path))) {
         LOG_WARN("failed to update table stat by default", K(ret));
       }
-    } else if (OB_FAIL(process_statistics_estimation(path))) {
+    } else if (OB_FAIL(process_statistics_estimation(ctx, path))) {
       // use default opt table meta inited in ObJoinOrder::init_est_sel_info_for_access_path
       LOG_WARN("failed to process statistics estimation", K(ret));
     }
@@ -668,7 +702,6 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   ObArray<ObAddr> prefer_addrs;
   int64_t partition_limit = 0;
   int64_t range_limit = 0;
-  ObCandiTabletLocSEArray chosen_partitions;
   ObSEArray<common::ObNewRange, 4> chosen_scan_ranges;
   ObSEArray<EstResultHelper, 4> result_helpers;
   ObSEArray<ObTablePartitionInfo *, 4> valid_partition_infos;
@@ -699,7 +732,6 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
     EstResultHelper *result_helper = NULL;
     RangePartitionHelper calc_range_partition_helper;
     chosen_scan_ranges.reuse();
-    chosen_partitions.reuse();
     SMART_VAR(ObTablePartitionInfo, tmp_part_info) {
       const ObTablePartitionInfo *table_part_info = NULL;
       ObTablePartitionInfo* valid_part_info = NULL;
@@ -805,7 +837,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   NG_TRACE(storage_estimation_end);
 
   if (OB_SUCC(ret) && !need_fallback &&
-      OB_FAIL(process_storage_estimation_result(tasks, result_helpers, is_success))) {
+      OB_FAIL(process_storage_estimation_result(ctx, tasks, result_helpers, is_success))) {
     LOG_WARN("failed to process result", K(ret));
   }
 
@@ -904,88 +936,89 @@ int ObAccessPathEstimation::add_storage_estimation_task_by_ranges(ObOptimizerCon
   ObSEArray<ObTabletID, 10> tablet_ids;
   ObSEArray<common::ObNewRange, 4> chosen_scan_ranges;
   ObSEArray<common::ObNewRange, 1> chosen_range;
-  ObCandiTabletLocSEArray valid_partitions_for_range;
-  ObCandiTabletLocSEArray chosen_partitions;
-  result_helper.different_parts_ = true;
-  const ObTableMetaInfo *table_meta = NULL;
-  if (OB_ISNULL(table_meta = ap.est_cost_info_.table_meta_info_) ||
-      OB_UNLIKELY(ori_partitions.count() != index_partitions.count()) ||
-      OB_UNLIKELY(ori_partitions.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param", K(ret), K(table_meta), K(ori_partitions), K(index_partitions));
-  } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit,
-                                                      ap.est_cost_info_.ranges_,
-                                                      ap.est_cost_info_.index_meta_info_.is_geo_index_,
-                                                      chosen_scan_ranges))) {
-    LOG_WARN("failed to choose scan ranges", K(ret));
-  } else if (OB_FAIL(result_helper.range_result_.prepare_allocate(chosen_scan_ranges.count()))) {
-    LOG_WARN("failed to prepare allocate", K(ret));
-  } else {
-    result_helper.est_scan_range_count_ = chosen_scan_ranges.count();
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < chosen_scan_ranges.count(); i ++) {
-    valid_partitions_for_range.reuse();
-    chosen_range.reuse();
-    chosen_partitions.reuse();
-    tablet_ids.reuse();
-    if (OB_FAIL(chosen_range.push_back(chosen_scan_ranges.at(i)))) {
-      LOG_WARN("failed to push back", K(ret));
-    } else if (OB_FAIL(calc_range_partition_helper.get_scan_range_partitions(exec_ctx,
-                                                                             chosen_scan_ranges.at(i),
-                                                                             tablet_ids))) {
-      LOG_WARN("failed to get scan range partitions", K(chosen_scan_ranges.at(i)));
-    } else if (!tablet_ids.empty()) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < ori_partitions.count(); j ++) {
-        if (ObOptimizerUtil::find_item(tablet_ids,
-                        ori_partitions.at(j).get_partition_location().get_tablet_id()) &&
-            OB_FAIL(valid_partitions_for_range.push_back(index_partitions.at(j)))) {
-          LOG_WARN("failed to push back", K(ret));
+  SMART_VARS_2((ObCandiTabletLocSEArray, valid_partitions_for_range),
+               (ObCandiTabletLocSEArray, chosen_partitions)) {
+    result_helper.different_parts_ = true;
+    const ObTableMetaInfo *table_meta = NULL;
+    if (OB_ISNULL(table_meta = ap.est_cost_info_.table_meta_info_) ||
+        OB_UNLIKELY(ori_partitions.count() != index_partitions.count()) ||
+        OB_UNLIKELY(ori_partitions.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", K(ret), K(table_meta), K(ori_partitions), K(index_partitions));
+    } else if (OB_FAIL(choose_storage_estimation_ranges(range_limit,
+                                                        ap.est_cost_info_.ranges_,
+                                                        ap.est_cost_info_.index_meta_info_.is_geo_index_,
+                                                        chosen_scan_ranges))) {
+      LOG_WARN("failed to choose scan ranges", K(ret));
+    } else if (OB_FAIL(result_helper.range_result_.prepare_allocate(chosen_scan_ranges.count()))) {
+      LOG_WARN("failed to prepare allocate", K(ret));
+    } else {
+      result_helper.est_scan_range_count_ = chosen_scan_ranges.count();
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < chosen_scan_ranges.count(); i ++) {
+      valid_partitions_for_range.reuse();
+      chosen_range.reuse();
+      chosen_partitions.reuse();
+      tablet_ids.reuse();
+      if (OB_FAIL(chosen_range.push_back(chosen_scan_ranges.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(calc_range_partition_helper.get_scan_range_partitions(exec_ctx,
+                                                                              chosen_scan_ranges.at(i),
+                                                                              tablet_ids))) {
+        LOG_WARN("failed to get scan range partitions", K(chosen_scan_ranges.at(i)));
+      } else if (!tablet_ids.empty()) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < ori_partitions.count(); j ++) {
+          if (ObOptimizerUtil::find_item(tablet_ids,
+                          ori_partitions.at(j).get_partition_location().get_tablet_id()) &&
+              OB_FAIL(valid_partitions_for_range.push_back(index_partitions.at(j)))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (!valid_partitions_for_range.empty()) {
-        if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
-                                                         valid_partitions_for_range,
-                                                         chosen_partitions))) {
-          LOG_WARN("failed to choose partitions", K(ret));
+      if (OB_SUCC(ret)) {
+        if (!valid_partitions_for_range.empty()) {
+          if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                          valid_partitions_for_range,
+                                                          chosen_partitions))) {
+            LOG_WARN("failed to choose partitions", K(ret));
+          } else {
+            result_helper.range_result_.at(i).valid_partition_count_ = valid_partitions_for_range.count();
+          }
         } else {
-          result_helper.range_result_.at(i).valid_partition_count_ = valid_partitions_for_range.count();
-        }
-      } else {
-        // no valid partitions, choose random partitions from all partitions
-        if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
-                                                         index_partitions,
-                                                         chosen_partitions))) {
-          LOG_WARN("failed to choose partitions", K(ret));
-        } else {
-          result_helper.range_result_.at(i).valid_partition_count_ = index_partitions.count();
+          // no valid partitions, choose random partitions from all partitions
+          if (OB_FAIL(choose_storage_estimation_partitions(partition_limit,
+                                                          index_partitions,
+                                                          chosen_partitions))) {
+            LOG_WARN("failed to choose partitions", K(ret));
+          } else {
+            result_helper.range_result_.at(i).valid_partition_count_ = index_partitions.count();
+          }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      OPT_TRACE("Range", chosen_scan_ranges.at(i), "has valid tablets:", tablet_ids);
-      OPT_TRACE_BEGIN_SECTION;
-      OPT_TRACE("Choose partitions", chosen_partitions);
-      OPT_TRACE_END_SECTION;
-      LOG_TRACE("choose range and partitions to estimate rowcount",
-          K(ap.index_id_), K(chosen_scan_ranges.at(i)), K(chosen_partitions), K(valid_partitions_for_range), K(tablet_ids));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < chosen_partitions.count(); j ++) {
-      EstimatedPartition best_index_part;
-      ObBatchEstTasks *task = NULL;
-      if (OB_FAIL(get_storage_estimation_task(ctx,
-                                              arena,
-                                              chosen_partitions.at(j),
-                                              *table_meta,
-                                              prefer_addrs,
-                                              tasks,
-                                              best_index_part,
-                                              task))) {
-        LOG_WARN("failed to get task", K(ret));
-      } else if (NULL != task) {
-        if (OB_FAIL(add_index_info(ctx, arena, task, best_index_part, ap, chosen_range, i))) {
-          LOG_WARN("failed to add task info", K(ret));
+      if (OB_SUCC(ret)) {
+        OPT_TRACE("Range", chosen_scan_ranges.at(i), "has valid tablets:", tablet_ids);
+        OPT_TRACE_BEGIN_SECTION;
+        OPT_TRACE("Choose partitions", chosen_partitions);
+        OPT_TRACE_END_SECTION;
+        LOG_TRACE("choose range and partitions to estimate rowcount",
+            K(ap.index_id_), K(chosen_scan_ranges.at(i)), K(chosen_partitions), K(valid_partitions_for_range), K(tablet_ids));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < chosen_partitions.count(); j ++) {
+        EstimatedPartition best_index_part;
+        ObBatchEstTasks *task = NULL;
+        if (OB_FAIL(get_storage_estimation_task(ctx,
+                                                arena,
+                                                chosen_partitions.at(j),
+                                                *table_meta,
+                                                prefer_addrs,
+                                                tasks,
+                                                best_index_part,
+                                                task))) {
+          LOG_WARN("failed to get task", K(ret));
+        } else if (NULL != task) {
+          if (OB_FAIL(add_index_info(ctx, arena, task, best_index_part, ap, chosen_range, i))) {
+            LOG_WARN("failed to add task info", K(ret));
+          }
         }
       }
     }
@@ -1044,7 +1077,8 @@ int ObAccessPathEstimation::get_storage_estimation_task(ObOptimizerContext &ctx,
   return ret;
 }
 
-int ObAccessPathEstimation::process_storage_estimation_result(ObIArray<ObBatchEstTasks *> &tasks,
+int ObAccessPathEstimation::process_storage_estimation_result(ObOptimizerContext &ctx,
+                                                              ObIArray<ObBatchEstTasks *> &tasks,
                                                               ObIArray<EstResultHelper> &result_helpers,
                                                               bool &is_reliable)
 {
@@ -1159,7 +1193,7 @@ int ObAccessPathEstimation::process_storage_estimation_result(ObIArray<ObBatchEs
                                                  new_range_with_exec_param,
                                                  path->est_cost_info_))) {
         LOG_WARN("failed to estimate prefix range rowcount", K(ret));
-      } else if (OB_FAIL(fill_cost_table_scan_info(path->est_cost_info_))) {
+      } else if (OB_FAIL(fill_cost_table_scan_info(ctx, path->est_cost_info_))) {
         LOG_WARN("failed to fill cost table scan info", K(ret));
       }
       OPT_TRACE("The storage estimation result of index", result_helpers.at(i).path_->index_id_, "is",
@@ -1285,54 +1319,79 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
   return ret;
 }
 
-int ObAccessPathEstimation::fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info)
+int ObAccessPathEstimation::fill_cost_table_scan_info(ObOptimizerContext &ctx,
+                                                      ObCostTableScanInfo &est_cost_info)
 {
   int ret = OB_SUCCESS;
-  double &output_row_count = est_cost_info.output_row_count_;
-  double &logical_row_count = est_cost_info.logical_query_range_row_count_;
-  double &physical_row_count = est_cost_info.phy_query_range_row_count_;
-  double &index_back_row_count = est_cost_info.index_back_row_count_;
+  if (OB_ISNULL(ctx.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_query_ctx()));
+  } else {
+    double &output_row_count = est_cost_info.output_row_count_;
+    double &logical_row_count = est_cost_info.logical_query_range_row_count_;
+    double &physical_row_count = est_cost_info.phy_query_range_row_count_;
+    double &index_back_row_count = est_cost_info.index_back_row_count_;
 
-  // we have exact query ranges on a unique index,
-  // each range is expected to have at most one row
-  if (est_cost_info.unique_range_rowcnt_ > 0) {
-    if (est_cost_info.is_unique_) {
-      logical_row_count  = est_cost_info.unique_range_rowcnt_;
-      physical_row_count = est_cost_info.unique_range_rowcnt_;
-    } else {
-      // normal index which contains a unique index
-      logical_row_count  = MIN(est_cost_info.unique_range_rowcnt_, logical_row_count);
-      physical_row_count = MIN(est_cost_info.unique_range_rowcnt_, physical_row_count);
+    // we have exact query ranges on a unique index,
+    // each range is expected to have at most one row
+    if (est_cost_info.unique_range_rowcnt_ > 0) {
+      if (est_cost_info.is_unique_) {
+        logical_row_count  = est_cost_info.unique_range_rowcnt_;
+        physical_row_count = est_cost_info.unique_range_rowcnt_;
+      } else {
+        // normal index which contains a unique index
+        logical_row_count  = MIN(est_cost_info.unique_range_rowcnt_, logical_row_count);
+        physical_row_count = MIN(est_cost_info.unique_range_rowcnt_, physical_row_count);
+      }
     }
+
+    double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
+            0.01 * est_cost_info.sample_info_.percent_ : 1.0;
+    if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                      COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                      COMPAT_VERSION_4_4_1)) {
+      // refine row count
+      if (0 >= logical_row_count) {
+        logical_row_count = 1.0 * est_cost_info.prefix_filter_sel_ * est_cost_info.pushdown_prefix_filter_sel_;
+      }
+      if (0 >= physical_row_count) {
+        physical_row_count = 1.0 * est_cost_info.prefix_filter_sel_ * est_cost_info.pushdown_prefix_filter_sel_;
+      }
+      // block sampling
+      logical_row_count *= block_sample_ratio;
+      physical_row_count *= block_sample_ratio;
+    } else {
+      // old version
+      logical_row_count *= block_sample_ratio;
+      physical_row_count *= block_sample_ratio;
+      logical_row_count = std::max(logical_row_count, 1.0);
+      physical_row_count = std::max(physical_row_count, 1.0);
+    }
+
+    // index back row count
+    if (est_cost_info.index_meta_info_.is_index_back_) {
+      index_back_row_count = logical_row_count * est_cost_info.postfix_filter_sel_;
+    }
+
+    output_row_count = logical_row_count;
+    // row sampling
+    double row_sample_ratio = est_cost_info.sample_info_.is_row_sample() ?
+          0.01 * est_cost_info.sample_info_.percent_ : 1.0;
+    output_row_count *= row_sample_ratio;
+
+    // postfix index filter and table filter
+    output_row_count = output_row_count
+        * est_cost_info.postfix_filter_sel_
+        * est_cost_info.table_filter_sel_;
+
+    fill_batch_type_info(est_cost_info);
   }
+  return ret;
+}
 
-  // block sampling
-  double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
-        0.01 * est_cost_info.sample_info_.percent_ : 1.0;
-  logical_row_count *= block_sample_ratio;
-  physical_row_count *= block_sample_ratio;
-
-  logical_row_count = std::max(logical_row_count, 1.0);
-  physical_row_count = std::max(physical_row_count, 1.0);
-
-  // index back row count
-  if (est_cost_info.index_meta_info_.is_index_back_) {
-    index_back_row_count = logical_row_count * est_cost_info.postfix_filter_sel_;
-  }
-
-  output_row_count = logical_row_count;
-  // row sampling
-  double row_sample_ratio = est_cost_info.sample_info_.is_row_sample() ?
-        0.01 * est_cost_info.sample_info_.percent_ : 1.0;
-  output_row_count *= row_sample_ratio;
-
-  // postfix index filter and table filter
-  output_row_count = output_row_count
-      * est_cost_info.postfix_filter_sel_
-      * est_cost_info.table_filter_sel_;
-
-  if (OB_FAIL(ret)) {
-  } else if (!est_cost_info.ss_ranges_.empty()) {
+void ObAccessPathEstimation::fill_batch_type_info(ObCostTableScanInfo &est_cost_info)
+{
+  if (!est_cost_info.ss_ranges_.empty()) {
     int64_t scan_range_count = get_scan_range_count(est_cost_info.ss_ranges_);
     if (scan_range_count == 1) {
       est_cost_info.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
@@ -1356,7 +1415,6 @@ int ObAccessPathEstimation::fill_cost_table_scan_info(ObCostTableScanInfo &est_c
       }
     }
   }
-  return ret;
 }
 
 int ObAccessPathEstimation::choose_storage_estimation_partitions(const int64_t partition_limit,
@@ -1501,56 +1559,59 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
                                                      ObTablePartitionInfo &valid_partition_info)
 {
   int ret = OB_SUCCESS;
-  valid_partition_info.set_table_location(table_partition_info.get_table_location());
-  ObArray<int64_t> all_part_ids;
-  ObArray<ObOptTableStat> part_stats;
-  const ObCandiTableLoc &table_loc = table_partition_info.get_phy_tbl_location_info();
-  const ObCandiTabletLocIArray &all_partitions = table_loc.get_phy_part_loc_info_list();
-  ObCandiTableLoc &valid_table_loc = valid_partition_info.get_phy_tbl_location_info_for_update();
-  ObCandiTabletLocIArray &valid_partitions = valid_table_loc.get_phy_part_loc_info_list_for_update();
-  OPT_TRACE("partition_index_dive_limit is less than the count of partitions, "\
-            "check whether there are empty partitions in table", table_partition_info.get_ref_table_id());
-  OPT_TRACE_BEGIN_SECTION;
-  if (OB_ISNULL(ctx.get_session_info()) ||
-      OB_ISNULL(ctx.get_opt_stat_manager()) ||
-      OB_UNLIKELY(all_partitions.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(table_partition_info), K(ctx.get_session_info()), K(ctx.get_opt_stat_manager()));
+  if (OB_FAIL(valid_partition_info.set_table_location(table_partition_info.get_table_location()))) {
+    LOG_WARN("failed to set table location");
   } else {
-    valid_table_loc.set_table_location_key(table_loc.get_table_location_key(), table_loc.get_ref_table_id());
-    valid_table_loc.set_duplicate_type(table_loc.get_duplicate_type());
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < all_partitions.count(); ++i) {
-    const ObOptTabletLoc &part_loc = all_partitions.at(i).get_partition_location();
-    if (OB_FAIL(all_part_ids.push_back(part_loc.get_partition_id()))) {
-      LOG_WARN("failed to push back part id", K(ret));
-    }
-  }
-  if (FAILEDx(ctx.get_opt_stat_manager()->get_table_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                         table_partition_info.get_ref_table_id(),
-                                                         all_part_ids,
-                                                         part_stats))) {
-    LOG_WARN("failed to get table stats", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
-    const ObOptTableStat &stat = part_stats.at(i);
-    if (stat.get_last_analyzed() <= 0 || stat.get_row_count() > 0) {
-      if (OB_FAIL(valid_partitions.push_back(all_partitions.at(i)))) {
-        LOG_WARN("failed to push back tablet loc", K(ret), K(all_partitions.at(i)));
-      }
+    ObArray<int64_t> all_part_ids;
+    ObArray<ObOptTableStat> part_stats;
+    const ObCandiTableLoc &table_loc = table_partition_info.get_phy_tbl_location_info();
+    const ObCandiTabletLocIArray &all_partitions = table_loc.get_phy_part_loc_info_list();
+    ObCandiTableLoc &valid_table_loc = valid_partition_info.get_phy_tbl_location_info_for_update();
+    ObCandiTabletLocIArray &valid_partitions = valid_table_loc.get_phy_part_loc_info_list_for_update();
+    OPT_TRACE("partition_index_dive_limit is less than the count of partitions, "\
+              "check whether there are empty partitions in table", table_partition_info.get_ref_table_id());
+    OPT_TRACE_BEGIN_SECTION;
+    if (OB_ISNULL(ctx.get_session_info()) ||
+        OB_ISNULL(ctx.get_opt_stat_manager()) ||
+        OB_UNLIKELY(all_partitions.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(table_partition_info), K(ctx.get_session_info()), K(ctx.get_opt_stat_manager()));
     } else {
-      OPT_TRACE("partition", stat.get_partition_id(), "is empty with stat version", stat.get_last_analyzed());
+      valid_table_loc.set_table_location_key(table_loc.get_table_location_key(), table_loc.get_ref_table_id());
+      valid_table_loc.set_duplicate_type(table_loc.get_duplicate_type());
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (valid_partitions.empty()) {
-      OPT_TRACE("All partitions are empty, choose partitions from all");
-      if (OB_FAIL(valid_partitions.assign(all_partitions))) {
-        LOG_WARN("failed to assign tablet loc", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_partitions.count(); ++i) {
+      const ObOptTabletLoc &part_loc = all_partitions.at(i).get_partition_location();
+      if (OB_FAIL(all_part_ids.push_back(part_loc.get_partition_id()))) {
+        LOG_WARN("failed to push back part id", K(ret));
       }
     }
+    if (FAILEDx(ctx.get_opt_stat_manager()->get_table_stat(ctx.get_session_info()->get_effective_tenant_id(),
+                                                          table_partition_info.get_ref_table_id(),
+                                                          all_part_ids,
+                                                          part_stats))) {
+      LOG_WARN("failed to get table stats", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
+      const ObOptTableStat &stat = part_stats.at(i);
+      if (stat.get_last_analyzed() <= 0 || stat.get_row_count() > 0) {
+        if (OB_FAIL(valid_partitions.push_back(all_partitions.at(i)))) {
+          LOG_WARN("failed to push back tablet loc", K(ret), K(all_partitions.at(i)));
+        }
+      } else {
+        OPT_TRACE("partition", stat.get_partition_id(), "is empty with stat version", stat.get_last_analyzed());
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (valid_partitions.empty()) {
+        OPT_TRACE("All partitions are empty, choose partitions from all");
+        if (OB_FAIL(valid_partitions.assign(all_partitions))) {
+          LOG_WARN("failed to assign tablet loc", K(ret));
+        }
+      }
+    }
+    OPT_TRACE_END_SECTION;
   }
-  OPT_TRACE_END_SECTION;
   return ret;
 }
 
@@ -1602,7 +1663,8 @@ int ObAccessPathEstimation::add_index_info(ObOptimizerContext &ctx,
   return ret;
 }
 
-int ObAccessPathEstimation::process_statistics_estimation(AccessPath *path)
+int ObAccessPathEstimation::process_statistics_estimation(ObOptimizerContext &ctx,
+                                                          AccessPath *path)
 {
   int ret = OB_SUCCESS;
   ObSEArray<common::ObNewRange, 4> get_ranges;
@@ -1650,21 +1712,22 @@ int ObAccessPathEstimation::process_statistics_estimation(AccessPath *path)
     logical_row_count   *= est_cost_info.ss_postfix_range_filters_sel_;
     physical_row_count  *= est_cost_info.ss_postfix_range_filters_sel_;
 
-    LOG_TRACE("OPT:[STATISTIC EST ROW COUNT",
+    LOG_TRACE("OPT:[STATISTIC EST ROW COUNT]",
               K(logical_row_count), K(physical_row_count),
               K(est_cost_info.pushdown_prefix_filter_sel_),
               K(est_cost_info.ss_postfix_range_filters_sel_));
 
-    OZ (fill_cost_table_scan_info(est_cost_info));
+    OZ (fill_cost_table_scan_info(ctx, est_cost_info));
   }
   return ret;
 }
 
-int ObAccessPathEstimation::process_statistics_estimation(ObIArray<AccessPath *> &paths)
+int ObAccessPathEstimation::process_statistics_estimation(ObOptimizerContext &ctx,
+                                                          ObIArray<AccessPath *> &paths)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-    if (OB_FAIL(process_statistics_estimation(paths.at(i)))) {
+    if (OB_FAIL(process_statistics_estimation(ctx, paths.at(i)))) {
       LOG_WARN("failed to process table default estimation", K(ret));
     }
   }
@@ -2549,10 +2612,10 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                     no_ds_data))) {
         LOG_WARN("failed to update table stat info by dynamic sampling", K(ret));
       } else if (only_ds_basic_stat || no_ds_data) {
-        if (OB_FAIL(process_statistics_estimation(paths))) {
+        if (OB_FAIL(process_statistics_estimation(ctx, paths))) {
           LOG_WARN("failed to process statistics estimation", K(ret));
         }
-      } else if (OB_FAIL(estimate_path_rowcount_by_dynamic_sampling(ds_table_param.table_id_, paths, ds_result_items))) {
+      } else if (OB_FAIL(estimate_path_rowcount_by_dynamic_sampling(ctx, ds_table_param.table_id_, paths, ds_result_items))) {
         LOG_WARN("failed to estimate path rowcount by dynamic sampling", K(ret));
       }
       LOG_TRACE("finish dynamic sampling", K(only_ds_basic_stat), K(only_ds_filter), K(no_ds_data), K(is_success));
@@ -2777,7 +2840,8 @@ int ObAccessPathEstimation::update_table_stat_info_by_default(AccessPath *path)
   return ret;
 }
 
-int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uint64_t table_id,
+int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimizerContext &ctx,
+                                                                       const uint64_t table_id,
                                                                        ObIArray<AccessPath *> &paths,
                                                                        ObIArray<ObDSResultItem> &ds_result_items)
 {
@@ -2788,6 +2852,8 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
                                                  ds_result_items);
   if (NULL == all_filter_item) {
     // non filter
+    // exprs_ in OB_DS_BASIC_STAT is not filters, it stores all columns that need to do dynamic sampling
+    // DO NOT USE exprs_ as filters to calculate selectivity!
     all_filter_item =
         ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_BASIC_STAT,
                                                    table_id,
@@ -2803,24 +2869,44 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
       OB_ISNULL(paths.at(0)->parent_) || OB_ISNULL(paths.at(0)->parent_->get_plan()) ||
       OB_ISNULL(paths.at(0)->est_cost_info_.table_meta_info_) ||
       OB_ISNULL(table_metas = paths.at(0)->est_cost_info_.table_metas_) ||
-      OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_)) {
+      OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_) ||
+      OB_ISNULL(ctx.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(table_id), KPC(all_filter_item), K(paths), K(ds_result_items));
+    LOG_WARN("get unexpected null", K(ret), K(table_id), KPC(all_filter_item), K(paths), K(ds_result_items), K(ctx.get_query_ctx()));
   } else {
     double output_rowcnt = all_filter_item->stat_handle_.stat_->get_rowcount();
     int64_t micro_block_count = all_filter_item->stat_handle_.stat_->get_micro_block_num();
     sel_ctx->init_op_ctx(NULL, paths.at(0)->est_cost_info_.table_meta_info_->table_row_count_);
     ObIArray<ObExprSelPair> &all_predicate_sel = paths.at(0)->parent_->get_plan()->get_predicate_selectivities();
+    double output_total_sel = 1.0;
     double output_non_ds_sel = 1.0;
-    if (OB_FAIL(process_non_ds_filters(*table_metas, *sel_ctx, *all_filter_item, output_non_ds_sel, all_predicate_sel))) {
+    if (all_filter_item->type_ != ObDSResultItemType::OB_DS_BASIC_STAT
+        && OB_FAIL(process_non_ds_filters(*table_metas,
+                                          *sel_ctx,
+                                          *all_filter_item,
+                                          output_total_sel,
+                                          output_non_ds_sel,
+                                          all_predicate_sel))) {
       LOG_WARN("failed to get non ds sel", K(ret), KPC(all_filter_item));
     } else {
-      double sample_ratio = all_filter_item->stat_handle_.stat_->get_sample_block_ratio();
-      output_rowcnt = output_rowcnt != 0 ? output_rowcnt : static_cast<int64_t>(100.0 / sample_ratio);
-      output_rowcnt *= output_non_ds_sel;
+      if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                        COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                        COMPAT_VERSION_4_4_1)) {
+        output_rowcnt *= output_non_ds_sel;
+        if (0 >= output_rowcnt) {
+          output_rowcnt = 1.0 * output_total_sel;
+        }
+      } else {
+        // old version
+        double sample_ratio = all_filter_item->stat_handle_.stat_->get_sample_block_ratio();
+        output_rowcnt = output_rowcnt != 0 ? output_rowcnt : static_cast<int64_t>(100.0 / sample_ratio);
+        output_rowcnt *= output_non_ds_sel;
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+      double index_range_total_sel = 1.0;
       double index_range_non_ds_sel = 1.0;
+      double index_back_total_sel = 1.0;
       double index_back_non_ds_sel = 1.0;
       if (OB_ISNULL(paths.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2837,11 +2923,21 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
                                                                                                paths.at(i)->index_id_,
                                                                                                ds_result_items);
         if (NULL != index_range_result_item &&
-            OB_FAIL(process_non_ds_filters(*table_metas, *sel_ctx, *index_range_result_item, index_range_non_ds_sel, all_predicate_sel))) {
-          LOG_WARN("failed to get non ds sel", K(ret), KPC(all_filter_item));
+            OB_FAIL(process_non_ds_filters(*table_metas,
+                                           *sel_ctx,
+                                           *index_range_result_item,
+                                           index_range_total_sel,
+                                           index_range_non_ds_sel,
+                                           all_predicate_sel))) {
+          LOG_WARN("failed to get non ds sel", K(ret), KPC(index_range_result_item));
         } else if (NULL != index_back_result_item &&
-                   OB_FAIL(process_non_ds_filters(*table_metas, *sel_ctx, *index_back_result_item, index_back_non_ds_sel, all_predicate_sel))) {
-          LOG_WARN("failed to get non ds sel", K(ret), KPC(all_filter_item));
+                   OB_FAIL(process_non_ds_filters(*table_metas,
+                                                  *sel_ctx,
+                                                  *index_back_result_item,
+                                                  index_back_total_sel,
+                                                  index_back_non_ds_sel,
+                                                  all_predicate_sel))) {
+          LOG_WARN("failed to get non ds sel", K(ret), KPC(index_back_result_item));
         } else {
           ObCostTableScanInfo &est_cost_info = paths.at(i)->est_cost_info_;
           bool no_add_micro_block = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
@@ -2858,73 +2954,76 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
           double &index_back_row_count = est_cost_info.index_meta_info_.is_index_back_ ?
                                           est_cost_info.index_back_row_count_ :
                                           dummy_row_count;
-          if (index_range_result_item == NULL || index_range_result_item->exprs_.empty()) {
-            logical_row_count = est_cost_info.table_meta_info_->table_row_count_;
+          double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
+                  0.01 * est_cost_info.sample_info_.percent_ : 1.0;
+          if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
+                                                            COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
+                                                            COMPAT_VERSION_4_4_1)) {
+            // calculate logical row count
+            if (index_range_result_item == NULL || index_range_result_item->exprs_.empty()) {
+              logical_row_count = est_cost_info.table_meta_info_->table_row_count_;
+            } else {
+              logical_row_count = index_range_result_item->stat_handle_.stat_->get_rowcount();
+            }
             logical_row_count *= index_range_non_ds_sel;
-            physical_row_count = logical_row_count;
-          } else {
-            logical_row_count = index_range_result_item->stat_handle_.stat_->get_rowcount();
-            double tmp_ratio = index_range_result_item->stat_handle_.stat_->get_sample_block_ratio();
-            logical_row_count =  logical_row_count != 0 ? logical_row_count : static_cast<int64_t>(100.0 / tmp_ratio);
-            logical_row_count *= index_range_non_ds_sel;
-            physical_row_count = logical_row_count;
-          }
-          if (index_back_result_item == NULL) {
-            index_back_row_count = logical_row_count;
-          } else if (index_back_result_item->exprs_.empty()) {
-            index_back_row_count = est_cost_info.table_meta_info_->table_row_count_;
-            index_back_row_count *= index_back_non_ds_sel;
-          } else {
-            index_back_row_count = index_back_result_item->stat_handle_.stat_->get_rowcount();
-            double tmp_ratio = index_back_result_item->stat_handle_.stat_->get_sample_block_ratio();
-            index_back_row_count = index_back_row_count != 0 ? index_back_row_count : static_cast<int64_t>(100.0 / tmp_ratio);
+            // calculate index back row count
+            if (index_back_result_item == NULL) {
+              index_back_row_count = logical_row_count;
+            } else if (index_back_result_item->exprs_.empty()) {
+              index_back_row_count = est_cost_info.table_meta_info_->table_row_count_;
+            } else {
+              index_back_row_count = index_back_result_item->stat_handle_.stat_->get_rowcount();
+            }
             index_back_row_count *= index_back_non_ds_sel;
             index_back_row_count = std::min(index_back_row_count, logical_row_count);
+            // refine row count
+            if (0 >= logical_row_count) {
+              logical_row_count = 1.0 * index_range_total_sel;
+            }
+            if (0 >= index_back_row_count) {
+              index_back_row_count = std::min(1.0 * index_back_total_sel, logical_row_count);
+            }
+            // block sampling
+            logical_row_count *= block_sample_ratio;
+            index_back_row_count *= block_sample_ratio;
+          } else {
+            // old version
+            if (index_range_result_item == NULL || index_range_result_item->exprs_.empty()) {
+              logical_row_count = est_cost_info.table_meta_info_->table_row_count_;
+              logical_row_count *= index_range_non_ds_sel;
+            } else {
+              logical_row_count = index_range_result_item->stat_handle_.stat_->get_rowcount();
+              double tmp_ratio = index_range_result_item->stat_handle_.stat_->get_sample_block_ratio();
+              logical_row_count =  logical_row_count != 0 ? logical_row_count : static_cast<int64_t>(100.0 / tmp_ratio);
+              logical_row_count *= index_range_non_ds_sel;
+            }
+            if (index_back_result_item == NULL) {
+              index_back_row_count = logical_row_count;
+            } else if (index_back_result_item->exprs_.empty()) {
+              index_back_row_count = est_cost_info.table_meta_info_->table_row_count_;
+              index_back_row_count *= index_back_non_ds_sel;
+            } else {
+              index_back_row_count = index_back_result_item->stat_handle_.stat_->get_rowcount();
+              double tmp_ratio = index_back_result_item->stat_handle_.stat_->get_sample_block_ratio();
+              index_back_row_count = index_back_row_count != 0 ? index_back_row_count : static_cast<int64_t>(100.0 / tmp_ratio);
+              index_back_row_count *= index_back_non_ds_sel;
+              index_back_row_count = std::min(index_back_row_count, logical_row_count);
+            }
+            logical_row_count *= block_sample_ratio;
+            index_back_row_count *= block_sample_ratio;
+            logical_row_count = std::max(logical_row_count, 1.0);
+            index_back_row_count = std::max(index_back_row_count, 1.0);
           }
-          // block sampling
-          double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
-                0.01 * est_cost_info.sample_info_.percent_ : 1.0;
-          logical_row_count *= block_sample_ratio;
-          physical_row_count *= block_sample_ratio;
-          index_back_row_count *= block_sample_ratio;
-
-          logical_row_count = std::max(logical_row_count, 1.0);
-          physical_row_count = std::max(physical_row_count, 1.0);
-          index_back_row_count = std::max(index_back_row_count, 1.0);
+          physical_row_count = logical_row_count;
           est_cost_info.output_row_count_ = output_rowcnt;
           // row sampling
           double row_sample_ratio = est_cost_info.sample_info_.is_row_sample() ?
                 0.01 * est_cost_info.sample_info_.percent_ : 1.0;
           est_cost_info.output_row_count_ *= row_sample_ratio;
-          est_cost_info.postfix_filter_sel_ = index_back_row_count * 1.0 / physical_row_count;
-          est_cost_info.table_filter_sel_ = output_rowcnt * 1.0 / index_back_row_count;
-
-          if (OB_FAIL(ret)) {
-          } else if (!est_cost_info.ss_ranges_.empty()) {
-            int64_t scan_range_count = get_scan_range_count(est_cost_info.ss_ranges_);
-            if (scan_range_count == 1) {
-              est_cost_info.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
-            } else {
-              est_cost_info.batch_type_ = ObSimpleBatch::T_MULTI_GET;
-            }
-          } else {
-            int64_t get_range_count = get_get_range_count(est_cost_info.ranges_);
-            int64_t scan_range_count = get_scan_range_count(est_cost_info.ranges_);
-            if (get_range_count + scan_range_count > 1) {
-              if (scan_range_count >= 1) {
-                est_cost_info.batch_type_ = ObSimpleBatch::T_MULTI_SCAN;
-              } else {
-                est_cost_info.batch_type_ = ObSimpleBatch::T_MULTI_GET;
-              }
-            } else {
-              if (scan_range_count == 1) {
-                est_cost_info.batch_type_ = ObSimpleBatch::T_SCAN;
-              } else {
-                est_cost_info.batch_type_ = ObSimpleBatch::T_GET;
-              }
-            }
-          }
-          LOG_TRACE("OPT:[DYNAMIC SAPMLING EST ROW COUNT", K(logical_row_count), K(physical_row_count), K(est_cost_info), K(output_rowcnt));
+          est_cost_info.postfix_filter_sel_ = 0 == logical_row_count ? 0.0 : index_back_row_count * 1.0 / logical_row_count;
+          est_cost_info.table_filter_sel_ = 0 == index_back_row_count ? 0.0 : output_rowcnt * 1.0 / index_back_row_count;
+          fill_batch_type_info(est_cost_info);
+          LOG_TRACE("OPT:[DYNAMIC SAMPLING EST ROW COUNT]", K(logical_row_count), K(physical_row_count), K(est_cost_info), K(output_rowcnt));
         }
       }
     }
@@ -2935,21 +3034,23 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
 int ObAccessPathEstimation::process_non_ds_filters(const OptTableMetas &table_metas,
                                                    const OptSelectivityCtx &ctx,
                                                    const ObDSResultItem &result_item,
-                                                   double &selectivity,
+                                                   double &total_sel,
+                                                   double &non_ds_sel,
                                                    ObIArray<ObExprSelPair> &all_predicate_sel)
 {
   int ret = OB_SUCCESS;
-  selectivity = 1.0;
+  total_sel = 1.0;
+  non_ds_sel = 1.0;
   ObSEArray<ObRawExpr *, 8> apply_filters;
-  double total_sel = 1.0;
-  if (result_item.non_ds_exprs_.empty()) {
-    // do nothing
+  if (result_item.type_ == ObDSResultItemType::OB_DS_BASIC_STAT) {
+    // do nothing, exprs_ in OB_DS_BASIC_STAT is not filters,
+    // it stores all columns that need to do dynamic sampling
   } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(table_metas,
                                                                          ctx,
                                                                          apply_filters,
                                                                          result_item.exprs_,
                                                                          total_sel,
-                                                                         selectivity,
+                                                                         non_ds_sel,
                                                                          all_predicate_sel))) {
     LOG_WARN("failed to calculate conditional sel", K(result_item));
   } else if (OB_FAIL(ObOptSelectivity::calculate_conditional_selectivity(table_metas,
@@ -2957,11 +3058,11 @@ int ObAccessPathEstimation::process_non_ds_filters(const OptTableMetas &table_me
                                                                          apply_filters,
                                                                          result_item.non_ds_exprs_,
                                                                          total_sel,
-                                                                         selectivity,
+                                                                         non_ds_sel,
                                                                          all_predicate_sel))) {
     LOG_WARN("failed to calculate conditional sel", K(result_item));
   } else {
-    LOG_TRACE("succeed to calculate non ds filters selectivity", K(selectivity), K(total_sel), K(result_item));
+    LOG_TRACE("succeed to calculate non ds filters selectivity", K(non_ds_sel), K(total_sel), K(result_item));
   }
   return ret;
 }

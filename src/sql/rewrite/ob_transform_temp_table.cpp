@@ -81,6 +81,12 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
         LOG_TRACE("succeed to do project pruning for temp table", K(temp_table_infos),  K(is_happened));
       }
     }
+    if (OB_SUCC(ret) && trans_happened) {
+      temp_table_infos.reuse();
+      if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+        LOG_WARN("failed to collect temp table infos", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(try_inline_temp_table(stmt, temp_table_infos, is_happened))) {
         LOG_WARN("failed to inline temp table", K(ret));
@@ -722,7 +728,8 @@ int ObTransformTempTable::check_stmt_can_extract_temp_table(ObSelectStmt *first,
     is_valid = QueryRelation::QUERY_EQUAL == relation && map_info.is_order_equal_;
   } else if (second->get_table_size() < 2) {
     if (second->get_group_expr_size() > 0 ||
-        second->get_rollup_expr_size() > 0) {
+        second->get_rollup_expr_size() > 0 ||
+        second->has_grouping_sets()) {
       is_valid = map_info.is_group_equal_ && map_info.is_cond_equal_;
     } else if (second->get_aggr_item_size() > 0) {
       is_valid = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_ && map_info.is_cond_equal_;
@@ -2166,10 +2173,7 @@ int ObTransformTempTable::need_transform(const common::ObIArray<ObParentDMLStmt>
     need_trans = false;
   } else if (!query_hint->has_outline_data()) {
     // TODO: sean.yyj make the priority of rule hint higher than cost based hint
-    if (OB_FAIL(ObTransformUtils::is_cost_based_trans_enable(ctx_, query_hint->global_hint_,
-                                                             need_trans))) {
-      LOG_WARN("failed to check cost based transform enable", K(ret));
-    }
+    need_trans = ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_);
   } else if (NULL == (trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))) {
     /*do nothing*/
     OPT_TRACE("outline reject transform");
@@ -3190,7 +3194,7 @@ int ObTransformTempTable::prepare_inline_materialize_stmts(ObDMLStmt *root_stmt,
     LOG_WARN("unexpect stmt", K(ret));
   } else if (OB_FALSE_IT(temp_view = static_cast<ObSelectStmt *>(copied_temp_stmt))) {
     // 在 temp table query 上封一层视图（用以获取 temp table access 的代价）
-  } else if (ObTransformUtils::pack_stmt(ctx_, temp_view)) {
+  } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, temp_view))) {
     LOG_WARN("failed to create simple view", K(ret));
   } else if (1 != temp_view->get_table_size()) {
     ret = OB_ERR_UNEXPECTED;

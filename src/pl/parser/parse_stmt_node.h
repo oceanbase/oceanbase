@@ -88,7 +88,8 @@ typedef struct _ObParseCtx
     uint32_t is_pl_fp_  :1;
     uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
     uint32_t need_switch_to_wrap_ : 1; // 1 indicates that the parser needs to switch to <wrap_begin>
-    uint32_t reserved_:23;
+    uint32_t contain_sensitive_data_ : 1; // 1 indicates whether contains sensitive data like create_ai_endpoint
+    uint32_t reserved_:22;
   };
 } ObParseCtx;
 

@@ -199,8 +199,10 @@ public:
                                            const common::ObObjType type1,
                                            const common::ObObjType type2)
   {
-    return get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
-                               ObArithResultTypeMap::OP::MUL);
+    return lib::is_oracle_mode()
+           ? get_arith_calc_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2,
+                                    ObArithResultTypeMap::OP::MUL)
+           : get_mul_result_type(calc_type, calc_ob1_type, calc_ob2_type, type1, type2);
   }
   OB_INLINE static int get_div_calc_type(common::ObObjType &calc_type,
                                            common::ObObjType &calc_ob1_type,

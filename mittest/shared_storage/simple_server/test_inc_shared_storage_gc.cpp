@@ -21,6 +21,66 @@
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
+namespace oceanbase
+{
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
+namespace sslog
+{
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+} // namespace sslog
+} // namespace oceanbase
+
 
 namespace oceanbase
 {
@@ -135,12 +195,16 @@ TEST_F(ObSharedStorageTest, observer_start)
 }
 
 #define EXE_SQL(sql_str)                                            \
+  LOG_INFO("exe sql start", K(sql_str));      \
   ASSERT_EQ(OB_SUCCESS, sql.assign(sql_str));                       \
-  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy2().write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy2().write(sql.ptr(), affected_rows));   \
+  LOG_INFO("exe sql end", K(sql_str));
 
 #define SYS_EXE_SQL(sql_str)                                            \
+  LOG_INFO("sys exe sql start", K(sql_str)); \
   ASSERT_EQ(OB_SUCCESS, sql.assign(sql_str));                       \
-  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows));  \
+  LOG_INFO("sys exe sql end", K(sql_str));
 
 TEST_F(ObSharedStorageTest, add_tenant)
 {
@@ -210,45 +274,42 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_shared_dir)
   wait_shared_tablet_gc_finish();
 }
 
-// TEST_F(ObSharedStorageTest, test_ls_gc_)
-// {
-//   int ret = OB_SUCCESS;
-//   share::ObTenantSwitchGuard tguard;
-//   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
-//
-//   ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->update_ls_gc_state(RunCtx.ls_id_, logservice::LSGCState::LS_OFFLINE, share::SCN::min_scn()));
-//   sleep(10);
-//
-//   int64_t affected_rows = 0;
-//   ObSqlString sql;
-//   // ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system change tenant tenant_id=%lu; \
-//   //       delete from __all_ls_status where tenant_id = %lu and ls_id_=%ld;\
-//   //       alter system change tenant tenant_id=%lu;",
-//   //       RunCtx.tenant_id_ - 1, RunCtx.tenant_id_, RunCtx.ls_id_.id(), RunCtx.tenant_id_));
-//
-//   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("delete from __all_ls_status where tenant_id = %lu and ls_id_=%ld;", RunCtx.tenant_id_ - 1, RunCtx.ls_id_.id()));
-//     LOG_INFO("kkkkkkkkkkkkkkkkkk sql", K(sql));
-//   ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows));
-//     LOG_INFO("kkkkkkkkkkkkkkkkkk sqlafter ", K(sql));
-//
-//   wait_shared_ls_gc_finish();
-//
-//   const share::ObLSID &ls_id = RunCtx.ls_id_;
-//   ObLSHandle ls_handle;
-//   ObLS *ls = NULL;
-//
-//   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id,
-//                                          ls_handle,
-//                                          ObLSGetMod::SHARED_META_SERVICE))) {
-//     LOG_WARN("failed to get ls", K(ret), K(ls_id));
-//   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-//     ret = OB_ERR_UNEXPECTED;
-//     LOG_WARN("ls is null", KR(ret), K(ls_id), KP(ls));
-//   // 2. create shared ls
-//   } else if (OB_FAIL(MTL(ObSSMetaService*)->create_ls_(ls))) {
-//     LOG_WARN("create ls failed", K(ret), K(ls_id));
-//   }
-// }
+TEST_F(ObSharedStorageTest, test_ls_gc_)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantSwitchGuard tguard;
+  ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
+
+  ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->update_ls_gc_state(RunCtx.ls_id_, logservice::LSGCState::LS_OFFLINE, share::SCN::min_scn()));
+  sleep(10);
+
+  int64_t affected_rows = 0;
+  ObSqlString sql_str;
+  ObSqlString sql;
+
+  ASSERT_EQ(OB_SUCCESS, sql_str.assign_fmt("delete from __all_ls_status where tenant_id = %lu and ls_id=%ld;", RunCtx.tenant_id_, RunCtx.ls_id_.id()));
+  SYS_EXE_SQL("alter system change tenant tenant_id=1001");
+  SYS_EXE_SQL(sql_str);
+  SYS_EXE_SQL("alter system change tenant tenant_id=1");
+
+  wait_shared_ls_gc_finish();
+
+  const share::ObLSID &ls_id = RunCtx.ls_id_;
+  ObLSHandle ls_handle;
+  ObLS *ls = NULL;
+
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id,
+                                         ls_handle,
+                                         ObLSGetMod::SHARED_META_SERVICE))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", KR(ret), K(ls_id), KP(ls));
+  // 2. create shared ls
+  } else if (OB_FAIL(MTL(ObSSMetaService*)->create_ls_(ls))) {
+    LOG_WARN("create ls failed", K(ret), K(ls_id));
+  }
+}
 
 TEST_F(ObSharedStorageTest, test_tenant_gc)
 {
@@ -373,10 +434,26 @@ void ObSharedStorageTest::check_block_for_private_dir(
 
   int64_t current_tablet_version = -1;
   int64_t current_tablet_transfer_seq = -1;
+  int64_t last_gc_version = -1;
+  uintptr_t tablet_fingerprint = 0;
   bool is_old_version_empty = false;
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_, RunCtx.tablet_id_, current_tablet_version, current_tablet_transfer_seq, is_old_version_empty));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_,
+                                                                                 RunCtx.tablet_id_,
+                                                                                 current_tablet_version,
+                                                                                 last_gc_version,
+                                                                                 current_tablet_transfer_seq,
+                                                                                 tablet_fingerprint,
+                                                                                 is_old_version_empty));
   ASSERT_NE(-1, current_tablet_version);
-  ObPrivateBlockGCHandler handler(RunCtx.ls_id_, RunCtx.ls_epoch_, RunCtx.tablet_id_, tablet_version, current_tablet_transfer_seq);
+  ASSERT_GE(last_gc_version, -1);
+  ASSERT_LT(last_gc_version, current_tablet_version);
+  ObPrivateBlockGCHandler handler(RunCtx.ls_id_,
+                                  RunCtx.ls_epoch_,
+                                  RunCtx.tablet_id_,
+                                  tablet_version,
+                                  last_gc_version,
+                                  current_tablet_transfer_seq,
+                                  tablet_fingerprint);
   ObArray<blocksstable::MacroBlockId> block_ids_in_tablet;
   ObArray<blocksstable::MacroBlockId> unuse_block_ids;
   ObArray<blocksstable::MacroBlockId> block_ids_in_dir;
@@ -446,12 +523,28 @@ void ObSharedStorageTest::get_tablet_version(
   bool is_old_version_empty = false;
   int64_t current_tablet_version = -1;
   int64_t current_tablet_transfer_seq = -1;
+  int64_t last_gc_version = -1;
+  uintptr_t tablet_fingerprint = 0;
   do {
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_, RunCtx.tablet_id_, current_tablet_version, current_tablet_transfer_seq, is_old_version_empty));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->get_current_version_for_tablet(RunCtx.ls_id_,
+                                                                                   RunCtx.tablet_id_,
+                                                                                   current_tablet_version,
+                                                                                   last_gc_version,
+                                                                                   current_tablet_transfer_seq,
+                                                                                   tablet_fingerprint,
+                                                                                   is_old_version_empty));
     ASSERT_NE(-1, current_tablet_version);
+    ASSERT_GE(last_gc_version, -1);
+    ASSERT_LT(last_gc_version, current_tablet_version);
     if (!is_old_version_empty) continue;
 
-    ObPrivateBlockGCHandler handler(RunCtx.ls_id_, RunCtx.ls_epoch_, RunCtx.tablet_id_, current_tablet_version, current_tablet_transfer_seq);
+    ObPrivateBlockGCHandler handler(RunCtx.ls_id_,
+                                    RunCtx.ls_epoch_,
+                                    RunCtx.tablet_id_,
+                                    current_tablet_version,
+                                    last_gc_version,
+                                    current_tablet_transfer_seq,
+                                    tablet_fingerprint);
     LOG_INFO("wait old tablet version delete", K(current_tablet_version), K(is_old_version_empty), K(RunCtx.ls_id_), K(RunCtx.ls_epoch_), K(handler));
     ASSERT_EQ(OB_SUCCESS, handler.list_tablet_meta_version(tablet_versions));
     usleep(100 * 1000);

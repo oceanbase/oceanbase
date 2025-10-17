@@ -396,9 +396,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         ObString sp_info_str;
         char *buf = nullptr;
         int64_t buf_len =
-            plan->stat_.sp_info_str_.length() > OB_MAX_COMMAND_LENGTH
+            (plan->stat_.sp_info_str_.length() + 1) > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
-                : plan->stat_.sp_info_str_.length();
+                : plan->stat_.sp_info_str_.length() + 1;
         if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
@@ -437,6 +437,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SYS_VARS: {
+      ObSqlString sql_influence_str;
       if (!cache_stat_updated) {
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr() ||
@@ -444,7 +445,13 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
                  cache_obj->is_result()) {
         ObString sys_vars_str, origin_str;
         if (cache_obj->is_sql_crsr()) {
-          origin_str = plan->stat_.sys_vars_str_;
+          if (OB_FAIL(sql_influence_str.assign_fmt("%u,%.*s", plan->stat_.collation_connection_,
+                                                              plan->stat_.sys_vars_str_.length(),
+                                                              plan->stat_.sys_vars_str_.ptr()))) {
+            SERVER_LOG(ERROR, "assign sql_influence_str failed", K(ret));
+          } else {
+            origin_str = sql_influence_str.string();
+          }
         } else if (cache_obj->is_result()) {
           origin_str = result_object->get_stat().sys_vars_str_;
         } else {
@@ -452,10 +459,11 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         }
         char *buf = nullptr;
         int64_t buf_len =
-            origin_str.length() > OB_MAX_COMMAND_LENGTH
+            (origin_str.length() + 1) > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
-                : origin_str.length();
-        if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+                : origin_str.length() + 1;
+        if (OB_FAIL(ret)) {
+        } else if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
         } else if (OB_FALSE_IT(origin_str.to_string(buf, buf_len))) {
@@ -483,9 +491,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         }
         char *buf = nullptr;
         int64_t buf_len =
-            origin_str.length() > OB_MAX_COMMAND_LENGTH
+            (origin_str.length() + 1) > OB_MAX_COMMAND_LENGTH
                 ? OB_MAX_COMMAND_LENGTH
-                : origin_str.length();
+                : origin_str.length() + 1;
         if (buf_len > 0 && OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
@@ -1222,11 +1230,23 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::FIRST_GET_PLAN_TIME:  {
-      cells[i].set_null();
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->stat_.gen_plan_usec_);
+      } else {
+        cells[i].set_int(0);
+      }
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::FIRST_EXE_USEC:  {
-      cells[i].set_null();
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->stat_.first_exec_usec_);
+      } else {
+        cells[i].set_int(0);
+      }
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::FORMAT_SQL_ID: {

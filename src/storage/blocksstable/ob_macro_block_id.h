@@ -16,6 +16,21 @@
 #include "share/ob_define.h"
 #include "common/storage/ob_io_device.h"
 
+// Forward declaration to avoid circular dependency
+namespace oceanbase {
+namespace blocksstable {
+enum class ObStorageObjectType : uint8_t;
+class ObStorageObjectTypeBase;
+class SSObjUtil;
+}
+}
+
+// Forward declaration for storage namespace types
+namespace oceanbase {
+namespace storage {
+enum class ObSSMacroBlockType : uint8_t;
+}
+}
 
 namespace oceanbase
 {
@@ -28,39 +43,6 @@ enum class ObMacroBlockIdMode : uint8_t
   ID_MODE_SHARE = 2,
   ID_MODE_MAX,
 };
-
-enum class ObStorageObjectType : uint8_t // FARM COMPAT WHITELIST
-{
-#define REGISTER_MACRO_BLOCK_ID
-#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_write_through, is_overwrite, is_support_fd_cache, is_valid, to_local_path_format, local_path_to_macro_id, to_remote_path_format, get_parent_dir, create_parent_dir) obj_id,
-    #include "storage/blocksstable/ob_macro_block_id_register.h"
-#undef STORAGE_OBJECT_TYPE_INFO
-#undef REGISTER_MACRO_BLOCK_ID
-};
-
-bool is_read_through_storage_object_type(const ObStorageObjectType type);
-bool is_need_alloc_file_size(const ObStorageObjectType type);
-bool is_pin_storage_object_type(const ObStorageObjectType type);
-bool is_overwrite_object_type(const ObStorageObjectType type);
-bool need_check_inner_tablet_type(const ObStorageObjectType type);
-
-
-static const char *get_storage_objet_type_str(const ObStorageObjectType type)
-{
-  static const char *type_str_map_[static_cast<int32_t>(ObStorageObjectType::MAX) + 1] = {
-#define REGISTER_MACRO_BLOCK_ID
-#define STORAGE_OBJECT_TYPE_INFO(obj_id, obj_str, is_pin_local, is_read_through, is_write_through, is_overwrite, is_support_fd_cache, is_valid, to_local_path_format, local_path_to_macro_id, to_remote_path_format, get_parent_dir, create_parent_dir) obj_str,
-    #include "storage/blocksstable/ob_macro_block_id_register.h"
-#undef STORAGE_OBJECT_TYPE_INFO
-#undef REGISTER_MACRO_BLOCK_ID
-  };
-  const char *type_str = type_str_map_[static_cast<int32_t>(ObStorageObjectType::MAX)];
-  if (OB_LIKELY((type >= ObStorageObjectType::PRIVATE_DATA_MACRO)) ||
-                (type <= ObStorageObjectType::MAX)) {
-    type_str = type_str_map_[static_cast<int32_t>(type)];
-  }
-  return type_str;
-}
 
 class MacroBlockId final
 {
@@ -111,8 +93,9 @@ public:
   bool is_id_mode_backup() const; // sn deploy mode, but backup macro id.
   bool is_id_mode_share() const; // ss deploy mode
   bool is_shared_data_or_meta() const; // shared tablet macro block in ss mode
-  bool is_shared_data_block_except_mds() const; // shared tablet data macro block in ss mode
+  bool is_shared_data_block_except_mds() const; // shared tablet data macro block in ss mode, except mds
   bool is_shared_data_block_or_meta_block() const; // shared tablet meta or data macro block in ss mode
+  bool is_shared_data_block_or_meta_block_except_mds() const; // shared tablet meta or data macro block in ss mode, except mds
   bool is_private_data_or_meta() const; // private tablet macro block in ss mode
   bool is_data() const; // shared data or private data
   bool is_meta() const; // shared meta or private meta
@@ -130,6 +113,7 @@ public:
   void set_ss_version(const uint64_t ss_version) { ss_version_ = ss_version; }
   void set_ss_id_mode(const uint64_t ss_mode_id) { ss_id_mode_ = ss_mode_id; }
   ObStorageObjectType storage_object_type() const { return static_cast<ObStorageObjectType>(storage_object_type_); }
+  const ObStorageObjectTypeBase &get_type_instance() const;
   void set_storage_object_type(const uint64_t storage_object_type) { storage_object_type_ = storage_object_type; }
   int64_t incarnation_id() const { return incarnation_id_; }
   void set_incarnation_id(const uint64_t incarnation_id) { incarnation_id_ = incarnation_id; }
@@ -143,15 +127,7 @@ public:
   void set_meta_transfer_seq(const int64_t meta_transfer_seq) { meta_transfer_seq_ = meta_transfer_seq; }
   uint64_t meta_version_id() const { return meta_version_id_; }
   void set_meta_version_id(const uint64_t meta_version_id) { meta_version_id_ = meta_version_id; }
-  bool meta_is_inner_tablet() const
-  {
-    bool b_ret = false;
-    if (need_check_inner_tablet_type(static_cast<ObStorageObjectType>(storage_object_type_))) {
-      const ObTabletID tablet_id(second_id_);
-      b_ret = tablet_id.is_ls_inner_tablet();
-    }
-    return b_ret;
-  }
+  bool meta_is_inner_tablet() const;
   int64_t meta_ls_id() const { return meta_ls_id_; }
   void set_meta_ls_id(const int64_t ls_id) { meta_ls_id_ = ls_id; }
   void set_reorganization_scn(const int64_t reorganization_scn) { reorganization_scn_ = reorganization_scn; }
@@ -277,7 +253,6 @@ OB_INLINE bool MacroBlockId::operator !=(const MacroBlockId &other) const
 {
   return !(other == *this);
 }
-
 #define SERIALIZE_MEMBER_WITH_MEMCPY(member)                                 \
   if (OB_SUCC(ret)) {                                                        \
     if (OB_UNLIKELY(buf_len - pos < sizeof(member))) {                       \

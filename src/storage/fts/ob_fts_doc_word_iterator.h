@@ -14,6 +14,8 @@
 #define OCEANBASE_STORAGE_FTS_DOC_WORD_ITERATOR_H
 
 #include "lib/allocator/page_arena.h"
+#include "share/datum/ob_datum.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/schema/ob_table_param.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "storage/access/ob_dml_param.h"
@@ -35,9 +37,7 @@ public:
       const common::ObTabletID &tablet_id,
       const transaction::ObTxReadSnapshot *snapshot,
       const int64_t schema_version);
-  int do_scan(
-      const uint64_t table_id,
-      const common::ObDocId &doc_id);
+  int do_scan(const uint64_t table_id, const ObDatum &row_mapping_id);
   int get_next_row(blocksstable::ObDatumRow *&datum_row);
 
   void reset();
@@ -54,10 +54,9 @@ private:
       const uint64_t table_id,
       share::schema::ObTableParam &table_param,
       common::ObIArray<uint64_t> &column_ids);
-  int build_key_range(
-      const uint64_t table_id,
-      const common::ObDocId &doc_id,
-      common::ObIArray<ObNewRange> &rowkey_range);
+  int build_key_range(const uint64_t table_id,
+                      const ObDatum &row_mapping_id,
+                      common::ObIArray<ObNewRange> &rowkey_range);
   int do_table_scan();
   int do_table_rescan();
   int reuse();
@@ -68,6 +67,7 @@ private:
   share::schema::ObTableParam table_param_;
   storage::ObTableScanParam scan_param_;
   common::ObNewRowIterator *doc_word_iter_;
+  ObDocIDType docid_type_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObFTDocWordScanIterator);

@@ -112,7 +112,8 @@ ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType 
       repartition_table_id_(0),
       wf_hybrid_aggr_status_expr_(NULL),
       wf_hybrid_pby_exprs_cnt_array_(alloc),
-      ddl_slice_id_expr_(NULL)
+      ddl_slice_id_expr_(NULL),
+      dfo_expr_frame_info_(NULL)
 {
 }
 
@@ -201,7 +202,14 @@ int ObPxTransmitOp::inner_open()
     rand48_buf_[0] = 0x330E; // 0x330E is the arbitrary value of srand48
     rand48_buf_[1] = trans_input->get_sqc_id();
     rand48_buf_[2] = trans_input->get_task_id();
-    OZ(params_.meta_.init(get_spec().output_, 0, params_.reorder_fixed_expr_));
+
+    if ((ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+         ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() < CLUSTER_VERSION_4_4_0_0) ||
+        ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_4_1_0) {
+      OZ(params_.meta_.init(get_spec().output_, 0, params_.reorder_fixed_expr_, &px_row_allocator_));
+    } else {
+      OZ(params_.meta_.init(get_spec().output_, 0, params_.reorder_fixed_expr_));
+    }
     if (is_object_sample()) {
       OZ(init_channel(*trans_input));
       OZ(set_expect_range_count());
@@ -211,6 +219,8 @@ int ObPxTransmitOp::inner_open()
       OZ(init_channel(*trans_input));
     }
     chs_agent_.set_row_meta(params_.meta_);
+    chs_agent_.set_plan_min_cluster_version(ctx_.get_physical_plan_ctx()->
+      get_phy_plan()->get_min_cluster_version());
     if (OB_SUCC(ret) && get_spec().use_rich_format_) {
       if (dtl::ObDtlMsgType::PX_VECTOR_FIXED == data_msg_type_) {
         int64_t size_per_buffer = GCONF.dtl_buffer_size;
@@ -402,6 +412,7 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
         ch->set_row_meta(params_.meta_);
+        ch->plan_min_cluster_version_ = min_cluster_version;
       }
       LOG_TRACE("Transmit channel", K(ch), KP(ch->get_id()), K(ch->get_peer()));
     }

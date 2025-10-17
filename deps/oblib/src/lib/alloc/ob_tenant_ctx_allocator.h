@@ -470,6 +470,7 @@ public:
     abort_unless(attr.numa_id_ == ta.get_numa_id());
     ObDisableDiagnoseGuard disable_diagnose_guard;
     SANITY_DISABLE_CHECK_RANGE();
+    ObSyncLogGuard guard;
     if (!attr.label_.is_valid()) {
       LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "OB_MOD_DO_NOT_USE_ME REALLOC", K(size));
     }
@@ -490,11 +491,11 @@ public:
         on_free(*obj, *block);
         inner_attr.use_malloc_v2_ = block->is_malloc_v2_;
       }
-      ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
-          && ObCtxIds::GLIBC != attr.ctx_id_);
       BASIC_TIME_GUARD(time_guard, "ObMalloc");
       DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
-      if (malloc_sample_allowed(size, inner_attr)) {
+      const bool light_backtrace_allowed = is_memleak_light_backtrace_enabled() && ObLightBacktraceGuard::is_enabled() && ObCtxIds::GLIBC != attr.ctx_id_;
+      bool sample_allowed = light_backtrace_allowed || malloc_sample_allowed(size, inner_attr);
+      if (sample_allowed) {
         inner_attr.extra_size_ = AOBJECT_EXTRA_INFO_SIZE;
       }
       do {
@@ -523,7 +524,7 @@ public:
         SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
       }
       if (OB_NOT_NULL(nobj)) {
-        on_alloc(*nobj, inner_attr);
+        on_alloc(*nobj, inner_attr, light_backtrace_allowed);
         nptr = nobj->data_;
       }
     }
@@ -536,7 +537,7 @@ public:
   }
   static void common_free(void *ptr);
 private:
-  static void on_alloc(AObject& obj, const ObMemAttr& attr);
+  static void on_alloc(AObject& obj, const ObMemAttr& attr, const bool light_backtrace_allowed);
   static void on_free(AObject& obj, ABlock& block);
 
 private:

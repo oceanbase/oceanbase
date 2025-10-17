@@ -156,7 +156,7 @@
     "base_value": "45",
     "data_type": "int",
     "info": "The collation which the server should translate to after receiving the statement",
-    "flags": "GLOBAL | SESSION | NULL | INFLUENCE_PLAN | NEED_SERIALIZE",
+    "flags": "GLOBAL | SESSION | NULL | NEED_SERIALIZE",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_collation_not_null",
     "get_meta_type_func": "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar",
     "to_select_obj_func": "ObSysVarToObjFuncs::to_obj_collation",
@@ -3350,7 +3350,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.4.0.0",
+    "default_value": "4.4.1.0",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -6901,7 +6901,7 @@
   "plsql_optimize_level": {
     "id": 10393,
     "name": "plsql_optimize_level",
-    "default_value": "2",
+    "default_value": "0",
     "base_value": "2",
     "data_type": "int",
     "min_val": "0",
@@ -11808,6 +11808,38 @@
     "min_val": "0",
     "max_val": "100",
     "publish_version": "4.3.5.2",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "sql_transpiler" : {
+    "id": 10754,
+    "name": "sql_transpiler",
+    "default_value": 0,
+    "base_value": 0,
+    "data_type": "enum",
+    "info": "control whether the sql transpiler is enabled. When enabled, PL/SQL functions are automatically transpiled into SQL expressions whenever possible, without user intervention.",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "enum_names": [
+      "OFF",
+      "ON",
+      "BASIC"
+    ],
+    "publish_version": "4.3.5.5",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "plsql_can_transform_sql_to_assign": {
+    "id": 10755,
+    "name": "plsql_can_transform_sql_to_assign",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "4.4.2.0",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""

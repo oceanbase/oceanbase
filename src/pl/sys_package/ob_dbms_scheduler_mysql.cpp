@@ -17,6 +17,7 @@
 #include "ob_dbms_scheduler_mysql.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 
 namespace oceanbase
 {
@@ -62,6 +63,7 @@ int ObDBMSSchedulerMysql::disable(
   CK (OB_LIKELY(3 == params.count()));
   OZ (dml.add_gmt_modified(now));
   OX (tenant_id = ctx.get_my_session()->get_effective_tenant_id());
+  OZ (ObScheduledTriggerPartitionBalance::check_disable_trigger_job(tenant_id, params.at(0).get_string()));
   OZ (dml.add_pk_column("tenant_id",
     share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job_name", ObHexEscapeSqlStr(params.at(0).get_string())));
@@ -86,6 +88,7 @@ int ObDBMSSchedulerMysql::enable(
   CK (OB_LIKELY(1 == params.count()));
   OZ (dml.add_gmt_modified(now));
   OX (tenant_id = ctx.get_my_session()->get_effective_tenant_id());
+  OZ (ObScheduledTriggerPartitionBalance::check_enable_trigger_job(tenant_id, params.at(0).get_string()));
   OZ (dml.add_pk_column("tenant_id",
     share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job_name", ObHexEscapeSqlStr(params.at(0).get_string())));
@@ -109,6 +112,7 @@ int ObDBMSSchedulerMysql::set_attribute(
   uint64_t tenant_id = OB_INVALID_ID;
   bool is_stat_window_attr = false;
   bool is_dynamic_partition_attr = false;
+  bool is_trigger_part_balance_attr = false;
   const int64_t now = ObTimeUtility::current_time();
   CK (OB_LIKELY(3 == params.count()));
   OZ (dml.add_gmt_modified(now));
@@ -126,7 +130,16 @@ int ObDBMSSchedulerMysql::set_attribute(
                                                                           dml))) {
       LOG_WARN("failed to is stats maintenance window attr", K(ret), K(params.at(0).get_string()),
                                         K(params.at(1).get_string()), K(params.at(2).get_string()));
-    } else if (is_stat_window_attr) {
+    } else if (OB_FAIL(ObScheduledTriggerPartitionBalance::set_attr_for_trigger_part_balance(
+        ctx.get_my_session(),
+        params.at(0).get_string(),
+        params.at(1).get_string(),
+        params.at(2).get_string(),
+        is_trigger_part_balance_attr,
+        dml))) {
+      LOG_WARN("is scheduled trigger partition balance attr failed", KR(ret), "job_name", params.at(0).get_string(),
+          "attr_name", params.at(1).get_string(), "val_str", params.at(2).get_string());
+    } else if (is_stat_window_attr || is_trigger_part_balance_attr) {
       OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
       OZ (execute_sql(ctx, sql, affected_rows));
       CK (1 == affected_rows || 2 == affected_rows);

@@ -587,7 +587,7 @@ int ObTXTransferUtils::traverse_trans_to_submit_redo_log_with_retry(
          && ObTimeUtil::current_time() - start_time < timeout) {
     ret = ls.get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id);
     if (OB_TX_NOLOGCB == ret) {
-      usleep(10_ms);
+      ob_usleep(10_ms);
     }
   }
 

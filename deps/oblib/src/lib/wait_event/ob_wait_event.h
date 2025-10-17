@@ -70,7 +70,7 @@ WAIT_EVENT_DEF(TRANS_SET_VIOLATION_RETRY, 14006, "retry: transaction set violati
 WAIT_EVENT_DEF(IO_QUEUE_COND_WAIT, 15066, "io queue condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(LATCH_WAIT_QUEUE_LOCK_WAIT, 15084, "latch wait queue lock wait", "address", "number", "tries", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DEFAULT_COND_WAIT, 15101, "default condition wait", "address", "", "", CONCURRENCY, true, true)
-WAIT_EVENT_DEF(DEFAULT_SLEEP, 15102, "sleep wait", "sleep_interval", "", "", IDLE, true, true)
+WAIT_EVENT_DEF(DEFAULT_SLEEP, 15102, "sleep wait", "sleep_interval", "caller bt", "", IDLE, true, true)
 WAIT_EVENT_DEF(CLOG_WRITER_COND_WAIT, 15103, "clog writer condition wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(IO_CONTROLLER_COND_WAIT, 15104, "io controller condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(IO_PROCESSOR_COND_WAIT, 15105, "io processor condition wait", "address", "", "", CONCURRENCY, true, false)
@@ -125,6 +125,8 @@ WAIT_EVENT_DEF(ASYNC_COMMITTING_WAIT, 16018, "tx commiting wait", "", "", "", CO
 WAIT_EVENT_DEF(OBCDC_PART_MGR_SCHEMA_VERSION_WAIT, 18000, "oblog part mgr schema version wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_TMP_FILE_WAIT, 18001, "backup tmp file wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_TMP_FILE_QUEUE_WAIT, 18002, "backup tmp file queue wait", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(CG_ROW_TMP_FILE_WAIT, 18003, "cg row file wait", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(CG_BLOCK_TMP_FILE_WAIT, 18004, "cg block file wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(SYNC_GET_GTS_WAIT, 18101, "sync get gts timestamp wait", "address", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(LOCK_FOR_READ_WAIT, 18102, "sleep: lock for read need wait for concurrency control", "sleep_interval", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DEADLOCK_MGR_BUCKET_LOCK, 18103, "latch: deadlock manager bucket access wait", "spin count", "", "", CONCURRENCY, true, true)
@@ -141,7 +143,8 @@ WAIT_EVENT_DEF(OCI_DBLINK_POOL_LOCK, 18113, "dbink pool lock", "", "", "", CONCU
 WAIT_EVENT_DEF(USER_INFO_LOCK, 18114, "user info lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(MYSQL_CONN_GET_LOCK, 18115, "mysql conn get lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock", "", "", "", CONCURRENCY, true, true)
-
+WAIT_EVENT_DEF(BACKUP_VALIDATE_SERVICE_COND_WAIT, 18117, "backup validate service condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(HMS_CLIENT_POOL_COND_WAIT, 18118, "hms client pool condition wait", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)

@@ -128,7 +128,14 @@ int64_t LogIOWorkerWrapper::get_last_working_time() const
     PALF_LOG_RET(ERROR, OB_NOT_INIT, "LogIOWorkerWrapper not inited", KPC(this));
   } else {
     for (int64_t i = 0; i < log_writer_parallelism_; i++) {
-      last_working_time = MAX(last_working_time, log_io_workers_[i].get_last_working_time());
+      const int64_t this_time = log_io_workers_[i].get_last_working_time();
+      if (OB_INVALID_TIMESTAMP == this_time) {
+        // skip
+      } else if (OB_INVALID_TIMESTAMP == last_working_time) {
+        last_working_time = this_time;
+      } else {
+        last_working_time = MIN(last_working_time, this_time);
+      }
     }
   }
   return last_working_time;

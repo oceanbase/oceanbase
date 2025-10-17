@@ -476,10 +476,10 @@ int ObTransformMVRewritePrepare::resolve_temp_stmt(const ObString &sql_string,
         LOG_WARN("invalid mv stmt", K(ret), K(dml_stmt));
       } else if (OB_FAIL(resolver_ctx.query_ctx_->query_hint_.init_query_hint(resolver_ctx.allocator_,
                                                                               resolver_ctx.session_info_,
+                                                                              resolver_ctx.global_hint_,
                                                                               dml_stmt))) {
         LOG_WARN("failed to init query hint.", K(ret));
-      } else if (OB_FAIL(resolver_ctx.query_ctx_->query_hint_.check_and_set_params_from_hint(resolver_ctx,
-                                                                                             *dml_stmt))) {
+      } else if (OB_FAIL(resolver_ctx.query_ctx_->query_hint_.set_params_from_hint(resolver_ctx))) {
         LOG_WARN("failed to check and set params from hint", K(ret));
       } else if (OB_FAIL(transform_pre_process.transform(dml_stmt, dummy_value))) {
         LOG_WARN("failed to do transform pre process", K(ret), KPC(dml_stmt));

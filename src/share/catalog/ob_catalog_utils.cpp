@@ -40,6 +40,29 @@ bool ObCatalogUtils::is_internal_catalog_name(const common::ObString &name_from_
                                : (name_from_meta.compare(OB_INTERNAL_CATALOG_NAME) == 0);
 }
 
+template <typename T>
+typename std::enable_if_t<std::is_base_of_v<ObILakeTableMetadata, T>, int>
+ObCatalogUtils::deep_copy_lake_table_metadata(char *buf, const T &old_var, T *&new_var)
+{
+  int ret = OB_SUCCESS;
+  new_var = NULL;
+
+  if (NULL == buf) {
+    ret = common::OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(buf));
+  } else {
+    int64_t size = old_var.get_convert_size() + sizeof(common::ObDataBuffer);
+    common::ObDataBuffer *data_buf = new (buf + sizeof(old_var))
+        common::ObDataBuffer(buf + sizeof(old_var) + sizeof(common::ObDataBuffer),
+                             size - sizeof(old_var) - sizeof(common::ObDataBuffer));
+    new_var = new (buf) T(*data_buf);
+    if (OB_FAIL(copy_assign(*new_var, old_var))) {
+      LOG_WARN("fail to assign lake table metadata", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSwitchCatalogHelper::set(uint64_t catalog_id,
                                uint64_t db_id,
                                const common::ObString& database_name,

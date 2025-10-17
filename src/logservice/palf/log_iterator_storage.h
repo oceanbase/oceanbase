@@ -22,6 +22,9 @@
 #include "log_storage_interface.h"
 #include "lsn.h"
 #include "log_reader_utils.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 namespace oceanbase
 {
 namespace palf
@@ -87,10 +90,14 @@ class MemoryStorage : public ILogStorage {
 public:
   MemoryStorage();
   ~MemoryStorage();
-  int init(const LSN &start_lsn);
+  int init(const LSN &start_lsn, const bool enable_logservice);
+  void reset();
   void destroy();
   bool is_inited() const { return is_inited_; }
   int append(const char *buf, const int64_t buf_len);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  const libpalf::LibPalfIteratorMemoryStorageFFI * get_memory_storage() { return memory_storage_; }
+#endif
   int pread(const LSN& lsn,
 	    const int64_t in_read_size,
 	    ReadBuf &read_buf,
@@ -103,6 +110,10 @@ private:
   LSN start_lsn_;
   LSN log_tail_;
   bool is_inited_;
+  bool enable_logservice_;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  const libpalf::LibPalfIteratorMemoryStorageFFI *memory_storage_;
+#endif
 };
 
 } // end namespace palf

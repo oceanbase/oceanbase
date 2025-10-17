@@ -131,6 +131,9 @@ int ObSimpleServer::simple_init()
   // NOTE: memory_limit must keep same with log_disk_size
   optstr_ = std::string();
   optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=" + std::string(datafile_size_) +",stack_size=512K,_enable_palf_kv=0";
+  if (!extra_optstr_.empty()) {
+    optstr_ = optstr_ + "," + extra_optstr_;
+  }
   opts.optstr_ = optstr_.c_str();
   //opts.devname_ = "eth0";
   opts.use_ipv6_ = false;
@@ -240,7 +243,8 @@ int ObSimpleServer::init_sql_proxy()
   return ret;
 }
 
-int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name, const bool oracle_mode)
+int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name,
+    const bool oracle_mode, const ObMySQLConnection::Mode connection_mode)
 {
   int ret = OB_SUCCESS;
   std::string user = oracle_mode ? "sys@" : "root@";
@@ -258,7 +262,7 @@ int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name
   param.sqlclient_per_observer_conn_limit_ = 10000;
   ret = sql_conn_pool2_.init(db_addr, param);
   if (OB_SUCC(ret)) {
-    sql_conn_pool2_.set_mode(common::sqlclient::ObMySQLConnection::DEBUG_MODE);
+    sql_conn_pool2_.set_mode(connection_mode);
     ret = sql_proxy2_.init(&sql_conn_pool2_);
   }
 

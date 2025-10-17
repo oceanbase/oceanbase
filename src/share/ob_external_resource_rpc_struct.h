@@ -73,17 +73,20 @@ struct ObDropExternalResourceArg final : public ObDDLArg
 public:
   ObDropExternalResourceArg()
     : tenant_id_(OB_INVALID_TENANT_ID),
-      database_id_(OB_INVALID_ID)
+      database_id_(OB_INVALID_ID),
+      type_(share::schema::ObSimpleExternalResourceSchema::INVALID_TYPE)
   {
     name_.reset();
   }
 
   ObDropExternalResourceArg(const uint64_t &tenant_id,
                             const uint64_t &database_id,
-                            const ObString &external_resource_name)
+                            const ObString &external_resource_name,
+                            const share::schema::ObSimpleExternalResourceSchema::ResourceType type)
     : tenant_id_(tenant_id),
       database_id_(database_id),
-      name_(external_resource_name)
+      name_(external_resource_name),
+      type_(type)
   {
     exec_tenant_id_ = tenant_id;
   }
@@ -91,12 +94,13 @@ public:
   int assign(const ObDropExternalResourceArg &arg);
   bool is_valid() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(name));
+  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(name), K_(type));
 
 public:
   uint64_t tenant_id_;
   uint64_t database_id_;
   ObString name_;
+  share::schema::ObSimpleExternalResourceSchema::ResourceType type_;
 };
 
 struct ObCreateExternalResourceRes final

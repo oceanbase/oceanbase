@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_SCHEMA_OB_SCHEMA_PRINTER_H_
 #include <stdint.h>
 #include "share/ob_define.h"
+#include "share/schema/ob_udt_info.h"
 #include "lib/container/ob_iarray.h"
 #include "share/schema/ob_schema_struct.h"
 #include "pl/parser/ob_pl_parser.h"
@@ -420,12 +421,17 @@ public:
                                 char *buf,
                                 const int64_t &buf_len,
                                 int64_t &pos) const;
-  int print_element_type(const uint64_t tenant_id,
-                         const uint64_t element_type_id,
+  int print_element_type(const uint64_t element_type_id,
                          const ObUDTBase *element_type_info,
                          char* buf,
                          const int64_t& buf_len,
                          int64_t &pos) const;
+  int print_object_spec_definition(const uint64_t tenant_id,
+                                   ObUDTTypeInfo *udt_info,
+                                   char* buf,
+                                   const int64_t& buf_len,
+                                   int64_t& pos,
+                                   ObString methods_definition) const;
   int print_trigger_definition(const share::schema::ObTriggerInfo &trigger_info,
                                char *buf, int64_t buf_len, int64_t &pos,
                                bool get_ddl = false) const;

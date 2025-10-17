@@ -117,6 +117,7 @@ public:
         last_refresh_ts_(INITED),
         alloc_mutex_(common::ObLatchIds::SEQUENCE_VALUE_ALLOC_LOCK),
         fetch_(common::ObLatchIds::SEQUENCE_VALUE_FETCH_LOCK),
+        epoch_version_(0),
         last_number_()
   {}
   int combine_prefetch_node()
@@ -154,6 +155,7 @@ public:
   int64_t last_refresh_ts_;
   lib::ObMutex alloc_mutex_;
   lib::ObMutex fetch_;
+  int64_t epoch_version_;
 private:
   ObSequenceValue last_number_;
 public:
@@ -163,7 +165,8 @@ public:
                K_(with_prefetch_node),
                K_(last_refresh_ts),
                K_(last_number),
-               K_(base_on_last_number));
+               K_(base_on_last_number),
+               K_(epoch_version));
 };
 
 class ObSequenceCache
@@ -180,8 +183,10 @@ public:
             common::ObMySQLProxy &sql_proxy);
   int nextval(const share::schema::ObSequenceSchema &schema,
               common::ObIAllocator &allocator, // 用于各种临时计算
-              ObSequenceValue &nextval);
+              ObSequenceValue &nextval,
+              sql::ObSQLSessionInfo *session);
   int remove(uint64_t tenant_id, uint64_t sequence_id, obrpc::ObSeqCleanCacheRes &cache_res);
+  int flush_sequence_cache(const uint64_t tenant_id, const uint64_t database_id, const ObString sequence_name);
 
 private:
   /* functions */
@@ -191,7 +196,8 @@ private:
 
   int prefetch_sequence_cache(const schema::ObSequenceSchema &schema,
                               ObSequenceCacheItem &cache,
-                              ObSequenceCacheItem &old_cache);
+                              ObSequenceCacheItem &old_cache,
+                              bool &wrap_around);
   int find_sequence_cache(const schema::ObSequenceSchema &schema,
                           ObSequenceCacheItem &cache);
   int move_next(const schema::ObSequenceSchema &schema,
@@ -204,7 +210,8 @@ private:
                         bool &need_refill);
   int refill_sequence_cache(const schema::ObSequenceSchema &schema,
                             common::ObIAllocator &allocator,
-                            ObSequenceCacheItem &cache);
+                            ObSequenceCacheItem &cache,
+                            bool &wrap_around);
   /* variables */
   ObSequenceDMLProxy dml_proxy_;
   bool inited_;

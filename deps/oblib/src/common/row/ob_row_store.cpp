@@ -719,6 +719,8 @@ int ObRowStore::add_row_by_projector(const ObNewRow &row,
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 OB_LOG(ERROR, "failed to new block", K(ret));
               }
+            } else if (block != blocks_.get_last() && OB_FAIL(blocks_.add_last(block))) {
+              LOG_WARN("failed to add block", K(ret));
             } else if (OB_ISNULL(block = new_block())) {  // normal case
               ret = OB_ALLOCATE_MEMORY_FAILED;
               OB_LOG(ERROR, "failed to new block", K(ret));
@@ -750,6 +752,9 @@ int ObRowStore::add_row_by_projector(const ObNewRow &row,
     if (OB_SUCC(ret) && 3 < retry) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(ERROR, "unexpected branch");
+    }
+    if (OB_FAIL(ret) && nullptr != block && block != blocks_.get_last()) {
+      alloc_.free(block);
     }
   }
   return ret;

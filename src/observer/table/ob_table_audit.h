@@ -324,7 +324,7 @@ public:
         ops_(ops),
         entities_(nullptr)
   {}
-  ObTableAuditMultiOp(ObTableOperationType::Type op_type, const common::ObIArray<ObITableEntity*> *entities)
+  ObTableAuditMultiOp(ObTableOperationType::Type op_type, const common::ObIArray<const ObITableEntity*> *entities)
       : op_type_(op_type),
         ops_(nullptr),
         entities_(entities)
@@ -341,7 +341,7 @@ private:
 public:
   ObTableOperationType::Type op_type_;
   const common::ObIArray<ObTableOperation> *ops_;
-  const common::ObIArray<ObITableEntity*> *entities_;
+  const common::ObIArray<const ObITableEntity*> *entities_;
 };
 
 struct ObTableAuditRedisOp

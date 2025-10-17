@@ -36,6 +36,7 @@ IMPL_ON_DEMAND_PRINT_FUNC(ObTxSubState)
     TX_KV_PRINT_WITH_ERR(flag_.prepare_notify_ > 0, prepare_notify, flag_.prepare_notify_, " ");
     TX_KV_PRINT_WITH_ERR(flag_.force_abort_ > 0, force_abort, flag_.force_abort_, " ");
     TX_KV_PRINT_WITH_ERR(flag_.transfer_blocking_ > 0, transfer_blocking, flag_.transfer_blocking_, " ");
+    TX_KV_PRINT_WITH_ERR(flag_.commit_submitting_redo_ > 0, commit_submitting_redo, flag_.commit_submitting_redo_, " ");
 
     ON_DEMAND_END_PRINT(SubState);
   // }

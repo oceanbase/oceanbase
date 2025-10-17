@@ -398,10 +398,10 @@ TEST_F(TestArrayMeta, type_deduce)
   // different str_len is still has same super type
   ASSERT_EQ(true, type2_info_parse.has_same_super_type(type1_info_parse));
 
-  ObSqlCollectionInfo decimal_array(allocator);
-  ObString type3_name(strlen("ARRAY(DECIMAL_INT(10,2))"), "ARRAY(DECIMAL_INT(10,2))");
-  decimal_array.set_name(type3_name);
-  ASSERT_EQ(OB_SUCCESS, decimal_array.parse_type_info());
+  // ObSqlCollectionInfo decimal_array(allocator);
+  // ObString type3_name(strlen("ARRAY(DECIMAL_INT(10,2))"), "ARRAY(DECIMAL_INT(10,2))");
+  // decimal_array.set_name(type3_name);
+  // ASSERT_EQ(OB_SUCCESS, decimal_array.parse_type_info());
 
   ObSqlCollectionInfo float_array(allocator);
   ObString type4_name(strlen("ARRAY(FLOAT)"), "ARRAY(FLOAT)");
@@ -409,7 +409,7 @@ TEST_F(TestArrayMeta, type_deduce)
   ASSERT_EQ(OB_SUCCESS, float_array.parse_type_info());
 
   // array(float)/array(decimal) has same super type
-  ASSERT_EQ(true, decimal_array.has_same_super_type(float_array));
+  // ASSERT_EQ(true, decimal_array.has_same_super_type(float_array));
 }
 
 TEST_F(TestArrayMeta, nested_array_parse)

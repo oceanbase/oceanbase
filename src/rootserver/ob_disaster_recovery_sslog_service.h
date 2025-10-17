@@ -31,6 +31,7 @@ public:
   virtual void runTimerTask() override;
 
 private:
+  int check_locality_for_add_sslog_(bool &locality_is_matched);
   int get_params_for_add_sslog_(int64_t &orig_paxos_replica_number,
                                 common::ObAddr &leader_server);
 

@@ -233,6 +233,12 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
           } else {
             tz_info_map_.id_map_ = shared_tz_info_map_.id_map_;
             tz_info_map_.name_map_ = shared_tz_info_map_.name_map_;
+            // caculate the offset between any two time zones
+            if (OB_FAIL(calc_tz_info_offsets(shared_tz_info_map_))) {
+              LOG_WARN("fail to caculate offset", K(ret));
+            } else {
+              tz_info_map_.offset_map_ = shared_tz_info_map_.offset_map_;
+            }
           }
           LOG_INFO("share tz info inited", K(ret), K(shared_tz_info_map_.id_map_),
                   K(shared_tz_info_map_.name_map_));
@@ -253,9 +259,16 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
               LOG_INFO("reset tz info map buf", K(tenant_id_), K(ret));
               tz_info_map_.id_map_ = shared_tz_info_map_.id_map_;
               tz_info_map_.name_map_ = shared_tz_info_map_.name_map_;
+              tz_info_map_.offset_map_ = shared_tz_info_map_.offset_map_;
             } else {
               tz_info_map_.id_map_ = tz_info_map_buf_.id_map_;
               tz_info_map_.name_map_ = tz_info_map_buf_.name_map_;
+              // caculate the offset between any two time zones
+              if (OB_FAIL(calc_tz_info_offsets(tz_info_map_buf_))) {
+                LOG_WARN("fail to caculate offset", K(ret));
+              } else {
+                tz_info_map_.offset_map_ = tz_info_map_buf_.offset_map_;
+              }
             }
           }
         }
@@ -367,6 +380,63 @@ int ObTimeZoneInfoManager::calc_default_tran_type(const ObIArray<ObTZTransitionT
     i = (type_count == i ? 0 : i);
     if (OB_FAIL(type_info.set_default_tran_type(types_with_null.at(i)))) {
       LOG_WARN("fail to set default tran type", K(i), "default_tran_type", types_with_null.at(i), K(types_with_null),K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTimeZoneInfoManager::calc_tz_info_offsets(ObTZInfoMap &tz_info_map)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tz_info_map.id_map_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tz info map not init", K(ret));
+  } else {
+    ObMemAttr attr(OB_SERVER_TENANT_ID, "TZInfoMgrMap");
+    if (tz_info_map.offset_map_buf_.created()) {
+      tz_info_map.offset_map_buf_.clear();
+    } else if (OB_FAIL(tz_info_map.offset_map_buf_.create(ObTZInfoMap::TZ_OFFSET_BUCKET_NUM, attr))) {
+      LOG_WARN("fail to init offset map", K(ret));
+    }
+    tz_info_map.offset_map_ = &tz_info_map.offset_map_buf_;
+    ObTZInfoIDPosMap::Iterator iter(*tz_info_map.id_map_);
+    ObTimeZoneInfoPos *tz_pos = NULL;
+    const int max_loop_cnt = 600;
+    int outer_cnt = 0;
+    ObTZOffsetValue offset_value;
+    common::ObSArray<ObTZRevertTypeInfo> *tz_revt_ptr = NULL;
+    while (OB_SUCC(ret) && (tz_pos = iter.next(tz_pos)) != NULL && (outer_cnt++ < max_loop_cnt)) {
+      ObTZInfoIDPosMap::Iterator inner_iter(*tz_info_map.id_map_);
+      ObTimeZoneInfoPos *inner_tz_pos = NULL;
+      int inner_cnt = 0;
+      int32_t id_invalid = OB_INVALID_INDEX;
+      int64_t tmp_time = 1726765200; // a random timestamp
+      while (OB_SUCC(ret) && (inner_tz_pos = inner_iter.next(inner_tz_pos)) != NULL && (inner_cnt++ < max_loop_cnt)) {
+        // only calculate offset between two time zones with one transtion type
+        if (tz_pos->get_tz_tran_types().size() > 1 || inner_tz_pos->get_tz_revt_types().size() > 1) {
+          continue;
+        }
+        if (tz_pos->get_tz_id() != inner_tz_pos->get_tz_id()) {
+          int32_t off_diff_s = 0;
+          int32_t off_diff_d = 0;
+          if (OB_FAIL(inner_tz_pos->get_timezone_sub_offset(tmp_time, ObString(), off_diff_d, id_invalid, id_invalid))) {
+            LOG_WARN("fail to get_timezone_sub_offset", K(ret), K(tmp_time), K(inner_tz_pos->get_tz_name()));
+          } else if (OB_FAIL(tz_pos->get_timezone_sub_offset(tmp_time, ObString(), off_diff_s, id_invalid, id_invalid))) {
+            LOG_WARN("fail to get_timezone_sub_offset", K(ret), K(tmp_time), K(tz_pos->get_tz_name()));
+          }
+          ObTZOffsetKey offset_key(tz_pos->get_tz_id(), inner_tz_pos->get_tz_id());
+          offset_value.set(off_diff_d-off_diff_s);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to get_timezone_sub_offset", K(ret), K(tmp_time), K(inner_tz_pos->get_tz_name()));
+          } else if (OB_FAIL(tz_info_map.offset_map_buf_.set_refactored(offset_key, offset_value))) {
+            LOG_WARN("fail to set offset map", K(ret), K(offset_key), K(offset_value));
+          }
+        }
+        if (NULL != inner_tz_pos) {
+          inner_iter.revert(inner_tz_pos);
+        }
+      }
+      iter.revert(tz_pos);
     }
   }
   return ret;

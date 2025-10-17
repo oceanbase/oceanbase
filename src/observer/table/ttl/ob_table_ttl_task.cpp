@@ -437,6 +437,7 @@ int ObTableTTLDeleteTask::process_ttl_delete(ObKvSchemaCacheGuard &schema_cache_
   ObTableApiExecutor *executor = nullptr;
   ObTableOperationResult op_result;
   SMART_VAR(ObTableCtx, delete_ctx, allocator_) {
+    delete_ctx.set_is_ttl_delete(true);
     if (OB_FAIL(init_tb_ctx(schema_cache_guard, new_entity, delete_ctx))) {
       LOG_WARN("fail to init table ctx", K(ret), K(new_entity));
     } else if (FALSE_IT(delete_ctx.set_skip_scan(true))) {
@@ -616,9 +617,9 @@ bool ObTableTTLDag::operator==(const ObIDag& other) const
   return is_equal;
 }
 
-int64_t ObTableTTLDag::hash() const
+uint64_t ObTableTTLDag::hash() const
 {
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid() || !info_.is_valid())) {
     LOG_ERROR_RET(OB_ERR_SYS, "invalid argument", K(is_inited_), K(param_));
   } else {

@@ -24,7 +24,7 @@ int64_t stress_time= 1; // 100ms
 char log_level[20] = "INFO";
 uint32_t time_slice = 1000;
 uint32_t sleep_slice = 2 * time_slice;
-const int64_t CHECK_TIMEOUT = 2 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIME_MS
+const int64_t CHECK_TIMEOUT = 20 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIME_MS and ADAPT_WORK_THREAD_INTERVAL
 
 #define CHECK_EQ_UTIL_TIMEOUT(expected, expr) \
   { \
@@ -35,8 +35,12 @@ const int64_t CHECK_TIMEOUT = 2 * 1000 * 1000; // larger than SCHEDULER_WAIT_TIM
         break; \
       } else { \
         expr_result = (expr); \
-      }\
+      } \
     } while(oceanbase::common::ObTimeUtility::current_time() - start_time < CHECK_TIMEOUT); \
+    if ((expected) != (expr_result)) { \
+      COMMON_LOG_RET(WARN, OB_TIMEOUT, "check timeout", K(expected), K(expr_result), K(start_time), K(CHECK_TIMEOUT), \
+        "current time", oceanbase::common::ObTimeUtility::current_time()); \
+    } \
     EXPECT_EQ((expected), (expr_result)); \
   }
 
@@ -519,7 +523,7 @@ public:
     }
     return OB_SUCCESS;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDag &other) const
   {
     bool bret = false;
@@ -614,6 +618,24 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(TestCompLowDag);
 };
+
+#ifdef OB_BUILD_SHARED_STORAGE
+class TestSSUploadDag : public TestDag
+{
+public:
+  TestSSUploadDag() : TestDag(ObDagType::DAG_TYPE_INC_SSTABLE_UPLOAD) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestSSUploadDag);
+};
+
+class TestSSAttachDag : public TestDag
+{
+public:
+  TestSSAttachDag() : TestDag(ObDagType::DAG_TYPE_ATTACH_SHARED_SSTABLE) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(TestSSAttachDag);
+};
+#endif
 
 class TestDDLDag : public TestDag
 {
@@ -2075,6 +2097,93 @@ TEST_F(TestDagScheduler, test_max_concurrent_task)
   EXPECT_EQ(0, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+TEST_F(TestDagScheduler, test_auto_adaptive)
+{
+  EXPECT_EQ(OB_SUCCESS, ObClockGenerator::init());
+  EXPECT_EQ(OB_SUCCESS, ObTenantConfigMgr::get_instance().add_tenant_config(MTL_ID()));
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice));
+  scheduler->stop();
+  bool finish_flag[6] = {false, false, false, false, false, false};
+  int32_t concurrency = 1;
+  LoopWaitTask *inc_task = NULL;
+
+  TestMemRelatedDag *dag1 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag1));
+  EXPECT_EQ(OB_SUCCESS, dag1->init(1));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, concurrency, finish_flag[0]));
+  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*inc_task));
+
+  TestSSUploadDag *dag2 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag2));
+  EXPECT_EQ(OB_SUCCESS, dag2->init(2));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag2, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, concurrency, finish_flag[1]));
+  EXPECT_EQ(OB_SUCCESS, dag2->add_task(*inc_task));
+
+  TestSSUploadDag *dag3 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag3));
+  EXPECT_EQ(OB_SUCCESS, dag3->init(3));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag3, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, concurrency, finish_flag[2]));
+  EXPECT_EQ(OB_SUCCESS, dag3->add_task(*inc_task));
+
+  TestSSAttachDag *dag4 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag4));
+  EXPECT_EQ(OB_SUCCESS, dag4->init(4));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag4, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, concurrency, finish_flag[3]));
+  EXPECT_EQ(OB_SUCCESS, dag4->add_task(*inc_task));
+
+  TestCompMidDag *dag5 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag5));
+  EXPECT_EQ(OB_SUCCESS, dag5->init(5));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag5, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, concurrency, finish_flag[4]));
+  EXPECT_EQ(OB_SUCCESS, dag5->add_task(*inc_task));
+
+  TestCompMidDag *dag6 = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag6));
+  EXPECT_EQ(OB_SUCCESS, dag6->init(6));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag6, inc_task));
+  EXPECT_EQ(OB_SUCCESS, inc_task->init(1, concurrency, finish_flag[5]));
+  EXPECT_EQ(OB_SUCCESS, dag6->add_task(*inc_task));
+
+  // default thread num is 24
+  EXPECT_EQ(24, scheduler->get_ss_total_thread_num_());
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag1));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag2));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag3));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag4));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag5));
+  EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag6));
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (!tenant_config.is_valid()) {
+    COMMON_LOG(INFO, "tenant config invalid");
+  } else if (!tenant_config->_ob_enable_background_thread_auto_adapt) {
+    COMMON_LOG(INFO, "_ob_enable_background_thread_auto_adapt not enabled");
+  } else {
+    COMMON_LOG(INFO, "auto adapt ss thread");
+  }
+  scheduler->adapt_ss_work_thread();
+  usleep(11 * 1000 * 1000);  // 11 s
+  scheduler->adapt_ss_work_thread();
+  scheduler->dump_dag_status();
+  int64_t curr_limit = 0;
+  EXPECT_EQ(OB_SUCCESS, scheduler->get_adaptive_limit(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, curr_limit));
+  EXPECT_EQ(6, curr_limit);
+  EXPECT_EQ(OB_SUCCESS, scheduler->get_adaptive_limit(ObDagPrio::DAG_PRIO_COMPACTION_MID, curr_limit));
+  EXPECT_EQ(7, curr_limit);
+  EXPECT_EQ(OB_SUCCESS, scheduler->get_adaptive_limit(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, curr_limit));
+  EXPECT_EQ(7, curr_limit);
+  EXPECT_EQ(OB_SUCCESS, scheduler->get_adaptive_limit(ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, curr_limit));
+  EXPECT_EQ(4, curr_limit);
+}
+#endif
 /*
 TEST_F(TestDagScheduler, test_large_thread_cnt)
 {

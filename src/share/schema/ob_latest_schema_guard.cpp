@@ -13,6 +13,7 @@
 
 #include "share/schema/ob_latest_schema_guard.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -20,12 +21,14 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
 ObLatestSchemaGuard::ObLatestSchemaGuard(
-  share::schema::ObMultiVersionSchemaService *schema_service,
-  const uint64_t tenant_id)
+  ObMultiVersionSchemaService *schema_service,
+  const uint64_t tenant_id,
+  ObISQLClient *sql_client)
   : schema_service_(schema_service),
     tenant_id_(tenant_id),
     local_allocator_("LastestSchGuard"),
-    schema_objs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(local_allocator_))
+    schema_objs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(local_allocator_)),
+    sql_client_(sql_client)
 {
 }
 
@@ -56,7 +59,7 @@ int ObLatestSchemaGuard::check_inner_stat_()
 
 int ObLatestSchemaGuard::check_and_get_service_(
     ObSchemaService *&schema_service_impl,
-    ObMySQLProxy *&sql_proxy)
+    ObISQLClient *&sql_client)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
@@ -64,7 +67,9 @@ int ObLatestSchemaGuard::check_and_get_service_(
   } else if (OB_ISNULL(schema_service_impl = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service impl is null", KR(ret), K_(tenant_id));
-  } else if (OB_ISNULL(sql_proxy = schema_service_->get_sql_proxy())) {
+  } else if (OB_NOT_NULL(sql_client_)) {
+    sql_client = sql_client_;
+  } else if (OB_ISNULL(sql_client = schema_service_->get_sql_proxy())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret), K_(tenant_id));
   }
@@ -175,15 +180,15 @@ int ObLatestSchemaGuard::get_tablegroup_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   tablegroup_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(tablegroup_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablegroup_name is empty", KR(ret), K_(tenant_id), K(tablegroup_name));
   } else if (OB_FAIL(schema_service_impl->get_tablegroup_id(
-             *sql_proxy, tenant_id_, tablegroup_name, tablegroup_id))) {
+             *sql_client, tenant_id_, tablegroup_name, tablegroup_id))) {
     LOG_WARN("fail to get tablegroup id", KR(ret), K_(tenant_id), K(tablegroup_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
     LOG_INFO("tablegroup not exist", KR(ret), K_(tenant_id), K(tablegroup_name));
@@ -197,15 +202,15 @@ int ObLatestSchemaGuard::get_database_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   database_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(database_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("database_name is empty", KR(ret), K_(tenant_id), K(database_name));
   } else if (OB_FAIL(schema_service_impl->get_database_id(
-             *sql_proxy, tenant_id_, database_name, database_id))) {
+             *sql_client, tenant_id_, database_name, database_id))) {
     LOG_WARN("fail to get database id", KR(ret), K_(tenant_id), K(database_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id)) {
     LOG_INFO("database not exist", KR(ret), K_(tenant_id), K(database_name));
@@ -223,11 +228,11 @@ int ObLatestSchemaGuard::get_table_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   table_id = OB_INVALID_ID;
   table_type = ObTableType::MAX_TABLE_TYPE;
   schema_version = OB_INVALID_VERSION;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || table_name.empty())) {
@@ -235,7 +240,7 @@ int ObLatestSchemaGuard::get_table_id(
     LOG_WARN("database_id/table_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(table_name));
   } else if (OB_FAIL(schema_service_impl->get_table_id(
-             *sql_proxy, tenant_id_, database_id, session_id,
+             *sql_client, tenant_id_, database_id, session_id,
              table_name, table_id, table_type, schema_version))) {
     LOG_WARN("fail to get database id", KR(ret), K_(tenant_id), K(database_id), K(session_id), K(table_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -251,8 +256,8 @@ int ObLatestSchemaGuard::get_mock_fk_parent_table_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  ObISQLClient *sql_client = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || table_name.empty())) {
@@ -260,7 +265,7 @@ int ObLatestSchemaGuard::get_mock_fk_parent_table_id(
     LOG_WARN("database_id/table_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(table_name));
   } else if (OB_FAIL(schema_service_impl->get_mock_fk_parent_table_id(
-             *sql_proxy, tenant_id_, database_id, table_name, mock_fk_parent_table_id))) {
+             *sql_client, tenant_id_, database_id, table_name, mock_fk_parent_table_id))) {
     LOG_WARN("fail to get mock parent table id", KR(ret), K_(tenant_id), K(database_id), K(table_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == mock_fk_parent_table_id)) {
     LOG_INFO("mock parent table not exist", KR(ret), K_(tenant_id), K(database_id), K(table_name));
@@ -275,9 +280,9 @@ int ObLatestSchemaGuard::get_synonym_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   synonym_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || synonym_name.empty())) {
@@ -285,7 +290,7 @@ int ObLatestSchemaGuard::get_synonym_id(
     LOG_WARN("database_id/synonym_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(synonym_name));
   } else if (OB_FAIL(schema_service_impl->get_synonym_id(
-             *sql_proxy, tenant_id_, database_id, synonym_name, synonym_id))) {
+             *sql_client, tenant_id_, database_id, synonym_name, synonym_id))) {
     LOG_WARN("fail to get synonym id", KR(ret), K_(tenant_id), K(database_id), K(synonym_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == synonym_id)) {
     LOG_INFO("synonym not exist", KR(ret), K_(tenant_id), K(database_id), K(synonym_name));
@@ -300,9 +305,9 @@ int ObLatestSchemaGuard::get_constraint_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   constraint_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || constraint_name.empty())) {
@@ -310,7 +315,7 @@ int ObLatestSchemaGuard::get_constraint_id(
     LOG_WARN("database_id/constraint_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(constraint_name));
   } else if (OB_FAIL(schema_service_impl->get_constraint_id(
-             *sql_proxy, tenant_id_, database_id, constraint_name, constraint_id))) {
+             *sql_client, tenant_id_, database_id, constraint_name, constraint_id))) {
     LOG_WARN("fail to get constraint id", KR(ret), K_(tenant_id), K(database_id), K(constraint_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == constraint_id)) {
     LOG_INFO("constraint not exist", KR(ret), K_(tenant_id), K(database_id), K(constraint_name));
@@ -325,9 +330,9 @@ int ObLatestSchemaGuard::get_foreign_key_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   foreign_key_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || foreign_key_name.empty())) {
@@ -335,7 +340,7 @@ int ObLatestSchemaGuard::get_foreign_key_id(
     LOG_WARN("database_id/foreign_key_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(foreign_key_name));
   } else if (OB_FAIL(schema_service_impl->get_foreign_key_id(
-             *sql_proxy, tenant_id_, database_id, foreign_key_name, foreign_key_id))) {
+             *sql_client, tenant_id_, database_id, foreign_key_name, foreign_key_id))) {
     LOG_WARN("fail to get foreign_key id", KR(ret), K_(tenant_id), K(database_id), K(foreign_key_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == foreign_key_id)) {
     LOG_INFO("foreign_key not exist", KR(ret), K_(tenant_id), K(database_id), K(foreign_key_name));
@@ -351,10 +356,10 @@ int ObLatestSchemaGuard::get_sequence_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   sequence_id = OB_INVALID_ID;
   is_system_generated = false;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || sequence_name.empty())) {
@@ -362,7 +367,7 @@ int ObLatestSchemaGuard::get_sequence_id(
     LOG_WARN("database_id/sequence_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(sequence_name));
   } else if (OB_FAIL(schema_service_impl->get_sequence_id(
-             *sql_proxy, tenant_id_, database_id,
+             *sql_client, tenant_id_, database_id,
              sequence_name, sequence_id, is_system_generated))) {
     LOG_WARN("fail to get sequence id", KR(ret), K_(tenant_id), K(database_id), K(sequence_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == sequence_id)) {
@@ -380,9 +385,9 @@ int ObLatestSchemaGuard::get_package_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   package_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || package_name.empty()
@@ -393,7 +398,7 @@ int ObLatestSchemaGuard::get_package_id(
              KR(ret), K_(tenant_id), K(database_id), K(package_name),
              K(package_type), K(compatible_mode));
   } else if (OB_FAIL(schema_service_impl->get_package_id(
-             *sql_proxy, tenant_id_, database_id, package_name,
+             *sql_client, tenant_id_, database_id, package_name,
              package_type, compatible_mode, package_id))) {
     LOG_WARN("fail to get package id", KR(ret), K_(tenant_id),
              K(database_id), K(package_name), K(compatible_mode));
@@ -414,9 +419,9 @@ int ObLatestSchemaGuard::get_routine_id(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   routine_pairs.reset();
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || routine_name.empty())) {
@@ -424,7 +429,7 @@ int ObLatestSchemaGuard::get_routine_id(
     LOG_WARN("database_id/routine_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(routine_name));
   } else if (OB_FAIL(schema_service_impl->get_routine_id(
-             *sql_proxy, tenant_id_, database_id, package_id,
+             *sql_client, tenant_id_, database_id, package_id,
              overload, routine_name, routine_pairs))) {
     LOG_WARN("fail to get routine id", KR(ret), K_(tenant_id),
              K(database_id), K(package_id), K(overload), K(routine_name));
@@ -444,10 +449,10 @@ int ObLatestSchemaGuard::check_udt_exist(
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
+  ObISQLClient *sql_client = NULL;
   exist = false;
   uint64_t udt_id = OB_INVALID_ID;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
              || UDT_INVALID_TYPE_CODE == type_code
@@ -456,7 +461,7 @@ int ObLatestSchemaGuard::check_udt_exist(
     LOG_WARN("database_id/type_code/udt_name is invalid",
              KR(ret), K_(tenant_id), K(database_id), K(type_code), K(udt_name));
   } else if (OB_FAIL(schema_service_impl->get_udt_id(
-             *sql_proxy, tenant_id_, database_id, package_id, udt_name, udt_id))) {
+             *sql_client, tenant_id_, database_id, package_id, udt_name, udt_id))) {
     LOG_WARN("fail to get udt id", KR(ret), K_(tenant_id), K(database_id),
              K(package_id), K(udt_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == udt_id)) {
@@ -489,56 +494,38 @@ int ObLatestSchemaGuard::check_udt_exist(
   return ret;
 }
 
-int ObLatestSchemaGuard::get_table_schema_versions(
-    const common::ObIArray<uint64_t> &table_ids,
-    common::ObIArray<ObSchemaIdVersion> &versions)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
-    LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_UNLIKELY(table_ids.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_ids is empty", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_table_schema_versions(
-             *sql_proxy, tenant_id_, table_ids, versions))) {
-    LOG_WARN("fail to get table schema versions", KR(ret), K_(tenant_id), K(table_ids));
-  }
-  return ret;
-}
-
-int ObLatestSchemaGuard::get_mock_fk_parent_table_schema_versions(
-    const common::ObIArray<uint64_t> &table_ids,
-    common::ObIArray<ObSchemaIdVersion> &versions)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
-    LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_UNLIKELY(table_ids.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_ids is empty", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_mock_fk_parent_table_schema_versions(
-             *sql_proxy, tenant_id_, table_ids, versions))) {
-    LOG_WARN("fail to get mock fk parent table schema versions", KR(ret), K_(tenant_id), K(table_ids));
-  }
-  return ret;
-}
 
 int ObLatestSchemaGuard::get_default_audit_schemas(
     common::ObIArray<ObSAuditSchema> &audit_schemas)
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service_impl = NULL;
-  ObMySQLProxy *sql_proxy = NULL;
-  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  ObISQLClient *sql_client = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
   } else if (OB_FAIL(schema_service_impl->get_audits_in_owner(
-             *sql_proxy, tenant_id_, AUDIT_OBJ_DEFAULT, OB_AUDIT_MOCK_USER_ID,
+             *sql_client, tenant_id_, AUDIT_OBJ_DEFAULT, OB_AUDIT_MOCK_USER_ID,
              audit_schemas))) {
     LOG_WARN("fail to get audits in owner", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_audit_schemas_in_owner(
+    const oceanbase::share::schema::ObSAuditType audit_type,
+    const uint64_t object_id,
+    common::ObIArray<ObSAuditSchema> &audit_schemas)
+{
+  int ret = OB_SUCCESS;
+  audit_schemas.reset();
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_audits_in_owner(
+             *sql_client, tenant_id_, audit_type, object_id,
+             audit_schemas))) {
+    LOG_WARN("fail to get audits in owner", KR(ret), K_(tenant_id), K(audit_type), K(object_id));
   }
   return ret;
 }
@@ -706,6 +693,41 @@ int ObLatestSchemaGuard::get_mock_fk_parent_table_schema(
   return ret;
 }
 
+int ObLatestSchemaGuard::get_tablegroup_schema_(
+    ObISQLClient &sql_client,
+    const uint64_t tablegroup_id,
+    const ObTablegroupSchema *&tablegroup_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablegroup_id is invalid", KR(ret), K(tablegroup_id));
+  } else if (OB_FAIL(get_from_local_cache_(TABLEGROUP_SCHEMA, tenant_id_,
+      tablegroup_id, tablegroup_schema))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get schema from cache", KR(ret), K_(tenant_id), K(tablegroup_id));
+    } else {
+      ObRefreshSchemaStatus schema_status;
+      schema_status.tenant_id_ = tenant_id_;
+      const int64_t schema_version = INT64_MAX;
+      const ObSchema *base_schema = NULL;
+      ObTablegroupSchema *tmp_tablegroup_schema = NULL;
+      if (OB_FAIL(schema_service_->get_schema_service()->get_tablegroup_schema(schema_status,
+          tablegroup_id, schema_version, sql_client, local_allocator_, tmp_tablegroup_schema))) {
+        LOG_WARN("fail to get latest schema", KR(ret), K_(tenant_id), K(tablegroup_id));
+      } else if (OB_ISNULL(tmp_tablegroup_schema)) {
+        // schema not exist
+      } else if (FALSE_IT(tablegroup_schema = tmp_tablegroup_schema))  {
+      } else if (FALSE_IT(base_schema = tmp_tablegroup_schema))  {
+      } else if (OB_FAIL(put_to_local_cache_(TABLEGROUP_SCHEMA, tenant_id_,
+          tablegroup_id, base_schema))) {
+        LOG_WARN("fail to put to local cache", KR(ret), K_(tenant_id), K(tablegroup_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLatestSchemaGuard::get_tablegroup_schema(
     const uint64_t tablegroup_id,
     const ObTablegroupSchema *&tablegroup_schema)
@@ -717,10 +739,18 @@ int ObLatestSchemaGuard::get_tablegroup_schema(
   } else if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablegroup_id is invalid", KR(ret), K_(tenant_id), K(tablegroup_id));
+  } else if (OB_NOT_NULL(sql_client_)) {
+    // 'sql_client_ not null' means a transcation (ddl transaction is child class of ObISQLClient) is passed in
+    // and we should use this sql_client to get visible tablegroup schema in current transaction
+    if (OB_FAIL(get_tablegroup_schema_(*sql_client_, tablegroup_id, tablegroup_schema))) {
+      LOG_WARN("fail to get tablegroup", KR(ret), K(tablegroup_id));
+    }
   } else if (OB_FAIL(get_schema_(TABLEGROUP_SCHEMA,
              tenant_id_, tablegroup_id, tablegroup_schema))) {
     LOG_WARN("fail to get tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
-  } else if (OB_ISNULL(tablegroup_schema)) {
+  }
+
+  if (OB_SUCC(ret) && OB_ISNULL(tablegroup_schema)) {
     LOG_INFO("tablegroup not exist", KR(ret), K_(tenant_id), K(tablegroup_id));
   }
   return ret;
@@ -788,7 +818,7 @@ int ObLatestSchemaGuard::get_tablespace_schema(
 
 int ObLatestSchemaGuard::get_udt_info(
     const uint64_t udt_id,
-    const ObUDTTypeInfo *udt_info)
+    const ObUDTTypeInfo *&udt_info)
 {
   int ret = OB_SUCCESS;
   udt_info = NULL;
@@ -814,7 +844,7 @@ int ObLatestSchemaGuard::get_coded_index_name_info_mysql(
     ObIndexSchemaInfo &index_info)
 {
   int ret = OB_SUCCESS;
-  ObMySQLProxy *sql_proxy = nullptr;
+  ObISQLClient *sql_client = NULL;
   ObSchemaService *schema_service_impl = nullptr;
   bool is_oracle_mode = false;
   ObArray<ObIndexSchemaInfo> index_infos;
@@ -825,11 +855,12 @@ int ObLatestSchemaGuard::get_coded_index_name_info_mysql(
                   || index_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("should use in mysql mode", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_table_index_infos(allocator, *sql_proxy, tenant_id_, database_id,
-                                                               data_table_id, index_infos))) {
-    LOG_WARN("fail to get table index name in mysql", KR(ret), K_(tenant_id), K(data_table_id), K(data_table_id));
+  } else if (OB_FAIL(schema_service_impl->get_table_index_infos(allocator, *sql_client,
+      tenant_id_, database_id, data_table_id, index_infos))) {
+    LOG_WARN("fail to get table index name in mysql", KR(ret), K_(tenant_id),
+      K(data_table_id), K(data_table_id));
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i)
   {
@@ -844,6 +875,202 @@ int ObLatestSchemaGuard::get_coded_index_name_info_mysql(
         break;
       }
     }
+  }
+  return ret;
+}
+
+#ifndef GET_OBJ_SCHEMA_VERSIONS
+#define GET_OBJ_SCHEMA_VERSIONS(OBJECT_NAME) \
+  int ObLatestSchemaGuard::get_##OBJECT_NAME##_schema_versions(const common::ObIArray<uint64_t> &obj_ids, \
+                                                               common::ObIArray<ObSchemaIdVersion> &versions) \
+    { \
+      int ret = OB_SUCCESS; \
+      ObISQLClient *sql_client = nullptr; \
+      ObSchemaService *schema_service_impl = nullptr; \
+      if (OB_FAIL(check_inner_stat_())) { \
+        LOG_WARN("fail to check inner stat", KR(ret)); \
+      } else if (OB_UNLIKELY(obj_ids.count() <= 0)) { \
+        ret = OB_INVALID_ARGUMENT; \
+        LOG_WARN("obj_ids is empty", KR(ret)); \
+      } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) { \
+        LOG_WARN("fail to check and get service", KR(ret)); \
+      } else if (OB_FAIL(schema_service_impl->get_##OBJECT_NAME##_schema_versions(*sql_client, tenant_id_, obj_ids, versions))) { \
+        LOG_WARN("fail to get obj schema versions", KR(ret), K_(tenant_id), K(obj_ids)); \
+      } \
+      return ret; \
+    }
+
+  GET_OBJ_SCHEMA_VERSIONS(table);
+  GET_OBJ_SCHEMA_VERSIONS(mock_fk_parent_table);
+  GET_OBJ_SCHEMA_VERSIONS(routine);
+  GET_OBJ_SCHEMA_VERSIONS(synonym);
+  GET_OBJ_SCHEMA_VERSIONS(package);
+  GET_OBJ_SCHEMA_VERSIONS(type);
+  GET_OBJ_SCHEMA_VERSIONS(sequence);
+#undef GET_OBJ_SCHEMA_VERSIONS
+#endif
+int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
+                                       const ObObjectType obj_type,
+                                       common::ObIArray<ObObjPriv> &obj_privs)
+{
+  int ret = OB_SUCCESS;
+  ObISQLClient *sql_client = NULL;
+  ObSchemaService *schema_service_impl = nullptr;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == obj_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(obj_id));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_obj_priv_with_obj_id(*sql_client, tenant_id_,
+             obj_id, static_cast<uint64_t>(obj_type), obj_privs))) {
+    LOG_WARN("fail to get obj priv", KR(ret), K_(tenant_id), K(obj_id));
+  }
+  return ret;
+}
+
+
+#ifndef GET_RLS_SCHEMA
+#define GET_RLS_SCHEMA(SCHEMA, SCHEMA_TYPE) \
+  int ObLatestSchemaGuard::get_##SCHEMA##s(const uint64_t rls_id, \
+                                           const SCHEMA_TYPE *&rls_schema) \
+  { \
+    int ret = OB_SUCCESS; \
+    rls_schema = nullptr; \
+    ObISQLClient *sql_client = nullptr; \
+    ObSchemaService *schema_service_impl = nullptr; \
+    if (OB_FAIL(check_inner_stat_())) { \
+      LOG_WARN("fail to check inner stat", KR(ret)); \
+    } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) { \
+      LOG_WARN("fail to check and get service", KR(ret)); \
+    } else if (OB_UNLIKELY(OB_INVALID_ID == rls_id)) { \
+      ret = OB_INVALID_ARGUMENT; \
+      LOG_WARN("rls id is invalid", KR(ret), K(rls_id)); \
+    } else { \
+      ObArray<SchemaKey> rls_keys; \
+      SchemaKey rls_key; \
+      rls_key.tenant_id_ = tenant_id_; \
+      rls_key.SCHEMA##_id_ = rls_id; \
+      if (OB_FAIL(rls_keys.push_back(rls_key))) { \
+        LOG_WARN("fail to push back rls key", KR(ret), K(rls_key)); \
+      } \
+      ObRefreshSchemaStatus schema_status; \
+      schema_status.tenant_id_ = tenant_id_; \
+      const int64_t schema_version = INT64_MAX; \
+      common::ObArray<SCHEMA_TYPE> object_schema_array;\
+      SCHEMA_TYPE *tmp_object_schema = nullptr;\
+      if (FAILEDx(schema_service_impl->get_batch_##SCHEMA##s(schema_status, *sql_client, \
+                                                             schema_version, rls_keys, object_schema_array))) { \
+        LOG_WARN("fail to get batch rls", KR(ret), K(schema_status), K(rls_keys)); \
+      } else if (OB_UNLIKELY(1 != object_schema_array.count())) { \
+        if (0 == object_schema_array.count()) { \
+          /* the action of not exist is up to user */ \
+        } else { \
+          ret = OB_ERR_UNEXPECTED; \
+          LOG_WARN("unexpected schema count", KR(ret), K(object_schema_array)); \
+        } \
+      } else if (OB_FAIL(ObSchemaUtils::alloc_schema(local_allocator_, \
+                                                     object_schema_array.at(0), \
+                                                     tmp_object_schema))) { \
+        LOG_WARN("fail to alloc new var", KR(ret), K(rls_keys)); \
+      } else if (OB_ISNULL(tmp_object_schema)) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN(#SCHEMA_TYPE "is NULL", KR(ret)); \
+      } else { \
+        rls_schema = tmp_object_schema; \
+      } \
+    } \
+    return ret; \
+  } \
+
+  GET_RLS_SCHEMA(rls_policy, ObRlsPolicySchema);
+  GET_RLS_SCHEMA(rls_group, ObRlsGroupSchema);
+  GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
+#undef GET_RLS_SCHEMA
+#endif
+
+int ObLatestSchemaGuard::get_sequence_schema(const uint64_t sequence_id,
+                                             const ObSequenceSchema *&sequence_schema)
+{
+  int ret = OB_SUCCESS;
+  sequence_schema = NULL;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == sequence_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sequence_id is invalid", KR(ret), K_(tenant_id), K(sequence_id));
+  } else if (OB_FAIL(get_schema_(SEQUENCE_SCHEMA, tenant_id_, sequence_id, sequence_schema))) {
+    LOG_WARN("fail to get sequence", KR(ret), K_(tenant_id), K(sequence_id));
+  } else if (OB_ISNULL(sequence_schema)) {
+    LOG_INFO("sequence not exist", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_trigger_info(const uint64_t trigger_id,
+                                          const ObTriggerInfo *&trigger_info)
+{
+  int ret = OB_SUCCESS;
+  trigger_info = NULL;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == trigger_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("trigger_id is invalid", KR(ret), K_(tenant_id), K(trigger_id));
+  } else if (OB_FAIL(get_schema_(TRIGGER_SCHEMA, tenant_id_, trigger_id, trigger_info))) {
+    LOG_WARN("fail to get trigger", KR(ret), K_(tenant_id), K(trigger_id));
+  } else if (OB_ISNULL(trigger_info)) {
+    LOG_INFO("trigger not exist", KR(ret), K_(tenant_id), K(trigger_info));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_table_schemas_in_tablegroup(
+    const uint64_t tablegroup_id,
+    ObIArray<const ObTableSchema *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_table_schemas_in_tablegroup(local_allocator_,
+      *sql_client, tenant_id_, tablegroup_id, table_schemas))) {
+    LOG_WARN("failed to get table schemas in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::check_database_exists_in_tablegroup(
+    const uint64_t tablegroup_id,
+    bool &exists)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->check_database_exists_in_tablegroup(*sql_client,
+      tenant_id_, tablegroup_id, exists))) {
+    LOG_WARN("failed to check database exists in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_table_id_and_table_name_in_tablegroup(
+    const uint64_t tablegroup_id,
+    ObIArray<ObString> &table_names,
+    ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_table_id_and_table_name_in_tablegroup(local_allocator_, *sql_client,
+      tenant_id_, tablegroup_id, table_names, table_ids))) {
+    LOG_WARN("fail to get table names and ids in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
   }
   return ret;
 }

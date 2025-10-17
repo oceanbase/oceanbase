@@ -61,6 +61,7 @@ public:
 
 class ObDASScanCtDef;
 class ObDASScanRtDef;
+class ObDASHNSWScanIter;
 
 /**
  * Func Lookup Iter:
@@ -108,6 +109,12 @@ public:
     return group_id;
   }
   virtual void clear_evaluated_flag() override;
+  virtual int set_scan_rowkey(ObEvalCtx *eval_ctx,
+                              const ObIArray<ObExpr *> &rowkey_exprs,
+                              const ObDASScanCtDef *lookup_ctdef,
+                              ObIAllocator *alloc,
+                              int64_t group_id) override;
+  friend class ObDASHNSWScanIter;
 protected:
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;

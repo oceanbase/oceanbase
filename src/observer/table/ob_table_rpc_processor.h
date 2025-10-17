@@ -24,7 +24,7 @@
 #include "ob_htable_lock_mgr.h"
 #include "ob_table_schema_cache.h"
 #include "observer/ob_req_time_service.h"
-#include "ob_table_trans_utils.h"
+#include "utils/ob_table_trans_utils.h"
 #include "ob_table_audit.h"
 #include "observer/table/common/ob_table_common_struct.h"
 
@@ -72,18 +72,22 @@ public:
   : allow_retry_(true),
     allow_rpc_retry_(true),
     local_retry_interval_us_(10),
-    max_local_retry_count_(5)
+    max_local_retry_count_(5),
+    allow_route_retry_(false)
   {}
   virtual ~ObTableRetryPolicy() {}
   bool allow_retry() const { return allow_retry_; }
   // rpc retry will receate the processor,
   // so there is no retry count limit for now.
   bool allow_rpc_retry() const { return allow_retry_ && allow_rpc_retry_; }
+  // allow route retry means can retry routing errors
+  bool allow_route_retry() const { return allow_retry_ && allow_route_retry_; }
 public:
   bool allow_retry_;
   bool allow_rpc_retry_;
   int64_t local_retry_interval_us_;
   int64_t max_local_retry_count_;
+  bool allow_route_retry_;
 };
 
 class ObTableApiUtils
@@ -154,20 +158,25 @@ protected:
   virtual table::ObTableEntityType get_entity_type() = 0;
   virtual bool is_kv_processor() = 0;
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
-  // init schema guard
+  // init schema_guard and simple_table_schema_
   virtual int init_schema_info(const ObString &arg_table_name, uint64_t arg_table_id);
   virtual int init_schema_info(uint64_t table_id, const ObString &arg_table_name, bool check_match = true);
   virtual int init_schema_info(const ObString &arg_table_name);
+  // init schema_guard and table_schema_
+  virtual int init_table_schema_info(const ObString &arg_table_name, uint64_t arg_table_id);
+  virtual int init_table_schema_info(uint64_t table_id, const ObString &arg_table_name, bool check_match = true);
+  virtual int init_table_schema_info(const ObString &arg_table_name);
   int check_table_has_global_index(bool &exists, table::ObKvSchemaCacheGuard& schema_cache_guard);
   int get_tablet_id(const share::schema::ObSimpleTableSchemaV2 * simple_table_schema,
                     const ObTabletID &arg_tablet_id,
                     const uint64_t table_id,
                     ObTabletID &tablet_id);
+  int check_local_execute(const ObTabletID &tablet_id);
   ObTableProccessType get_stat_process_type(bool is_readonly,
                                             bool is_same_type,
                                             bool is_same_properties_names,
                                             table::ObTableOperationType::Type op_type);
-  bool can_retry(int retcode);
+  bool can_retry(const int retcode, bool &did_local_retry);
   virtual bool is_new_try_process() { return false; };
 protected:
   common::ObArenaAllocator allocator_;
@@ -179,6 +188,7 @@ protected:
   table::ObTableApiSessGuard sess_guard_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
+  const share::schema::ObTableSchema *table_schema_;
   observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int32_t stat_process_type_;
@@ -187,6 +197,8 @@ protected:
   ObTableRetryPolicy retry_policy_;
   bool need_retry_in_queue_;
   bool is_tablegroup_req_; // is table name a tablegroup name
+  bool require_rerouting_;
+  bool kv_route_meta_error_;
   int32_t retry_count_;
   uint64_t table_id_;
   ObTabletID tablet_id_;

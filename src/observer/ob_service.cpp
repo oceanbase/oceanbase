@@ -1560,6 +1560,30 @@ int ObService::broadcast_consensus_version(
   return OB_SUCCESS;
 }
 
+int ObService::fetch_tablet_physical_row_cnt(
+  const obrpc::ObFetchTabletPhysicalRowCntArg &arg,
+  obrpc::ObFetchTabletPhysicalRowCntRes &result)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcLSAddReplicaP::process tenant not match", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ObDDLUtil::get_tablet_physical_row_cnt(arg.ls_id_,
+                                                            arg.tablet_id_,
+                                                            arg.calc_sstable_,
+                                                            arg.calc_memtable_,
+                                                            result.physical_row_cnt_))) {
+    LOG_WARN("failed to calc row count", K(ret), K(arg));
+  } else {
+    LOG_INFO("fetch_tablet_physical_row_cnt", K(ret), K(arg), K(result));
+  }
+  return ret;
+}
+
 int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -1741,6 +1765,11 @@ int ObService::prepare_server_for_adding_server(
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (arg.is_cluster_version_valid() && GET_MIN_CLUSTER_VERSION() != arg.get_cluster_version()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "adding server with other cluster version is");
+    LOG_WARN("adding server with other cluster version is not supported",
+          KR(ret), K(arg), KDV(GET_MIN_CLUSTER_VERSION()), KDV(arg.get_cluster_version()));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant data version", KR(ret));
   } else if (arg.get_sys_tenant_data_version() > 0
@@ -2001,6 +2030,7 @@ int ObService::do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg)
     LOG_ERROR("ObRpcLSReplaceReplicaP::process tenant not match", KR(ret), K(tenant_id));
   }
   ObCurTraceId::set(arg.get_task_id());
+  FLOG_INFO("start schedule ls replace task", K(arg));
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("storage_ha", "schedule_ls_replace start",
                      "tenant_id", tenant_id,
@@ -2031,6 +2061,7 @@ int ObService::do_replace_ls_replica(const obrpc::ObLSReplaceReplicaArg &arg)
   if (OB_FAIL(ret)) {
     SERVER_EVENT_ADD("storage_ha", "schedule_ls_replace failed", "ls_id", ls_id.id(), "result", ret);
   }
+  FLOG_INFO("finish schedule ls replace task", KR(ret), K(arg));
   return ret;
 }
 
@@ -2430,14 +2461,16 @@ int ObService::request_heartbeat(ObLeaseRequest &lease_request)
 }
 
 int ObService::generate_tenant_table_schemas_(const obrpc::ObBatchBroadcastSchemaArg &arg,
-      ObSArray<share::schema::ObTableSchema> &tables, ObIAllocator &allocator)
+      ObIAllocator &allocator, ObSArray<share::schema::ObTableSchema> &tables)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.get_tenant_id();
+  ObArray<uint64_t> table_ids_to_construct; // empty means construct all
   if (CLUSTER_CURRENT_VERSION != arg.get_cluster_current_version()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("server binary not equal, create tenant is not allowed", KR(ret), KCV(CLUSTER_CURRENT_VERSION), K(arg));
-  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, tables, allocator))) {
+  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id,
+          table_ids_to_construct, true/*include_index_and_lob_aux_schemas*/, allocator, tables))) {
     LOG_WARN("failed to construct_inner_table_schemas", KR(ret), K(tenant_id));
   }
   return ret;
@@ -2471,7 +2504,7 @@ int ObService::batch_broadcast_schema(
              OB_SYS_TENANT_ID, sys_schema_version))) {
     LOG_WARN("fail to refresh sys schema", KR(ret), K(sys_schema_version));
   } else if (arg.need_generate_schema()) {
-    if (OB_FAIL(generate_tenant_table_schemas_(arg, generated_tables, arena_allocator))) {
+    if (OB_FAIL(generate_tenant_table_schemas_(arg, arena_allocator, generated_tables))) {
       LOG_WARN("failed to generate tenant table schemas", KR(ret), K(arg));
     } else {
       tables_to_broadcast = &generated_tables;
@@ -3074,7 +3107,7 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         LOG_WARN("fail to init complement data dag", K(ret), K(arg));
       } else if (OB_FAIL(dag->create_first_task())) {
         LOG_WARN("create first task failed", K(ret));
-      } else if (OB_FAIL(add_dag_and_get_progress<ObComplementDataDag>(dag, res.row_inserted_, res.physical_row_count_))) {
+      } else if (OB_FAIL(add_dag_and_get_progress<ObComplementDataDag>(dag, res.row_inserted_, res.cg_row_inserted_, res.physical_row_count_))) {
         saved_ret = ret;
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
@@ -4085,12 +4118,10 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &access_info = arg.items_.at(1).value_;
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &attribute = arg.items_.at(2).value_;
 
-    ChangeExternalStorageDestMgr change_mgr;
+    ObChangeExternalStorageDestMgr change_mgr;
     const bool has_access_info = !access_info.is_empty();
     const bool has_attribute = !attribute.is_empty();
-    ObBackupPathString backup_path;
-    ObBackupDestAttribute access_info_option;
-    ObBackupDestAttribute attribute_option;
+    ObBackupDestAttribute change_option;
     ObMySQLTransaction trans;
 
     if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -4102,46 +4133,17 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, " using the syntax under sys tenant or meta tenant is");
     } else if (OB_FAIL(change_mgr.init(tenant_id, path, *GCTX.sql_proxy_))) {
       LOG_WARN("failed to init change_external_storage_dest_mgr", K(ret));
-    }
-
-    if (OB_SUCC(ret) && has_access_info) {
-      if (OB_FAIL(ObBackupDestAttributeParser::parse(access_info.str(), access_info_option))) {
-        LOG_WARN("failed to parse attribute", K(ret), K(access_info));
-      } else if (OB_FAIL(change_mgr.update_and_validate_authorization(
-                            access_info_option.access_id_, access_info_option.access_key_))) {
-        LOG_WARN("failed to reset access id and access key", K(ret), K(access_info_option));
-      }
-    }
-    if (OB_SUCC(ret) && has_attribute) {
-      if (OB_FAIL(ObBackupDestAttributeParser::parse(attribute.str(), attribute_option))) {
-        LOG_WARN("failed to parse attribute", K(ret), K(attribute));
-      }
-    }
-
-    if (FAILEDx(trans.start(GCTX.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
-      LOG_WARN("failed to start trans", K(ret), K(tenant_id));
+    } else if (has_access_info && OB_FAIL(change_mgr.set_authorization(access_info.str()))) {
+      LOG_WARN("failed to set authorization", K(ret), K(access_info));
+    } else if (has_attribute && OB_FAIL(change_mgr.set_attribute(attribute.str()))) {
+      LOG_WARN("failed to set attribute", K(ret), K(attribute));
+    } else if (OB_FAIL(change_mgr.change_external_storage_dest())) {
+      LOG_WARN("failed to change external storage dest", K(ret));
     } else {
-      if (has_access_info && OB_FAIL(change_mgr.update_inner_table_authorization(trans))) {
-        LOG_WARN("failed to update backup authorization", K(ret), K(tenant_id));
-      }
-
-      if (OB_SUCC(ret) && has_attribute) {
-        if (FAILEDx(ObBackupStorageInfoOperator::update_backup_dest_attribute(
-            trans, tenant_id, change_mgr.backup_dest_, attribute_option.max_iops_, attribute_option.max_bandwidth_))) {
-          LOG_WARN("failed to update backup dest attribute", K(ret), K(tenant_id));
-        } else {
-          LOG_INFO("admin change external storage dest", K(arg));
-        }
-      }
-      if (trans.is_started()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
-          ret = COVER_SUCC(tmp_ret);
-        }
-      }
+      LOG_INFO("admin change external storage dest", K(arg));
     }
   }
+
   ROOTSERVICE_EVENT_ADD("root_service", "change_external_storage_dest", K(ret), K(arg));
   return ret;
 }

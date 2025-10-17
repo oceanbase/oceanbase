@@ -61,6 +61,9 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
     case T_FUN_SYS_L2_DISTANCE:
       dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN;
       break;
+    case T_FUN_SYS_L2_SQUARED:
+      dis_type = ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED;
+      break;
     case T_FUN_SYS_INNER_PRODUCT:
       dis_type = ObExprVectorDistance::ObVecDisType::DOT;
       break;
@@ -129,17 +132,23 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
     ObDASSortRtDef *sort_rtdef = static_cast<ObDASSortRtDef *>(ir_rtdef->get_inv_idx_scan_rtdef());
     if (ObDASOpType::DAS_OP_TABLE_SCAN == sort_rtdef->children_[0]->op_type_) {
       base_rtdef = static_cast<ObDASScanRtDef *>(sort_rtdef->children_[0]);
+    } else if (sort_rtdef->children_[0]->children_cnt_ > 0
+      && ObDASOpType::DAS_OP_TABLE_SCAN == sort_rtdef->children_[0]->children_[0]->op_type_) {
+      base_rtdef = static_cast<ObDASScanRtDef *>(sort_rtdef->children_[0]->children_[0]);
     }
+  } else if (ObDASOpType::DAS_OP_INDEX_MERGE == ir_rtdef->get_inv_idx_scan_rtdef()->op_type_ && OB_ISNULL(sort_ctdef->limit_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null base limit expr", K(ret));
   }
 
-  if (OB_ISNULL(base_rtdef)) {
+  if (OB_ISNULL(base_rtdef) && (OB_ISNULL(sort_ctdef->limit_expr_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null base rtdef", K(ret), KPC(ir_ctdef), KPC(ir_rtdef));
-  } else if (nullptr != sort_ctdef && nullptr != sort_rtdef) {
+  } else if (OB_NOT_NULL(sort_ctdef->limit_expr_)) {
     // try init top-k limits
     bool is_null = false;
-    if (OB_UNLIKELY((nullptr != sort_ctdef->limit_expr_ || nullptr != sort_ctdef->offset_expr_) &&
-                    base_rtdef->limit_param_.is_valid())) {
+    if (OB_UNLIKELY((nullptr == sort_ctdef->limit_expr_ && nullptr == sort_ctdef->offset_expr_)
+                    && (OB_ISNULL(base_rtdef) || base_rtdef->limit_param_.is_valid()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected top k limit with table scan limit pushdown", K(ret), KPC(ir_ctdef), KPC(ir_rtdef));
     } else if (nullptr != sort_ctdef->limit_expr_) {
@@ -247,7 +256,8 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
                                        transaction::ObTxDesc *tx_desc,
                                        transaction::ObTxReadSnapshot *snapshot,
                                        ObTableScanParam &scan_param,
-                                       bool is_get)
+                                       bool is_get,
+                                       ObIAllocator *scan_allocator /*=nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef)) {
@@ -263,7 +273,7 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
     scan_param.scan_flag_ = rtdef->scan_flag_;
     scan_param.reserved_cell_count_ = ctdef->access_column_ids_.count();
     scan_param.allocator_ = &rtdef->stmt_allocator_;
-    scan_param.scan_allocator_ = &rtdef->scan_allocator_;
+    scan_param.scan_allocator_ = scan_allocator == nullptr ? &rtdef->scan_allocator_ : scan_allocator;
     scan_param.sql_mode_ = rtdef->sql_mode_;
     scan_param.frozen_version_ = rtdef->frozen_version_;
     scan_param.force_refresh_lc_ = rtdef->force_refresh_lc_;
@@ -271,7 +281,8 @@ int ObDasVecScanUtils::init_scan_param(const share::ObLSID &ls_id,
     scan_param.ext_file_column_exprs_ = &(ctdef->pd_expr_spec_.ext_file_column_exprs_);
     scan_param.ext_mapping_column_exprs_ = &(ctdef->pd_expr_spec_.ext_mapping_column_exprs_);
     scan_param.ext_mapping_column_ids_ = &(ctdef->pd_expr_spec_.ext_mapping_column_ids_);
-    scan_param.ext_column_convert_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    scan_param.ext_column_dependent_exprs_ = &(ctdef->pd_expr_spec_.ext_column_convert_exprs_);
+    scan_param.ext_enable_late_materialization_ = ctdef->pd_expr_spec_.ext_enable_late_materialization_;
     scan_param.calc_exprs_ = &(ctdef->pd_expr_spec_.calc_exprs_);
     scan_param.aggregate_exprs_ = &(ctdef->pd_expr_spec_.pd_storage_aggregate_output_);
     scan_param.table_param_ = &(ctdef->table_param_);
@@ -340,12 +351,13 @@ int ObDasVecScanUtils::init_vec_aux_scan_param(const share::ObLSID &ls_id,
                                                transaction::ObTxDesc *tx_desc,
                                                transaction::ObTxReadSnapshot *snapshot,
                                                ObTableScanParam &scan_param,
-                                               bool is_get)
+                                               bool is_get,
+                                               ObIAllocator *scan_allocator /*=nullptr*/)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(
-          ObDasVecScanUtils::init_scan_param(ls_id, tablet_id, ctdef, rtdef, tx_desc, snapshot, scan_param, is_get))) {
+          ObDasVecScanUtils::init_scan_param(ls_id, tablet_id, ctdef, rtdef, tx_desc, snapshot, scan_param, is_get, scan_allocator))) {
     LOG_WARN("failed to generate init vec aux scan param", K(ret));
   } else {
     scan_param.is_for_foreign_check_ = false;

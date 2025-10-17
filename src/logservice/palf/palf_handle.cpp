@@ -147,7 +147,7 @@ int PalfHandle::seek(const SCN &scn, PalfGroupBufferIterator &iter)
   return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter);
 }
 
-int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfLogIterator &iter)
+int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfIterator<ipalf::ILogEntry> &iter)
 {
   CHECK_VALID;
   int ret = OB_SUCCESS;
@@ -157,11 +157,42 @@ int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfLogIterator &iter)
   } else if (true == iter.is_inited()) {
     ret = iter.reuse(lsn);
   } else if (OB_FAIL(iter.init(lsn, palf_handle_impl_))) {
-    PALF_LOG(WARN, "failed to init ipalf::IPalfLogIterator", KR(ret), K(lsn));
+    PALF_LOG(WARN, "failed to init ipalf::IPalfIterator", KR(ret), K(lsn));
   } else {
-    PALF_LOG(INFO, "succeed to init ipalf::IPalfLogIterator", K(lsn));
+    PALF_LOG(INFO, "succeed to init ipalf::IPalfIterator", K(lsn));
   }
   return ret;
+}
+
+int PalfHandle::seek(const palf::LSN &lsn, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter)
+{
+  CHECK_VALID;
+  int ret = OB_SUCCESS;
+  if (!lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid lsn to seek iterator", KR(ret), K(lsn));
+  } else if (true == iter.is_inited()) {
+    ret = iter.reuse(lsn);
+  } else if (OB_FAIL(iter.init(lsn, palf_handle_impl_))) {
+    PALF_LOG(WARN, "failed to init ipalf::IPalfIterator", KR(ret), K(lsn));
+  } else {
+    PALF_LOG(INFO, "succeed to init ipalf::IPalfIterator", K(lsn));
+  }
+  return ret;
+}
+
+int PalfHandle::seek(const share::SCN &scn, ipalf::IPalfIterator<ipalf::ILogEntry> &iter)
+{
+  CHECK_VALID;
+  iter.set_is_inited();
+  return palf_handle_impl_->alloc_palf_buffer_iterator(scn, iter.palf_iterator_);
+}
+
+int PalfHandle::seek(const share::SCN &scn, ipalf::IPalfIterator<ipalf::IGroupEntry> &iter)
+{
+  CHECK_VALID;
+  iter.set_is_inited();
+  return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter.palf_iterator_);
 }
 
 int PalfHandle::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)

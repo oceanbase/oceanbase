@@ -87,8 +87,8 @@ private:
     uint64_t min_;
     uint64_t max_;
   };
-  typedef ObConcurrentHashMap<uint64_t, EventStat*> EventStatMap;
-  typedef ObConcurrentHashMap<uint64_t, EventStatMap*> CatStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStat*> EventStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStatMap*> CatStatMap;
   static bool for_each_cat_id(uint64_t cat_id, EventStatMap* event_stats);
   static bool for_each_event(uint64_t event, EventStat* event_stat);
 private:
@@ -213,8 +213,8 @@ private:
     uint64_t total_;
     int64_t cur_begin_ts_;
   };
-  typedef ObConcurrentHashMap<uint64_t, EventStat*> EventStatMap;
-  typedef ObConcurrentHashMap<uint64_t, EventStatMap*> CatStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStat*> EventStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStatMap*> CatStatMap;
   static inline bool is_pair_begin(uint64_t event_id);
   static bool for_each_cat_id(uint64_t cat_id, EventStatMap* event_stats);
   static bool for_each_event(uint64_t event, EventStat* event_stat);
@@ -369,7 +369,7 @@ private:
   {
     uint64_t count_;
   };
-  typedef ObConcurrentHashMap<uint64_t, EventStat*> EventStatMap;
+  typedef ObConcurrentHashMapDoNotUse<uint64_t, EventStat*> EventStatMap;
   static bool for_each_event(uint64_t event, EventStat* event_stat);
   static int64_t elapsed_time_;
 private:

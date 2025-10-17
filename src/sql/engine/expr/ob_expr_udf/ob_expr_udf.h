@@ -58,7 +58,9 @@ public:
       external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
       external_routine_entry_(),
       external_routine_url_(),
-      external_routine_resource_()
+      external_routine_resource_(),
+      is_mysql_udtf_(false),
+      out_params_type_(alloc)
   {
   }
 
@@ -67,6 +69,11 @@ public:
                         ObIExprExtraInfo *&copied_info) const override;
 
   template <typename RE> int from_raw_expr(RE &expr);
+
+  inline bool is_py_udf() {
+    return external_routine_type_ == ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_URL
+        || external_routine_type_ == ObExternalRoutineType::EXTERNAL_PY_UDF_FROM_RES;
+  }
 
   int64_t udf_id_;
   int64_t udf_package_id_;
@@ -87,6 +94,8 @@ public:
   common::ObString external_routine_entry_;
   common::ObString external_routine_url_;
   common::ObString external_routine_resource_;
+  bool is_mysql_udtf_;
+  common::ObFixedArray<ObExprResType, common::ObIAllocator> out_params_type_;
 };
 
 class ObExprUDFEnvGuard
@@ -153,6 +162,8 @@ public:
                                       const ObBitVector &skip,
                                       const EvalBound &bound);
 
+  static int eval_mysql_udtf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
   inline void set_udf_id(int64_t udf_id) { udf_id_ = udf_id; }
   inline int64_t get_udf_id() const { return udf_id_;}
   inline void set_udf_package_id(int64_t udf_package_id) { udf_package_id_ = udf_package_id; }
@@ -171,7 +182,12 @@ public:
   {
     return ObExprResultTypeUtil::assign_type_array(params_type, params_type_);
   }
+  inline int set_out_params_type(common::ObIArray<ObRawExprResType> &out_params_type)
+  {
+    return ObExprResultTypeUtil::assign_type_array(out_params_type, out_params_type_);
+  }
   inline const common::ObIArray<ObExprResType> &get_params_type() const { return params_type_;}
+  inline const common::ObIArray<ObExprResType> &get_out_params_type() const { return out_params_type_;}
   inline int set_params_desc(common::ObIArray<ObUDFParamDesc> &params_desc)
   {
     return params_desc_.assign(params_desc);
@@ -202,6 +218,7 @@ private:
   bool call_in_sql_;
   uint64_t loc_;
   bool is_udt_cons_;
+  common::ObSEArray<ObExprResType, 5> out_params_type_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUDF);

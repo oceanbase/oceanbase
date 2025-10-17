@@ -196,6 +196,7 @@ public:
       is_overwrite_(false),
       values_desc_(),
       values_vector_(),
+      all_values_simple_const_(false),
       column_conv_exprs_(),
       assignments_(),
       column_in_values_vector_()
@@ -207,6 +208,7 @@ public:
       is_overwrite_(false),
       values_desc_(),
       values_vector_(),
+      all_values_simple_const_(false),
       column_conv_exprs_(),
       part_generated_col_dep_cols_(),
       assignments_(),
@@ -247,6 +249,8 @@ public:
   //  - value_vectors_ 的大小为 6，保存的内容为 1,2,3,4,5,6 这几个表达式
   common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> values_desc_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> values_vector_;
+  // mark if all values in values_vector_ are simple const which can be ignored during relation expr iteration
+  bool all_values_simple_const_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_conv_exprs_;
   // if generated col is partition key in heap table, we need to store all dep cols,
   // eg:
@@ -293,7 +297,11 @@ public:
                K_(values_desc),
                K_(values_vector),
                K_(column_conv_exprs),
-               K_(assignments));
+               K_(assignments),
+               K_(match_condition_exprs),
+               K_(insert_condition_exprs),
+               K_(update_condition_exprs),
+               K_(delete_condition_exprs));
   uint64_t source_table_id_;
   uint64_t target_table_id_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> match_condition_exprs_;

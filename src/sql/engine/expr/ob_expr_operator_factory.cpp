@@ -512,9 +512,18 @@
 #include "sql/engine/expr/ob_expr_current_catalog.h"
 #include "sql/engine/expr/ob_expr_check_catalog_access.h"
 #include "sql/engine/expr/ob_expr_check_location_access.h"
-
+#include "sql/engine/expr/ob_expr_tmp_file_open.h"
+#include "sql/engine/expr/ob_expr_tmp_file_close.h"
+#include "sql/engine/expr/ob_expr_tmp_file_write.h"
+#include "sql/engine/expr/ob_expr_tmp_file_read.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_complete.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
+#include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
+#include "sql/engine/expr/ob_expr_bucket.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_format_profile.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1002,6 +1011,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprBenchmark);
     REG_OP(ObExprWeightString);
     REG_OP(ObExprCrc32);
+  #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
+    REG_OP(ObExprTmpFileOpen);
+    REG_OP(ObExprTmpFileClose);
+    REG_OP(ObExprTmpFileWrite);
+    REG_OP(ObExprTmpFileRead);
+  #endif
     REG_OP(ObExprToBase64);
     REG_OP(ObExprFromBase64);
     REG_OP(ObExprOpSubQueryInPl);
@@ -1289,6 +1304,13 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
     REG_OP(ObExprCheckLocationAccess);
     REG_OP(ObExprStartUpMode);
+    REG_OP(ObExprAIComplete);
+    REG_OP(ObExprAIEmbed);
+    REG_OP(ObExprAIRerank);
+    REG_OP(ObExprLocalDynamicFilter);
+    REG_OP(ObExprFormatProfile);
+    REG_OP(ObExprBucket);
+    REG_OP(ObExprVectorL2Squared);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1631,6 +1653,15 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCurrentCatalog);
   REG_OP_ORCL(ObExprCheckCatalogAccess);
   REG_OP_ORCL(ObExprStartUpMode);
+#if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
+  REG_OP_ORCL(ObExprTmpFileOpen);
+  REG_OP_ORCL(ObExprTmpFileClose);
+  REG_OP_ORCL(ObExprTmpFileWrite);
+  REG_OP_ORCL(ObExprTmpFileRead);
+#endif
+  REG_OP_ORCL(ObExprLocalDynamicFilter);
+  REG_OP_ORCL(ObExprFormatProfile);
+  REG_OP_ORCL(ObExprCheckLocationAccess);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

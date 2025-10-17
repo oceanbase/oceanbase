@@ -161,7 +161,7 @@ public:
     id_(ObTimeUtility::current_time() + random())
   {}
   void init(int64_t id) { id_ = id; }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDag &other) const
   {
     bool bret = false;
@@ -479,6 +479,69 @@ TEST_F(TestDagScheduler, test_dag_retry)
   EXPECT_EQ(0, MTL(ObDagWarningHistoryManager *)->size());
 }
 
+class ObDagRetryFailedTask : public ObITask
+{
+public:
+  ObDagRetryFailedTask() : ObITask(ObITaskType::TASK_TYPE_NORMAL_MINOR_MERGE) {}
+  virtual ~ObDagRetryFailedTask() {}
+  virtual int process()
+  {
+    int ret = OB_ERROR;
+    return ret;
+  }
+};
+
+class ObRetryFailedDag : public ObDagRetryDag
+{
+public:
+  ObRetryFailedDag() : ObDagRetryDag() {}
+  virtual ~ObRetryFailedDag() {}
+  virtual int create_first_task() override
+  {
+    int ret = OB_SUCCESS;
+    ObDagRetryFailedTask *task = nullptr;
+    if (OB_FAIL(alloc_task(task))) {
+      COMMON_LOG(WARN, "Fail to alloc task", K(ret));
+    } else if (OB_FAIL(add_task(*task))) {
+      COMMON_LOG(WARN, "Fail to add task", K(ret));
+    } else if (running_times_ >= 1) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "create first task failed when dag retry", K_(running_times), KPC(this));
+    }
+    return ret;
+  }
+};
+
+TEST_F(TestDagScheduler, test_dag_retry_failed)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ObDagWarningHistoryManager* manager = MTL(ObDagWarningHistoryManager *);
+  ASSERT_TRUE(nullptr != manager);
+  EXPECT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->init(true, MTL_ID(), "DagWarnHis"));
+
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < 5; ++i) {
+    ObRetryFailedDag *dag = NULL;
+    ObRetryDagInitParam param;
+    const int64_t str_len = 100;
+    char str[str_len];
+    param.id_ = i + 1;
+    snprintf(str, str_len, "Hello OceanBase_%d", i);
+    param.str_ = ObString(str);
+    if (OB_FAIL(scheduler->create_dag(&param, dag))) {
+      COMMON_LOG(WARN, "failed to create dag", K(ret));
+    } else if (FALSE_IT(dag->set_max_retry_times(3))) {
+    } else if (OB_FAIL(scheduler->add_dag(dag))) {
+      COMMON_LOG(WARN, "failed to add dag", K(ret));
+    }
+    EXPECT_EQ(OB_SUCCESS, ret);
+  }
+
+  wait_scheduler();
+  EXPECT_EQ(5, MTL(ObDagWarningHistoryManager *)->size());
+}
+
 class ObOperator
 {
 public:
@@ -743,7 +806,7 @@ public:
     }
     return ret;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDagNet &other) const
   {
     bool bret = false;
@@ -1837,7 +1900,7 @@ public:
     }
     return ret;
   }
-  virtual int64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
+  virtual uint64_t hash() const { return murmurhash(&id_, sizeof(id_), 0);}
   virtual bool operator == (const ObIDagNet &other) const
   {
     bool bret = false;

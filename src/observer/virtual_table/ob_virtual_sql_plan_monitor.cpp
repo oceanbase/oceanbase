@@ -40,10 +40,13 @@ ObVirtualSqlPlanMonitor::ObVirtualSqlPlanMonitor() :
     rt_nodes_(),
     rt_node_idx_(0),
     rt_start_idx_(INT64_MAX),
-    rt_end_idx_(INT64_MIN)
+    rt_end_idx_(INT64_MIN),
+    fetch_profile_(false)
 {
   server_ip_[0] = '\0';
   trace_id_[0] = '\0';
+  profile_allocator_.set_label("MonRTProfile");
+  profile_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObVirtualSqlPlanMonitor::~ObVirtualSqlPlanMonitor()
@@ -75,6 +78,7 @@ void ObVirtualSqlPlanMonitor::reset()
   need_rt_node_ = false;
   rt_nodes_.reset();
   rt_node_idx_ = 0;
+  profile_allocator_.reset();
 }
 
 int ObVirtualSqlPlanMonitor::inner_open()
@@ -86,6 +90,13 @@ int ObVirtualSqlPlanMonitor::inner_open()
   }
 
   SERVER_LOG(DEBUG, "tenant ids", K(tenant_id_array_));
+  for (int64_t i = 0; i < output_column_ids_.count(); ++i) {
+    const uint64_t column_id = output_column_ids_.at(i);
+    if (column_id == RAW_PROFILE) {
+      fetch_profile_ = true;
+      break;
+    }
+  }
 
   if (OB_SUCC(ret)) {
     if (NULL == allocator_) {
@@ -169,7 +180,7 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
     SERVER_LOG(WARN, "invalid argument", KP(allocator_), K(ret));
   } else if (is_first_get_) {
     bool is_valid = true;
-    // init inner iterator varaibales
+    // init inner iterator variables
     tenant_id_array_idx_ = is_reverse_scan() ? tenant_id_array_.count() : -1;
     cur_mysql_req_mgr_ = nullptr;
 
@@ -251,7 +262,8 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
   int ret = OB_SUCCESS;
   if (need_rt_node_ && OB_NOT_NULL(cur_mysql_req_mgr_)) {
     if (rt_nodes_.empty()) {
-      if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_))) {
+      if (OB_FAIL(cur_mysql_req_mgr_->convert_node_map_2_array(rt_nodes_, &profile_allocator_,
+                                                               fetch_profile_))) {
         LOG_WARN("fail to convert node map to array", K(ret));
       } else {
         rt_start_idx_ = MAX(rt_start_idx_, 0);
@@ -271,7 +283,7 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
       LOG_WARN("fail to convert node to row", K(ret));
     } else if (OB_ISNULL(row)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpectd null row", K(ret));
+      LOG_WARN("unexpected null row", K(ret));
     } else if (!is_reverse_scan()) {
       rt_node_idx_++;
     } else {
@@ -856,6 +868,16 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       }
       case PLAN_HASH_VALUE: {
         cells[cell_idx].set_uint64(node.plan_hash_value_);
+        break;
+      }
+      case RAW_PROFILE: {
+        if (OB_ISNULL(node.raw_profile_)) {
+          cells[cell_idx].set_null();
+        } else {
+          cells[cell_idx].set_varchar(node.raw_profile_, node.raw_profile_len_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                    ObCharset::get_default_charset()));
+        }
         break;
       }
       default: {

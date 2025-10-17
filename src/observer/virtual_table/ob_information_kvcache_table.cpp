@@ -29,9 +29,8 @@ ObInfoSchemaKvCacheTable::ObInfoSchemaKvCacheTable()
     port_(0),
     cache_iter_(0),
     str_buf_(),
-    arenallocator_(),
     tenant_di_info_(allocator_),
-    tenant_dis_()
+    first_enter_(true)
 {
 }
 
@@ -42,43 +41,66 @@ ObInfoSchemaKvCacheTable::~ObInfoSchemaKvCacheTable()
 
 void ObInfoSchemaKvCacheTable::reset()
 {
-  ObVirtualTableScannerIterator::reset();
+  omt::ObMultiTenantOperator::reset();
   cache_iter_ = 0;
   addr_ = NULL;
   port_ = 0;
   ipstr_.reset();
   inst_handles_.reset();
   str_buf_.reset();
-  for (int64_t i = 0; i  < OB_ROW_MAX_COLUMNS_COUNT; i++) {
-    cells_[i].reset();
-  }
-  arenallocator_.reset();
   tenant_di_info_.reset();
-  tenant_dis_.reset();
+  first_enter_ = true;
+  ObVirtualTableScannerIterator::reset();
+
+}
+
+void ObInfoSchemaKvCacheTable::release_last_tenant()
+{
+  cache_iter_ = 0;
+  inst_handles_.reset();
+  str_buf_.reset();
+  tenant_di_info_.reset();
+  first_enter_ = true;
 }
 
 int ObInfoSchemaKvCacheTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(execute(row))) {
+    SERVER_LOG(WARN, "execute fail", K(ret));
+  }
+  return ret;
+}
 
-  row = nullptr;
-  ObKVCacheInst * inst = NULL;
-  ObDiagnoseTenantInfo *tenant_info = nullptr;
-  if (OB_UNLIKELY(NULL == allocator_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "Invalid allocator, not init", K(ret), KP(allocator_));
-  } else if (OB_FAIL(get_handles(inst, tenant_info))) {
-    if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "Fail to get cache inst or tenant diagnose info", K(ret));
+int ObInfoSchemaKvCacheTable::process_curr_tenant(common::ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (first_enter_) {
+    if (OB_FAIL(ObKVGlobalCache::get_instance().get_cache_inst_info(MTL_ID(), inst_handles_))) {
+      SERVER_LOG(WARN, "Fail to get cache info", K(ret), K(MTL_ID()));
+    } else {
+      first_enter_ = false;
     }
-  } else if (OB_FAIL(set_diagnose_info(inst, tenant_info))) {
-    SERVER_LOG(WARN, "Fail to set diagnose info for cache inst", K(ret));
-  } else if (OB_FAIL(process_row(inst))) {
-    SERVER_LOG(WARN, "Fail to process current row", K(ret));
-  } else {
-    row = &cur_row_;
   }
 
+  if (OB_SUCC(ret)) {
+    row = nullptr;
+    ObKVCacheInst * inst = nullptr;
+    if (cache_iter_ >= inst_handles_.count()) {
+      ret = OB_ITER_END;
+    } else {
+      inst = inst_handles_.at(cache_iter_++).get_inst();
+      if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(MTL_ID(), tenant_di_info_))) {
+        SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(MTL_ID()));
+      } else if (OB_FAIL(set_diagnose_info(inst, &tenant_di_info_))) {
+        SERVER_LOG(WARN, "Fail to set diagnose info for cache inst", K(ret));
+      } else if (OB_FAIL(process_row(inst))) {
+        SERVER_LOG(WARN, "Fail to process current row", K(ret));
+      } else {
+        row = &cur_row_;
+      }
+    }
+  }
   return ret;
 }
 
@@ -109,84 +131,10 @@ int ObInfoSchemaKvCacheTable::inner_open()
   inst_handles_.reuse();
   if (OB_FAIL(set_ip())) {
     SERVER_LOG(WARN, "Fail to set ip from addr", K(ret), K(addr_));
-  } else if (OB_FAIL(ObKVGlobalCache::get_instance().get_cache_inst_info(effective_tenant_id_, inst_handles_))) {
-    SERVER_LOG(WARN, "Fail to get cache info", K(ret), K(effective_tenant_id_));
-  } else if (OB_FAIL(get_tenant_info())) {
-    SERVER_LOG(WARN, "Fail to get tenant info", K(ret));
   }
-
   return ret;
 }
 
-int ObInfoSchemaKvCacheTable::get_tenant_info()
-{
-  int ret = OB_SUCCESS;
-
-  if (oceanbase::lib::is_diagnose_info_enabled()) {
-    if (is_sys_tenant(effective_tenant_id_)) {
-      arenallocator_.reuse();
-      tenant_dis_.reuse();
-      common::ObVector<uint64_t> ids;
-      GCTX.omt_->get_tenant_ids(ids);
-      for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); ++i) {
-        uint64_t tenant_id = ids[i];
-        void *buf = NULL;
-        if (!is_virtual_tenant_id(tenant_id)) {
-          if (OB_ISNULL(buf = allocator_->alloc(sizeof(common::ObDiagnoseTenantInfo)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            SERVER_LOG(WARN, "Fail to alloc buf", KR(ret));
-          } else {
-            std::pair<uint64_t, common::ObDiagnoseTenantInfo *> pair;
-            pair.first = tenant_id;
-            pair.second = new (buf) common::ObDiagnoseTenantInfo(allocator_);
-            if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(
-                    tenant_id, *(pair.second)))) {
-              SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(tenant_id));
-            } else if (OB_FAIL(tenant_dis_.push_back(pair))) {
-              SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(tenant_id));
-            }
-          }
-        }
-      }
-    } else {
-      tenant_di_info_.reset();
-      if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(effective_tenant_id_, tenant_di_info_))) {
-        SERVER_LOG(WARN, "Fail to get tenant stat event", K(ret), K(effective_tenant_id_));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObInfoSchemaKvCacheTable::get_handles(ObKVCacheInst *&inst, ObDiagnoseTenantInfo *&tenant_info)
-{
-  int ret = OB_SUCCESS;
-
-  inst = nullptr;
-  tenant_info = nullptr;
-  do {
-    if (cache_iter_ >= inst_handles_.count()) {
-      ret = OB_ITER_END;
-    } else {
-      inst = inst_handles_.at(cache_iter_++).get_inst();
-    }
-    if (OB_FAIL(ret)) {
-    } else if (!oceanbase::lib::is_diagnose_info_enabled()) {
-    } else if (is_sys_tenant(effective_tenant_id_)) {
-      for (int64_t i = 0; i < tenant_dis_.count(); ++i) {
-        if (tenant_dis_.at(i).first == inst->tenant_id_) {
-          tenant_info = tenant_dis_.at(i).second;
-          break;
-        }
-      }
-    } else {
-      tenant_info = &tenant_di_info_;
-    }
-  } while (OB_SUCC(ret) && OB_ISNULL(tenant_info));
-
-  return ret;
-}
 
 int ObInfoSchemaKvCacheTable::set_diagnose_info(ObKVCacheInst *inst, ObDiagnoseTenantInfo *tenant_info)
 {
@@ -243,57 +191,56 @@ int ObInfoSchemaKvCacheTable::process_row(const ObKVCacheInst *inst)
   int ret = OB_SUCCESS;
 
   uint64_t cell_idx = 0;
-  cur_row_.cells_ = cells_;
-  cur_row_.count_ = reserved_column_cnt_;
+  ObObj *cells = cur_row_.cells_;
   for (int64_t i = 0 ; OB_SUCC(ret) && i < output_column_ids_.count() ; ++i) {
     uint64_t col_id = output_column_ids_.at(i);
     switch(col_id) {
       case TENANT_ID: {
-        cells_[cell_idx].set_int(inst->tenant_id_);
+        cells[cell_idx].set_int(inst->tenant_id_);
         break;
       }
       case SVR_IP: {
-        cells_[cell_idx].set_varchar(ipstr_);
-        cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        cells[cell_idx].set_varchar(ipstr_);
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
       case SVR_PORT: {
-        cells_[cell_idx].set_int(port_);
+        cells[cell_idx].set_int(port_);
         break;
       }
       case CACHE_NAME: {
         if (NULL != inst->status_.config_) {
-          cells_[cell_idx].set_varchar(inst->status_.config_->cache_name_);
-          cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cells[cell_idx].set_varchar(inst->status_.config_->cache_name_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
         break;
       }
       case CACHE_ID: {
-        cells_[cell_idx].set_int(inst->cache_id_);
+        cells[cell_idx].set_int(inst->cache_id_);
         break;
       }
       case CACHE_SIZE: {
-        cells_[cell_idx].set_int(inst->status_.store_size_ + inst->status_.map_size_);
+        cells[cell_idx].set_int(inst->status_.store_size_ + inst->status_.map_size_);
         break;
       }
       case PRIORITY: {
         if (NULL != inst->status_.config_) {
-          cells_[cell_idx].set_int(inst->status_.config_->priority_);
+          cells[cell_idx].set_int(inst->status_.config_->priority_);
         } else {
-          cells_[cell_idx].set_int(0);
+          cells[cell_idx].set_int(0);
         }
         break;
       }
       case CACHE_STORE_SIZE: {
-        cells_[cell_idx].set_int(inst->status_.store_size_);
+        cells[cell_idx].set_int(inst->status_.store_size_);
         break;
       }
       case CACHE_MAP_SIZE: {
-        cells_[cell_idx].set_int(inst->status_.map_size_);
+        cells[cell_idx].set_int(inst->status_.map_size_);
         break;
       }
       case KV_CNT: {
-        cells_[cell_idx].set_int(inst->status_.kv_cnt_);
+        cells[cell_idx].set_int(inst->status_.kv_cnt_);
         break;
       }
       case HIT_RATIO: {
@@ -309,24 +256,24 @@ int ObInfoSchemaKvCacheTable::process_row(const ObKVCacheInst *inst)
         } else if (OB_FAIL(num.from(buf, str_buf_))) {
           SERVER_LOG(WARN, "Fail to cast to number", K(ret));
         } else {
-          cells_[cell_idx].set_number(num);
+          cells[cell_idx].set_number(num);
         }
         break;
       }
       case TOTAL_PUT_CNT: {
-        cells_[cell_idx].set_int(inst->status_.total_put_cnt_.value());
+        cells[cell_idx].set_int(inst->status_.total_put_cnt_.value());
         break;
       }
       case TOTAL_HIT_CNT: {
-        cells_[cell_idx].set_int(inst->status_.total_hit_cnt_.value());
+        cells[cell_idx].set_int(inst->status_.total_hit_cnt_.value());
         break;
       }
       case TOTAL_MISS_CNT: {
-        cells_[cell_idx].set_int(inst->status_.total_miss_cnt_);
+        cells[cell_idx].set_int(inst->status_.total_miss_cnt_);
         break;
       }
       case HOLD_SIZE: {
-        cells_[cell_idx].set_int(inst->status_.hold_size_);
+        cells[cell_idx].set_int(inst->status_.hold_size_);
         break;
       }
       default: {

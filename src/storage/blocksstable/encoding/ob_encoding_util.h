@@ -770,7 +770,7 @@ public:
   ObEncodingRowBufHolder(
       const lib::ObLabel &label = blocksstable::OB_ENCODING_LABEL_ROW_BUFFER,
       const int64_t page_size = common::OB_MALLOC_MIDDLE_BLOCK_SIZE)
-    : allocator_(label, page_size), buf_size_limit_(0), alloc_size_(0), alloc_buf_(nullptr) {}
+    : allocator_(label, page_size), buf_size_limit_(0), alloc_size_(0), alloc_buf_(nullptr), is_inited_(false) {}
   virtual ~ObEncodingRowBufHolder() {}
   int init(const int64_t macro_block_size, const int64_t tenant_id = OB_SERVER_TENANT_ID);
   void reset();

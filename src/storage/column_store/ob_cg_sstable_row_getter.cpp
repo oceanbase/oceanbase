@@ -163,19 +163,12 @@ int ObCGGetter::get_next_row(ObMacroBlockReader &block_reader, const blocksstabl
 ///////////////////////////////////////// ObCGSSTableRowGetter ///////////////////////////////////////////////
 ObCGSSTableRowGetter::~ObCGSSTableRowGetter()
 {
-  FREE_PTR_FROM_CONTEXT(access_ctx_, cg_param_pool_, ObCGIterParamPool);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, flat_reader_, ObMicroBlockGetReader);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, encode_reader_, ObEncodeBlockGetReader);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, cs_encode_reader_, ObCSEncodeBlockGetReader);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, micro_getter_, ObMicroBlockRowGetter);
+  reset();
 }
 
 void ObCGSSTableRowGetter::reset()
 {
   FREE_PTR_FROM_CONTEXT(access_ctx_, cg_param_pool_, ObCGIterParamPool);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, flat_reader_, ObMicroBlockGetReader);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, encode_reader_, ObEncodeBlockGetReader);
-  FREE_PTR_FROM_CONTEXT(access_ctx_, cs_encode_reader_, ObCSEncodeBlockGetReader);
   FREE_PTR_FROM_CONTEXT(access_ctx_, micro_getter_, ObMicroBlockRowGetter);
   is_inited_ = false;
   co_sstable_ = nullptr;
@@ -185,6 +178,7 @@ void ObCGSSTableRowGetter::reset()
   row_idx_datum_.reset();
   row_idx_key_.reset();
   row_getters_.reset();
+  reader_helper_.reset();
   ObStoreRowIterator::reset();
 }
 
@@ -219,7 +213,10 @@ int ObCGSSTableRowGetter::init(
     row_getters_.set_allocator(access_ctx_->stmt_allocator_);
     ObSSTable *sstable = static_cast<ObSSTable *>(table);
     int64_t access_col_cnt = iter_param.get_out_col_cnt();
-    if (OB_FAIL(row_getters_.prepare_reallocate(access_col_cnt))) {
+
+    if (OB_FAIL(reader_helper_.init(*access_ctx_->stmt_allocator_))) {
+      LOG_WARN("Fail to init reader helper", K(ret));
+    } else if (OB_FAIL(row_getters_.prepare_reallocate(access_col_cnt))) {
       LOG_WARN("Failed to init row getters", K(ret), K(access_col_cnt));
     } else if (!row_.is_valid()) {
       if (OB_FAIL(row_.init(*access_ctx.stmt_allocator_, access_col_cnt))) {
@@ -258,37 +255,6 @@ int ObCGSSTableRowGetter::init_cg_param_pool(ObTableAccessContext &context)
   return ret;
 }
 
-int ObCGSSTableRowGetter::prepare_reader(const ObRowStoreType store_type)
-{
-  int ret = OB_SUCCESS;
-  reader_ = nullptr;
-  if (FLAT_ROW_STORE == store_type) {
-    if (nullptr == flat_reader_) {
-      flat_reader_ = OB_NEWx(ObMicroBlockGetReader, access_ctx_->stmt_allocator_);
-    }
-    reader_ = flat_reader_;
-  } else if (ENCODING_ROW_STORE == store_type || SELECTIVE_ENCODING_ROW_STORE == store_type) {
-    if (nullptr == encode_reader_) {
-      encode_reader_ = OB_NEWx(ObEncodeBlockGetReader, access_ctx_->stmt_allocator_);
-    }
-    reader_ = encode_reader_;
-  } else if (CS_ENCODING_ROW_STORE == store_type) {
-    if (nullptr == cs_encode_reader_) {
-      cs_encode_reader_ = OB_NEWx(ObCSEncodeBlockGetReader, access_ctx_->stmt_allocator_);
-    }
-    reader_ = cs_encode_reader_;
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported row store type", K(ret), K(store_type));
-  }
-  LOG_DEBUG("row store type", K(ret), K(store_type));
-  if (OB_SUCC(ret) && OB_ISNULL(reader_)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate reader", K(ret), K(store_type));
-  }
-  return ret;
-}
-
 int ObCGSSTableRowGetter::get_row_id(ObSSTableReadHandle &read_handle, ObCSRowId &row_id)
 {
   int ret = OB_SUCCESS;
@@ -297,16 +263,19 @@ int ObCGSSTableRowGetter::get_row_id(ObSSTableReadHandle &read_handle, ObCSRowId
   } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
     int64_t cursor = -1;
     ObMicroBlockData block_data;
+    ObMicroBlockAddr block_addr(read_handle.micro_handle_->macro_block_id_,
+                                   read_handle.micro_handle_->micro_info_.offset_,
+                                   read_handle.micro_handle_->micro_info_.size_);
     if (OB_FAIL(read_handle.get_block_data(macro_block_reader_, block_data))) {
       LOG_WARN("Fail to get block data", K(ret), K(read_handle));
-    } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
+    } else if (OB_FAIL(reader_helper_.get_reader(block_data.get_store_type(), reader_))) {
       LOG_WARN("Fail to prepare reader", K(ret), K(read_handle.micro_handle_->macro_block_id_));
-    } else if (OB_FAIL(reader_->get_row_id(block_data, *read_handle.rowkey_, *iter_param_->get_read_info(), cursor))) {
+    } else if (OB_FAIL(reader_->get_row_id(block_addr, block_data, *read_handle.rowkey_, *iter_param_->get_read_info(), cursor))) {
       if (OB_BEYOND_THE_RANGE == ret) {
         row_id = OB_INVALID_CS_ROW_ID;
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("Fail to get row id", K(ret), KPC(read_handle.rowkey_), K(read_handle.micro_handle_->macro_block_id_));
+        LOG_WARN("Fail to get row id", K(ret), KPC(read_handle.rowkey_), K(block_addr));
       }
     } else {
       row_id = read_handle.index_block_info_.get_row_range().start_row_id_ + cursor;

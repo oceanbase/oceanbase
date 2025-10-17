@@ -107,9 +107,6 @@ void ObCommonLSService::do_work()
           LOG_WARN("failed to create ls", KR(ret), KR(tmp_ret), K(user_tenant_schema));
         }
         if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()) {
-          if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(user_tenant_schema))) {
-            LOG_WARN("failed to adjust user tenant primary zone", KR(ret), KR(tmp_ret), K(user_tenant_schema));
-          }
           if (OB_TMP_FAIL(try_modify_ls_unit_group_(user_tenant_schema))) {
             LOG_WARN("failed to modify ls unit group", KR(ret), KR(tmp_ret), K(user_tenant_schema));
           }
@@ -119,7 +116,8 @@ void ObCommonLSService::do_work()
           (void)try_update_primary_ip_list();
         }
       }
-
+      //系统日志流primary_zone的调整不受配置项的控制
+      //系统日志流的个数不会发生变化，加上限制会导致升级case需要大量的修改
       if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
         LOG_WARN("failed to update sys ls primary zone", KR(ret), KR(tmp_ret), K(tenant_id_));
       }

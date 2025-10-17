@@ -24,11 +24,13 @@
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 #endif
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
+#include "sql/engine/table/ob_dummy_table_row_iter.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
+#include "plugin/external_table/ob_plugin_external_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/config/ob_server_config.h"
-
+#include "sql/engine/table/ob_iceberg_delete_bitmap_builder.h"
 namespace oceanbase
 {
 namespace common {
@@ -43,6 +45,8 @@ class ObExternalTablePartInfoArray;
 using namespace share::schema;
 using namespace common;
 using namespace share;
+using namespace plugin;
+
 namespace sql
 {
 
@@ -143,168 +147,34 @@ int ObExternalDataAccessDriver::pread(void *buf, const int64_t count, const int6
   return ret;
 }
 
-class ObExternalFileListArrayOpWithFilter : public ObBaseDirEntryOperator
-{
-public:
-  ObExternalFileListArrayOpWithFilter(ObIArray <common::ObString>& name_array,
-                                      ObIArray <int64_t>& file_size,
-                              ObExternalPathFilter *filter,
-                              ObIAllocator& array_allocator)
-    : name_array_(name_array), file_size_(file_size), filter_(filter), allocator_(array_allocator) {}
-
-  virtual bool need_get_file_size() const override { return true; }
-  int func(const dirent *entry) {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(entry)) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "invalid list entry, entry is null");
-    } else if (OB_ISNULL(entry->d_name)) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "invalid list entry, d_name is null");
-    } else {
-      const ObString file_name(entry->d_name);
-      ObString tmp_file;
-      bool is_filtered = false;
-      if (!file_name.empty() && file_name[file_name.length() - 1] != '/') {
-        if (OB_NOT_NULL(filter_) && OB_FAIL(filter_->is_filtered(file_name, is_filtered))) {
-          LOG_WARN("fail check is filtered", K(ret));
-        } else if (!is_filtered) {
-          if (OB_FAIL(ob_write_string(allocator_, file_name, tmp_file, true))) {
-            OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
-          } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
-            OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
-          } else if (OB_FAIL(file_size_.push_back(get_size()))) {
-            OB_LOG(WARN, "fail to push size to array", K(ret), K(tmp_file));
-          }
-        }
-      }
-    }
-    return ret;
-  }
-
-private:
-  ObIArray <ObString>& name_array_;
-  ObIArray <int64_t>& file_size_;
-  ObExternalPathFilter *filter_;
-  ObIAllocator& allocator_;
-};
-
-class ObLocalFileListArrayOpWithFilter : public ObBaseDirEntryOperator
-{
-public:
-  ObLocalFileListArrayOpWithFilter(ObIArray <common::ObString> &name_array,
-                                   ObIArray <int64_t>& file_size,
-                                   const ObString &path,
-                                   const ObString &origin_path,
-                                   ObExternalPathFilter *filter,
-                                   ObIAllocator &array_allocator)
-    : name_array_(name_array), file_size_(file_size), path_(path), origin_path_(origin_path),
-      filter_(filter), allocator_(array_allocator) {}
-  virtual bool need_get_file_size() const override { return true; }
-  int func(const dirent *entry)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(entry)) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "invalid list entry, entry is null");
-    } else if (OB_ISNULL(entry->d_name)) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "invalid list entry, d_name is null");
-    } else {
-      const ObString file_name(entry->d_name);
-      ObSqlString full_path;
-      ObString tmp_file;
-      bool is_filtered = false;
-      ObString cur_path = path_;
-      ObString filter_path;
-      if (file_name.case_compare(".") == 0
-          || file_name.case_compare("..") == 0) {
-        //do nothing
-      } else if (OB_FAIL(full_path.assign(cur_path))) {
-        OB_LOG(WARN, "assign string failed", K(ret));
-      } else if (full_path.length() > 0 && *(full_path.ptr() + full_path.length() - 1) != '/' &&
-                                                                OB_FAIL(full_path.append("/"))) {
-        OB_LOG(WARN, "append failed", K(ret)) ;
-      } else if (OB_FAIL(full_path.append(file_name))) {
-        OB_LOG(WARN, "append file name failed", K(ret));
-      } else {
-        filter_path = full_path.string();
-        filter_path += origin_path_.length();  // 只匹配location下的子路径
-      }
-
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_NOT_NULL(filter_) && OB_FAIL(filter_->is_filtered(filter_path, is_filtered))) {
-        LOG_WARN("fail check is filtered", K(ret));
-      } else if (!is_filtered) {
-        ObString target = full_path.string();
-        if (!is_dir_scan()) {
-          target += origin_path_.length();
-          if (!target.empty() && '/' == target[0]) {
-            target += 1;
-          }
-        }
-        if (target.empty()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("empty dir or name", K(full_path), K(origin_path_));
-        } else if (OB_FAIL(ob_write_string(allocator_, target, tmp_file, true/*c_style*/))) {
-          OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
-        } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
-          OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
-        } else if (OB_FAIL(file_size_.push_back(get_size()))) {
-          OB_LOG(WARN, "fail to push size to array", K(ret), K(tmp_file));
-        }
-      }
-    }
-    return ret;
-  }
-private:
-  ObIArray <ObString> &name_array_;
-  ObIArray <int64_t> &file_size_;
-  const ObString &path_;
-  const ObString &origin_path_;
-  ObExternalPathFilter *filter_;
-  ObIAllocator &allocator_;
-};
-
-
-int ObExternalDataAccessDriver::get_file_list(const ObString &path,
-                                              const ObString &pattern,
-                                              const ObExprRegexpSessionVariables &regexp_vars,
-                                              ObIArray<ObString> &file_urls,
-                                              ObIArray<int64_t> &file_sizes,
-                                              ObIAllocator &allocator)
+int ObExternalDataAccessDriver::get_directory_list(const common::ObString &path,
+                                                   common::ObIArray<common::ObString> &file_urls,
+                                                   common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_VISIT_COUNT = 100000;
-  ObExprRegexContext regexp_ctx;
-  ObExternalPathFilter filter(regexp_ctx, allocator);
   ObString path_cstring;
+  ObArray<int64_t> useless_size;
   CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
 
   if (OB_UNLIKELY(!access_info_->is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObExternalDataAccessDriver not init", KR(ret), K_(access_info));
-  } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, regexp_vars))) {
-    LOG_WARN("fail to init filter", K(ret));
-  } else if (OB_FAIL(ob_write_string(allocator, path, path_cstring, true/*c_style*/))) {
+  } else if (OB_FAIL(ob_write_string(allocator, path, path_cstring, true /*c_style*/))) {
     LOG_WARN("fail to copy string", KR(ret), K(path));
-  } else if (get_storage_type() == OB_STORAGE_FILE ||
-             get_storage_type() == OB_STORAGE_HDFS) {
-    ObSEArray<ObString, 4> file_dirs;
+  } else if (get_storage_type() == OB_STORAGE_FILE || get_storage_type() == OB_STORAGE_HDFS) {
+    ObString file_dir;
     bool is_dir = false;
 
     if (get_storage_type() == OB_STORAGE_FILE) {
-      ObString path_without_prifix;
-      path_without_prifix = path_cstring;
-      path_without_prifix += strlen(OB_FILE_PREFIX);
+      ObString path_without_prefix;
+      path_without_prefix = path_cstring;
+      path_without_prefix += strlen(OB_FILE_PREFIX);
 
-      OZ(FileDirectoryUtils::is_directory(path_without_prifix.ptr(), is_dir));
+      OZ(FileDirectoryUtils::is_directory(path_without_prefix.ptr(), is_dir));
       if (!is_dir) {
-        LOG_INFO("external location is not a directory",
-                 K(path_without_prifix));
+        LOG_INFO("external location is not a directory", K(path_without_prefix));
       } else {
-        OZ(file_dirs.push_back(path_cstring));
+        file_dir = path_cstring;
       }
     } else {
       // OB_STORAGE_HDFS
@@ -312,29 +182,23 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
       if (!is_dir) {
         LOG_INFO("external location is not a directory", K(path_cstring));
       } else {
-        OZ(file_dirs.push_back(path_cstring));
+        file_dir = path_cstring;
       }
     }
 
-    ObArray<int64_t> useless_size;
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
-      ObString file_dir = file_dirs.at(i);
-      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path_cstring, NULL, allocator);
-      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path_cstring,
-                                               pattern.empty() ? NULL : &filter, allocator);
+    if (OB_SUCC(ret)) {
+      ObFileListArrayOp dir_op(file_urls, allocator);
       dir_op.set_dir_flag();
-      if (OB_FAIL(ObExternalIoAdapter::list_files(file_dir, access_info_, file_op))) {
-        LOG_WARN("fail to list files", KR(ret), K(file_dir), K_(access_info));
-      } else if (OB_FAIL(ObExternalIoAdapter::list_directories(file_dir, access_info_, dir_op))) {
+      if (OB_FAIL(ObExternalIoAdapter::list_directories(file_dir, access_info_, dir_op))) {
         LOG_WARN("fail to list dirs", KR(ret), K(file_dir), K_(access_info));
-      } else if (file_dirs.count() + file_urls.count() > MAX_VISIT_COUNT) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("too many files and dirs to visit", K(ret));
       }
     }
   } else {
-    ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, pattern.empty() ? NULL : &filter, allocator);
-    if (OB_FAIL(ObExternalIoAdapter::list_files(path_cstring, access_info_, file_op))) {
+    ObSEArray<ObString,4> content_digests;
+    ObSEArray<int64_t,4> modify_times;
+    ObExternalFileListArrayOpWithFilter dir_op(file_urls, useless_size, modify_times, content_digests, NULL, allocator);
+    dir_op.set_dir_flag();
+    if (OB_FAIL(ObExternalIoAdapter::list_files(path_cstring, access_info_, dir_op))) {
       LOG_WARN("fail to list files", KR(ret), K(path_cstring), K_(access_info));
     }
   }
@@ -433,6 +297,11 @@ int ObExternalStreamFileReader::open(const ObString &filename)
 
   LOG_TRACE("open file done", K(filename), K(ret));
   return ret;
+}
+
+int64_t ObExternalStreamFileReader::get_file_size() const
+{
+  return file_size_;
 }
 
 void ObExternalStreamFileReader::close()
@@ -607,54 +476,89 @@ int ObExternalTableAccessService::table_scan(
   ObExternalTableRowIterator* row_iter = NULL;
 
   auto &scan_param = static_cast<storage::ObTableScanParam&>(param);
+  if (scan_param.key_ranges_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else {
+    const ObObj *obj_ptr = scan_param.key_ranges_.at(0).get_start_key().get_obj_ptr();
+    ObString file_path = obj_ptr[ObExternalTableUtils::FILE_URL].get_string();
+    // ODPS外表会在每个SQC中加一个DUMMY_FILE，因此ODPS_FORMAT遇到DUMMY_FILE依然要用ObODPSTableRowIterator处理
+    if (param.external_file_format_.format_type_ != ObExternalFileFormat::ODPS_FORMAT &&
+        file_path.compare_equal(ObExternalTableUtils::dummy_file_name())) {
+      if (OB_ISNULL(row_iter = OB_NEWx(ObDummyTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      }
+    } else {
+      ObExternalFileFormat::FormatType format_type = param.external_file_format_.format_type_;
+      if (param.lake_table_format_ == ObLakeTableFormat::ICEBERG) {
+        if (scan_param.key_ranges_.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else {
+          const ObObj *obj_ptr = scan_param.key_ranges_.at(0).get_start_key().get_obj_ptr();
+          int64_t file_format_int = obj_ptr[ObExternalTableUtils::DATA_FILE_FORMAT].get_int();
+          format_type = static_cast<ObExternalFileFormat::FormatType>(file_format_int);
+        }
+      }
 
-  switch (param.external_file_format_.format_type_) {
-    case ObExternalFileFormat::CSV_FORMAT:
-      if (OB_ISNULL(row_iter = OB_NEWx(ObCSVTableRowIterator, (scan_param.allocator_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret));
-      }
-      break;
-    case ObExternalFileFormat::PARQUET_FORMAT:
-      if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret));
-      }
-      break;
-    case ObExternalFileFormat::ODPS_FORMAT:
-      if (!GCONF._use_odps_jni_connector) {
+      switch (format_type) {
+        case ObExternalFileFormat::CSV_FORMAT:
+          if (OB_ISNULL(row_iter = OB_NEWx(ObCSVTableRowIterator, (scan_param.allocator_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed", K(ret));
+          }
+          break;
+        case ObExternalFileFormat::PARQUET_FORMAT :
+          if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed", K(ret));
+          }
+          break;
+        case ObExternalFileFormat::ODPS_FORMAT:
+          if (!GCONF._use_odps_jni_connector) {
 #if defined(OB_BUILD_CPP_ODPS)
-        if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator,
-                                         (scan_param.allocator_)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("alloc memory failed", K(ret));
-        }
+            if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator,
+                                            (scan_param.allocator_)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(ret));
+            }
 #else
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("odps cpp connector is not enabled", K(ret));
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("odps cpp connector is not enabled", K(ret));
 #endif
-      } else {
+          } else {
 #if defined(OB_BUILD_JNI_ODPS)
-        if (OB_ISNULL(row_iter = OB_NEWx(ObODPSJNITableRowIterator,
-                                         (scan_param.allocator_)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("alloc memory failed for jni row iterator", K(ret));
-        }
+            if (OB_ISNULL(row_iter = OB_NEWx(ObODPSJNITableRowIterator,
+                                            (scan_param.allocator_)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed for jni row iterator", K(ret));
+            }
 #else
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("odps jni connector is not enabled", K(ret));
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("odps jni connector is not enabled", K(ret));
 #endif
+          }
+          break;
+        case ObExternalFileFormat::ORC_FORMAT:
+          if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed", K(ret));
+          }
+          break;
+        case ObExternalFileFormat::PLUGIN_FORMAT:
+          if (OB_ISNULL(row_iter = OB_NEWx(ObPluginExternalTableRowIterator, (scan_param.allocator_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory", K(ret), K(sizeof(ObPluginExternalTableRowIterator)));
+          } else {
+            LOG_TRACE("success to create plugin row iterator");
+          }
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
       }
-      break;
-    case ObExternalFileFormat::ORC_FORMAT:
-      if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret));
-      }
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -698,6 +602,14 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
         LOG_WARN("not support to read odps in opensource", K(ret));
 #endif
         break;
+      case ObExternalFileFormat::PLUGIN_FORMAT: {
+        ObPluginExternalTableRowIterator *iter = static_cast<ObPluginExternalTableRowIterator *>(result);
+        iter->reset();
+        if (OB_FAIL(iter->rescan(static_cast<ObTableScanParam *>(&param)))) {
+          LOG_WARN("failed to do rescan by plugin row iterator", K(ret));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -745,7 +657,7 @@ int ObExternalTableRowIterator::gen_ip_port(ObIAllocator &allocator)
 int ObExternalTableRowIterator::init_exprs(const storage::ObTableScanParam *scan_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(scan_param)) {
+  if (OB_ISNULL(scan_param) || OB_ISNULL(scan_param->table_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan param is null", K(ret));
   } else {
@@ -753,6 +665,7 @@ int ObExternalTableRowIterator::init_exprs(const storage::ObTableScanParam *scan
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column ids not equal to access expr", K(ret));
     }
+    const ObIArray<bool> &output_sel_mask = scan_param->table_param_->get_output_sel_mask();
     for (int i = 0; OB_SUCC(ret) && i < scan_param->column_ids_.count(); i++) {
       ObExpr *cur_expr = scan_param->output_exprs_->at(i);
       switch (scan_param->column_ids_.at(i)) {
@@ -764,13 +677,86 @@ int ObExternalTableRowIterator::init_exprs(const storage::ObTableScanParam *scan
           break;
         default:
           OZ (column_exprs_.push_back(cur_expr));
+          OZ (column_sel_mask_.push_back(output_sel_mask.at(i)));
           break;
       }
     }
-    if (OB_SUCC(ret) && column_exprs_.count() != scan_param->ext_column_convert_exprs_->count()) {
+    if (OB_SUCC(ret) && column_exprs_.count() != scan_param->ext_column_dependent_exprs_->count()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column expr not equal to convert convert expr", K(ret),
-               K(column_exprs_), KPC(scan_param->ext_column_convert_exprs_));
+      LOG_WARN("column expr not equal to dependent expr", K(ret),
+               K(column_exprs_), KPC(scan_param->ext_column_dependent_exprs_));
+    }
+
+    if (OB_SUCC(ret)) {
+      ObArray<ObExpr*> file_column_exprs;
+      ObArray<std::pair<uint64_t, uint64_t>> mapping_column_ids;
+      ObArray<ObExpr*> file_meta_column_exprs;
+      for (int i = 0; OB_SUCC(ret) && i < scan_param->ext_file_column_exprs_->count(); i++) {
+        ObExpr* ext_file_column_expr = scan_param->ext_file_column_exprs_->at(i);
+        if (OB_ISNULL(ext_file_column_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ptr", K(ret));
+        } else if (ext_file_column_expr->type_ == T_PSEUDO_EXTERNAL_FILE_URL
+                  || ext_file_column_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
+          OZ (file_meta_column_exprs.push_back(ext_file_column_expr));
+        } else if (ext_file_column_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
+          OZ (file_column_exprs.push_back(ext_file_column_expr));
+          OZ (generate_mapping_column_id(ext_file_column_expr, i, mapping_column_ids));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr", KPC(ext_file_column_expr));
+        }
+      }
+      OZ (file_column_exprs_.assign(file_column_exprs));
+      OZ (mapping_column_ids_.assign(mapping_column_ids));
+      OZ (check_can_skip_conv());
+      OZ (file_meta_column_exprs_.assign(file_meta_column_exprs));
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableRowIterator::generate_mapping_column_id(
+  ObExpr* ext_file_column_expr,
+  int64_t file_column_expr_idx,
+  ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t mapped_column_id = OB_INVALID_ID;
+
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    bool mapping_generated = !scan_param_->ext_mapping_column_exprs_->empty()
+                              && !scan_param_->ext_mapping_column_ids_->empty();
+    if (mapping_generated) {
+      mapped_column_id = scan_param_->ext_mapping_column_ids_->at(file_column_expr_idx);
+    }
+  } else {
+    ObDataAccessPathExtraInfo *data_access_info =
+      static_cast<ObDataAccessPathExtraInfo *>(ext_file_column_expr->extra_info_);
+    mapped_column_id = data_access_info->mapped_column_id_;
+  }
+
+  if (OB_SUCC(ret)) {
+    if (mapped_column_id >= 0) {
+      int index = 0;
+      bool found = false;
+      for (int i = 0; OB_SUCC(ret) && i < scan_param_->column_ids_.count() && !found; i++) {
+        uint64_t column_id = scan_param_->column_ids_.at(i);
+        if (OB_HIDDEN_LINE_NUMBER_COLUMN_ID != column_id && OB_HIDDEN_FILE_ID_COLUMN_ID != column_id) {
+          if (column_id == mapped_column_id) {
+            found = true;
+            OZ (mapping_column_ids.push_back(std::make_pair(column_id, index)));
+          }
+          index++;
+        }
+      }
+      if (!found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mapped column id not found", K(ret), K(mapped_column_id));
+      }
+    } else {
+      OZ (mapping_column_ids.push_back(std::make_pair(OB_INVALID_ID, OB_INVALID_ID)));
     }
   }
   return ret;
@@ -798,6 +784,20 @@ int ObExternalTableRowIterator::fill_file_partition_expr(ObExpr *expr, ObNewRow 
     }
   }
   return ret;
+}
+
+ObExternalTableRowIterator::~ObExternalTableRowIterator()
+{
+  if (nullptr != scan_param_ && nullptr != scan_param_->pd_storage_filters_) {
+    scan_param_->pd_storage_filters_->clear();
+  }
+  if (OB_NOT_NULL(delete_bitmap_)) {
+    delete_bitmap_->set_empty();
+  }
+  if (OB_NOT_NULL(delete_bitmap_builder_)) {
+    delete_bitmap_builder_->~ObIcebergDeleteBitmapBuilder();
+    delete_bitmap_builder_ = nullptr;
+  }
 }
 
 int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t part_id, ObIAllocator &allocator, ObNewRow &value)
@@ -885,28 +885,269 @@ int ObExternalTableRowIterator::calc_file_part_list_value_by_array(
   return ret;
 }
 
-int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state)
+int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count,
+                                                     ObExternalIteratorState &state,
+                                                     const bool update_state)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   if (OB_NOT_NULL(file_id_expr_)) {
-    OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_id_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state.cur_file_id_);
+    if (scan_param_->op_->enable_rich_format_) {
+      OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+      for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+        ObFixedLengthBase* vec = static_cast<ObFixedLengthBase*>(file_id_expr_->get_vector(eval_ctx));
+        vec->set_int(i, state.cur_file_id_);
+      }
+    } else {
+      ObDatum* datums = file_id_expr_->locate_batch_datums(eval_ctx);
+      for (int64_t i = 0; i < read_count; i++) {
+        datums[i].set_int(state.cur_file_id_);
+      }
     }
-    file_id_expr_->set_evaluated_flag(eval_ctx);
+    OX (file_id_expr_->set_evaluated_flag(eval_ctx));
   }
   if (OB_NOT_NULL(line_number_expr_)) {
-    OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(line_number_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state.cur_line_number_ + i);
+    if (scan_param_->op_->enable_rich_format_) {
+      OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+      for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+        ObFixedLengthBase* vec = static_cast<ObFixedLengthBase*>(line_number_expr_->get_vector(eval_ctx));
+        vec->set_int(i, state.cur_line_number_ + i);
+      }
+    } else {
+      ObDatum* datums = line_number_expr_->locate_batch_datums(eval_ctx);
+      for (int64_t i = 0; i < read_count; i++) {
+        datums[i].set_int(state.cur_line_number_ + i);
+      }
     }
-    line_number_expr_->set_evaluated_flag(eval_ctx);
+    OX (line_number_expr_->set_evaluated_flag(eval_ctx));
   }
-  state.cur_line_number_ += read_count;
-  state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;
+  if (update_state) {
+    state.cur_line_number_ += read_count;
+    state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;
+  }
+  return ret;
+}
+
+bool ObExternalTableRowIterator::is_dummy_file(const ObString &file_url)
+{
+  return (0 == file_url.compare(ObExternalTableUtils::dummy_file_name()));
+}
+
+int ObExternalTableRowIterator::build_delete_bitmap(const ObString &data_file_path,
+                                                    const int64_t task_idx) {
+  return delete_bitmap_builder_->build_delete_bitmap(data_file_path, task_idx, delete_bitmap_);
+}
+
+int ObExternalTableRowIterator::init_default_batch(ExprFixedArray &file_column_exprs)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t max_batch_size = scan_param_->op_->get_eval_ctx().max_batch_size_;
+  ObBitVector *default_nulls = NULL;
+
+  for (int i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); ++i) {
+    ObExpr* expr = file_column_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret), K(i));
+    } else {
+      ObColumnDefaultValue col_def;
+      OZ (colid_default_value_arr_.push_back(col_def));
+
+      if (OB_SUCC(ret)) {
+        ObObj default_value;
+        // TODO: 目前还没有完成iceberg default value解析的方案，所以所有的default value都设置为null
+        default_value.set_null();
+        // 根据不同的数据类型构造批量数组
+        // TODO: 完善iceberg所有的default value类型支持
+        ObColumnDefaultValue &array_col_def = colid_default_value_arr_.at(i);
+        if (default_value.is_null()) {
+          array_col_def.is_null_ = true;
+          if (OB_ISNULL(default_nulls)) {
+            const int64_t nulls_size = ObBitVector::memory_size(max_batch_size);
+            if (OB_ISNULL(default_nulls = to_bit_vector(allocator_.alloc(nulls_size)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc mem", KR(ret), K(nulls_size));
+            } else {
+              default_nulls->set_all(max_batch_size);
+            }
+          }
+          array_col_def.batch_data_or_nulls_ = default_nulls;
+        } else if (default_value.is_int() || default_value.is_uint64() || default_value.is_double()) {
+          array_col_def.batch_data_or_nulls_ = allocator_.alloc(sizeof(int64_t) * max_batch_size);
+          if (OB_ISNULL(array_col_def.batch_data_or_nulls_)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc batch array for integer", K(ret));
+          } else {
+            if (default_value.is_int()) {
+              const int64_t val = default_value.get_int();
+              int64_t *batch_array = static_cast<int64_t*>(array_col_def.batch_data_or_nulls_);
+              for (int64_t j = 0; OB_SUCC(ret) && j < max_batch_size; ++j) {
+                batch_array[j] = val;
+              }
+            } else if (default_value.is_uint64()) {
+              const uint64_t val = default_value.get_uint64();
+              uint64_t *batch_array = static_cast<uint64_t*>(array_col_def.batch_data_or_nulls_);
+              for (int64_t j = 0; OB_SUCC(ret) && j < max_batch_size; ++j) {
+                batch_array[j] = val;
+              }
+            } else {
+              const double val = default_value.get_double();
+              double *batch_array = static_cast<double*>(array_col_def.batch_data_or_nulls_);
+              for (int64_t j = 0; OB_SUCC(ret) && j < max_batch_size; ++j) {
+                batch_array[j] = val;
+              }
+            }
+          }
+        } else if (default_value.is_float()) {
+          const float val = default_value.get_float();
+          array_col_def.batch_data_or_nulls_
+              = static_cast<float *>(allocator_.alloc(sizeof(float) * max_batch_size));
+          if (OB_ISNULL(array_col_def.batch_data_or_nulls_)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc batch array for float", K(ret));
+          } else {
+            float *batch_array = static_cast<float*>(array_col_def.batch_data_or_nulls_);
+            for (int64_t j = 0; OB_SUCC(ret) && j < max_batch_size; ++j) {
+              batch_array[j] = val;
+            }
+          }
+        } else if (default_value.is_varchar() || default_value.is_char()
+                  || default_value.is_varbinary() || default_value.is_binary()) {
+          const ObString str = default_value.get_string();
+          array_col_def.batch_data_or_nulls_
+              = static_cast<char **>(allocator_.alloc(sizeof(char *) * max_batch_size));
+          array_col_def.batch_len_
+              = static_cast<int32_t *>(allocator_.alloc(sizeof(int32_t) * max_batch_size));
+          if (OB_ISNULL(array_col_def.batch_data_or_nulls_)
+              || OB_ISNULL(array_col_def.batch_len_)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc batch array for string", K(ret));
+          } else {
+            char **batch_array = static_cast<char**>(array_col_def.batch_data_or_nulls_);
+            int32_t *length_array = static_cast<int32_t*>(array_col_def.batch_len_);
+            for (int64_t j = 0; OB_SUCC(ret) && j < max_batch_size; ++j) {
+              batch_array[j] = const_cast<char*>(str.ptr());
+              length_array[j] = static_cast<int32_t>(str.length());
+            }
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported default value type", K(default_value.get_type()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableRowIterator::init_for_iceberg(ObExternalTableAccessOptions *options)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(delete_bitmap_ = OB_NEWx(ObRoaringBitmap, &allocator_, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc bitmap", K(ret), K(sizeof(ObRoaringBitmap)));
+  } else if (OB_ISNULL(delete_bitmap_builder_
+                       = OB_NEWx(ObIcebergDeleteBitmapBuilder, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc bitmap builder", K(ret), K(sizeof(ObIcebergDeleteBitmapBuilder)));
+  } else if (OB_FAIL(delete_bitmap_builder_->init(scan_param_, options))) {
+    LOG_WARN("failed to init bitmap builder", K(ret));
+  }
+
+  return ret;
+}
+
+int ObExternalTableRowIterator::set_default_batch(const ObDatumMeta &datum_type,
+                                                  const ObColumnDefaultValue &col_def,
+                                                  ObIVector *vec)
+{
+  int ret = OB_SUCCESS;
+  switch (vec->get_format()) {
+    case VEC_FIXED: {
+      ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vec);
+      if (col_def.is_null_) {
+        fixed_vec->set_nulls(to_bit_vector(col_def.batch_data_or_nulls_));
+        fixed_vec->set_has_null();
+      } else if (ObIntType == datum_type.type_
+                || ObUInt64Type == datum_type.type_ || ObDoubleType == datum_type.type_) {
+        fixed_vec->from(sizeof(int64_t), reinterpret_cast<char*>(col_def.batch_data_or_nulls_));
+      } else if (ObFloatType == datum_type.type_) {
+        fixed_vec->from(sizeof(float), reinterpret_cast<char*>(col_def.batch_data_or_nulls_));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported default value type", K(datum_type.type_));
+      }
+      break;
+    }
+    case VEC_DISCRETE: {
+      StrDiscVec *str_vec = static_cast<StrDiscVec *>(vec);
+      if (col_def.is_null_) {
+        str_vec->set_nulls(to_bit_vector(col_def.batch_data_or_nulls_));
+        str_vec->set_has_null();
+      } else if (ob_is_string_type(datum_type.type_) || ObRawType == datum_type.type_) {
+        str_vec->set_ptrs(reinterpret_cast<char**>(col_def.batch_data_or_nulls_));
+        str_vec->set_lens(col_def.batch_len_);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported default value type", K(datum_type.type_));
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported vector format for default value", K(vec->get_format()));
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableRowIterator::check_can_skip_conv()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(column_need_conv_.prepare_allocate(column_exprs_.count()))) {
+    LOG_WARN("failed to prepare allocate for column_need_conv_", K(ret));
+  } else {
+    MEMSET(column_need_conv_.get_data(), 1, column_exprs_.count() * sizeof(bool));
+  }
+
+  const ExprFixedArray &column_dependent_exprs = *(scan_param_->ext_column_dependent_exprs_);
+
+  for (int i = 0; OB_SUCC(ret) && i < mapping_column_ids_.count(); i++) {
+    uint64_t column_id = mapping_column_ids_.at(i).first;
+    uint64_t column_expr_index = mapping_column_ids_.at(i).second;
+    if (column_id != OB_INVALID_ID && column_expr_index != OB_INVALID_ID &&
+        column_expr_index < column_dependent_exprs.count() &&
+        column_dependent_exprs.at(column_expr_index)->type_ != T_FUN_COLUMN_CONV) {
+      column_need_conv_.at(column_expr_index) = false;
+    }
+  }
+
+  return ret;
+}
+
+ObExpr* ObExternalTableRowIterator::get_column_expr_by_id(int64_t file_column_expr_idx)
+{
+  uint64_t column_expr_index = mapping_column_ids_.at(file_column_expr_idx).second;
+  ObExpr *res_expr = nullptr;
+  if (column_expr_index != OB_INVALID_ID && column_expr_index < column_exprs_.count() &&
+      !column_need_conv_.at(column_expr_index)) {
+    res_expr = column_exprs_.at(column_expr_index);
+  } else {
+    res_expr = file_column_exprs_.at(file_column_expr_idx);
+  }
+  return res_expr;
+}
+
+int ObColumnDefaultValue::assign(const ObColumnDefaultValue &other)
+{
+  int ret = OB_SUCCESS;
+  this->is_null_ = other.is_null_;
+  this->batch_data_or_nulls_ = other.batch_data_or_nulls_;
+  this->batch_len_ = other.batch_len_;
   return ret;
 }
 
@@ -924,6 +1165,7 @@ DEF_TO_STRING(ObExternalIteratorState)
   return pos;
 }
 
+const std::string ObExternalTableRowIterator::ICEBERG_ID_KEY = "iceberg.id";
 
 }
 }

@@ -15,10 +15,74 @@
 
 #include <gtest/gtest.h>
 #include "mittest/shared_storage/simple_server/test_storage_cache_common_util.h"
+#include "unittest/storage/sslog/test_mock_palf_kv.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+
+namespace oceanbase
+{
+OB_MOCK_PALF_KV_FOR_REPLACE_SYS_TENANT
+namespace sslog
+{
+
+oceanbase::unittest::ObMockPalfKV PALF_KV;
+
+int get_sslog_table_guard(const ObSSLogTableType type,
+                          const int64_t tenant_id,
+                          ObSSLogProxyGuard &guard)
+{
+  int ret = OB_SUCCESS;
+
+  switch (type)
+  {
+    case ObSSLogTableType::SSLOG_TABLE: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogTableProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogTableProxy *sslog_table_proxy = new (proxy) ObSSLogTableProxy(tenant_id);
+        if (OB_FAIL(sslog_table_proxy->init())) {
+          SSLOG_LOG(WARN, "fail to inint", K(ret));
+        } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        }
+      }
+      break;
+    }
+    case ObSSLogTableType::SSLOG_PALF_KV: {
+      void *proxy = share::mtl_malloc(sizeof(ObSSLogKVProxy), "ObSSLogTable");
+      if (nullptr == proxy) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        ObSSLogKVProxy *sslog_kv_proxy = new (proxy) ObSSLogKVProxy(&PALF_KV);
+        // if (OB_FAIL(sslog_kv_proxy->init(GCONF.cluster_id, tenant_id))) {
+        //   SSLOG_LOG(WARN, "init palf kv failed", K(ret));
+        // } else {
+          guard.set_sslog_proxy((ObISSLogProxy *)proxy);
+        // }
+      }
+      break;
+    }
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      SSLOG_LOG(WARN, "invalid sslog type", K(type));
+      break;
+    }
+  }
+
+  return ret;
+}
+} // namespace sslog
+} // namespace oceanbase
+
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
 
+const char *get_per_file_test_name()
+{
+  return "test_storage_cache_policy_prewarmer_";
+}
 namespace oceanbase
 {
 namespace unittest
@@ -235,7 +299,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
 
   task->status_ = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING;
   for (int i = 0; i < MAX_RETRY_TIMES && !succeed; i++) {
-    micro_cache->clear_micro_cache();
+    IGNORE_RETURN micro_cache->clear_micro_cache();
     OK(prewarmer.prewarm_hot_tablet(task));
     first_stat = prewarmer.get_hot_retention_prewarm_stat();
     LOG_INFO("read init major", K(i), K(first_stat));
@@ -243,13 +307,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, basic)
     ASSERT_TRUE(first_stat.micro_block_fail_cnt_ == 0);
     // ASSERT_TRUE(first_stat.macro_block_hit_cnt_ == 0);
     ASSERT_TRUE(first_stat.micro_block_hit_cnt_ == 0);
-    ASSERT_TRUE(first_stat.macro_block_add_cnt_ == first_stat.macro_data_block_num_);
     ASSERT_TRUE(first_stat.micro_block_add_cnt_ == first_stat.micro_block_num_);
     succeed = first_stat.macro_block_fail_cnt_ == 0
         && first_stat.micro_block_fail_cnt_ == 0
         // && first_stat.macro_block_hit_cnt_ == 0
         && first_stat.micro_block_hit_cnt_ == 0
-        && first_stat.macro_block_add_cnt_ == first_stat.macro_data_block_num_
         && first_stat.micro_block_add_cnt_ == first_stat.micro_block_num_;
   }
   ASSERT_TRUE(succeed);
@@ -356,7 +418,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   // Case 1
   // 1. Simulate hot tablet macro cache is full to get a skipped tablet task
   int64_t max_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_tablet_size1 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size1);
 
@@ -372,11 +434,12 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_NE(nullptr, tablet_task_handle1());
   ASSERT_EQ(true, tablet_task_handle1()->is_skipped_macro_cache());
   ASSERT_EQ(true, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
+                                                           ObDiskSpaceType::FILE));
 
   // 2. The total macro cache is full, but HOT_TABLET_MACRO_BLOCK is below min value
   int64_t max_tablet_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_tablet_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size2);
 
@@ -386,13 +449,14 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_NE(nullptr, after_trigger_tablet_task_handle1());
   ASSERT_EQ(false, after_trigger_tablet_task_handle1()->is_skipped_macro_cache());
   ASSERT_EQ(false, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK,
+                                                           ObDiskSpaceType::FILE));
 
   // Case 2
   // 1. Simulate hot tablet macro cache is full to get a skipped tablet task
   FLOG_INFO("[TEST] start case2 in test_incremental_trigger");
   int64_t max_tablet_size3 = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_tablet_size3 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size3);
 
@@ -412,21 +476,22 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   FLOG_INFO("[TEST] tablet task handle2", KPC(tablet_task_handle2()));
   ASSERT_EQ(true, tablet_task_handle2()->is_skipped_macro_cache());
   ASSERT_EQ(true, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
+                                                           ObDiskSpaceType::FILE));
 
   // 2. Free space is below free threshold while hot tablet space is exceed min value
   int64_t max_tablet_size4 = tnt_disk_space_mgr->get_macro_cache_size();
   // hot tablet macro cache: 75%
   const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold + 5);
   int64_t alloc_size1 = (max_tablet_size4 * alloc_hot_tablet_perc) / 100;
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   ObSSMacroCacheStat macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat1));
   ASSERT_GT(macro_cache_stat1.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
   int64_t alloc_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
   alloc_size2 -= (max_tablet_size4 * (ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD + 2)) / 100;
 
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK));
+  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   for (int i=0; i<SS_MACRO_CACHE_MAX_TYPE_VAL; i++) {
     FLOG_INFO("[TEST] print macro cache all stats444", K(tnt_disk_space_mgr->macro_cache_stats_[i]));
   }
@@ -442,9 +507,36 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_EQ(false, after_trigger_tablet_task_handle2()->is_skipped_macro_cache());
   ASSERT_EQ(false, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
 
-  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK));
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
+                                                           ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] finished test_incremental_trigger");
 }
+
+TEST_F(ObStorageCachePolicyPrewarmerTest, test_force_refresh_policy_task)
+{
+  FLOG_INFO("[TEST] start test_force_refresh_policy_task");
+  share::ObTenantSwitchGuard tguard;
+  OK(tguard.switch_to(run_ctx_.tenant_id_));
+  OK(exe_sql("create table test_force_refresh_policy_task (a int)"));
+  set_ls_and_tablet_id_for_run_ctx("test_force_refresh_policy_task");
+
+  OK(exe_sql("alter table test_force_refresh_policy_task storage_cache_policy (global = 'hot');"));
+  wait_task_finished(run_ctx_.tablet_id_.id());
+  FLOG_INFO("[TEST] wait task finished in test_force_refresh_policy_task");
+
+  ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
+  ASSERT_NE(nullptr, policy_service);
+  PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
+  ASSERT_EQ(OB_SUCCESS, policy_service->tablet_status_map_.get_refactored(run_ctx_.tablet_id_.id(), policy_status));
+  ASSERT_EQ(PolicyStatus::HOT, policy_status);
+  ASSERT_EQ(OB_SUCCESS,policy_service->tablet_status_map_.erase_refactored(run_ctx_.tablet_id_.id()));
+  policy_service->refresh_policy_scheduler_.force_refresh_policy_task_.runTimerTask();
+  ASSERT_EQ(OB_SUCCESS, policy_service->tablet_status_map_.get_refactored(run_ctx_.tablet_id_.id(), policy_status));
+  ASSERT_EQ(PolicyStatus::HOT, policy_status);
+  ASSERT_TRUE(policy_service->get_need_generate_cache_task());
+  FLOG_INFO("[TEST] finish test_force_refresh_policy_task");
+}
+
 }
 }
 

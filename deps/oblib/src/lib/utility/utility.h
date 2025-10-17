@@ -180,23 +180,29 @@ void max(T, T) = delete;
 
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
-inline void ob_usleep(const useconds_t v)
+inline void ob_usleep(const useconds_t v, int64_t call_bt=0)
 {
-  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v);
+  if (oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && call_bt == 0) {
+    call_bt = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
+  oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v, call_bt);
   ::usleep(v);
 }
 
+template void ob_usleep<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>(const useconds_t v, int64_t call_bt);
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
-inline void ob_usleep(const useconds_t v, const bool is_idle_sleep)
+inline void ob_usleep(const useconds_t v, const bool is_idle_sleep, int64_t call_bt=0)
 {
+  if (!is_idle_sleep && oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && call_bt == 0) {
+    call_bt = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
   if (is_idle_sleep) {
     ObBKGDSessInActiveGuard inactive_guard;
-    ob_usleep(v);
+    ob_usleep(v, call_bt);
   } else {
-    ob_usleep(v);
+    ob_usleep(v, call_bt);
   }
-
 }
 
 inline void ob_throttle_usleep(const useconds_t v, int errcode, int64_t p3 = 0)
@@ -207,16 +213,22 @@ inline void ob_throttle_usleep(const useconds_t v, int errcode, int64_t p3 = 0)
 
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
-inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3)
+inline void ob_usleep(const useconds_t v, const int64_t p1, int64_t p2, const int64_t p3)
 {
+  if (oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && p2 == 0) {
+    p2 = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
   oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v, p1, p2, p3);
   ::usleep(v);
 }
 
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
-inline void ob_usleep(const useconds_t v, const int64_t p1, const int64_t p2, const int64_t p3, const bool is_idle_sleep)
+inline void ob_usleep(const useconds_t v, const int64_t p1, int64_t p2, const int64_t p3, const bool is_idle_sleep)
 {
+  if (!is_idle_sleep && oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP == event_id && p2 == 0) {
+    p2 = static_cast<int64_t>(get_rel_offset(reinterpret_cast<int64_t>(__builtin_return_address(0))));
+  }
   if (is_idle_sleep) {
     ObBKGDSessInActiveGuard inactive_guard;
     ob_usleep(v, p1, p2, p3);

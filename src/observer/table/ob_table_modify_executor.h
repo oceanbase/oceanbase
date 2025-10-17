@@ -96,6 +96,10 @@ public:
   OB_INLINE int64_t get_affected_rows() const { return affected_rows_; }
   int get_affected_entity(ObITableEntity *&entity);
 protected:
+  int copy_heap_table_hidden_pk(const ObChunkDatumStore::StoredRow *old_row,
+                                ObChunkDatumStore::StoredRow *new_row);
+  int set_heap_table_hidden_pk(const ObTableInsCtDef &ins_ctdef,
+                               const common::ObTabletID &tablet_id);
   int generate_ins_rtdef(const ObTableInsCtDef &ins_ctdef,
                          ObTableInsRtDef &ins_rtdef);
   int generate_del_rtdef(const ObTableDelCtDef &del_ctdef,

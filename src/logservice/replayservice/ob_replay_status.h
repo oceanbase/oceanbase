@@ -39,7 +39,7 @@ namespace ipalf
 {
 class IPalfEnv;
 class IPalfHandle;
-class IPalfLogIterator;
+template <class LogEntryType> class IPalfIterator;
 }
 namespace logservice
 {
@@ -340,7 +340,7 @@ private:
   //initial log scn when enable replay, logs which scn small than this value should skip replay
   share::SCN base_scn_;
   //for unittest, should be a member not pointer
-  ipalf::IPalfLogIterator iterator_;
+  ipalf::IPalfIterator<ipalf::ILogEntry> iterator_;
 };
 
 class ObReplayServiceReplayTask : public ObReplayServiceTask

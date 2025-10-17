@@ -308,6 +308,7 @@ int ObMergeGroupByOp::inner_close()
 {
   int ret = OB_SUCCESS;
   reset();
+  inner_sort_.destroy();
   if (OB_FAIL(ObGroupByOp::inner_close())) {
     LOG_WARN("failed to inner close", K(ret));
   }

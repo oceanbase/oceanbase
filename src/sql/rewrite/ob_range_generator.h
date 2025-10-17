@@ -21,6 +21,48 @@ namespace oceanbase
 namespace sql
 {
 
+struct ObFastFinalNLJRangeCtx
+{
+  ObFastFinalNLJRangeCtx(common::ObIAllocator &allocator)
+    : has_check_valid_(false),
+      is_valid_(false),
+      max_group_size_(0),
+      column_cnt_(0),
+      one_range_size_(0),
+      range_buffer_size_(0),
+      extra_buffer_size_(0),
+      range_buffer_(NULL),
+      extra_buffer_(NULL),
+      allocator_(allocator),
+      first_ranges_(allocator),
+      cache_ranges_(allocator) {}
+
+  TO_STRING_KV(K_(has_check_valid), K_(is_valid), K_(max_group_size),
+               K_(range_buffer_size), K_(extra_buffer_size),
+               K_(first_ranges));
+  int init_first_ranges(int64_t column_cnt,
+                        int64_t range_buffer_idx,
+                        ObIArray<common::ObNewRange*> &ranges);
+  OB_INLINE char* locate_range_buffer(int64_t range_buffer_idx)
+  {
+    return range_buffer_ + range_buffer_size_ * range_buffer_idx;
+  }
+  int get_cached_ranges(int range_buffer_idx,
+                        ObIArray<common::ObNewRange*> & ranges);
+  bool has_check_valid_;
+  bool is_valid_;
+  int64_t max_group_size_;
+  int64_t column_cnt_;
+  int64_t one_range_size_;
+  int64_t range_buffer_size_;
+  int64_t extra_buffer_size_;
+  char* range_buffer_;
+  char* extra_buffer_;
+  common::ObIAllocator &allocator_;
+  ObFixedArray<common::ObNewRange*, common::ObIAllocator> first_ranges_;
+  ObFixedArray<common::ObNewRange*, common::ObIAllocator> cache_ranges_;
+};
+
 struct ObTmpRange : public common::ObDLinkBase<ObTmpRange>
 {
   ObTmpRange(common::ObIAllocator &allocator)
@@ -124,12 +166,55 @@ public:
   static int generate_fast_nlj_range(const ObPreRangeGraph &pre_range_graph,
                                      const ParamStore &param_store,
                                      ObIAllocator &allocator,
-                                     void *range_buffer);
+                                     void *range_buffer,
+                                     ObIArray<ObNewRange*> &out_ranges);
   static int check_can_final_fast_nlj_range(const ObPreRangeGraph &pre_range_graph,
                                             const ParamStore &param_store,
                                             bool &is_valid);
   static int get_spatial_relationship_by_mask(const ObObj& extra, ObDomainOpType& op_type);
   static bool is_geo_type(const ObDomainOpType& op_type);
+  static int calc_result_value(ObIAllocator &allocator,
+                               const ObRangeMap &range_map,
+                               const int64_t param_idx,
+                               ObObj &val,
+                               bool &is_valid,
+                               ObExecContext &exec_ctx);
+  static int check_range_type(const ObNewRange *range, bool &is_always_true, bool &is_false);
+  static int false_range(const ObNewRange &range, bool &is_false);
+  static int fill_general_nlj_range(ObFastFinalNLJRangeCtx &ctx,
+                                    const ObPreRangeGraph &pre_range_graph,
+                                    ObIArray<ObObj> &params,
+                                    int64_t range_buffer_idx,
+                                    bool &always_false,
+                                    ObIArray<ObNewRange*> &out_ranges);
+  static int try_cast_value(ObIAllocator &allocator,
+                            ObExecContext &exec_ctx,
+                            const common::ObDataTypeCastParams &dtc_params,
+                            const ObRangeColumnMeta &meta,
+                            int64_t cur_datetime,
+                            ObObj &value,
+                            int64_t &cmp,
+                            common::ObCmpOp cmp_op);
+  static int check_can_fast_extract_nlj_range(ObIAllocator &allocator,
+                                              ObExecContext &exec_ctx,
+                                              const common::ObDataTypeCastParams &dtc_params,
+                                              const ObPreRangeGraph &pre_range_graph,
+                                              ObIArray<ObObj> &objs,
+                                              bool &is_always_false,
+                                              bool &can_extract);
+  static int copy_ranges(const ObIArray<ObNewRange*> &ranges,
+                         char* range_buffer,
+                         int64_t one_range_size,
+                         char* extra_buffer,
+                         int64_t extra_buffer_size,
+                         int64_t column_cnt,
+                         ObIArray<ObNewRange*> &out_ranges);
+  static int calc_copy_ranges_buffer_size(const ObIArray<ObNewRange*> &ranges,
+                                          int64_t column_cnt,
+                                          int64_t &one_range_size,
+                                          int64_t &range_buffer_size,
+                                          int64_t &extra_buffer_size);
+
 private:
   int generate_tmp_range(ObTmpRange *&tmp_range, const int64_t column_cnt);
   int generate_one_range(ObTmpRange &tmp_range);
@@ -177,11 +262,11 @@ private:
   int check_need_merge_range_nodes(const ObRangeNode *node,
                                    bool &need_merge);
 
-  int cast_double_to_fixed_double(const ObRangeColumnMeta &meta,
-                                  const ObObj& in_value,
-                                  ObObj &out_value);
+  static int cast_double_to_fixed_double(const ObRangeColumnMeta &meta,
+                                         const ObObj& in_value,
+                                         ObObj &out_value);
 
-  int refine_real_range(const ObAccuracy &accuracy, double &value);
+  static int refine_real_range(const ObAccuracy &accuracy, double &value);
   int final_json_member_of_range_node(const ObRangeNode *node, ObTmpRange *&range, bool need_cache);
   int fill_domain_range_node(const ObRangeNode &node,
                              const ObObj& start_val,

@@ -4793,7 +4793,7 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
   const ObITableEntity *result_entity = NULL;
   ObTableEntityIterator *iter = nullptr;
   int expect_query_cnt = 5;
-  ObArray<ObObj> properties_values;
+  ObArray<ObObj*> properties_values;
 
   // insert
   {
@@ -4862,9 +4862,9 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
       result_cnt++;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
       ASSERT_EQ(3, properties_values.count());
-      ASSERT_EQ(++i, properties_values.at(0).get_int());
-      ASSERT_EQ(++i, properties_values.at(1).get_int());
-      ASSERT_EQ(++i, properties_values.at(2).get_int());
+      ASSERT_EQ(++i, properties_values.at(0)->get_int());
+      ASSERT_EQ(++i, properties_values.at(1)->get_int());
+      ASSERT_EQ(++i, properties_values.at(2)->get_int());
       properties_values.reset();
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -4897,9 +4897,9 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
       result_cnt++;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
       ASSERT_EQ(3, properties_values.count());
-      ASSERT_EQ(++i, properties_values.at(0).get_int());
-      ASSERT_EQ(++i, properties_values.at(1).get_int());
-      ASSERT_EQ(++i, properties_values.at(2).get_int());
+      ASSERT_EQ(++i, properties_values.at(0)->get_int());
+      ASSERT_EQ(++i, properties_values.at(1)->get_int());
+      ASSERT_EQ(++i, properties_values.at(2)->get_int());
       properties_values.reset();
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -4934,9 +4934,9 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
       result_cnt++;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
       ASSERT_EQ(3, properties_values.count());
-      ASSERT_EQ(++i, properties_values.at(0).get_int());
-      ASSERT_EQ(++i, properties_values.at(1).get_int());
-      ASSERT_EQ(++i, properties_values.at(2).get_int());
+      ASSERT_EQ(++i, properties_values.at(0)->get_int());
+      ASSERT_EQ(++i, properties_values.at(1)->get_int());
+      ASSERT_EQ(++i, properties_values.at(2)->get_int());
       properties_values.reset();
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -4969,9 +4969,9 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
       result_cnt++;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
       ASSERT_EQ(3, properties_values.count());
-      ASSERT_EQ(++i, properties_values.at(0).get_int());
-      ASSERT_EQ(++i, properties_values.at(1).get_int());
-      ASSERT_EQ(++i, properties_values.at(2).get_int());
+      ASSERT_EQ(++i, properties_values.at(0)->get_int());
+      ASSERT_EQ(++i, properties_values.at(1)->get_int());
+      ASSERT_EQ(++i, properties_values.at(2)->get_int());
       properties_values.reset();
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -5002,9 +5002,9 @@ TEST_F(TestBatchExecute, table_query_with_secondary_index)
       result_cnt++;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
       ASSERT_EQ(3, properties_values.count());
-      ASSERT_EQ(++i, properties_values.at(0).get_int());
-      ASSERT_EQ(++i, properties_values.at(1).get_int());
-      ASSERT_EQ(++i, properties_values.at(2).get_int());
+      ASSERT_EQ(++i, properties_values.at(0)->get_int());
+      ASSERT_EQ(++i, properties_values.at(1)->get_int());
+      ASSERT_EQ(++i, properties_values.at(2)->get_int());
       properties_values.reset();
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -5034,7 +5034,7 @@ TEST_F(TestBatchExecute, check_scan_range)
   const ObITableEntity *result_entity = NULL;
   ObTableEntityIterator *iter = nullptr;
   int expect_query_cnt = 5;
-  ObArray<ObObj> properties_values;
+  ObArray<ObObj*> properties_values;
 
   // insert
   {
@@ -5196,11 +5196,11 @@ TEST_F(TestBatchExecute, check_scan_range)
       result_cnt++;
       ASSERT_EQ(OB_SUCCESS, result_entity->get_properties_values(properties_values));
       ASSERT_EQ(3, properties_values.count());
-      ASSERT_EQ(i, properties_values.at(0).get_int());
+      ASSERT_EQ(i, properties_values.at(0)->get_int());
       ObString str;
-      ASSERT_EQ(OB_SUCCESS, properties_values.at(1).get_varchar(str));
+      ASSERT_EQ(OB_SUCCESS, properties_values.at(1)->get_varchar(str));
       ASSERT_EQ(0, str.case_compare("hello"));
-      ASSERT_EQ(i + 2, properties_values.at(2).get_int());
+      ASSERT_EQ(i + 2, properties_values.at(2)->get_int());
       i += 3;
       properties_values.reset();
     }

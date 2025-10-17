@@ -14,7 +14,7 @@
 #include "ob_table_batch_service.h"
 #include "ob_table_op_wrapper.h"
 #include "observer/ob_req_time_service.h"
-#include "ob_htable_utils.h"
+#include "utils/ob_htable_utils.h"
 #include "observer/table/ob_table_query_common.h"
 #include "tableapi/ob_table_api_service.h"
 
@@ -181,7 +181,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   ObTableApiExecutor *executor = nullptr;
-  ObSEArray<ObITableEntity*, 16> entities;
+  ObSEArray<const ObITableEntity*, 16> entities;
   entities.set_attr(ObMemAttr(MTL_ID(), "MulOpEntArr"));
   tb_ctx.set_batch_tablet_ids(&ctx.tablet_ids_);
   tb_ctx.set_batch_entities(&entities);
@@ -220,7 +220,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx,
 
 int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
                                         const ObIArray<ObTableOperation> &ops,
-                                        ObIArray<ObITableEntity*> &entities)
+                                        ObIArray<const ObITableEntity*> &entities)
 {
   int ret = OB_SUCCESS;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
@@ -246,7 +246,7 @@ int ObTableBatchService::adjust_entities(ObTableBatchCtx &ctx,
 
 int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
                                                   ObTableApiSpec &spec,
-                                                  const ObIArray<ObITableEntity *> &entities,
+                                                  const ObIArray<const ObITableEntity *> &entities,
                                                   ObIArray<ObTableOperationResult> &results,
                                                   int64_t &got_row_count)
 {
@@ -320,7 +320,7 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
                     K(ret), K(index), K(results), K(entity_count), KPC(row), K(ops));
               } else if (OB_FAIL(results.at(index).get_entity(result_entity))) {
                 LOG_WARN("fail to get result entity", K(ret));
-              } else if (OB_ISNULL(requset_entity = static_cast<ObTableEntity *>(entities.at(index)))) {
+              } else if (OB_ISNULL(requset_entity = static_cast<ObTableEntity *>(const_cast<ObITableEntity*>(entities.at(index))))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("entity is null", K(ret), K(index));
               } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator, row,
@@ -396,7 +396,7 @@ int ObTableBatchService::multi_get(ObTableBatchCtx &ctx,
   observer::ObReqTimeGuard req_time_guard;
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  ObSEArray<ObITableEntity*, 16> entities;
+  ObSEArray<const ObITableEntity*, 16> entities;
   entities.set_attr(ObMemAttr(MTL_ID(), "MGetEntArr"));
   tb_ctx.set_read_latest(false);
   tb_ctx.set_batch_entities(&entities);
@@ -993,7 +993,7 @@ int ObTableBatchService::process_insert(ObTableCtx &tb_ctx, ObTableOperationResu
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_insert_op(tb_ctx, result))) {
-    LOG_WARN("fail to process insert", K(ret));
+    LOG_WARN("fail to process insert", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1012,7 +1012,7 @@ int ObTableBatchService::process_delete(ObTableCtx &tb_ctx, ObTableOperationResu
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(tb_ctx, result))) {
-    LOG_WARN("fail to process delete", K(ret));
+    LOG_WARN("fail to process delete", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1031,7 +1031,7 @@ int ObTableBatchService::process_update(ObTableCtx &tb_ctx, ObTableOperationResu
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, result))) {
-    LOG_WARN("fail to process update", K(ret));
+    LOG_WARN("fail to process update", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1050,7 +1050,7 @@ int ObTableBatchService::process_replace(ObTableCtx &tb_ctx, ObTableOperationRes
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(tb_ctx, result))) {
-    LOG_WARN("fail to process replace", K(ret));
+    LOG_WARN("fail to process replace", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1069,7 +1069,7 @@ int ObTableBatchService::process_insert_up(ObTableCtx &tb_ctx, ObTableOperationR
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, result))) {
-    LOG_WARN("fail to process insert or update", K(ret));
+    LOG_WARN("fail to process insert or update", K(ret), KPC(tb_ctx.get_entity()));
   }
   OB_TABLE_END_AUDIT(ret_code, ret,
                      snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
@@ -1088,7 +1088,7 @@ int ObTableBatchService::process_put(ObTableCtx &tb_ctx, ObTableOperationResult 
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_put_op(tb_ctx, result))) {
-    LOG_WARN("fail to process put", K(ret));
+    LOG_WARN("fail to process put", K(ret), KPC(tb_ctx.get_entity()));
   }
 
   OB_TABLE_END_AUDIT(ret_code, ret,
@@ -1108,7 +1108,7 @@ int ObTableBatchService::process_increment_or_append(ObTableCtx &tb_ctx, ObTable
                        tb_ctx.get_table_name(),
                        tb_ctx.get_audit_ctx(), op);
   if (OB_FAIL(ObTableOpWrapper::process_incr_or_append_op(tb_ctx, result))) {
-    LOG_WARN("fail to process increment or append", K(ret));
+    LOG_WARN("fail to process increment or append", K(ret), KPC(tb_ctx.get_entity()));
   }
 
   StmtType stmt_type = tb_ctx.is_inc() ? StmtType::T_KV_INCREMENT : StmtType::T_KV_APPEND;

@@ -23,6 +23,7 @@ int timerfd_init(eloop_t* ep, timerfd_t* s, handle_event_t handle) {
     err = EIO;
   } else {
     err = eloop_regist(ep, (sock_t*)s, EPOLLIN);
+    rk_info("create timerfd and regist to epoll, fd=%d, err=%d", s->fd, err);
   }
   if (0 != err && s->fd >= 0) {
     close(s->fd);

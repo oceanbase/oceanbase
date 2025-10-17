@@ -726,7 +726,7 @@ int ObExprOutputPack::process_oneline(const ObExpr &expr, ObEvalCtx &ctx, ObSQLS
     LOG_WARN("failed to get str res mem", K(ret), K(len));
   }
   //if try encode failed, refresh buffer and retry
-  while(OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+  while (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
     tmp_ret = OB_SUCCESS;
     if (obmysql::MYSQL_PROTOCOL_TYPE::BINARY == encode_type) {
       tmp_ret = reset_bitmap(buffer, len, expr.arg_cnt_ - 1, pos, bitmap);
@@ -736,16 +736,20 @@ int ObExprOutputPack::process_oneline(const ObExpr &expr, ObEvalCtx &ctx, ObSQLS
                               buffer, bitmap, schema_guard, encode_type, len, pos);
     }
     if (OB_SUCCESS != tmp_ret) {
-      len *= 2;
-      if (len >= MAX_PACK_LEN) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("encode row size overflow ", K(ret), K(len));
-      } else if (OB_ISNULL(buffer = expr.get_str_res_mem(ctx, len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to get str res mem", K(ret), K(len));
+      if (OB_SIZE_OVERFLOW != tmp_ret && OB_BUF_NOT_ENOUGH != tmp_ret) {
+        ret = tmp_ret;
       } else {
-        //re encode from begin
-        pos = 0;
+        len *= 2;
+        if (len >= MAX_PACK_LEN) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("encode row size overflow ", K(ret), K(len));
+        } else if (OB_ISNULL(buffer = expr.get_str_res_mem(ctx, len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to get str res mem", K(ret), K(len));
+        } else {
+          //re encode from begin
+          pos = 0;
+        }
       }
     }
   }

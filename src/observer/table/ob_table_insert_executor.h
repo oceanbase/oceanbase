@@ -59,7 +59,7 @@ public:
   virtual int close() override;
 private:
   int inner_open_with_das();
-  int process_single_operation(const ObTableEntity *entity);
+  int process_single_operation(const ObITableEntity *entity);
   int get_next_row_from_child();
   int ins_rows_post_proc();
   int insert_row_to_das();

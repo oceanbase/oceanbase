@@ -15,12 +15,15 @@
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "logservice/restoreservice/ob_remote_log_raw_reader.h"
 #include "logservice/restoreservice/ob_remote_log_raw_reader.h"
+#include "logservice/ipalf/ipalf_iterator.h"
+#include "logservice/ipalf/ipalf_log_group_entry.h"
 
 namespace oceanbase
 {
 using namespace obrpc;
 using namespace oceanbase::logservice;
 using namespace oceanbase::palf;
+using namespace oceanbase::ipalf;
 
 namespace cdc
 {
@@ -299,7 +302,7 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
 // don't block any error code here, let the caller handle the errcode for generality
 template <class LogEntryType>
 int ObCdcFetcher::fetch_log_in_palf_(const ObLSID &ls_id,
-    PalfIterator<LogEntryType> &iter,
+    IPalfIterator<LogEntryType> &iter,
     const LSN &start_lsn,
     const bool need_init_iter,
     const SCN &replayable_point_scn,
@@ -350,6 +353,7 @@ int ObCdcFetcher::fetch_log_in_archive_(
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
     } else  {
       int64_t retry_count = 0;
+      bool enable_logservice = GCONF.enable_logservice;
       // Retry when we encounter OB_ITER_END, here is the scenario:
       // 1. Logs does not exist in palf, and it's the first time to read archive log;
       // 2. The lastest archive log is read, and the lastest archive file is larger than SINGLE_READ_SIZE;
@@ -364,7 +368,7 @@ int ObCdcFetcher::fetch_log_in_archive_(
       do {
         const bool iter_inited = remote_iter.is_init();
         if (!iter_inited && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
-            start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE))) {
+            start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE, enable_logservice))) {
           LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
         } else if (!iter_inited && OB_FAIL(remote_iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
           LOG_WARN("set_io_context failed", KR(ret), K(tenant_id_), K(ls_id));
@@ -486,13 +490,13 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   const int64_t start_ls_fetch_log_time = ObTimeUtility::current_time();
-  PalfGroupBufferIterator palf_iter;
+  IPalfIterator<IGroupEntry> palf_iter;
   PalfHandleGuard palf_guard;
   int64_t version = 0;
   // use cached remote_iter
   ObCdcUpdateSourceFunctor update_source_func(ctx, version);
   ObCdcGetSourceFunctor get_source_func(ctx, version);
-  ObRemoteLogGroupEntryIterator remote_iter(get_source_func, update_source_func);
+  ObRemoteIGroupEntryIterator remote_iter(get_source_func, update_source_func);
   bool ls_exist_in_palf = true;
   // always reset remote_iter when need_init_iter is true
   // always set need_init_inter=true when switch fetch_mode
@@ -522,7 +526,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
   // 3. LS do not need to fetch logs, reach upper limit or max lsn
   // 4. LS no log fetched
   while (OB_SUCC(ret) && ! frt.is_stopped()) {
-    LogGroupEntry log_group_entry;
+    IGroupEntry log_group_entry;
     LSN lsn;
     FetchMode fetch_mode = get_fetch_mode_when_fetching_log_(ctx, fetch_archive_only);
     if (fetch_mode != ctx.get_fetch_mode()) {
@@ -691,7 +695,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
 }
 
 void ObCdcFetcher::check_next_group_entry_(const LSN &next_lsn,
-    const LogGroupEntry &next_log_group_entry,
+    const IGroupEntry &next_log_group_entry,
     const int64_t fetched_log_count,
     obrpc::ObCdcLSFetchLogResp &resp,
     FetchRunTime &frt,
@@ -700,7 +704,7 @@ void ObCdcFetcher::check_next_group_entry_(const LSN &next_lsn,
 {
   //TODO(scn)
   int64_t submit_ts = next_log_group_entry.get_scn().get_val_for_logservice();
-  int64_t entry_size = next_log_group_entry.get_serialize_size();
+  int64_t entry_size = next_log_group_entry.get_serialize_size(next_lsn);
   bool is_buf_full = (! resp.has_enough_buffer(entry_size));
   // if a valid log entry is fetched, update the ctx progress
   if (entry_size > 0) {
@@ -732,13 +736,13 @@ void ObCdcFetcher::check_next_group_entry_(const LSN &next_lsn,
 
 int ObCdcFetcher::prefill_resp_with_group_entry_(const ObLSID &ls_id,
     const LSN &lsn,
-    LogGroupEntry &log_group_entry,
+    IGroupEntry &log_group_entry,
     obrpc::ObCdcLSFetchLogResp &resp,
     ObCdcFetchLogTimeStats &fetch_time_stat)
 {
   int ret = OB_SUCCESS;
   const int64_t start_fill_ts = ObTimeUtility::current_time();
-  int64_t entry_size = log_group_entry.get_serialize_size();
+  int64_t entry_size = log_group_entry.get_serialize_size(lsn);
 
   if (! resp.has_enough_buffer(entry_size)) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -750,7 +754,7 @@ int ObCdcFetcher::prefill_resp_with_group_entry_(const ObLSID &ls_id,
     if (OB_ISNULL(remain_buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("remain_buf is NULL", KR(ret), K(ls_id), K(lsn));
-    } else if (OB_FAIL(log_group_entry.serialize(remain_buf, remain_size, pos))) {
+    } else if (OB_FAIL(log_group_entry.serialize(lsn, remain_buf, remain_size, pos))) {
       LOG_WARN("LogGroupEntry serialize fail", KR(ret), K(remain_size), K(pos), K(ls_id), K(lsn),
           K(log_group_entry));
     } else {
@@ -872,7 +876,7 @@ int ObCdcFetcher::fetch_missing_logs_in_palf_(const ObLSID &ls_id,
   int ret = OB_SUCCESS;
 
   bool need_seek = true;
-  PalfBufferIterator log_entry_iter;
+  IPalfIterator<ILogEntry> log_entry_iter;
   const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L;
 
   while (! frt.is_stopped() && OB_SUCC(ret) && cur_idx < miss_log_array.count()) {
@@ -887,7 +891,7 @@ int ObCdcFetcher::fetch_missing_logs_in_palf_(const ObLSID &ls_id,
     } else if (OB_FAIL(log_entry_iter.set_io_context(palf::LogIOContext(tenant_id_, ls_id.id(), palf::LogIOUser::CDC)))) {
       LOG_WARN("set_io_context fail", KR(ret), K(ls_id), K(curr_lsn), K(cur_idx));
     } else {
-      LogEntry log_entry;
+      ILogEntry log_entry;
       palf::LSN log_entry_lsn;
       need_seek = false;
       if (OB_FAIL(log_entry_iter.next())) {
@@ -965,7 +969,7 @@ int ObCdcFetcher::fetch_missing_logs_in_archive_(const ObLSID &ls_id,
     while (OB_SUCC(ret) && cur_idx < miss_log_array.count() && !frt.is_stopped()) {
       const palf::LSN &read_start_lsn = miss_log_array.at(cur_idx).miss_lsn_;
       int64_t real_read_size = 0;
-      MemPalfBufferIterator iter;
+      IPalfIterator<ILogEntry> iter;
       MemoryStorage mem_storage;
       int64_t target_idx = 0;
       resp.set_next_miss_lsn(read_start_lsn);
@@ -977,7 +981,7 @@ int ObCdcFetcher::fetch_missing_logs_in_archive_(const ObLSID &ls_id,
         if (OB_ERR_OUT_OF_UPPER_BOUND != ret) {
           LOG_WARN("raw_reader failed to read raw log", K(read_start_lsn), K(read_size));
         }
-      } else if (OB_FAIL(mem_storage.init(read_start_lsn))) {
+      } else if (OB_FAIL(mem_storage.init(read_start_lsn, GCONF.enable_logservice))) {
         LOG_WARN("memory storage failed to init", K(read_start_lsn));
       } else if (OB_FAIL(mem_storage.append(tmp_buf, real_read_size))) {
         LOG_WARN("memory storage failed to append buffer", K(real_read_size));
@@ -988,7 +992,7 @@ int ObCdcFetcher::fetch_missing_logs_in_archive_(const ObLSID &ls_id,
         raw_reader.update_source_cb();
         while (OB_SUCC(ret) && cur_idx < miss_log_array.count() && cur_idx < target_idx && !frt.is_stopped()) {
           const palf::LSN &cur_wanted_lsn = miss_log_array.at(cur_idx).miss_lsn_;
-          LogEntry log_entry;
+          ILogEntry log_entry;
           palf::LSN log_entry_lsn;
 
           resp.set_next_miss_lsn(cur_wanted_lsn);
@@ -1194,11 +1198,11 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
 }
 
 void ObCdcFetcher::check_next_entry_(const LSN &next_lsn,
-    const LogEntry &next_log_entry,
+    const ILogEntry &next_log_entry,
     obrpc::ObCdcLSFetchLogResp &resp,
     FetchRunTime &frt)
 {
-  int64_t entry_size = next_log_entry.get_serialize_size();
+  int64_t entry_size = next_log_entry.get_serialize_size(next_lsn);
   bool is_buf_full = (! resp.has_enough_buffer(entry_size));
 
   if (is_buf_full) {
@@ -1211,11 +1215,11 @@ void ObCdcFetcher::check_next_entry_(const LSN &next_lsn,
 
 int ObCdcFetcher::prefill_resp_with_log_entry_(const ObLSID &ls_id,
     const LSN &lsn,
-    LogEntry &log_entry,
+    ILogEntry &log_entry,
     obrpc::ObCdcLSFetchLogResp &resp)
 {
   int ret = OB_SUCCESS;
-  int64_t entry_size = log_entry.get_serialize_size();
+  int64_t entry_size = log_entry.get_serialize_size(lsn);
 
   if (! resp.has_enough_buffer(entry_size)) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -1227,7 +1231,7 @@ int ObCdcFetcher::prefill_resp_with_log_entry_(const ObLSID &ls_id,
     if (OB_ISNULL(remain_buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("remain_buf is NULL", KR(ret), K(ls_id), K(lsn));
-    } else if (OB_FAIL(log_entry.serialize(remain_buf, remain_size, pos))) {
+    } else if (OB_FAIL(log_entry.serialize(lsn, remain_buf, remain_size, pos))) {
       LOG_WARN("LogEntry serialize fail", KR(ret), K(remain_size), K(pos), K(ls_id), K(lsn),
           K(log_entry));
     } else {

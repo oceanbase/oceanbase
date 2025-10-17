@@ -24,8 +24,12 @@
 #include "share/stat/ob_opt_ds_stat.h"
 #include "share/stat/ob_stat_item.h"
 #include "share/stat/ob_opt_system_stat.h"
+#include "share/stat/ob_lake_table_stat.h"
 
 namespace oceanbase {
+namespace sql {
+class ObSqlSchemaGuard;
+}
 namespace common {
 class ObOptColumnStatHandle;
 
@@ -188,6 +192,11 @@ public:
 
   int handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
+  int update_stats_internal_stat(const uint64_t tenant_id,
+                                sqlclient::ObISQLConnection *conn,
+                                uint64_t table_id,
+                                int64_t global_partition_id);
+
   int get_table_rowcnt(const uint64_t tenant_id,
                        const uint64_t table_id,
                        const ObIArray<ObTabletID> &all_tablet_ids,
@@ -226,6 +235,21 @@ public:
   int update_system_stats(const uint64_t tenant_id,
                         const ObOptSystemStat *system_stats);
   int delete_system_stats(const uint64_t tenant_id);
+
+  int get_external_table_stat(const uint64_t tenant_id,
+                              const uint64_t ref_table_id,
+                              const ObIArray<ObString> &partition_names,
+                              sql::ObSqlSchemaGuard &schema_guard,
+                              ObLakeTableStat &stat);
+  int get_external_column_stat(ObIAllocator &alloc,
+                               const uint64_t tenant_id,
+                               const uint64_t ref_table_id,
+                               const ObIArray<ObString> &column_names,
+                               const ObIArray<ObString> &partition_names,
+                               sql::ObSqlSchemaGuard &schema_guard,
+                               const int64_t row_cnt,
+                               const double scale_ratio,
+                               ObIArray<ObLakeColumnStat*> &column_stats);
 
 private:
   int trans_col_handle_to_evals(const ObArray<ObOptColumnStatHandle> &new_handles,

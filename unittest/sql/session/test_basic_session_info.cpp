@@ -15,6 +15,15 @@
 #define private public
 #define protected public
 #include "observer/ob_server.h"
+#include "sql/session/ob_basic_session_info.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "share/system_variable/ob_system_variable_alias.h"
+#include "share/system_variable/ob_system_variable.h"
+#include "share/ob_errno.h"
+#include "common/ob_smart_var.h"
+#include "deps/easy/src/io/easy_io_struct.h"
+#include "lib/ob_define.h"
+#include "lib/allocator/ob_mod_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -205,10 +214,68 @@ TEST(test_basic_session_info, load_variables)
   }
 }
 
+TEST(test_basic_session_info, reset_sys_vars)
+{
+  int ret = OB_SUCCESS;
+  OBSERVER.init_schema();
+  OBSERVER.init_tz_info_mgr();
+  common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
+  SMART_VAR(sql::ObSQLSessionInfo, session_info) {
+    ObBasicSessionInfo::LockGuard lock_guard(session_info.get_query_lock());
+    ASSERT_EQ(OB_SUCCESS, ObPreProcessSysVars::init_sys_var());
+    ASSERT_EQ(OB_SUCCESS, session_info.test_init(0, 0, 0, &allocator));
+    if (OB_SUCCESS != (ret = ObPreProcessSysVars::change_initial_value())){
+      LOG_ERROR("Change initial value failed !", K(ret));
+    }
 
-}
+    // Step 1: Load default system variables
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+
+    // Step 2: Set some variables to non-default values
+
+    ObString current_default_catalog_name = ObString::make_string("_current_default_catalog");
+    ObObj current_default_catalog_value;
+
+    current_default_catalog_value.set_uint64(50008);
+
+    ASSERT_EQ(OB_SUCCESS, session_info.update_sys_variable_by_name(current_default_catalog_name, current_default_catalog_value));
+
+    // Step 3: Verify variables are set to non-default values
+    ObObj result;
+    ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
+    ASSERT_EQ(result.get_uint64(), current_default_catalog_value.get_uint64());
+
+    // Step 4: Reset session with skip_sys_var = false (no session cache)
+    session_info.reset(false);
+
+    // Step 5: Load default system variables again
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+
+    // Step 6: Verify variables are back to default values
+    ObObj default_current_default_catalog;
+    default_current_default_catalog.set_uint64(0);
+
+    ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
+    ASSERT_EQ(result.get_uint64(), default_current_default_catalog.get_uint64()); // both are default value 0
+
+    // Step 7: Test with skip_sys_var = true (preserve system variables)
+    // Set variables again to non-default values
+    ASSERT_EQ(OB_SUCCESS, session_info.update_sys_variable_by_name(current_default_catalog_name, current_default_catalog_value));
+
+    // Reset with skip_sys_var = true (with session cache, only clean inc value by reset inc flags)
+    session_info.reset(true);
+
+    // Load default system variables
+    ASSERT_EQ(OB_SUCCESS, session_info.load_default_sys_variable(true, true));
+
+    // Verify variables are back to default values
+    ASSERT_EQ(OB_SUCCESS, session_info.get_sys_variable_by_name(current_default_catalog_name, result));
+    ASSERT_EQ(result.get_uint64(), default_current_default_catalog.get_uint64());
+  }
 }
 
+} // namespace sql
+} // namespace oceanbase
 
 int main(int argc, char **argv)
 {

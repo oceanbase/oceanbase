@@ -125,6 +125,7 @@ int ObPLParser::fast_parse(const ObString &query,
         parse_result.param_node_num_ = parse_ctx.param_node_num_;
         parse_result.param_nodes_ = parse_ctx.param_nodes_;
         parse_result.tail_param_node_ = parse_ctx.tail_param_node_;
+        parse_result.contain_sensitive_data_ = parse_ctx.contain_sensitive_data_;
       }
     }
   }
@@ -139,6 +140,7 @@ int ObPLParser::parse(const ObString &stmt_block,
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
   int ret = OB_SUCCESS;
   bool is_include_old_new_in_trigger = false;
+  bool contain_sensitive_data = false;
   ObQuestionMarkCtx question_mark_ctx;
   if (OB_FAIL(parse_procedure(stmt_block,
                               orig_stmt_block,
@@ -147,7 +149,8 @@ int ObPLParser::parse(const ObString &stmt_block,
                               parse_result.is_for_trigger_,
                               parse_result.is_dynamic_sql_,
                               is_inner_parse,
-                              is_include_old_new_in_trigger))) {
+                              is_include_old_new_in_trigger,
+                              contain_sensitive_data))) {
     if (OB_SIZE_OVERFLOW != ret) {
       LOG_WARN("parse stmt block failed", K(ret), K(ObString(MIN(MAX_PRINT_LEN, stmt_block.length()) ,stmt_block.ptr())),
                                                   K(ObString(MIN(MAX_PRINT_LEN, orig_stmt_block.length()) ,orig_stmt_block.ptr())));
@@ -165,6 +168,7 @@ int ObPLParser::parse(const ObString &stmt_block,
     parse_result.no_param_sql_len_ = stmt_block.length();
     parse_result.end_col_ = stmt_block.length();
     parse_result.is_include_old_new_in_trigger_ = is_include_old_new_in_trigger;
+    parse_result.contain_sensitive_data_ = contain_sensitive_data;
   }
   return ret;
 }
@@ -176,7 +180,8 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
                                 bool is_for_trigger,
                                 bool is_dynamic,
                                 bool is_inner_parse,
-                                bool &is_include_old_new_in_trigger)
+                                bool &is_include_old_new_in_trigger,
+                                bool &contain_sensitive_data)
 {
   int ret = OB_SUCCESS;
   ObParseCtx parse_ctx;
@@ -247,6 +252,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
   } else {
     question_mark_ctx = parse_ctx.question_mark_ctx_;
     is_include_old_new_in_trigger = parse_ctx.is_include_old_new_in_trigger_;
+    contain_sensitive_data = parse_ctx.contain_sensitive_data_;
   }
   return ret;
 }
@@ -254,6 +260,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
 int ObPLParser::parse_routine_body(const ObString &routine_body,
                                    ObStmtNodeTree *&routine_stmt,
                                    bool is_for_trigger,
+                                   bool &is_wrap,
                                    bool need_unwrap)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_pl_parse);
@@ -307,10 +314,11 @@ int ObPLParser::parse_routine_body(const ObString &routine_body,
         ObArenaAllocator arena_allocator("PLWrap", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         if (OB_FAIL(decode_cipher_text(arena_allocator, routine_stmt, plain_text))) {
           LOG_WARN("failed to decode wrapped cipher text", K(ret));
-        } else if (OB_FAIL(parse_routine_body(plain_text, routine_stmt, is_for_trigger, false))) {
+        } else if (OB_FAIL(parse_routine_body(plain_text, routine_stmt, is_for_trigger, is_wrap, false))) {
           LOG_WARN("failed to parse unwrapped procedure or function", K(ret));
         }
       }
+      is_wrap = true;
 #endif
     }
   }
@@ -322,6 +330,7 @@ int ObPLParser::parse_package(const ObString &package,
                               const ObDataTypeCastParams &dtc_params,
                               share::schema::ObSchemaGetterGuard *schema_guard,
                               bool is_for_trigger,
+                              bool & is_wrap,
                               const ObTriggerInfo *trg_info,
                               bool need_unwrap)
 {
@@ -363,11 +372,13 @@ int ObPLParser::parse_package(const ObString &package,
                                        dtc_params,
                                        schema_guard,
                                        is_for_trigger,
+                                       is_wrap,
                                        trg_info,
                                        false))) {
         LOG_WARN("failed to parse unwrapped type or package", K(ret));
       }
     }
+    is_wrap = true;
 #endif
   } else if (is_for_trigger && OB_NOT_NULL(trg_info) && lib::is_oracle_mode()) {
     OZ (reconstruct_trigger_package(package_stmt, trg_info, dtc_params, schema_guard));
@@ -399,6 +410,7 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
       pre_parse_ctx.is_for_preprocess_ = true;
       pre_parse_ctx.connection_collation_ = parse_ctx.connection_collation_;
       pre_parse_ctx.scanner_ctx_.sql_mode_ = parse_ctx.scanner_ctx_.sql_mode_;
+      pre_parse_ctx.contain_sensitive_data_ = parse_ctx.contain_sensitive_data_;
       if (0 != obpl_parser_init(&pre_parse_ctx)) {
         ret = OB_ERR_PARSER_INIT;
         LOG_WARN("failed to initialized parser", K(ret));

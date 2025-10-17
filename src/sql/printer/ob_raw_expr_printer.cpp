@@ -776,7 +776,10 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       ObIArray<pl::ObObjAccessIdx> &access_idxs = obj_access_expr->get_orig_access_idxs();
       int64_t start = access_idxs.count() - 1;
       for (;start > 0; --start) {
-        if (OB_NOT_NULL(access_idxs.at(start).get_sysfunc_)) {
+        if (OB_NOT_NULL(access_idxs.at(start).get_sysfunc_)
+          && (T_FUN_UDF == access_idxs.at(start).get_sysfunc_->get_expr_type()
+              || T_OP_GET_PACKAGE_VAR == access_idxs.at(start).get_sysfunc_->get_expr_type()
+              || T_OP_GET_SUBPROGRAM_VAR == access_idxs.at(start).get_sysfunc_->get_expr_type())) {
           break;
         }
       }
@@ -789,15 +792,20 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         }
         if (OB_NOT_NULL(current_idx.get_sysfunc_)) {
           PRINT_EXPR(current_idx.get_sysfunc_);
+        } else if (current_idx.is_local()) {
+          DATA_PRINTF(":%ld", current_idx.var_index_);
         } else if (!current_idx.var_name_.empty()) {
           DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
-        } else {
+        } else if (current_idx.is_const()) {
           DATA_PRINTF("%ld", current_idx.var_index_);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected current idx type", K(ret), K(current_idx));
         }
         if (parent_is_table) {
           DATA_PRINTF(")");
         }
-        parent_is_table = current_idx.elem_type_.is_nested_table_type();
+        parent_is_table = current_idx.elem_type_.is_collection_type();
       }
       break;
     }
@@ -956,6 +964,20 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
                  K(ret), "type", get_type_name(type),
                  K(cursor_attr_expr->get_pl_get_cursor_attr_info()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "only rowid for cursor is supported");
+      }
+      break;
+    }
+    case T_ANY: {
+      SET_SYMBOL_IF_EMPTY("ANY");
+    }
+    case T_ALL: {
+      SET_SYMBOL_IF_EMPTY("ALL");
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr param count should be equal 1 ", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
+        PRINT_EXPR(expr->get_param_expr(0));
       }
       break;
     }
@@ -1196,6 +1218,10 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("json_arrayagg");
     case T_FUN_JSON_OBJECTAGG:
       SET_SYMBOL_IF_EMPTY("json_objectagg");
+    case T_FUN_ARG_MIN:
+      SET_SYMBOL_IF_EMPTY("arg_min");
+    case T_FUN_ARG_MAX:
+      SET_SYMBOL_IF_EMPTY("arg_max");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
@@ -3736,11 +3762,11 @@ do { \
     LOG_WARN("database schema info is null", K(ret), K(database_schema), KPC(expr), K(tenant_id)); \
   } else if (OB_FAIL(checker.init(*schema_guard_, schema_guard_->get_session_id()))) { \
     LOG_WARN("failed to init schema checker", K(ret)); \
-  } else if (OB_FAIL(checker.check_exist_same_name_object_with_synonym(tenant_id, \
-                                                                       database_schema->get_database_id(), \
-                                                                       database_schema->get_database_name_str(), \
-                                                                       exist, \
-                                                                       is_private_syn))) { \
+  } else if (OB_FAIL(checker.check_object_exists_by_name(tenant_id, \
+                                                         database_schema->get_database_id(), \
+                                                         database_schema->get_database_name_str(), \
+                                                         exist, \
+                                                         is_private_syn))) { \
     LOG_WARN("failed to check exist same name object with database name", K(ret), KPC(database_schema)); \
   } else if (!exist) { \
     PRINT_IDENT_WITH_QUOT(database_schema->get_database_name_str()); \
@@ -3902,6 +3928,10 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("json_arrayagg");
       case T_FUN_JSON_OBJECTAGG:
         SET_SYMBOL_IF_EMPTY("json_objectagg");
+      case T_FUN_ARG_MAX:
+        SET_SYMBOL_IF_EMPTY("arg_max");
+      case T_FUN_ARG_MIN:
+        SET_SYMBOL_IF_EMPTY("arg_min");
       case T_FUN_PL_AGG_UDF: {
         ObString database;
         if (OB_ISNULL(expr->get_agg_expr())) {
@@ -4026,14 +4056,14 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
             }
           }
         }
-        if (OB_FAIL(ret)) {
+        DATA_PRINTF(")");
+        if (OB_SUCC(ret)) {
           if (expr->is_ignore_null()) {
             DATA_PRINTF(" ignore nulls");
           } else {
             DATA_PRINTF(" respect nulls");
           }
         }
-        DATA_PRINTF(")");
         DATA_PRINTF(" over(");
         if (OB_FAIL(print_partition_exprs(expr))) {
           LOG_WARN("failed to print partition exprs.", K(ret));
@@ -4321,7 +4351,39 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(buf_), K(pos_), K(expr));
-  } else if (is_mysql_mode()) {
+  } else if (is_mysql_mode() && expr->is_es_match()) {
+    DATA_PRINTF("MATCH('");
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < expr->get_match_columns().count() - 1; ++i) {
+      if (OB_ISNULL(expr->get_match_columns().at(i)) || OB_ISNULL(expr->get_columns_boosts().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_match_columns().at(i));
+        DATA_PRINTF("^");
+        PRINT_EXPR(expr->get_columns_boosts().at(i));
+        DATA_PRINTF(",");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(expr->get_match_columns().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_ISNULL(expr->get_search_key())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_match_columns().at(i));
+        DATA_PRINTF("^");
+        PRINT_EXPR(expr->get_columns_boosts().at(i));
+        DATA_PRINTF("', '");
+        PRINT_EXPR(expr->get_search_key());
+        DATA_PRINTF("', '");
+        DATA_PRINTF(expr->get_param_text_expr());
+        DATA_PRINTF("')");
+      }
+    }
+  } else if (is_mysql_mode() && !expr->is_es_match()) {
     DATA_PRINTF("MATCH(");
     int64_t i = 0;
     for (; OB_SUCC(ret) && i < expr->get_match_columns().count() - 1; ++i) {
@@ -4373,6 +4435,33 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
     }
   } else if (is_oracle_mode()) {
     // jinmao TODO: print oracle contains()
+  } else {}
+  return ret;
+}
+
+int ObRawExprPrinter::print(ObUnpivotRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(buf_), K(pos_), K(expr));
+  } else if (is_mysql_mode()) {
+    // do nothing
+  } else if (is_oracle_mode()) {
+    DATA_PRINTF("UNPIVOT(");
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_ISNULL(expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_param_expr(i));
+        DATA_PRINTF(",");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      --*pos_;
+      DATA_PRINTF(")");
+    }
   } else {}
   return ret;
 }

@@ -36,6 +36,12 @@ public:
     sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int reset_package(
     sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int is_role_enabled(
+    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int session_is_role_enabled(
+    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int current_is_role_enabled(
+    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
 private:
   static int check_argument(const ObObj &input_param, bool allow_null,
                             bool need_case_up, int32_t param_idx,
@@ -50,6 +56,9 @@ private:
   static int check_privileges(ObPLContext *pl_ctx,
                               const ObString &package_name,
                               const ObString &schema_name);
+  static int find_top_definer(ObPLContext *pl_ctx,
+                              ObSchemaGetterGuard &schema_guard,
+                              ObPLExecState *&exec_state);
 };
 
 } // end of pl

@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "src/share/table/ob_table_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "observer/table/utils/ob_table_convert_utils.h"
 
 using namespace oceanbase::common;
 
@@ -300,26 +301,23 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(init_common_without_check(credential, timeout_ts))) {
+  if (OB_FAIL(init_common_without_check(credential, arg_tablet_id, timeout_ts))) {
     LOG_WARN("fail to init common without check", K(ret), K(credential), K(timeout_ts));
-  } else if (OB_FAIL(check_legality(arg_tablet_id))) {
-    LOG_WARN("fail to check legality", K(ret), K(arg_tablet_id));
+  } else if (OB_FAIL(check_legality())) {
+    LOG_WARN("fail to check legality", K(ret), K(tablet_id_));
   }
 
   return ret;
 }
 
-int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
+int ObTableCtx::check_tablet_id_valid()
 {
   int ret = OB_SUCCESS;
-  bool is_cache_hit = false;
-  ObTabletID tablet_id = arg_tablet_id;
-
-  if (!arg_tablet_id.is_valid() && !is_scan_) {
+  if (!tablet_id_.is_valid()) {
     // for scan scene, we will process it in init_scan when tablet_id is invalid
     // because we need to know if use index and index_type
     if (!simple_table_schema_->is_partitioned_table()) {
-      tablet_id = simple_table_schema_->get_tablet_id();
+      tablet_id_ = simple_table_schema_->get_tablet_id();
     } else {
       // trigger client to refresh table entry
       // maybe drop a non-partitioned table and create a
@@ -328,19 +326,25 @@ int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
       LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     }
   }
+  return ret;
+}
 
-  if (OB_FAIL(ret)) {
-  } else if (!is_scan_ && !ls_id_.is_valid() && tablet_id.is_valid()
+int ObTableCtx::check_legality()
+{
+  int ret = OB_SUCCESS;
+  bool is_cache_hit = false;
+  if (!is_scan_ && OB_FAIL(check_tablet_id_valid())) {
+    LOG_WARN("fail to check tablet id", K(ret), K(tablet_id_));
+  } else if (!is_scan_ && !ls_id_.is_valid() && tablet_id_.is_valid()
       && OB_FAIL(GCTX.location_service_->get(tenant_id_,
-                                             tablet_id,
+                                             tablet_id_,
                                              0, /* expire_renew_time */
                                              is_cache_hit,
                                              ls_id_))) {
-    LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K_(tenant_id));
+    LOG_WARN("fail to get ls id", K(ret), K(tablet_id_), K_(tenant_id));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
   } else {
-    tablet_id_ = tablet_id;
     index_tablet_id_ = tablet_id_;
   }
 
@@ -348,6 +352,7 @@ int ObTableCtx::check_legality(const ObTabletID &arg_tablet_id)
 }
 
 int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
+                                          const ObTabletID &arg_tablet_id,
                                           const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -372,6 +377,11 @@ int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
     ref_table_id_ = simple_table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;
     timeout_ts_ = timeout_ts;
+    tablet_id_ = arg_tablet_id;
+    index_tablet_id_ = tablet_id_;
+    exec_ctx_.set_my_session(&get_session_info());
+    typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
+    MyExecCtxSessionRegister ctx_register(get_session_info(), &exec_ctx_);
   }
 
   return ret;
@@ -630,6 +640,7 @@ int ObTableCtx::adjust_rowkey()
   } else {
     const int64_t entity_rowkey_cnt = rowkey.get_obj_cnt();
     bool has_auto_inc = false; // only one auto increment column in a table
+    bool has_pk_increment = false;
     bool is_full_filled = entity_rowkey_cnt == schema_rowkey_cnt; // allow not full filled when rowkey has auto_increment;
     uint64_t column_id = OB_INVALID_ID;
     ObObj *obj_ptr = rowkey.get_obj_ptr();
@@ -653,6 +664,9 @@ int ObTableCtx::adjust_rowkey()
           // curr column is auto_increment and user not fill，no need to check
           need_check = false;
         }
+      } else if (col_info->column_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+        need_check = false;
+        has_pk_increment = true;
       }
       if (is_htable() && (operation_type_ == ObTableOperationType::Type::DEL)) {
         need_check = false;
@@ -680,7 +694,7 @@ int ObTableCtx::adjust_rowkey()
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (!has_auto_inc && entity_rowkey_cnt != schema_rowkey_cnt) {
+    } else if (!has_auto_inc && !has_pk_increment && entity_rowkey_cnt != schema_rowkey_cnt) {
       ret = OB_KV_ROWKEY_COUNT_NOT_MATCH;
       LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
       LOG_WARN("entity rowkey count mismatch table schema rowkey count",
@@ -707,17 +721,21 @@ int ObTableCtx::adjust_properties()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is invalid", K(ret), KP(schema_cache_guard_));
   } else {
-    ObTableEntity *entity = static_cast<ObTableEntity*>(const_cast<ObITableEntity *>(entity_));
-    const ObIArray<ObString> &prop_names = entity->get_properties_names();
-    const ObIArray<ObObj> &prop_objs = entity->get_properties_values();
-    if (prop_names.count() != prop_objs.count()) {
+    ObITableEntity *entity = const_cast<ObITableEntity *>(entity_);
+    ObSEArray<ObString, 1> prop_names;
+    ObSEArray<ObObj*, 1> prop_objs;
+    if (OB_FAIL(entity_->get_properties_names(prop_names))) {
+      LOG_WARN("fail to get properties names", K(ret));
+    } else if (OB_FAIL(entity_->get_properties_values(prop_objs))) {
+      LOG_WARN("fail to get properties values", K(ret));
+    } else if (prop_names.count() != prop_objs.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("property name count is not equal to property obj count", K(ret),
                 K(prop_names.count()), K(prop_objs.count()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < prop_names.count(); i++) {
       const ObString &col_name = prop_names.at(i);
-      ObObj &prop_obj = const_cast<ObObj &>(prop_objs.at(i));
+      ObObj *prop_obj = prop_objs.at(i);
       const ObTableColumnInfo *col_info = nullptr;
       if (OB_FAIL(schema_cache_guard_->get_column_info(col_name, col_info))) {
         LOG_WARN("fail to get column schema", K(ret), K(col_name));
@@ -735,8 +753,17 @@ int ObTableCtx::adjust_properties()
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The specified value for generated column");
         LOG_WARN("The specified value for generated column is not allowed", K(ret), K(col_info->column_name_));
-      } else if (OB_FAIL(adjust_column_type(*col_info, prop_obj))) {
-        LOG_WARN("fail to adjust rowkey column type", K(ret), K(prop_obj), KPC(col_info));
+      } else if (entity_type_ == ObTableEntityType::ET_KV && ob_is_json(col_info->type_.get_type())) {
+        if (OB_ISNULL(entity->get_allocator())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("allocator of entity is NULL", K(ret), KPC(entity));
+        } else if (OB_FAIL(ObTableConvertUtils::convert_to_json_bin(*entity->get_allocator(),
+                                                                    *col_info,
+                                                                    *prop_obj))) {
+          LOG_WARN("fail to convert json_text to json_bin", K(ret), KPC(col_info), KPC(prop_obj));
+        }
+      } else if (OB_FAIL(adjust_column_type(*col_info, *prop_obj))) {
+        LOG_WARN("fail to adjust rowkey column type", K(ret), KPC(prop_obj), KPC(col_info));
       }
     }
   }
@@ -758,14 +785,75 @@ int ObTableCtx::adjust_entity()
   } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is invalid", K(ret), KP(schema_cache_guard_));
-  } else if (schema_cache_guard_->get_hbase_mode_type() == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+  } else if (is_time_series_mode()) {
     // do nothing
+  } else if (entity_->get_entity_type() == ObTableEntityType::ET_HKV_V2) {
+    if (OB_FAIL(adjust_hkv_v2_entity())) {
+      LOG_WARN("fail to adjust hkv_v2 entity", K(ret));
+    }
   } else if (OB_FAIL(adjust_rowkey())) {
     LOG_WARN("fail to adjust rowkey", K(ret));
   } else if (OB_FAIL(adjust_properties())) {
     LOG_WARN("fail to check properties", K(ret));
   }
 
+  return ret;
+}
+
+int ObTableCtx::adjust_hkv_v2_entity()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entity_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity is null", K(ret));
+  } else if (entity_->get_entity_type() != ObTableEntityType::ET_HKV_V2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity type is not hkv_v2", K(ret), K(entity_->get_entity_type()));
+  } else {
+    ObHCell *hcell = const_cast<ObHCell *>(static_cast<const ObHCell *>(entity_));
+    ObSEArray<const ObTableColumnInfo*, 6> hbase_col_infos;
+    hbase_col_infos.set_attr(ObMemAttr(MTL_ID(), "HColInfos"));
+    if (OB_FAIL(schema_cache_guard_->get_hbase_column_infos(hbase_col_infos))) {
+      LOG_WARN("fail to get hbase column infos", K(ret));
+    } else if (hbase_col_infos.count() < hcell->count()) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("hbase column infos count is less than hcell count", K(ret), K(hbase_col_infos), K(hcell));
+    } else {
+      for (int64_t i = 0; i < hbase_col_infos.count(); ++i) {
+        const ObTableColumnInfo *col_info = hbase_col_infos.at(i);
+        if (OB_ISNULL(col_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column info is NULL", K(ret), K(i));
+        } else if (col_info->rowkey_position_ > 0) {
+          ObObj *obj = hcell->get_cell_obj(col_info->rowkey_position_ - 1);
+          if (OB_ISNULL(obj)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("obj is null", K(ret), K(col_info->rowkey_position_ - 1), KPC(hcell));
+          } else if (OB_FAIL(adjust_column_type(*col_info, *obj))) {
+            LOG_WARN("fail to adjust column type", K(ret), K(obj), KPC(col_info));
+          }
+        } else {
+          const ObString &col_name = col_info->column_name_;
+          if (col_name.case_compare(ObHTableConstants::VALUE_CNAME) == 0) {
+            ObObj *obj = hcell->get_cell_obj(ObHTableConstants::COL_IDX_V);
+            if (OB_ISNULL(obj)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("obj is null", K(ret), KPC(hcell));
+            } else if (OB_FAIL(adjust_column_type(*col_info, *obj))) {
+              LOG_WARN("fail to adjust column type", K(ret), K(obj), KPC(col_info));
+            }
+          } else if (col_name.case_compare(ObHTableConstants::TTL_CNAME) == 0) {
+            ObObj *obj = hcell->get_cell_obj(ObHTableConstants::COL_IDX_TTL);
+            if (OB_ISNULL(obj)) {
+              // do nothing, maybe ttl val is nullable and we will check in refresh_hbase_frame
+            } else if (OB_FAIL(adjust_column_type(*col_info, *obj))) {
+              LOG_WARN("fail to adjust column type", K(ret), K(obj), KPC(col_info));
+            }
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -896,8 +984,7 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
             } else if (OB_ISNULL(columns_infos.at(k))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column info is NULL", K(ret), K(k));
-            } else if (schema_cache_guard_->get_hbase_mode_type() != ObHbaseModeType::OB_HBASE_SERIES_TYPE
-                      && OB_FAIL(adjust_column_type(*columns_infos.at(k), obj))) {
+            } else if (!is_time_series_mode() && OB_FAIL(adjust_column_type(*columns_infos.at(k), obj))) {
               LOG_WARN("fail to adjust column type", K(ret), K(*columns_infos.at(k)), K(obj));
             } else if (ob_is_mysql_date_tc(columns_infos.at(k)->type_.get_type()) && ob_is_date_tc(obj.get_type())) {
               ObMySQLDate mdate = 0;
@@ -994,7 +1081,8 @@ int ObTableCtx::generate_key_range(const ObIArray<ObString> &scan_ranges_columns
 */
 int ObTableCtx::init_scan(const ObTableQuery &query,
                           const bool &is_wead_read,
-                          const uint64_t arg_table_id)
+                          const uint64_t arg_table_id,
+                          bool skip_get_ls_id /* false */)
 {
   int ret = OB_SUCCESS;
   query_ = &query;
@@ -1276,6 +1364,14 @@ int ObTableCtx::init_put(bool allow_insup)
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid operation type use put");
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
+  } else if (is_heap_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use put");
+    LOG_WARN("heap table use put is not supported", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(init_dml_index_info())) {
     LOG_WARN("fail to init index info for put", K(ret));
   } else if (has_secondary_index()) { // has index, can not use put
@@ -1286,7 +1382,7 @@ int ObTableCtx::init_put(bool allow_insup)
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with lob column use put");
     LOG_WARN("table with lob column use put is not supported", K(ret));
-  } else if (is_total_quantity_log() && !is_htable()) {
+  } else if (is_total_quantity_log() && !is_htable() && entity_type_ != ObTableEntityType::ET_HKV_V2) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "binlog_row_image is full use put");
     LOG_WARN("binlog_row_image is full use put is not supported", K(ret));
@@ -1362,21 +1458,24 @@ int ObTableCtx::add_generated_column_assignment()
         c3 should be update.
     3. on update current timestamp should be add.
 */
-int ObTableCtx::init_assignments(const ObTableEntity &entity)
+int ObTableCtx::init_assignments()
 {
   int ret = OB_SUCCESS;
   ObObj prop_obj;
   if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not init", K(ret));
+  } else if (OB_ISNULL(entity_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity is NULL", K(ret));
   } else {
     const ObIArray<ObTableColumnInfo *> &column_info_array = schema_cache_guard_->get_column_info_array();
     for (int64_t i = 0; OB_SUCC(ret) && i < column_info_array.count(); i++) {
-      ObTableColumnInfo *col_info =nullptr;
+      ObTableColumnInfo *col_info = nullptr;
       if (OB_ISNULL(col_info = column_info_array.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column info is NULL", K(ret), K(i));
-      } else if (OB_SUCCESS == entity.get_property(col_info->column_name_, prop_obj)) {
+      } else if (OB_SUCCESS == entity_->get_property(col_info->column_name_, prop_obj)) {
         if (col_info->rowkey_position_ > 0) {
           ret = OB_ERR_UPDATE_ROWKEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_UPDATE_ROWKEY_COLUMN);
@@ -1421,9 +1520,16 @@ int ObTableCtx::init_update()
 {
   int ret = OB_SUCCESS;
   is_for_update_ = true;
+  if (is_heap_table() && operation_type_ == ObTableOperationType::Type::UPDATE) { // insert_up also init_update
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use update");
+    LOG_WARN("heap table use update is not supported", K(ret));
+  }
 
   // 1. init assignments
-  if (OB_FAIL(init_assignments(static_cast<const ObTableEntity&>(*entity_)))) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(init_assignments())) {
     LOG_WARN("fail to init assignments", K(ret), K(*entity_));
   } else {
     // 2. init scan
@@ -1459,7 +1565,15 @@ int ObTableCtx::init_update()
 int ObTableCtx::init_delete()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
+  if (is_heap_table() && !is_ttl_delete_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use delete");
+    LOG_WARN("heap table use delete is not supported", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not init", K(ret));
   } else {
@@ -1562,7 +1676,15 @@ int ObTableCtx::init_get()
   is_index_back_ = false;
   is_get_ = true;
   scan_order_ = ObQueryFlag::Forward;
-  if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
+  if (is_heap_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use get");
+    LOG_WARN("heap table use get is not supported", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not init", K(ret));
   } else if (OB_FAIL(init_primary_index_info())) {
@@ -1611,8 +1733,15 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
   int ret = OB_SUCCESS;
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
+  if (is_heap_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use append");
+    LOG_WARN("heap table use append is not supported", K(ret));
+  }
 
-  if (OB_FAIL(init_update())) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1683,8 +1812,15 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
   int ret = OB_SUCCESS;
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
+  if (is_heap_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "heap table use increment");
+    LOG_WARN("heap table use increment is not supported", K(ret));
+  }
 
-  if (OB_FAIL(init_update())) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1889,7 +2025,7 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
     } else if (OB_FAIL(exec_ctx_.get_das_ctx().extended_table_loc(*index_info.loc_meta_, table_loc))) {
       LOG_WARN("fail to extend table loc", K(ret), K(*index_info.loc_meta_));
     } else if (index_info.is_primary_index_) {
-      if (need_related_table_id() && OB_FAIL(init_related_tablet_map(das_ctx))) {
+      if (need_related_table_id() && tablet_id_.is_valid() && OB_FAIL(init_related_tablet_map(das_ctx))) {
         LOG_WARN("fail to init related tablet map", K(ret));
       }
     }
@@ -1900,7 +2036,7 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("local_table_loc is NULL", K(ret));
    } else if (index_tablet_id_.is_valid()
-      &&OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
+      && OB_FAIL(exec_ctx_.get_das_ctx().extended_tablet_loc(*local_table_loc,
                                                             index_tablet_id_,
                                                             tablet_loc))) {
       LOG_WARN("fail to extend tablet loc", K(ret), K(index_tablet_id_));
@@ -2251,10 +2387,7 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
 int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 {
   int ret = OB_SUCCESS;
-  if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid operation type", K(ret), K_(operation_type));
-  } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
+  if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not inited", K(ret), KP(schema_cache_guard_));
   } else if (OB_FAIL(check_insert_up_can_use_put(*schema_cache_guard_,
@@ -2296,7 +2429,7 @@ int ObTableCtx::check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_g
   } else if (has_lob_column) {
     // has lob column cannot use put: may cause lob storeage leak when put row to lob meta table
     can_use_put = false;
-  } else if (is_htable) { // htable has no index and alway full filled.
+  } else if (is_htable || entity->get_entity_type() == ObTableEntityType::ET_HKV_V2) { // htable has no index and alway full filled.
     can_use_put = true;
   } else {
     bool is_all_columns_filled = false;

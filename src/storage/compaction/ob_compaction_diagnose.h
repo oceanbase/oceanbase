@@ -473,6 +473,7 @@ private:
 #endif
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
+  int diagnose_tablet_multi_version_start(storage::ObLS &ls, ObTablet &tablet);
   int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,
@@ -606,7 +607,7 @@ private:
       }                                                                        \
     } else {                                                                   \
       STORAGE_LOG(DEBUG, "success to delete suspect info", K(tmp_ret),         \
-                  K(dag_hash));                                                \
+                  K(dag_hash), K(diagnose_type));                                                \
     }                                                                          \
   }
 
@@ -665,6 +666,10 @@ DEFINE_DIAGNOSE_PRINT_KV(2)
 DEFINE_DIAGNOSE_PRINT_KV(3)
 DEFINE_DIAGNOSE_PRINT_KV(4)
 DEFINE_DIAGNOSE_PRINT_KV(5)
+DEFINE_DIAGNOSE_PRINT_KV(6)
+DEFINE_DIAGNOSE_PRINT_KV(7)
+
+
 
 #define INFO_PARAM_INT(n) T param_int##n
 #define INFO_PARAM_INT0

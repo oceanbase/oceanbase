@@ -24,17 +24,18 @@ namespace share
 
 int ObLSLifeAgentManager::create_new_ls(
     const ObLSStatusInfo &ls_info, const SCN &create_ls_scn,
-    const common::ObString &zone_priority, const share::ObTenantSwitchoverStatus &working_sw_status)
+    const common::ObString &zone_priority, const int64_t switchover_epoch)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans; 
+  ObMySQLTransaction trans;
   const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(ls_info.tenant_id_);
-  if (OB_UNLIKELY(!ls_info.is_valid() || !create_ls_scn.is_valid() || zone_priority.empty())) {
+  if (OB_UNLIKELY(!ls_info.is_valid() || !create_ls_scn.is_valid() || zone_priority.empty()
+      || OB_INVALID_VERSION == switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_scn), K(zone_priority));
+    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_scn), K(zone_priority), K(switchover_epoch));
   } else {
     TAKE_IN_TRANS(create_new_ls, proxy_,
-        exec_tenant_id, ls_info, create_ls_scn, zone_priority, working_sw_status);
+        exec_tenant_id, ls_info, create_ls_scn, zone_priority, switchover_epoch);
   }
   return ret;
 }
@@ -117,7 +118,7 @@ int ObLSLifeAgentManager::update_ls_primary_zone(
 int ObLSLifeAgentManager::create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
                             const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
-                            const share::ObTenantSwitchoverStatus &working_sw_status,
+                            const int64_t switchover_epoch,
                             ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -129,8 +130,9 @@ int ObLSLifeAgentManager::create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
     if (OB_ISNULL(agents_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agent is null", KR(ret), K(i));
-    } else if (OB_FAIL(agents_[i]->create_new_ls(ls_info, create_ls_scn, zone_priority, working_sw_status, trans))) {
-      LOG_WARN("failed to create new ls", KR(ret), K(i), K(ls_info), K(create_ls_scn), K(zone_priority));
+    } else if (OB_FAIL(agents_[i]->create_new_ls(ls_info, create_ls_scn, zone_priority, switchover_epoch, trans))) {
+      LOG_WARN("failed to create new ls", KR(ret), K(i), K(ls_info), K(create_ls_scn),
+          K(zone_priority), K(switchover_epoch));
     }
   }
   return ret;

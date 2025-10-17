@@ -2842,6 +2842,25 @@ int ObInnerTableSchema::all_virtual_table_stat_schema(ObTableSchema &table_schem
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj internal_stat_default;
+    internal_stat_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("internal_stat", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      internal_stat_default,
+      internal_stat_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -3385,6 +3404,25 @@ int ObInnerTableSchema::all_virtual_column_stat_schema(ObTableSchema &table_sche
       -1, //column_scale
       true, //is_nullable
       false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj internal_stat_default;
+    internal_stat_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("internal_stat", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      internal_stat_default,
+      internal_stat_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
@@ -8481,6 +8519,25 @@ int ObInnerTableSchema::all_virtual_backup_storage_info_schema(ObTableSchema &ta
       false, //is_autoincrement
       max_bandwidth_default,
       max_bandwidth_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj status_default;
+    status_default.set_varchar(ObString::make_string("NORMAL"));
+    ADD_COLUMN_SCHEMA_T("status", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      64, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      status_default,
+      status_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

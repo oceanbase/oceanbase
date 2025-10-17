@@ -21,6 +21,8 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 
+#define DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(data_version) (data_version > MOCK_DATA_VERSION_4_2_5_3 && data_version < DATA_VERSION_4_3_0_0) || (data_version >= DATA_VERSION_4_4_1_0)
+
 namespace oceanbase
 {
 namespace obrpc
@@ -90,6 +92,7 @@ enum ObDDLType
   DDL_DROP_VEC_IVFPQ_INDEX = 23,
   DDL_DROP_VEC_SPIV_INDEX = 24,
   DDL_REPLACE_MLOG = 25, // placeholder of alter mlog
+  DDL_CREATE_VEC_SPIV_INDEX = 26, // placeholder of spiv post build
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -164,7 +167,8 @@ enum ObDDLTaskType {
   PARTITION_SPLIT_RECOVERY_TASK = 13,
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
-  SWITCH_MLOG_NAME_TASK = 16
+  SWITCH_MLOG_NAME_TASK = 16,
+  GET_SPECIFIC_TABLE_TABLETS = 17
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -218,6 +222,9 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   PURGE_OLD_MLOG = 47,
   REGISTER_SPLIT_INFO_MDS = 48,
   PREPARE_TABLET_SPLIT_RANGES = 49,
+  DROP_VID_ROWKEY_INDEX_TABLE = 50,
+  DROP_ROWKEY_VID_INDEX_TABLE = 51,
+  BUILD_MLOG = 52,
 
   FAIL = 99,
   SUCCESS = 100
@@ -402,6 +409,15 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::PREPARE_TABLET_SPLIT_RANGES:
       str = "PREPARE_TABLET_SPLIT_RANGES";
       break;
+    case ObDDLTaskStatus::DROP_VID_ROWKEY_INDEX_TABLE:
+      str = "DROP_VID_ROWKEY_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::DROP_ROWKEY_VID_INDEX_TABLE:
+      str = "DROP_ROWKEY_VID_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::BUILD_MLOG:
+      str = "BUILD_MLOG";
+      break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
       break;
@@ -453,6 +469,10 @@ static inline bool is_direct_load_task(const ObDDLType type)
   return DDL_DIRECT_LOAD == type || DDL_DIRECT_LOAD_INSERT == type;
 }
 
+static bool is_recover_table_task(const ObDDLType ddl_type) {
+  return DDL_TABLE_RESTORE == ddl_type;
+}
+
 static inline bool is_complement_data_relying_on_dag(const ObDDLType type)
 {
   return DDL_DROP_COLUMN == type
@@ -482,6 +502,7 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       || OB_TRANS_KILLED == ret || OB_TRANS_ROLLBACKED == ret // table lock doesn't support leader switch
       || OB_PARTITION_IS_BLOCKED == ret // when LS is block_tx by a transfer task
       || OB_TRANS_NEED_ROLLBACK == ret // transaction killed by leader switch
+      || OB_ERR_DDL_RESOURCE_NOT_ENOUGH == ret // tenant ddl resource not enough
       ;
 }
 
@@ -644,10 +665,12 @@ struct InsertMonitorNodeInfo final
 {
 public:
   InsertMonitorNodeInfo():
-    tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0)
+    tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0),
+    vec_task_thread_pool_cnt_(0), vec_task_total_cnt_(0), vec_task_finish_cnt_(0)
   {}
   ~InsertMonitorNodeInfo() = default;
-  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_));
+  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_),
+  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_));
 
 public:
   uint64_t tenant_id_;
@@ -657,6 +680,10 @@ public:
   int64_t last_refresh_time_;
   int64_t cg_row_inserted_;
   int64_t sstable_row_inserted_;
+  // for vec index
+  int64_t vec_task_thread_pool_cnt_;
+  int64_t vec_task_total_cnt_;
+  int64_t vec_task_finish_cnt_;
 };
 
 struct ObSqlMonitorStats final
@@ -807,6 +834,15 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
+    vec_task_thread_pool_cnt_ = 0;
+    vec_task_total_cnt_ = 0;
+    vec_task_finish_cnt_ = 0;
+    vec_task_trigger_cnt_ = 0;
+    vec_task_progress_ = 1;
+    vec_task_slowest_trigger_id_ = 0;
+    vec_task_slowest_cnt_ = 0;
+    vec_task_slowest_finish_cnt_ = 0;
+
     state_ = RedefinitionState::BEFORESCAN;
     is_empty_ = true;
     finish_ddl_ = false;
@@ -862,6 +898,15 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
+    vec_task_thread_pool_cnt_ = 0;
+    vec_task_total_cnt_ = 0;
+    vec_task_finish_cnt_ = 0;
+    vec_task_trigger_cnt_ = 0;
+    vec_task_progress_ = 1;
+    vec_task_slowest_trigger_id_ = 0;
+    vec_task_slowest_cnt_ = 0;
+    vec_task_slowest_finish_cnt_ = 0;
+
     state_ = RedefinitionState::BEFORESCAN;
     finish_thread_num_ = 0;
     is_empty_ = true;
@@ -894,6 +939,8 @@ public:
   K(merge_sort_thread_num_), K(row_merge_sorted_), K(expected_round_), K(merge_sort_remain_time_), K(merge_sort_progress_),
   K(dump_size_), K(compress_type_),
   K(row_inserted_cg_), K(row_inserted_file_), K(insert_thread_num_), K(insert_progress_), K(insert_remain_time_),
+  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_), K(vec_task_trigger_cnt_), K(vec_task_progress_),
+  K(vec_task_slowest_trigger_id_), K(vec_task_slowest_cnt_), K(vec_task_slowest_finish_cnt_),
   K(state_), K(parallelism_), K(real_parallelism_), K(execution_id_), K(finish_thread_num_),
   K(min_inmem_sort_row_), K(min_merge_sort_row_), K(min_insert_row_));
 
@@ -914,6 +961,7 @@ private:
       const int64_t row_count,
       const SortMonitorNodeInfo &sort_info,
       const ObSqlMonitorStats &sql_monitor_stats);
+  int calculate_vec_task_info(const InsertMonitorNodeInfo &insert_monitor_node);
   int local_index_diagnose();
   int finish_ddl_diagnose();
   int running_ddl_diagnose();
@@ -985,6 +1033,15 @@ private:
   int64_t min_insert_row_;
   double insert_spend_time_;
   int64_t insert_slowest_thread_id_ = 0;
+  // for vec index
+  int64_t vec_task_thread_pool_cnt_;
+  int64_t vec_task_total_cnt_;
+  int64_t vec_task_finish_cnt_;
+  int64_t vec_task_trigger_cnt_;
+  double vec_task_progress_;
+  int64_t vec_task_slowest_trigger_id_;
+  int64_t vec_task_slowest_cnt_;
+  int64_t vec_task_slowest_finish_cnt_;
 
   // analysis data
   bool is_empty_;
@@ -1157,6 +1214,13 @@ public:
             (is_string_lob || (CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index));
   }
 
+  static int get_rs_specific_table_tablets(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    const uint64_t index_table_id,
+    const uint64_t task_id,
+    ObIArray<ObTabletID> &tablet_ids);
+
   static int get_sys_ls_leader_addr(
     const uint64_t cluster_id,
     const uint64_t tenant_id,
@@ -1203,6 +1267,8 @@ public:
     const uint64_t &tenant_id,
     const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
+    const uint64_t data_version,
+    const ObAddr &addr,
     int64_t &data_row_cnt);
   static int get_ls_host_left_disk_space(
     const uint64_t &tenant_id,
@@ -1317,16 +1383,23 @@ public:
       share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
+  static int get_tablet_physical_row_cnt_remote(
+        const uint64_t tenant_id,
+        const share::ObLSID &ls_id,
+        const ObTabletID &tablet_id,
+        const bool calc_sstable,
+        const bool calc_memtable,
+        int64_t &physical_row_count /*OUT*/);
   static int get_tablet_physical_row_cnt(
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const bool calc_sstable,
       const bool calc_memtable,
       int64_t &physical_row_count /*OUT*/);
-  static int check_table_empty_in_oracle_mode(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      share::schema::ObSchemaGetterGuard &schema_guard,
+  static int check_table_empty(
+      const ObString &database_name,
+      const share::schema::ObTableSchema &table_schema,
+      const ObSQLMode sql_mode,
       bool &is_table_empty);
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
@@ -1444,10 +1517,14 @@ public:
     rootserver::ObDDLTask &task,
     obrpc::ObCreateIndexArg &create_index_arg,
     ObDDLType &ddl_type);
-  static int get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
+
+  static int get_domain_index_share_table_snapshot(
+    const ObTableSchema *table_schema,
     const ObTableSchema *index_schema,
-    uint64_t tenant_id,
+    const int64_t task_id,
+    const obrpc::ObCreateIndexArg &create_index_arg,
     int64_t &fts_snapshot_version);
+
   static int write_defensive_and_obtain_snapshot(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
@@ -1455,11 +1532,22 @@ public:
       const ObTableSchema &index_table_schema,
       ObSchemaService *schema_service,
       int64_t &new_fetched_snapshot);
-
   static int get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs);
+  static int load_ddl_task(
+      const int64_t tenant_id,
+      const int64_t task_id,
+      ObIAllocator &allocator,
+      rootserver::ObDDLTask &task);
 
   static int is_ls_leader(ObLS &ls, bool &is_leader);
 private:
+  static int check_need_update_domain_index_share_table_snapshot(
+    const ObTableSchema *table_schema,
+    const ObTableSchema *index_schema,
+    const int64_t task_id,
+    const obrpc::ObCreateIndexArg &create_index_arg,
+    bool &need_update_snapshot);
+
   static int hold_snapshot(
       common::ObMySQLTransaction &trans,
       rootserver::ObDDLTask* task,

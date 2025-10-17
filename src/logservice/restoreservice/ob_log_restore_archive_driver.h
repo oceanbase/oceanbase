@@ -59,6 +59,7 @@ public:
 
   int init(const uint64_t tenant_id, ObLSService *ls_svr, ObLogService *log_service, ObRemoteFetchWorker *worker);
   void destroy();
+  void print_stat();
 
 private:
   int do_fetch_log_(ObLS &ls);

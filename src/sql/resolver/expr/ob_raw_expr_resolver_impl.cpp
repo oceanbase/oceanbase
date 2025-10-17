@@ -260,6 +260,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
     LOG_WARN("stack overflow", K(ret));
   } else {
     LOG_DEBUG("resolve item", "item_type", get_type_name(node->type_));
+    int64_t child_start = ctx_.columns_->count();
     if (IS_DATATYPE_OR_QUESTIONMARK_OP(node->type_)) {
       if (OB_FAIL(process_datatype_or_questionmark(*node, expr))) {
         LOG_WARN("fail to process datatype or questionmark", K(ret), K(node));
@@ -572,7 +573,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_ANY:
         //fall through
       case T_ALL: {
-        if (OB_FAIL(process_any_or_all_node(node, expr))) {
+        if (OB_FAIL(ctx_.parents_expr_info_.add_member(node->type_ == T_ANY ?
+                                                       IS_WITH_ANY : IS_WITH_ALL))) {
+          LOG_WARN("failed to add member", K(ret));
+        } else if (OB_FAIL(process_any_or_all_node(node, expr))) {
           LOG_WARN("fail to process any or all node", K(ret), K(node));
         }
         break;
@@ -622,7 +626,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
           } else {
             expr = m_expr;
           }
-        } else if (OB_FAIL(SMART_CALL(recursive_resolve(merged_node, expr)))) {  // inlist merge eliminated AND/OR
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(merged_node, expr, is_root_expr)))) {  // inlist merge eliminated AND/OR
           LOG_WARN("fail to process node", K(ret), K(merged_node));
         }
         break;
@@ -861,7 +865,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_RB_AND_AGG:
       case T_FUNC_SYS_ARRAY_AGG:
       case T_FUN_SYS_RB_OR_CARDINALITY_AGG:
-      case T_FUN_SYS_RB_AND_CARDINALITY_AGG: {
+      case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
+      case T_FUN_ARG_MAX:
+      case T_FUN_ARG_MIN: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -1166,6 +1172,18 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         }
         break;
       }
+      case T_FUN_ES_SCORE: {
+        if (OB_FAIL(process_match_score(node, expr))) {
+          LOG_WARN("process fun sys match score failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_ES_MATCH: {
+        if (OB_FAIL(process_match(node, expr))) {
+          LOG_WARN("process fun sys match failed", K(ret));
+        }
+        break;
+      }
       case T_WINDOW_FUNCTION: {
         const int64_t orig_win_func_cnt = ctx_.win_exprs_->count();
         if (OB_FAIL(process_window_function_node(node, expr))) {
@@ -1422,6 +1440,21 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
         break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (T_FUN_SYS_XML_ATTRIBUTES_VALUES == expr->get_expr_type() ||
+               T_FUNC_SYS_LAMBDA == expr->get_expr_type() ||
+               (T_OP_ROW == expr->get_expr_type() && 1 == expr->get_param_count() && lib::is_mysql_mode())) {
+      // these exprs are temporarily used, they are not the actual parent of child exprs.
+    } else {
+      for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
+        if (!ctx_.columns_->at(i).parent_exists() && ctx_.columns_->at(i).ref_expr_ != expr) {
+          ctx_.columns_->at(i).parent_expr_ = expr;
+        }
       }
     }
   }
@@ -1906,6 +1939,7 @@ int ObRawExprResolverImpl::resolve_dblink_udf_expr(const ParseNode *node,
   ObObjAccessIdent &access_ident = column_ref.access_idents_.at(column_ref.access_idents_.count() - 1);
   ObUDFInfo &udf_info = access_ident.udf_info_;
   ObUDFRawExpr *func_expr = NULL;
+  int64_t child_start = ctx_.columns_->count();
   access_ident.type_ = PL_UDF;
   OX (udf_info.udf_name_.assign_ptr(access_ident.access_name_.ptr(), access_ident.access_name_.length()));
   OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
@@ -1958,6 +1992,11 @@ int ObRawExprResolverImpl::resolve_dblink_udf_expr(const ParseNode *node,
     column_ref.format_qualified_name(ctx_.case_mode_);
     column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
     ObColumnRefRawExpr *b_expr = NULL;
+    for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
+      if (!ctx_.columns_->at(i).parent_qname_exists()) {
+        ctx_.columns_->at(i).parent_qname_idx_ = ctx_.columns_->count();
+      }
+    }
     OZ (ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr));
     OV (OB_NOT_NULL(b_expr));
     OX (column_ref.ref_expr_ = b_expr);
@@ -2188,6 +2227,11 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
       for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
         ctx_.columns_->at(i).is_access_root_ = false;
       }
+      for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
+        if (!ctx_.columns_->at(i).parent_qname_exists()) {
+          ctx_.columns_->at(i).parent_qname_idx_ = ctx_.columns_->count();
+        }
+      }
       OZ (ctx_.columns_->push_back(column_ref));
       OX (expr = column_expr);
     } else {
@@ -2239,6 +2283,11 @@ int ObRawExprResolverImpl::process_obj_access_node(const ParseNode &node, ObRawE
           //PL变量的所有生成的孩子ObQualifiedName都不是root
           for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
             ctx_.columns_->at(i).is_access_root_ = false;
+          }
+        }
+        for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
+          if (!ctx_.columns_->at(i).parent_qname_exists()) {
+            ctx_.columns_->at(i).parent_qname_idx_ = ctx_.columns_->count();
           }
         }
         if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
@@ -2326,7 +2375,7 @@ int ObRawExprResolverImpl::is_explict_func_expr(const ParseNode &node, bool &is_
       } else {
         //do nothing
         //ret = OB_ERR_FUNCTION_UNKNOWN;
-        //LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name));//throw this error to user
+        //LOG_USER_ERROR(ret, "FUNCTION", helper.convert(func_name));//throw this error to user
       }
       LOG_DEBUG("is_explict_func_expr", K(func_name), K(is_func), K(exist), "node", SJ(ObParserResultPrintWrapper(node)));
     } else if (IS_FUN_SYS_TYPE(node.children_[0]->type_) || IS_AGGR_FUN(node.children_[0]->type_)) {
@@ -3374,6 +3423,13 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                 OX (const_cast<pl::ObPLVar*>(var)->set_is_referenced(true));
               }
             }
+#ifdef OB_BUILD_ORACLE_PL
+            CK (OB_NOT_NULL(ctx_.secondary_namespace_->get_type_table()));
+            if (OB_SUCC(ret) && c_expr->get_result_type().is_pl_extend_type() && pl::PL_REF_CURSOR_TYPE == c_expr->get_result_type().get_extend_type()) {
+              //update refcursor udt_id
+              OX (c_expr->set_udt_id(ctx_.secondary_namespace_->get_type_table()->get_sys_refcursor_type().get_user_type_id()));
+            }
+#endif
           }
 //execute阶段不需要统计prepare_param_count_的个数
 //          ctx_.prepare_param_count_++;
@@ -4224,7 +4280,7 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
   } else if (T_OP_DIV == node->type_
             || T_OP_MINUS == node->type_
             || T_OP_ADD == node->type_
-            || T_OP_DIV == node->type_) {
+            || T_OP_MUL == node->type_) {
     formalize_const_int_prec = true;
   }
   if (OB_FAIL(ret)) {
@@ -4242,8 +4298,6 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
     LOG_WARN("expr is null");
   } else if (OB_FAIL(b_expr->set_param_exprs(sub_expr1, sub_expr2))) {
     LOG_WARN("failed to add param expr", K(ret));
-  } else if (OB_FAIL(convert_any_or_all_expr(expr, happened))) {
-    LOG_WARN("failed to convert any all expr", K(ret));
   } else if (lib::is_oracle_mode() && !happened &&
              T_OP_ROW != sub_expr1->get_expr_type() &&
              T_OP_ROW != sub_expr2->get_expr_type()) {
@@ -4294,125 +4348,6 @@ int ObRawExprResolverImpl::process_operator_node(const ParseNode *node, ObRawExp
           }
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObRawExprResolverImpl::convert_any_or_all_expr(ObRawExpr *&expr,
-                                                   bool &happened)
-{
-  int ret = OB_SUCCESS;
-  ObRawExpr *sub_expr1 = NULL;
-  ObRawExpr *sub_expr2 = NULL;
-  ObRawExpr *sub_expr2_child = NULL;
-  ObOpRawExpr *op_expr = NULL;
-  happened = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_.op_exprs_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(expr), K(ctx_.op_exprs_), K(ret));
-  } else if (T_OP_EQ > expr->get_expr_type()
-             || T_OP_NE < expr->get_expr_type()) {
-    /*do nothing*/
-  } else if (OB_UNLIKELY(2 != expr->get_param_count()) ||
-             OB_ISNULL(sub_expr1 = expr->get_param_expr(0)) ||
-             OB_ISNULL(sub_expr2 = expr->get_param_expr(1))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(expr->get_param_count()),
-        K(sub_expr1), K(sub_expr2), K(ret));
-  } else if (T_ANY != sub_expr2->get_expr_type() &&
-             T_ALL != sub_expr2->get_expr_type()) {
-    /*do nothing*/
-  } else if (OB_UNLIKELY(1 != sub_expr2->get_param_count()) ||
-             OB_ISNULL(sub_expr2_child = sub_expr2->get_param_expr(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(sub_expr2->get_param_count()),
-        K(sub_expr2_child), K(ret));
-  } else if (T_OP_ROW != sub_expr2_child->get_expr_type()) {
-    /*do nothing*/
-  } else if (T_OP_EQ == expr->get_expr_type() &&
-             T_ANY == sub_expr2->get_expr_type() &&
-             OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_IN, op_expr))) {
-     LOG_WARN("create ObOpRawExpr failed", K(ret));
-  } else if (T_OP_NE == expr->get_expr_type() &&
-             T_ALL == sub_expr2->get_expr_type() &&
-             OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_NOT_IN, op_expr))) {
-      LOG_WARN("create ObOpRawExpr failed", K(ret));
-  } else if (OB_NOT_NULL(op_expr)) {
-    if (OB_FAIL(op_expr->set_param_exprs(sub_expr1, sub_expr2_child))) {
-      LOG_WARN("failed to set param exprs", K(ret));
-    } else if (T_OP_ROW != sub_expr1->get_expr_type() &&
-               T_OP_ROW != sub_expr2_child->get_expr_type() &&
-               OB_FAIL(ctx_.op_exprs_->push_back(op_expr))) {
-      LOG_WARN("failed to push back exprs", K(ret));
-    } else {
-      happened = true;
-      expr = op_expr;
-      LOG_DEBUG("succeed to convert any/all expr", K(*expr));
-    }
-  } else if (T_ANY == sub_expr2->get_expr_type() &&
-             (T_OP_EQ < expr->get_expr_type() && expr->get_expr_type() <= T_OP_NE) &&
-             OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_OR, op_expr))) {
-    LOG_WARN("failed to create or expr", K(ret));
-  } else if (T_ALL == sub_expr2->get_expr_type() &&
-             (T_OP_EQ <= expr->get_expr_type() && expr->get_expr_type() < T_OP_NE) &&
-             OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_AND, op_expr))) {
-    LOG_WARN("failed to create and expr", K(ret));
-  } else if (OB_ISNULL(op_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(op_expr->init_param_exprs(sub_expr2_child->get_param_count()))) {
-    LOG_WARN("failed to init param exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < sub_expr2_child->get_param_count(); i++) {
-      ObOpRawExpr *tmp_expr = NULL;
-      if (OB_ISNULL(sub_expr2_child->get_param_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if ((T_OP_EQ != expr->get_expr_type() && T_OP_NE != expr->get_expr_type()) &&
-                 (T_OP_ROW == sub_expr2_child->get_param_expr(i)->get_expr_type() ||
-                 T_OP_ROW == sub_expr1->get_expr_type())) {
-        //由于oracle不支持形如(2,3) < ((2,3)(2,4))向量列表,因此需要禁掉,'<='、'>'、'>='同理
-        ret = OB_ERR_OPERATOR_CANNOT_BE_USED_WITH_LIST;
-        LOG_WARN("this operator cannot be used with lists", K(ret));
-      } else if (T_OP_EQ == expr->get_expr_type() &&
-                 OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_EQ, tmp_expr))) {
-        LOG_WARN("failed to create equal expr", K(ret));
-      } else if (T_OP_NE == expr->get_expr_type() &&
-                 OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_NE, tmp_expr))) {
-        LOG_WARN("failed to create not equal expr", K(ret));
-      } else if (T_OP_LT == expr->get_expr_type() &&
-                 OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_LT, tmp_expr))) {
-        LOG_WARN("failed to create less expr", K(ret));
-      } else if (T_OP_LE == expr->get_expr_type() &&
-                 OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_LE, tmp_expr))) {
-        LOG_WARN("failed to create less equal expr", K(ret));
-      } else if (T_OP_GT == expr->get_expr_type() &&
-                 OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_GT, tmp_expr))) {
-        LOG_WARN("failed to create great expr", K(ret));
-      } else if (T_OP_GE == expr->get_expr_type() &&
-                 OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_GE, tmp_expr))) {
-        LOG_WARN("failed to create great equal expr", K(ret));
-      } else if (OB_ISNULL(tmp_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(tmp_expr->set_param_exprs(sub_expr1,
-                                                   sub_expr2_child->get_param_expr(i)))) {
-        LOG_WARN("failed to set param exprs", K(ret));
-      } else if (T_OP_ROW != sub_expr1->get_expr_type() &&
-                 T_OP_ROW != sub_expr2_child->get_param_expr(i)->get_expr_type() &&
-                 OB_FAIL(ctx_.op_exprs_->push_back(tmp_expr))) {
-        LOG_WARN("failed to push back exprs", K(ret));
-      } else if (sub_expr2_child->get_param_count() == 1) {//any/all仅仅只有一个row时，没有必要创建and/or
-        op_expr = tmp_expr;
-      } else if (OB_FAIL(op_expr->add_param_expr(tmp_expr))) {
-        LOG_WARN("failed to add param exprs", K(ret));
-      } else {/*do nothing*/}
-    }
-    if (OB_SUCC(ret)) {
-      happened = true;
-      expr = op_expr;
-      LOG_DEBUG("succeed to convert great equal any expr to great equal or expr", K(*expr));
     }
   }
   return ret;
@@ -4668,8 +4603,6 @@ int ObRawExprResolverImpl::add_params_to_op_expr(
     LOG_WARN("expr is null");
   } else if (OB_FAIL(op_expr->set_param_exprs(op_param_1, op_param_2))) {
     LOG_WARN("failed to add param expr", K(ret));
-  } else if (OB_FAIL(convert_any_or_all_expr(expr, happened))) {
-    LOG_WARN("failed to convert any all expr", K(ret));
   } else if (lib::is_oracle_mode() && !happened &&
              T_OP_ROW != op_param_1->get_expr_type() &&
              T_OP_ROW != op_param_2->get_expr_type()) {
@@ -4994,6 +4927,12 @@ int ObRawExprResolverImpl::resolve_right_branch_of_in_op(const ParseNode *node,
       }
     }
   /* do as normal process */
+  } else if (node->type_ == T_SELECT
+             && OB_FAIL(ctx_.parents_expr_info_.add_member(op_type == T_OP_IN ? IS_WITH_ANY
+                                                                              : IS_WITH_ALL))) {
+    // [for oracle mode] set IS_WITH_ANY/ALL flag before resolving subquery
+    // for deciding if char data with different lengths should be converted to varchar2 or not
+    LOG_WARN("failed to add member", K(ret));
   } else if (OB_FAIL(SMART_CALL(recursive_resolve(node, right_expr)))) {
     LOG_WARN("resolve left raw expr failed", K(ret));
   } else {/* do nothing */}
@@ -5144,6 +5083,33 @@ int ObRawExprResolverImpl::process_sub_query_node(const ParseNode *node, ObRawEx
   return ret;
 }
 
+int ObRawExprResolverImpl::try_cast_expr_to_int(ObRawExprFactory *expr_factory,
+                                                const ObSQLSessionInfo *session,
+                                                ObSysFunRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObExprResType cast_dst_type;
+  ObRawExpr *new_expr = NULL;
+  cast_dst_type.set_type(ObIntType);
+  if (OB_ISNULL(expr_factory) ||
+      OB_ISNULL(session) ||
+      OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(expr->formalize(session))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory,
+                                                             session,
+                                                             *expr,
+                                                             cast_dst_type,
+                                                             new_expr))) {
+    LOG_WARN("failed to add cast to expr above", K(ret));
+  } else {
+    expr = static_cast<ObSysFunRawExpr *>(new_expr);
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -5281,6 +5247,12 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
         LOG_WARN("floor expr is null", K(ret));
       } else if (OB_FAIL(window_size_expr->set_param_expr(div_expr))) {
         LOG_WARN("failed to set param expr", K(ret));
+      } else if (lib::is_mysql_mode() &&
+                 GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0 &&
+                 OB_FAIL(try_cast_expr_to_int(&ctx_.expr_factory_,
+                                              ctx_.session_info_,
+                                              window_size_expr))) {
+        LOG_WARN("failed to cast expr to int", K(ret));
       } else if (OB_FAIL(agg_expr->add_real_param_expr(window_size_expr))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));
       } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], param_expr)))) {
@@ -5521,6 +5493,26 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
               }
             }
           }
+        }
+      }
+    } else if (T_FUN_ARG_MAX == node->type_ || T_FUN_ARG_MIN == node->type_) {
+      if (OB_UNLIKELY(3 != node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error, node expected 2 arguments", K(ret), K(node->num_child_));
+      } else if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
+        agg_expr->set_param_distinct(true);
+      }
+      if (OB_SUCC(ret)) {
+        sub_expr = NULL;
+        ObRawExpr *sub_expr2 = NULL;
+        if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], sub_expr)))) {
+          LOG_WARN("fail to recursive resolve node child", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+          LOG_WARN("fail to add param expr", K(ret));
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[2], sub_expr2)))) {
+          LOG_WARN("fail to recursive resolve node child", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr2))) {
+          LOG_WARN("fail to add param expr", K(ret));
         }
       }
     } else if (T_FUN_COUNT != node->type_
@@ -6086,7 +6078,8 @@ int ObRawExprResolverImpl::process_timestamp_node(const ParseNode *node, ObStrin
 
       if (OB_UNLIKELY(scale > OB_MAX_DATETIME_PRECISION)) {
         ret = OB_ERR_TOO_BIG_PRECISION;
-        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, to_cstring(err_info), OB_MAX_DATETIME_PRECISION);
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, helper.convert(err_info), OB_MAX_DATETIME_PRECISION);
       } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, c_expr))) {
         LOG_WARN("fail to create raw expr", K(ret));
       } else if (OB_ISNULL(c_expr)) {
@@ -8017,6 +8010,125 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
   return ret;
 }
 
+int ObRawExprResolverImpl::process_match(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 2> match_exprs;
+  ObMatchFunRawExpr *match_against = NULL;
+  if (OB_ISNULL(node) || OB_ISNULL(node->children_) ||
+      node->num_child_ != 3 ||
+      OB_ISNULL(ctx_.match_exprs_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for match against", K(ret), K(node));
+  } else if (OB_ISNULL(node->children_[0]) || node->children_[0]->type_ != T_MATCH_COLUMN_LIST) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("match column list is unexpected", K(ret), K(node->children_[0]));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_ES_MATCH, match_against))) {
+    LOG_WARN("create match_against expr failed", K(ret));
+  } else if (OB_ISNULL(match_against)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ctx_.match_exprs_->push_back(match_against))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else {
+    // resolve match columns
+    ParseNode *column_list_node = node->children_[0];
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_list_node->num_child_; ++i) {
+      const ParseNode *merge_node = column_list_node->children_[i];
+      const ParseNode *column_node = nullptr;
+      const ParseNode *boost_node = nullptr;
+      ObRawExpr *column_ref = NULL;
+      ObRawExpr *boost_expr = NULL;
+      if (OB_ISNULL(merge_node) || OB_ISNULL(merge_node->children_) || merge_node->num_child_ != 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("merge node is unexpected", K(ret), K(merge_node));
+      } else if (OB_ISNULL(column_node = merge_node->children_[0]) || OB_ISNULL(boost_node = merge_node->children_[1])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column node or boost node is unexpected", K(ret), K(column_node), K(boost_node));
+      } else if (OB_FAIL(process_column_ref_node(column_node, column_ref))) {
+        LOG_WARN("resolve column node failed", K(ret));
+      } else if (OB_FAIL(match_against->get_match_columns().push_back(column_ref))) {
+        LOG_WARN("add column ref to column list failed", K(ret));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(boost_node, boost_expr)))) {
+        LOG_WARN("recursive resolve boost node failed", K(ret));
+      } else if (OB_FAIL(boost_expr->extract_info())) {
+        LOG_WARN("failed to extract info", K(ret));
+      } else if (FALSE_IT(match_against->get_columns_boosts().push_back(boost_expr))) {
+        LOG_WARN("failed to set boost expr", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // resolve search query and mode
+    ObRawExpr *search_keywords = nullptr;
+    ObRawExpr *params = nullptr;
+    ObExecContext *exec_ctx = NULL;
+    ObIAllocator &allocator = ctx_.expr_factory_.get_allocator();
+    ObObj result;
+    bool got_result = false;
+    if (OB_ISNULL(node->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("match against search keywords is unexpected");
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], search_keywords)))) {
+      LOG_WARN("recursive resolve search keywords failed", K(ret));
+    } else if (OB_FAIL(search_keywords->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else if (!search_keywords->is_static_const_expr()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
+      LOG_WARN("search query is not const expr", K(ret));
+    } else if (OB_ISNULL(node->children_[2])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("match against search keywords is unexpected");
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[2], params)))) {
+      LOG_WARN("recursive resolve search keywords failed", K(ret));
+    } else {
+      match_against->set_search_key(search_keywords);
+      match_against->set_param_text_expr(params);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    expr = match_against;
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_match_score(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *result_expr = NULL;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for match against", K(ret), K(node));
+  } else if (node->type_ != T_FUN_ES_SCORE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("match column list is unexpected", K(ret), K(node->children_[0]));
+  } else if (OB_ISNULL(ctx_.stmt_) || static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count() == 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("The position of score() is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The position of score() is");
+  } else if (FALSE_IT(result_expr = static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(0))) {
+  } else if (!static_cast<ObMatchFunRawExpr *>(result_expr)->is_es_match()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("The score with match agaisnt is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The score with match agaisnt is");
+  } else {
+    ObOpRawExpr *add_expr = NULL;
+    for (int64_t i = 1; OB_SUCC(ret) && i < static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count(); ++i) {
+      ObMatchFunRawExpr *match_expr = static_cast<ObMatchFunRawExpr *>(static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(i));
+      if (OB_FAIL(ObRawExprUtils::build_add_expr(ctx_.expr_factory_, match_expr, result_expr, add_expr))) {
+        LOG_WARN("add column ref to column list failed", K(ret));
+      } else {
+        result_expr = add_expr;
+      }
+    }
+    expr = result_expr;
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::not_int_check(const ObRawExpr *expr)		
 {		
   int ret = OB_SUCCESS;		
@@ -8131,7 +8243,9 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_SYS_BIT_OR == func_type
         || T_FUN_SYS_BIT_XOR == func_type
         || T_FUN_JSON_ARRAYAGG == func_type
-        || T_FUN_JSON_OBJECTAGG == func_type) {
+        || T_FUN_JSON_OBJECTAGG == func_type
+        || T_FUN_ARG_MIN == func_type
+        || T_FUN_ARG_MAX == func_type) {
       ctx_.is_win_agg_ = true;
       if (T_FUN_PL_AGG_UDF == func_type) {
         ParseNode *agg_udf_node = NULL;

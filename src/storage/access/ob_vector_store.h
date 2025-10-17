@@ -69,9 +69,7 @@ protected:
       blocksstable::ObIMicroBlockRowScanner &scanner,
       int64_t &begin_index,
       const int64_t end_index,
-      const ObFilterResult &res,
-      const bool need_set_end = true,
-      const bool need_init_vector = true);
+      const ObFilterResult &res);
   int fill_group_by_rows(
       const int64_t group_idx,
       blocksstable::ObIMicroBlockReader *reader,
@@ -96,6 +94,7 @@ protected:
       bool &is_agg_mask) const;
   int alloc_group_by_cell(const ObTableAccessParam &param);
   int check_need_group_by(const ObTableAccessParam &param);
+  int fill_group_by_col_lob_locator(const bool has_lob_out_row);
 
   int64_t count_;
   // exprs needed fill in

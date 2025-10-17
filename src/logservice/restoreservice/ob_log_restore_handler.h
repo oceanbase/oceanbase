@@ -76,6 +76,62 @@ struct RestoreDiagnoseInfo
   }
 };
 
+struct ObRemoteFetchStat
+{
+  ObRemoteFetchStat() { reset(); }
+  ~ObRemoteFetchStat() { reset(); }
+  void reset() {
+    fetch_task_count_ = 0;
+    fetch_log_size_ = 0;
+    gen_to_fetch_time_ = 0;
+    fetch_log_time_ = 0;
+    fetch_to_submit_time_ = 0;
+    submit_log_time_ = 0;
+  }
+
+  void update_fetch_stat(const ObRemoteFetchTaskStat &stat);
+
+  ObRemoteFetchStat operator-(const ObRemoteFetchStat &rhs) const {
+    ObRemoteFetchStat delta;
+    delta.fetch_task_count_ = fetch_task_count_ - rhs.fetch_task_count_;
+    delta.fetch_log_size_ = fetch_log_size_ - rhs.fetch_log_size_;
+    delta.gen_to_fetch_time_ = gen_to_fetch_time_ - rhs.gen_to_fetch_time_;
+    delta.fetch_log_time_ = fetch_log_time_ - rhs.fetch_log_time_;
+    delta.fetch_to_submit_time_ =  fetch_to_submit_time_ - rhs.fetch_to_submit_time_;
+    delta.submit_log_time_ = submit_log_time_ - rhs.submit_log_time_;
+    return delta;
+  }
+
+  ObRemoteFetchStat operator/(const int64_t task_count) const {
+    ObRemoteFetchStat delta;
+    if (task_count != 0) {
+      delta.fetch_task_count_ = fetch_task_count_ / task_count;
+      delta.fetch_log_size_ = fetch_log_size_ / task_count;
+      delta.gen_to_fetch_time_ = gen_to_fetch_time_ / task_count;
+      delta.fetch_log_time_ = fetch_log_time_ / task_count;
+      delta.fetch_to_submit_time_ =  fetch_to_submit_time_ / task_count;
+      delta.submit_log_time_ = submit_log_time_ / task_count;
+    }
+    return delta;
+  }
+
+  TO_STRING_KV(
+    K(fetch_task_count_),
+    K(fetch_log_size_),
+    K(gen_to_fetch_time_),
+    K(fetch_log_time_),
+    K(fetch_to_submit_time_),
+    K(submit_log_time_)
+  )
+
+  int64_t fetch_task_count_;
+  int64_t fetch_log_size_;
+  int64_t gen_to_fetch_time_;
+  int64_t fetch_log_time_;
+  int64_t fetch_to_submit_time_;
+  int64_t submit_log_time_;
+};
+
 enum class RestoreSyncStatus {
   INVALID_RESTORE_SYNC_STATUS = 0,
   RESTORE_SYNC_NORMAL = 1,
@@ -191,7 +247,8 @@ public:
   // @param[in] const int64_t, the max_scn submitted
   int update_max_fetch_info(const int64_t proposal_id,
       const palf::LSN &lsn,
-      const share::SCN &scn);
+      const share::SCN &scn,
+      const ObRemoteFetchTaskStat &stat);
   // @brief check if need update fetch log source,
   // ONLY return true if role of RestoreHandler is LEADER
   bool need_update_source() const;
@@ -265,6 +322,8 @@ public:
   int refresh_error_context();
   int get_ls_restore_status_info(RestoreStatusInfo &restore_status_info);
   int get_restore_sync_status(int ret_code, const ObLogRestoreErrorContext::ErrorType error_type, RestoreSyncStatus &sync_status);
+  void inc_delay_count();
+  void print_stat();
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
 
 private:
@@ -293,6 +352,11 @@ private:
   ObRemoteLogParent *parent_;
   ObRemoteFetchContext context_;
   ObRestoreLogContext restore_context_;
+  int64_t last_stat_ts_;
+  int64_t cur_delay_count_;
+  int64_t last_delay_count_;
+  ObRemoteFetchStat cur_stat_info_;
+  ObRemoteFetchStat last_stat_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreHandler);
 };

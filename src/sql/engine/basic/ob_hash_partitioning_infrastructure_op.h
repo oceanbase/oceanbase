@@ -395,8 +395,9 @@ private:
     int64_t avg_mem_bound = get_each_slice_avg_size(sql_mem_processor_->get_mem_bound());
     avg_mem_bound = avg_mem_bound > MIN_MEM_BOUND ? avg_mem_bound : MIN_MEM_BOUND;
     SQL_ENG_LOG(TRACE, "check need dump", K(period_row_cnt_), K(est_part_cnt_), K(slice_cnt),
-      K(avg_mem_bound), K(sql_mem_processor_->get_mem_bound()));
-    return (avg_mem_bound <= est_part_cnt_ * BLOCK_SIZE + get_mem_used()) && (period_row_cnt_ > MIN_PERIOD_ROW_CNT);
+      K(avg_mem_bound), K(sql_mem_processor_->get_mem_bound()), K(hash_table_.mem_used()));
+    return (avg_mem_bound <= est_part_cnt_ * BLOCK_SIZE + get_mem_used() + 2 * hash_table_.mem_used())
+            && (period_row_cnt_ > MIN_PERIOD_ROW_CNT);
   }
   OB_INLINE int64_t get_bucket_idx(const uint64_t hash_value)
   {

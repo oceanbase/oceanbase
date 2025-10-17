@@ -46,11 +46,23 @@ public:
   template<VecValueTypeClass vec_tc>
   static int dispatch_transfer_vec_to_obj(ObObj& obj, ObIVector *arg_vec, ObObjMeta meta, int64_t idx);
   template <typename RES_VEC>
-  static int inner_obj_to_vec(ObIVector *in_vec, ObObj& res, const int64_t batch_idx);
+  static int inner_obj_to_vec(ObIVector *in_vec,
+                              ObObj& res,
+                              const int64_t batch_idx,
+                              const ObExpr &expr,
+                              ObEvalCtx &eval_ctx);
   template<VecValueTypeClass vec_tc>
-  static int dispatch_transfer_obj_to_vec(ObObj& result, ObIVector *res_vec, int64_t idx);
+  static int dispatch_transfer_obj_to_vec(ObObj& result,
+                                          ObIVector *res_vec,
+                                          int64_t idx,
+                                          const ObExpr &expr,
+                                          ObEvalCtx &eval_ctx);
   static int transfer_vec_to_obj(ObObj *objs, ObIVector **arg_vec, const ObExpr &expr, int64_t idx);
-  static int transfer_obj_to_vec(ObObj& result, ObIVector *res_vec, int64_t idx, const ObDatumMeta &meta);
+  static int transfer_obj_to_vec(ObObj& result,
+                                  ObIVector *res_vec,
+                                  int64_t idx,
+                                  const ObExpr &expr,
+                                  ObEvalCtx &eval_ctx);
 
   static int extract_allocator_and_restore_obj(
     const ObObj &obj, ObObj &new_obj, ObIAllocator *&composite_allocator);

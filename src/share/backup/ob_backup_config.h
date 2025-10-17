@@ -219,32 +219,50 @@ private:
 };
 
 //class for update backup dest or archive dest.
-class ChangeExternalStorageDestMgr final
+class ObChangeExternalStorageDestMgr final
 {
 public:
-  ChangeExternalStorageDestMgr();
-  ~ChangeExternalStorageDestMgr() { reset(); }
+  ObChangeExternalStorageDestMgr();
+  ~ObChangeExternalStorageDestMgr() { reset(); }
   int init(
     const uint64_t tenant_id,
     const common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> &path,
     common::ObISQLClient &sql_proxy);
   void reset();
-  int update_and_validate_authorization(const char *access_id, const char *access_key);
-  int update_inner_table_authorization(common::ObISQLClient &trans);
+  int set_authorization(const common::ObString &access_info);
+  int set_attribute(const common::ObString &attribute);
+  int change_external_storage_dest();
 private:
   int update_backup_dest_authorization_(const char *access_id, const char *access_key);
   int update_backup_parameter_(common::ObISQLClient &trans);
   int update_archive_parameter_(common::ObISQLClient &trans);
+  int update_and_validate_authorization(const char *access_id, const char *access_key);
+  int update_inner_table_authorization(common::ObISQLClient &trans);
+
 private:
   bool is_inited_;
   uint64_t tenant_id_;
   int64_t dest_id_;
   ObBackupDestType::TYPE dest_type_;
   common::ObISQLClient *sql_proxy_;
-public:
   ObBackupDest backup_dest_;
+  ObBackupDestAttribute change_option_;
+  bool change_access_info_;
+public:
+  DISALLOW_COPY_AND_ASSIGN(ObChangeExternalStorageDestMgr);
+};
 
-  DISALLOW_COPY_AND_ASSIGN(ChangeExternalStorageDestMgr);
+class ObBackupConfigUtil {
+public:
+  ObBackupConfigUtil() {}
+  ~ObBackupConfigUtil() {}
+  static int admin_set_backup_config(
+      common::ObMySQLProxy &sql_proxy,
+      obrpc::ObSrvRpcProxy &rpc_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      const obrpc::ObAdminSetConfigArg &arg);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupConfigUtil);
 };
 
 }

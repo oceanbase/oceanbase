@@ -59,12 +59,13 @@ int ObTmpFileBlockAllocatingPriorityManager::init()
   int ret = OB_SUCCESS;
   STATIC_ASSERT(ARRAYSIZEOF(alloc_lists_) == (int64_t)BlockPreAllocLevel::MAX,
               "alloc_lists_ size mismatch enum BlockPreAllocLevel count");
-  STATIC_ASSERT(ARRAYSIZEOF(locks_) == (int64_t)BlockPreAllocLevel::MAX,
-                "locks_ size mismatch enum BlockPreAllocLevel count");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTmpFileBlockAllocatingPriorityManager inited twice", KR(ret));
   } else {
+    for (int32_t i = 0; i < BlockPreAllocLevel::MAX; ++i) {
+      alloc_lists_[i].init(ObTmpFileBlockHandleList::PREALLOC_NODE);
+    }
     is_inited_ = true;
     LOG_INFO("ObTmpFileBlockAllocatingPriorityManager init succ", K(is_inited_));
   }
@@ -75,22 +76,52 @@ void ObTmpFileBlockAllocatingPriorityManager::destroy()
 {
   int ret = OB_SUCCESS;
   is_inited_ = false;
-  ObTmpFileBlock* block = nullptr;
   for (int64_t i = 0; i < BlockPreAllocLevel::MAX; i++) {
-    ObSpinLockGuard guard(locks_[i]);
-    while (!alloc_lists_[i].is_empty()) {
-      if (OB_ISNULL(block = &alloc_lists_[i].remove_first()->block_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("block is null", KR(ret));
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("there is a block still exists when destroying", KR(ret), KP(block), KPC(block));
-        // block->dec_ref_cnt();
-      }
+    int64_t cur_size = alloc_lists_[i].size();
+    if (cur_size != 0) {
+      LOG_ERROR("there are blocks in alloc_list_ when destroying", K(i), K(cur_size));
+      PrintOperator print_op("destroy_alloc_prio");
+      alloc_lists_[i].for_each(print_op);
     }
-    alloc_lists_[i].clear();
   }
   LOG_INFO("ObTmpFileBlockAllocatingPriorityManager destroy succ");
+}
+
+GetAllocatableBlockOp::GetAllocatableBlockOp(
+    const int64_t necessary_page_num,
+    int64_t &candidate_page_num,
+    ObTmpFileBlockHandleList &list,
+    ObIArray<ObTmpFileBlockHandle> &candidate_blocks) :
+    necessary_page_num_(necessary_page_num),
+    candidate_page_num_(candidate_page_num),
+    list_(list),
+    candidate_blocks_(candidate_blocks)
+{}
+
+bool GetAllocatableBlockOp::operator()(ObTmpFileBlkNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("block node is nullptr", KR(ret));
+  } else if (candidate_page_num_ >= necessary_page_num_ ||
+             candidate_blocks_.count() >= ObTmpFileGlobal::TMP_FILE_MAX_SHARED_PRE_ALLOC_BLOCK_NUM) {
+    ret = OB_ITER_END;
+  } else {
+    // TODO: explain why we can access block free_page_num without lock
+    ObTmpFileBlockHandle handle(&node->block_);
+    if (handle->get_free_page_num_without_lock() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("block has no free page", KR(ret), K(handle));
+    } else if (OB_FAIL(candidate_blocks_.push_back(handle))) {
+      LOG_ERROR("fail to push back block handle", KR(ret), K(handle));
+    } else if (OB_FAIL(list_.remove_without_lock_(handle))) {
+      LOG_ERROR("fail to remove block handle", KR(ret), K(handle));
+    } else {
+      candidate_page_num_ += handle->get_free_page_num_without_lock();
+    }
+  }
+  return OB_SUCCESS == ret;
 }
 
 // simply iterate the first [1, TMP_FILE_MAX_SHARED_PRE_ALLOC_BLOCK_NUM] blocks
@@ -123,40 +154,9 @@ int ObTmpFileBlockAllocatingPriorityManager::alloc_page_range(const int64_t nece
     while (OB_SUCC(ret) && level < BlockPreAllocLevel::MAX && level != BlockPreAllocLevel::INVALID &&
            candidate_alloc_page_num < necessary_page_num &&
            candidate_blocks.count() < ObTmpFileGlobal::TMP_FILE_MAX_SHARED_PRE_ALLOC_BLOCK_NUM) {
-      // iterate lists of different level
-      ObSpinLockGuard guard(locks_[level]);
-      if (alloc_lists_[level].is_empty()) {
-        level = get_next_level_(level);
-      } else {
-        while (OB_SUCC(ret) &&
-                !alloc_lists_[level].is_empty() &&
-                candidate_alloc_page_num < necessary_page_num &&
-                candidate_blocks.count() < ObTmpFileGlobal::TMP_FILE_MAX_SHARED_PRE_ALLOC_BLOCK_NUM) {
-          // iterate each block in the list
-          ObTmpFileBlockHandle block_handle;
-          ObTmpFileBlock *block = &alloc_lists_[level].remove_first()->block_;
-          if (OB_ISNULL(block)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("block is null", KR(ret), K(block));
-          } else if (OB_FAIL(block_handle.init(block))) {
-            LOG_WARN("fail to init block handle", KR(ret));
-          } else if (OB_UNLIKELY(block->get_free_page_num_without_lock() <= 0)) {
-            // currently, 'free_page_num' is only decreased in this thread.
-            // if the block is in prio list, that of it must be positive
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("block has no free page", KR(ret), K(block_handle));
-          } else if (FALSE_IT(block->dec_ref_cnt())) {
-          } else if (OB_FAIL(candidate_blocks.push_back(block_handle))) {
-            LOG_ERROR("fail to push back block handle", KR(ret), K(block_handle));
-          } else {
-            // it is unnecessary to take block lock for acquiring 'free_page_num' because:
-            // 1. 'free_page_num' is only modified by ObTmpFileBlock::alloc_pages;
-            // 2. for shared blocks in alloc_lists_, the alloc_pages() is only called in this function
-            // thus, take priority list lock and pop block from list is enough
-            candidate_alloc_page_num += block->get_free_page_num_without_lock();
-          }
-        }
-      }
+      GetAllocatableBlockOp alloc_op(necessary_page_num, candidate_alloc_page_num, alloc_lists_[level], candidate_blocks);
+      alloc_lists_[level].for_each(alloc_op);
+      level = get_next_level_(level);
     } // end while
 
     if (OB_SUCC(ret)) {
@@ -206,14 +206,8 @@ int ObTmpFileBlockAllocatingPriorityManager::insert_block_into_alloc_priority_li
   } else if (OB_UNLIKELY(!block.is_shared_block())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not shared block", KR(ret), K(block));
-  } else {
-    ObSpinLockGuard guard(locks_[level]);
-    if (OB_UNLIKELY(!alloc_lists_[level].add_last(&block.get_prealloc_blk_node()))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to add block into alloc_lists", KR(ret), K(block));
-    } else {
-      block.inc_ref_cnt();
-    }
+  } else if (OB_FAIL(alloc_lists_[level].append(&block))) {
+    LOG_WARN("fail to append block into alloc_lists", KR(ret), K(block));
   }
 
   LOG_DEBUG("insert block into alloc priority list", KR(ret), K(free_page_num), K(block));
@@ -238,23 +232,8 @@ int ObTmpFileBlockAllocatingPriorityManager::remove_block_from_alloc_priority_li
   } else if (OB_UNLIKELY(!block.is_shared_block())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not shared block", KR(ret), K(block));
-  } else {
-    ObSpinLockGuard guard(locks_[level]);
-    ObTmpFileBlkNode &prealloc_node = block.get_prealloc_blk_node();
-    if (OB_ISNULL(prealloc_node.get_next()) && OB_ISNULL(prealloc_node.get_prev())) {
-      // do nothing
-    } else if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("alloc node contains unexpected ptr", KR(ret), K(block));
-    } else if (OB_ISNULL(alloc_lists_[level].remove(&prealloc_node))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
-    } else {
-      int64_t ref = block.dec_ref_cnt();
-      if (0 == ref) {
-        LOG_ERROR("unexpected ref cnt", K(ref), K(block));
-      }
-    }
+  } else if (OB_FAIL(alloc_lists_[level].remove(&block))) {
+    LOG_WARN("fail to remove block from alloc_lists", KR(ret), K(block));
   }
   LOG_DEBUG("remove block from alloc priority list", KR(ret), K(free_page_num), K(block));
   return ret;
@@ -269,7 +248,7 @@ int ObTmpFileBlockAllocatingPriorityManager::adjust_block_alloc_priority(const i
   int ret = OB_SUCCESS;
   BlockPreAllocLevel old_level = get_block_list_level_(old_free_page_num);
   BlockPreAllocLevel new_level = get_block_list_level_(free_page_num);
-
+  bool is_exist = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockAllocatingPriorityManager is not inited", KR(ret));
@@ -286,30 +265,11 @@ int ObTmpFileBlockAllocatingPriorityManager::adjust_block_alloc_priority(const i
     LOG_WARN("block is not shared block", KR(ret), K(block));
   } else if (old_level == new_level) {
     // do nothing
-  } else {
-    bool need_insert = true;
-    ObTmpFileBlkNode &prealloc_node = block.get_prealloc_blk_node();
-    {
-      ObSpinLockGuard guard(locks_[old_level]);
-      if (OB_ISNULL(prealloc_node.get_next()) && OB_ISNULL(prealloc_node.get_prev())) {
-        // do nothing
-        need_insert = false;
-      } else if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("alloc node contains unexpected ptr", KR(ret), K(block));
-      } else if (OB_ISNULL(alloc_lists_[old_level].remove(&prealloc_node))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("block is not in alloc_lists", KR(ret), K(block));
-      }
-    }
-
-    if (OB_SUCC(ret) && need_insert) {
-      ObSpinLockGuard guard(locks_[new_level]);
-      if (OB_UNLIKELY(!alloc_lists_[new_level].add_first(&prealloc_node))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("fail to add block into alloc_lists", KR(ret), K(block));
-      }
-    }
+  } else if (OB_FAIL(alloc_lists_[old_level].remove(&block, is_exist))) {
+    LOG_WARN("fail to remove block from alloc_lists", KR(ret), K(old_level), K(block));
+  } else if (is_exist &&
+             OB_FAIL(alloc_lists_[new_level].append(&block))) {
+    LOG_WARN("fail to append block into alloc_lists", KR(ret), K(new_level), K(block));
   }
   LOG_DEBUG("adjust block from alloc priority list", KR(ret), K(old_free_page_num),
            K(free_page_num), K(old_level), K(new_level), K(block));
@@ -353,12 +313,9 @@ ObTmpFileBlockAllocatingPriorityManager::BlockPreAllocLevel ObTmpFileBlockAlloca
 int64_t ObTmpFileBlockAllocatingPriorityManager::get_block_count()
 {
   int64_t size = 0;
-
   for (int64_t i = 0; i < BlockPreAllocLevel::MAX; i++) {
-    ObSpinLockGuard guard(locks_[i]);
-    size += alloc_lists_[i].get_size();
+    size += alloc_lists_[i].size();
   }
-
   return size;
 }
 
@@ -367,33 +324,10 @@ void ObTmpFileBlockAllocatingPriorityManager::print_blocks()
   int ret = OB_SUCCESS;
   bool cache_over = false;
   BlockPreAllocLevel alloc_level = BlockPreAllocLevel::L1;
-
-  while (OB_SUCC(ret) && !cache_over) {
-    ObSpinLockGuard guard(locks_[alloc_level]);
-    LOG_INFO("printing blocks of alloc priority manager begin", K(alloc_lists_[alloc_level].get_size()), K(alloc_level));
-    ObTmpFileBlkNode *header = alloc_lists_[alloc_level].get_header();
-    ObTmpFileBlkNode *node = alloc_lists_[alloc_level].get_header()->get_next();
-    while (OB_SUCC(ret) && node != header) {
-      ObTmpFileBlock *block = nullptr;
-      if (OB_ISNULL(node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null", KR(ret), KPC(node));
-      } else if (OB_ISNULL(block = &node->block_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("block is null", KR(ret));
-      } else {
-        LOG_INFO("print block of alloc priority manage", KPC(block));
-        node = node->get_next();
-      }
-    } // end while
+  PrintOperator print_op("alloc_prio_mgr");
+  while (OB_SUCC(ret) && BlockPreAllocLevel::MAX != alloc_level) {
+    alloc_lists_[alloc_level].for_each(print_op);
     alloc_level = get_next_level_(alloc_level);
-    if (BlockPreAllocLevel::INVALID == alloc_level) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status", KR(ret), K(alloc_level));
-    } else if (BlockPreAllocLevel::MAX == alloc_level) {
-      cache_over = true;
-    }
-    LOG_INFO("printing blocks of alloc priority manager end", KR(ret), K(alloc_lists_[alloc_level].get_size()), K(alloc_level));
   }
 }
 

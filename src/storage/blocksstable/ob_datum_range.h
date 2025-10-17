@@ -32,6 +32,8 @@ public:
   OB_INLINE bool is_memtable_valid() const;
   OB_INLINE const ObDatumRowkey& get_start_key() const { return start_key_; }
   OB_INLINE const ObDatumRowkey& get_end_key() const { return end_key_; }
+  OB_INLINE ObDatumRowkey& get_start_key() { return start_key_; }
+  OB_INLINE ObDatumRowkey& get_end_key() { return end_key_; }
   OB_INLINE const ObBorderFlag& get_border_flag() const { return border_flag_; }
   OB_INLINE int64_t get_group_idx() const { return group_idx_; }
   OB_INLINE void set_inclusive(ObBorderFlag flag) { border_flag_.set_inclusive(flag.get_data()); }
@@ -53,7 +55,7 @@ public:
   OB_INLINE int is_single_rowkey(const ObStorageDatumUtils &datum_utils, bool &is_single) const;
   OB_INLINE void change_boundary(const ObDatumRowkey &rowkey, bool is_reverse, bool is_closed = false);
   OB_INLINE int from_range(const common::ObStoreRange &range, ObIAllocator &allocator);
-  OB_INLINE int from_range(const common::ObNewRange &range, ObIAllocator &allocator);
+  OB_INLINE int from_range(const common::ObNewRange &range, ObIAllocator &allocator, bool enable_new_false_range = false);
   OB_INLINE int to_store_range(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                               common::ObIAllocator &allocator,
                               common::ObStoreRange &store_range) const;
@@ -233,12 +235,11 @@ OB_INLINE int ObDatumRange::is_memtable_single_rowkey(const int64_t schema_rowke
   return ret;
 }
 
-OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAllocator &allocator)
+OB_INLINE int ObDatumRange::from_range(const common::ObNewRange &range, ObIAllocator &allocator, bool enable_new_false_range)
 {
   int ret = OB_SUCCESS;
 
-  //we should not defend the range valid
-  if (OB_UNLIKELY(!range.is_valid())) {
+  if (!enable_new_false_range && OB_UNLIKELY(!range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to ", K(ret), K(range));
   } else if (OB_FAIL(start_key_.from_rowkey(range.get_start_key(), allocator))) {

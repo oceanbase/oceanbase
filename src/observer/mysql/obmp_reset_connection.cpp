@@ -208,6 +208,7 @@ int ObMPResetConnection::process()
 #ifdef OB_BUILD_ORACLE_PL
       session->reset_pl_debugger_resource();
       session->reset_pl_profiler_resource();
+      session->reset_pl_code_coverage_resource();
 #endif
 
       // 10.2 非分布式需要的话，分布式也需要，用于清理package的全局变量值

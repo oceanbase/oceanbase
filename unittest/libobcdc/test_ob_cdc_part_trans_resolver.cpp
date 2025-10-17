@@ -32,6 +32,7 @@
 #include "logservice/libobcdc/src/ob_log_committer.h"
 #include "logservice/libobcdc/src/ob_log_instance.h"
 #include "logservice/libobcdc/src/ob_log_resource_collector.h"
+#include "logservice/libobcdc/src/ob_log_lsn_filter.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -70,10 +71,12 @@ using namespace logfetcher;
     EXPECT_EQ(OB_SUCCESS, fetcher_dispatcher.init(&sys_ls_handler, &committer, 0)); \
     ObLogClusterIDFilter cluster_id_filter; \
     const char *cluster_id_black_list = "2147473648"; \
+    ObLogLsnFilter lsn_filter; \
     double a = 1.0; \
     void *fetcher = &a; \
     EXPECT_EQ(OB_SUCCESS, cluster_id_filter.init(cluster_id_black_list, 2147473648, 2147483647)); \
-    EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter)); \
+    EXPECT_EQ(OB_SUCCESS, lsn_filter.init("|")); \
+    EXPECT_EQ(OB_SUCCESS, resolver_factory.init(task_pool, log_entry_task_pool, fetcher_dispatcher, cluster_id_filter, lsn_filter)); \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.init(1, progress_controller, resolver_factory, fetcher));
 
 
@@ -88,8 +91,9 @@ using namespace logfetcher;
     LSFetchCtx *ls_fetch_ctx = NULL; \
     ObLogFetcherStartParameters start_paras; \
     start_paras.reset(start_ts_ns, start_lsn); \
+    logservice::ObLogserviceModelInfo logservice_model_info; \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.add_ls(tls_id, start_paras, false, false, \
-        ClientFetchingMode::FETCHING_MODE_INTEGRATED, "|")); \
+        ClientFetchingMode::FETCHING_MODE_INTEGRATED, "|", logservice_model_info)); \
     EXPECT_EQ(OB_SUCCESS, ls_fetch_mgr.get_ls_fetch_ctx(tls_id, ls_fetch_ctx)); \
     ObTxLogGenerator log_generator(tenant_id, ls_id, tx_id, cluster_id);
 
@@ -280,7 +284,7 @@ TEST(ObCDCPartTransResolver, test_misslog_info_basic)
 TEST(ObCDCPartTransResolver, test_ls_fetch_ctx)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
 
   log_generator.gen_redo_log();
@@ -296,7 +300,7 @@ TEST(ObCDCPartTransResolver, test_ls_fetch_ctx)
   log_generator.gen_commit_log();
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_log_entry(log_entry, lsn));
   LOG_DEBUG("redo-2", K(log_entry), K(lsn));
-  LogEntry offline_ls_entry;
+  ipalf::ILogEntry offline_ls_entry;
   LSN offline_lsn;
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_ls_offline_log_entry(offline_ls_entry, offline_lsn));
   EXPECT_EQ(OB_INVALID_DATA, ls_fetch_ctx->read_log(offline_ls_entry, offline_lsn, missing_info, tsi, stop_flag));
@@ -312,7 +316,7 @@ TEST(ObCDCPartTransResolver, test_ls_fetch_ctx)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq1)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
 
   log_generator.gen_redo_log();
@@ -328,7 +332,7 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq1)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq2)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
 
   log_generator.gen_redo_log();
@@ -346,12 +350,12 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq2)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq2_miss)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
 
   log_generator.gen_redo_log();
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_log_entry(log_entry, lsn));
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -379,12 +383,12 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq2_miss)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq3)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_log_entry(log_entry, lsn));
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_commit_log();
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_log_entry(log_entry2, lsn2));
@@ -401,13 +405,13 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq3)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq3_miss)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_log_entry(log_entry, lsn));
 
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_commit_log();
   EXPECT_EQ(OB_SUCCESS, log_generator.gen_log_entry(log_entry2, lsn2));
@@ -432,16 +436,16 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq3_miss)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq4)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_commit_log();
   log_generator.gen_log_entry(log_entry3, lsn3);
@@ -457,16 +461,16 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq4)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq4_miss_1)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_commit_log();
   log_generator.gen_log_entry(log_entry3, lsn3);
@@ -491,16 +495,16 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq4_miss_1)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq4_miss_2)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_commit_log();
   log_generator.gen_log_entry(log_entry3, lsn3);
@@ -531,17 +535,17 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq4_miss_2)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq5)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
 
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_commit_info_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
 
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_commit_log();
   log_generator.gen_log_entry(log_entry3, lsn3);
@@ -556,17 +560,17 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq5)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq5_miss)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
 
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_commit_info_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
 
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_commit_log();
   log_generator.gen_log_entry(log_entry3, lsn3);
@@ -587,17 +591,17 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq5_miss)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq6)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
 
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_rollback_to_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
 
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -615,17 +619,17 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq6)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq6_miss)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_redo_log();
   log_generator.gen_log_entry(log_entry, lsn);
 
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_rollback_to_log();
   log_generator.gen_log_entry(log_entry2, lsn2);
 
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -656,11 +660,11 @@ TEST(ObCDCPartTransResolver, test_sp_tx_seq6_miss)
 TEST(ObCDCPartTransResolver, test_sp_tx_dist)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -680,11 +684,11 @@ TEST(ObCDCPartTransResolver, test_sp_tx_dist)
 TEST(ObCDCPartTransResolver, test_sp_tx_dist_miss1)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -711,11 +715,11 @@ TEST(ObCDCPartTransResolver, test_sp_tx_dist_miss1)
 TEST(ObCDCPartTransResolver, test_sp_tx_dist_miss2)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
-  LogEntry log_entry3;
+  ipalf::ILogEntry log_entry3;
   palf::LSN lsn3;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -750,9 +754,9 @@ TEST(ObCDCPartTransResolver, test_sp_tx_dist_miss2)
 TEST(ObCDCPartTransResolver, test_sp_tx_dist2)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_redo_log();
   log_generator.gen_commit_info_log();
@@ -771,9 +775,9 @@ TEST(ObCDCPartTransResolver, test_sp_tx_dist2)
 TEST(ObCDCPartTransResolver, test_sp_tx_dist3)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
   log_generator.gen_commit_info_log();
   log_generator.gen_prepare_log();
@@ -791,7 +795,7 @@ TEST(ObCDCPartTransResolver, test_sp_tx_dist3)
 TEST(ObCDCPartTransResolver, DISABLED_test_sp_tx_dist4)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   log_generator.gen_commit_log();
   log_generator.gen_log_entry(log_entry, lsn);
@@ -803,17 +807,17 @@ TEST(ObCDCPartTransResolver, DISABLED_test_sp_tx_dist4)
 TEST(ObCDCPartTransResolver, test_sp_tx_record)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry_rc0;
+  ipalf::ILogEntry log_entry_rc0;
   palf::LSN lsn_rc0;
-  LogEntry log_entry1;
+  ipalf::ILogEntry log_entry1;
   palf::LSN lsn1;
-  LogEntry log_entry_rc1;
+  ipalf::ILogEntry log_entry_rc1;
   palf::LSN lsn_rc1;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
-  LogEntry log_entry_rc2;
+  ipalf::ILogEntry log_entry_rc2;
   palf::LSN lsn_rc2;
   // generate and log_entry below
   log_generator.gen_redo_log();
@@ -841,17 +845,17 @@ TEST(ObCDCPartTransResolver, test_sp_tx_record)
 TEST(ObCDCPartTransResolver, test_sp_tx_record_miss)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
-  LogEntry log_entry_rc0;
+  ipalf::ILogEntry log_entry_rc0;
   palf::LSN lsn_rc0;
-  LogEntry log_entry1;
+  ipalf::ILogEntry log_entry1;
   palf::LSN lsn1;
-  LogEntry log_entry_rc1;
+  ipalf::ILogEntry log_entry_rc1;
   palf::LSN lsn_rc1;
-  LogEntry log_entry2;
+  ipalf::ILogEntry log_entry2;
   palf::LSN lsn2;
-  LogEntry log_entry_rc2;
+  ipalf::ILogEntry log_entry_rc2;
   palf::LSN lsn_rc2;
   // generate and log_entry below
   log_generator.gen_redo_log();
@@ -890,7 +894,7 @@ TEST(ObCDCPartTransResolver, test_sp_tx_record_miss)
 TEST(ObCDCPartTransResolver, test_sp_tx_seq_example)
 {
   PREPARE_LS_FETCH_CTX();
-  LogEntry log_entry;
+  ipalf::ILogEntry log_entry;
   palf::LSN lsn;
   // generate and log_entry below
 

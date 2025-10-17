@@ -154,7 +154,7 @@ int ObITenantTmpFileManager::remove(const int64_t fd)
   //   // some modules remove tmp file when they are destroying.
   //   // at this time, the tmp file mgr is not running because of stop().
   //   // thus, we need to support this case
-  //   ret = OB_ERR_UNEXPECTED;
+  //   ret = OB_NOT_RUNNING;
   //   LOG_WARN("ObITenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(files_.erase(ObTmpFileKey(fd), tmp_file_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -184,7 +184,7 @@ int ObITenantTmpFileManager::remove(const int64_t fd)
             K(start_remove_ts), KP(tmp_file), KPC(tmp_file), K(lbt()));
         sleep(2); // 2s
       } else {
-        usleep(100 * 1000); // 100ms
+        ob_usleep(100 * 1000); // 100ms
       }
     }
     if (OB_FAIL(tmp_file->release_resource())) {
@@ -353,6 +353,9 @@ int ObITenantTmpFileManager::pread(const uint64_t tenant_id,
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(io_handle.wait())) {
       LOG_WARN("fail to wait", KR(tmp_ret), K(io_info));
+      if (OB_TIMEOUT == tmp_ret) {
+        io_handle.reset();
+      }
     }
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }

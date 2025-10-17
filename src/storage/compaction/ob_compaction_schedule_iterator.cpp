@@ -183,7 +183,6 @@ int ObBasicMergeScheduleIterator::get_next_tablet(ObTabletHandle &tablet_handle)
           LOG_WARN("fail to get tablet", K(ret), K(tablet_ids_), K(tablet_id));
         }
       } else {
-        tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
         schedule_tablet_cnt_++;
       }
     } while (OB_TABLET_NOT_EXIST == ret);

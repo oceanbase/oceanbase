@@ -23,6 +23,51 @@ namespace oceanbase
 {
 namespace sql
 {
+
+int ObPlanExecutingStat::get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const
+{
+  int ret = OB_SUCCESS;
+  exec_time = 0;
+  exec_cnt = 0;
+  const int64_t exec_cur_timestamp = ObTimeUtility::current_time();
+  int64_t exec_start_timestamp = 0;
+  const int64_t all_exec_cnt = ATOMIC_LOAD(&(exec_cnt_));
+  for (int64_t i = 0; OB_SUCC(ret) && exec_cnt < all_exec_cnt && i < MAX_EXECUTING_SIZE; ++i) {
+    exec_start_timestamp = ATOMIC_LOAD(&(exec_start_timestamps_[i]));
+    if (0 < exec_start_timestamp) {
+      exec_time += exec_cur_timestamp - exec_start_timestamp;
+      ++exec_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObPlanExecutingStat::set_executing_record(const int64_t exec_start_timestamp)
+{
+  int ret = OB_SUCCESS;
+  bool finish = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !finish && i < MAX_EXECUTING_SIZE; ++i) {
+    if (0 == ATOMIC_VCAS(&(exec_start_timestamps_[i]), 0, exec_start_timestamp)) {
+      ATOMIC_INC(&exec_cnt_);
+      finish = true;
+    }
+  }
+  return ret;
+}
+
+int ObPlanExecutingStat::erase_executing_record(const int64_t exec_start_timestamp)
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < MAX_EXECUTING_SIZE; ++i) {
+    if (exec_start_timestamp == ATOMIC_VCAS(&(exec_start_timestamps_[i]), exec_start_timestamp, 0)) {
+      ATOMIC_DEC(&exec_cnt_);
+      find = true;
+    }
+  }
+  return ret;
+}
+
 int ObGetAllPlanIdOp::set_key_array(common::ObIArray<uint64_t> *key_array)
 {
 int ret = common::OB_SUCCESS;
@@ -447,6 +492,8 @@ int ObPhyLocationGetter::build_related_tablet_info(const ObTableLocation &table_
 
 OB_SERIALIZE_MEMBER(ObTableRowCount, op_id_, row_count_);
 
+
+
 int ObConfigInfoInPC::load_influence_plan_config()
 {
   int ret = OB_SUCCESS;
@@ -492,6 +539,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_topn_runtime_filter_ = tenant_config->_enable_topn_runtime_filter;
     min_const_integer_precision_ = static_cast<int8_t>(tenant_config->_min_const_integer_precision);
     enable_runtime_filter_adaptive_apply_ = tenant_config->_enable_runtime_filter_adaptive_apply;
+    extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
   }
 
   return ret;
@@ -554,27 +602,27 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
                                "%d,", enable_hyperscan_regexp_engine_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_hyperscan_regexp_engine_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", realistic_runtime_bloom_filter_size_))) {
+                               "%d,", realistic_runtime_bloom_filter_size_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(realistic_runtime_bloom_filter_size_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", enable_parallel_das_dml_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_parallel_das_dml_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", direct_load_allow_fallback_))) {
+                               "%d,", direct_load_allow_fallback_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(direct_load_allow_fallback_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", default_load_mode_))) {
+                               "%d,", default_load_mode_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(default_load_mode_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d", hash_rollup_policy_))) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", hash_rollup_policy_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(hash_rollup_policy_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%d,", enable_nlj_spf_use_rich_format_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nlj_spf_use_rich_format_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", ndv_runtime_bloom_filter_size_))) {
+                               "%d,", ndv_runtime_bloom_filter_size_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(ndv_runtime_bloom_filter_size_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", enable_index_merge_))) {
+                               "%d,", enable_index_merge_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_index_merge_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", enable_distributed_das_scan_))) {
@@ -589,6 +637,8 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_const_integer_precision_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_runtime_filter_adaptive_apply_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_runtime_filter_adaptive_apply_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", extend_sql_plan_monitor_metrics_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(extend_sql_plan_monitor_metrics_));
   } else {
     // do nothing
   }

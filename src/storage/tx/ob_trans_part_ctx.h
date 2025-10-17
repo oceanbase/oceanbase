@@ -1010,6 +1010,8 @@ private:
   int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
   bool is_for_sslog_() const;
+  bool can_use_gts_ahead_() const;
+  void try_recover_trans_need_wait_wrap_();
 public:
   int prepare_for_submit_redo(ObTxLogCb *&log_cb,
                               ObTxLogBlock &log_block,

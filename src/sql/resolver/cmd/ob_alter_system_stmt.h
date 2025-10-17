@@ -17,8 +17,6 @@
 #include "share/ob_rpc_struct.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/backup/ob_backup_clean_struct.h"
-#include "rootserver/ob_transfer_partition_command.h"
-#include "share/ob_service_name_proxy.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "share/table/ob_redis_importer.h"
 
@@ -140,6 +138,17 @@ public:
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name));
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
+};
+
+class ObFlushSSLocalCacheStmt : public ObSystemCmdStmt
+{
+public:
+ObFlushSSLocalCacheStmt() : ObSystemCmdStmt(stmt::T_FLUSH_SS_LOCAL_CACHE) {}
+  virtual ~ObFlushSSLocalCacheStmt() {}
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_name), K_(cache_name));
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> cache_name_;
 };
 
 class ObFlushDagWarningsStmt : public ObSystemCmdStmt
@@ -480,6 +489,50 @@ public:
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
+};
+
+class ObReplaceTenantStmt : public ObSystemCmdStmt
+{
+public:
+  ObReplaceTenantStmt() : ObSystemCmdStmt(stmt::T_REPLACE_TENANT),
+                          tenant_name_(),
+                          server_info_(),
+                          logservice_access_point_(),
+                          shared_storage_info_() {}
+  virtual ~ObReplaceTenantStmt() {}
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),
+                            K_(tenant_name),
+                            K_(server_info),
+                            K_(logservice_access_point),
+                            K_(shared_storage_info));
+public:
+  int init(const common::ObString &tenant_name,
+           const common::ObRegion& region,
+           const common::ObZone &zone,
+           const common::ObAddr& server_addr,
+           const common::ObString &logservice_access_point,
+           const common::ObString &shared_storage_info);
+  bool is_valid() const {
+    return !tenant_name_.empty()
+        && !server_info_.zone_.is_empty()
+        && server_info_.server_.is_valid()
+        && !server_info_.region_.is_empty()
+        && !logservice_access_point_.empty()
+        && !shared_storage_info_.empty();
+  }
+  int assign(const sql::ObReplaceTenantStmt &that);
+  const common::ObSqlString &get_tenant_name() const { return tenant_name_; }
+  const common::ObZone &get_zone() const { return server_info_.zone_; }
+  const common::ObAddr &get_server() const { return server_info_.server_; }
+  const common::ObRegion &get_region() const { return server_info_.region_; }
+  const common::ObSqlString &get_logservice_access_point() const { return logservice_access_point_; }
+  const common::ObSqlString &get_shared_storage_info() const { return shared_storage_info_; }
+private:
+  common::ObSqlString tenant_name_;
+  obrpc::ObServerInfo server_info_;
+  common::ObSqlString logservice_access_point_;
+  common::ObSqlString shared_storage_info_;
 };
 
 class ObAlterLSReplicaStmt : public ObSystemCmdStmt
@@ -1117,56 +1170,68 @@ public:
       ObSystemCmdStmt(stmt::T_BACKUP_CLEAN),
       initiator_tenant_id_(OB_INVALID_TENANT_ID),
       type_(share::ObNewBackupCleanType::MAX),
-      value_(0),
-      copy_id_(0),
       description_(),
-      clean_tenant_ids_()
+      clean_tenant_ids_(),
+      value_(),
+      dest_path_(),
+      dest_type_(share::ObBackupDestType::DEST_TYPE_MAX)
   {
   }
   virtual ~ObBackupCleanStmt() {}
   share::ObNewBackupCleanType::TYPE get_type() const { return type_; }
-  int64_t get_value() const { return value_; }
+  const common::ObSArray<int64_t> &get_value() const { return value_; }
   uint64_t get_tenant_id() const { return initiator_tenant_id_; }
-  int64_t get_copy_id() const { return copy_id_; }
   const share::ObBackupDescription &get_description() const { return description_; }
   const common::ObSArray<uint64_t> &get_clean_tenant_ids() const { return clean_tenant_ids_; }
+  const share::ObBackupPathString &get_dest_path() const { return dest_path_; }
+  share::ObBackupDestType::TYPE get_dest_type() const { return dest_type_; }
   int set_param(
       const uint64_t tenant_id, 
       const int64_t type, 
-      const int64_t value, 
-      const int64_t copy_id, 
+      const ObSArray<int64_t> &value,
       const share::ObBackupDescription &description,
-      const ObSArray<uint64_t> &clean_tenant_ids)
+      const ObSArray<uint64_t> &clean_tenant_ids,
+      const share::ObBackupPathString &dest_path,
+      const share::ObBackupDestType::TYPE dest_type)
   {
     int ret = common::OB_SUCCESS;
-
+    bool all_non_negative = true;
+    for (int64_t i = 0; all_non_negative && i < value.count(); ++i) {
+      if (value.at(i) < 0) {
+        all_non_negative = false;
+      }
+    }
     if (OB_INVALID_ID == tenant_id || type <= 0 || type >= share::ObNewBackupCleanType::MAX
-        || value < 0) {
+        || !all_non_negative) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid args", K(tenant_id), K(type), K(value));
     } else if (OB_FAIL(description_.assign(description))) {
       COMMON_LOG(WARN, "set description failed", K(description));
     } else if (OB_FAIL(append(clean_tenant_ids_, clean_tenant_ids))) {
       COMMON_LOG(WARN, "append clean tenant ids failed", K(clean_tenant_ids));
+    } else if (OB_FAIL(append(value_, value))) {
+      COMMON_LOG(WARN, "append clean values failed", K(value));
+    } else if (OB_FAIL(dest_path_.assign(dest_path))) {
+      COMMON_LOG(WARN, "set dest path failed", K(dest_path));
     } else {
       type_ = static_cast<share::ObNewBackupCleanType::TYPE>(type);
-      value_ = value;
       initiator_tenant_id_ = tenant_id;
-      copy_id_ = copy_id;
+      dest_type_ = dest_type;
     }
 
     return ret;
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(initiator_tenant_id), K_(type), K_(value), K_(copy_id), K_(description), K_(clean_tenant_ids));
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(initiator_tenant_id), K_(type), K_(value), K_(description), K_(clean_tenant_ids), K_(dest_path), K_(dest_type));
 
 private:
   uint64_t initiator_tenant_id_;
   share::ObNewBackupCleanType::TYPE type_;
-  int64_t value_;
-  int64_t copy_id_;
   share::ObBackupDescription description_; 
   common::ObSArray<uint64_t> clean_tenant_ids_; 
+  common::ObSArray<int64_t> value_;
+  share::ObBackupPathString dest_path_;
+  share::ObBackupDestType::TYPE dest_type_;
 };
 
 class ObDeletePolicyStmt : public ObSystemCmdStmt
@@ -1196,7 +1261,7 @@ public:
       const uint64_t tenant_id, 
       const int64_t type,
       const ObString &policy_name,
-      const ObSArray<uint64_t> &clean_tenant_ids)
+      const ObIArray<uint64_t> &clean_tenant_ids)
   {
     int ret = common::OB_SUCCESS;
     if (!is_valid_tenant_id(tenant_id) || type < 0 || type >= share::ObPolicyOperatorType::MAX) {
@@ -1485,28 +1550,6 @@ public:
 private:
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> clone_tenant_name_;
 };
-class ObTransferPartitionStmt : public ObSystemCmdStmt
-{
-public:
-  ObTransferPartitionStmt()
-    : ObSystemCmdStmt(stmt::T_TRANSFER_PARTITION),
-      arg_() {}
-  virtual ~ObTransferPartitionStmt() {}
-
-  rootserver::ObTransferPartitionArg &get_arg() { return arg_; }
-private:
-  rootserver::ObTransferPartitionArg arg_;
-};
-
-class ObServiceNameStmt : public ObSystemCmdStmt
-{
-public:
-  ObServiceNameStmt() : ObSystemCmdStmt(stmt::T_SERVICE_NAME), arg_() {}
-  virtual ~ObServiceNameStmt() {}
-  share::ObServiceNameArg &get_arg() { return arg_; }
-private:
-  share::ObServiceNameArg arg_;
-};
 
 class ObRebuildTabletStmt : public ObSystemCmdStmt
 {
@@ -1537,7 +1580,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid args", K(tenant_id), K(ls_id), K(tablet_id_array), K(src), K(dest));
     } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
-      LOG_WARN("failed to assign tablet id array", K(ret), K(tenant_id), K(tablet_id_array));
+      COMMON_LOG(WARN,"failed to assign tablet id array", K(ret), K(tenant_id), K(tablet_id_array));
     } else {
       tenant_id_ = tenant_id;
       ls_id_ = ls_id;
@@ -1568,6 +1611,19 @@ public:
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(arg));
 private:
   table::ObModuleDataArg arg_;
+};
+
+class ObLoadLicenseStmt : public ObSystemCmdStmt
+{
+public:
+  ObLoadLicenseStmt() : ObSystemCmdStmt(stmt::T_LOAD_LICENSE), path_() {}
+  OB_INLINE ObString &get_path() { return path_; }
+  OB_INLINE const ObString &get_path() const { return path_; }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(path));
+
+private:
+  ObString path_;
 };
 
 } // end namespace sql

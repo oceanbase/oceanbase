@@ -41,13 +41,13 @@ public:
 
 
   OB_INLINE const common::ObTabletID get_tablet_id() const { return tablet_id_; }
-  OB_INLINE const common::ObIArray<table::ObITableEntity *> &get_cells() const { return cells_; }
-  OB_INLINE common::ObIArray<table::ObITableEntity *> &get_cells() { return cells_; }
+  OB_INLINE const common::ObIArray<const table::ObITableEntity *> &get_cells() const { return cells_; }
+  OB_INLINE common::ObIArray<const table::ObITableEntity *> &get_cells() { return cells_; }
   OB_INLINE void set_tablet_id(common::ObTabletID tablet_id) { tablet_id_ = tablet_id; }
   TO_STRING_KV(K_(tablet_id), K_(cells));
 private:
   common::ObTabletID tablet_id_;
-  ObSEArray<table::ObITableEntity *, 4> cells_;
+  ObSEArray<const table::ObITableEntity *, 4> cells_;
 };
 
 class ObHbaseTableCells

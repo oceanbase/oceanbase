@@ -137,6 +137,39 @@ private:
     bool &is_election_silent_;
   };
 #endif
+  struct PalfDiskHangDetector {
+    PalfDiskHangDetector();
+    ~PalfDiskHangDetector();
+    bool is_clog_disk_hang(int64_t &sensitivity);
+    TO_STRING_KV(K_(last_detect_time), K_(last_detect_failure_time), K_(curr_detect_round));
+  private:
+    int64_t min_recovery_interval_() const;
+    int64_t size_to_learn_idx_(const double log_size) const;
+    double learn_idx_to_size_(const int64_t learn_idx) const;
+    bool has_continuous_error_(const bool has_failure, const int64_t continuous_error_gap) const;
+  private:
+    static constexpr int64_t PALF_DISK_DETECT_INTERVAL_US = 1 * 1000 * 1000;          // 1s
+    static constexpr int64_t MIN_RECOVERY_INTERVAL = 30;             // 30s
+    static constexpr int64_t PALF_DISK_FAILURE_TIME_UPPER_BOUND = 30 * 60 * 1000 * 1000; // 30mins
+    static constexpr int64_t MIN_WRITE_SIZE = 4 * 1000;
+    static constexpr int64_t MAX_WRITE_SIZE = 4 * 1000 * 1000;
+    // 4 * 10^3 - 4 * 10^6, step: 0.1 * 10^n
+    // [4.0 * 10^3, 4.1 * 10^3, ..., 9.9 ^ 10^3, 1.0 * 10^4, 1.1 * 10^4, ..., 4.0 * 10^6]
+    static constexpr int64_t PALF_DISK_LEARN_SLOT = (6 - 3) * 90;
+  private:
+    int64_t last_detect_time_;
+    int64_t last_detect_failure_time_;
+    int64_t curr_detect_round_;
+    // detect slot
+    int64_t prev_accum_write_size_;
+    int64_t prev_accum_write_count_;
+    int64_t prev_accum_write_rt_;
+    // learn slot
+    double learn_avg_bw_[PALF_DISK_LEARN_SLOT];
+    double learn_avg_rt_[PALF_DISK_LEARN_SLOT];
+    // bandwidth error flag
+    bool detect_error_flags_[MIN_RECOVERY_INTERVAL];
+  };
   bool is_running_;
   common::ObArray<FailureEventWithRecoverOp> events_with_ops_;
   common::ObArray<common::ObAddr> tenant_server_list_;
@@ -149,6 +182,7 @@ private:
   bool has_schema_error_;
   bool has_add_disk_full_event_;
   bool has_election_silent_event_;
+  PalfDiskHangDetector palf_disk_hang_detector_;
   ObSpinLock lock_;
 };
 

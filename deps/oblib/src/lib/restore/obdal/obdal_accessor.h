@@ -25,10 +25,18 @@ namespace common
 class ObDalAccessor
 {
 public:
-  static int init_env(void *malloc, void *free, void *log_handler, const int32_t log_level, const int64_t thread_cnt, const int64_t pool_max_idle_per_host, const int64_t pool_max_idle_time_s);
+  static int init_env(void *malloc,
+                      void *free,
+                      void *log_handler,
+                      const int32_t log_level,
+                      const int64_t thread_cnt,
+                      const int64_t pool_max_idle_per_host,
+                      const int64_t pool_max_idle_time_s,
+                      const int64_t connect_timeout_s);
   static void fin_env();
 
 public:
+  static int64_t obdal_get_tenant_id();
   // operator
   static int obdal_operator_options_new(opendal_operator_options *&options);
   static int obdal_operator_options_set(opendal_operator_options *options, const char *key, const char *value);
@@ -69,6 +77,7 @@ public:
   // metadata
   static int obdal_metadata_content_length(const opendal_metadata *metadata, int64_t &content_length);
   static int obdal_metadata_last_modified(const opendal_metadata *metadata, int64_t &last_modified_time_s);
+  static int obdal_metadata_etag(const opendal_metadata *metadata, char *&etag);
   static int obdal_metadata_free(opendal_metadata *&metadata);
 
   // reader

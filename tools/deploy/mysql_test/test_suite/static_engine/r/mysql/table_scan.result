@@ -322,14 +322,14 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |24          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |24          |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |23          |
+|0 |PX COORDINATOR                     |        |1       |13          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |13          |
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |12          |
 |3 |    ├─EXCHANGE IN DISTR            |        |1       |2           |
 |4 |    │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|1       |2           |
 |5 |    │   └─PX BLOCK ITERATOR        |        |1       |2           |
 |6 |    │     └─TABLE FULL SCAN        |t1      |1       |2           |
-|7 |    └─DISTRIBUTED TABLE RANGE SCAN |t2(idx1)|1       |21          |
+|7 |    └─DISTRIBUTED TABLE RANGE SCAN |t2(idx1)|1       |20          |
 =======================================================================
 Outputs & filters:
 -------------------------------------
@@ -349,7 +349,7 @@ Outputs & filters:
   7 - output([t2.c6]), filter([cast(:1, DECIMAL_INT(64, 0)) <= column_conv(DECIMAL_INT,PS:(64,0),NULL,cast(cast(t2.c3, DECIMAL_INT(81, 18)) + cast(t2.c4,
        DECIMAL_INT(81, 18)), DECIMAL_INT(64, 0)))]), rowset=16
       access([GROUP_ID], [t2.__pk_increment], [t2.c3], [t2.c4], [t2.c6]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.c2], [t2.c1], [t2.c5], [t2.shadow_pk_0]), range(MIN ; MAX), 
       range_cond([cast(:0, DECIMAL_INT(64, 16)) = t2.c2])
 select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;

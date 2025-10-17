@@ -144,7 +144,7 @@ void ObTenantCheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
   if (SERVER_STORAGE_META_SERVICE.is_started()) {
-    if (OB_FAIL(handler_->write_checkpoint(false/*is_force*/))) {
+    if (OB_FAIL(handler_->write_checkpoint(ObTenantSlogCheckpointWorkflow::normal_type()))) {
       LOG_WARN("fail to write checkpoint", K(ret));
     }
   } else {
@@ -156,14 +156,8 @@ void ObTenantCheckpointSlogHandler::ObWriteCheckpointTask::runTimerTask()
 ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
   : is_inited_(false),
     is_writing_checkpoint_(false),
-    last_ckpt_time_(0),
-    last_frozen_version_(0),
     slogger_(nullptr),
     lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
-    slog_ckpt_lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
-    tablet_key_set_(),
-    is_copying_tablets_(false),
-    ckpt_cursor_(),
     ls_block_handle_(),
     tablet_block_handle_(),
     wait_gc_tablet_block_handle_(),
@@ -172,7 +166,8 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     replay_tablet_disk_addr_map_(),
     replay_wait_gc_tablet_set_(),
     replay_gc_tablet_set_(),
-    super_block_mutex_()
+    super_block_mutex_(),
+    ckpt_info_()
 {
 }
 
@@ -245,9 +240,6 @@ void ObTenantCheckpointSlogHandler::destroy()
     replay_tablet_disk_addr_map_.destroy();
     replay_wait_gc_tablet_set_.destroy();
     replay_gc_tablet_set_.destroy();
-    tablet_key_set_.destroy();
-    ckpt_cursor_.reset();
-    is_copying_tablets_ = false;
     is_inited_ = false;
   }
 }
@@ -693,200 +685,41 @@ int ObTenantCheckpointSlogHandler::clone_tablet(
   return ret;
 }
 
-int ObTenantCheckpointSlogHandler::report_slog(
-    const ObTabletMapKey &tablet_key,
-    const ObMetaDiskAddr &slog_addr)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantCheckpointSlogHandler hasn't been inited", K(ret));
-  } else if (OB_UNLIKELY(!slog_addr.is_valid() || !slog_addr.is_file())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("slog_addr is invalid", K(ret), K(slog_addr));
-  } else {
-    int64_t file_id;
-    int64_t offset;
-    int64_t size;
-    if (is_copying_tablets_) {
-      if (OB_UNLIKELY(!ckpt_cursor_.is_valid())) {
-        LOG_WARN("checkpoint cursor is invalid", K(ret), K(ckpt_cursor_));
-      } else if (OB_FAIL(slog_addr.get_file_addr(file_id, offset, size))) {
-        LOG_WARN("fail to get slog file addr", K(ret), K(slog_addr));
-      } else if (file_id < ckpt_cursor_.file_id_
-          || (file_id == ckpt_cursor_.file_id_ && offset < ckpt_cursor_.offset_)) {
-        LOG_INFO("tablet slog cursor is smaller, no need to add it to the set",
-          K(ret), K(ckpt_cursor_), K(file_id), K(offset));
-      } else if (OB_FAIL(tablet_key_set_.set_refactored(tablet_key, 1 /* whether allow override */))) {
-        LOG_WARN("fail to insert element into tablet key set", K(ret), K(tablet_key));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTenantCheckpointSlogHandler::check_slog(const ObTabletMapKey &tablet_key, bool &has_slog)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantCheckpointSlogHandler hasn't been inited", K(ret));
-  } else if (OB_UNLIKELY(!tablet_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tablet key is invalid", K(ret), K(tablet_key));
-  } else {
-    int tmp_ret = tablet_key_set_.exist_refactored(tablet_key);
-    if (OB_HASH_EXIST == tmp_ret) {
-      has_slog = true;
-      LOG_INFO("tablet slog has been written, no need to write checkpoint", K(tmp_ret), K(tablet_key));
-    } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp_ret)) {
-      ret = tmp_ret;
-      LOG_WARN("fail to check whether tablet slog has been written", K(ret), K(tablet_key));
-    } else {
-      has_slog = false;
-    }
-  }
-  return ret;
-}
-
-int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
+int ObTenantCheckpointSlogHandler::write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  omt::ObTenant *tenant = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_ISNULL(tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tenant", K(ret), K(tenant));
+  } else if (tenant->is_hidden()) {
+    // skip hidden tenant
+    LOG_INFO("tenant is hidden while trying to process tenant slog checkpoint, skip this time");
   } else {
-    bool is_writing_checkpoint_set = false;
+    // wait until another ckpt task finished...
     while (!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
         LOG_INFO("wait until last checkpoint finished");
       }
       ob_usleep(100 * 1000); // 100ms
     }
-    is_writing_checkpoint_set = true;
+
     if (OB_FAIL(gc_checkpoint_file())) {
       LOG_WARN("fail to gc checkpoint file before checkpoint", K(ret));
-    } else if (OB_FAIL(inner_write_checkpoint(is_force))) {
-      LOG_WARN("fail to inner write checkpoint", K(ret), K(is_force));
+    } else if (OB_FAIL(ObTenantSlogCheckpointWorkflow::execute(ckpt_type, *this))) {
+      LOG_WARN("failed to execute tenant slog checkpoint workflow", K(ret), K(ckpt_type));
     }
+
     // Regardless of success or failure, gc checkpoint file
     if (OB_TMP_FAIL(gc_checkpoint_file())) {
       LOG_WARN("fail to gc checkpoint file after checkpoint", K(ret), K(tmp_ret));
     }
-    if (is_writing_checkpoint_set) {
-      ATOMIC_STORE(&is_writing_checkpoint_, false);
-    }
-  }
-  return ret;
-}
 
-int ObTenantCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
-{
-  int ret = OB_SUCCESS;
-  int64_t alert_interval = ObWriteCheckpointTask::FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL;
-  int64_t min_interval = ObWriteCheckpointTask::RETRY_WRITE_CHECKPOINT_MIN_INTERVAL;
-
-  uint64_t tenant_id = MTL_ID();
-  omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
-
-  ObSlogCheckpointFdDispenser fd_dispenser;
-  HEAP_VARS_2((ObTenantSuperBlock, last_super_block), (ObTenantStorageCheckpointWriter, tenant_storage_ckpt_writer)) {
-    last_super_block = tenant->get_super_block();
-    fd_dispenser.set_cur_max_file_id(last_super_block.max_file_id_);
-    int64_t broadcast_version = -1;
-    int64_t frozen_version = -1;
-    bool is_major_doing = false;
-    const int64_t start_time = ObTimeUtility::current_time();
-    int64_t cost_time = 0;
-
-    if (OB_ISNULL(MERGE_SCHEDULER_PTR)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, merge scheduler ptr is nullptr", K(ret));
-    } else {
-      //Don't compare to MERGE_SCHEDULER_PTR->get_frozen_version(), because we expect to do
-      //checkpoint after merge finish.
-      // 1) avoid IO traffic between ckpt and major
-      // 2) truncate slog totally generated by major tablet
-      broadcast_version = MERGE_SCHEDULER_PTR->get_frozen_version();
-      frozen_version = MERGE_SCHEDULER_PTR->get_inner_table_merged_scn();
-      is_major_doing = (frozen_version != broadcast_version);
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_UNLIKELY(tenant->is_hidden())) {
-      LOG_INFO("maybe hidden sys, skip checkpoint");
-    } else if (OB_UNLIKELY(!last_super_block.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get tenant super block", K(ret), K(last_super_block));
-    } else if (OB_FAIL(get_cur_cursor())) {
-      LOG_WARN("get slog current cursor fail", K(ret));
-    } else if (OB_UNLIKELY(!ckpt_cursor_.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ckpt_cursor_ is invalid", K(ret));
-    } else if (is_force // alter system command triggered
-               || last_super_block.is_old_version()  // compat upgrade
-               || ((start_time > last_ckpt_time_ + min_interval) // slog is long
-                   && !is_major_doing
-                   && ckpt_cursor_.newer_than(last_super_block.replay_start_point_)
-                   &&(ckpt_cursor_.log_id_ - last_super_block.replay_start_point_.log_id_ >= ObWriteCheckpointTask::MIN_WRITE_CHECKPOINT_LOG_CNT))) {
-      DEBUG_SYNC(AFTER_CHECKPOINT_GET_CURSOR);
-      blocksstable::MacroBlockId ls_meta_entry;
-      blocksstable::MacroBlockId wait_gc_tablet_entry = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
-      if (OB_FAIL(tenant_storage_ckpt_writer.init(ObTenantStorageMetaType::CKPT, this))) {
-        LOG_WARN("fail to init tenant_storage_meta_writer", K(ret));
-      } else if (OB_FAIL(tenant_storage_ckpt_writer.record_meta(ls_meta_entry,
-                                                                wait_gc_tablet_entry,
-                                                                GCTX.is_shared_storage_mode() ? &fd_dispenser : nullptr))) {
-        LOG_WARN("fail to write_checkpoint", K(ret));
-      }
-      clean_copy_status();
-
-      if (OB_SUCC(ret)) {
-        HEAP_VAR(ObTenantSuperBlock, super_block) {
-          lib::ObMutexGuard guard(super_block_mutex_);
-          super_block = tenant->get_super_block();
-          super_block.replay_start_point_ = ckpt_cursor_;
-          super_block.ls_meta_entry_ = ls_meta_entry;
-          super_block.wait_gc_tablet_entry_ = wait_gc_tablet_entry;
-          super_block.copy_snapshots_from(tenant->get_super_block());
-          super_block.min_file_id_ = fd_dispenser.get_min_file_id();
-          super_block.max_file_id_ = fd_dispenser.get_max_file_id();
-          if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(0, super_block))) {
-            LOG_WARN("fail to update tenant super block", K(ret), K(super_block));
-          } else {
-            tenant->set_tenant_super_block(super_block);
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(update_tablet_meta_addr_and_block_list(tenant_storage_ckpt_writer))) {
-        LOG_ERROR("fail to update_tablet_meta_addr_and_block_list", K(ret), K(last_super_block));
-        // abort if failed, because it cannot be rolled back if partially success.
-        // otherwise, updates need to be transactional.
-        ob_usleep(1000 * 1000);
-        ob_abort();
-      } else if (OB_FAIL(slogger_->remove_useless_log_file(ckpt_cursor_.file_id_, MTL_ID()))) {
-        LOG_WARN("fail to remove_useless_log_file", K(ret), K(tenant->get_super_block()));
-      } else {
-        last_ckpt_time_ = start_time;
-        last_frozen_version_ = frozen_version;
-        cost_time = ObTimeUtility::current_time() - start_time;
-      }
-
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(tenant_storage_ckpt_writer.rollback())) {
-        LOG_ERROR("fail to rollback checkpoint, macro blocks leak", K(tmp_ret));
-      }
-
-      FLOG_INFO("finish write tenant checkpoint", K(ret), K(last_super_block), "super_block", tenant->get_super_block(),
-          K_(last_ckpt_time), K(start_time), K(broadcast_version),K(frozen_version), K_(last_frozen_version),
-          K(is_force), K(cost_time));
-      SERVER_EVENT_ADD("storage", "write slog checkpoint", "tenant_id", tenant_id,
-          "ret", ret, "cursor", ckpt_cursor_, "frozen_version", frozen_version, "cost_time(us)", cost_time);
-    }
-    clean_copy_status(); // in case fail after get_cur_cursor
+    ATOMIC_STORE(&is_writing_checkpoint_, false);  // end up checkpoint
   }
   return ret;
 }
@@ -1036,69 +869,6 @@ int ObTenantCheckpointSlogHandler::swap_snapshot(const ObTenantSnapshotMeta &ten
   } else {
     tenant->set_tenant_super_block(super_block);
   }
-  return ret;
-}
-
-int ObTenantCheckpointSlogHandler::get_cur_cursor()
-{
-  int ret = OB_SUCCESS;
-  TCWLockGuard guard(slog_ckpt_lock_);
-  tablet_key_set_.destroy();
-  if (OB_FAIL(slogger_->get_active_cursor(ckpt_cursor_))) {
-    LOG_WARN("fail to get current cursor", K(ret));
-  } else if (OB_FAIL(tablet_key_set_.create(BUCKET_NUM, ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_BUCKET, MTL_ID()))) {
-    LOG_WARN("fail to create tablet key set", K(ret));
-  } else {
-    is_copying_tablets_ = true;
-  }
-  return ret;
-}
-
-void ObTenantCheckpointSlogHandler::clean_copy_status()
-{
-  TCWLockGuard guard(slog_ckpt_lock_);
-  is_copying_tablets_ = false;
-  tablet_key_set_.destroy();
-}
-
-int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
-    ObTenantStorageCheckpointWriter &meta_writer)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<MacroBlockId> *meta_block_list = nullptr;
-  // the two operations(update tablet_meta_addr and update tablet_block_handle) should be a
-  // transaction, so update_tablet_meta_addr is supposed to be placed within the lock, but this can
-  // lead to dead lock with read_tablet_checkpoint_by_addr which is called by t3m. the calling of
-  // read_tablet_checkpoint_by_addr involves two locks, one in t3m(as lock_A) and one in the current
-  // class (as lock_B). when t3m loads the tablet by address, lock A first and then lock B .
-  // howerver, update_tablet_meta_addr_and_block_list locks B first and then locks A in t3m to
-  // update the tablet addr. to resolve the dead lock, update_tablet_meta_addr is moved out of lock,
-  // but this may cause t3m read a new addr which is not in the tablet_block_handle_. when this
-  // happens, t3m needs to retry.
-  if (!GCTX.is_shared_storage_mode() && OB_FAIL(meta_writer.batch_compare_and_swap_tablet())) {
-    LOG_WARN("fail to update_tablet_meta_addr", K(ret));
-  }
-
-  TCWLockGuard guard(lock_);
-  if (OB_FAIL(ret)) {
-  } else {
-    do {
-      if (OB_FAIL(meta_writer.get_ls_block_list(meta_block_list))) {
-        LOG_WARN("fail to get_ls_block_list", K(ret));
-      } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list))) {
-        LOG_WARN("fail to add_macro_blocks", K(ret));
-      } else if (OB_FAIL(meta_writer.get_tablet_block_list(meta_block_list))) {
-        LOG_WARN("fail to get_tablet_block_list", K(ret));
-      } else if (OB_FAIL(tablet_block_handle_.add_macro_blocks(*meta_block_list))) {
-        LOG_WARN("fail to set_tablet_block_list", K(ret));
-      } else if (OB_FAIL(meta_writer.get_wait_gc_tablet_block_list(meta_block_list))) {
-        LOG_WARN("fail to get wait gc tablet block list", K(ret));
-      } else if (OB_FAIL(wait_gc_tablet_block_handle_.add_macro_blocks(*meta_block_list))) {
-        LOG_WARN("fail to set wait gc talbet block list", K(ret));
-      }
-    } while (OB_ALLOCATE_MEMORY_FAILED == ret);
-  }
-
   return ret;
 }
 
@@ -1747,6 +1517,79 @@ int ObTenantCheckpointSlogHandler::read_empty_shell_file(
   return ret;
 }
 
+int ObTenantCheckpointSlogHandler::update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_UNLIKELY(!common::is_sys_tenant(sys_tenant.id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only sys tenant can call this method", K(ret), K(sys_tenant.id()));
+  } else {
+    lib::ObMutexGuard guard(super_block_mutex_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("failed to hold super block mutex", K(ret));
+    } else {
+      HEAP_VAR(ObTenantSuperBlock, new_super_block) {
+        new_super_block = sys_tenant.get_super_block();
+        new_super_block.is_hidden_ = false;
+        if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(sys_tenant.get_epoch(), new_super_block))) {
+          LOG_WARN("failed to update tenant super block", K(ret), K(new_super_block));
+        } else {
+          sys_tenant.set_tenant_super_block(new_super_block);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantCheckpointSlogHandler::update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_UNLIKELY(!common::is_sys_tenant(sys_tenant.id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only sys tenant can call this method", K(ret), K(sys_tenant.id()));
+  } else {
+    lib::ObMutexGuard guard(super_block_mutex_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("failed to hold super block mutex", K(ret));
+    } else {
+      HEAP_VARS_2((ObTenantSuperBlock, super_block, OB_SYS_TENANT_ID, /*is_hidden*/true), (ObTenantSuperBlock, old_tenant_super_block)) {
+        if (OB_FAIL(TENANT_SLOGGER.get_active_cursor(super_block.replay_start_point_))) {
+          LOG_WARN("get slog current cursor failed", K(ret));
+        } else if (OB_UNLIKELY(!super_block.replay_start_point_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cur_cursor is invalid", K(ret), K_(super_block.replay_start_point));
+        } else {
+          // acquire auto_inc_ls_epoch and preallocated_seqs from old tenant super block.
+          // the tenant epoch is not changed.
+          old_tenant_super_block = sys_tenant.get_super_block();
+          super_block.auto_inc_ls_epoch_ = old_tenant_super_block.auto_inc_ls_epoch_;
+          super_block.preallocated_seqs_ = old_tenant_super_block.preallocated_seqs_;
+          if (GCTX.is_shared_storage_mode()) {
+            super_block.min_file_id_ = old_tenant_super_block.min_file_id_;
+            super_block.max_file_id_ = old_tenant_super_block.max_file_id_;
+          }
+        }
+
+        if (FAILEDx(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(
+            sys_tenant.get_epoch(), super_block))) {
+          LOG_WARN("fail to update tenant super block", K(ret), K(super_block));
+        } else {
+          sys_tenant.set_tenant_super_block(super_block);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObTenantCheckpointSlogHandler::create_tenant_ls_item(const ObLSID ls_id, int64_t &ls_epoch)
 {
   int ret = OB_SUCCESS;
@@ -1768,7 +1611,10 @@ int ObTenantCheckpointSlogHandler::create_tenant_ls_item(const ObLSID ls_id, int
         break;
       }
     }
-    if (OB_UNLIKELY(i != tenant_super_block.ls_cnt_)) {
+    if (OB_UNLIKELY(i < tenant_super_block.ls_cnt_) && ObLSItemStatus::CREATING == tenant_super_block.ls_item_arr_[i].status_) {
+      ls_epoch = tenant_super_block.ls_item_arr_[i].epoch_;
+      FLOG_INFO("ls item already exist", K(ret), K(i), "ls_item", tenant_super_block.ls_item_arr_[i], K(ls_epoch));
+    } else if (OB_UNLIKELY(i != tenant_super_block.ls_cnt_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls item already exist", K(ret), "ls_item", tenant_super_block.ls_item_arr_[i]);
     } else if (OB_UNLIKELY(ObTenantSuperBlock::MAX_LS_COUNT == i)) {
@@ -1885,8 +1731,8 @@ int ObTenantCheckpointSlogHandler::delete_tenant_ls_item(const share::ObLSID ls_
     if (OB_FAIL(ret)) {
       // error occurred
     } else if (OB_LIKELY(is_delete_hit)) {
-      if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(tenant->get_epoch(), tenant_super_block))) {
-        LOG_WARN("fail to write tenant super block", K(ret), K(tenant->get_epoch()), K(tenant_super_block));
+      if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(tenant->get_epoch(), tmp_super_block))) {
+        LOG_WARN("fail to write tenant super block", K(ret), K(tenant->get_epoch()), K(tmp_super_block), K(tenant_super_block));
       } else {
         tenant->set_tenant_super_block(tmp_super_block);
         FLOG_INFO("update tenant super block ls item (delete)", K(ret), K(ls_id), K(ls_epoch), K(tenant_super_block), K(tmp_super_block));
@@ -1927,25 +1773,6 @@ int ObTenantCheckpointSlogHandler::update_tenant_preallocated_seqs(
   }
   return ret;
 }
-
-[[nodiscard]] ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard::ObCkptSlogROptLockGuard(
-    const ObTenantCheckpointSlogHandler &ckpt_slog_hdl)
-  : ckpt_slog_hdl_(ckpt_slog_hdl),
-    ret_(OB_NOT_INIT),
-    slot_id_(0)
-{
-  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdlock(INT64_MAX, slot_id_)))) {
-    COMMON_LOG_RET(ERROR, ret_, "fail to read lock, ", K_(ret));
-  }
-}
-
-ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard::~ObCkptSlogROptLockGuard()
-{
-  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdunlock(slot_id_)))) {
-    COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
-  }
-}
-
 
 }  // end namespace storage
 }  // namespace oceanbase

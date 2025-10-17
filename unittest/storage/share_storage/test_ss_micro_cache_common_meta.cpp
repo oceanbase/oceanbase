@@ -280,6 +280,48 @@ TEST_F(TestSSMicroCacheCommonMeta, ls_tablet_cache_info)
   ASSERT_EQ(500, ls_cache_info.get_valid_size());
 }
 
+TEST_F(TestSSMicroCacheCommonMeta, micro_meta_info)
+{
+  ObSSMicroBlockMetaInfo micro_meta_info;
+  micro_meta_info.data_loc_ = 10 * 1024 * 1024 + 137;
+  micro_meta_info.access_time_s_ = 1234567;
+  micro_meta_info.crc_ = 6677;
+  micro_meta_info.size_ = 8190;
+  micro_meta_info.access_type_ = 1;
+  micro_meta_info.is_in_l1_ = 1;
+  micro_meta_info.is_in_ghost_ = 0;
+  micro_meta_info.is_data_persisted_ = 1;
+  micro_meta_info.is_meta_persisted_ = 0;
+  micro_meta_info.is_meta_dirty_ = 0;
+  micro_meta_info.is_meta_partial_ = 0;
+  micro_meta_info.is_meta_deleted_ = 0;
+  micro_meta_info.is_meta_serialized_ = 0;
+  micro_meta_info.reuse_version_ = 11;
+  micro_meta_info.effective_tablet_id_ = 100013;
+
+  ObSSMicroBlockMetaInfo ori_micro_info = micro_meta_info;
+  micro_meta_info.data_loc_ += 1;
+  ASSERT_EQ(true, micro_meta_info.compare_check_dirty(ori_micro_info));
+  micro_meta_info.data_loc_ -= 1;
+  micro_meta_info.is_in_ghost_ = 1;
+  ASSERT_EQ(true, micro_meta_info.compare_check_dirty(ori_micro_info));
+  micro_meta_info.is_in_ghost_ = 0;
+  micro_meta_info.access_time_s_ += 1;
+  ASSERT_EQ(false, micro_meta_info.compare_check_dirty(ori_micro_info));
+
+  ASSERT_EQ(false, micro_meta_info.is_meta_written());
+  ASSERT_EQ(false, micro_meta_info.can_check_dirty());
+  micro_meta_info.is_meta_serialized_ = 1;
+  ASSERT_EQ(true, micro_meta_info.is_meta_written());
+  ASSERT_EQ(true, micro_meta_info.can_check_dirty());
+  micro_meta_info.is_meta_dirty_ = 1;
+  ASSERT_EQ(false, micro_meta_info.can_check_dirty());
+  micro_meta_info.is_meta_dirty_ = 0;
+  ASSERT_EQ(false, micro_meta_info.compare_check_dirty(ori_micro_info));
+  micro_meta_info.data_loc_ += 1;
+  ASSERT_EQ(true, micro_meta_info.compare_check_dirty(ori_micro_info));
+}
+
 TEST_F(TestSSMicroCacheCommonMeta, expired_micro_meta)
 {
   ObSSMicroBlockMeta micro_meta;

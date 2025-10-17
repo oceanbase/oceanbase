@@ -34,6 +34,7 @@ class PalfFSCb;
 class PalfRoleChangeCb;
 class PalfLocalityInfoCb;
 class PalfReconfigCheckerCb;
+class PalfLocationCacheCb;
 class PalfBaseInfo;
 class LogConfigVersion;
 namespace election
@@ -112,7 +113,8 @@ public:
 
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
 
-  virtual int seek(const palf::LSN &lsn, ipalf::IPalfLogIterator &iter) = 0;
+  virtual int seek(const palf::LSN &lsn, ipalf::IPalfIterator<ILogEntry> &iter) = 0;
+  virtual int seek(const palf::LSN &lsn, ipalf::IPalfIterator<IGroupEntry> &iter) = 0;
 
   // @desc: seek a buffer(group buffer) iterator by scn, the first log A in iterator must meet
   // one of the following conditions:
@@ -131,6 +133,8 @@ public:
   // - others: bug
   virtual int seek(const share::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int seek(const share::SCN &scn, palf::PalfBufferIterator &iter) = 0;
+  virtual int seek(const share::SCN &scn, ipalf::IPalfIterator<ILogEntry> &iter) = 0;
+  virtual int seek(const share::SCN &scn, ipalf::IPalfIterator<IGroupEntry> &iter) = 0;
 
   // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
   // its lsn and scn are result_lsn and result_scn, and result_scn <= scn.
@@ -267,6 +271,8 @@ public:
 
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
+  virtual int set_location_cache_cb(palf::PalfLocationCacheCb *lc_cb) = 0;
+  virtual int reset_location_cache_cb() = 0;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
   virtual int reset_locality_cb() = 0;
   virtual int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) = 0;

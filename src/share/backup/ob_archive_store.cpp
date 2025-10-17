@@ -534,7 +534,7 @@ int ObArchiveStore::get_round_id(const int64_t dest_id, const SCN &scn, int64_t 
     ObArray<int64_t> &result = round_op.result();
     lib::ob_sort(result.begin(), result.end());
     if (result.count() > 0) {
-      round_id = result.at(0);
+      round_id = result.at(result.count() - 1);
     } else {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("no round match exist", K(ret), K(dest_id), K(scn));
@@ -1846,7 +1846,6 @@ int ObArchiveStore::ObPieceRangeFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPieceRangeFilter not init", K(ret));
-  } else if (pieces_.count() >= OB_MAX_BACKUP_PIECE_NUM) { // list upper limit //TODO(zeyong) add new error code
   } else if (OB_FAIL(is_piece_start_file_name_(file_name, is_piece_start))) {
     LOG_WARN("failed to check piece start file name", K(ret), K(file_name));
   } else if (! is_piece_start) {
@@ -2003,7 +2002,7 @@ int ObArchiveStore::ObPieceFilter::func(const dirent *entry)
 
 
 ObArchiveStore::ObLocateRoundFilter::ObLocateRoundFilter()
-  : is_inited_(false), store_(nullptr), scn_(), rounds_()
+  : is_inited_(false), store_(nullptr), scn_(), rounds_(), rounds_info_()
 {}
 
 int ObArchiveStore::ObLocateRoundFilter::init(ObArchiveStore *store, const SCN &scn)
@@ -2035,6 +2034,7 @@ int ObArchiveStore::ObLocateRoundFilter::func(const dirent *entry)
   int64_t round_id = 0;
   ObRoundStartDesc start_desc;
   ObRoundEndDesc end_desc;
+  ObRoundInfo round_info;
   bool end_file_exist = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2058,16 +2058,66 @@ int ObArchiveStore::ObLocateRoundFilter::func(const dirent *entry)
     LOG_WARN("failed to read round end file", K(ret), K(dest_id), K(round_id));
   }
 
+  LOG_INFO("locate round info", K(round_info), K_(scn)); //TODO: delete
   if (OB_FAIL(ret) || ! is_round_start) {
-  } else if (end_file_exist && end_desc.checkpoint_scn_ <= scn_) {
-    LOG_INFO("scn bigger than round max checkpoint_scn, skip it", K(dest_id), K(round_id), K(start_desc), K(end_file_exist), K(end_desc));
-  } else if (OB_FAIL(rounds_.push_back(round_id))) {
+  } else if (OB_FAIL(round_info.set(round_id, dest_id, start_desc.start_scn_, end_desc.checkpoint_scn_, end_file_exist))) {
+    LOG_WARN("round_info set failed", K(ret), K(round_id), K(start_desc), K(end_desc), K_(scn));
+  } else if (OB_FAIL(rounds_info_.push_back(round_info))) {
     LOG_WARN("push back failed", K(ret), K(round_id), K(start_desc), K(end_desc), K_(scn));
   } else {
-    LOG_INFO("round may be match, add round succ", K(dest_id), K(round_id), K_(scn), K(start_desc), K(end_desc));
+    LOG_INFO("round_info push succ", K(round_info));
   }
 
   return ret;
+}
+
+void ObArchiveStore::ObLocateRoundFilter::process_rounds_info_()
+{
+  int ret = OB_SUCCESS;
+  if (rounds_info_.count() > 0 ) {
+    lib::ob_sort(rounds_info_.begin(), rounds_info_.end(), RoundInfoCmp());
+    ARRAY_FOREACH_N(rounds_info_, idx, cnt) {
+      ObRoundInfo &round_info = rounds_info_.at(idx);
+      int64_t round_id = round_info.round_id_;
+      if ((idx < (cnt - 1)) && ! round_info.is_end_file_exist_ && rounds_info_.at(idx + 1).start_scn_ <= scn_) {
+        LOG_INFO("remove force stop round succ", K(round_info));
+      } else if (round_info.is_end_file_exist_ && round_info.end_scn_ < scn_) {
+        LOG_INFO("scn bigger than round max checkpoint_scn, skip it", K(round_info));
+      } else if (round_info.start_scn_ > scn_) {
+        LOG_INFO("scn smaller than round start_scn, skip it", K(round_info));
+      } else if (OB_FAIL(rounds_.push_back(round_id))) {
+        LOG_WARN("push back failed", K(ret), K(round_id), K_(rounds), K_(scn));
+      } else {
+        LOG_INFO("round may be match, add round succ", K(round_info));
+      }
+    }
+  } else {
+    LOG_INFO("rounds_info_ is empty", K_(scn));
+  }
+}
+
+int ObArchiveStore::ObLocateRoundFilter::ObRoundInfo::set(
+    const int64_t round_id,
+    const int64_t dest_id,
+    const SCN &start_scn,
+    const SCN &end_scn,
+    const bool is_end_file_exist)
+{
+  int ret = OB_SUCCESS;
+  round_id_ = round_id;
+  dest_id_ = dest_id;
+  start_scn_ = start_scn;
+  end_scn_ = end_scn;
+  is_end_file_exist_ = is_end_file_exist;
+  return ret;
+}
+
+bool ObArchiveStore::ObLocateRoundFilter::ObRoundInfo::is_valid()
+{
+  return round_id_ != -1
+    && dest_id_ != -1
+    && start_scn_.is_valid()
+    && end_scn_.is_valid();
 }
 
 ObArchiveStore::ObRoundRangeFilter::ObRoundRangeFilter()

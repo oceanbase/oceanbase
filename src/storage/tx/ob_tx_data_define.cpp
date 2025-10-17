@@ -545,6 +545,20 @@ int ObTxData::reserve_undo(ObTxTable *tx_table)
   return ret;
 }
 
+void ObTxData::dec_ref()
+{
+#ifdef UNITTEST
+  return;
+#endif
+  if (nullptr == tx_data_allocator_) {
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid slice allocator", KPC(this));
+    ob_abort();
+  } else if (0 == ATOMIC_SAF(&ref_cnt_, 1)) {
+    op_guard_.reset();
+    tx_data_allocator_->free(this);
+  }
+}
+
 int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *&undo_node)
 {
   // STORAGE_LOG(DEBUG, "do add_undo_action");

@@ -98,24 +98,28 @@ public:
        usable_(true),
        last_set_sql_mode_cstr_(NULL),
        last_set_sql_mode_cstr_buf_size_(0),
-       last_set_client_charset_cstr_(NULL),
-       last_set_connection_charset_cstr_(NULL),
-       last_set_results_charset_cstr_(NULL),
+       last_set_conn_charset_type_(CHARSET_INVALID),
+       last_set_transaction_isolation_cstr_(NULL),
+       ob_query_timeout_(0),
        dblink_lock_(common::ObLatchIds::ISQL_CONNECTION_DBLINK_LOCK),
        next_conn_(NULL),
        check_priv_(false)
   {}
   virtual ~ObISQLConnection() {
     allocator_.reset();
-    last_set_sql_mode_cstr_buf_size_ = 0;
-    last_set_sql_mode_cstr_ = NULL;
-    last_set_client_charset_cstr_ = NULL;
-    last_set_connection_charset_cstr_ = NULL;
-    last_set_results_charset_cstr_ = NULL;
     next_conn_ = NULL;
+    reset_init_variables();
   }
 
   // sql execute interface
+  void reset_init_variables() {
+    last_set_sql_mode_cstr_buf_size_ = 0;
+    last_set_sql_mode_cstr_ = NULL;
+    last_set_conn_charset_type_ = CHARSET_INVALID;
+    last_set_transaction_isolation_cstr_ = NULL;
+    ob_query_timeout_ = 0;
+    is_inited_ = false;
+  }
   virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) = 0;
@@ -212,23 +216,29 @@ public:
   void set_session_init_status(bool status) { is_inited_ = status;}
   virtual void set_user_timeout(int64_t user_timeout) { UNUSED(user_timeout); }
   virtual int64_t get_user_timeout() const { return 0; }
+  virtual void set_for_sslog(bool v) { UNUSED(v); }
   int is_session_inited(const sqlclient::dblink_param_ctx &param_ctx, bool &is_inited)
   {
     int ret = OB_SUCCESS;
-    is_inited = false;
-    int64_t sql_mode_len = 0;
+    is_inited = true;
     const char *sql_mode_cstr = param_ctx.set_sql_mode_cstr_;
-    if (lib::is_oracle_mode()) {
-      is_inited = is_inited_;
-    } else if (FALSE_IT([&]{
-                              if (OB_NOT_NULL(sql_mode_cstr)) {
-                                is_inited = (0 == ObString(sql_mode_cstr).compare(last_set_sql_mode_cstr_));
-                                sql_mode_len = STRLEN(sql_mode_cstr);
-                              } else {
-                                is_inited = true;
-                              }
-                           }())) {
-    } else if (!is_inited && OB_NOT_NULL(sql_mode_cstr)) {
+    if (!is_inited_) {
+      is_inited = false;
+    } else if (param_ctx.set_conn_charset_type_ != last_set_conn_charset_type_ ||
+               param_ctx.set_transaction_isolation_cstr_ != last_set_transaction_isolation_cstr_ ||
+               param_ctx.ob_query_timeout_ != ob_query_timeout_) {
+      is_inited = false;
+    } else if (!lib::is_oracle_mode() && OB_NOT_NULL(sql_mode_cstr)
+              && 0 != ObString(sql_mode_cstr).compare(last_set_sql_mode_cstr_)) {
+      is_inited = false;
+    }
+    return ret;
+  }
+  int save_last_set_sql_mode_cstr(const char *str)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(str)) {
+      int64_t sql_mode_len = STRLEN(str);
       if (sql_mode_len >= last_set_sql_mode_cstr_buf_size_) {
         void *buf = NULL;
         if (OB_ISNULL(buf = allocator_.alloc((sql_mode_len * 2)))) {
@@ -239,19 +249,9 @@ public:
         }
       }
       if (OB_SUCC(ret)) {
-        MEMCPY(last_set_sql_mode_cstr_, sql_mode_cstr, sql_mode_len);
+        MEMCPY(last_set_sql_mode_cstr_, str, sql_mode_len);
         last_set_sql_mode_cstr_[sql_mode_len] = 0;
       }
-    }
-    if (param_ctx.set_client_charset_cstr_ != last_set_client_charset_cstr_ ||
-        param_ctx.set_connection_charset_cstr_ != last_set_connection_charset_cstr_ ||
-        param_ctx.set_results_charset_cstr_ != last_set_results_charset_cstr_ ||
-        param_ctx.set_transaction_isolation_cstr_ != last_set_transaction_isolation_cstr_) {
-      is_inited = false;
-      last_set_client_charset_cstr_ = param_ctx.set_client_charset_cstr_;
-      last_set_connection_charset_cstr_ = param_ctx.set_connection_charset_cstr_;
-      last_set_results_charset_cstr_ = param_ctx.set_results_charset_cstr_;
-      last_set_transaction_isolation_cstr_ = param_ctx.set_transaction_isolation_cstr_;
     }
     return ret;
   }
@@ -268,6 +268,13 @@ public:
   void dblink_unwlock() { dblink_lock_.wlock()->unlock(); }
   ObISQLConnection *get_next_conn() { return next_conn_; }
   void set_next_conn(ObISQLConnection *conn) { next_conn_ = conn; }
+  ObCharsetType get_last_set_conn_charset_type() const { return last_set_conn_charset_type_; }
+  void set_last_set_conn_charset_type(ObCharsetType charset_type) { last_set_conn_charset_type_ = charset_type; }
+  const char *get_last_set_sql_mode_cstr() const { return last_set_sql_mode_cstr_; }
+  const char *get_last_set_transaction_isolation_cstr() const { return last_set_transaction_isolation_cstr_; }
+  void set_last_set_transaction_isolation_cstr(const char *str) { last_set_transaction_isolation_cstr_ = str; }
+  int64_t get_ob_query_timeout() const { return ob_query_timeout_; }
+  void set_ob_query_timeout(int64_t v) { ob_query_timeout_ = v; }
   void set_check_priv(bool on) { check_priv_ = on; }
   bool is_check_priv() { return check_priv_; }
 protected:
@@ -281,10 +288,9 @@ protected:
   bool usable_;  // usable_ = false: connection is unusable, should not execute query again.
   char *last_set_sql_mode_cstr_; // for mysql dblink to set sql mode
   int64_t last_set_sql_mode_cstr_buf_size_;
-  const char *last_set_client_charset_cstr_;
-  const char *last_set_connection_charset_cstr_;
-  const char *last_set_results_charset_cstr_;
+  ObCharsetType last_set_conn_charset_type_;
   const char *last_set_transaction_isolation_cstr_;
+  int64_t ob_query_timeout_;
   common::ObArenaAllocator allocator_;
   obsys::ObRWLock<> dblink_lock_;
   ObISQLConnection *next_conn_; // used in dblink_conn_map_

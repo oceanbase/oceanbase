@@ -21,6 +21,7 @@
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/test_tablet_helper.h"
 #include "test_merge_basic.h"
+#include "storage/mockcontainer/mock_ob_merge_iterator.h"
 
 namespace oceanbase
 {
@@ -99,9 +100,29 @@ public:
       ObSSTable *&merged_sstable);
   void fake_freeze_info();
   void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
+  void prepare_output_expr(const ObIArray<int32_t> &projector,
+                           const ObIArray<ObColDesc> &cols_desc);
+  void prepare_scan_param(const ObVersionRange &version_range,
+                          const ObTableStoreIterator &table_store_iter);
 public:
+  static const int64_t DATUM_ARRAY_CNT = 1024;
+  static const int64_t DATUM_RES_SIZE = 10;
+  static const int64_t SQL_BATCH_SIZE = 256;
+  ObArenaAllocator query_allocator_;
   ObStoreCtx store_ctx_;
   ObTabletMergeExecuteDag merge_dag_;
+  ObTableAccessParam access_param_;
+  ObGetTableParam get_table_param_;
+  ObTableReadInfo read_info_;
+  ObFixedArray<int32_t, ObIAllocator> output_cols_project_;
+  ObFixedArray<share::schema::ObColumnParam*, ObIAllocator> cols_param_;
+  sql::ExprFixedArray output_exprs_;
+  sql::ObExecContext exec_ctx_;
+  sql::ObEvalCtx eval_ctx_;
+  sql::ObPushdownExprSpec expr_spec_;
+  sql::ObPushdownOperator op_;
+  void *datum_buf_;
+  int64_t datum_buf_offset_;
 };
 
 void TestMultiVersionMerge::SetUpTestCase()
@@ -132,7 +153,11 @@ void TestMultiVersionMerge::TearDownTestCase()
 }
 
 TestMultiVersionMerge::TestMultiVersionMerge()
-  : TestMergeBasic("test_multi_version_merge")
+  : TestMergeBasic("test_multi_version_merge"),
+    exec_ctx_(query_allocator_),
+    eval_ctx_(exec_ctx_),
+    expr_spec_(query_allocator_),
+    op_(eval_ctx_, expr_spec_)
 {}
 
 void TestMultiVersionMerge::SetUp()
@@ -199,6 +224,176 @@ void TestMultiVersionMerge::prepare_query_param(const ObVersionRange &version_ra
                           allocator_,
                           version_range));
   context_.limit_param_ = nullptr;
+}
+
+void TestMultiVersionMerge::prepare_output_expr(
+    const ObIArray<int32_t> &projector,
+    const ObIArray<ObColDesc> &cols_desc)
+{
+  output_exprs_.set_allocator(&query_allocator_);
+  output_exprs_.init(projector.count());
+  for (int64_t i = 0; i < projector.count(); ++i) {
+    void *expr_buf = query_allocator_.alloc(sizeof(sql::ObExpr));
+    ASSERT_NE(nullptr, expr_buf);
+    sql::ObExpr *expr = reinterpret_cast<sql::ObExpr *>(expr_buf);
+    expr->reset();
+
+    expr->frame_idx_ = 0;
+    expr->datum_off_ = datum_buf_offset_;
+    sql::ObDatum *datums = new ((char*)datum_buf_ + datum_buf_offset_) sql::ObDatum[DATUM_ARRAY_CNT];
+    datum_buf_offset_ += sizeof(sql::ObDatum) * DATUM_ARRAY_CNT;
+    expr->res_buf_off_ = datum_buf_offset_;
+    expr->res_buf_len_ = DATUM_RES_SIZE;
+    char *ptr = (char *)datum_buf_ + expr->res_buf_off_;
+    for (int64_t i = 0; i < DATUM_ARRAY_CNT; i++) {
+      datums[i].ptr_ = ptr;
+      ptr += expr->res_buf_len_;
+    }
+    datum_buf_offset_ += expr->res_buf_len_ * DATUM_ARRAY_CNT;
+    expr->type_ = T_REF_COLUMN;
+    expr->obj_datum_map_ = OBJ_DATUM_8BYTE_DATA;
+    expr->batch_result_ = true;
+    expr->datum_meta_.type_ = cols_desc.at(i).col_type_.get_type();
+    expr->obj_meta_ = cols_desc.at(i).col_type_;
+    output_exprs_.push_back(expr);
+  }
+}
+
+void TestMultiVersionMerge::prepare_scan_param(
+    const ObVersionRange &version_range,
+    const ObTableStoreIterator &table_store_iter)
+{
+  context_.reset();
+  access_param_.reset();
+  get_table_param_.reset();
+  read_info_.reset();
+  output_cols_project_.reset();
+  cols_param_.reset();
+  output_exprs_.reset();
+  datum_buf_ = nullptr;
+  datum_buf_offset_ = 0;
+  query_allocator_.reset();
+
+  ObTabletHandle tablet_handle;
+  ObLSID ls_id(ls_id_);
+  ObTabletID tablet_id(tablet_id_);
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
+
+  get_table_param_.frozen_version_ = INT64_MAX;
+  get_table_param_.refreshed_merge_ = nullptr;
+  get_table_param_.need_split_dst_table_ = false;
+  get_table_param_.tablet_iter_.tablet_handle_.assign(tablet_handle);
+  get_table_param_.tablet_iter_.table_store_iter_.assign(table_store_iter);
+  get_table_param_.tablet_iter_.transfer_src_handle_ = nullptr;
+  get_table_param_.tablet_iter_.split_extra_tablet_handles_.reset();
+
+  int64_t schema_column_count = full_read_info_.get_schema_column_count();
+  int64_t schema_rowkey_count = full_read_info_.get_schema_rowkey_count();
+  eval_ctx_.batch_idx_ = 0;
+  eval_ctx_.batch_size_ = SQL_BATCH_SIZE;
+  expr_spec_.max_batch_size_ = SQL_BATCH_SIZE;
+  datum_buf_ = query_allocator_.alloc((sizeof(sql::ObDatum) + OBJ_DATUM_NUMBER_RES_SIZE) * DATUM_ARRAY_CNT * 2 * schema_column_count);
+  ASSERT_NE(nullptr, datum_buf_);
+  eval_ctx_.frames_ = (char **)(&datum_buf_);
+
+  output_cols_project_.set_allocator(&query_allocator_);
+  output_cols_project_.init(schema_column_count);
+  for (int64_t i = 0; i < schema_column_count; i++) {
+    output_cols_project_.push_back(i);
+  }
+
+  ObSEArray<ObColDesc, 8> tmp_col_descs;
+  ObSEArray<int32_t, 8> tmp_cg_idxs;
+  const common::ObIArray<ObColDesc> &cols_desc = full_read_info_.get_columns_desc();
+  for (int64_t i = 0; i < schema_column_count; i++) {
+    if (i < schema_rowkey_count) {
+      tmp_col_descs.push_back(cols_desc.at(i));
+    } else {
+      tmp_col_descs.push_back(cols_desc.at(i + 2));
+    }
+  }
+
+  cols_param_.set_allocator(&query_allocator_);
+  cols_param_.init(tmp_col_descs.count());
+  for (int64_t i = 0; i < tmp_col_descs.count(); ++i) {
+    void *col_param_buf = query_allocator_.alloc(sizeof(ObColumnParam));
+    ObColumnParam *col_param = new(col_param_buf) ObColumnParam(query_allocator_);
+    col_param->set_meta_type(tmp_col_descs.at(i).col_type_);
+    col_param->set_nullable_for_write(true);
+    col_param->set_column_id(common::OB_APP_MIN_COLUMN_ID + i);
+    cols_param_.push_back(col_param);
+    tmp_cg_idxs.push_back(i + 1);
+  }
+
+  ASSERT_EQ(OB_SUCCESS,
+            read_info_.init(query_allocator_,
+                            full_read_info_.get_schema_column_count(),
+                            full_read_info_.get_schema_rowkey_count(),
+                            lib::is_oracle_mode(),
+                            tmp_col_descs,
+                            nullptr/*storage_cols_index*/,
+                            &cols_param_,
+                            &tmp_cg_idxs));
+  access_param_.iter_param_.read_info_ = &read_info_;
+  access_param_.iter_param_.rowkey_read_info_ = &full_read_info_;
+
+  access_param_.iter_param_.table_id_ = table_id_;
+  access_param_.iter_param_.tablet_id_ = tablet_id_;
+  access_param_.iter_param_.is_same_schema_column_ = true;
+  access_param_.iter_param_.has_virtual_columns_ = false;
+  access_param_.iter_param_.vectorized_enabled_ = true;
+  access_param_.iter_param_.has_lob_column_out_ = false;
+  access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
+  access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
+  access_param_.iter_param_.is_delete_insert_ = false;
+
+  prepare_output_expr(output_cols_project_, tmp_col_descs);
+  access_param_.iter_param_.out_cols_project_ = &output_cols_project_;
+  access_param_.output_exprs_ = &output_exprs_;
+  access_param_.iter_param_.output_exprs_ = &output_exprs_;
+  access_param_.iter_param_.op_ = &op_;
+  access_param_.padding_cols_ = nullptr;
+  access_param_.aggregate_exprs_ = nullptr;
+  access_param_.op_filters_ = nullptr;
+  access_param_.output_sel_mask_ = nullptr;
+  void *buf = query_allocator_.alloc(sizeof(ObRow2ExprsProjector));
+  access_param_.row2exprs_projector_ = new (buf) ObRow2ExprsProjector(query_allocator_);
+  // TODO: construct pushdown filter
+  ASSERT_EQ(OB_SUCCESS, access_param_.iter_param_.op_->init_pushdown_storage_filter());
+  access_param_.is_inited_ = true;
+
+  ASSERT_EQ(OB_SUCCESS,
+            store_ctx_.init_for_read(ls_id,
+                                     tablet_id,
+                                     INT64_MAX, // query_expire_ts
+                                     -1, // lock_timeout_us
+                                     share::SCN::max_scn()));
+
+  ObQueryFlag query_flag(ObQueryFlag::NoOrder,
+                         false, // daily_merge
+                         false, // optimize
+                         false, // sys scan
+                         false, // full_row
+                         false, // index_back
+                         false, // query_stat
+                         ObQueryFlag::MysqlMode, // sql_mode
+                         true // read_latest
+                        );
+  query_flag.set_not_use_row_cache();
+  query_flag.set_not_use_block_cache();
+  //query_flag.multi_version_minor_merge_ = true;
+  ASSERT_EQ(OB_SUCCESS,
+            context_.init(query_flag,
+                          store_ctx_,
+                          query_allocator_,
+                          query_allocator_,
+                          version_range));
+  context_.ls_id_ = ls_id_;
+  context_.limit_param_ = nullptr;
+  context_.is_inited_ = true;
 }
 
 void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
@@ -3825,6 +4020,645 @@ TEST_F(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
   handle3.reset();
   merger.reset();
 }
+
+TEST_F(TestMultiVersionMerge, across_multi_blocks)
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator table_store_iter;
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[200];
+  micro_data[0] =
+      "bigint      bigint   bigint   bigint bigint dml           flag    multi_version_row_flag\n"
+      "1          -10       0        1        1    T_DML_INSERT  EXIST   CLF\n"
+      "2          -10       0        2        2    T_DML_INSERT  EXIST   CLF\n";
+
+  micro_data[1] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "3          -10      0        3       3     T_DML_INSERT EXIST   CLF\n";
+
+  micro_data[2] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "4          -10      0        4       4     T_DML_INSERT EXIST   CLF\n";
+
+  micro_data[3] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "5          -10      0        5       5     T_DML_INSERT EXIST   CLF\n";
+
+  micro_data[4] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "6          -10      0        6       6     T_DML_INSERT EXIST   CLF\n";
+
+  micro_data[5] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "7          -10      0        7       7     T_DML_INSERT EXIST   CLF\n";
+
+  micro_data[6] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "8          -10      0        8       8     T_DML_INSERT EXIST   CLF\n";
+
+  micro_data[7] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -100      MIN        100       100     T_DML_INSERT EXIST   SCF\n"
+      "9          -100      0          NOP       100     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[8] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -99      0        NOP       99     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[9] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -98      0        NOP       98     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[10] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -97      0        NOP       97     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[11] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -96      0        NOP       96     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[12] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -95      0        NOP       95     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[13] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -94      0        NOP       94     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[14] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -93      0        NOP       93     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[15] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -92      0        NOP       92     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[16] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -91      0        NOP       91     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[17] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -90      0        NOP       90     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[18] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -89      0        NOP       89     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[19] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -88      0        NOP       88     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[20] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -87      0        NOP       87     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[21] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -86      0        NOP       86     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[22] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -85      0        NOP       85     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[23] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -84      0        NOP       84     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[24] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -83      0        NOP       83     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[25] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -82      0        NOP       82     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[26] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -81      0        NOP       81     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[27] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -80      0        NOP       80     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[28] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -79      0        NOP       79     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[29] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -78      0        NOP       78     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[30] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -77      0        NOP       77     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[31] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -76      0        NOP       76     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[32] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -75      0        NOP       75     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[33] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -74      0        NOP       74     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[34] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -73      0        NOP       73     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[35] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -72      0        NOP       72     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[36] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -71      0        NOP       71     T_DML_UPDATE EXIST   N\n";
+
+  /*
+  micro_data[37] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -70      0        NOP       70     T_DML_UPDATE EXIST   N\n";
+      */
+
+  micro_data[37] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9          -50      0        100       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[38] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "9           -18       0        68       NOP     T_DML_UPDATE EXIST   L\n"
+      "13          -100      MIN      100       100     T_DML_UPDATE EXIST   SCF\n"
+      "13          -100      0        NOP       100     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[40] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -99      0        NOP       99     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[41] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -98      0        NOP       98     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[42] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -97      0        NOP       97     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[43] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -96      0        NOP       96     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[44] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -95      0        NOP       95     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[45] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -94      0        NOP       94     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[46] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -93      0        NOP       93     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[47] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -92      0        NOP       92     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[48] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -91      0        NOP       91     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[49] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -90      0        NOP       90     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[50] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -89      0        NOP       89     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[51] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -88      0        NOP       88     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[52] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -87      0        NOP       87     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[53] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -86      0        NOP       86     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[54] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -85      0        NOP       85     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[55] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -84      0        NOP       84     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[56] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -83      0        NOP       83     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[57] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -82      0        NOP       82     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[58] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -81      0        NOP       81     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[59] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -80      0        NOP       80     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[60] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -79      0        NOP       79     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[61] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -78      0        NOP       78     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[62] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -77      0        NOP       77     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[63] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -76      0        NOP       76     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[64] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -75      0        NOP       75     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[65] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -74      0        NOP       74     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[66] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -73      0        NOP       73     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[67] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -72      0        NOP       72     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[68] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -71      0        NOP       71     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[69] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -70      0        NOP       70     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[70] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -50      0        100       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[71] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -49      0        99       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[72] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -48      0        98       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[73] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -47      0        97       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[74] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -46      0        96       NOP     T_DML_UPDATE EXIST  N\n";
+
+  micro_data[75] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -45      0        95       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[76] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -44      0        94       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[77] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -43      0        93       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[78] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -42      0        92       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[79] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -41      0        91       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[80] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -40      0        90       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[81] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -39      0        89       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[82] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -38      0        88       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[83] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -37      0        87       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[84] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -36      0        86       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[85] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -35      0        85       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[86] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -34      0        84       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[87] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -33      0        83       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[88] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -32      0        82       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[89] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -31      0        81       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[90] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -30      0        80       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[91] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -29      0        79       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[92] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -28      0        78       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[93] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -27      0        77       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[94] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -26      0        76       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[95] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -25      0        75       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[96] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -24      0        74       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[97] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -23      0        73       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[98] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -22      0        72       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[99] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -21      0        71       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[100] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -20      0        70       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[101] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -19      0        69       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[102] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -18      0        68       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[103] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -17      0        67       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[104] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -16      0        66       NOP     T_DML_UPDATE EXIST   N\n";
+
+  micro_data[105] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "13          -15      0        65       NOP     T_DML_UPDATE EXIST   CL\n"
+      "15          -10      0        15       15     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[106] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "20          -10      0        20       20     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[107] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "21          -10      0        21       21     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[108] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "22          -10      0        22       22     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[109] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "23          -10      0        23       23     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[110] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "24          -10      0        24       24     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[111] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "25          -10      0        25       25     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[112] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "26          -10      0        26       26     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[113] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "27          -10      0        27       27     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[114] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "28          -10      0        28       28     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[115] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "29          -10      0        29       29     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[116] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "30          -10      0        30       30     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[117] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "31          -10      0        31       31     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[118] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "32          -10      0        32       32     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[119] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "33          -10      0        33       33     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[120] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "34          -10      0        34       34     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[121] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "35          -10      0        35       35     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[122] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "36          -10      0        36       36     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[123] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "37          -10      0        37       37     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[124] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "38          -10      0        38       38     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[125] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "39          -10      0        39       39     T_DML_UPDATE EXIST   CLF\n";
+
+  micro_data[126] =
+      "bigint      bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag\n"
+      "40          -10      0        40       40     T_DML_UPDATE EXIST   CLF\n";
+  int schema_rowkey_cnt = 1;
+
+  int64_t snapshot_version = 100;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(100);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
+  reset_writer(snapshot_version);
+  /*
+  prepare_one_macro(micro_data, 7);
+  prepare_one_macro(&micro_data[7], 34);
+  prepare_one_macro(&micro_data[41], 6);
+  for (int64_t i = 0; i < 7; i++) {
+    prepare_one_macro(micro_data+i, 1);
+  }
+  */
+  prepare_one_macro(micro_data, 7);
+  prepare_one_macro(micro_data + 7, 32);
+  prepare_one_macro(micro_data + 40, 35);
+  prepare_one_macro(micro_data + 75, 23);
+  prepare_one_macro(micro_data + 98, 28);
+  /*
+  for (int64_t i = 134; i < 157; i++) {
+    prepare_one_macro(micro_data+i, 1);
+  }
+  */
+
+  prepare_data_end(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+  table_store_iter.add_table(handle1.get_table());
+
+  const char *result1 =
+      "bigint   bigint bigint  flag     flag_type\n"
+      "1        1      1    INSERT    NORMAL\n"
+      "2        2      2    INSERT    NORMAL\n"
+      "3        3      3     INSERT    NORMAL\n"
+      "4        4       4    INSERT    NORMAL\n"
+      "5        5       5    INSERT    NORMAL\n"
+      "6        6       6    INSERT    NORMAL\n"
+      "7        7       7    INSERT    NORMAL\n"
+      "8        8       8    INSERT    NORMAL\n"
+      "9        100    100   INSERT    NORMAL\n"
+      "13       100   100    INSERT    NORMAL\n"
+      "20       20    20    INSERT    NORMAL\n"
+      "21       21    21    INSERT    NORMAL\n"
+      "22       22    22    INSERT    NORMAL\n"
+      "23       23    23    INSERT    NORMAL\n"
+      "24       24    24    INSERT    NORMAL\n";
+
+  ObVersionRange trans_version_range;
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  res_iter.reset();
+  ObSEArray<blocksstable::ObDatumRange, 18> ranges;
+  ObStorageDatum start[40];
+  ObStorageDatum end[40];
+  for (int64_t i = 0; i < 13; i++) {
+    start[2*i].set_int(i+1);
+    start[2*i+1].set_min();
+    end[2*i].set_int(i+1);
+    end[2*i+1].set_max();
+    ObDatumRange range;
+    range.start_key_.assign(start + 2 * i, 2);
+    range.end_key_.assign(end + 2 * i, 2);
+    ASSERT_EQ(OB_SUCCESS, ranges.push_back(range));
+  }
+
+  for (int64_t i = 13; i < 18; i++) {
+    start[2*i].set_int(i+7);
+    start[2*i+1].set_min();
+    end[2*i].set_int(i+7);
+    end[2*i+1].set_max();
+    ObDatumRange range;
+    range.start_key_.assign(start + 2 * i, 2);
+    range.end_key_.assign(end + 2 * i, 2);
+    ASSERT_EQ(OB_SUCCESS, ranges.push_back(range));
+  }
+
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_scan_param(trans_version_range, table_store_iter);
+  ObMultipleMultiScanMerge scan_merge;
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.open(ranges));
+  scan_merge.disable_padding();
+  scan_merge.disable_fill_virtual_column();
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  int64_t count = 0;
+  int64_t total_count = 0;
+  ret = OB_SUCCESS;
+
+  while (OB_SUCC(ret)) {
+    ret = scan_merge.get_next_rows(count, 1);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END) {
+      STORAGE_LOG(ERROR, "error return value", K(ret), K(count));
+      ASSERT_EQ(1, 0);
+    }
+    if (count > 0) {
+      ObMockScanMergeIterator merge_iter(count);
+      ASSERT_EQ(OB_SUCCESS, merge_iter.init(reinterpret_cast<ObVectorStore *>(scan_merge.block_row_store_),
+                                            query_allocator_, *access_param_.iter_param_.get_read_info()));
+      bool is_equal = res_iter.equals<ObMockScanMergeIterator, ObStoreRow>(merge_iter, false, false, false, true);
+      ASSERT_TRUE(is_equal);
+
+      total_count += count;
+      STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
+    } else {
+      break;
+    }
+  }
+  ASSERT_EQ(15, total_count);
+
+  handle1.reset();
+  scan_merge.reset();
+}
+
 }
 }
 

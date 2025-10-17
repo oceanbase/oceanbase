@@ -107,8 +107,8 @@ bool ObSSTableRowScanner<PrefetchType>::can_batch_scan() const
       !block_row_store_->is_disabled() &&
       micro_scanner_->is_filter_applied() &&
       !access_ctx_->is_mview_query() &&
-      // can batch scan when only enable_pd_aggregate, as it uses own datum buffer and only return aggregated result
-      (iter_param_->vectorized_enabled_ || iter_param_->enable_pd_aggregate());
+      // can batch scan when only enable_pd_aggregate in vec 1.0, as it uses own datum buffer and only return aggregated result
+      (iter_param_->vectorized_enabled_ || (!iter_param_->plan_use_new_format() && iter_param_->enable_pd_aggregate()));
 }
 
 template<typename PrefetchType>
@@ -147,7 +147,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
           nullptr != block_row_store_ &&
           iter_param_->enable_skip_index() &&
           !sstable_->is_multi_version_table()) {
-        if (iter_param_->use_new_format()) {
+        if (iter_param_->plan_use_new_format()) {
           prefetcher_.agg_store_ = static_cast<ObAggStoreBase *>(static_cast<ObAggregatedStoreVec *>(block_row_store_));
         } else {
           prefetcher_.agg_store_ = static_cast<ObAggStoreBase *>(static_cast<ObAggregatedStore *>(block_row_store_));
@@ -260,6 +260,8 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
         // Apply pushdown filter and block scan
         sql::ObPushdownFilterExecutor *filter = block_row_store_->get_pd_filter();
         ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor());
+        ObAggregatedStoreVec *agg_store_vec = iter_param_->enable_pd_aggregate() && iter_param_->plan_use_new_format()
+          ? static_cast<ObAggregatedStoreVec *>(block_row_store_) : nullptr;
         if (nullptr != sample_executor && sstable_->is_major_sstable()) {
           sample_executor->set_block_row_range(prefetcher_.cur_micro_data_fetch_idx_,
                                                micro_scanner_->get_current_pos(),
@@ -269,7 +271,9 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
         if (nullptr != filter) {
           micro_info.pre_process_filter(*filter);
         }
-        if (OB_FAIL(micro_scanner_->apply_filter(can_blockscan))) {
+        if (nullptr != agg_store_vec && OB_FAIL(agg_store_vec->reset_agg_row_id())) {
+          LOG_WARN("Fail to reset agg row id", K(ret));
+        } else if (OB_FAIL(micro_scanner_->apply_filter(can_blockscan))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to apply filter", K(ret));
           } else {
@@ -341,7 +345,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
         continue;
       } else if (OB_FAIL(fetch_row(prefetcher_.current_read_handle(), store_row))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
-          if (prefetcher_.cur_range_fetch_idx_ < prefetcher_.prefetching_range_idx() || prefetcher_.is_prefetch_end_) {
+          if (prefetcher_.is_current_range_prefetch_finished()) {
             ++prefetcher_.cur_range_fetch_idx_;
           }
           ret = OB_SUCCESS;
@@ -475,7 +479,7 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rows()
         continue;
       } else if (OB_FAIL(fetch_rows(prefetcher_.current_read_handle()))) {
         if (OB_ITER_END == ret) {
-          if (prefetcher_.cur_range_fetch_idx_ < prefetcher_.prefetching_range_idx() || prefetcher_.is_prefetch_end_) {
+          if (prefetcher_.is_current_range_prefetch_finished()) {
             ++prefetcher_.cur_range_fetch_idx_;
           }
           ret = OB_SUCCESS;

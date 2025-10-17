@@ -85,6 +85,55 @@ std::shared_ptr<arrow::Table> generate_table() {
   return arrow::Table::Make(schema, {i64array, strarray});
 }
 
+std::shared_ptr<arrow::Table> generate_array_table() {
+  // 1. 构建 int32 列
+  arrow::Int32Builder i32builder;
+  PARQUET_THROW_NOT_OK(i32builder.AppendValues({1, 2, 3, 4, 5, 6, 7, 8}));
+  std::shared_ptr<arrow::Array> i32array;
+  PARQUET_THROW_NOT_OK(i32builder.Finish(&i32array));
+
+  // 2. 构建 List<Int32> 列
+  std::shared_ptr<arrow::Int32Builder> elem_builder = std::make_shared<arrow::Int32Builder>();
+  arrow::ListBuilder list_builder(arrow::default_memory_pool(), elem_builder);
+
+  // 添加第一个数组 [100, 200]
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendValues({100, 200}));
+
+  // 添加第二个数组 [300]
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->Append(300));
+
+
+  // 添加两个空数组 (null)
+  PARQUET_THROW_NOT_OK(list_builder.AppendNull());
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendValues({400, 500}));
+
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendNull());
+
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendValues({600}));
+
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendValues({}));
+
+  PARQUET_THROW_NOT_OK(list_builder.Append());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendNull());
+  PARQUET_THROW_NOT_OK(elem_builder->AppendValues({700}));
+
+  std::shared_ptr<arrow::Array> listarray;
+  PARQUET_THROW_NOT_OK(list_builder.Finish(&listarray));
+
+  // 3. 定义 Schema（类型改为 list<int32>）
+  std::shared_ptr<arrow::Schema> schema = arrow::schema(
+      {arrow::field("int", arrow::int32()),
+       arrow::field("array_col", arrow::list(arrow::int32()))});
+
+  return arrow::Table::Make(schema, {i32array, listarray});
+}
+
 // #1 Write out the data as a Parquet file
 void write_parquet_file(const arrow::Table& table) {
   std::shared_ptr<arrow::io::FileOutputStream> outfile;
@@ -104,6 +153,7 @@ void read_whole_file() {
   PARQUET_ASSIGN_OR_THROW(infile,
                           arrow::io::ReadableFile::Open("parquet-arrow-example.parquet",
                                                         arrow::default_memory_pool()));
+
   std::unique_ptr<parquet::arrow::FileReader> reader;
   PARQUET_THROW_NOT_OK(
       parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
@@ -166,22 +216,27 @@ void read_single_column_chunk() {
   PARQUET_THROW_NOT_OK(arrow::PrettyPrint(*array, 4, &std::cout));
   std::cout << std::endl;
 }
+
 class ObParquetAllocator : public ::arrow::MemoryPool
 {
 public:
+  ObParquetAllocator() : total_alloc_size_(0), total_hold_size_(0), num_allocations_(0) {}
 
   /// Allocate a new memory region of at least size bytes.
   ///
   /// The allocated region shall be 64-byte aligned.
-  virtual arrow::Status Allocate(int64_t size, uint8_t** out) override
+  virtual arrow::Status Allocate(int64_t size, int64_t alignment, uint8_t** out) override
   {
     arrow::Status ret = arrow::Status::OK();
-    void *buf = alloc_.alloc_aligned(size, 64);
+    void *buf = alloc_.alloc_aligned(size, alignment);
     if (OB_ISNULL(buf)) {
       ret = arrow::Status::Invalid("allocate memory failed");
     } else {
       *out = static_cast<uint8_t*>(buf);
     }
+    ++num_allocations_;
+    total_alloc_size_ += size;
+    total_hold_size_ += size;
     std::cout << "Allocing : " << size << std::endl;
     return arrow::Status::OK();
   }
@@ -190,10 +245,11 @@ public:
   ///
   /// As by default most default allocators on a platform don't support aligned
   /// reallocation, this function can involve a copy of the underlying data.
-  virtual arrow::Status Reallocate(int64_t old_size, int64_t new_size, uint8_t** ptr)
+  virtual arrow::Status Reallocate(int64_t old_size, int64_t new_size, int64_t alignment,
+                                   uint8_t **ptr) override
   {
     std::cout << "Reallocing : " << old_size << ',' << new_size << std::endl;
-    return Allocate(new_size, ptr);
+    return Allocate(new_size, alignment, ptr);
   }
 
   /// Free an allocated region.
@@ -202,9 +258,12 @@ public:
   /// @param size Allocated size located at buffer. An allocator implementation
   ///   may use this for tracking the amount of allocated bytes as well as for
   ///   faster deallocation if supported by its backend.
-  virtual void Free(uint8_t* buffer, int64_t size) {
+  virtual void Free(uint8_t* buffer, int64_t size, int64_t alignment) override
+  {
+    UNUSED(alignment);
     std::cout << "Freed : " << size << std::endl;
     alloc_.free(buffer);
+    total_hold_size_ -= size;
   }
 
   /// Return unused memory to the OS
@@ -216,11 +275,22 @@ public:
     std::cout << "ReleaseUnused" << std::endl;
   }
 
+  virtual int64_t total_bytes_allocated() const override
+  {
+    std::cout << "total_bytes_allocated()" << std::endl;
+    return total_alloc_size_;
+  }
+  virtual int64_t num_allocations() const override
+  {
+    std::cout << "num_allocations()" << std::endl;
+    return num_allocations_;
+  }
+
   /// The number of bytes that were allocated and not yet free'd through
   /// this allocator.
   virtual int64_t bytes_allocated() const override {
     std::cout << "bytes_allocated()" << std::endl;
-    return alloc_.total();
+    return total_hold_size_;
   }
 
   /// Return peak memory allocation in this memory pool
@@ -233,6 +303,9 @@ public:
   virtual std::string backend_name() const override { return "Parquet"; }
 private:
   ObArenaAllocator alloc_;
+  int64_t total_alloc_size_;
+  int64_t total_hold_size_;
+  int64_t num_allocations_;
   arrow::internal::MemoryPoolStats stats_;
 };
 
@@ -425,6 +498,155 @@ void read_column_schema() {
     }
   }
 
+}
+
+template<typename T>
+void print_level_values(int16_t* def_levels, int16_t* rep_levels, int64_t rows_read, T* values, int64_t values_read) {
+  std::cout<<"Definition Levels: ";
+  for (int i = 0; i < rows_read; ++i) {
+    std::cout << def_levels[i] << ", ";
+  }
+  std::cout << std::endl;
+  std::cout<<"Repeated Levels: ";
+  for (int i = 0; i < rows_read; ++i) {
+    std::cout << rep_levels[i] << ", ";
+  }
+  std::cout << std::endl;
+  std::cout<<"Values: ";
+  for (int i = 0; i < values_read; ++i) {
+    std::cout << values[i] << ", ";
+  }
+  std::cout << std::endl;
+}
+
+void read_array_column_schema() {
+
+  ObParquetAllocator alloc;
+  parquet::ReaderProperties read_props(&alloc);
+  std::shared_ptr<ObExternalFileReader> reader =
+      std::make_shared<ObExternalFileReader>("parquet-arrow-example.parquet", &alloc);
+  std::unique_ptr<parquet::ParquetFileReader> parquet_reader =
+      parquet::ParquetFileReader::Open(reader, read_props);
+
+    // Get the File MetaData
+  std::shared_ptr<parquet::FileMetaData> file_metadata = parquet_reader->metadata();
+
+  int num_row_groups = file_metadata->num_row_groups();
+  int num_columns = file_metadata->num_columns();
+
+  for (int r = 0; r < num_row_groups; ++r) {
+    std::shared_ptr<parquet::RowGroupReader> row_group_reader = parquet_reader->RowGroup(r);
+    std::shared_ptr<parquet::ColumnReader> column_reader = row_group_reader->Column(1);
+    parquet::Int32Reader* int32_reader = static_cast<parquet::Int32Reader*>(column_reader.get());
+
+    const int batch_size = 10;
+    std::vector<int32_t> values(batch_size);
+    std::vector<int16_t> def_levels(batch_size);
+    std::vector<int16_t> rep_levels(batch_size);
+    int64_t values_read = 0;
+
+    // 状态跟踪
+    std::vector<int32_t> current_list;
+    bool in_list = false;
+
+    while (int32_reader->HasNext()) {
+      int64_t rows_read = int32_reader->ReadBatch(batch_size, def_levels.data(), rep_levels.data(),
+                                                   values.data(), &values_read);
+      print_level_values(def_levels.data(), rep_levels.data(), rows_read, values.data(), values_read);
+      int val_idx = 0;
+        for (int i = 0; i < rows_read && val_idx < values_read; ++i) {
+          // 处理列表边界
+          if (rep_levels[i] == 0) {
+            if (!current_list.empty()) {
+              std::cout << "List: [";
+              for (int32_t v : current_list)
+                std::cout << v << ", ";
+              std::cout << "]" << std::endl;
+              current_list.clear();
+            }
+            in_list = true;
+          }
+          if (def_levels[i] == 3) {
+            current_list.push_back(values[val_idx]);
+            val_idx++;
+          } else if (def_levels[i] == 2) {
+            current_list.push_back(-1); // NULL element
+          } else if (def_levels[i] == 1) {
+            std::cout << "List: NULL" << std::endl;
+            in_list = false;
+          }
+        }
+        if (!current_list.empty()) {
+          std::cout << "List: [";
+          for (int32_t v : current_list) std::cout << v << ", ";
+          std::cout << "]" << std::endl;
+        }
+      }
+  }
+}
+
+bool check_array_column_schema(const ::parquet::schema::Node* node) {
+  // 1st level.
+  // <list-repetition> group <name> (LIST)
+  if (node->is_group() && node->logical_type()->is_list()) {
+    const ::parquet::schema::GroupNode* group_node = reinterpret_cast<const ::parquet::schema::GroupNode*>(node);
+    if (group_node->field_count() == 1) {
+      // 2nd level.
+      // repeated group list {
+      const ::parquet::schema::NodePtr list_node = group_node->field(0);
+      const std::shared_ptr<::parquet::schema::GroupNode> list_group_node = std::static_pointer_cast<::parquet::schema::GroupNode>(list_node);
+      if (list_group_node->field_count() == 1) {
+        // 3rd level.
+        // <list-repetition> group <name> (LIST)
+        const ::parquet::schema::NodePtr child_node = list_group_node->field(0);
+        if (child_node->is_primitive()) {
+          return true;
+        } else {
+          return check_array_column_schema(child_node.get());
+        }
+      }
+    }
+  }
+  return false;
+}
+
+void array_column_read_record() {
+  ObParquetAllocator alloc;
+  parquet::ReaderProperties read_props(&alloc);
+  std::shared_ptr<ObExternalFileReader> reader =
+      std::make_shared<ObExternalFileReader>("parquet-arrow-example.parquet", &alloc);
+  std::unique_ptr<parquet::ParquetFileReader> parquet_reader =
+      parquet::ParquetFileReader::Open(reader, read_props);
+
+    // Get the File MetaData
+  std::shared_ptr<parquet::FileMetaData> file_metadata = parquet_reader->metadata();
+
+  const parquet::ColumnDescriptor *col_desc = NULL;
+  col_desc = file_metadata->schema()->Column(1);
+  const ::parquet::schema::Node* node = file_metadata->schema()->GetColumnRoot(0);
+  std::cout << "check_array_column_schema: " << check_array_column_schema(node) << std::endl;
+
+  int num_row_groups = file_metadata->num_row_groups();
+  int num_columns = file_metadata->num_columns();
+
+  for (int r = 0; r < num_row_groups; ++r) {
+    std::shared_ptr<parquet::RowGroupReader> row_group_reader = parquet_reader->RowGroup(r);
+    std::shared_ptr<parquet::internal::RecordReader> reader = row_group_reader->RecordReader(1);
+
+    // reader->SkipRecords(/*num_records=*/20);
+    int64_t records_read = reader->ReadRecords(/*num_records=*/49);
+    // records_read = reader->ReadRecords(/*num_records=*/3);
+    // reader->Reset();
+    // records_read = reader->ReadRecords(/*num_records=*/3);
+    std::cout << "Records read: " << records_read << std::endl;
+    int16_t* def_levels = reader->def_levels();
+    int16_t* rep_levels = reader->rep_levels();
+
+    int32_t* read_values = reinterpret_cast<int32_t*>(reader->values());
+    std::cout<<"levels count: " << reader->levels_position() << std::endl;
+
+    print_level_values(def_levels, rep_levels, reader->levels_position(), read_values, reader->values_written());
+  }
 }
 
 using parquet::ConvertedType;
@@ -699,6 +921,10 @@ TEST_F(TestParquet, example1)
   read_single_column_chunk();
   read_column_schema();
   gen_test_parquet();
+  std::shared_ptr<arrow::Table> array_table = generate_array_table();
+  write_parquet_file(*array_table);
+  read_array_column_schema();
+  array_column_read_record();
 }
 
 int main(int argc, char **argv)

@@ -40,7 +40,7 @@ class ObStorageIOPipelineTaskInfo
 {
 public:
   ObStorageIOPipelineTaskInfo();
-  virtual ~ObStorageIOPipelineTaskInfo() { reset(); }
+  virtual ~ObStorageIOPipelineTaskInfo() { ObStorageIOPipelineTaskInfo::reset(); }
 
   int assign(const ObStorageIOPipelineTaskInfo &other);
   virtual void reset();
@@ -51,6 +51,10 @@ public:
   int64_t get_buf_size() const { return buf_size_; }
   TaskState get_state() const { return state_; }
   int set_state(const TaskState target_state);
+  static int set_macro_block_id(
+      blocksstable::ObStorageObjectHandle &handle, const blocksstable::MacroBlockId &macro_id);
+  static int set_macro_block_id(
+      blocksstable::ObMacroBlockHandle &handle, const blocksstable::MacroBlockId &macro_id);
 
   VIRTUAL_TO_STRING_KV(K(state_), "state", get_state_str(state_), K(buf_size_));
 
@@ -149,7 +153,6 @@ public:
   common::ObIAllocator &allocator_;
 };
 
-
 /**
  * @brief A pipeline class for asynchronous IO task processing with read-write-complete stages.
  * This class manages the lifecycle of IO tasks,
@@ -167,7 +170,7 @@ public:
  *         on_task_succeeded_(): Success callback
  *         on_task_failed_(): Failure callback
  *     2. Implement init() in derived class calling basic_init_() with proper tenant_id
- *     3. Call process_pipeline() periodically
+ *     3. Call process() periodically
  *
  *
  * Typical Usage:
@@ -188,7 +191,7 @@ public:
  * // In background thread:
  * while (running)
  * {
- *   pipeline.process_pipeline();
+ *   pipeline.process();
  *   usleep(1000);
  * }
  *
@@ -202,8 +205,8 @@ public:
  *
  * Thread Safety:
  * - add_task() is thread-safe through internal locking
- * - process_pipeline() should be called from single thread
- * - Virtual methods will be called from process_pipeline() context
+ * - process() should be called from single thread
+ * - Virtual methods will be called from process() context
  *
  * @tparam TaskInfoType_ Task metadata type (must inherit from ObStorageIOPipelineTaskInfo)
  *
@@ -281,7 +284,7 @@ public:
       OB_LOG(WARN, "fail to init task", KR(ret), K(info));
     } else if (OB_FAIL(task->set_state(TASK_READ_IN_PROGRESS))) {
       OB_LOG(WARN, "fail to update task state", KR(ret), KPC(task), K(info));
-    } else if (OB_FAIL(do_async_read_(task))) {
+    } else if (OB_FAIL(do_async_read_(*task))) {
       OB_LOG(WARN, "fail to do async read", KR(ret), KPC(task), K(info));
     } else if (OB_FAIL(async_read_list_.push(task))) {
       OB_LOG(ERROR, "fail to push task to async read list", KR(ret), KPC(task), K(info), KPC(this));
@@ -304,7 +307,7 @@ public:
     return ret;
   }
 
-  int process_pipeline()
+  int process()
   {
     int ret = OB_SUCCESS;
     ret = check_init_and_stop_();
@@ -317,7 +320,7 @@ public:
   }
 
 protected:
-  int check_init_and_stop_()
+  int check_init_and_stop_() const
   {
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
@@ -325,7 +328,7 @@ protected:
       OB_LOG(WARN, "ObStorageIOPipeline not init", KR(ret));
     } else if (OB_UNLIKELY(ATOMIC_LOAD(&is_stopped_))) {
       ret = OB_SERVICE_STOPPED;
-      OB_LOG(WARN, "ObStorageIOPipeline is stopped", KR(ret), K(is_stopped_));
+      OB_LOG(WARN, "ObStorageIOPipeline is stopped", KR(ret));
     }
     return ret;
   }
@@ -375,7 +378,7 @@ protected:
       } else if (TASK_READ_DONE == state) {
         if (OB_FAIL(task->set_state(TASK_WRITE_IN_PROGRESS))) {
           OB_LOG(WARN, "fail to update task state", KR(ret), K(i), K(io_cnt), KPC(task));
-        } else if (OB_FAIL(do_async_write_(task))) {
+        } else if (OB_FAIL(do_async_write_(*task))) {
           OB_LOG(WARN, "fail to do async write", KR(ret), K(i), K(io_cnt), KPC(task));
         } else if (OB_FAIL(async_write_list_.push(task))) {
           OB_LOG(ERROR, "fail to push into async_write_list",
@@ -440,8 +443,8 @@ protected:
       } else if (OB_FAIL(task->refresh_state(state))) {
         OB_LOG(WARN, "fail to refresh task state", KR(ret), K(i), K(io_cnt), KPC(task));
       } else if (TASK_WRITE_DONE == state) {
-        if (OB_FAIL(do_complete_task_(task))) {
-          OB_LOG(WARN, "fail to do async write", KR(ret), K(i), K(io_cnt), KPC(task));
+        if (OB_FAIL(do_complete_task_(*task))) {
+          OB_LOG(WARN, "fail to complete task", KR(ret), K(i), K(io_cnt), KPC(task));
         } else if (OB_FAIL(task->set_state(TASK_FINISHED))) {
           OB_LOG(WARN, "fail to update task state", KR(ret), K(i), K(io_cnt), KPC(task));
         } else {
@@ -482,15 +485,16 @@ protected:
 
   virtual int on_task_failed_(TaskType &task) = 0;
   virtual int on_task_succeeded_(TaskType &task) = 0;
-  virtual int do_async_read_(TaskType *task) = 0;
-  virtual int do_async_write_(TaskType *task) = 0;
-  virtual int do_complete_task_(TaskType *task) = 0;
+  virtual int do_async_read_(TaskType &task) = 0;
+  virtual int do_async_write_(TaskType &task) = 0;
+  virtual int do_complete_task_(TaskType &task) = 0;
 
 protected:
   int basic_init_(const uint64_t tenant_id)
   {
     int ret = OB_SUCCESS;
     ObMemAttr attr(tenant_id, "IOPipeline");
+    SET_IGNORE_MEM_VERSION(attr);
     if (IS_INIT) {
       ret = OB_INIT_TWICE;
       OB_LOG(WARN, "ObStorageIOPipeline init twice", KR(ret));
@@ -587,7 +591,7 @@ class TaskInfoWithRWHandle : public ObStorageIOPipelineTaskInfo
 {
 public:
   TaskInfoWithRWHandle();
-  virtual ~TaskInfoWithRWHandle() { reset(); }
+  virtual ~TaskInfoWithRWHandle() { TaskInfoWithRWHandle::reset(); }
 
   int assign(const TaskInfoWithRWHandle &other);
   virtual void reset() override;
@@ -597,6 +601,10 @@ public:
 
   INHERIT_TO_STRING_KV("ObStorageIOPipelineTaskInfo", ObStorageIOPipelineTaskInfo,
       K(read_handle_), K(write_handle_));
+
+protected:
+  virtual int refresh_read_state_();
+  virtual int refresh_write_state_();
 
 public:
   blocksstable::ObStorageObjectHandle read_handle_;

@@ -529,6 +529,8 @@ public:
   // So if advance_base_info returns OB_SUCCESS, that means log sync and replay_status have been disabled.
   int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   // check if palf is in sync state or need rebuild
+  // in SN, we compare follower's log_sync_scn with leader's log_sync_scn.
+  // in SS, we compare follower's replayed_scn with leader's log_sync_scn, because follower has no log_sync_scn.
   // @param [out] is_log_sync: if the log of this replica is sync with leader's,
   //    - false: leader's max_scn  - local max_scn > 3s + keepalive_interval
   //    - true:  leader's max_scn  - local max_scn < 3s + keepalive_interval
@@ -905,7 +907,7 @@ private:
   template <class StartPoint>
   int seek_log_iterator_dispatch_(const StartPoint &start_point,
                                   const int64_t suggested_read_buf_size,
-                                  ipalf::IPalfLogIterator &iterator);
+                                  ipalf::IPalfIterator<ipalf::ILogEntry> &iterator);
   int advance_base_lsn_impl_(const palf::LSN &lsn);
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:
@@ -1044,7 +1046,7 @@ int ObLogHandler::seek_log_iterator_dispatch_(const StartPoint &start_point,
 template <class StartPoint>
 int ObLogHandler::seek_log_iterator_dispatch_(const StartPoint &start_point,
                                               const int64_t suggested_read_buf_size,
-                                              ipalf::IPalfLogIterator &iterator)
+                                              ipalf::IPalfIterator<ipalf::ILogEntry> &iterator)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1104,7 +1106,7 @@ template<typename StartPoint, typename IteratorType>
 int seek_log_iterator_for_cdc(const share::ObLSID &ls_id,
                               const StartPoint &start_point,
                               const int64_t suggested_read_buf_size,
-                              palf::PalfIterator<IteratorType> &iterator)
+                              ipalf::IPalfIterator<IteratorType> &iterator)
 {
   return init_log_iterator_(ls_id, start_point, suggested_read_buf_size, iterator);
 }

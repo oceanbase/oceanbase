@@ -194,7 +194,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
                                                                  ObMvccTransNode *save)
 {
   int ret = OB_SUCCESS;
-  ObRowReader row_reader;
+  ObCompatRowReader row_reader;
   ObDatumRow compact_datum_row;
   ObMvccTransNode *trans_node = nullptr;
   ObMvccTransNode *cur = save;
@@ -319,10 +319,17 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
   // Write compact row
   if (OB_SUCC(ret) && !giveup_compaction && compact_row_cnt > 0) {
     EVENT_INC(MEMSTORE_ROW_COMPACTION_COUNT);
-    SMART_VAR(blocksstable::ObRowWriter, row_writer) {
+    SMART_VAR(blocksstable::ObCompatRowWriter, row_writer) {
       char *buf = nullptr;
       int64_t len = 0;
-      if (OB_FAIL(row_writer.write(rowkey_cnt, compact_datum_row, buf, len))) {
+      if (OB_FAIL(row_writer.init(memtable_->get_micro_block_format_version()))) {
+        TRANS_LOG(WARN, "Fail to init row writer", K(ret));
+      } else if (OB_FAIL(row_writer.write(rowkey_cnt,
+                                          compact_datum_row,
+                                          /* update_array */ nullptr,
+                                          /* column_desc */ nullptr,
+                                          buf,
+                                          len))) {
         TRANS_LOG(WARN, "Failed to writer compact row", K(ret));
       } else if (OB_UNLIKELY(ObDmlFlag::DF_NOT_EXIST == dml_flag)) {
         ret = OB_ERR_UNEXPECTED;

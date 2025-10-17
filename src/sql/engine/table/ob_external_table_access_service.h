@@ -23,11 +23,15 @@
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/ob_sql_context.h"
 #include "sql/engine/table/ob_file_prebuffer.h"
+#include "lib/roaringbitmap/ob_roaringbitmap.h"
+#include "sql/engine/basic/ob_lake_table_reader_profile.h"
+#include "sql/engine/expr/ob_expr_get_path.h"
 
 namespace oceanbase
 {
 namespace common
 {
+class ObIVector;
 }
 
 namespace share
@@ -38,6 +42,7 @@ class ObExternalTablePartInfoArray;
 namespace sql {
 class ObExprRegexpSessionVariables;
 class ObDecompressor;
+class ObIcebergDeleteBitmapBuilder;
 // help.aliyun.com   maxcompute user-guide time-zone-configuration-operations
 // 后续应该优化为系统配置项
 const int32_t ODPS_JAVA_SDK_NO_OVERSEA_OFFSET = (8 * 60 * 60);
@@ -53,19 +58,16 @@ public:
 
   int get_file_sizes(const ObString &location, const ObIArray<ObString> &urls, ObIArray<int64_t> &file_sizes);
   int pread(void *buf, const int64_t count, const int64_t offset, int64_t &read_size);
-  int get_file_list(const common::ObString &path,
-                    const common::ObString &pattern,
-                    const ObExprRegexpSessionVariables &regexp_vars,
-                    common::ObIArray<common::ObString> &file_urls,
-                    common::ObIArray<int64_t> &file_sizes,
-                    common::ObIAllocator &allocator);
+  int get_directory_list(const common::ObString &path,
+                         common::ObIArray<common::ObString> &file_urls,
+                         common::ObIAllocator &allocator);
   common::ObStorageType get_storage_type() { return storage_type_; }
   void close();
 
   const char dummy_empty_char = '\0';
 private:
   common::ObStorageType storage_type_;
-  share::ObBackupStorageInfo backup_storage_info_;
+  share::ObExternalTableStorageInfo backup_storage_info_;
   share::ObHDFSStorageInfo hdfs_storage_info_;
   common::ObObjectStorageInfo *access_info_;
   ObIODevice* device_handle_;
@@ -85,6 +87,7 @@ public:
            ObIAllocator &allocator);
 
   int open(const ObString &filename);
+  int64_t get_file_size() const;
   void close();
 
   /**
@@ -140,7 +143,8 @@ public:
     cur_line_number_(0),
     cur_file_url_(),
     part_list_val_(),
-    batch_first_row_line_num_(0) {}
+    batch_first_row_line_num_(0),
+    is_delete_file_loaded_(false) {}
 
   virtual void reuse() {
     file_idx_ = 0;
@@ -150,6 +154,7 @@ public:
     cur_file_url_.reset();
     part_list_val_.reset();
     batch_first_row_line_num_ = 0;
+    is_delete_file_loaded_ = false;
   }
   DECLARE_VIRTUAL_TO_STRING;
   int64_t file_idx_;
@@ -159,6 +164,7 @@ public:
   ObString cur_file_url_;
   ObNewRow part_list_val_;
   int64_t batch_first_row_line_num_;
+  bool is_delete_file_loaded_;
 };
 
 struct ObExternalTableAccessOptions
@@ -221,17 +227,36 @@ public:
   virtual ObString get_cur_file_url() const { return ObString(); }
 };
 
+struct ObColumnDefaultValue {
+  bool is_null_;
+  void* batch_data_or_nulls_;
+  int32_t *batch_len_;
+
+  ObColumnDefaultValue() :
+    is_null_(false), batch_data_or_nulls_(nullptr), batch_len_(nullptr) {}
+
+  int assign(const ObColumnDefaultValue &other);
+  TO_STRING_KV(K_(is_null), K_(batch_data_or_nulls), K_(batch_len));
+};
+
 class ObExternalTableRowIterator : public common::ObNewRowIterator, public ObDiagnosisInfoProvider {
 public:
+  friend class ObExternalTablePushdownFilter;
   ObExternalTableRowIterator() :
-    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL) {}
+    scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL),
+    delete_bitmap_(nullptr), delete_bitmap_builder_(nullptr), reader_profile_(),
+    need_partition_info_(false), file_column_exprs_(allocator_), mapping_column_ids_(allocator_),
+    file_meta_column_exprs_(allocator_), column_need_conv_(allocator_)
+  {}
   virtual int init(const storage::ObTableScanParam *scan_param);
-  ~ObExternalTableRowIterator()
-  {
-    if (nullptr != scan_param_ && nullptr != scan_param_->pd_storage_filters_) {
-      scan_param_->pd_storage_filters_->clear();
-    }
-  }
+  ~ObExternalTableRowIterator();
+
+  static const std::string ICEBERG_ID_KEY;
+
+  static int set_default_batch(const ObDatumMeta &datum_type,
+                               const ObColumnDefaultValue &col_def,
+                               ObIVector *vec);
+
 protected:
   int init_exprs(const storage::ObTableScanParam *scan_param);
   int gen_ip_port(common::ObIAllocator &allocator);
@@ -243,7 +268,9 @@ protected:
                                         const share::ObExternalTablePartInfoArray *partition_array,
                                         common::ObNewRow &value);
   int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
-  int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state);
+  int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state,
+                           const bool update_state = true);
+  bool is_dummy_file(const ObString &file_url);
   static inline bool text_type_length_is_valid_at_runtime(ObObjType type, int64_t text_data_length) {
     bool is_valid = false;
     if (ObTinyTextType == type && text_data_length <= OB_MAX_TINYTEXT_LENGTH) {
@@ -264,15 +291,66 @@ protected:
     return (type == ObVarcharType) && ((CHARSET_UTF8MB4 == charset && judge_length <= max_length)
               || (CHARSET_BINARY == charset && judge_length <= max_length));
   }
+
+  OB_INLINE bool is_iceberg_lake_table() const
+  {
+    return scan_param_->lake_table_format_ == share::ObLakeTableFormat::ICEBERG;
+  }
+
+  OB_INLINE bool is_hive_lake_table() const
+  {
+    return scan_param_->lake_table_format_ == share::ObLakeTableFormat::HIVE;
+  }
+
+  OB_INLINE bool is_lake_table() const
+  {
+    return is_iceberg_lake_table() || is_hive_lake_table();
+  }
+  bool is_abs_url(ObString url)
+  {
+    ObString dst("://");
+    if (0
+        == ObCharset::instr(ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                            url.ptr(),
+                            url.length(),
+                            dst.ptr(),
+                            dst.length())) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  int init_for_iceberg(ObExternalTableAccessOptions *options);
+  int init_default_batch(ExprFixedArray &file_column_exprs);
+  int build_delete_bitmap(const ObString &data_file_path, const int64_t task_idx);
+  int check_can_skip_conv();
+  ObExpr* get_column_expr_by_id(int64_t file_column_expr_idx);
+  int generate_mapping_column_id(ObExpr* ext_file_column_expr,
+                                int64_t file_column_expr_idx,
+                                ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids);
 protected:
   const storage::ObTableScanParam *scan_param_;
   //external table column exprs
   common::ObSEArray<ObExpr*, 16> column_exprs_;
+  common::ObSEArray<bool, 16> column_sel_mask_;
   //hidden columns
   ObExpr *line_number_expr_;
   ObExpr *file_id_expr_;
   ObExpr *file_name_expr_;
   common::ObString ip_port_;
+  ObRoaringBitmap* delete_bitmap_;
+  common::ObArray<ObColumnDefaultValue> colid_default_value_arr_;
+  ObIcebergDeleteBitmapBuilder* delete_bitmap_builder_;
+  ObLakeTableReaderProfile reader_profile_;
+  bool need_partition_info_;
+  ExprFixedArray file_column_exprs_; //column value from file
+  // file column expr index -> 1. column id 2. column expr index
+  ObFixedArray<std::pair<uint64_t, uint64_t>, ObIAllocator> mapping_column_ids_;
+  ExprFixedArray file_meta_column_exprs_; //column value from file meta
+  common::ObFixedArray<bool, ObIAllocator> column_need_conv_;
+private:
+  ObArenaAllocator allocator_; // used by delete map now
 };
 
 class ObExternalTableAccessService : public common::ObITabletScan

@@ -37,7 +37,7 @@ ERRSIM_POINT_DEF(EN_JOIN_LEARNER_LIST_FAILED);
 ERRSIM_POINT_DEF(EN_MIGRATION_RPC_NOT_SUPPORT);
 ERRSIM_POINT_DEF(EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY);
 ERRSIM_POINT_DEF(MIGRATION_START_RUNNING_FAILED);
-ERRSIM_POINT_DEF(MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS );
+ERRSIM_POINT_DEF(MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS);
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
@@ -402,9 +402,9 @@ bool ObMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObMigrationDagNet::hash() const
+uint64_t ObMigrationDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx is NULL", KPC(ctx_));
   } else {
@@ -459,10 +459,10 @@ int ObMigrationDagNet::fill_dag_net_key(char *buf, const int64_t buf_len) const
 int ObMigrationDagNet::clear_dag_net_ctx()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
   int32_t result = OB_SUCCESS;
   ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
   LOG_INFO("start clear dag net ctx", KPC(ctx_));
 
   if (!is_inited_) {
@@ -473,16 +473,23 @@ int ObMigrationDagNet::clear_dag_net_ctx()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_), KP(ls));
+  } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), KPC(ctx_));
   } else {
-    if (OB_FAIL(ctx_->get_result(result))) {
+     if (OB_FAIL(ctx_->get_result(result))) {
       LOG_WARN("failed to get migration ctx result", K(ret), KPC(ctx_));
-    } else if (OB_FAIL(ls->get_ls_migration_handler()->set_result(result))) {
+    } else if (OB_FAIL(ls_migration_handler->set_result(result))) {
       LOG_WARN("failed to report result", K(ret), KPC(ctx_));
     }
 
     ctx_->finish_ts_ = ObTimeUtil::current_time();
     const int64_t cost_ts = ctx_->finish_ts_ - ctx_->start_ts_;
     FLOG_INFO("finish migration dag net", "ls id", ctx_->arg_.ls_id_, "type", ctx_->arg_.type_, K(cost_ts), K(result));
+  }
+
+  if (OB_NOT_NULL(ls_migration_handler)) {
+    ls_migration_handler->set_dag_net_cleared();
   }
   return ret;
 }
@@ -569,9 +576,9 @@ bool ObInitialMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObInitialMigrationDag::hash() const
+uint64_t ObInitialMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx * ctx = get_migration_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -880,9 +887,9 @@ bool ObStartMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObStartMigrationDag::hash() const
+uint64_t ObStartMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {
@@ -1901,9 +1908,9 @@ bool ObSysTabletsMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObSysTabletsMigrationDag::hash() const
+uint64_t ObSysTabletsMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {
@@ -2259,9 +2266,9 @@ bool ObTabletMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletMigrationDag::hash() const
+uint64_t ObTabletMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {
@@ -3697,9 +3704,9 @@ bool ObDataTabletsMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObDataTabletsMigrationDag::hash() const
+uint64_t ObDataTabletsMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = nullptr;
 
   if (NULL != ctx) {
@@ -4457,9 +4464,9 @@ bool ObTabletGroupMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupMigrationDag::hash() const
+uint64_t ObTabletGroupMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
   if (NULL != ctx) {
     hash_value = common::murmurhash(
@@ -4992,9 +4999,9 @@ bool ObMigrationFinishDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObMigrationFinishDag::hash() const
+uint64_t ObMigrationFinishDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {

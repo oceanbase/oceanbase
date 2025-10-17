@@ -1220,11 +1220,21 @@ int ObDynamicPartitionManager::check_is_supported(const ObTableSchema &table_sch
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "for dynamic partition, this part key type is");
   } else if (OB_FAIL(table_schema.get_part_key_column_name(0, part_key_column_name))) {
     LOG_WARN("fail to get part key column name", KR(ret));
-  } else if (0 != part_key_column_name.case_compare(table_schema.get_part_option().get_part_func_expr_str())) {
-    // part key with function
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("for dynamic partition, this part func expr is not supported", KR(ret), "part_func_expr", table_schema.get_part_option().get_part_func_expr_str());
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "for dynamic partition, this part func expr is");
+  } else {
+    const ObString &origin_part_func = table_schema.get_part_option().get_part_func_expr_str();
+    ObString part_func = origin_part_func;
+    // remove ` or " from part_func_expr_str
+    if (origin_part_func.length() > 2 &&
+        ((origin_part_func[origin_part_func.length() - 1] == '`' && origin_part_func[0] == '`') ||
+         (origin_part_func[origin_part_func.length() - 1] == '"' && origin_part_func[0] == '"'))) {
+      part_func.assign_ptr(origin_part_func.ptr() + 1, origin_part_func.length() - 2);
+    }
+    if (0 != part_key_column_name.case_compare(part_func)) {
+      // part key with function
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("for dynamic partition, this part func expr is not supported", KR(ret), "part_func_expr", part_func);
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "for dynamic partition, this part func expr is");
+    }
   }
 
   return ret;

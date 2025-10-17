@@ -80,6 +80,7 @@ void ObTransferPartitionHelper::destroy()
   max_task_id_.reset();
   job_generator_.reset();
 }
+
 int ObTransferPartitionHelper::check_inner_stat_()
 {
   int ret = OB_SUCCESS;
@@ -459,7 +460,7 @@ int ObTransferPartitionHelper::process_in_trans(
   int ret = OB_SUCCESS;
   ObArray<share::ObTransferPartitionTask> task_array;
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_TRANSFER_PARTITION);
-  ObString balance_strategy = ObString::make_string("manual transfer partition");
+  ObBalanceStrategy balance_strategy(ObBalanceStrategy::MANUAL_TRANSFER);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));

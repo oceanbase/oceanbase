@@ -20,6 +20,7 @@
 #include "rootserver/ddl_task/ob_sys_ddl_util.h"  // for ObSysDDLServiceUtil
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_disaster_recovery_task_utils.h"
+#include "rootserver/ob_server_zone_op_service.h"
 #include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
@@ -1861,11 +1862,7 @@ int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
   } else { // tenant_data_version >= DATA_VERSION_4_2_1_0
     // step 1: cancel rs job if exists
     int64_t job_id = 0;
-    if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-      (void) print_user_error_(tenant_id);
-    } else if(OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
+    if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job",
           KR(ret), K(tenant_id), K(sql_text));
     } else {
@@ -1909,12 +1906,7 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t job_id = 0;
-  if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-    (void) print_user_error_(tenant_id);
-  } else {
-    ret = create_alter_resource_tenant_unit_num_rs_job(
+  ret = create_alter_resource_tenant_unit_num_rs_job(
         tenant_id,
         new_unit_num,
         old_unit_num,
@@ -1922,28 +1914,9 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
         sql_text,
         trans,
         JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM);
-    FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
-        KR(ret), K(tenant_id), K(job_id), K(sql_text));
-  }
+  FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
+      KR(ret), K(tenant_id), K(job_id), K(sql_text));
   return ret ;
-}
-
-void ObUnitManager::print_user_error_(const uint64_t tenant_id)
-{
-  const int64_t ERR_MSG_LEN = 256;
-  char err_msg[ERR_MSG_LEN] = {'\0'};
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (OB_FAIL(databuff_printf(err_msg, ERR_MSG_LEN, pos,
-      "Tenant (%lu) 'enable_rebalance' is disabled, alter tenant unit num", tenant_id))) {
-    if (OB_SIZE_OVERFLOW == ret) {
-      LOG_WARN("format to buff size overflow", KR(ret));
-    } else {
-      LOG_WARN("format new unit num failed", KR(ret));
-    }
-  } else {
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  }
 }
 
 int ObUnitManager::cancel_alter_resource_tenant_unit_num_rs_job(
@@ -2035,10 +2008,6 @@ int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
     if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job in v4.1", KR(ret), K(tenant_id));
     }
-  } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-    (void) print_user_error_(tenant_id);
   } else if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
     LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
   } else if (OB_FAIL(create_alter_resource_tenant_unit_num_rs_job(tenant_id,
@@ -2587,6 +2556,9 @@ int ObUnitManager::alter_resource_tenant(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || new_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_unit_num));
+  } else if (OB_SYS_TENANT_ID == tenant_id && 1 != new_unit_num) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter resource tenant for sys tenant");
   } else if (OB_FAIL(get_pools_by_tenant_(tenant_id, pools))) {
     LOG_WARN("fail to get pools by tenant", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(nullptr == pools)) {
@@ -2610,8 +2582,6 @@ int ObUnitManager::alter_resource_tenant(
           K(new_unit_num), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_EXPAND == alter_unit_num_type) {
-    // in 4.1, if enable_rebalance is false, this op can be executed successfully
-    // in 4.2, it will return OB_OP_NOT_ALLOW
     if (delete_unit_group_id_array.count() > 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand pool unit num combined with deleting unit");
@@ -2621,7 +2591,6 @@ int ObUnitManager::alter_resource_tenant(
           KPC(pools), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_SHRINK == alter_unit_num_type) {
-    // both 4.1 and 4.2 do not allow this op when enable_rebalance is false.
     if (OB_FAIL(shrink_tenant_pools_unit_num(tenant_id, *pools, new_unit_num,
             old_unit_num, delete_unit_group_id_array, sql_text))) {
       LOG_WARN("fail to shrink pool unit num", K(ret), K(new_unit_num), K(sql_text), K(old_unit_num));
@@ -5356,10 +5325,8 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
     }
   } else {
     // init rpc arg for user tenant with data version
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(is_delete));
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_tenant_data_version))) {
-      LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id), K(is_delete));
+    if (OB_FAIL(get_meta_and_user_data_version_(tenant_id, data_version, meta_tenant_data_version))) {
+      LOG_WARN("fail to get meta and user data version", KR(ret), K(tenant_id), K(is_delete));
     } else if (OB_FAIL(rpc_arg.init(tenant_id,
                                     unit.unit_id_,
                                     compat_mode,
@@ -5377,6 +5344,46 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
     }
   }
 
+  return ret;
+}
+
+int ObUnitManager::get_meta_and_user_data_version_(
+    const uint64_t tenant_id,
+    uint64_t &user_data_version,
+    uint64_t &meta_data_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, user_data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+      LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id));
+    }
+  } else {
+#ifdef OB_BUILD_SHARED_STORAGE
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+      LOG_WARN("fail to get data version", KR(ret));
+    } else if (data_version >= DATA_VERSION_4_4_1_0) {
+      LOG_INFO("get data version in palf kv", KR(ret), K(data_version));
+      if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(tenant_id, user_data_version))) {
+        LOG_WARN("fail to get data version in palf kv", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ObServerZoneOpService::get_data_version_in_palf_kv(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+        LOG_WARN("fail to get meta tenant data version in palf kv", KR(ret), K(tenant_id));
+      }
+    } else {
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, user_data_version))) {
+        LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), meta_data_version))) {
+        LOG_WARN("fail to get meta tenant data version", KR(ret), K(tenant_id));
+      }
+    }
+#endif
+  }
+  FLOG_INFO("get meta and user data version", KR(ret), K(tenant_id), KDV(user_data_version), KDV(meta_data_version));
   return ret;
 }
 
@@ -11666,6 +11673,11 @@ int ObUnitManager::fetch_new_unit_id(uint64_t &unit_id)
       LOG_WARN("fetch_new_max_id failed", "id_type", OB_MAX_USED_UNIT_ID_TYPE, K(ret));
     } else {
       unit_id = combine_id;
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(ObServerZoneOpService::store_max_unit_id_in_palf_kv(combine_id))) {
+        LOG_WARN("fail to store max unit id in palf kv", KR(ret), K(combine_id));
+      }
+#endif
     }
   }
   return ret;

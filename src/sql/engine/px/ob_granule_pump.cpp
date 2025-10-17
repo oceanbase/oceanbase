@@ -43,10 +43,12 @@ int ObGITaskSet::get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) co
     info.ss_ranges_.reset();
     for (int64_t i = pos; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
-        if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
-          LOG_WARN("push back ranges failed", K(ret));
-        } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
-          LOG_WARN("push back skip scan ranges failed", K(ret));
+        if (!gi_task_set_.at(i).is_false_range_) {
+          if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
+            LOG_WARN("push back ranges failed", K(ret));
+          } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
+            LOG_WARN("push back skip scan ranges failed", K(ret));
+          }
         }
       } else {
         break;
@@ -109,10 +111,12 @@ int ObGITaskSet::get_next_gi_task(ObGranuleTaskInfo &info)
     info.ss_ranges_.reset();
     for (int64_t i = cur_pos_; OB_SUCC(ret) && i < gi_task_set_.count(); i++) {
       if (cur_idx == gi_task_set_.at(i).idx_) {
-        if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
-          LOG_WARN("push back ranges failed", K(ret));
-        } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
-          LOG_WARN("push back skip scan ranges failed", K(ret));
+        if (!gi_task_set_.at(i).is_false_range_) {
+          if (OB_FAIL(info.ranges_.push_back(gi_task_set_.at(i).range_))) {
+            LOG_WARN("push back ranges failed", K(ret));
+          } else if (OB_FAIL(info.ss_ranges_.push_back(gi_task_set_.at(i).ss_range_))) {
+            LOG_WARN("push back skip scan ranges failed", K(ret));
+          }
         }
         if (i == (gi_task_set_.count() - 1)) {
           cur_pos_ = gi_task_set_.count();
@@ -226,9 +230,11 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
                                    ObGIRandomType random_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(taskset_tablets.count() != taskset_ranges.count() ||
-                  taskset_tablets.count() != taskset_idxs.count() ||
-                  taskset_tablets.empty() || ss_ranges.count() > 1)) {
+  if (OB_UNLIKELY(taskset_tablets.count() != taskset_idxs.count() ||
+                  (!taskset_ranges.empty() &&
+                    taskset_tablets.count() != taskset_ranges.count()) ||
+                  taskset_tablets.empty() ||
+                  ss_ranges.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("taskset count err", K(taskset_tablets.count()),
                                   K(taskset_ranges),
@@ -242,11 +248,18 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
   } else {
     ObNewRange whole_range;
     whole_range.set_whole_range();
+    ObNewRange false_range;
+    false_range.set_false_range();
+    bool is_false_range = taskset_ranges.empty();
     ObNewRange &ss_range = ss_ranges.empty() ? whole_range : ss_ranges.at(0);
     int64_t max_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < taskset_tablets.count(); i++) {
       max_idx = max(max_idx, taskset_idxs.at(i));
-      ObGITaskInfo task_info(taskset_tablets.at(i), taskset_ranges.at(i), ss_range, taskset_idxs.at(i));
+      ObGITaskInfo task_info(taskset_tablets.at(i),
+                             is_false_range ? false_range : taskset_ranges.at(i),
+                             ss_range,
+                             taskset_idxs.at(i),
+                             is_false_range);
       if (random_type != ObGITaskSet::GI_RANDOM_NONE) {
         task_info.hash_value_ = common::murmurhash(&task_info.idx_, sizeof(task_info.idx_), 0);
       }
@@ -623,8 +636,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
     if (OB_UNLIKELY(check_task_exist)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value", K(ret));
-    } else if (OB_FAIL(splitter.partitions_info_.assign(args.partitions_info_))) {
-      LOG_WARN("Failed to assign partitions info", K(ret));
+    } else if (OB_FAIL(splitter.px_tablets_info_.assign(args.px_tablets_info_))) {
+      LOG_WARN("Failed to assign tablets info", K(ret));
     } else if (OB_FAIL(splitter.split_granule(args,
                                               scan_ops,
                                               gi_task_array_map_,
@@ -636,8 +649,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
     if (OB_UNLIKELY(check_task_exist)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value", K(ret));
-    } else if (OB_FAIL(splitter.partitions_info_.assign(args.partitions_info_))) {
-      LOG_WARN("Failed to assign partitions info", K(ret));
+    } else if (OB_FAIL(splitter.px_tablets_info_.assign(args.px_tablets_info_))) {
+      LOG_WARN("Failed to assign tablets info", K(ret));
     } else if (OB_FAIL(splitter.split_granule(args,
                                               scan_ops,
                                               gi_task_array_map_,
@@ -856,50 +869,57 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                         table_id, op_id, partition_granule,
                                         ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
-  } else if (ranges.count() <= 0) {
+  } else if (!tsc->get_query_range_provider().enable_new_false_range() &&
+             ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty range", K(ret), K(ranges));
+  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()) {
+    ret = ObGranuleUtil::split_granule_for_external_table(args.ctx_->get_allocator(),
+                                                          tsc,
+                                                          ranges,
+                                                          tablets,
+                                                          args.external_table_files_,
+                                                          args.parallelism_,
+                                                          taskset_tablets,
+                                                          taskset_ranges,
+                                                          taskset_idxs);
+  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()) {
+    ret = ObGranuleUtil::split_granule_for_lake_table(*args.ctx_,
+                                                      args.ctx_->get_allocator(),
+                                                      ranges,
+                                                      tablets,
+                                                      partition_granule,
+                                                      taskset_tablets,
+                                                      taskset_ranges,
+                                                      taskset_idxs);
   } else {
-    bool is_external_table = tsc->tsc_ctdef_.scan_ctdef_.is_external_table_;
-    if (is_external_table) {
-      ret = ObGranuleUtil::split_granule_for_external_table(args.ctx_->get_allocator(),
-                                                            tsc,
-                                                            ranges,
-                                                            tablets,
-                                                            args.external_table_files_,
-                                                            args.parallelism_,
-                                                            taskset_tablets,
-                                                            taskset_ranges,
-                                                            taskset_idxs);
-    } else {
-      ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
-                                              args.ctx_->get_allocator(),
-                                              tsc,
-                                              ranges,
-                                              tablets,
-                                              args.parallelism_,
-                                              args.tablet_size_,
-                                              partition_granule,
-                                              taskset_tablets,
-                                              taskset_ranges,
-                                              taskset_idxs,
-                                              range_independent);
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to get granule task", K(ret), K(ranges), K(tablets), K(is_external_table));
-    } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets,
-                                                  taskset_ranges,
-                                                  ss_ranges,
-                                                  taskset_idxs,
-                                                  random_type))) {
-      LOG_WARN("construct taskset failed", K(ret), K(taskset_tablets),
-                                                   K(taskset_ranges),
-                                                   K(ss_ranges),
-                                                   K(taskset_idxs),
-                                                   K(random_type));
-    } else {
-
-    }
+    ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
+                                            args.ctx_->get_allocator(),
+                                            tsc,
+                                            ranges,
+                                            tablets,
+                                            args.parallelism_,
+                                            args.tablet_size_,
+                                            partition_granule,
+                                            taskset_tablets,
+                                            taskset_ranges,
+                                            taskset_idxs,
+                                            range_independent);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get granule task", K(ret), K(ranges), K(tablets),
+                K(tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()),
+                K(tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()));
+  } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets,
+                                                taskset_ranges,
+                                                ss_ranges,
+                                                taskset_idxs,
+                                                random_type))) {
+    LOG_WARN("construct taskset failed", K(ret), K(taskset_tablets),
+                                                 K(taskset_ranges),
+                                                 K(ss_ranges),
+                                                 K(taskset_idxs),
+                                                 K(random_type));
   }
   return ret;
 }
@@ -918,6 +938,7 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
   ObQueryRangeArray skip_scan_ranges;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
   bool has_extract_query_range = false;
+  bool is_false_range = false;
   // 如果tsc有对应的query range，就预先抽取对应的query range
   LOG_DEBUG("set partition granule to whole range", K(table_id), K(op_id),
       K(partition_granule), K(with_param_down),
@@ -949,6 +970,9 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
                     scan_ranges,
                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
         LOG_WARN("failed to get scan ranges", K(ret));
+      } else if (tsc_pre_query_range.enable_new_false_range() && scan_ranges.empty()) {
+        has_extract_query_range = true;
+        is_false_range = true;
       } else if (OB_FAIL(tsc_pre_query_range.get_ss_tablet_ranges(
                                   ctx.get_allocator(),
                                   ctx,
@@ -961,7 +985,9 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
     }
     if (OB_SUCC(ret)) {
       // 没有抽取出来query range, 就使用whole range
-      if (scan_ranges.empty()) {
+      if (is_false_range) {
+        // do nothing
+      } else if (scan_ranges.empty()) {
         LOG_DEBUG("the scan ranges is invalid, use the whole range", K(scan_ranges));
         if (OB_FAIL(ranges.push_back(whole_range))) {
            LOG_WARN("Failed to push back scan range", K(ret));
@@ -980,6 +1006,9 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
                       scan_ranges,
                       ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
       LOG_WARN("failed to get scan ranges", K(ret));
+    } else if (tsc_pre_query_range.enable_new_false_range() && scan_ranges.empty()) {
+      has_extract_query_range = true;
+      is_false_range = true;
     } else if (OB_FAIL(tsc_pre_query_range.get_ss_tablet_ranges(
                                   ctx.get_allocator(),
                                   ctx,
@@ -1103,6 +1132,7 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       uint64_t op_id = tsc->get_id();
       ObGITaskSet total_task_set;
       ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
+      taskset_array.reuse();
       partition_granule = is_virtual_table(scan_key_id) || partition_granule;
       if (OB_FAIL(split_gi_task(args,
                                 tsc,
@@ -1215,7 +1245,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
   ObPxAffinityByRandom affinitize_rule(qc_order_gi_tasks, partition_random_affinitize);
   ARRAY_FOREACH_X(taskset.gi_task_set_, idx, cnt, OB_SUCC(ret)) {
     if (cur_idx != taskset.gi_task_set_.at(idx).idx_) {
-      cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different parition key in Affinitize
+      cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different partition key in Affinitize
       const ObDASTabletLoc &tablet_loc = *taskset.gi_task_set_.at(idx).tablet_loc_;
       int64_t tablet_idx = -1;
       if (NULL == table_schema || table_schema->get_table_id() != tablet_loc.loc_meta_->ref_table_id_) {
@@ -1250,7 +1280,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_loc.tablet_id_.id(),
-                                                               partitions_info_,
+                                                               px_tablets_info_,
                                                                partition_row_info))) {
         LOG_WARN("Failed to get tablet info", K(ret));
       } else if (OB_FAIL(affinitize_rule.add_partition(tablet_loc.tablet_id_.id(),
@@ -1263,7 +1293,7 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty(),
+  } else if (OB_FAIL(affinitize_rule.do_random(!px_tablets_info_.empty(),
                                                my_session->get_effective_tenant_id()))) {
     LOG_WARN("failed to do random", K(ret));
   } else {
@@ -1680,7 +1710,7 @@ int ObGranulePump::find_taskset_by_tsc_id(uint64_t op_id, GITaskArrayItem *&task
 int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     ObIArray<const ObTableScanSpec*> &scan_ops,
     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-    common::ObIArray<ObPxTabletInfo> &partitions_info,
+    common::ObIArray<ObPxTabletInfo> &tablets_info,
     common::ObIArray<ObExternalFileInfo> &external_table_files,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1698,7 +1728,7 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
     if (OB_FAIL(pump_args_.push_back(new_arg))) {
       LOG_WARN("fail to push back new arg", K(ret));
     } else if (OB_FAIL(init_arg(pump_args_.at(pump_args_.count() - 1), ctx, scan_ops,
-          tablet_arrays, partitions_info, external_table_files, modify_op, parallelism,
+          tablet_arrays, tablets_info, external_table_files, modify_op, parallelism,
           tablet_size, gi_attri_flag, locations_order, gi_op_id))) {
       LOG_WARN("fail to init arg", K(ret));
     } else if (OB_FAIL(add_new_gi_task(pump_args_.at(pump_args_.count() - 1), false))) {
@@ -1711,7 +1741,7 @@ int ObGranulePump::init_pump_args_inner(ObExecContext *ctx,
 int ObGranulePump::init_pump_args(ObExecContext *ctx,
     ObIArray<const ObTableScanSpec*> &scan_ops,
     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-    common::ObIArray<ObPxTabletInfo> &partitions_info,
+    common::ObIArray<ObPxTabletInfo> &tablets_info,
     common::ObIArray<share::ObExternalFileInfo> &external_table_files,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1720,7 +1750,7 @@ int ObGranulePump::init_pump_args(ObExecContext *ctx,
     const ObIArray<std::pair<int64_t, bool>> &locations_order,
     int64_t gi_op_id)
 {
-  return init_pump_args_inner(ctx, scan_ops, tablet_arrays, partitions_info,
+  return init_pump_args_inner(ctx, scan_ops, tablet_arrays, tablets_info,
                               external_table_files, modify_op, parallelism,
                               tablet_size, gi_attri_flag, locations_order, gi_op_id);
 }
@@ -1730,7 +1760,7 @@ int ObGranulePump::init_arg(
     ObExecContext *ctx,
     ObIArray<const ObTableScanSpec*> &scan_ops,
     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-    common::ObIArray<ObPxTabletInfo> &partitions_info,
+    common::ObIArray<ObPxTabletInfo> &tablets_info,
     const common::ObIArray<ObExternalFileInfo> &external_table_files,
     const ObTableModifySpec* modify_op,
     int64_t parallelism,
@@ -1749,8 +1779,8 @@ int ObGranulePump::init_arg(
   for (int i = 0; OB_SUCC(ret) && i < tablet_arrays.count(); ++i) {
     OZ(arg.tablet_arrays_.push_back(tablet_arrays.at(i)));
   }
-  for (int i = 0; OB_SUCC(ret) && i < partitions_info.count(); ++i) {
-    OZ(arg.partitions_info_.push_back(partitions_info.at(i)));
+  for (int i = 0; OB_SUCC(ret) && i < tablets_info.count(); ++i) {
+    OZ(arg.px_tablets_info_.push_back(tablets_info.at(i)));
   }
   LOG_TRACE("gi pump init arg", K(scan_ops), K(tablet_arrays), K(arg.tablet_arrays_));
   OZ(arg.external_table_files_.assign(external_table_files));
@@ -1861,8 +1891,8 @@ int ObGranulePumpArgs::assign(const ObGranulePumpArgs &rhs)
     LOG_WARN("Failed to assign tablet_arrays", K(ret));
   } else if (OB_FAIL(run_time_pruning_flags_.assign(rhs.run_time_pruning_flags_))) {
     LOG_WARN("Failed to assign run_time_pruning_flags", K(ret));
-  } else if (OB_FAIL(partitions_info_.assign(rhs.partitions_info_))) {
-    LOG_WARN("Failed to assign partitions_info", K(ret));
+  } else if (OB_FAIL(px_tablets_info_.assign(rhs.px_tablets_info_))) {
+    LOG_WARN("Failed to assign tablets_info", K(ret));
   } else if (OB_FAIL(external_table_files_.assign(rhs.external_table_files_))) {
     LOG_WARN("Failed to assign external_table_files", K(ret));
   } else if (OB_FAIL(query_range_by_runtime_filter_.assign(rhs.query_range_by_runtime_filter_))) {

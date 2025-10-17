@@ -230,12 +230,14 @@ int ObLoadDataBase::memory_check_remote(uint64_t tenant_id, bool &need_wait_mino
       int64_t major_freeze_trigger = 0;
       int64_t memstore_limit = 0;
       int64_t freeze_cnt = 0;
+      int64_t unused_throttle_trigger = 0;
 
       if (OB_FAIL(freezer->get_tenant_memstore_cond(active_memstore_used,
                                                     total_memstore_used,
                                                     major_freeze_trigger,
                                                     memstore_limit,
-                                                    freeze_cnt))) {
+                                                    freeze_cnt,
+                                                    unused_throttle_trigger))) {
         LOG_WARN("fail to get memstore used", K(ret));
       } else {
         if (total_memstore_used > (memstore_limit - major_freeze_trigger)/2 + major_freeze_trigger) {
@@ -442,6 +444,10 @@ int ObLoadDataBase::pre_parse_lines(ObLoadFileBuffer &buffer,
     const char *end = ptr + buffer.get_data_len();
     struct Functor {
       int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
         UNUSED(param);
         return OB_SUCCESS;
       }
@@ -1013,6 +1019,10 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
 
     struct Functor {
       int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
         UNUSED(param);
         return OB_SUCCESS;
       }
@@ -2776,6 +2786,23 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     }
   }
 
+  if (OB_SUCC(ret)) {
+    int64_t query_timeout = 0;
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
+      LOG_WARN("fail to get value", K(ret));
+    } else if (0 == query_timeout) {
+      if (OB_FAIL(ctx.get_my_session()->get_query_timeout(query_timeout))) {
+        LOG_WARN("fail to get query timeout", KR(ret));
+      } else {
+        query_timeout = MAX(query_timeout, RPC_BATCH_INSERT_TIMEOUT_US);
+        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+      }
+    } else if (query_timeout > 0) {
+      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+    }
+  }
+
+
   if (OB_UNLIKELY(ObLoadFileLocation::OSS == load_file_storage &&
                     ObLoadDataFormat::CSV != load_args.access_info_.get_load_data_format())) {
     ret = OB_NOT_SUPPORTED;
@@ -2919,22 +2946,6 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       }
     }
     LOG_DEBUG("batch size", K(hint_batch_size), K(batch_row_count), K(batch_buffer_size));
-  }
-
-  if (OB_SUCC(ret)) {
-    int64_t query_timeout = 0;
-    if (OB_FAIL(hint.get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
-      LOG_WARN("fail to get value", K(ret));
-    } else if (0 == query_timeout) {
-      if (OB_FAIL(ctx.get_my_session()->get_query_timeout(query_timeout))) {
-        LOG_WARN("fail to get query timeout", KR(ret));
-      } else {
-        query_timeout = MAX(query_timeout, RPC_BATCH_INSERT_TIMEOUT_US);
-        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
-      }
-    } else if (query_timeout > 0) {
-      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
-    }
   }
 
   if (OB_SUCC(ret)) {

@@ -20,6 +20,8 @@ namespace oceanbase {
 namespace plugin {
 
 extern lib::ObLabel OB_PLUGIN_MEMORY_LABEL;
+lib::ObMemAttr ob_plugin_mem_attr();
+lib::ObMemAttr ob_plugin_mem_attr(lib::ObLabel label);
 
 constexpr int OB_PLUGIN_NAME_MAX_LENGTH = 64;
 
@@ -45,6 +47,12 @@ struct ObPluginNameEqual
 {
   bool operator()(const common::ObString &name1, const ObString &name2) const;
 };
+
+/**
+ * calc the struct size up to the specific member
+ */
+#define PLUGIN_STRUCT_SIZEOF(struct_type, struct_member) \
+  (offsetof(struct_type, struct_member) + sizeof(((struct_type *)0)->struct_member))
 
 } // namespace plugin
 } // namespace oceanbase

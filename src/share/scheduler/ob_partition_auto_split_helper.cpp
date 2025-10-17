@@ -19,7 +19,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
-
+#include "rootserver/ob_split_partition_helper.h"
 
 namespace oceanbase
 {
@@ -448,8 +448,8 @@ int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const boo
     if (polling_mgr_.is_empty() && task_direct_cache_.empty()) {
       //do nothing
     } else {
-      if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, false, tmp_tenant_task_arrays, allocator))) {
-       LOG_WARN("fail to pop tasks from tree", K(ret));
+      if (num_tasks_pop_from_poll_mgr > 0 && OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, false, tmp_tenant_task_arrays, allocator))) {
+        LOG_WARN("fail to pop tasks from tree", K(ret));
       }
       ObArray<ObAutoSplitTask> tmp_task_array;
       for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_task_arrays.count(); ++i) {
@@ -470,7 +470,7 @@ int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const boo
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
+      } else if (num_tasks_pop_from_poll_mgr > 0 && OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
         LOG_WARN("failed to push to direct cache", K(ret));
       } else if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
        LOG_WARN("failed ot pop from direct cache", K(ret));
@@ -963,7 +963,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_INVALID_SIZE == auto_split_tablet_size) {
+  } else if (auto_split_tablet_size <= 0) {
     can_split = false;
   } else if (OB_FAIL(check_sstable_limit(*tablet, num_sstables_exceed_limit))) {
     LOG_WARN("fail to check sstable limit", K(ret), KPC(tablet));
@@ -979,7 +979,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
     can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet->get_tablet_id()
         && common::ObRole::LEADER == role && !num_sstables_exceed_limit && MTL_ID() != OB_SYS_TENANT_ID;
     // TODO gaishun.gs resident_info
-    const int64_t used_disk_space = tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_;
+    const int64_t used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
     can_split &= (used_disk_space > real_auto_split_size);
     if (OB_SUCC(ret) && can_split) {
       ObTabletCreateDeleteMdsUserData user_data;
@@ -1174,10 +1174,12 @@ int ObServerAutoSplitScheduler::cal_real_auto_split_size(const double base_ratio
   int ret = OB_SUCCESS;
   int64_t tablet_limit_penalty = 1;
   real_split_size = 0;
+  const int64_t skip_tablet_num_limit_check = std::abs(OB_E(EventTable::EN_SKIP_TABLET_NUM_LIMIT_CHECK) 0);
+  const bool skip_check = skip_tablet_num_limit_check > 0;
   if (OB_UNLIKELY(base_ratio < 0 || base_ratio > 1.0 || cur_ratio < 0 || cur_ratio > 1.0 || split_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(base_ratio), K(cur_ratio), K(split_size));
-  } else if (cur_ratio > base_ratio) {
+  } else if (cur_ratio > base_ratio && !skip_check) {
     // the tablet_limit_penalty is designed to fit large table(10pb)
     // if we consider the base_ratio to be 0.5
     // than cur_ratio | tablet_limit_penalty
@@ -2032,8 +2034,22 @@ int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(!table_schema->is_auto_partitioned_table())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("attempt to auto split tablet of a non-auto-partitioned table", KR(ret), KPC(table_schema));
+  } else if (table_schema->is_global_index_table()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    const ObString global_index_policy_str(tenant_config->global_index_auto_split_policy.str());
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_EAGAIN;
+      LOG_WARN("invalid tenant config", K(ret), K(tenant_id), K(tablet_id), K(table_schema->get_table_id()));
+    } else if (0 == global_index_policy_str.case_compare("off")) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_INFO("global index auto split disabled", KR(ret), K(tenant_id), K(tablet_id), K(table_schema->get_table_id()));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_schema->check_validity_for_auto_partition())) {
     LOG_WARN("table is invalid for auto partition", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
+  } else if (OB_FAIL(rootserver::ObSplitPartitionHelper::check_allow_split(guard, *table_schema))) {
+    LOG_WARN("failed to check allow split", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
   } else if (OB_FAIL(sampler.query_ranges(tenant_id,
                                           db_schema->get_database_name_str(),
                                           *table_schema,
@@ -2406,7 +2422,21 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
   const ObString& part_func_expr = table_schema.get_part_option().get_part_func_expr_str();
   const ObPartitionFuncType part_func_type = table_schema.get_part_option().get_part_func_type();
   ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
-  if (OB_FAIL(table_schema.get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+  ObBasePartition *src_part = nullptr;
+  int64_t src_part_idx = OB_INVALID_INDEX;
+  int64_t src_subpart_idx = OB_INVALID_INDEX;
+  if (PARTITION_LEVEL_ZERO != table_schema.get_part_level()) {
+    if (OB_FAIL(table_schema.get_part_idx_by_tablet(split_source_tablet_id, src_part_idx, src_subpart_idx))) {
+      LOG_WARN("failed to get src part idx", K(ret), K(src_part_idx), K(src_subpart_idx), K(table_schema));
+    } else if (OB_FAIL(table_schema.get_part_by_idx(src_part_idx, src_subpart_idx, src_part))) {
+      LOG_WARN("failed to get src part", K(ret), K(src_part_idx), K(src_subpart_idx), K(table_schema));
+    } else if (OB_ISNULL(src_part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid src part", K(ret), K(src_part_idx), K(src_subpart_idx), K(split_source_tablet_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_schema.get_target_part_level_for_auto_partitioned_table(target_part_level))) {
     LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), K(table_schema));
   } else if (OB_FAIL(alter_table_schema.set_origin_database_name(db_name))) {
     LOG_WARN("fail to set origin database name", KR(ret), K(db_name));
@@ -2429,7 +2459,7 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
       const ObRowkey& high_bound_val = ranges[i].get_end_key();
 
       if (OB_FAIL(build_partition_(tenant_id, table_id,
-                                   split_source_tablet_id, high_bound_val, tz_info,
+                                   split_source_tablet_id, high_bound_val, tz_info, src_part,
                                    new_part))) {
         LOG_WARN("fail to build partition", KR(ret), K(tenant_id), K(table_id), K(split_source_tablet_id),
                                             K(high_bound_val), K(table_schema));
@@ -2467,23 +2497,41 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
   return ret;
 }
 
+int ObAutoSplitArgBuilder::check_null_value(const ObRowkey &high_bound_val)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < high_bound_val.get_obj_cnt(); i++) {
+    if (OB_UNLIKELY(high_bound_val.get_obj_ptr()[i].is_null())) {
+      ret = OB_EER_NULL_IN_VALUES_LESS_THAN;
+      LOG_WARN("null value is not allowed in less than", K(ret), K(i), K(high_bound_val));
+    }
+  }
+  return ret;
+}
+
 int ObAutoSplitArgBuilder::build_partition_(const uint64_t tenant_id, const uint64_t table_id,
                                             const ObTabletID split_source_tablet_id,
                                             const ObRowkey &high_bound_val,
                                             const ObTimeZoneInfo *tz_info,
+                                            const ObBasePartition *src_part,
                                             share::schema::ObPartition &new_part)
 {
   int ret = OB_SUCCESS;
   bool need_cast = false;
   ObRowkey cast_high_bound_val;
   common::ObArenaAllocator cast_allocator;
+  const ObRowkey *target_high_bound_val = nullptr;
   if (OB_FAIL(check_and_cast_high_bound(high_bound_val, tz_info, cast_high_bound_val, need_cast, cast_allocator))) {
     LOG_WARN("failed to check cast high bound", K(ret));
-  } else if (need_cast && OB_FAIL(new_part.set_high_bound_val(cast_high_bound_val))) {
-    LOG_WARN("failed to set high_bound_val", KR(ret));
-  } else if (!need_cast && OB_FAIL(new_part.set_high_bound_val(high_bound_val))) {
+  } else if (OB_FALSE_IT(target_high_bound_val = need_cast ? &cast_high_bound_val : &high_bound_val)) {
+  } else if (OB_FAIL(check_null_value(*target_high_bound_val))) {
+    LOG_WARN("failed to check null value in high bound val", K(ret), K(need_cast), K(high_bound_val), KPC(target_high_bound_val));
+  } else if (OB_FAIL(new_part.set_high_bound_val(*target_high_bound_val))) {
     LOG_WARN("failed to set high_bound_val", KR(ret));
   } else {
+    if (nullptr != src_part) {
+      new_part.set_part_storage_cache_policy_type(src_part->get_part_storage_cache_policy_type());
+    }
     new_part.set_is_empty_partition_name(true);
     new_part.set_tenant_id(tenant_id);
     new_part.set_table_id(table_id);
@@ -2624,6 +2672,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
                             range_num, used_disk_space,
                             table_schema.is_global_index_table(),
                             is_oracle_mode,
+                            table_schema.is_user_hidden_table(),
                             low_bound_val, high_bound_val,
                             range_allocator, ranges))) {
     LOG_WARN("fail to acquire ranges for split partition", KR(ret), K(tenant_id), K(db_name),
@@ -2685,6 +2734,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
                                    range_num, used_disk_space,
                                    false /*query_index*/,
                                    is_oracle_mode,
+                                   data_table_schema.is_user_hidden_table(),
                                    low_bound_val, high_bound_val,
                                    range_allocator, ranges))) {
     LOG_WARN("fail to acquire ranges for split partition", KR(ret), K(tenant_id), K(db_name),
@@ -2798,6 +2848,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
                                   const int64_t range_num, const int64_t used_disk_space,
                                   const bool query_index,
                                   const bool is_oracle_mode,
+                                  const bool is_query_table_hidden,
                                   common::ObRowkey &low_bound_val,
                                   common::ObRowkey &high_bound_val,
                                   common::ObArenaAllocator& range_allocator,
@@ -2808,30 +2859,26 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   if (nullptr != part_meta.part_) {
     part_name = &part_meta.part_->get_part_name();
   }
-  ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
   ObSqlString sql;
-  ObSingleConnectionProxy single_conn_proxy;
   static const int64_t MAX_SAMPLE_SCALE = 128L * 1024 * 1024; // at most sample 128MB
   double sample_pct = MAX_SAMPLE_SCALE >= used_disk_space ?
                       100 :
                       static_cast<double>(MAX_SAMPLE_SCALE) / used_disk_space * 100;
   ranges.reset();
-
-  if (is_oracle_mode) {
+  ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
+  ObSingleConnectionProxy single_conn_proxy;
+  if (OB_FAIL(ret)) {
+  } else if (is_oracle_mode) {
     if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
       LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
     }
   } else if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
     LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
   }
-  if (OB_FAIL(ret)) {
-  } else if (query_index) {
-    ObSqlString set_sql;
-    int64_t affected_rows = 0;
-    if (OB_FAIL(set_sql.assign_fmt("SET session %s = true", share::OB_SV_ENABLE_INDEX_DIRECT_SELECT))) {
-      LOG_WARN("failed to assign sql", KR(ret));
-    } else if (OB_FAIL(single_conn_proxy.write(tenant_id, set_sql.ptr(), affected_rows))) {
-      LOG_WARN("single_conn_proxy write failed", KR(ret), K(set_sql));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(set_lower_case_table_names_(tenant_id, query_index, single_conn_proxy))) {
+      LOG_WARN("fail to fetch lower_case_table_names", KR(ret), K(tenant_id));
     }
   }
 
@@ -2839,7 +2886,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_sample_sql_(db_name, table_name, part_name,
                                        column_names, column_ranges,
-                                       range_num, sample_pct, is_oracle_mode, sql))) {
+                                       range_num, sample_pct, is_oracle_mode, query_index, sql))) {
     LOG_WARN("fail to build sample sql", KR(ret), K(db_name), K(table_name), K(part_name),
                                          K(column_names), K(column_ranges),
                                          K(range_num), K(sample_pct));
@@ -2935,6 +2982,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
                                       const ObIArray<ObNewRange> &column_ranges,
                                       const int range_num, const double sample_pct,
                                       const bool is_oracle_mode,
+                                      const bool query_index,
                                       ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -2943,6 +2991,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
   ObString db_name_quoted;
   ObSqlString col_alias_str;
   ObSqlString col_name_alias_str;
+  ObSqlString query_index_hint;
 
   if (OB_FAIL(gen_column_alias_(column_names, is_oracle_mode, col_alias_str, col_name_alias_str))) {
     LOG_WARN("fail to gen column alias", KR(ret), K(column_names));
@@ -2950,11 +2999,13 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
     LOG_WARN("failed to generate new name with escape character", K(ret), K(db_name));
   } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, table_name, table_name_quoted))) {
     LOG_WARN("failed to generate new name with escape character", K(ret), K(table_name));
+  } else if (!query_index && OB_FAIL(query_index_hint.assign_fmt("/*+ index(%.*s primary) */", table_name.length(), table_name.ptr()))) {
+    LOG_WARN("failed to assign query index hint", K(ret), K(table_name));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT %.*s FROM "
       "(SELECT %.*s, bucket, ROW_NUMBER() OVER (PARTITION BY bucket ORDER BY %.*s) rn FROM "
       "(SELECT %.*s, NTILE(%d) OVER (ORDER BY %.*s) bucket FROM "
-      "(SELECT /*+ index(%.*s primary) */ %.*s FROM %.*s.%.*s ",
+      "(SELECT %.*s %.*s FROM %.*s.%.*s ",
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
 
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
@@ -2964,7 +3015,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
       range_num,
       static_cast<int>(col_alias_str.length()), col_alias_str.ptr(),
 
-      table_name.length(), table_name.ptr(),
+      static_cast<int>(query_index_hint.length()), query_index_hint.ptr(),
       static_cast<int>(col_name_alias_str.length()), col_name_alias_str.ptr(),
       db_name_quoted.length(), db_name_quoted.ptr(),
       table_name_quoted.length(), table_name_quoted.ptr()))) {
@@ -3148,6 +3199,41 @@ int ObSplitSampler::gen_column_alias_(const ObIArray<ObString> &columns,
     }
   }
 
+  return ret;
+}
+
+int ObSplitSampler::set_lower_case_table_names_(const uint64_t tenant_id,
+                                                const bool query_index,
+                                                ObSingleConnectionProxy &single_conn_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema *sysvar = nullptr;
+  sqlclient::ObISQLConnection *connection = nullptr;
+  int64_t refreshed_schema_version = OB_INVALID_VERSION;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("fail to get tenant schema version", K(ret), K(tenant_id));
+  } else if (OB_CORE_SCHEMA_VERSION >= refreshed_schema_version) {
+    // tenant creating or tenant create failed or schema refreshing.
+    ret = OB_SCHEMA_EAGAIN;
+    LOG_WARN("schema retry to get lower_case_table_names", K(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, SYS_VAR_LOWER_CASE_TABLE_NAMES, sysvar))) {
+    LOG_WARN("get tenant system variable failed", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(sysvar)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null schema", K(ret), K(tenant_id), KPC(sysvar));
+  } else if (OB_ISNULL(connection = single_conn_proxy.get_connection())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null conn", K(ret));
+  } else if (OB_FAIL(connection->set_session_variable(share::OB_SV_LOWER_CASE_TABLE_NAMES, sysvar->get_value()))) {
+    LOG_WARN("update lower_case_table_names for ddl inner sql failed", K(ret));
+  } else if (query_index && OB_FAIL(connection->set_session_variable(share::OB_SV_ENABLE_INDEX_DIRECT_SELECT, 1))) {
+    LOG_WARN("update enable_index_direct_select for ddl inner sql failed", K(ret));
+  } else {
+    LOG_TRACE("set lower_case_table_names", K(ret), K(tenant_id), K(query_index), "lower_case_table_names", sysvar->get_value());
+  }
   return ret;
 }
 

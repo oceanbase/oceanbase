@@ -38,6 +38,7 @@
   RPC_S(PRD drop_tablegroup, obrpc::OB_DROP_TABLEGROUP, (ObDropTablegroupArg));
   RPC_S(PRD alter_tablegroup, obrpc::OB_ALTER_TABLEGROUP, (ObAlterTablegroupArg));
   RPC_S(PRD drop_table, obrpc::OB_DROP_TABLE, (ObDropTableArg), ObDDLRes);
+  RPC_S(PRD parallel_drop_table, obrpc::OB_PARALLEL_DROP_TABLE, (ObDropTableArg), ObDropTableRes);
   RPC_S(PRD rename_table, obrpc::OB_RENAME_TABLE, (ObRenameTableArg));
   RPC_S(PRD truncate_table, obrpc::OB_TRUNCATE_TABLE, (ObTruncateTableArg), ObDDLRes);
   RPC_S(PRD truncate_table_v2, obrpc::OB_TRUNCATE_TABLE_V2, (ObTruncateTableArg), ObDDLRes);
@@ -101,6 +102,7 @@
   RPC_S(PRD create_udt, obrpc::OB_CREATE_UDT, (ObCreateUDTArg));
   RPC_S(PRD create_udt_with_res, obrpc::OB_CREATE_UDT_WITH_RES, (ObCreateUDTArg), ObRoutineDDLRes);
   RPC_S(PRD drop_udt, obrpc::OB_DROP_UDT, (ObDropUDTArg));
+  RPC_S(PRD alter_udt_with_res, obrpc::OB_ALTER_UDT_WITH_RES, (ObAlterUDTArg), ObRoutineDDLRes);
 
   //----Definitions for managing dblinks----
   RPC_S(PRD create_dblink, obrpc::OB_CREATE_DBLINK, (ObCreateDbLinkArg));
@@ -206,6 +208,7 @@
   RPC_S(PRD run_job, obrpc::OB_RUN_JOB, (ObRunJobArg));
   RPC_S(PRD run_upgrade_job, obrpc::OB_RUN_UPGRADE_JOB, (ObUpgradeJobArg));
   RPC_S(PRD upgrade_table_schema, obrpc::OB_UPGRADE_TABLE_SCHEMA, (ObUpgradeTableSchemaArg));
+  RPC_S(PRD batch_upgrade_table_schema, obrpc::OB_BATCH_UPGRADE_TABLE_SCHEMA, (ObBatchUpgradeTableSchemaArg));
   RPC_S(PR5 admin_flush_cache, obrpc::OB_ADMIN_FLUSH_CACHE, (ObAdminFlushCacheArg));
   RPC_S(PR5 admin_upgrade_cmd, obrpc::OB_ADMIN_UPGRADE_CMD, (Bool));
   RPC_S(PR5 admin_rolling_upgrade_cmd, obrpc::OB_ADMIN_ROLLING_UPGRADE_CMD, (ObAdminRollingUpgradeArg));
@@ -323,3 +326,16 @@
   RPC_S(PRD create_external_resource, obrpc::OB_CREATE_EXTERNAL_RESOURCE, (ObCreateExternalResourceArg), obrpc::ObCreateExternalResourceRes);
   RPC_S(PRD drop_external_resource, obrpc::OB_DROP_EXTERNAL_RESOURCE, (ObDropExternalResourceArg), obrpc::ObDropExternalResourceRes);
   //----End of functions for managing external resource----
+
+  //----Functions for managing ai model----
+  RPC_S(PRD create_ai_model, obrpc::OB_CREATE_AI_MODEL, (ObCreateAiModelArg));
+  RPC_S(PRD drop_ai_model, obrpc::OB_DROP_AI_MODEL, (ObDropAiModelArg));
+  //----End of functions for managing ai model----
+
+  // htable ddl
+  RPC_S(PRD parallel_htable_ddl, obrpc::OB_PARALLEL_HTABLE_DDL, (ObHTableDDLArg), ObHTableDDLRes);
+
+  //----Functions for managing CCL rules----
+  RPC_S(PRD create_ccl_rule, obrpc::OB_CREATE_CCL_RULE, (ObCreateCCLRuleArg));
+  RPC_S(PRD drop_ccl_rule, obrpc::OB_DROP_CCL_RULE, (ObDropCCLRuleArg));
+  //----End of functions for managing CCL rules----

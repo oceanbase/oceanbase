@@ -347,7 +347,11 @@ int ObTableOpProcessor::init_batch_params(ObTableBatchCtx &batch_ctx,
     batch_ctx.credential_ = &group_ctx_->credential_;
     for (int64_t i = 0; i < ops_->count() && OB_SUCC(ret); i++) {
       ObTableOp *single_op = static_cast<ObTableOp *>(ops_->at(i));
-      if (OB_FAIL(batch_ops.push_back(single_op->op_))) {
+      ObITableEntity *entity = nullptr;
+      if (OB_FAIL(single_op->op_.get_entity(entity))) {
+        LOG_WARN("fail to get entity", K(ret), K(i));
+      } else if (FALSE_IT(entity->set_allocator(&single_op->get_allocator()))) {
+      } else if (OB_FAIL(batch_ops.push_back(single_op->op_))) {
         LOG_WARN("fail to push back table operation", K(single_op->op_), K(i));
       } else if (OB_FAIL(batch_ctx.tablet_ids_.push_back(single_op->tablet_id()))) {
         LOG_WARN("fail to push back tablet id", K(ret), K(single_op->tablet_id()), K(i));

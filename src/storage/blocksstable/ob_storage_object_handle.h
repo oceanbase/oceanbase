@@ -15,6 +15,9 @@
 
 #include "share/io/ob_io_define.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_ss_local_cache_service.h"
+#endif
 namespace oceanbase
 {
 namespace storage
@@ -26,7 +29,7 @@ namespace storage
   class ObSSPreReadTask;
   class ObSSMicroCacheHandler;
   class ObSSMicroCache;
-  class ObSSMicroCache;
+  class ObSSMemMacroCache;
   class ObTenantFileManager;
   class ObServerFileManager;
   class ObSSBaseReader;
@@ -35,6 +38,7 @@ namespace storage
   class ObSSObjectAccessUtil;
   class ObStorageCachePolicyPrewarmer;
 #endif
+  class ObStorageIOPipelineTaskInfo;
 }
 namespace blocksstable
 {
@@ -54,7 +58,7 @@ class ObStorageObjectHandle final
   friend class storage::ObSSPreReadTask;
   friend class storage::ObSSMicroCacheHandler;
   friend class storage::ObSSMicroCache;
-  friend class storage::ObSSMicroCache;
+  friend class storage::ObSSMemMacroCache;
   friend class storage::ObTenantFileManager;
   friend class storage::ObServerFileManager;
   friend class storage::ObSSBaseReader;
@@ -63,6 +67,7 @@ class ObStorageObjectHandle final
   friend class storage::ObSSObjectAccessUtil;
   friend class storage::ObStorageCachePolicyPrewarmer;
   #endif
+  friend class storage::ObStorageIOPipelineTaskInfo;
 public:
   ObStorageObjectHandle() = default;
   ~ObStorageObjectHandle();
@@ -96,6 +101,8 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int ss_async_read(const ObStorageObjectReadInfo &read_info);
   int ss_async_write(const ObStorageObjectWriteInfo &write_info);
+  int ss_update_object_type_rw_stat(const blocksstable::ObStorageObjectType &object_type, const int result,
+    const int64_t delta_cnt);
 #endif
 
 private:

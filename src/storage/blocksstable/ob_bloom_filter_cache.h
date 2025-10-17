@@ -35,6 +35,7 @@ public:
 
 public:
   ObBloomFilter();
+  explicit ObBloomFilter(const uint64_t tenant_id);
   ~ObBloomFilter();
   int init_by_row_count(const int64_t element_count, const double false_positive_prob = BLOOM_FILTER_FALSE_POSITIVE_PROB);
   void destroy();

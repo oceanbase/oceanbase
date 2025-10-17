@@ -15,27 +15,39 @@
 
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/optimizer/ob_table_location.h"
-#include "sql/ob_phy_table_location.h"
+#include "share/partition_table/ob_partition_location.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
+enum class PartitionInfoType
+{
+  INTERNAL_TABLE,
+  LAKE_TABLE
+};
+
 class ObTablePartitionInfo
 {
 public:
-  ObTablePartitionInfo() :
+  ObTablePartitionInfo(PartitionInfoType type = PartitionInfoType::INTERNAL_TABLE) :
   inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
-  allocator_(inner_allocator_)
+  allocator_(inner_allocator_),
+  type_(type)
   {}
-  ObTablePartitionInfo(common::ObIAllocator &allocator)
+  ObTablePartitionInfo(common::ObIAllocator &allocator, PartitionInfoType type = PartitionInfoType::INTERNAL_TABLE)
   : allocator_(allocator),
-  table_location_(allocator)
+  table_location_(allocator),
+  type_(type)
   {}
   virtual ~ObTablePartitionInfo() {}
 
-  int assign(const ObTablePartitionInfo &other);
+  virtual int assign(const ObTablePartitionInfo &other);
+  virtual uint64_t get_table_id() const { return table_location_.get_table_id(); }
+  virtual uint64_t get_ref_table_id() const { return table_location_.get_ref_table_id(); }
+  virtual share::schema::ObPartitionLevel get_part_level() const { return table_location_.get_part_level(); }
+  virtual bool is_lake_table_partition_info() const { return type_ != PartitionInfoType::INTERNAL_TABLE; }
 
   int init_table_location(ObSqlSchemaGuard &schema_guard,
                           const ObDMLStmt &stmt,
@@ -59,11 +71,12 @@ public:
   int calc_phy_table_loc_and_select_leader(ObExecContext &exec_ctx,
                                            const ParamStore &params,
                                            const common::ObDataTypeCastParams &dtc_params);
-  int replace_final_location_key(ObExecContext &exec_ctx, uint64_t ref_table_id, bool is_local_index);
+  virtual int replace_final_location_key(ObExecContext &exec_ctx, uint64_t ref_table_id, bool is_local_index);
 
-  int set_table_location_direction(const ObOrderDirection &direction);
-  int fill_phy_tbl_loc_info_direction();
   int get_location_type(const common::ObAddr &server, ObTableLocationType &type) const;
+  static int get_location_type(const common::ObAddr &server,
+                               const ObCandiTabletLocIArray &phy_part_loc_info_list,
+                               ObTableLocationType &type);
   int get_all_servers(common::ObIArray<common::ObAddr> &servers) const;
 
   ObTableLocation &get_table_location()
@@ -76,6 +89,16 @@ public:
     return table_location_;
   }
 
+  virtual const ObDASTableLocMeta &get_loc_meta() const
+  {
+    return table_location_.get_loc_meta();
+  }
+
+  virtual ObDASTableLocMeta &get_loc_meta()
+  {
+    return table_location_.get_loc_meta();
+  }
+
   const ObCandiTableLoc &get_phy_tbl_location_info() const
   {
     return candi_table_loc_;
@@ -85,29 +108,21 @@ public:
     return candi_table_loc_;
   }
 
-  void set_table_location(const ObTableLocation &tbl)
+  int set_table_location(const ObTableLocation &tbl)
   {
-    table_location_ = tbl;
+    return table_location_.assign(tbl);
   }
 
-  /*ObPhyTableLocation &get_phy_table_location()
-  {
-    return phy_tbl_location_;
-  }*/
-
-  uint64_t get_table_id() const { return table_location_.get_table_id(); }
-  uint64_t get_ref_table_id() const { return table_location_.get_ref_table_id(); }
-  share::schema::ObPartitionLevel get_part_level() const { return table_location_.get_part_level(); }
   TO_STRING_KV(K_(table_location),
                K_(candi_table_loc));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartitionInfo);
 
-private:
+protected:
   /**
    * ObTableLocation is the structure we stored to calculate the physical table location,
-   * which is represented by ObPhyTableLocation, for a given table(logical) in a given statement.
+   * which is represented by ObCandiTableLoc, for a given table(logical) in a given statement.
    *
    * The info we keep in ObTableLocation is constant for a parameterized query among multiple
    * times of execution, which is stored to short-cut to plan matching and location calculation
@@ -118,7 +133,7 @@ private:
   ObIAllocator &allocator_;
   ObTableLocation table_location_;
   ObCandiTableLoc candi_table_loc_;
-  //ObPhyTableLocation phy_tbl_location_;
+  PartitionInfoType type_;
 };
 
 }

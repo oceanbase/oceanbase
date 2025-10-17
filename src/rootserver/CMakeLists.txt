@@ -14,6 +14,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_clean_ls_task_mgr.cpp
   backup/ob_backup_clean_scheduler.cpp
   backup/ob_backup_clean_task_mgr.cpp
+  backup/ob_backup_clean_selector.cpp
   backup/ob_backup_service.cpp
   backup/ob_backup_schedule_task.cpp
   backup/ob_backup_task_scheduler.cpp
@@ -35,6 +36,7 @@ ob_set_subtarget(ob_rootserver common
   ob_disaster_recovery_info.cpp
   ob_disaster_recovery_worker.cpp
   ob_disaster_recovery_service.cpp
+  ob_disaster_recovery_replace_tenant.cpp
   ob_disaster_recovery_task.cpp
   ob_disaster_recovery_task_mgr.cpp
   ob_disaster_recovery_task_utils.cpp
@@ -113,14 +115,21 @@ ob_set_subtarget(ob_rootserver common
   ob_catalog_ddl_service.cpp
   ob_tenant_ddl_service.cpp
   ob_tenant_parallel_create_executor.cpp
+  ob_load_inner_table_schema_executor.cpp
   ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
+  ob_alter_ls_command.cpp
   ob_alter_table_constraint_checker.cpp
   ob_location_ddl_operator.cpp
   ob_location_ddl_service.cpp
   ob_objpriv_mysql_ddl_operator.cpp
   ob_objpriv_mysql_ddl_service.cpp
   ob_objpriv_mysql_schema_history_recycler.cpp
+  ob_ai_model_ddl_operator.cpp
+  ob_ai_model_ddl_service.cpp
+  ob_create_index_on_empty_table_helper.cpp
+  ob_ccl_ddl_service.cpp
+  ob_ccl_ddl_operator.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
@@ -131,6 +140,8 @@ ob_set_subtarget(ob_rootserver balance
   balance/ob_tenant_ls_balance_group_info.cpp
   balance/ob_ls_all_part_builder.cpp
   balance/ob_partition_balance_helper.cpp
+  balance/ob_object_balance_weight_mgr.cpp
+  balance/ob_part_group_container.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task
@@ -169,6 +180,11 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_set_comment_helper.cpp
   parallel_ddl/ob_create_index_helper.cpp
   parallel_ddl/ob_update_index_status_helper.cpp
+  parallel_ddl/ob_drop_table_helper.cpp
+  parallel_ddl/ob_htable_ddl_handler.cpp
+  parallel_ddl/ob_set_kv_attribute_helper.cpp
+  parallel_ddl/ob_create_tablegroup_helper.cpp
+  parallel_ddl/ob_drop_tablegroup_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze
@@ -241,6 +257,7 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_standby_service.cpp
   standby/ob_recovery_ls_service.cpp
   standby/ob_tenant_role_transition_service.cpp
+  standby/ob_flashback_standby_log_command.cpp
 )
 
 ob_set_subtarget(ob_rootserver truncate_info

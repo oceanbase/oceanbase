@@ -83,6 +83,7 @@ ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
   iter_(get_source_func, update_source_func, refresh_storage_info_func)
 {
   pre_scn_ = pre_scn;
+  task_stat_.gen_ts_ = common::ObTimeUtility::current_time();
 }
 
 bool ObFetchLogTask::is_valid() const

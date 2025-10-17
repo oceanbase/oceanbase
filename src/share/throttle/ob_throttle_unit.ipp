@@ -123,6 +123,19 @@ bool ObThrottleUnit<ALLOCATOR>::has_triggered_throttle(const int64_t holding_siz
 }
 
 template <typename ALLOCATOR>
+bool ObThrottleUnit<ALLOCATOR>::exceeded_resource_limit(const int64_t holding_resource, const int64_t apply_resource)
+{
+  bool exceeded = false;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(holding_resource < 0 || apply_resource <= 0)) {
+    SHARE_LOG(ERROR, "invalid arguments", K(holding_resource), K(resource_limit_), K(apply_resource));
+  } else if (holding_resource + apply_resource > resource_limit_) {
+    exceeded = true;
+  }
+  return exceeded;
+}
+
+template <typename ALLOCATOR>
 bool ObThrottleUnit<ALLOCATOR>::is_throttling(ObThrottleInfoGuard &ti_guard)
 {
   int ret = OB_SUCCESS;
@@ -225,7 +238,7 @@ int ObThrottleUnit<ALLOCATOR>::inner_get_throttle_info_(share::ObThrottleInfo *&
               SHARE_LOG(WARN, "allocate throttle info failed", KR(ret), K(tid));
             } else {
               // sleep 10 ms and retry
-              usleep(10 * 1000);
+              ob_usleep(10 * 1000);
               ret = OB_SUCCESS;
             }
           } else {

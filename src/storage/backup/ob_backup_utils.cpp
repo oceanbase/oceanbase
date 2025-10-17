@@ -25,6 +25,7 @@
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "lib/wait_event/ob_wait_event.h"
+#include "share/backup/ob_backup_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -57,6 +58,26 @@ int ObBackupUtils::calc_start_replay_scn(
   if (OB_SUCC(ret)) {
     start_replay_scn = SCN::max(tmp_start_replay_scn, round_attr.start_scn_);
     LOG_INFO("calculate start replay scn finish", K(start_replay_scn), K(ls_meta_infos), K(round_attr));
+  }
+  return ret;
+}
+
+int ObBackupUtils::check_tenant_backup_dest_exists(const uint64_t tenant_id, bool &exists, common::ObISQLClient &sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupHelper backup_helper;
+  ObBackupPathString backup_dest_str;
+  exists = false;
+  if (OB_FAIL(backup_helper.init(tenant_id, sql_proxy))) {
+    LOG_WARN("fail to init backup help", K(ret));
+  } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get backup dest", K(ret), K(tenant_id));
+    }
+  } else if (!backup_dest_str.is_empty()) {
+    exists = true;
   }
   return ret;
 }
@@ -2163,7 +2184,7 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             LOG_WARN("tablet is split dst when double check tablet status", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(status));
           } else if (ObTabletStatus::NORMAL != status && ObTabletStatus::SPLIT_SRC != status) {
             LOG_WARN("tablet status is not normal", K(tenant_id), K(ls_id), K(tablet_id), K(status));
-            usleep(100 * 1000); // wait 100ms
+            ob_usleep(100 * 1000); // wait 100ms
           } else if (OB_FAIL(inner_get_tablet_handle_without_memtables_(tenant_id, ls_id, tablet_id, tablet_ref))) { // read readble commited, only get NORMAL and TRANSFER IN tablet.
             LOG_WARN("failed to inner get tablet handle without memtables", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
           } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
@@ -2175,7 +2196,7 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             break;
           } else if (tablet_ref->tablet_handle_.get_obj()->get_tablet_meta().has_transfer_table()) {
             LOG_INFO("transfer table is not replaced", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-            usleep(100 * 1000); // wait 100ms
+            ob_usleep(100 * 1000); // wait 100ms
           } else if (OB_FAIL(get_tablet_status_(ls_id, tablet_id, status))) {
             LOG_WARN("failed to check tablet is normal", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
           } else if (ObTabletStatus::NORMAL != status && ObTabletStatus::SPLIT_SRC != status) {

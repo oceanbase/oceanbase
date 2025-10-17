@@ -323,7 +323,7 @@ TEST_F(ObCollectMV, update_full_column)
                                              true  /*end_exclusive*/));
   {
     int ret = OB_SUCCESS;
-    blocksstable::ObRowReader row_reader;
+    blocksstable::ObCompatRowReader row_reader;
     blocksstable::ObDatumRow datum_row;
     SMART_VAR(ObCStringHelper, helper) {
       for (int64_t row_idx = 0; OB_SUCC(ret) && OB_SUCC(iter.next_internal()); row_idx++) {

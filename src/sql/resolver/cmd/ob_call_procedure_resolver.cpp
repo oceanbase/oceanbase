@@ -277,7 +277,7 @@ int ObCallProcedureResolver::add_call_proc_info(ObCallProcedureInfo *call_info)
       ret = OB_SUCCESS;
       LOG_DEBUG("plan cache don't support add this kind of plan now",  KPC(call_info));
     } else {
-      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+      if (OB_REACH_MAX_CONCURRENT_NUM != ret && OB_REACH_MAX_CCL_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
         ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
         LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
       }
@@ -477,7 +477,6 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           OZ (pl::ObPLDataType::transform_from_iparam(param_info,
                                                       *(schema_checker_->get_schema_mgr()),
                                                       *(session_info_),
-                                                      *(params_.allocator_),
                                                       *(params_.sql_proxy_),
                                                       pl_type,
                                                       NULL,

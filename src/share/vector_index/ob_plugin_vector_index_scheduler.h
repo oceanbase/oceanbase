@@ -22,6 +22,7 @@
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
+#include "share/vector_index/ob_ivf_async_task_executor.h"
 
 namespace oceanbase
 {
@@ -232,7 +233,9 @@ public:
 
   // core interfaces
   int execute_adapter_maintenance();
-  int acquire_adapter_in_maintenance(const int64_t table_id, const ObTableSchema *table_schema);
+  int acquire_adapter_in_maintenance(const int64_t table_id,
+                                     const ObTableSchema *table_schema,
+                                     ObVecIdxSharedTableInfoMap &shared_table_info_map);
   int set_shared_table_info_in_maintenance(const int64_t table_id,
                                            const ObTableSchema *table_schema,
                                            ObVecIdxSharedTableInfoMap &shared_table_info_map);
@@ -255,6 +258,8 @@ public:
   int try_schedule_remaining_tasks(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *current_ctx);
   int generate_vec_idx_memdata_dag(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
   int get_ls_mgr(ObPluginVectorIndexMgr *&mgr);
+  void refresh_adapter_rb_flag();
+  void set_ls_leader_flag(const bool is_leader);
 
   // logger interfaces
   int handle_submit_callback(const bool success);
@@ -290,6 +295,11 @@ public:
 private:
   int submit_log_();
   void inner_switch_to_follower_();
+  int init_task_executors(uint64_t tenant_id, ObLS &ls);
+  int check_and_load_task_executors();
+  int start_task_executors();
+  int resume_task_executors();
+  static bool in_retry_list(const int ret_code) { return OB_REPLICA_NOT_READABLE == ret_code; }
 
 private:
 
@@ -327,6 +337,7 @@ private:
   ObVectorIndexTabletIDArray tablet_id_array_;
   ObVectorIndexTableIDArray table_id_array_;
   ObVecAsyncTaskExector async_task_exec_;
+  ObIvfAsyncTaskExector ivf_task_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask
@@ -340,7 +351,7 @@ public:
       vec_idx_mgr_(nullptr),
       task_ctx_(nullptr),
       read_snapshot_(),
-      allocator_(ObMemAttr(MTL_ID(), "VecIdxTaskCtx"))
+      allocator_(ObMemAttr(MTL_ID(), "VecIdxTask"))
   {}
   ~ObVectorIndexTask() {};
   int init(ObPluginVectorIndexLoadScheduler *schedular,
@@ -408,7 +419,7 @@ public:
   {}
   virtual ~ObVectorIndexDag() {}
   virtual bool operator==(const ObIDag& other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   int init(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -442,6 +453,7 @@ public:
 
   int add_task_to_waiting_map(ObVectorIndexSyncLog &ls_log);
   int add_task_to_waiting_map(VectorIndexAdaptorMap &adapter_map);
+  int add_task_to_waiting_map(ObTabletID &tablet_id, int64_t table_id);
   int count_processing_finished(bool &is_finished,
                                 uint32_t &total_count,
                                 uint32_t &finished_count);

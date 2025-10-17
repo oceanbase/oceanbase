@@ -122,6 +122,8 @@ private:
   static const int64_t APPEND_TIMES = 5;
   static const int64_t CLOG_FILE_SIZE = 64 * 1024 * 1024;
 
+  static const int64_t IO_TIMEOUT_MS = 120LL * 1000LL;
+
   DISALLOW_COPY_AND_ASSIGN(ObAdminTestIODeviceExecutor);
 };
 

@@ -29,10 +29,7 @@ add_library(zlib_lite_qpl
   codec_deflate_qpl.cpp
 )
 
-set(ZLIB_LITE_COMPILE_DEFINITIONS -fvisibility=hidden)
-if (CPP_STANDARD_20)
-  set(ZLIB_LITE_COMPILE_DEFINITIONS ${ZLIB_LITE_COMPILE_DEFINITIONS} -Wno-deprecated-non-prototype)
-endif()
+set(ZLIB_LITE_COMPILE_DEFINITIONS -fvisibility=hidden -Wno-deprecated-non-prototype)
 
 target_compile_options(zlib_lite_src PRIVATE ${ZLIB_LITE_COMPILE_DEFINITIONS})
 target_compile_options(zlib_lite_adaptor PRIVATE ${ZLIB_LITE_COMPILE_DEFINITIONS})

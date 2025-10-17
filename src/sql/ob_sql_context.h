@@ -27,7 +27,9 @@
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/monitor/ob_sql_stat_record.h"
+#include "share/catalog/ob_external_catalog.h"
 #include "share/stat/ob_opt_ds_stat_cache.h"
+#include "sql/ob_sql_ccl_rule_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
@@ -231,6 +233,7 @@ class ObRawExpr;
 class ObSQLSessionInfo;
 
 class ObSelectStmt;
+class ObCCLRuleConcurrencyValueWrapper;
 
 class ObMultiStmtItem
 {
@@ -493,6 +496,8 @@ public:
                                const uint64_t database_id,
                                const ObString &tbl_name,
                                const ObTableSchema *&table_schema);
+  int get_lake_table_metadata(const uint64_t table_id,
+                              share::ObILakeTableMetadata *&lake_table_metadata) const;
   int get_catalog_table_id(const uint64_t tenant_id,
                            const uint64_t catalog_id,
                            const uint64_t database_id,
@@ -528,11 +533,18 @@ public:
   uint64_t get_next_mocked_schema_id() { return ++mocked_schema_id_counter_; }
   int get_mocked_table_schema(uint64_t ref_table_id, const share::schema::ObTableSchema *&table_schema) const;
   int add_mocked_table_schema(const share::schema::ObTableSchema &table_schema);
+  int add_mocked_table_schema(const share::schema::ObTableSchema *table_schema);
   int add_mocked_database_schema(const share::schema::ObDatabaseSchema &database_schema);
   int recover_schema_from_external_object(const share::ObExternalObject &external_object);
   int recover_schema_from_external_objects(const ObIArray<share::ObExternalObject> &external_objects);
   common::ObIArray<const share::schema::ObDatabaseSchema *> &get_mocked_database_schemas();
   common::ObIArray<const share::schema::ObTableSchema *> &get_mocked_table_schemas();
+  bool check_is_under_oracle12c(uint64_t dblink_id);
+  const share::ObILakeTableMetadata* get_table_metadata(int64_t table_id);
+
+  int get_lake_table_metadata(const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              const share::ObILakeTableMetadata *&lake_table_metadata);
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
@@ -542,10 +554,12 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   common::ObSEArray<const share::schema::ObDatabaseSchema *, 1> mocked_database_schemas_;
+  common::ObSEArray<share::ObILakeTableMetadata *, 1> lake_table_metadatas_;
   uint64_t next_link_table_id_;
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
   int64_t mocked_schema_id_counter_;
+  common::ObSEArray<uint64_t, 1> dblink_ids_under_oracle12c_;
 };
 
 #ifndef OB_BUILD_SPM
@@ -783,6 +797,10 @@ public:
     };
   };
   common::ObString raw_sql_;
+  uint64_t ccl_rule_id_;
+  uint64_t ccl_match_time_;
+  common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_rule_level_values_;
+  common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_format_sqlid_level_values_;
   TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
@@ -831,7 +849,8 @@ public:
       has_dblink_(false),
       injected_random_status_(false),
       ori_question_marks_count_(0),
-      type_demotion_flag_(0)
+      type_demotion_flag_(0),
+      initial_type_ctx_()
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -878,6 +897,7 @@ public:
     ori_question_marks_count_ = 0;
     filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
+    // initial_type_ctx_.reset();
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -923,7 +943,9 @@ public:
     ori_question_marks_count_ = count;
     question_marks_count_ = count;
   };
-
+  void init_type_ctx(const ObSQLSessionInfo *session);
+  bool is_type_ctx_inited() const { return NULL != initial_type_ctx_.get_session(); }
+  const ObExprTypeCtx& get_initial_type_ctx() const { return initial_type_ctx_; };
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -1002,6 +1024,9 @@ public:
       int8_t type_demotion_flag_reserved_   : 4;
     };
   };
+  // A type context master copy that requires duplication during usage.
+  // For scenarios involving numerous and deeply nested expressions, frequent type context initialization is costy.
+  ObExprTypeCtx initial_type_ctx_;
 };
 
 template<typename... Args>

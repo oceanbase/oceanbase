@@ -192,7 +192,7 @@ static struct VarsInit{
       ObSysVars[9].name_ = "collation_connection" ;
       ObSysVars[9].data_type_ = ObIntType ;
       ObSysVars[9].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_collation" ;
-      ObSysVars[9].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NULLABLE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[9].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NULLABLE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[9].base_class_ = "ObCharsetSysVar" ;
       ObSysVars[9].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_collation" ;
       ObSysVars[9].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_collation_not_null" ;
@@ -3306,7 +3306,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.4.0.0" ;
+      ObSysVars[234].default_value_ = "4.4.1.0" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -6669,7 +6669,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[477].default_value_ = "2" ;
+      ObSysVars[477].default_value_ = "0" ;
       ObSysVars[477].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
       ObSysVars[477].name_ = "plsql_optimize_level" ;
       ObSysVars[477].data_type_ = ObIntType ;
@@ -11479,13 +11479,26 @@ static struct VarsInit{
     ObSysVars[837].alias_ = "OB_SV_SPARSE_DROP_RATIO_SEARCH" ;
     }();
 
+    [&] (){
+      ObSysVars[838].default_value_ = "0" ;
+      ObSysVars[838].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
+      ObSysVars[838].name_ = "plsql_can_transform_sql_to_assign" ;
+      ObSysVars[838].data_type_ = ObIntType ;
+      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[838].id_ = SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN] = 838 ;
+      ObSysVars[838].base_value_ = "0" ;
+    ObSysVars[838].alias_ = "OB_SV_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 838;
+static int64_t var_amount = 839;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

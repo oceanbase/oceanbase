@@ -41,60 +41,6 @@ void fin_obdal_env()
   ObDalEnvIniter::get_instance().global_destroy();
 }
 
-//========================= ObDalMemoryManager =========================
-ObDalMemoryManager::ObDalMemoryManager()
-  : attr_(),
-    mem_limiter_(),
-    allocator_()
-{
-  attr_.label_ = OB_DAL_SDK;
-}
-
-ObDalMemoryManager::~ObDalMemoryManager()
-{
-}
-
-ObDalMemoryManager &ObDalMemoryManager::get_instance()
-{
-  static ObDalMemoryManager memory_manger;
-  return memory_manger;
-}
-
-int ObDalMemoryManager::init()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(allocator_.init(DEFAULT_BLOCK_SIZE, mem_limiter_, attr_))) {
-    OB_LOG(WARN, "init allocator error", K(ret));
-  } else {
-    allocator_.set_nway(N_WAY);
-  }
-  return ret;
-}
-
-void *ObDalMemoryManager::allocate(std::size_t size, std::size_t align)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = nullptr;
-  do {
-    ptr = allocator_.alloc_align(size, align);
-    if (OB_ISNULL(ptr)) {
-      ::usleep(10000); // 10ms
-      if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(ERROR, "ObVSliceAlloc failed to allocate memory",
-            K(size), K(align));
-      }
-    }
-  } while (OB_ISNULL(ptr));
-  return ptr;
-}
-
-void ObDalMemoryManager::free(void *ptr)
-{
-  allocator_.free_align(ptr);
-  ptr = nullptr;
-}
-
 //========================= ObDalEnvIniter =========================
 ObDalEnvIniter::ObDalEnvIniter()
   : lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
@@ -110,17 +56,21 @@ ObDalEnvIniter &ObDalEnvIniter::get_instance()
 
 void *obdal_malloc(std::size_t size, std::size_t align)
 {
-  // Since there are some global static variables in obdal that cannot be cleaned up
-  // at fin_obdal_env and vslice alloc has memory_leak checks, ob_malloc replacement is used first
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
+  const int64_t tenant_id = ObDalAccessor::obdal_get_tenant_id();
+  if (size < OBDAL_MALLOC_BIG_SIZE) {
+    attr.tenant_id_ = OB_SERVER_TENANT_ID;
+  } else {
+    attr.tenant_id_ = tenant_id;
+  }
   SET_IGNORE_MEM_VERSION(attr);
   do {
     // ptr = ObDalMemoryManager::get_instance().allocate(size, align);
     ptr = ob_malloc_align(align, size, attr);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000);   // 10ms
+      ob_usleep(10000);   // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "obdal failed to allocate memory", K(size), K(align));
       }
@@ -175,15 +125,14 @@ int ObDalEnvIniter::global_init()
   if (is_global_inited_) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "cannot init twice", K(ret));
-  } else if (OB_FAIL(ObDalMemoryManager::get_instance().init())) {
-    OB_LOG(WARN, "failed init global obdal memory manager", K(ret));
   } else if (OB_FAIL(ObDalAccessor::init_env(reinterpret_cast<void *>(obdal_malloc),
                                              reinterpret_cast<void *>(obdal_free),
                                              reinterpret_cast<void *>(obdal_log_handler),
                                              OB_LOGGER.get_level(),
                                              get_obdal_thread_cnt(),
                                              POOL_MAX_IDLE_PER_HOST,
-                                             POOL_MAX_IDLE_TIME_S))) {
+                                             POOL_MAX_IDLE_TIME_S,
+                                             CONNECT_TIMEOUT_S))) {
     OB_LOG(WARN, "failed init obdal env", K(ret));
   } else {
     signal(SIGPIPE, SIG_IGN);
@@ -253,7 +202,7 @@ int ObDalAccount::assign(const ObObjectStorageInfo *storage_info)
 ObStorageObDalBase::ObStorageObDalBase()
   : is_inited_(false),
     is_write_with_if_match_(false),
-    allocator_(OB_STORAGE_OBDAL_ALLOCATOR),
+    allocator_(OB_STORAGE_OBDAL_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id()),
     storage_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     bucket_(),
     object_(),
@@ -319,11 +268,16 @@ int set_obdal_options_with_account(
     const ObString &bucket)
 {
   int ret = OB_SUCCESS;
+  const int64_t tenant_id = ObObjectStorageTenantGuard::get_tenant_id();
+  static constexpr int INTEGER_BUF_LEN = 32;
+  char tenant_id_str[INTEGER_BUF_LEN] = {0};
   if (OB_ISNULL(options)
       || OB_UNLIKELY(!obdal_account.is_valid()
       || bucket.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(options), K(obdal_account), K(bucket));
+  } else if (OB_FAIL(databuff_printf(tenant_id_str, INTEGER_BUF_LEN, "%ld", tenant_id))) {
+    OB_LOG(WARN, "failed to set tenant id", K(ret), K(tenant_id));
   } else {
     if (storage_type == ObStorageType::OB_STORAGE_S3) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "bucket", bucket.ptr()))) {
@@ -335,7 +289,7 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
         OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "secret_access_key", obdal_account.access_key_))) {
-        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.access_key_));
+        OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_config_load", "true"))) {
         OB_LOG(WARN, "failed to set disable config load", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_ec2_metadata", "true"))) {
@@ -346,6 +300,8 @@ int set_obdal_options_with_account(
         OB_LOG(WARN, "faield to set enable virtual host style", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "tenant_id", tenant_id_str))) {
+        OB_LOG(WARN, "failed to set tenant id", K(ret));
       }
     } else if (storage_type == ObStorageType::OB_STORAGE_OSS) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "bucket", bucket.ptr()))) {
@@ -355,9 +311,25 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
         OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_secret", obdal_account.access_key_))) {
-        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.access_key_));
+        OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "tenant_id", tenant_id_str))) {
+        OB_LOG(WARN, "failed to set tenant id", K(ret));
+      }
+    } else if (storage_type == ObStorageType::OB_STORAGE_AZBLOB) {
+      if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "container", bucket.ptr()))) {
+        OB_LOG(WARN, "failed to set bucket", K(ret), K(bucket));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "endpoint", obdal_account.endpoint_))) {
+        OB_LOG(WARN, "failed to set endpoint", K(ret), K(obdal_account.endpoint_));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "account_name", obdal_account.access_id_))) {
+        OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "account_key", obdal_account.access_key_))) {
+        OB_LOG(WARN, "failed to set access key", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "120"))) {
+        OB_LOG(WARN, "failed to set timeout", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "tenant_id", tenant_id_str))) {
+        OB_LOG(WARN, "failed to set tenant id", K(ret));
       }
     }
   }
@@ -365,14 +337,15 @@ int set_obdal_options_with_account(
 }
 
 int set_options_checksum_algorithm(
-  opendal_operator_options *options,
-  const ObStorageChecksumType checksum_type)
+    const ObStorageType storage_type,
+    const ObStorageChecksumType checksum_type,
+    opendal_operator_options *options)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(options)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(options), K(checksum_type));
-  } else if (OB_UNLIKELY(!is_obdal_supported_checksum(checksum_type))) {
+  } else if (OB_UNLIKELY(!is_obdal_supported_checksum(storage_type, checksum_type))) {
     ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
     OB_LOG(WARN, "that checksum algorithm is not supported for obdal", K(ret), K(checksum_type));
   } else {
@@ -414,7 +387,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
       OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
     }
 #endif
-    if (OB_UNLIKELY(!is_obdal_supported_checksum(checksum_type_))) {
+    if (OB_UNLIKELY(!is_obdal_supported_checksum(storage_type_, checksum_type_))) {
       ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for obdal", K(ret), K_(checksum_type));
     } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_new(options_))) {
@@ -422,7 +395,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
     } else if (OB_FAIL(set_obdal_options_with_account(options_, storage_type_, obdal_account_, bucket_))) {
       OB_LOG(WARN, "fail set opendal operator options", K(ret),
           K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
-    } else if (OB_FAIL(set_options_checksum_algorithm(options_, checksum_type_))) {
+    } else if (OB_FAIL(set_options_checksum_algorithm(storage_type_, checksum_type_, options_))) {
       OB_LOG(WARN, "fail set options with checksum algorithm", K(ret), K(checksum_type_),
           K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
     } else {
@@ -431,8 +404,13 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
           OB_LOG(WARN, "fail get opendal operator with options", K(ret),
               K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
         }
-      } else {
+      } else if (storage_type_ == OB_STORAGE_S3) {
         if (OB_FAIL(ObDalAccessor::obdal_operator_new("s3", options_, op_))) {
+          OB_LOG(WARN, "fail get opendal operator with options", K(ret),
+              K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
+        }
+      } else if (storage_type_ == OB_STORAGE_AZBLOB) {
+        if (OB_FAIL(ObDalAccessor::obdal_operator_new("azblob", options_, op_))) {
           OB_LOG(WARN, "fail get opendal operator with options", K(ret),
               K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
         }
@@ -453,6 +431,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
 int ObStorageObDalBase::get_file_meta(ObDalObjectMeta &meta)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   meta.reset();
   opendal_metadata *query_meta = nullptr;
 
@@ -473,20 +452,33 @@ int ObStorageObDalBase::get_file_meta(ObDalObjectMeta &meta)
   } else {
     meta.is_exist_ = true;
 
-    if (OB_FAIL(ObDalAccessor::obdal_metadata_last_modified(query_meta, meta.mtime_s_))) {
-      OB_LOG(WARN, "fail get last modified", K(ret), K(bucket_), K(object_));
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_last_modified(query_meta, meta.mtime_s_))) {
+      OB_LOG(WARN, "fail get last modified", K(ret), K(tmp_ret), K(bucket_), K(object_));
       // This field is currently only used by external tables.
       // To avoid impacting existing functionality,
       // even if the value is invalid, no error is reported. Instead, `meta.mtime_s_` is set to -1.
-      ret = OB_SUCCESS;
       meta.mtime_s_ = -1;
+    }
+
+    char *obdal_etag = nullptr;
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_etag(query_meta, obdal_etag))) {
+      OB_LOG(WARN, "fail get etag", K(ret), K(tmp_ret), K(bucket_), K(object_));
+    } else if (OB_TMP_FAIL(meta.digest_.set(obdal_etag))) {
+      OB_LOG(WARN, "fail to set digest", K(ret), K(tmp_ret), K(bucket_), K(object_));
+    }
+
+    if (OB_NOT_NULL(obdal_etag)) {
+      if (OB_TMP_FAIL(ObDalAccessor::obdal_c_char_free(obdal_etag))) {
+        OB_LOG(WARN, "failed to free obdal etag", K(ret), K(tmp_ret), K(bucket_), K(object_));
+      }
+      obdal_etag = nullptr;
     }
   }
 
   if (OB_NOT_NULL(query_meta)) {
-    int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_free(query_meta))) {
-      OB_LOG(WARN, "fail free opendal metadata", K(tmp_ret), KP(query_meta));
+      OB_LOG(WARN, "fail free opendal metadata",
+          K(ret), K(tmp_ret), KP(query_meta), K(bucket_), K(object_));
     }
     ret = COVER_SUCC(tmp_ret);
     query_meta = nullptr;
@@ -802,6 +794,9 @@ int ObStorageObDalUtil::head_object_meta(const common::ObString &uri, ObStorageO
     if (obj_meta.is_exist_) {
       obj_meta.length_ = meta.length_;
       obj_meta.mtime_s_ = meta.mtime_s_;
+      if (!meta.digest_.empty() && OB_FAIL(obj_meta.digest_.assign(meta.digest_))) {
+        OB_LOG(WARN, "fail to set digest", K(ret), K(uri), K(meta));
+      }
     }
   }
   return ret;
@@ -1004,6 +999,51 @@ int get_entry_length(const opendal_entry *entry, int64_t &length)
   return ret;
 }
 
+int get_file_extra_info(ObIAllocator &allocator, const opendal_entry *entry, ObFileExtraInfo &file_extra_info)
+{
+  int ret = OB_SUCCESS;
+  file_extra_info.reset();
+  opendal_metadata *meta = nullptr;
+  char *obdal_etag = nullptr;
+  char *deep_copied_etag = nullptr;
+  int64_t last_modified_time_s = 0;
+  if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arguments", K(ret), KP(entry));
+  } else if (OB_FAIL(ObDalAccessor::obdal_entry_metadata(entry, meta))) {
+    OB_LOG(WARN, "failed to get entry metadata", K(ret), KP(entry));
+  } else if (OB_FAIL(ObDalAccessor::obdal_metadata_etag(meta, obdal_etag))) {
+    OB_LOG(WARN, "failed to get entry etag", K(ret), KP(entry), KP(meta));
+  } else if (OB_FAIL(ObDalAccessor::obdal_metadata_last_modified(meta, last_modified_time_s))) {
+    OB_LOG(WARN, "failed to get entry last modified time", K(ret), KP(entry), KP(meta));
+  } else if (OB_FAIL(ob_dup_cstring(allocator, obdal_etag, deep_copied_etag))) {
+    OB_LOG(WARN, "failed to deep copy obdal etag data", K(ret), KP(entry), KP(meta));
+  } else {
+    file_extra_info.last_modified_time_ms_ = last_modified_time_s * 1000LL;
+    file_extra_info.etag_ = deep_copied_etag;
+    file_extra_info.etag_len_ = get_safe_str_len(deep_copied_etag);
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(obdal_etag)) {
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_c_char_free(obdal_etag))) {
+      OB_LOG(WARN, "failed to free obdal etag", K(ret), K(tmp_ret));
+    }
+    obdal_etag = nullptr;
+    ret = COVER_SUCC(tmp_ret);
+  }
+  if (OB_NOT_NULL(meta)) {
+    tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObDalAccessor::obdal_metadata_free(meta))) {
+      OB_LOG(WARN, "fail free opendal metadata", K(ret), K(tmp_ret));
+    }
+    meta = nullptr;
+    ret = COVER_SUCC(tmp_ret);
+  }
+
+  return ret;
+}
+
 int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
@@ -1028,9 +1068,11 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDi
           OB_STORAGE_LIST_MAX_NUM, true/*recursive*/, "", lister))) {
     OB_LOG(WARN, "failed to list obdal objects", K(ret), K(uri), K(OB_STORAGE_LIST_MAX_NUM));
   } else {
+    ObArenaAllocator etag_allocator(OB_STORAGE_OBDAL_ALLOCATOR);
     opendal_entry *entry = nullptr;
     const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
     while (OB_SUCC(ret)) {
+      etag_allocator.clear();
       if (OB_FAIL(ObDalAccessor::obdal_lister_next(lister, entry))) {
         OB_LOG(WARN, "failed to exec obdal lister next", K(ret));
       } else if (entry == nullptr) {
@@ -1040,10 +1082,11 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDi
         // a break is used to exit the loop here.
         break;
       } else {
-        int64_t obj_size = 0;
+        int64_t obj_size = -1;
         char *cur_obj_path = nullptr;
         int64_t cur_obj_path_len = 0;
-        if (OB_FAIL(get_entry_length(entry, obj_size))) {
+        ObFileExtraInfo file_extra_info;
+        if (op.need_get_file_meta() && OB_FAIL(get_entry_length(entry, obj_size))) {
           OB_LOG(WARN, "faield to exec obdal entry content length", K(ret));
         } else if (OB_FAIL(ObDalAccessor::obdal_entry_path(entry, cur_obj_path))) {
           OB_LOG(WARN, "failed exec obdal entry path", K(ret));
@@ -1059,11 +1102,16 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, common::ObBaseDi
         } else if (OB_UNLIKELY(cur_obj_path_len == full_dir_path_len)) {
           OB_LOG(INFO, "exist object path length is same with dir path length",
               K(cur_obj_path), K(full_dir_path), K(full_dir_path_len));
+        } else if (op.need_get_file_meta()
+            && OB_FAIL(get_file_extra_info(etag_allocator, entry, file_extra_info))) {
+          OB_LOG(WARN, "fail to get file extra info", K(ret),
+              K(cur_obj_path), K(full_dir_path), K(full_dir_path_len));
         } else if (OB_FAIL(handle_listed_object(op, cur_obj_path + full_dir_path_len,
                                                 cur_obj_path_len - full_dir_path_len,
-                                                obj_size))) {
+                                                obj_size,
+                                                &file_extra_info))) {
           OB_LOG(WARN, "fail to add listed obdal obejct meta into ctx",
-              K(ret), K(cur_obj_path), K(cur_obj_path_len),
+              K(ret), K(cur_obj_path), K(cur_obj_path_len), K(file_extra_info),
               K(full_dir_path), K(full_dir_path_len), K(obj_size));
         }
 
@@ -1137,7 +1185,7 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, ObStorageListCtx
     const int64_t full_dir_path_len = get_safe_str_len(full_dir_path);
 
     for (int64_t i = 0; OB_SUCC(ret) && (i < max_list_num); i++) {
-      int64_t obj_size = 0;
+      int64_t obj_size = -1;
       char *cur_obj_path = nullptr;
       int64_t cur_obj_path_len = 0;
       if (OB_FAIL(ObDalAccessor::obdal_lister_next(list_ctx.opendal_lister_, entry))) {
@@ -1145,7 +1193,7 @@ int ObStorageObDalUtil::list_files(const common::ObString &uri, ObStorageListCtx
       } else if (entry == nullptr) {
         list_ctx.has_next_ = false;
         break;
-      } else if (OB_FAIL(get_entry_length(entry, obj_size))) {
+      } else if (list_ctx.need_meta_ && OB_FAIL(get_entry_length(entry, obj_size))) {
         OB_LOG(WARN, "faield to exec obdal entry content length", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_entry_path(entry, cur_obj_path))) {
         OB_LOG(WARN, "failed exec obdal entry path", K(ret));
@@ -1236,7 +1284,10 @@ int ObStorageObDalUtil::list_directories(const common::ObString &uri, common::Ob
         } else if (OB_UNLIKELY(false == ObString(listed_dir_path).prefix_match(full_dir_path))) {
           ret = OB_OBJECT_STORAGE_IO_ERROR;
           OB_LOG(WARN, "returned object prefix not match", K(ret), K(uri), K(listed_dir_path), K(full_dir_path));
-        } else if (listed_dir_path_len > 0 && listed_dir_path[listed_dir_path_len - 1] == '/') {
+        } else if (listed_dir_path_len > full_dir_path_len
+                   && listed_dir_path[listed_dir_path_len - 1] == '/') {
+          // The condition listed_dir_path_len > full_dir_path_len is used to prevent the scenario where listed_dir_path is equal to full_dir_path.
+          // oss mkdir will create a empty file named ended with '/', althouth ob not do mkdir, the outer layer will.
           if (OB_FAIL(handle_listed_directory(op, listed_dir_path + full_dir_path_len, listed_dir_path_len - full_dir_path_len - 1))) {
             OB_LOG(WARN, "fail to handle obdal directory name", K(ret),
                 K(full_dir_path), K(listed_dir_path), K(listed_dir_path_len));
@@ -1380,7 +1431,7 @@ int ObStorageObDalAppendWriter::open(const ObString &uri, ObObjectStorageInfo *s
   } else if (OB_FAIL(ObStorageObDalBase::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in obdal base", K(ret), K(uri), KPC(storage_info));
   } else {
-    if (storage_type_ == OB_STORAGE_OSS) {
+    if (storage_type_ == OB_STORAGE_OSS || storage_type_ == OB_STORAGE_AZBLOB) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_append_writer(op_, object_.ptr(), writer_))) {
         OB_LOG(WARN, "failed to get obdal operator append writer", K(ret), K(uri));
       }
@@ -1414,7 +1465,7 @@ int ObStorageObDalAppendWriter::pwrite(const char *buf, const int64_t size, cons
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(size), K(offset));
   } else {
-    if (storage_type_ == OB_STORAGE_OSS) {
+    if (storage_type_ == OB_STORAGE_OSS || storage_type_ == OB_STORAGE_AZBLOB) {
       if (OB_FAIL(ObDalAccessor::obdal_writer_write_with_offset(writer_, offset, buf, size))) {
         OB_LOG(WARN, "failed to write with offset in obdal append writer", K(ret), K(offset), K(size));
       }

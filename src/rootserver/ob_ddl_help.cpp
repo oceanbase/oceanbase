@@ -50,23 +50,17 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("user table cannot add to sys tablegroup", KR(ret), K(tablegroup_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table add to sys tablegroup");
-  } else if (OB_ISNULL(ddl_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ddl_service is null", KR(ret));
   } else {
-    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     const bool is_index = false;
     const uint64_t tenant_id = arg.tenant_id_;
     ObString tablegroup_name = tablegroup_schema.get_tablegroup_name();
     // first table is used for tablegroup is empty, but add list's num more than one to compare partition
-    const ObTableSchema *first_table_schema = NULL;
+    const ObTableSchema *first_table_schema = nullptr;
     int64_t table_items_count = table_items.count();
     ObArray<uint64_t> table_ids;
-    bool duplicate_table = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_items_count; ++i) {
-      duplicate_table = false;
       const ObTableItem &table_item = table_items.at(i);
-      const ObTableSchema *table_schema = NULL;
+      const ObTableSchema *table_schema = nullptr;
       uint64_t database_id = common::OB_INVALID_ID;
       //check database exist
       if (OB_FAIL(schema_guard.get_database_id(
@@ -82,64 +76,72 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(table_item.database_name_),
                                            helper.convert(table_item.table_name_));
         LOG_WARN("table not exist!", KR(ret), K(tenant_id), K(database_id), K(table_item));
-      } else if (is_inner_table(table_schema->get_table_id())) {
-        //the tablegroup of sys table must be oceanbase
-        ret = OB_OP_NOT_ALLOW;
-        LOG_WARN("sys table's tablegroup should be oceanbase", KR(ret), K(arg), KPC(table_schema));
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set the tablegroup of system table besides oceanbase");
-      } else if (table_schema->has_mlog_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("alter tablegroup of table with materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of table with materialized view log is");
-      } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("alter tablegroup of table required by materialized view is not supported",
-                 KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "alter tablegroup of table required by materialized view is");
-      } else if (table_schema->is_mlog_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("alter tablegroup of materialized view log is not supported", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of materialized view log is");
-      } else if (table_schema->is_external_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of external table is");
+      } else if (is_contain(table_ids, table_schema->get_table_id())) {
+        // skip redundant table
+      } else if (OB_FAIL(table_ids.push_back(table_schema->get_table_id()))) {
+        LOG_WARN("fail to push back table", KR(ret), "table_id", table_schema->get_table_id());
       } else {
-        if (is_contain(table_ids, table_schema->get_table_id())) {
-          duplicate_table = true;
-        } else if (OB_FAIL(table_ids.push_back(table_schema->get_table_id()))) {
-          LOG_WARN("fail to push back table", KR(ret));
-        }
-      }
-      if (OB_SUCC(ret) && !duplicate_table) {
-        ObTableSchema new_table_schema;
-        ObSqlString sql;
-        if (OB_FAIL(new_table_schema.assign(*table_schema))) {
-          LOG_WARN("fail to assign schema", KR(ret));
-        } else {
-          new_table_schema.set_tablegroup_id(tablegroup_id);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(check_table_alter_tablegroup(schema_guard, first_table_schema, *table_schema, new_table_schema))) {
-          LOG_WARN("fail to check primary zone and locality", KR(ret));
-        } else if (OB_FAIL(sql.append_fmt("ALTER TABLEGROUP %.*s ADD TABLE %.*s.%.*s",
-                                          tablegroup_name.length(),
-                                          tablegroup_name.ptr(),
-                                          table_item.database_name_.length(),
-                                          table_item.database_name_.ptr(),
-                                          table_item.table_name_.length(),
-                                          table_item.table_name_.ptr()))) {
-          LOG_WARN("failed to append sql", KR(ret));
-        } else {
-          ObString sql_str = sql.string();
-          if (OB_FAIL(ddl_operator.alter_tablegroup(schema_guard, new_table_schema, trans, &sql_str))) {
-            LOG_WARN("ddl operator alter tablegroup failed", KR(ret), K(tenant_id), K(tablegroup_id));
-          } else if (table_items_count >= 2 && i == 0) {
-            first_table_schema = table_schema;
-          }
+        ObSqlString ddl_stmt_str;
+        if (OB_FAIL(ddl_stmt_str.append_fmt(
+            "ALTER TABLEGROUP %.*s ADD TABLE %.*s.%.*s",
+            tablegroup_name.length(),
+            tablegroup_name.ptr(),
+            table_item.database_name_.length(),
+            table_item.database_name_.ptr(),
+            table_item.table_name_.length(),
+            table_item.table_name_.ptr()))) {
+          LOG_WARN("append sql failed", KR(ret), K(tablegroup_name), K(table_item));
+        } else if (OB_FAIL(update_table_tablegroup(
+            trans,
+            schema_guard,
+            tablegroup_id,
+            *table_schema,
+            ddl_stmt_str.string(),
+            first_table_schema))) {
+          LOG_WARN("add table to tablegroup failed", KR(ret),
+              K(tablegroup_id), KPC(table_schema), KP(first_table_schema));
+        } else if (i == 0) {
+          first_table_schema = table_schema;
         }
       } // no more
     } // end for get all tableschema
+  }
+  return ret;
+}
+
+int ObTableGroupHelp::update_table_tablegroup(
+    ObMySQLTransaction &trans,
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t new_tablegroup_id,
+    const ObTableSchema &table_schema,
+    const ObString &ddl_stmt_str,
+    const ObTableSchema *first_table_schema/*= nullptr*/)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema new_table_schema;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const ObString &table_name = table_schema.get_table_name_str();
+  if (OB_UNLIKELY(!trans.is_started())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("trans not started", KR(ret));
+  } else if (OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", KR(ret), KP(schema_service_), KP(sql_proxy_));
+  } else if (OB_FAIL(new_table_schema.assign(table_schema))) {
+    LOG_WARN("fail to assign schema", KR(ret), K(table_schema));
+  } else if (FALSE_IT(new_table_schema.set_tablegroup_id(new_tablegroup_id))) {
+  } else if (OB_FAIL(check_table_alter_tablegroup(
+      schema_guard,
+      first_table_schema,
+      table_schema,
+      new_table_schema))) {
+    LOG_WARN("fail to check table alter tablegroup", KR(ret),
+        KP(first_table_schema), K(table_schema), K(new_table_schema));
+  } else {
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    if (OB_FAIL(ddl_operator.alter_tablegroup(schema_guard, new_table_schema, trans, &ddl_stmt_str))) {
+      LOG_WARN("ddl operator alter tablegroup failed", KR(ret), K(tenant_id), K(new_tablegroup_id));
+    }
   }
   return ret;
 }
@@ -159,7 +161,11 @@ int ObTableGroupHelp::check_table_alter_tablegroup(
   bool can_alter_tablegroup = !is_sys_tablegroup_id(new_table_schema.get_tablegroup_id());
   ObString src_previous_locality_str;
   ObString dst_previous_locality_str;
-  if (!can_alter_tablegroup) {
+  if (!need_balance_table(new_table_schema)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table can't in tablegroup", KR(ret), K(new_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "add this type of table to tablegroup is");
+  } else if (!can_alter_tablegroup) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("cann't alter table's tablegroup", KR(ret),
              "src_tg_id", orig_table_schema.get_tablegroup_id(),
@@ -212,33 +218,38 @@ int ObTableGroupHelp::check_table_alter_tablegroup(
 //need to check whether the partition type of tablegroup and table are consistent
 int ObTableGroupHelp::check_table_partition_in_tablegroup(const ObTableSchema *first_table_schema,
                                                           ObTableSchema &table,
-                                                          ObSchemaGetterGuard &schema_guard                                                              )
+                                                          ObSchemaGetterGuard &schema_guard,
+                                                          const ObTablegroupSchema *tablegroup)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table.get_tenant_id();
   const uint64_t tablegroup_id = table.get_tablegroup_id();
-  const ObTablegroupSchema *tablegroup = NULL;
+  const ObTablegroupSchema *tablegroup_schema = tablegroup;
   if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablegroup_id is invalid", KR(ret), K(tablegroup_id));
   } else if (is_sys_tablegroup_id(tablegroup_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not handle with sys tablegroup", KR(ret), K(tablegroup_id));
-  } else if (OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id, tablegroup_id, tablegroup))) {
+  } else if (OB_NOT_NULL(tablegroup_schema) && OB_UNLIKELY(tablegroup_id != tablegroup_schema->get_tablegroup_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablegroup id is not match with specified tablegroup schema id", KR(ret), K(tablegroup_id), KPC(tablegroup_schema));
+  } else if (OB_ISNULL(tablegroup_schema) && OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id,
+      tablegroup_id, tablegroup_schema))) {
     LOG_WARN("fail to get tablegroup schema", KR(ret), K(tenant_id), KT(tablegroup_id));
-  } else if (OB_ISNULL(tablegroup)) {
+  } else if (OB_ISNULL(tablegroup_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablegroup schema is null", KR(ret), KT(tablegroup_id));
-  } else if (table.is_in_splitting() || tablegroup->is_in_splitting()) {
+  } else if (table.is_in_splitting() || tablegroup_schema->is_in_splitting()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("table or tablegroup is splitting", KR(ret), K(table), K(tablegroup));
+    LOG_WARN("table or tablegroup is splitting", KR(ret), K(table), KPC(tablegroup_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add table to tablegroup while either object is splitting");
   } else {
     // sort partition info in order, to prevent same value not in order from being misjudged
     if (OB_FAIL(ObSchemaServiceSQLImpl::sort_table_partition_info_v2(table))) {
       LOG_WARN("fail to sort table partition", K(ret));
-    } else if (OB_FAIL(check_partition_option(*tablegroup, first_table_schema, table, schema_guard))) {
-      LOG_WARN("fail to check partition option", KR(ret), KPC(tablegroup), K(table));
+    } else if (OB_FAIL(check_partition_option(*tablegroup_schema, first_table_schema, table, schema_guard))) {
+      LOG_WARN("fail to check partition option", KR(ret), KPC(tablegroup_schema), K(table));
     }
   }
   return ret;

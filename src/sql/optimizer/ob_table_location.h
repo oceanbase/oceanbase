@@ -500,11 +500,6 @@ public:
     common::ObIAllocator &allocator_;
   };
 
-  int get_location_type(
-      const common::ObAddr &server,
-      const ObCandiTabletLocIArray &phy_part_loc_info_list,
-      ObTableLocationType &location_type) const;
-
   //get virtual talbe partition ids or fake id. ref_table_id should be partitioned virtual table
   //@param [in] ref_table_id partitioned virtual table
   //@param [out] partition ids. all partition ids
@@ -617,10 +612,6 @@ public:
   {
   }
   virtual ~ObTableLocation() { reset(); }
-
-  ObTableLocation(const ObTableLocation &other);
-
-  ObTableLocation &operator=(const ObTableLocation &other);
 
   int assign(const ObTableLocation &other);
 
@@ -875,6 +866,7 @@ public:
   {
     check_no_partition_ = check;
   }
+  static bool can_use_table_location(share::ObLakeTableFormat format);
   TO_STRING_KV(K_(loc_meta),
                K_(part_projector),
                K_(has_dynamic_exec_param),
@@ -1277,6 +1269,8 @@ public:
   {
     return part_hint_ids_;
   }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableLocation);
 private:
   bool inited_;
   bool is_partitioned_;

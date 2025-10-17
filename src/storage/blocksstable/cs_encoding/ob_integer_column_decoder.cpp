@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_integer_column_decoder.h"
@@ -24,7 +25,7 @@ using namespace oceanbase::share;
 
 int ObIntegerColumnDecoder::decode(const ObColumnCSDecoderCtx &ctx,
                                    const int32_t row_id,
-                                   common::ObDatum &datum) const
+                                   ObStorageDatum &datum) const
 {
   int ret = OB_SUCCESS;
   const ObIntegerColumnDecoderCtx &integer_ctx = ctx.integer_ctx_;
@@ -35,6 +36,9 @@ int ObIntegerColumnDecoder::decode(const ObColumnCSDecoderCtx &ctx,
       [integer_ctx.null_flag_]
       [integer_ctx.ctx_->meta_.is_decimal_int()];
   convert_func(integer_ctx, integer_ctx.data_, *integer_ctx.ctx_, nullptr, &row_id, 1, &datum);
+  if (datum.is_null()) {
+    integer_ctx.set_nop_if_is_null(row_id, datum);
+  }
   return ret;
 }
 
@@ -65,7 +69,7 @@ int ObIntegerColumnDecoder::decode_vector(
   return ret;
 }
 
-int ObIntegerColumnDecoder::get_null_count(
+int ObIntegerColumnDecoder::inner_get_null_count(
     const ObColumnCSDecoderCtx &col_ctx,
     const int32_t *row_ids,
     const int64_t row_cap,
@@ -76,9 +80,9 @@ int ObIntegerColumnDecoder::get_null_count(
   const ObIntegerColumnDecoderCtx &integer_ctx = col_ctx.integer_ctx_;
   const ObIntegerStreamMeta &stream_meta =integer_ctx.ctx_->meta_;
   const char *null_bitmap = nullptr;
-  if (integer_ctx.has_null_bitmap()) {
+  if (integer_ctx.has_null_or_nop_bitmap()) {
     for (int64_t i = 0; i < row_cap; ++i) {
-      if (ObCSDecodingUtil::test_bit(integer_ctx.null_bitmap_, row_ids[i])) {
+      if (ObCSDecodingUtil::test_bit(integer_ctx.null_or_nop_bitmap_, row_ids[i])) {
         ++null_count;
       }
     }
@@ -114,10 +118,10 @@ int ObIntegerColumnDecoder::pushdown_operator(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_cnt), K(result_bitmap.size()));
   } else {
-    if (integer_ctx.has_null_bitmap()) {
+    if (integer_ctx.has_null_or_nop_bitmap()) {
       for (int64_t i = 0; OB_SUCC(ret) && (i < row_cnt); ++i) {
         const int64_t row_id = pd_filter_info.start_ + i;
-        if (ObCSDecodingUtil::test_bit(integer_ctx.null_bitmap_, row_id)) {
+        if (ObCSDecodingUtil::test_bit(integer_ctx.null_or_nop_bitmap_, row_id)) {
           if (OB_FAIL(result_bitmap.set(i))) {
             LOG_WARN("fail to set bitmap", KR(ret), K(i), K(row_id));
           }
@@ -278,8 +282,8 @@ int ObIntegerColumnDecoder::tranverse_integer_comparison_op(
   int ret = OB_SUCCESS;
   sql::ObWhiteFilterOperatorType op_type = ori_op_type;
   const bool use_null_replace_val = ctx.is_null_replaced();
-  const bool exist_null_bitmap = ctx.has_null_bitmap();
-  const bool has_no_null = ctx.has_no_null();
+  const bool exist_null_or_nop_bitmap = ctx.has_null_or_nop_bitmap();
+  const bool HAS_NO_NULL_OR_NOP = ctx.has_no_null_or_nop();
   const ObIntegerStreamMeta stream_meta = ctx.ctx_->meta_;
   const uint64_t base_value = stream_meta.is_use_base() * stream_meta.base_value_;
   const uint32_t store_width_size = stream_meta.get_uint_width_size();
@@ -295,10 +299,10 @@ int ObIntegerColumnDecoder::tranverse_integer_comparison_op(
   if (is_less_than_base) {
     // if filter_val less than base, it must be less than all row value
     if (sql::WHITE_OP_NE == op_type || sql::WHITE_OP_GT == op_type || sql::WHITE_OP_GE == op_type) {
-      if (has_no_null) {
+      if (HAS_NO_NULL_OR_NOP) {
         result_bitmap.reuse(true/*is_all_true*/);
       }
-      need_filter_null = !has_no_null;
+      need_filter_null = !HAS_NO_NULL_OR_NOP;
     } else if (sql::WHITE_OP_EQ == op_type || sql::WHITE_OP_LT == op_type || sql::WHITE_OP_LE == op_type) {
       // whether nullptr exist or not, row_value won't <= or < or == 'filter', thus ALL_FALSE
       result_bitmap.reuse();
@@ -314,11 +318,11 @@ int ObIntegerColumnDecoder::tranverse_integer_comparison_op(
         // whether nullptr exist or not, row_value won't == 'filter', thus ALL_FALSE
         result_bitmap.reuse();
       } else if (sql::WHITE_OP_NE == op_type || sql::WHITE_OP_LT == op_type || sql::WHITE_OP_LE == op_type) {
-        if (has_no_null) {
+        if (HAS_NO_NULL_OR_NOP) {
           // row_value != 'filter' AND not exist null, thus ALL_TRUE
           result_bitmap.reuse(true/*is_all_true*/);
         }
-        need_filter_null = !has_no_null;
+        need_filter_null = !HAS_NO_NULL_OR_NOP;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected operator type", KR(ret), K(op_type));
@@ -329,7 +333,7 @@ int ObIntegerColumnDecoder::tranverse_integer_comparison_op(
   if (OB_FAIL(ret)) {
   } else if (is_less_than_base || is_exceed_range) {
     if (need_filter_null) {
-      if (exist_null_bitmap && OB_FAIL(result_bitmap.bit_not())) {
+      if (exist_null_or_nop_bitmap && OB_FAIL(result_bitmap.bit_not())) {
         LOG_WARN("fail to exe bit not", KR(ret));
       } else if (use_null_replace_val) {
         op_type = sql::WHITE_OP_NE;
@@ -347,7 +351,7 @@ int ObIntegerColumnDecoder::tranverse_integer_comparison_op(
       const uint64_t null_replaced_val_base_diff = ctx.null_replaced_value_ - base_value;
       cmp_func(reinterpret_cast<const unsigned char *>(ctx.data_), filter_base_diff,
           null_replaced_val_base_diff, result_bitmap.get_data(), row_start, row_start + row_count);
-    } else if (exist_null_bitmap) {
+    } else if (exist_null_or_nop_bitmap) {
       if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_compare_tranverse(ctx.data_,
           store_width_size, filter_base_diff, row_start, row_count, true, op_type, parent, result_bitmap))) {
         LOG_WARN("fail to handle integer bt tranverse", KR(ret), K(filter_base_diff), K(store_width_size));
@@ -482,10 +486,10 @@ int ObIntegerColumnDecoder::tranverse_integer_between_op(
           LOG_WARN("fail to exe integer bt tranverse with null", KR(ret), K(store_width_size));
         }
       } else {
-        const bool exist_null_bitmap = ctx.has_null_bitmap();
+        const bool exist_null_or_nop_bitmap = ctx.has_null_or_nop_bitmap();
         if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_bt_tranverse(ctx.data_, store_width_size,
-            filter_vals, row_start, row_cnt, exist_null_bitmap, parent, result_bitmap))) {
-          LOG_WARN("fail to exe integer bt tranverse", KR(ret), K(exist_null_bitmap), K(store_width_size));
+            filter_vals, row_start, row_cnt, exist_null_or_nop_bitmap, parent, result_bitmap))) {
+          LOG_WARN("fail to exe integer bt tranverse", KR(ret), K(exist_null_or_nop_bitmap), K(store_width_size));
         }
       }
     }
@@ -628,10 +632,10 @@ int ObIntegerColumnDecoder::tranverse_integer_in_op(
         LOG_WARN("fail to handle integer in tranverse with null", KR(ret), K(store_width_size));
       }
     } else {
-      const bool exist_null_bitmap = ctx.has_null_bitmap();
+      const bool exist_null_or_nop_bitmap = ctx.has_null_or_nop_bitmap();
       if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_in_tranverse(ctx.data_, store_width_size,
-          filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, exist_null_bitmap, parent, result_bitmap, &filter))) {
-        LOG_WARN("fail to handle integer in tranverse", KR(ret), K(exist_null_bitmap), K(store_width_size));
+          filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, exist_null_or_nop_bitmap, parent, result_bitmap, &filter))) {
+        LOG_WARN("fail to handle integer in tranverse", KR(ret), K(exist_null_or_nop_bitmap), K(store_width_size));
       }
     }
   }
@@ -650,7 +654,7 @@ int ObIntegerColumnDecoder::tranverse_datum_all_op(
   const int64_t row_count = pd_filter_info.count_;
   const ObIntegerStreamMeta &stream_meta = ctx.ctx_->meta_;
   const uint32_t store_width_size = stream_meta.get_uint_width_size();
-  const bool exist_null_bitmap = ctx.has_null_bitmap();
+  const bool exist_null_or_nop_bitmap = ctx.has_null_or_nop_bitmap();
   const bool use_null_replace = ctx.is_null_replaced();
   const uint64_t base = stream_meta.is_use_base() * stream_meta.base_value_;
   ObDatum cur_datum;
@@ -675,7 +679,7 @@ int ObIntegerColumnDecoder::tranverse_datum_all_op(
         }
       }
     }
-  } else if (exist_null_bitmap) {
+  } else if (exist_null_or_nop_bitmap) {
     for (int64_t i = 0; (OB_SUCC(ret) && i < row_count); ++i) {
       if (result_bitmap.test(i)) {
         // cur_datum is null, directly set result_bitmap
@@ -730,14 +734,14 @@ int ObIntegerColumnDecoder::get_aggregate_result(
     while (OB_SUCC(ret) && base_idx < row_count) {
       int64_t row_id_start = pd_row_id_ctx.get_row_id(base_idx);
       int64_t batch_size = MIN(AGGREGATE_STORE_BATCH_SIZE, row_count - base_idx);
-      if (integer_ctx.has_null_bitmap()) {
+      if (integer_ctx.has_null_or_nop_bitmap()) {
         if (OB_FAIL(agg_cell.reserve_bitmap(batch_size))) {
           LOG_WARN("Failed to reserve memory for null bitmap", KR(ret));
         } else {
           ObBitmap &null_bitmap = agg_cell.get_bitmap();
           for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
             const int64_t row_id = pd_row_id_ctx.get_row_id(base_idx + i);
-            if (ObCSDecodingUtil::test_bit(integer_ctx.null_bitmap_, row_id) &&
+            if (ObCSDecodingUtil::test_bit(integer_ctx.null_or_nop_bitmap_, row_id) &&
                 OB_FAIL(null_bitmap.set(i))) {
               LOG_WARN("Fail to set null bitmap", KR(ret), K(i), K(base_idx), K(row_id));
             }
@@ -792,7 +796,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
 {
   int ret = OB_SUCCESS;
   const bool use_null_replace_val = ctx.is_null_replaced();
-  const bool exist_null_bitmap = ctx.has_null_bitmap();
+  const bool exist_null_or_nop_bitmap = ctx.has_null_or_nop_bitmap();
   const ObIntegerStreamMeta stream_meta = ctx.ctx_->meta_;
   const uint64_t base_value = stream_meta.is_use_base() * stream_meta.base_value_;
   const uint32_t store_width_tag = stream_meta.get_width_tag();
@@ -832,7 +836,7 @@ int ObIntegerColumnDecoder::traverse_integer_in_agg(
           row_start, row_start + row_count, result);
         result_is_null = result == null_replaced_val_base_diff;
       }
-    } else if (exist_null_bitmap) {
+    } else if (exist_null_or_nop_bitmap) {
       ObBitmap &null_bitmap = agg_cell.get_bitmap();
       if (null_bitmap.is_all_true()) {
         result_is_null = true;

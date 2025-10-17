@@ -186,6 +186,7 @@ public:
       trace_id_(),
       optional_servers_(),
       dst_(),
+      dest_id_(share::OB_INVALID_DEST_ID),
       generate_time_(common::ObTimeUtility::current_time()),
       schedule_time_(0),
       executor_time_(0),
@@ -211,7 +212,7 @@ private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) = 0;
 public:
   int build_from_res(const obrpc::ObBackupTaskRes &res, const BackupJobType &type);
-  int build(const ObBackupScheduleTaskKey &key, const share::ObTaskId &trace_id, const share::ObBackupTaskStatus &status, const common::ObAddr &dst);
+  int build(const ObBackupScheduleTaskKey &key, const share::ObTaskId &trace_id, const share::ObBackupTaskStatus &status, const common::ObAddr &dst, const int64_t dest_id);
   int update_dst_and_doing_status(common::ObMySQLProxy &sql_proxy);
   int set_schedule(const common::ObAddr &server);
   void clear_schedule();
@@ -240,12 +241,13 @@ public:
   const share::ObBackupTaskStatus &get_status() const { return status_; }
   void set_last_check_alive_time(int64_t now) { last_check_alive_time_ = now; }
   const int64_t &get_last_check_alive_time() const { return last_check_alive_time_; }
+  const int64_t &get_dest_id() const { return dest_id_; }
 
 public:
   /* disallow copy constructor and operator= */
   ObBackupScheduleTask(const ObBackupScheduleTask &) = delete;
   ObBackupScheduleTask &operator=(const ObBackupScheduleTask &) = delete;
-  TO_STRING_KV(K_(task_key), K_(trace_id), K_(dst), K_(status), K_(optional_servers), K_(generate_time),
+  TO_STRING_KV(K_(task_key), K_(trace_id), K_(dst), K_(status), K_(dest_id), K_(optional_servers), K_(generate_time),
       K_(schedule_time), K_(executor_time), K_(last_check_alive_time));
 private:
   ObBackupScheduleTaskKey task_key_;  // the key for map to indicate a specific task
@@ -254,6 +256,7 @@ private:
   ObSEArray<share::ObBackupServer, OB_MAX_MEMBER_NUMBER> optional_servers_;
   common::ObAddr dst_; // choosed server
   share::ObBackupTaskStatus status_;
+  int64_t dest_id_;
   int64_t generate_time_; // time of generating task
   int64_t schedule_time_; // time of choosing task dst
   int64_t executor_time_; // time of sending to dst
@@ -279,6 +282,7 @@ public:
       char *buf,
       const int64_t size,
       bool &can_do_backup);
+  int get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id) const;
 private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
       share::ObTaskId &trace_id) final override;
@@ -410,7 +414,7 @@ private:
 public:
   int build(const share::ObBackupCleanTaskAttr &task_attr, const share::ObBackupCleanLSTaskAttr &ls_attr);
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(job_id), K_(incarnation_id), K_(id), K_(round_id),
-               K_(task_type), K_(ls_id), K_(dest_id), K_(backup_path));
+               K_(task_type), K_(ls_id), K_(backup_path));
 private:
   int64_t job_id_;
   uint64_t incarnation_id_;
@@ -418,7 +422,6 @@ private:
   uint64_t round_id_;
   share::ObBackupCleanTaskType::TYPE task_type_;
   share::ObLSID ls_id_;
-  int64_t dest_id_;
   share::ObBackupPathString backup_path_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTask); 

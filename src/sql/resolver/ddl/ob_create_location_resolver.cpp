@@ -16,6 +16,7 @@
 #include "sql/resolver/ddl/ob_create_location_stmt.h"
 #include "lib/restore/ob_storage_info.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -132,26 +133,10 @@ int ObCreateLocationResolver::resolve(const ParseNode &parse_tree)
         if (OB_ISNULL(option_node)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid argument.", K(ret));
+        } else if (OB_FAIL(ObExternalTableUtils::get_credential_field_name(
+                            credential_params, option_node->value_))) {
+          LOG_WARN("failed to get field name", K(ret), K(option_node->value_));
         } else {
-          if (option_node->value_ == 1) {
-            credential_params.append(common::ACCESS_ID);
-          } else if (option_node->value_ == 2) {
-            credential_params.append(common::ACCESS_KEY);
-          } else if (option_node->value_ == 3) {
-            credential_params.append(common::HOST);
-          } else if (option_node->value_ == 4) {
-            credential_params.append(common::APPID);
-          } else if (option_node->value_ == 5) {
-            credential_params.append(common::REGION);
-          } else if (option_node->value_ == 6) {
-            credential_params.append(common::PRINCIPAL);
-          } else if (option_node->value_ == 7) {
-            credential_params.append(common::KEYTAB);
-          } else if (option_node->value_ == 8) {
-            credential_params.append(common::KRB5CONF);
-          } else if (option_node->value_ == 9) {
-            credential_params.append(common::CONFIGS);
-          }
           ObString tmp;
           tmp.assign_ptr(option_node->str_value_, static_cast<int32_t>(option_node->str_len_));
           credential_params.append(tmp);
@@ -178,12 +163,12 @@ int ObCreateLocationResolver::resolve(const ParseNode &parse_tree)
   // url like: oss://bucket/...?host=xxxx&access_id=xxx&access_key=xxx
   const bool is_hdfs_type = location_url.prefix_match(OB_HDFS_PREFIX);
   ObHDFSStorageInfo hdfs_storage_info;
-  ObBackupStorageInfo back_up_backup;
+  ObExternalTableStorageInfo external_storage_info;
   ObObjectStorageInfo *storage_info = nullptr;
-  if (OB_LIKELY(is_hdfs_type)) {
+  if (is_hdfs_type) {
     storage_info = &hdfs_storage_info;
   } else {
-    storage_info = &back_up_backup;
+    storage_info = &external_storage_info;
   }
   char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   ObString uri_cstr = location_url;

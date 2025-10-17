@@ -25,7 +25,7 @@ namespace common
 extern ObBlockAllocMgr default_blk_alloc;
 class ObBlockVSlicer
 {
-  friend class ObVSliceAlloc;
+  template<int ARENA_NUM> friend class ObVSliceAllocT;
 public:
   enum { K = INT64_MAX };
   static const uint32_t ITEM_MAGIC_CODE = 0XCCEEDDF1;
@@ -39,7 +39,7 @@ public:
     Host* host_;
     int64_t size_;
   } __attribute__((aligned (16)));;
-  ObBlockVSlicer(ObVSliceAlloc* vslice_alloc, int64_t blk_size)
+  ObBlockVSlicer(ObIAllocator* vslice_alloc, int64_t blk_size)
     : vslice_alloc_(vslice_alloc), arena_(nullptr), blk_size_(blk_size), ref_(K), pos_(0) {}
   ~ObBlockVSlicer() {}
   int64_t get_blk_size() const { return blk_size_; }
@@ -73,9 +73,9 @@ public:
     return (old_pos <= get_limit());
   }
   bool retire() { return 0 == ATOMIC_AAF(&ref_, -K); }
-  ObVSliceAlloc* get_vslice_alloc() { return vslice_alloc_; }
+  ObIAllocator* get_vslice_alloc() { return vslice_alloc_; }
 private:
-  ObVSliceAlloc* vslice_alloc_;
+  ObIAllocator* vslice_alloc_;
   void *arena_;
   int64_t blk_size_ CACHE_ALIGNED;
   int64_t ref_ CACHE_ALIGNED;
@@ -83,11 +83,13 @@ private:
   char base_[] CACHE_ALIGNED;
 };
 
-class ObVSliceAlloc : public common::ObIAllocator
+template<int ARENA_NUM = 32>
+class ObVSliceAllocT : public ObIAllocator
 {
   friend class ObBlockVSlicer;
 public:
   enum { MAX_ARENA_NUM = 32, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
+  static_assert(ARENA_NUM > 0 && ARENA_NUM <= MAX_ARENA_NUM, "ARENA_NUM must be in range [1, MAX_ARENA_NUM]");
   typedef ObBlockAllocMgr BlockAlloc;
   typedef ObBlockVSlicer Block;
   typedef ObSimpleSync Sync;
@@ -102,13 +104,17 @@ public:
     Block* blk_;
   } CACHE_ALIGNED;
 public:
-  ObVSliceAlloc(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
-  ObVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
-    : nway_(1), bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc) {}
-  virtual ~ObVSliceAlloc() override { destroy(); }
+  ObVSliceAllocT(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
+  ObVSliceAllocT(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE,
+      BlockAlloc &blk_alloc = default_blk_alloc, int nway = 1)
+    : bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc)
+  {
+    set_nway(nway);
+  }
+  virtual ~ObVSliceAllocT() override { destroy(); }
   int init(int64_t block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = OB_SUCCESS;
-    new(this)ObVSliceAlloc(attr, block_size, block_alloc);
+    new(this)ObVSliceAllocT(attr, block_size, block_alloc);
     return ret;
   }
   void destroy() {
@@ -121,8 +127,8 @@ public:
   void set_nway(int nway) {
     if (nway <= 0) {
       nway = 1;
-    } else if (nway > MAX_ARENA_NUM) {
-      nway = MAX_ARENA_NUM;
+    } else if (nway > ARENA_NUM) {
+      nway = ARENA_NUM;
     }
     ATOMIC_STORE(&nway_,  nway);
     purge_extra_cached_block(nway);
@@ -211,10 +217,10 @@ public:
       Block* blk = item->host_;
       Arena *arena = (Arena*)blk->arena_;
 #ifndef NDEBUG
-      abort_unless(blk->get_vslice_alloc() == this);
+      abort_unless(blk->get_vslice_alloc() == static_cast<ObIAllocator*>(this));
       abort_unless(bsize_ != 0);
 #else
-      if (this != blk->get_vslice_alloc()) {
+      if (static_cast<ObIAllocator*>(this) != blk->get_vslice_alloc()) {
         LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));
         return;
       }
@@ -229,6 +235,9 @@ public:
     }
 
 #endif
+  }
+  virtual void set_attr(const ObMemAttr &attr) override {
+    mattr_ = attr;
   }
 
   void purge_extra_cached_block(Arena &arena, bool need_check = false) {
@@ -252,7 +261,7 @@ public:
     }
   }
   void purge_extra_cached_block(int keep, bool need_check = false) {
-    for(int i = MAX_ARENA_NUM - 1; i >= keep; i--) {
+    for(int i = ARENA_NUM - 1; i >= keep; i--) {
       purge_extra_cached_block(arena_[i], need_check);
     }
   }
@@ -287,10 +296,11 @@ protected:
   int nway_ CACHE_ALIGNED;
   int64_t bsize_;
   ObMemAttr mattr_;
-  Arena arena_[MAX_ARENA_NUM];
+  Arena arena_[ARENA_NUM];
   BlockAlloc &blk_alloc_;
 };
 
+using ObVSliceAlloc = ObVSliceAllocT<>; // keep compatibility
 }; // end namespace common
 }; // end namespace oceanbase
 

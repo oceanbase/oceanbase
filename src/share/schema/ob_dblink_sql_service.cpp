@@ -264,7 +264,8 @@ int ObDbLinkSqlService::get_link_table_schema(const ObDbLinkSchema *dblink_schem
                                               sql::ObSQLSessionInfo *session_info,
                                               const ObString &dblink_name,
                                               bool is_reverse_link,
-                                              uint64_t *current_scn)
+                                              uint64_t *current_scn,
+                                              bool &is_under_oracle12c)
 {
   int ret = OB_SUCCESS;
   ObTableSchema *tmp_schema = NULL;
@@ -347,7 +348,8 @@ int ObDbLinkSqlService::get_link_table_schema(const ObDbLinkSchema *dblink_schem
                                            session_info,
                                            dblink_name_for_meta,
                                            reverse_link,
-                                           current_scn))) {
+                                           current_scn,
+                                           is_under_oracle12c))) {
     LOG_WARN("fetch link table info failed", K(ret), K(dblink_schema), K(database_name), K(table_name));
   } else if (OB_ISNULL(tmp_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -373,7 +375,8 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
                                                   sql::ObSQLSessionInfo *session_info,
                                                   const ObString &dblink_name,
                                                   sql::ObReverseLink *reverse_link,
-                                                  uint64_t *current_scn)
+                                                  uint64_t *current_scn,
+                                                  bool &is_under_oracle12c)
 {
   int ret = OB_SUCCESS;
   int dblink_read_ret = OB_SUCCESS;
@@ -403,13 +406,13 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
     } else if (database_name.empty() || table_name.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("table name or database name is empty", K(ret), K(database_name), K(table_name));
-    } else if (OB_FAIL(convert_idenfitier_charset(allocator, database_name,
+    } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, database_name,
                       session_info, nls_database_name))) {
       LOG_WARN("convert charset of database name failed", K(ret));
-    } else if (OB_FAIL(convert_idenfitier_charset(allocator, table_name,
+    } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, table_name,
                       session_info, nls_table_name))) {
       LOG_WARN("convert charset of table name failed", K(ret));
-    } else if (OB_FAIL(convert_idenfitier_charset(allocator, dblink_name,
+    } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, dblink_name,
                       session_info, nls_dblink_name))) {
       LOG_WARN("convert charset of dblink name failed", K(ret));
     } else if (OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ?
@@ -474,6 +477,41 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
         LOG_WARN("fetch link current scn failed", K(ret));
       }
     }
+
+#ifdef OB_BUILD_DBLINK
+    if (DBLINK_DRV_OCI == param_ctx.link_type_ && OB_NOT_NULL(dblink_conn)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+        LOG_WARN("failed to close oci result", K(tmp_ret));
+      }
+      if (OB_SUCC(ret)) {
+        SMART_VAR(ObMySQLProxy::MySQLResult, version_res) {
+          const char* check_version_sql = "select version, product from product_component_version where product LIKE 'Oracle%' and version < '12.1.0.1'";
+          ObMySQLResult *version_result = NULL;
+          if (OB_FAIL(dblink_proxy_->dblink_read(dblink_conn, version_res, check_version_sql))) {
+            LOG_WARN("read link failed", K(ret), K(param_ctx), K(sql.ptr()));
+          } else if (OB_ISNULL(version_result = version_res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get result", K(ret));
+          } else if (OB_FAIL(version_result->set_expected_charset_id(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID),
+                                                                     static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)))) {
+            LOG_WARN("failed to set expected charset id", K(ret));
+          } else if (OB_FAIL(version_result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("failed to get next row", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          } else {
+            is_under_oracle12c = true;
+          }
+          if (OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+            LOG_WARN("failed to close oci result", K(tmp_ret));
+          }
+        }
+      }
+    }
+#endif
     if (NULL != dblink_conn) {
       int tmp_ret = OB_SUCCESS;
       if (DBLINK_DRV_OB == param_ctx.link_type_ &&
@@ -481,12 +519,6 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
           OB_SUCCESS != (tmp_ret = result->close())) {
         LOG_WARN("failed to close result", K(tmp_ret));
       }
-#ifdef OB_BUILD_DBLINK
-      if (DBLINK_DRV_OCI == param_ctx.link_type_ &&
-          OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
-        LOG_WARN("failed to close oci result", K(tmp_ret));
-      }
-#endif
       if (OB_SUCCESS != (tmp_ret = dblink_proxy_->release_dblink(param_ctx.link_type_, dblink_conn))) {
         LOG_WARN("failed to relese connection", K(tmp_ret));
       }
@@ -516,6 +548,7 @@ int ObDbLinkSqlService::generate_link_table_schema(const dblink_param_ctx &param
   bool need_desc = param_ctx.sql_request_level_ == 1 &&
                    DBLINK_DRV_OB == param_ctx.link_type_ &&
                    sql::DblinkGetConnType::TEMP_CONN != conn_type;
+  bool need_convert_charset = DBLINK_DRV_OB == param_ctx.link_type_ && is_oracle_mode();
   ObMySQLResult *desc_result = NULL;
   CK(OB_NOT_NULL(session_info));
   SMART_VAR(ObMySQLProxy::MySQLResult, desc_res) {
@@ -543,7 +576,7 @@ int ObDbLinkSqlService::generate_link_table_schema(const dblink_param_ctx &param
       ObDataType data_type;
       if (OB_FAIL(col_meta_result->get_col_meta(i, old_max_length, column_name, data_type))) {
         LOG_WARN("failed to get column meta", K(i), K(old_max_length), K(ret));
-      } else if (is_oracle_mode() && OB_FAIL(ObCharset::charset_convert(allocator, column_name,
+      } else if (need_convert_charset && OB_FAIL(ObCharset::charset_convert(allocator, column_name,
                  nls_collation, CS_TYPE_UTF8MB4_BIN, column_name))) {
         LOG_WARN("convert charset of column name failed", K(ret), K(column_name));
       } else if (OB_FAIL(column_schema.set_column_name(column_name))) {
@@ -569,10 +602,10 @@ int ObDbLinkSqlService::generate_link_table_schema(const dblink_param_ctx &param
           if (OB_ISNULL(dblink_conn)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("dblink conn is null",K(ret));
-          } else if (OB_FAIL(convert_idenfitier_charset(allocator, database_name,
+          } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, database_name,
                             session_info, nls_database_name))) {
             LOG_WARN("convert charset of database name failed", K(ret));
-          } else if (OB_FAIL(convert_idenfitier_charset(allocator, table_name,
+          } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, table_name,
                             session_info, nls_table_name))) {
             LOG_WARN("convert charset of table name failed", K(ret));
           } else if (OB_FAIL(desc_sql.append_fmt(desc_sql_str_fmt, nls_database_name.length(),
@@ -750,14 +783,15 @@ int ObDbLinkSqlService::try_mock_link_table_column(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObDbLinkSqlService::convert_idenfitier_charset(ObIAllocator &alloc,
-                                              const ObString &in,
-                                              const sql::ObSQLSessionInfo *session_info,
-                                              ObString &out)
+int ObDbLinkSqlService::convert_idenfitier_charset(const DblinkDriverProto driver_proto,
+                                                   ObIAllocator &alloc,
+                                                   const ObString &in,
+                                                   const sql::ObSQLSessionInfo *session_info,
+                                                   ObString &out)
 {
   int ret = OB_SUCCESS;
   ObCollationType tenant_collation = CS_TYPE_INVALID;
-  if (!is_oracle_mode()) {
+  if (!is_oracle_mode() || driver_proto != DBLINK_DRV_OB) {
     out = in;
   } else if (in.empty()) {
     out = in;
@@ -768,6 +802,7 @@ int ObDbLinkSqlService::convert_idenfitier_charset(ObIAllocator &alloc,
   } else if (OB_FAIL(ObCharset::charset_convert(alloc, in, CS_TYPE_UTF8MB4_BIN, tenant_collation, out))) {
     LOG_WARN("charset convert failed", K(ret), K(in), K(tenant_collation));
   }
+  LOG_TRACE("dblink convert charset", K(tenant_collation), K(in), K(out), KPHEX(in.ptr(), in.length()), KPHEX(out.ptr(), out.length()));
   return ret;
 }
 

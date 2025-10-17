@@ -177,7 +177,8 @@ public:
                K_(micro_index_clustered),
                K_(ddl_replay_status),
                K_(split_info),
-               K_(has_truncate_info));
+               K_(has_truncate_info),
+               K_(inc_major_snapshot));
 
 public:
   int32_t version_; // alignment: 4B, size: 4B
@@ -244,6 +245,7 @@ public:
   bool micro_index_clustered_; // alignment: 1B, size: 2B
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
   bool has_truncate_info_; // be True after first major with truncate info
+  int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
@@ -335,7 +337,8 @@ public:
                K_(is_storage_schema_cs_replica),
                K_(split_info),
                K_(has_truncate_info),
-               K_(min_ss_tablet_version));
+               K_(min_ss_tablet_version),
+               K_(inc_major_snapshot));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -395,6 +398,7 @@ public:
   bool has_truncate_info_;
 
   share::SCN min_ss_tablet_version_;
+  int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 };

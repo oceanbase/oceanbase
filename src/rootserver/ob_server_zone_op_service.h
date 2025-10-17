@@ -18,6 +18,9 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "rootserver/ob_rs_master_key_manager.h"
 #endif
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_palf_adapter.h"
+#endif
 
 namespace oceanbase
 {
@@ -41,9 +44,16 @@ namespace rootserver
 {
 class ObIServerChangeCallback;
 class ObUnitManager;
+typedef common::ObSEArray<uint64_t, 128> ServerIDArray;
+typedef common::ObSEArray<ObZone, DEFAULT_ZONE_COUNT> ZoneNameArray;
 class ObServerZoneOpService
 {
 public:
+  static const char *PALF_KV_SERVER_IDS_INFOS_PREFIX;
+  static const char *PALF_KV_ZONE_NAMES_INFOS_PREFIX;
+  static const char *PALF_KV_MAX_UNIT_ID_FORMAT_STR;
+  static const char *PALF_KV_TENANT_DATA_VERSION_FORMAT_STR;
+  static const int64_t MAX_ROW_KEY_LENGTH = 128;
   const static int64_t OB_SERVER_SEND_MASTER_KEY_TIMEOUT = 10 * 1000 * 1000; // 10s
 public:
   ObServerZoneOpService();
@@ -58,6 +68,29 @@ public:
       , ObRsMasterKeyManager *master_key_mgr
 #endif
       );
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int delete_zone_from_palf_kv(const ObZone &zone);
+  static int insert_zone_in_palf_kv(const ObZone &zone);
+  static int store_all_zone_in_palf_kv(const ZoneNameArray &zone_list);
+  static int check_new_zone_in_palf_kv(const ObZone& zone, bool &new_zone);
+  static int delete_server_id_in_palf_kv(const uint64_t server_id);
+  static int get_server_ids_from_palf_kv(ServerIDArray &server_ids);
+  static int get_server_infos_from_palf_kv(ServerIDArray &server_ids, ServerIDArray &server_ids_with_ts, uint64_t &max_server_id);
+  static int store_server_ids_in_palf_kv(ServerIDArray &server_ids, const uint64_t max_server_id);
+  static int generate_new_server_id_from_palf_kv(uint64_t &new_server_id);
+
+  static int store_max_unit_id_in_palf_kv(const uint64_t max_unit_id);
+  static int generate_new_unit_id_from_palf_kv(uint64_t &new_unit_id);
+  static int store_data_version_in_palf_kv(const uint64_t tenant_id, const uint64_t data_version);
+  static int get_data_version_in_palf_kv(const uint64_t tenant_id, uint64_t &data_version);
+#endif
+  static int calculate_new_candidate_server_id(
+      const common::ObIArray<uint64_t> &server_id_in_cluster,
+      const uint64_t candidate_server_id,
+      uint64_t &new_candidate_server_id);
+  static bool check_server_index(
+      const uint64_t candidate_server_id,
+      const common::ObIArray<uint64_t> &server_id_in_cluster);
   // Add new servers to a specified（optional) zone in the cluster.
   // The servers should be empty and the zone should be active.
   // This operation is successful
@@ -214,9 +247,8 @@ private:
       const obrpc::ObAdminServerArg::AdminServerOp &op);
   int check_and_update_service_epoch_(common::ObMySQLTransaction &trans);
   int fetch_new_server_id_(uint64_t &server_id);
-  bool check_server_index_(
-      const uint64_t candidate_server_id,
-      const common::ObIArray<uint64_t> &server_id_in_cluster) const;
+  int fetch_new_server_id_for_sn_(uint64_t &server_id);
+  int fetch_new_server_id_for_ss_(uint64_t &server_id);
   int check_server_have_enough_resource_for_delete_server_(
       const ObIArray<common::ObAddr> &servers,
       const common::ObZone &zone);
@@ -246,6 +278,34 @@ private:
       ObZone &picked_zone,
       obrpc::ObPrepareServerForAddingServerArg &rpc_arg,
       obrpc::ObPrepareServerForAddingServerResult &rpc_result);
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int get_server_ids_from_palf_kv_(ServerIDArray &server_ids);
+  static int get_zone_names_from_palf_kv_(ZoneNameArray &zone_names);
+  static int insert_server_ids_in_palf_kv_(const ServerIDArray &server_ids);
+  static int insert_zone_names_in_palf_kv_(const ZoneNameArray &zone_names);
+  static int cas_server_ids_in_palf_kv_(
+      const ServerIDArray &old_server_ids,
+      const ServerIDArray &new_server_ids);
+  static int cas_zone_names_in_palf_kv_(
+      const ZoneNameArray &old_zone_names,
+      const ZoneNameArray &new_zone_names);
+  static int store_max_uint_in_palf_kv_(
+      const common::ObString &row_key,
+      const uint64_t max_uint);
+  static int cas_uint_in_palf_kv_(
+      const common::ObString &row_key,
+      const uint64_t orig_uint,
+      const uint64_t new_uint);
+  static int insert_uint_in_palf_kv_(
+      const common::ObString &row_key,
+      const uint64_t uint_val);
+  static int get_uint_in_palf_kv_(
+      const common::ObString &row_key,
+      uint64_t &uint_val);
+  static int trans_str_to_uint_(
+      const ObString &str_val,
+      uint64_t &ret_val);
+#endif
   bool is_inited_;
   ObIServerChangeCallback *server_change_callback_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

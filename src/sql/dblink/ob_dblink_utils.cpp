@@ -260,41 +260,28 @@ int ObDblinkService::get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *s
   LOG_TRACE("dblink get isolation level from session", K(ret), K(session_info), K(set_isolation_level));
   return ret;
 }
-
-int ObDblinkService::get_set_names_cstr(sql::ObSQLSessionInfo *session_info,
-                                        const char *&set_client_charset,
-                                        const char *&set_connection_charset,
-                                        const char *&set_results_charset)
+//const char *charset_name(ObCharsetType charset_type);
+int ObDblinkService::get_set_names_charset_type(sql::ObSQLSessionInfo *session_info, ObCharsetType &charset_type)
 {
   int ret = OB_SUCCESS;
-  set_client_charset = NULL;
-  set_connection_charset = NULL;
-  set_results_charset = NULL;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
   } else {
     ObCollationType tenant_collation = is_oracle_mode() ? session_info->get_nls_collation() : ObCollationType::CS_TYPE_UTF8MB4_BIN;
-    switch(ObCharset::charset_type_by_coll(tenant_collation)) {
-      case ObCharsetType::CHARSET_UTF8MB4:
-        set_client_charset = "set character_set_client = utf8mb4";
-        set_connection_charset = "set character_set_connection = utf8mb4";
-        set_results_charset = "set character_set_results = utf8mb4";
-        break;
-      case ObCharsetType::CHARSET_GBK:
-        set_client_charset = "set character_set_client = gbk";
-        set_connection_charset = "set character_set_connection = gbk";
-        set_results_charset = "set character_set_results = gbk";
-        break;
-      case ObCharsetType::CHARSET_BINARY:
-        set_client_charset = "set character_set_client = binary";
-        set_connection_charset = "set character_set_connection = binary";
-        set_results_charset = "set character_set_results = binary";
-        break;
-      default:
-        // do nothing
-        break;
-    }
+    charset_type = ObCharset::charset_type_by_coll(tenant_collation);
+  }
+  return ret;
+}
+
+int ObDblinkService::get_ob_query_timeout_value(sql::ObSQLSessionInfo *session_info, int64_t &timeout)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(session_info->get_query_timeout(timeout))) {
+    LOG_WARN("get query timeout failed", K(ret));
   }
   return ret;
 }
@@ -309,15 +296,12 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
   } else if (OB_FAIL(get_set_transaction_isolation_cstr(session_info,
                                                         param_ctx.set_transaction_isolation_cstr_))) {
     LOG_WARN("failed to get set_transaction_isolation_cstr", K(ret));
-  } else if (OB_FAIL(get_set_names_cstr(session_info,
-                                        param_ctx.set_client_charset_cstr_,
-                                        param_ctx.set_connection_charset_cstr_,
-                                        param_ctx.set_results_charset_cstr_))) {
+  } else if (OB_FAIL(get_set_names_charset_type(session_info, param_ctx.set_conn_charset_type_))) {
     LOG_WARN("failed to get set_names_cstr", K(ret));
+  } else if (OB_FAIL(get_ob_query_timeout_value(session_info, param_ctx.ob_query_timeout_))) {
+    LOG_WARN("failed to get ob_query_timeout sys var", K(ret));
   } else {
-    LOG_TRACE("succ to get local session vars", K(param_ctx.set_client_charset_cstr_),
-                                                K(param_ctx.set_connection_charset_cstr_),
-                                                K(param_ctx.set_results_charset_cstr_),
+    LOG_TRACE("succ to get local session vars", K(param_ctx.set_conn_charset_type_),
                                                 K(param_ctx.set_sql_mode_cstr_),
                                                 K(param_ctx.dblink_id_),
                                                 K(ret));

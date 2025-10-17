@@ -80,6 +80,7 @@ class ObUpgradeStorageFormatVersionExecutor;
 class ObCreateInnerSchemaExecutor;
 class ObRsStatus;
 class ObRsGtsManager;
+class ObDDLSQLTransaction;
 namespace config_error
 {
 const static char * const INVALID_DISK_WATERLEVEL = "cannot specify disk waterlevel to zero when tenant groups matrix is specified";
@@ -428,7 +429,32 @@ public:
   int execute();
   int execute(const uint64_t tenant_id, int64_t &upgrade_cnt);
 private:
-  int upgrade_(const uint64_t tenant_id, share::schema::ObTableSchema &table);
+  // in drop inner table, we need to generate_origin_index_name for oracle virtual table index
+  // which is not a const method, so the ObTableSchema in the following method should not use const
+  int batch_upgrade_(const uint64_t tenant_id,
+      ObIArray<share::schema::ObTableSchema> &hard_code_tables,
+      int64_t &upgrade_cnt);
+  // drop inner table and ignore table not exist error
+  int check_and_drop_inner_table_(rootserver::ObDDLSQLTransaction &trans,
+      const uint64_t &tenant_id,
+      share::schema::ObTableSchema &table,
+      common::hash::ObHashSet<uint64_t> &dropped_table_ids);
+  bool check_table_dropped(const share::schema::ObSimpleTableSchemaV2 &table,
+      const common::hash::ObHashSet<uint64_t> &dropped_table_ids);
+  // drop and create all inner table in upgrade_idxs
+  int batch_upgrade_inner_tables_(ObDDLSQLTransaction &trans, const uint64_t &tenant_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObIArray<share::schema::ObTableSchema> &hard_code_tables,
+      const ObIArray<int64_t> &upgrade_idxs);
+  int generate_hard_code_schemas_(
+      const int64_t &tenant_id,
+      ObArrayArray<ObTableSchema> &hard_code_tables);
+  int generate_table_id_set_(
+      const ObArrayArray<ObTableSchema> &hard_code_tables,
+      common::hash::ObHashSet<uint64_t> &table_ids);
+  int drop_not_exist_tables_(
+      const uint64_t &tenant_id,
+      const ObArrayArray<ObTableSchema> &hard_code_tables);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeVirtualSchema);
 };

@@ -18,7 +18,6 @@ namespace common
 {
 namespace checksum
 {
-//crc64¹þÏ£Ëã·¨
 #define  NOT_CHECK_SUM  0xFFFFFFFFFFFFFFFF##LL
 #define  INT64_C(x)  x ## LL
 

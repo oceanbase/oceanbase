@@ -55,6 +55,7 @@ void ObUnit::reset()
   is_manual_migrate_ = false;
   status_ = UNIT_STATUS_MAX;
   replica_type_ = REPLICA_TYPE_FULL;
+  time_stamp_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObUnit::assign(const ObUnit& that)
@@ -73,6 +74,43 @@ int ObUnit::assign(const ObUnit& that)
     is_manual_migrate_ = that.is_manual_migrate_;
     status_ = that.status_;
     replica_type_ = that.replica_type_;
+    time_stamp_ = that.time_stamp_;
+  }
+  return ret;
+}
+
+int ObUnit::init(
+    const uint64_t unit_id,
+    const uint64_t resource_pool_id,
+    const uint64_t unit_group_id,
+    const common::ObZone &zone,
+    const common::ObAddr &server,
+    const common::ObAddr &migrate_from_server,
+    const bool is_manual_migrate,
+    const Status &status,
+    const common::ObReplicaType &replica_type,
+    const int64_t time_stamp)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == unit_id
+               || OB_INVALID_ID == resource_pool_id
+               || OB_INVALID_ID == unit_group_id
+               || zone.is_empty()
+               || !server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(unit_id), K(resource_pool_id), K(unit_group_id), K(zone), K(server));
+  } else if (OB_FAIL(zone_.assign(zone))) {
+    LOG_WARN("fail to assign zone", KR(ret), K(zone));
+  } else {
+    unit_id_ = unit_id;
+    resource_pool_id_ = resource_pool_id;
+    unit_group_id_ = unit_group_id;
+    server_ = server;
+    migrate_from_server_ = migrate_from_server;
+    is_manual_migrate_ = is_manual_migrate;
+    status_ = status;
+    replica_type_ = replica_type;
+    time_stamp_ = time_stamp;
   }
   return ret;
 }
@@ -126,7 +164,8 @@ OB_SERIALIZE_MEMBER(ObUnit,
                     migrate_from_server_,
                     is_manual_migrate_,
                     status_,
-                    replica_type_);
+                    replica_type_,
+                    time_stamp_);
 
 int ObUnitInfo::assign(const ObUnitInfo &other)
 {

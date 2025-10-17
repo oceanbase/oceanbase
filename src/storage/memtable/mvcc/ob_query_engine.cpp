@@ -43,7 +43,7 @@ void ObQueryEngine::check_cleanout(bool &is_all_cleanout,
                                              true  /*end_exclusive*/))) {
     TRANS_LOG(ERROR, "set key range to btree scan handle fail", KR(ret));
   } else {
-    blocksstable::ObRowReader row_reader;
+    blocksstable::ObCompatRowReader row_reader;
     blocksstable::ObDatumRow datum_row;
     is_all_cleanout = true;
     is_all_delay_cleanout = true;
@@ -80,7 +80,7 @@ void ObQueryEngine::dump2text(FILE* fd)
                                              true  /*end_exclusive*/))) {
     TRANS_LOG(ERROR, "set key range to btree scan handle fail", KR(ret));
   } else {
-    blocksstable::ObRowReader row_reader;
+    blocksstable::ObCompatRowReader row_reader;
     blocksstable::ObDatumRow datum_row;
     SMART_VAR(ObCStringHelper, helper) {
       for (int64_t row_idx = 0; OB_SUCC(ret) && OB_SUCC(iter.next_internal()); row_idx++) {

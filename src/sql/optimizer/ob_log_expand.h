@@ -21,12 +21,13 @@ namespace oceanbase
 namespace sql
 {
 class ObHashRollupInfo;
+class ObGroupingSetInfo;
 using DupRawExprPair = ObTuple<ObRawExpr *, ObRawExpr *>;
 
 class ObLogExpand : public ObLogicalOperator
 {
 public:
-  ObLogExpand(ObLogPlan &plan) : ObLogicalOperator(plan),hash_rollup_info_(nullptr)
+  ObLogExpand(ObLogPlan &plan) : ObLogicalOperator(plan),grouping_set_info_(nullptr)
   {}
   virtual ~ObLogExpand()
   {}
@@ -36,9 +37,10 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item) override;
   virtual int get_op_exprs(ObIArray<ObRawExpr *> &all_exprs) override;
 
-  inline void set_hash_rollup_info(ObHashRollupInfo *hash_rollup_info) { hash_rollup_info_ = hash_rollup_info; }
 
-  ObHashRollupInfo *get_hash_rollup_info() { return hash_rollup_info_; }
+  inline void set_grouping_set_info(ObGroupingSetInfo *grouping_set_info) { grouping_set_info_ = grouping_set_info; }
+
+  ObGroupingSetInfo *get_grouping_set_info() { return grouping_set_info_; }
 
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
 
@@ -54,31 +56,35 @@ public:
 
   virtual int compute_op_ordering() override;
 
-  static int gen_expand_exprs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
-                              ObIArray<ObExprConstraint> &constraints,
-                              ObIArray<ObRawExpr *> &rollup_exprs,
-                              ObIArray<ObRawExpr *> &gby_exprs,
-                              ObIArray<DupRawExprPair> &dup_expr_pairs);
-
   static int dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
                                                 ObIArray<ObExprConstraint> &constraints,
                                                 const ObIArray<ObRawExpr *> &rollup_exprs,
                                                 const ObIArray<ObAggFunRawExpr *> &aggr_items,
-                                                ObIArray<DupRawExprPair> &dup_expr_pairs);
+                                                ObIArray<ObAggFunRawExpr *> &new_agg_items,
+                                                ObIArray<DupRawExprPair> &dup_expr_pairs,
+                                                ObIArray<DupRawExprPair> &replaced_aggr_pairs);
 
   static int unshare_constraints(ObRawExprCopier &copier, ObIArray<ObExprConstraint> &constraints);
+
   TO_STRING_KV(K(""));
 
 private:
+  static int create_aggr_with_dup_params(ObRawExprFactory &factory, ObAggFunRawExpr *aggr_item, ObSQLSessionInfo *sess,
+                                         ObIArray<DupRawExprPair> &dup_expr_pairs,
+                                         ObAggFunRawExpr *&new_agg);
   static int find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *expected,
                                         bool &found);
-  static int replace_expr_with_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *from, ObRawExpr *to);
-  static int replace_expr(ObRawExpr *&root, const ObRawExpr *from, ObRawExpr *to);
-
   int gen_duplicate_expr_text(PlanText &plan_text, ObIArray<ObRawExpr *> &exprs);
+
+  int gen_grouping_set_text(PlanText &plan_text, const int64_t n_group);
+  int gen_pruned_grouping_set_text(PlanText &plan_text, ObIArray<ObRawExpr *> &pruned_gby_exprs);
+  static int build_dup_expr(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
+                            ObRawExpr *input, ObIArray<DupRawExprPair> &dup_expr_pairs,
+                            ObRawExpr *&output);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogExpand);
-  ObHashRollupInfo *hash_rollup_info_;
+  ObGroupingSetInfo *grouping_set_info_;
 };
 } // namespace sql
 } // end oceanbase

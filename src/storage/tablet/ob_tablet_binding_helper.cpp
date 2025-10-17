@@ -335,6 +335,34 @@ int ObTabletBindingHelper::bind_lob_tablet_to_data_tablet(
   return modify_tablet_binding_new_mds(ls, info.data_tablet_id_, replay_scn, ctx, arg.is_old_mds_, op);
 }
 
+int ObTabletBindingHelper::build_single_table_write_defensive(
+    const ObTableSchema &table_schema,
+    const int64_t schema_version,
+    rootserver::ObDDLSQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!table_schema.is_valid() || schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is invalid", K(ret), K(table_schema), K(schema_version));
+  }
+  ObArray<ObTabletID> tablet_ids;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  int64_t timeout_us = 0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
+    LOG_WARN("invalid args", KR(ret), K(table_schema), K(tablet_ids));
+  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tablet_ids.count(), timeout_us))) {
+    LOG_WARN("failed to get ddl rpc timeout", K(ret), K(tablet_ids.count()));
+  } else if (OB_FAIL(ObTabletBindingMdsHelper::modify_tablet_binding_for_write_defensive(tenant_id,
+                                                                                         tablet_ids,
+                                                                                         schema_version,
+                                                                                         ObTimeUtility::current_time() + timeout_us,
+                                                                                         trans))) {
+    LOG_WARN("fail to modify tablet binding for write defensive", K(ret));
+  }
+  return ret;
+}
+
 // TODO (lihongqin.lhq) Separate the code of replay
 template<typename F>
 int ObTabletBindingHelper::modify_tablet_binding_new_mds(

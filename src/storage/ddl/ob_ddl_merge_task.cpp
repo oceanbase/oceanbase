@@ -200,7 +200,7 @@ bool ObDDLTableMergeDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObDDLTableMergeDag::hash() const
+uint64_t ObDDLTableMergeDag::hash() const
 {
   return ddl_param_.tablet_id_.hash();
 }
@@ -2267,6 +2267,11 @@ int ObTabletDDLUtil::freeze_ddl_kv(const ObDDLTableMergeDagParam &param)
   ObTabletDirectLoadMgrHandle tablet_mgr_hdl;
   if (OB_FAIL(ls_service->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(param));
+  } else if (ls_handle.get_ls()->flush_is_disabled()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      FLOG_INFO("DDLKV flush is disabled", K(ls_handle.get_ls()->get_ls_id()));
+    }
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                param.tablet_id_,
                                                tablet_handle,

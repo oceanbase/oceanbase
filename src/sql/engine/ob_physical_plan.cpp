@@ -16,6 +16,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/monitor/ob_sql_plan.h"
+#include "sql/code_generator/ob_enable_rich_format_flags.h"
 
 namespace oceanbase
 {
@@ -139,7 +140,9 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_node_policy_(ObPxNodePolicy::INVALID),
     px_node_addrs_(&allocator_),
     px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT),
-    px_worker_share_plan_enabled_(false)
+    px_worker_share_plan_enabled_(false),
+    extend_sql_plan_monitor_metrics_(false),
+    optimizer_features_enable_version_(0)
 {
 }
 
@@ -255,6 +258,8 @@ void ObPhysicalPlan::reset()
   px_node_count_ = ObPxNodeHint::UNSET_PX_NODE_COUNT;
   px_node_addrs_.reset();
   px_worker_share_plan_enabled_ = false;
+  extend_sql_plan_monitor_metrics_ = false;
+  optimizer_features_enable_version_ = 0;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -512,15 +517,7 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     } else {
       ATOMIC_INC(&(stat_.hit_count_));
     }
-    if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
-      ATOMIC_INC(&(stat_.evolution_stat_.executions_));
-      // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
-      //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
-      //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
-      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
-      ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
-      ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
-    }
+    update_evolution_stat(record);  //for spm
   } else { // long route stat begin
     if (nullptr != adpt_pc_conf) {
       update_adaptive_pc_info(record, adpt_pc_conf);
@@ -559,15 +556,7 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     }
 
     ATOMIC_STORE(&(stat_.last_active_time_), current_time);
-    if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
-      ATOMIC_INC(&(stat_.evolution_stat_.executions_));
-      // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
-      //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
-      //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
-      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
-      ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
-      ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
-    }
+    update_evolution_stat(record);  //for spm
     if (stat_.is_bind_sensitive_ && execute_count > 0) {
       int64_t pos = execute_count % ObPlanStat::MAX_SCAN_STAT_SIZE;
       ATOMIC_STORE(&(stat_.table_scan_stat_[pos].query_range_row_count_),
@@ -579,8 +568,26 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     }
   } // long route stat ends
 
-  if (!is_expired() && stat_.enable_plan_expiration_) {
+  if (!is_expired()) {
     update_plan_expired_info(record, is_first, table_row_count_list);
+  }
+}
+
+void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record)
+{
+  if (ATOMIC_LOAD(&stat_.is_evolution_)) {
+    ATOMIC_INC(&(stat_.evolution_stat_.executions_));
+    // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
+    //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
+    //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+    ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
+    ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
+    ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
+    ObEvoRecordsGuard guard;
+    stat_.get_evo_records(guard);
+    if (NULL != guard.get_evo_records()) {
+      guard.get_evo_records()->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, record.get_elapsed_time());
+    }
   }
 }
 
@@ -599,19 +606,18 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
 {
   bool bret = false;
   bool is_evolution = ATOMIC_LOAD(&stat_.is_evolution_);
+  is_evolution &= (NULL != stat_.evolution_stat_.records_);
   bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_row_count_)) >= 0;
-  if (!is_evolution && check_if_is_expired_by_error(record.status_)) {
-    set_is_expired(true);
+  if (!is_evolution && stat_.enable_plan_expiration_ && check_if_is_expired_by_error(record.status_)) {
+    set_is_expired(EXPIRED_BY_EXEC_ERROR);
     LOG_INFO("query plan is expired due to execution error", K(record.status_), K(stat_));
-  } else if (is_first) {
+  } else if (is_first && !is_evolution) {
     ATOMIC_STORE(&(stat_.sample_times_), 0);
     ATOMIC_STORE(&(stat_.first_exec_row_count_), record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
     ATOMIC_STORE(&(stat_.first_exec_usec_), record.exec_timestamp_.executor_t_);
     if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL) {
       fill_row_count_info(true, stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list);
     }
-  } else if (info_inited && is_evolution) {
-    /* do nothing */
   } else if (!info_inited && is_evolution) {
     /* in evolution, sampling infos */
     ATOMIC_INC(&(stat_.sample_times_));
@@ -647,11 +653,13 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
       }
       LOG_DEBUG("init first exec info for spm plan", K(sample_count), K(stat_.first_exec_row_count_), K(stat_.first_exec_usec_));
     }
+  } else if (!stat_.enable_plan_expiration_) {
+    /* do nothing */
   } else if (stat_.table_row_count_first_exec_ != NULL && table_row_count_list != NULL
              && record.get_elapsed_time() > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE
              && check_if_is_expired(record.get_elapsed_time(), stat_.access_table_num_, stat_.table_row_count_first_exec_, *table_row_count_list)) {
     /* expire plan by range scan row count */
-    set_is_expired(true);
+    set_is_expired(EXPIRED_BY_TABLE_ACCESS_ROW_COUNT);
   } else {
     /* expire plan by local plan row count and dist plan exec time */
     int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
@@ -663,7 +671,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.sample_exec_row_count_), 0);
       ATOMIC_STORE(&(stat_.sample_exec_usec_), 0);
       if (is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
-        set_is_expired(true);
+        set_is_expired(EXPIRED_BY_EXEC_TIME);
         if (stat_.elapsed_time_ > SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
           LOG_INFO("plan expired for physical plan avg elapsed_time more than 5ms", K(stat_.plan_id_),
                                       K(stat_.elapsed_time_), K(stat_.execute_times_));
@@ -731,31 +739,19 @@ bool ObPhysicalPlan::check_if_is_expired(const int64_t elapsed_time,
 
 bool ObPhysicalPlan::is_plan_unstable(const int64_t sample_count,
                                       const int64_t sample_exec_row_count,
-                                      const int64_t sample_exec_usec)
+                                      const int64_t sample_exec_usec) const
 {
   bool bret = false;
   if (sample_exec_usec <= SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * sample_count) {
     // sample query is fast query in the average
-  } else if (OB_PHY_PLAN_LOCAL == plan_type_) {
-    int64_t first_query_range_rows = ATOMIC_LOAD(&stat_.first_exec_row_count_);
-    if (sample_exec_row_count <= SLOW_QUERY_ROW_COUNT_THRESOLD * sample_count) {
-      // the sample query does not accesses too many rows in the average
-    } else if (sample_exec_row_count / sample_count > first_query_range_rows * 10) {
-      // the average sample query range row count increases great
-      bret = true;
-      LOG_INFO("local query plan is expired due to unstable performance",
-               K(first_query_range_rows), K(sample_exec_row_count), K(sample_count), K(stat_));
-    }
-  } else if ( OB_PHY_PLAN_DISTRIBUTED == plan_type_) {
+  } else {
     int64_t first_exec_usec = ATOMIC_LOAD(&stat_.first_exec_usec_);
     if (sample_exec_usec / sample_count > first_exec_usec * 2) {
       // the average sample query execute time increases great
       bret = true;
-      LOG_INFO("distribute query plan is expired due to unstable performance",
-               K(first_exec_usec), K(sample_exec_usec), K(sample_count), K(stat_));
+      LOG_INFO("query plan is expired due to unstable performance", K_(plan_type),
+                K(first_exec_usec), K(sample_exec_usec), K(sample_count), K(stat_));
     }
-  } else {
-    // do nothing
   }
   return bret;
 }
@@ -918,7 +914,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     px_node_policy_,
                     px_node_addrs_,
                     px_node_count_,
-                    px_worker_share_plan_enabled_);
+                    px_worker_share_plan_enabled_,
+                    extend_sql_plan_monitor_metrics_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -936,7 +933,8 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
   for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
     ObTableLocation &tl = infos.at(i)->get_table_location();
     const ObTableSchema *table_schema = nullptr;
-    if (tl.use_das()) {
+    if (infos.at(i)->is_lake_table_partition_info()) {
+    } else if (tl.use_das()) {
       if (OB_FAIL(das_table_locations_.push_back(tl))) {
         LOG_WARN("fail to push das table location", K(ret), K(i));
       }
@@ -1158,19 +1156,25 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
 }
 
 int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
+                                         const bool plan_use_rich_format,
                                          const ObPhyOperatorType type, const int64_t child_cnt,
-                                         ObOpSpec *&spec, const uint64_t op_id)
+                                         ObOpSpec *&spec, const uint64_t op_id,
+                                         const EnableOpRichFormat &enable_rich_format)
 {
   int ret = OB_SUCCESS;
   bool disable_vectorize = false;
   if (OB_FAIL(alloc_op_spec(type, child_cnt, spec, op_id))) {
     LOG_WARN("alloc op spec failed", K(ret));
-  } else if (OB_FAIL(ObStaticEngineCG::check_op_vectorization(op, schema_guard, type, disable_vectorize))) {
+  } else if (OB_FAIL(ObStaticEngineCG::check_op_vectorization(
+               op, schema_guard, plan_use_rich_format, disable_vectorize))) {
     LOG_WARN("check op vectorization failed", K(ret));
   } else if (disable_vectorize) {
     spec->max_batch_size_ = 0;
     spec->use_rich_format_ = false;
+  } else if (!enable_rich_format.check(type)) {
+    spec->use_rich_format_ = false;
   }
+
   if (OB_SUCC(ret)) {
     LOG_TRACE("alloc op spec for cg", K(disable_vectorize), K(spec->max_batch_size_),
               K(spec->use_rich_format_), K(*spec));
@@ -1270,6 +1274,9 @@ void ObPhysicalPlan::calc_whether_need_trans()
   }
   // mysql允许select udf中有dml，需要保证select 整体原子性
   if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
+    bool_ret = true;
+  }
+  if (!bool_ret && has_instead_of_trigger() && is_dml_write_stmt()) {
     bool_ret = true;
   }
   is_need_trans_ = bool_ret;
@@ -1376,6 +1383,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       SQL_PC_LOG(DEBUG, "fail to copy raw sql", "plan_id", get_plan_id(), K(ret));
     } else {
       stat_.sql_cs_type_ = pc_ctx.sql_ctx_.session_info_->get_local_collation_connection();
+      stat_.collation_connection_ = pc_ctx.fp_result_.pc_key_.collation_connection_;
     }
 
     if (OB_FAIL(ret)) {

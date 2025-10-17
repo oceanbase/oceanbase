@@ -388,7 +388,10 @@ int ObPxSqcHandler::destroy_sqc(int &report_ret)
   }
 
   ObSQLSessionInfo *session = NULL;
-  if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
+  if (OB_ISNULL(sqc_init_args_->exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_ISNULL(session = GET_MY_SESSION(*sqc_init_args_->exec_ctx_))) {
     LOG_WARN("session is null, which is unexpected!", K(ret));
   } else if (is_session_query_locked_) {
     if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = session->get_query_lock().unlock()))) {
@@ -501,6 +504,18 @@ int ObPxSqcHandler::set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_
       }
     }
   }
+  return ret;
+}
+
+int ObPxSqcHandler::prepare_tablets_info()
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObPxTabletInfo> &px_tablets_info = sqc_init_args_->sqc_.get_px_tablets_info();
+  if (OB_FAIL(sub_coord_->set_tablets_info(px_tablets_info))) {
+    LOG_WARN("Failed to set partitions info");
+  }
+  LOG_TRACE("[Dop Assign]sqc handler get all partition rows info",
+            K(sqc_init_args_->sqc_.get_dfo_id()), K(px_tablets_info.count()), K(px_tablets_info));
   return ret;
 }
 

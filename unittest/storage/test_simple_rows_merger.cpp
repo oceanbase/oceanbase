@@ -72,14 +72,14 @@ TEST_F(ObSimpleRowsMergerTest, single)
   ASSERT_TRUE(merger.is_unique_champion());
 
   // 0 player
-  ret = merger.init(0, allocator);
+  ret = merger.init(0, 0, allocator);
   ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
 
   // init twice
-  ret = merger.init(1, allocator);
+  ret = merger.init(1, 1, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(merger.is_unique_champion());
-  ret = merger.init(1, allocator);
+  ret = merger.init(1, 1, allocator);
   ASSERT_EQ(ret, OB_INIT_TWICE);
   ASSERT_EQ(0, merger.count());
 
@@ -125,7 +125,7 @@ TEST_F(ObSimpleRowsMergerTest, one_iter)
   ObSimpleRowsMerger<TestItem, TestCompator> merger(tc);
   const int64_t DATA_CNT = 7;
   TestItem data[DATA_CNT] = {4, 3, 2, 1, 5, 7, 6};
-  ret = merger.init(DATA_CNT, allocator);
+  ret = merger.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {
@@ -183,7 +183,7 @@ TEST_F(ObSimpleRowsMergerTest, two_iters)
   ObSimpleRowsMerger<TestItem, TestCompator> merger(tc);
   const int64_t DATA_CNT = 8;
   TestItem data[DATA_CNT] = {{1,0}, {1,1}, {2,1}, {2,0}, {3,1}, {3,0}, {5,0}, {4,1}};
-  ret = merger.init(DATA_CNT, allocator);
+  ret = merger.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {
@@ -271,7 +271,7 @@ TEST_F(ObSimpleRowsMergerTest, three_iters)
   ObSimpleRowsMerger<TestItem, TestCompator> merger(tc);
   const int64_t DATA_CNT = 8;
   TestItem data[DATA_CNT] = {{1,0}, {1,1}, {1,2}, {2,2}, {2,0}, {3,1}, {4,0}, {4,2}};
-  ret = merger.init(DATA_CNT, allocator);
+  ret = merger.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {
@@ -369,7 +369,7 @@ TEST_F(ObSimpleRowsMergerTest, reset_range)
   ObSimpleRowsMerger<TestItem, TestCompator> merger(tc);
   const int64_t DATA_CNT = 5;
   TestItem data[DATA_CNT] = {{1,0}, {1,1}, {1,2}, {2,2}, {2,0}};
-  ret = merger.init(DATA_CNT, allocator);
+  ret = merger.init(DATA_CNT, DATA_CNT, allocator);
   ASSERT_EQ(ret, OB_SUCCESS);
 
   for (int64_t i = 0; i < DATA_CNT; ++i) {

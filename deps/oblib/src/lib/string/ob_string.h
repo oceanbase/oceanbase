@@ -877,6 +877,46 @@ int ob_write_string(AllocatorT &allocator, const ObString &src, ObString &dst, i
 }
 
 template <typename AllocatorT>
+int ob_concat_string(AllocatorT &allocator, ObString &dst, int64_t num, const ObString sources[], bool c_style = false)
+{
+  int ret = OB_SUCCESS;
+  ObString::obstr_size_t dst_length = 0;
+  if (OB_ISNULL(sources) || num < 0) {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    if (OB_NOT_NULL(sources[i]) && OB_NOT_NULL(sources[i].ptr()) && sources[i].length() > 0) {
+      dst_length += sources[i].length();
+    }
+  }
+
+  char *buf = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(dst_length + (c_style ? 1 : 0))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "allocate memory failed", K(ret), K(dst_length));
+  }
+
+  ObString::obstr_size_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    if (OB_NOT_NULL(sources[i]) && OB_NOT_NULL(sources[i].ptr()) && sources[i].length() > 0) {
+      MEMCPY(buf + pos, sources[i].ptr(), sources[i].length());
+      pos += sources[i].length();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (c_style) {
+      buf[pos] = 0;
+    }
+    dst.assign_ptr(buf, dst_length);
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+    allocator.free(buf);
+  }
+  return ret;
+}
+
+template <typename AllocatorT>
 int ob_strip_space(AllocatorT &allocator, const ObString &src, ObString &dst)
 {
   int ret = OB_SUCCESS;

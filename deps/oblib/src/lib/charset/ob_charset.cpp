@@ -3517,7 +3517,7 @@ int ObCharset::charset_convert(ObIAllocator &alloc,
         char *res_buf = static_cast<char *>(alloc.alloc(res_buf_len));
         if (OB_ISNULL(res_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("alloc memory failed", K(ret), K(lbt()));
+          LOG_WARN("alloc memory failed", K(ret), K(res_buf_len), K(lbt()));
         } else  {
           if (OB_SUCC(charset_convert(src_cs_type, in.ptr(), in.length(),
                                       dst_cs_type, res_buf, res_buf_len, res_len))) {

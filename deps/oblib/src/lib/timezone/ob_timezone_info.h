@@ -444,6 +444,51 @@ public:
   ObTZTransitionStruct extra_info_;
 };
 
+class ObTZOffsetKey
+{
+public:
+  ObTZOffsetKey() : tz_ids_(0) {}
+  ObTZOffsetKey(int32_t src_tzid, int32_t dest_tzid)
+  {
+    tz_ids_ = (static_cast<uint64_t>(src_tzid) << 32) | dest_tzid;
+  }
+  uint64_t hash() const
+  {
+    return tz_ids_;
+  }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+  bool operator==(const ObTZOffsetKey &other) const
+  {
+    return tz_ids_ == other.tz_ids_;
+  }
+  bool operator!=(const ObTZOffsetKey &other) const
+  {
+    return !(*this == other);
+  }
+  TO_STRING_KV(K_(tz_ids));
+public:
+  int64_t tz_ids_;
+};
+
+class ObTZOffsetValue
+{
+public:
+  ObTZOffsetValue() : offset_(0) {}
+  ObTZOffsetValue(int32_t offset)
+    : offset_(offset) {}
+  void set(int32_t offset)
+  {
+    offset_ = offset;
+  }
+  TO_STRING_KV(K_(offset));
+public:
+  int32_t offset_;
+};
+
 class ObTZIDKey
 {
 public:
@@ -654,12 +699,13 @@ public:
 
 typedef common::ObLinkHashMap<ObTZIDKey, ObTimeZoneInfoPos, ObTZIDPosAlloc> ObTZInfoIDPosMap;
 typedef common::ObLinkHashMap<ObTZNameKey, ObTZNameIDInfo, ObTZNameIDAlloc> ObTZInfoNameIDMap;
+typedef common::hash::ObHashMap<ObTZOffsetKey, ObTZOffsetValue, common::hash::NoPthreadDefendMode> ObTZInfoOffsetMap;
 
 class ObTZInfoMap
 {
 public:
-  ObTZInfoMap() : inited_(false), id_map_(&id_map_buf_), name_map_(&name_map_buf_) {}
-  ~ObTZInfoMap() {}
+  ObTZInfoMap() : inited_(false), id_map_(&id_map_buf_), name_map_(&name_map_buf_), offset_map_(&offset_map_buf_) {}
+  ~ObTZInfoMap() { destroy(); }
   int init(const lib::ObMemAttr &attr);
   void destroy();
   int print_tz_info_map();
@@ -668,12 +714,18 @@ public:
   int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos &tz_info_by_name);
   int get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos *&tz_info_by_id);
   int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos *&tz_info_by_name);
+  int get_offset_by_couple_tz_name(int64_t timestamp_data, const common::ObString &tz_str_s, const common::ObString &tz_str_d, int32_t &off);
+  void revert_tz_info_pos(ObTimeZoneInfoPos *&tz_info);
+  int check_local_ts_valid_in_tz(int64_t timestamp_data, const int64_t tz_id, const ObTimeZoneInfoPos *tz_info_ptr);
 public:
+  static const uint32_t TZ_OFFSET_BUCKET_NUM = 360060;
   bool inited_;
   ObTZInfoIDPosMap *id_map_;
   ObTZInfoNameIDMap *name_map_;
+  ObTZInfoOffsetMap *offset_map_;
   ObTZInfoIDPosMap id_map_buf_; // tz_id => ObTimeZoneInfoPos
   ObTZInfoNameIDMap name_map_buf_; // tz_name => tz_id
+  ObTZInfoOffsetMap offset_map_buf_; // <tz_id1, tz_id2> => offset
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTZInfoMap);

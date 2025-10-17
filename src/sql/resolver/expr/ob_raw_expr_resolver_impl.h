@@ -144,6 +144,8 @@ private:
   int resolve_udf_param_expr(const ParseNode *node,
                              common::ObIArray<ObRawExpr*> &param_exprs);
   int process_match_against(const ParseNode *node, ObRawExpr *&expr);
+  int process_match(const ParseNode *node, ObRawExpr *&expr);
+  int process_match_score(const ParseNode *node, ObRawExpr *&expr);
   int process_window_function_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sort_list_node(const ParseNode *node, common::ObIArray<OrderItem> &order_items);
   int process_frame_node(const ParseNode *node,
@@ -233,7 +235,6 @@ private:
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);
-  int convert_any_or_all_expr(ObRawExpr *&expr, bool &happened);
   int get_opposite_string(const common::ObString &orig_string, common::ObString &new_string, common::ObIAllocator &allocator);
   int reset_keep_aggr_sort_direction(ObIArray<OrderItem> &aggr_sort_item);
   int reset_aggr_sort_nulls_first(ObIArray<OrderItem> &aggr_sort_item);
@@ -247,6 +248,9 @@ private:
                                     const ObRawExpr *left_expr,
                                     const bool is_root_condition,
                                     ObRawExpr *&right_expr);
+  int try_cast_expr_to_int(ObRawExprFactory *expr_factory,
+                           const ObSQLSessionInfo *session,
+                           ObSysFunRawExpr *&expr);
 private:
   // data members
   ObExprResolveContext &ctx_;

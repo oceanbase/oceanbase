@@ -138,12 +138,13 @@ int ObSkipIndexSortedness::init_compare_func(const ObTableSchema &schema, const 
     LOG_WARN("Invalid argument", KR(ret), K(schema), K(column_id));
   } else {
     ObObjMeta col_type = column_schema->get_meta_type();
+    const ObScale scale = col_type.is_decimal_int() ? column_schema->get_accuracy().get_scale() : col_type.get_scale();
     const ObPrecision precision
-        = col_type.is_decimal_int() ? col_type.get_stored_precision() : PRECISION_UNKNOWN_YET;
+        = col_type.is_decimal_int() ? column_schema->get_accuracy().get_precision() : PRECISION_UNKNOWN_YET;
     sql::ObExprBasicFuncs *basic_func
         = ObDatumFuncs::get_basic_func(col_type.get_type(),
                                        col_type.get_collation_type(),
-                                       col_type.get_scale(),
+                                       scale,
                                        lib::is_oracle_mode(),
                                        is_lob_storage(col_type.get_type()),
                                        precision);

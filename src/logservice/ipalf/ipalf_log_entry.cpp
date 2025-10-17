@@ -12,18 +12,38 @@
 
 #include "share/config/ob_server_config.h"
 #include "ipalf_log_entry.h"
+#include "logservice/palf/lsn.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 
 namespace oceanbase
 {
+
+namespace palf
+{
+class LSN;
+class LogEntryHeader;
+class LogEntry;
+}
 namespace ipalf
 {
 
 ILogEntryHeader::ILogEntryHeader()
     : is_inited_(false),
-      palf_log_header_(NULL)
+      palf_log_header_(NULL),
+      enable_logservice_(GCONF.enable_logservice)
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
-      ,enable_logservice_(GCONF.enable_logservice),
-      libpalf_log_header_(NULL)
+      ,libpalf_log_header_(NULL)
+#endif
+{}
+
+ILogEntryHeader::ILogEntryHeader(bool enable_logservice)
+    : is_inited_(false),
+      palf_log_header_(NULL),
+      enable_logservice_(enable_logservice)
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      ,libpalf_log_header_(NULL)
 #endif
 {}
 
@@ -36,8 +56,8 @@ void ILogEntryHeader::reset()
 {
     is_inited_ = false;
     palf_log_header_ = NULL;
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
     enable_logservice_ = false;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
     libpalf_log_header_ = NULL;
 #endif
 }
@@ -170,13 +190,25 @@ int64_t ILogEntryHeader::to_string(char *buf, const int64_t buf_len) const
 
 
 ILogEntry::ILogEntry()
-    : is_inited_(false),
-      header_(),
-      palf_log_entry_()
+    :
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
-      ,enable_logservice_(GCONF.enable_logservice),
-      libpalf_log_entry_(libpalf::LibPalfLogEntryHeader(0, 0, 0, 0, 0, 0), NULL)
+    libpalf_log_entry_(libpalf::LibPalfLogEntryHeader(0, 0, 0, 0, 0, 0), NULL),
 #endif
+      is_inited_(true),
+      header_(),
+      palf_log_entry_(),
+      enable_logservice_(GCONF.enable_logservice)
+{}
+
+ILogEntry::ILogEntry(bool enable_logservice)
+    :
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    libpalf_log_entry_(libpalf::LibPalfLogEntryHeader(0, 0, 0, 0, 0, 0), NULL),
+#endif
+      is_inited_(true),
+      header_(enable_logservice),
+      palf_log_entry_(),
+      enable_logservice_(enable_logservice)
 {}
 
 ILogEntry::~ILogEntry()
@@ -224,7 +256,7 @@ bool ILogEntry::is_valid() const
 
 void ILogEntry::reset()
 {
-    is_inited_ = false;
+    is_inited_ = true;
     header_.reset();
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
     if (enable_logservice_) {
@@ -260,6 +292,7 @@ int64_t ILogEntry::get_header_size() const
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
     } else if (enable_logservice_) {
         // TODO by qingxia: get header size after serialize is implemented
+        size = sizeof(libpalf::LibPalfLogEntryHeader);
 #endif
     } else {
         size = palf_log_entry_.get_header_size();
@@ -338,17 +371,68 @@ const ILogEntryHeader &ILogEntry::get_header()
     return header_;
 }
 
+int64_t ILogEntry::get_serialize_size(const palf::LSN &lsn) const
+{
+    int ret = OB_SUCCESS;
+    int64_t size = 0;
+    if (IS_NOT_INIT) {
+        size = 0;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    } else if (enable_logservice_) {
+        size_t body_size = 0;
+        if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_log_entry_get_body_serialize_size(&libpalf_log_entry_.header, lsn.val_, &body_size)))) {
+            PALF_LOG(WARN, "libpalf_log_entry_get_body_serialize_size failed", K(ret));
+        } else {
+            size = body_size + sizeof(libpalf_log_entry_.header);
+        }
+#endif
+    } else {
+        size = palf_log_entry_.get_serialize_size();
+    }
+    return size;
+}
+
+int ILogEntry::serialize(const palf::LSN &lsn, char * buf, int64_t size, int64_t &pos) const
+{
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+        ret = OB_INVALID_ARGUMENT;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    } else if (enable_logservice_) {
+        size_t c_pos = static_cast<size_t>(pos);
+        ret = LIBPALF_ERRNO_CAST(libpalf_log_entry_serialize(&libpalf_log_entry_, lsn.val_, buf, size, &c_pos));
+        pos = static_cast<int64_t>(c_pos);
+#endif
+    } else {
+        ret = palf_log_entry_.serialize(buf, size, pos);
+    }
+    return ret;
+}
+
+int ILogEntry::deserialize(const palf::LSN &lsn, const char *buf, int64_t size, int64_t &pos)
+{
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+        ret = OB_INVALID_ARGUMENT;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    } else if (enable_logservice_) {
+        size_t c_pos = static_cast<size_t>(pos);
+        ret = LIBPALF_ERRNO_CAST(libpalf_log_entry_deserialize(&libpalf_log_entry_, lsn.val_, buf, size, &c_pos));
+        pos = static_cast<int64_t>(c_pos);
+#endif
+    } else {
+        ret = palf_log_entry_.deserialize(buf, size, pos);
+    }
+    return ret;
+}
+
 int ILogEntry::init(palf::LogEntry &palf_log_entry)
 {
     int ret = OB_SUCCESS;
-    if (IS_INIT) {
-        ret = OB_INIT_TWICE;
-    } else {
-        palf_log_entry_.shallow_copy(palf_log_entry);
-        header_.palf_log_header_ = &palf_log_entry_.get_header();
-        header_.is_inited_ = true;
-        is_inited_ = true;
-    }
+    palf_log_entry_.shallow_copy(palf_log_entry);
+    header_.palf_log_header_ = &palf_log_entry_.get_header();
+    header_.is_inited_ = true;
+    is_inited_ = true;
     return ret;
 }
 
@@ -356,9 +440,7 @@ int ILogEntry::init(palf::LogEntry &palf_log_entry)
 int ILogEntry::init(libpalf::LibPalfLogEntry &libpalf_log_entry)
 {
     int ret = OB_SUCCESS;
-    if (IS_INIT) {
-        ret = OB_INIT_TWICE;
-    } else if (!enable_logservice_) {
+    if (!enable_logservice_) {
         ret = OB_ERR_UNEXPECTED;
     } else {
         libpalf_log_entry_ = libpalf_log_entry;

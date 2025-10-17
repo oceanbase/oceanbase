@@ -86,7 +86,11 @@ public:
                K_(tablet_macro_info_addr),
                KP_(tablet_macro_info_ptr),
                K_(is_row_store),
-               K_(is_tablet_referenced_by_collect_mv));
+               K_(is_tablet_referenced_by_collect_mv),
+               K_(ddl_kv_count),
+               K_(memtable_count),
+              KP_(new_table_store_ptr),
+               K_(table_store_cache));
 public:
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
   const ObTabletMacroInfo *tablet_macro_info_ptr_;
@@ -100,6 +104,8 @@ public:
   int64_t ddl_kv_count_;
   ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   int64_t memtable_count_;
+  ObTabletTableStore *new_table_store_ptr_;
+  ObTableStoreCache table_store_cache_;
   // If you want to add new member, make sure all member is assigned in 2 convert function.
   // ObTabletPersister::convert_tablet_to_mem_arg
   // ObTabletPersister::convert_tablet_to_disk_arg
@@ -186,7 +192,8 @@ public:
       const share::ObLSID ls_id,
       const int64_t ls_epoch,
       const ObTabletID tablet_id,
-      const int64_t tablet_transfer_seq)
+      const int64_t tablet_transfer_seq,
+      const int64_t meta_version)
     : data_version_(data_version),
       ls_id_(ls_id),
       ls_epoch_(ls_epoch),
@@ -199,7 +206,8 @@ public:
       #ifdef OB_BUILD_SHARED_STORAGE
       , op_handle_(nullptr),
       file_(nullptr),
-      reorganization_scn_(0)
+      reorganization_scn_(0),
+      meta_version_(meta_version)
       #endif
     {}
 
@@ -225,7 +233,8 @@ public:
     #ifdef OB_BUILD_SHARED_STORAGE
     , op_handle_(nullptr),
     file_(nullptr),
-    reorganization_scn_(0)
+    reorganization_scn_(0),
+    meta_version_(0)
     #endif
   {}
   #ifdef OB_BUILD_SHARED_STORAGE
@@ -255,7 +264,8 @@ public:
     file_(file),
     update_reason_(update_reason),
     sstable_op_id_(sstable_op_id),
-    reorganization_scn_(reorganization_scn)
+    reorganization_scn_(reorganization_scn),
+    meta_version_(0)
   {}
   #endif
 
@@ -279,7 +289,7 @@ public:
   TO_STRING_KV(K_(data_version), K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(tablet_transfer_seq),
    K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
    #ifdef OB_BUILD_SHARED_STORAGE
-   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn)
+   , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn), K_(meta_version)
    #endif
    );
 
@@ -298,6 +308,7 @@ public:
   ObMetaUpdateReason update_reason_;
   int64_t sstable_op_id_;
   int64_t reorganization_scn_;
+  int64_t meta_version_;
   #endif
   DISALLOW_COPY_AND_ASSIGN(ObTabletPersisterParam);
 };
@@ -417,6 +428,7 @@ private:
       const ObTabletMacroInfo &macro_info,
       ObTabletHandle &new_handle,
       ObTabletSpaceUsage &space_usage);
+  static int sanity_check_ss_macro_info(const ObTabletMacroInfo &macro_info);
   int delete_blocks_(
     const common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs);
   int check_shared_root_macro_seq_(
@@ -449,6 +461,7 @@ private:
       const ObTablet &tablet,
       common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs,
       ObTabletPoolType &type,
+      ObTabletTableStore &new_table_store,
       ObTabletTransformArg &arg,
       int64_t &total_tablet_meta_size,
       ObBlockInfoSet &block_info_set);
@@ -524,6 +537,7 @@ private:
       ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
       common::ObIArray<ObSharedObjectWriteInfo> &write_infos,
       common::ObIArray<ObSharedObjectsWriteCtx> &meta_write_ctxs,
+      ObTabletTableStore *new_table_store,
       int64_t &total_tablet_meta_size,
       ObBlockInfoSet &block_info_set);
   int load_storage_schema_and_fill_write_info(

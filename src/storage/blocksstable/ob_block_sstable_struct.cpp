@@ -69,7 +69,7 @@ bool ObMicroBlockEncodingCtx::is_valid() const
       && column_cnt_ >= rowkey_column_cnt_ && NULL != col_descs_
       && !(CS_ENCODING_ROW_STORE != row_store_type_ && !encoder_opt_.is_valid())
       && major_working_cluster_version_ >= 0
-      && (FLAT_ROW_STORE != row_store_type_ &&  MAX_ROW_STORE != row_store_type_)
+      && ObStoreFormat::is_row_store_type_with_encoding(row_store_type_)
       && compressor_type_ != ObCompressorType::INVALID_COMPRESSOR
       && compressor_type_ != ObCompressorType::MAX_COMPRESSOR;
 }
@@ -491,6 +491,7 @@ ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
     reserved_block_count_(0),
     linked_block_count_(0),
     tmp_file_count_(0),
+    ext_disk_cache_count_(0),
     data_block_count_(0),
     shared_data_block_count_(0),
     index_block_count_(0),
@@ -538,6 +539,7 @@ void ObMacroBlockMarkerStatus::reuse()
   reserved_block_count_ = 0;
   linked_block_count_ = 0;
   tmp_file_count_ = 0;
+  ext_disk_cache_count_ = 0;
   data_block_count_ = 0;
   shared_data_block_count_ = 0;
   index_block_count_ = 0;
@@ -789,8 +791,6 @@ int ObRecordHeaderV3::deserialize(const char *buf, int64_t buf_len, int64_t &pos
   }
   return ret;
 }
-
-constexpr uint8_t ObColClusterInfoMask::BYTES_TYPE_TO_LEN[];
 
 }
 }

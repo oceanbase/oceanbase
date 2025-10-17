@@ -840,6 +840,8 @@ int ObTransferUtils::unblock_tx(const uint64_t tenant_id, const share::ObLSID &l
 int ObTransferUtils::get_gts(const uint64_t tenant_id, SCN &gts)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtil::current_time();
+  int64_t retry_count = 0;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", K(ret), K(tenant_id));
@@ -858,12 +860,14 @@ int ObTransferUtils::get_gts(const uint64_t tenant_id, SCN &gts)
           LOG_WARN("failed to get gts", KR(ret), K(tenant_id));
         } else {
           // waiting 10ms
+          ++retry_count;
           ob_usleep(10L * 1000L);
         }
       }
     }
   }
-  LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(gts));
+  LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(gts), "cost_ts",
+            ObTimeUtil::current_time() - start_ts, K(retry_count));
   return ret;
 }
 

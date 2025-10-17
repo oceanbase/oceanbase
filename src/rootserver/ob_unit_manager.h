@@ -133,7 +133,8 @@ public:
   virtual int load();
   common::SpinRWLock& get_lock() { return lock_; }
   common::ObMySQLProxy &get_sql_proxy() { return *proxy_; }
-
+  int fetch_new_unit_config_id(uint64_t &unit_config_id);
+  int fetch_new_resource_pool_id(uint64_t &resource_pool_id);
   // unit config related
   virtual int create_unit_config(const share::ObUnitConfig &unit_config,
                                  const bool if_not_exist);
@@ -845,8 +846,6 @@ private:
                           common::ObArray<share::ObResourcePool *> *&pools) const;
   int get_migrate_units_by_server(const common::ObAddr &server,
                                   common::ObArray<uint64_t> *&migrate_units) const;
-  int fetch_new_unit_config_id(uint64_t &unit_config_id);
-  int fetch_new_resource_pool_id(uint64_t &resource_pool_id);
   int fetch_new_unit_id(uint64_t &unit_id);
   int fetch_new_unit_group_id(uint64_t &unit_group_id);
   int extract_unit_ids(const common::ObIArray<share::ObUnit *> &units,
@@ -869,6 +868,10 @@ private:
       const bool if_not_grant,
       const bool fill_data_version,
       obrpc::TenantServerUnitConfig &rpc_arg) const;
+  int get_meta_and_user_data_version_(
+      const uint64_t tenant_id,
+      uint64_t &user_data_version,
+      uint64_t &meta_data_version) const;
   int check_dest_data_version_is_loaded_(
       const uint64_t tenant_id, const ObAddr &addr);
   int do_notify_unit_resource_(
@@ -1154,7 +1157,6 @@ private:
     }
     return str;
   }
-  void print_user_error_(const uint64_t tenant_id);
 
 private:
   bool inited_;

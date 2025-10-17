@@ -506,9 +506,9 @@ int ObCompressTmpFile::write(
           if (retry_time < MAX_RETRY_TIME) {
             ret = OB_SUCCESS;
             if (0 == retry_time) {
-              usleep(10 * 1000); // 10ms
+              ob_usleep(10 * 1000); // 10ms
             } else if (0 < retry_time) {
-              usleep(100 * 1000); // 100ms
+              ob_usleep(100 * 1000); // 100ms
             }
             retry_time++;
           }
@@ -574,9 +574,9 @@ int ObCompressTmpFile::seal(const uint64_t tenant_id)
           if (retry_time < MAX_RETRY_TIME) {
             ret = OB_SUCCESS;
             if (0 == retry_time) {
-              usleep(10 * 1000); // 10ms
+              ob_usleep(10 * 1000); // 10ms
             } else if (0 < retry_time) {
-              usleep(100 * 1000); // 10ms
+              ob_usleep(100 * 1000); // 10ms
             }
             retry_time++;
           }

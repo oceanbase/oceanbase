@@ -903,7 +903,7 @@ int ObTxRedoLog::format_row_data_(const memtable::ObRowData &row_data, ObAdminMu
   int ret = OB_SUCCESS;
 
   blocksstable::ObDatumRow datum_row;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   const blocksstable::ObRowHeader *row_header = nullptr;
   if (row_data.size_ > 0) {
     if (OB_FAIL(row_reader.read_row(row_data.data_, row_data.size_, nullptr, datum_row))) {

@@ -398,7 +398,11 @@ int ObPartitionSplitTask::init(
         (partition_split_arg.local_index_table_ids_.count() !=
          partition_split_arg.src_local_index_tablet_ids_.count()) &&
         (partition_split_arg.lob_table_ids_.count() !=
-         partition_split_arg.src_lob_tablet_ids_.count()))) {
+         partition_split_arg.src_lob_tablet_ids_.count()) &&
+        (partition_split_arg.local_index_table_schemas_.count() !=
+         partition_split_arg.local_index_table_ids_.count()) &&
+        (partition_split_arg.lob_table_schemas_.count() !=
+         partition_split_arg.lob_table_ids_.count()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(partition_split_arg),
         K(task_status), K(task_id));
@@ -424,10 +428,11 @@ int ObPartitionSplitTask::init(
     execution_id_ = 1L;
     data_format_version_ = tenant_data_version;
     split_start_delayed_ = false;
+    // TODO: ly435438 adjust this after auto split support column-stored table.
+    target_cg_cnt_ = 1; // auto split support row-stored table only for now.
     if (OB_FAIL(src_table_schema_.assign(*src_table_schema))) {
       LOG_WARN("failed to assign src table schema", K(ret), K(*src_table_schema));
     } else if (OB_FALSE_IT(src_table_schema_.reset_partition_schema())) {
-      LOG_WARN("failed to reset partition schema", K(ret), K(*src_table_schema));
     } else if (OB_FAIL(init_ddl_task_monitor_info(table_id))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -1002,6 +1007,7 @@ int ObPartitionSplitTask::send_split_request(
     param.data_format_version_ = data_format_version_;
     param.consumer_group_id_ = partition_split_arg_.consumer_group_id_;
     param.min_split_start_scn_ = min_split_start_scn_;
+    param.dest_cg_cnt_ = target_cg_cnt_;
     if (OB_ISNULL(root_service_)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys", K(ret));
@@ -1134,8 +1140,13 @@ int ObPartitionSplitTask::update_complete_sstable_job_status(
   } else if (execution_id < execution_id_) {
     LOG_INFO("receive a mismatch execution result, ignore", K(ret_code),
         K(execution_id), K(execution_id_));
-  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id, svr,
-          ret_code, addition_info.row_scanned_, addition_info.row_inserted_, addition_info.physical_row_count_))) {
+  } else if (OB_FAIL(replica_builder_.update_build_progress(tablet_id,
+                                                            svr,
+                                                            ret_code,
+                                                            addition_info.row_scanned_,
+                                                            addition_info.row_inserted_,
+                                                            addition_info.cg_row_inserted_,
+                                                            addition_info.physical_row_count_))) {
     LOG_WARN("fail to update replica build status", K(ret));
   }
   return ret;
@@ -2031,10 +2042,6 @@ int ObPartitionSplitTask::check_health()
       LOG_WARN("data table or dest table not exist", K(ret), K(is_data_table_exist), K(table_id));
     }
   }
-  if (ObDDLTaskStatus::FAIL == static_cast<ObDDLTaskStatus>(task_status_)
-      || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
-    ret = OB_SUCCESS; // allow clean up
-  }
   check_ddl_task_execute_too_long();
   return ret;
 }
@@ -2261,29 +2268,32 @@ int ObPartitionSplitTask::update_message_row_progress_(const oceanbase::share::O
   } else {
     ObString str;
     int64_t row_inserted = 0;
-    int64_t physical_row_count_ = 0;
-    double percent = 0.0;
-    replica_builder_.get_progress(row_inserted, physical_row_count_, percent);
-    if (ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END == status
+    int64_t unused_cg_row_inserted = 0;
+    int64_t physical_row_count = 0;
+    double row_percent = 0.0;
+    double unused_cg_row_percent = 0.0;
+    if (OB_FAIL(replica_builder_.get_progress(physical_row_count, row_inserted, unused_cg_row_inserted, row_percent, unused_cg_row_percent))) {
+      LOG_WARN("failed to gather partition split task stats", K(ret));
+    } else if (ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END == status
       && OB_FAIL(databuff_printf(stat_info_.message_,
                          MAX_LONG_OPS_MESSAGE_LENGTH,
                          pos,
                          "STATUS: DATA TABLET SPLITTING, TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, ROW_PROGRESS: %0.1lf%%; LOCAL INDEX TABLET 0.0%%; LOB TEBLET 0.0%%;",
-                         physical_row_count_, row_inserted, percent))) {
+                         physical_row_count, row_inserted, row_percent))) {
       LOG_WARN("failed to print", K(ret));
     } else if (ObDDLTaskStatus::WAIT_LOCAL_INDEX_SPLIT_END == status
             && OB_FAIL(databuff_printf(stat_info_.message_,
                                MAX_LONG_OPS_MESSAGE_LENGTH,
                                pos,
                                "STATUS: DATA TABLET SPLITTED 100.0%%; LOCAL INDEX TABLET SPLITTING, TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, ROW_PROGRESS: %0.1lf%%; LOB TEBLET 0.0%%;",
-                               physical_row_count_, row_inserted, percent))) {
+                               physical_row_count, row_inserted, row_percent))) {
       LOG_WARN("failed to print", K(ret));
     } else if (ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END == status
             && OB_FAIL(databuff_printf(stat_info_.message_,
                                MAX_LONG_OPS_MESSAGE_LENGTH,
                                pos,
                                "STATUS: DATA TABLET SPLITTED 100.0%%; LOCAL INDEX TABLET SPLITTED 100.0%%; LOB TABLET SPLITTING, TOTAL_ROWS: %ld, ROW_PROCESSED: %ld, ROW_PROGRESS: %0.1lf%%",
-                               physical_row_count_, row_inserted, percent)))  {
+                               physical_row_count, row_inserted, row_percent)))  {
       LOG_WARN("failed to print", K(ret));
     }
   }
@@ -2863,7 +2873,7 @@ int ObPartitionSplitTask::register_split_info_mds(const share::ObDDLTaskStatus n
       LOG_WARN("failed to assign lob_schema_versions", K(ret));
     } else if (OB_FAIL(prepare_tablet_split_infos(ls_id, leader_addr, split_info_array))) {
       LOG_WARN("prepare tablet split infos failed", K(ret));
-    } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(root_service_->get_ddl_service(), arg))) {
+    } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(arg, partition_split_arg_, data_format_version_, root_service_->get_ddl_service()))) {
       LOG_WARN("register split info mds failed", KR(ret), K(arg));
     } else if (OB_FAIL(switch_status(next_task_status, true/*enable_flt_tracing*/, ret))) {
       LOG_WARN("fail to switch task status", K(ret), K(next_task_status));

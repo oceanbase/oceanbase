@@ -32,12 +32,12 @@ int ObDbmsStatsGather::gather_stats(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("begin to gather table stats", K(param));
-  if (OB_ISNULL(param.allocator_)) {
+    if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param.allocator_));
   } else if (OB_FAIL(init_opt_stats(*param.allocator_, param, opt_stats))) {
     LOG_WARN("failed to init opt stats", K(ret));
-  } else if (OB_FAIL(refine_sample_block_for_async_gather(opt_stats, const_cast<ObOptStatGatherParam&>(param)))) {
+  } else if (OB_FAIL(adjust_sample_param(opt_stats, const_cast<ObOptStatGatherParam&>(param)))) {
     LOG_WARN("failed to refine sample block for async gather", K(ret));
   } else if (!opt_stats.empty()) {
     //1.firstly esimate basic stat
@@ -379,42 +379,24 @@ int ObDbmsStatsGather::gather_index_stats(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStatsGather::refine_sample_block_for_async_gather(const ObIArray<ObOptStat> &opt_stats,
-                                                            ObOptStatGatherParam &param)
+int ObDbmsStatsGather::adjust_sample_param(const ObIArray<ObOptStat> &opt_stats, ObOptStatGatherParam &param)
 {
   int ret = OB_SUCCESS;
-  if (param.is_async_gather_ && !param.sample_info_.is_specify_sample()) {
-    int64_t sstable_row_cnt = 0;
-    int64_t memtable_row_cnt = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
-      if (OB_ISNULL(opt_stats.at(i).table_stat_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(opt_stats.at(i).table_stat_));
-      } else {
-        sstable_row_cnt += opt_stats.at(i).table_stat_->get_sstable_row_count();
-        memtable_row_cnt += opt_stats.at(i).table_stat_->get_memtable_row_count();
+  if (param.is_auto_sample_size_) {
+    if (!param.sample_info_.is_specify_sample() && opt_stats.count() == 1) {
+      int64_t sstable_row_cnt = opt_stats.at(0).table_stat_->get_sstable_row_count();
+      int64_t memtable_row_cnt = opt_stats.at(0).table_stat_->get_memtable_row_count();
+      if (param.auto_sample_row_cnt_ < sstable_row_cnt + memtable_row_cnt) {
+        double sample_ratio = 100.0;
+        sample_ratio = 1.0 * param.auto_sample_row_cnt_ / (sstable_row_cnt + memtable_row_cnt) * 100.0;
+        if (sample_ratio > 0.0 && sample_ratio < 100.0) {
+          param.sample_info_.set_percent(sample_ratio);
+          param.sample_info_.set_is_block_sample(true);
+        }
+        LOG_TRACE("decide auto gather stats need sample", K(param), K(opt_stats));
       }
-    }
-    if (OB_UNLIKELY(opt_stats.count() > 1 &&
-                    sstable_row_cnt + memtable_row_cnt > DEFAULT_ASYNC_MAX_SCAN_ROWCOUNT)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(sstable_row_cnt), K(memtable_row_cnt), K(opt_stats), K(param));
-    }
-  }
-
-  if (OB_SUCC(ret) &&
-      (param.is_async_gather_ || param.is_auto_sample_size_) &&
-      !param.sample_info_.is_specify_sample() && opt_stats.count() == 1) {
-    int64_t sstable_row_cnt = opt_stats.at(0).table_stat_->get_sstable_row_count();
-    int64_t memtable_row_cnt = opt_stats.at(0).table_stat_->get_memtable_row_count();
-    if (param.auto_sample_row_cnt_ < sstable_row_cnt + memtable_row_cnt) {
-      double sample_ratio = 100.0;
-      sample_ratio = 1.0 * param.auto_sample_row_cnt_ / (sstable_row_cnt + memtable_row_cnt) * 100.0;
-      if (sample_ratio > 0.0 && sample_ratio < 100.0) {
-        param.sample_info_.set_percent(sample_ratio);
-        param.sample_info_.set_is_block_sample(true);
-      }
-      LOG_INFO("decide auto gather stats need sample", K(param), K(opt_stats));
+    } else if (!param.sample_info_.is_specify_sample() && opt_stats.count() > 1) {
+      LOG_TRACE("use full scan for collect multi part", K(ret));
     }
   }
   return ret;

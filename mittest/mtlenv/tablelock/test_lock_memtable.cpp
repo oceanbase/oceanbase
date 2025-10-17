@@ -41,6 +41,10 @@ int ObTxTable::online()
   ATOMIC_STORE(&state_, TxTableState::ONLINE);
   return OB_SUCCESS;
 }
+void ObTxData::dec_ref()
+{
+  return;
+}
 }  // namespace storage
 
 namespace memtable

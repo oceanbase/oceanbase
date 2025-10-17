@@ -61,19 +61,23 @@ public:
     value_ = value;
     return *this;
   }
+  bool is_general_flashback_status() const {
+    return is_flashback_status() ||  is_flashback_and_stay_standby_status();
+  }
 
   // Tenant Switchover attribute interface
 #define IS_TENANT_STATUS(TENANT_STATUS, STATUS) \
   bool is_##STATUS##_status() const { return TENANT_STATUS == value_; };
 
-IS_TENANT_STATUS(NORMAL_STATUS, normal) 
+IS_TENANT_STATUS(NORMAL_STATUS, normal)
 IS_TENANT_STATUS(SWITCHING_TO_PRIMARY_STATUS, switching_to_primary)
 IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_FAILOVER_TO_PRIMARY_STATUS, prepare_flashback_for_failover_to_primary)
-IS_TENANT_STATUS(FLASHBACK_STATUS, flashback) 
+IS_TENANT_STATUS(FLASHBACK_STATUS, flashback)
 IS_TENANT_STATUS(PREPARE_SWITCHING_TO_STANDBY_STATUS, prepare_switching_to_standby)
 IS_TENANT_STATUS(SWITCHING_TO_STANDBY_STATUS, switching_to_standby)
 IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashback_for_switch_to_primary)
-#undef IS_TENANT_STATUS 
+IS_TENANT_STATUS(FLASHBACK_AND_STAY_STANDBY_STATUS, flashback_and_stay_standby)
+#undef IS_TENANT_STATUS
 
   TO_STRING_KV("switchover_status", to_str(), K_(value));
   DECLARE_TO_YSON_KV;
@@ -89,6 +93,7 @@ static const ObTenantSwitchoverStatus SWITCHING_TO_PRIMARY_SWITCHOVER_STATUS(ObT
 static const ObTenantSwitchoverStatus PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_SWITCHING_TO_STANDBY_STATUS);
 static const ObTenantSwitchoverStatus SWITCHING_TO_STANDBY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::SWITCHING_TO_STANDBY_STATUS);
 static const ObTenantSwitchoverStatus PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS);
+static const ObTenantSwitchoverStatus FLASHBACK_AND_STAY_STANDBY_STATUS(ObTenantSwitchoverStatus::FLASHBACK_AND_STAY_STANDBY_STATUS);
 
 }  // share
 }  // oceanbase

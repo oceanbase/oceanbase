@@ -635,13 +635,15 @@ struct ObLobDataOutRowCtx
   // and this field is added later when bug is found, and may be a random value
   uint32_t reserved_;
 
-  bool is_empty_sql() const { return OpType::EMPTY_SQL == op_; }
+  bool is_append() const { return OpType::APPEND == op_; }
+  bool is_insert() const { return OpType::INSERT == op_; }
+  bool is_write() const { return OpType::WRITE == op_; }
+  bool is_erase() const { return OpType::ERASE == op_; }
   bool is_diff_v1() const { return OpType::DIFF == op_;}
   bool is_diff() const { return OpType::DIFF == op_ || OpType::DIFF_V2 == op_; }
   bool is_ext_info_log() const { return OpType::EXT_INFO_LOG == op_; }
-  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }
-
+  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   int64_t get_real_chunk_size() const;
 };
 
@@ -1257,6 +1259,13 @@ public:
   char *ptr_; // if has_lob_header ptr_ is ObMemLobCommon, else it is data content
   uint32_t size_; // full MemLobLocator size;
   bool has_lob_header_; // for observer 4.0 compatibility
+};
+
+enum class ObDocIDType : uint16_t
+{
+  INVALID = 0,
+  TABLET_SEQUENCE,
+  HIDDEN_INC_PK,
 };
 
 class ObDocId final
@@ -2248,6 +2257,8 @@ public:
   int hash_wy(uint64_t &res, uint64_t seed = 0) const;
   // xx hash
   int hash_xx(uint64_t &res, uint64_t seed = 0) const;
+  // murmurhash3_x86_32 hash
+  int hash_murmur3_x86_32(uint64_t &res, uint64_t seed = 0) const;
   // mysql hash
   uint64_t varchar_hash(ObCollationType cs_type, uint64_t seed = 0) const;
   uint64_t varchar_murmur_hash(ObCollationType cs_type, uint64_t seed = 0) const;
@@ -2322,6 +2333,14 @@ struct ObXxHash : public ObjHashBase
   static uint64_t hash(const void *data, uint64_t len, uint64_t seed)
   {
     return XXH64(data, static_cast<size_t>(len), seed);
+  }
+};
+
+struct ObMurmurHash3_x86_32 : public ObjHashBase
+{
+  OB_INLINE static uint64_t hash(const void *data, uint64_t len, uint64_t seed)
+  {
+    return murmurhash3_x86_32(data, static_cast<int32_t>(len), static_cast<uint32_t>(seed));
   }
 };
 

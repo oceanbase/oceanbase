@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_copy_finish_task.h"
+#include "lib/ob_define.h"
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "src/storage/high_availability/ob_storage_ha_macro_block_writer.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
@@ -194,6 +197,16 @@ int ObCopiedSSTableCreatorImpl::do_create_sstable_(
       LOG_WARN("failed to create sstable", K(ret), K(param));
     }
   }
+#ifdef ERRSIM
+  char *origin_thread_name = ob_get_tname_v2();
+  int64_t base_snapshot_version = src_sstable_param_->table_key_.get_end_scn().get_val_for_logservice();
+  SERVER_EVENT_SYNC_ADD("copy_errsim", "create_sstable",
+                        "origin_thread_name", origin_thread_name,
+                        "tablet_id", src_sstable_param_->table_key_.tablet_id_.id(),
+                        "column_group_idx", src_sstable_param_->table_key_.column_group_idx_,
+                        "base_snapshot_version", base_snapshot_version,
+                        "co_base_snapshot_version", param.co_base_snapshot_version());
+#endif
 
   LOG_INFO("create sstable", K(ret), KPC_(src_sstable_param), K(param));
 

@@ -54,6 +54,9 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(ObRpcWaitMasterKeyInSyncP, gctx_);
+#ifdef OB_BUILD_SHARED_STORAGE
+    RPC_PROCESSOR(ObRpcUploadRootKeyP, gctx_);
+#endif
 #endif
     RPC_PROCESSOR(ObRpcSyncAutoincValueP, gctx_);
     RPC_PROCESSOR(ObRpcClearAutoincCacheP, gctx_);
@@ -105,8 +108,10 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcLSModifyPaxosReplicaNumberP, gctx_);
     RPC_PROCESSOR(ObRpcLSCheckDRTaskExistP, gctx_);
     RPC_PROCESSOR(ObAdminDRTaskP, gctx_);
+    RPC_PROCESSOR(ObRpcTriggerPartitionBalanceP, gctx_);
     RPC_PROCESSOR(ObRpcLSReplaceReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcCreateTenantUserLSP, gctx_);
+    RPC_PROCESSOR(ObRpcLoadTenantTableSchemaP, gctx_);
     RPC_PROCESSOR(ObRpcGenUniqueIDP, gctx_);
     RPC_PROCESSOR(ObRpcStartTransferTaskP, gctx_);
     RPC_PROCESSOR(ObRpcFinishTransferTaskP, gctx_);
@@ -123,6 +128,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcNotifyCloneSchedulerP, gctx_);
     RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
+    RPC_PROCESSOR(ObRpcAlterLSP, gctx_);
     RPC_PROCESSOR(ObRpcDetectSessionAliveP, gctx_);
     RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
     RPC_PROCESSOR(ObCollectMvMergeInfoP, gctx_);
@@ -141,6 +147,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObEnableSSMicroCacheP, gctx_);
     RPC_PROCESSOR(ObGetSSMicroCacheInfoP, gctx_);
     RPC_PROCESSOR(ObRpcClearSSMicroCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcFlushSSLocalCacheP, gctx_);
     RPC_PROCESSOR(ObDelSSLocalTmpFileP, gctx_);
     RPC_PROCESSOR(ObDelSSLocalMajorP, gctx_);
     RPC_PROCESSOR(ObCalibrateSSDiskSpaceP, gctx_);
@@ -163,5 +170,10 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObFetchArbMemberP, gctx_);
 #endif
     RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);
+    RPC_PROCESSOR(ObCheckSysTableSchemaP, gctx_);
     RPC_PROCESSOR(ObWriteInnerTabletP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestRWConsistencyP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestVaildityP, gctx_);
+    RPC_PROCESSOR(ObRpcWriteBackupDestFormatFileP, gctx_);
+    RPC_PROCESSOR(ObRpcFetchTabletPhysicalRowCntP, gctx_);
 }

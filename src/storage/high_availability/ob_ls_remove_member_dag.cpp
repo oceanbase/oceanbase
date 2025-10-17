@@ -109,7 +109,7 @@ bool ObLSRemoveMemberDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRemoveMemberDag::hash() const
+uint64_t ObLSRemoveMemberDag::hash() const
 {
   int64_t hash_value = 0;
   if (!is_inited_) {
@@ -363,6 +363,8 @@ int ObLSRemoveMemberTask::transform_member_(ObLS *ls)
   if (!ctx_->arg_.type_.is_transform_member()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transform member get invalid argument", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(verify_addr_for_transform_member_())) {
+    LOG_WARN("failed to verify addr for transform member", K(ret), KPC(ctx_));
   } else {
     if (ObReplicaTypeCheck::is_full_replica(src_type) && ObReplicaTypeCheck::is_readonly_replica(dest_type)) {
       //F -> R
@@ -392,6 +394,29 @@ int ObLSRemoveMemberTask::switch_learner_to_acceptor_(ObLS *ls)
                                              ctx_->arg_.new_paxos_replica_number_,
                                              timeout))) {
     LOG_WARN("failed to switch learner to acceptor", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObLSRemoveMemberTask::verify_addr_for_transform_member_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx_ should not be null", K(ret));
+  } else if (!ctx_->arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (!ctx_->arg_.type_.is_transform_member()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transform member get invalid argument", K(ret), KPC(ctx_));
+  } else {
+    const common::ObAddr current_addr = GCONF.self_addr_;
+    if (common::is_tenant_sslog_ls(ctx_->arg_.tenant_id_, ctx_->arg_.ls_id_)) {
+      // skip verify for sslog ls
+    } else if (current_addr != ctx_->arg_.src_.get_server()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("type transform target address is not current server address", K(ret), K(current_addr), KPC(ctx_));
+    }
   }
   return ret;
 }

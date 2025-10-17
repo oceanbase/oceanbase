@@ -135,6 +135,7 @@ ob_set_subtarget(ob_server omt
   omt/ob_worker_processor.cpp
   omt/ob_multi_tenant_operator.cpp
   omt/ob_tenant_srs.cpp
+  omt/ob_tenant_ai_service.cpp
 )
 
 ob_set_subtarget(ob_server table
@@ -144,7 +145,6 @@ ob_set_subtarget(ob_server table
   table/ob_htable_filter_parser.cpp
   table/ob_htable_filters.cpp
   table/ob_table_filter.cpp
-  table/ob_htable_utils.cpp
   table/ob_table_batch_execute_processor.cpp
   table/ob_table_end_trans_cb.cpp
   table/ob_table_execute_processor.cpp
@@ -186,7 +186,6 @@ ob_set_subtarget(ob_server table
   table/ob_table_connection_mgr.cpp
   table/redis/ob_redis_meta.cpp
   table/ob_table_batch_service.cpp
-  table/ob_table_trans_utils.cpp
   table/group/ob_table_group_common.cpp
   table/group/ob_table_tenant_group.cpp
   table/group/ob_table_group_service.cpp
@@ -230,6 +229,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_multi_batch_common.cpp
   table/ob_table_multi_batch_service.cpp
   table/ob_redis_execute_processor_v2.cpp
+  table/ob_hbase_execute_processor.cpp
   table/fts/ob_table_fts_cg_service.cpp
   table/adapters/ob_hbase_cell_iter.cpp
   table/adapters/ob_normal_adapter_iter.cpp
@@ -256,6 +256,15 @@ ob_set_subtarget(ob_server table
   table/common/ob_table_query_session_mgr.cpp
   table/common/ob_hbase_common_struct.cpp
   table/ob_table_merge_filter.cpp
+  table/ob_table_meta_handler.cpp
+  table/ob_table_meta_processor.cpp
+  table/utils/ob_table_sql_utils.cpp
+  table/utils/ob_htable_utils.cpp
+  table/utils/ob_table_trans_utils.cpp
+  table/utils/ob_table_json_utils.cpp
+  table/utils/ob_table_convert_utils.cpp
+  table/common/ob_table_query_session_id_service.cpp
+  table/common/ob_table_query_session_id_rpc.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -320,6 +329,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_partition_location.cpp
   table_load/ob_table_load_pre_sort_writer.cpp
   table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_px_batch_rows.cpp
   table_load/ob_table_load_redef_table.cpp
   table_load/ob_table_load_row_projector.cpp
   table_load/ob_table_load_rpc_processor.cpp
@@ -468,6 +478,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp
+  virtual_table/ob_all_virtual_hms_client_pool_stat.cpp
   virtual_table/ob_all_virtual_ls_migration_task.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp
@@ -583,6 +594,10 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_logservice_cluster_info.cpp
   virtual_table/ob_all_virtual_ss_gc_status.cpp
   virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
+  virtual_table/ob_all_virtual_dba_source.cpp
+  virtual_table/ob_all_virtual_tenant_vector_mem_info.cpp
+  virtual_table/ob_all_virtual_ccl_status.cpp
+  virtual_table/ob_all_virtual_ss_object_type_io_stat.cpp
 )
 
 ob_server_add_target(ob_server)
@@ -618,6 +633,7 @@ else()
   target_link_libraries(oceanbase
     PUBLIC ob_base
     ${HYPERSCAN_SHARED_LIB}
+    INTERFACE
     ${STDC_SHARED_LIB}
     PRIVATE
     -Wl,-z,notext
@@ -632,6 +648,10 @@ else()
     -static-libgcc -static-libstdc++
     objit)
 endif()
+
+get_filename_component(STDC_SHARED_LIB_DIR ${STDC_SHARED_LIB} DIRECTORY)
+target_link_options(oceanbase INTERFACE
+    "-Wl,-rpath=${STDC_SHARED_LIB_DIR}")
 
 if (NOT OB_USE_ASAN)
   set(link_malloc_hook malloc_hook)
@@ -695,8 +715,10 @@ endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)
 
-message(STATUS "dump config item")
-add_custom_command(TARGET observer POST_BUILD
-COMMAND ${CMAKE_BINARY_DIR}/src/observer/observer -C
-WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+if (NOT OB_USE_ASAN)
+  message(STATUS "dump config item")
+  add_custom_command(TARGET observer POST_BUILD
+    COMMAND ${CMAKE_BINARY_DIR}/src/observer/observer -C
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+endif()

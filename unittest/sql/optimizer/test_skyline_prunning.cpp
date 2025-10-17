@@ -178,20 +178,20 @@ void ObSkylinePrunningTest::check_interest_dim(const uint64_t *left, const int64
 
   ObInterestOrderDim left_dim;
   if (left_cnt > 0) {
-    left_dim.set_intereting_order(true);
+    left_dim.set_interesting_order(true);
     left_dim.add_interest_prefix_ids(left_ids);
     left_dim.add_const_column_info(left_const_column_info);
   } else {
-    left_dim.set_intereting_order(false);
+    left_dim.set_interesting_order(false);
   }
 
   ObInterestOrderDim right_dim;
   if (right_cnt > 0) {
-    right_dim.set_intereting_order(true);
+    right_dim.set_interesting_order(true);
     right_dim.add_interest_prefix_ids(right_ids);
     right_dim.add_const_column_info(right_const_column_info);
   } else {
-    right_dim.set_intereting_order(false);
+    right_dim.set_interesting_order(false);
   }
   check(&left_dim, &right_dim, status, reverse_status);
 }
