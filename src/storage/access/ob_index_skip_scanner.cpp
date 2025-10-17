@@ -235,7 +235,7 @@ int ObIndexSkipScanner::skip(ObMicroIndexInfo &index_info, ObIndexSkipState &pre
     bool less_than_left = false;
     bool need_check_end = false;
     bool left_prefix_not_change = false;
-    const bool cmp_datum_cnt = true;
+    const bool cmp_datum_cnt = false;
     const ObDatumRowkey &left_border = complete_range_.start_key_;
     const ObDatumRowkey &right_border = complete_range_.end_key_;
     const ObBorderFlag &border_flag = complete_range_.border_flag_;
@@ -693,7 +693,7 @@ int ObIndexSkipScanner::check_after_range_updated(
   } else {
     int left_cmp_ret = 1;
     int64_t left_ne_pos = -1;
-    const bool cmp_datum_cnt = true;
+    const bool cmp_datum_cnt = false;
     const ObDatumRowkey &left_border = range.start_key_;
     const ObBorderFlag &border_flag = range.border_flag_;
     if (OB_FAIL(endkey.compare(left_border, datum_utils_, left_cmp_ret, cmp_datum_cnt, &left_ne_pos))) {
@@ -917,7 +917,7 @@ int ObIndexSkipScanner::check_disabled()
     } else if (OB_ISNULL(newest_prefix_key)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("max prefix key is null", KR(ret));
-    } else if (OB_FAIL(cur_prefix_key.compare(*newest_prefix_key, datum_utils_, cmp_ret, prefix_cnt_))) {
+    } else if (OB_FAIL(cur_prefix_key.compare(*newest_prefix_key, datum_utils_, cmp_ret))) {
       LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_prefix_key), K_(complete_range), KPC(this));
     } else if ((!is_reverse_scan_ && cmp_ret > 0) || (is_reverse_scan_ && cmp_ret < 0)) {
       // current prefix is behind the max prefix, so we can disable this index skip scanner now
@@ -1068,7 +1068,7 @@ int ObIndexSkipScanFactory::set_pending_disabled(
         int cmp_ret = 0;
         const ObDatumRowkey &cur_prefix_key = skip_scanner->get_complete_range().start_key_;
         LOG_INFO("[INDEX SKIP SCAN] compare prefix", K(i), K(skip_scanners_.count()), K(cur_prefix_key), KPC(newest_key));
-        if (OB_FAIL(cur_prefix_key.compare(*newest_key, datum_utils, cmp_ret, prefix_cnt))) {
+        if (OB_FAIL(cur_prefix_key.compare(*newest_key, datum_utils, cmp_ret))) {
           LOG_WARN("failed to compare", KR(ret), K(cur_prefix_key), K(newest_key));
         } else if ((!is_reverse_scan && cmp_ret > 0) || (is_reverse_scan && cmp_ret < 0)) {
           newest_key = &cur_prefix_key;
