@@ -10979,11 +10979,12 @@ int ObDDLService::alter_shadow_column_for_index(
     const AlterColumnSchema *alter_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
-    common::ObMySQLTransaction &trans)
+    common::ObMySQLTransaction &trans,
+    ObIArray<ObTableSchema> *globla_idx_schema_array)
 {
   int ret = OB_SUCCESS;
   bool need_del_stats = false;
-  if (OB_ISNULL(alter_column_schema)) {
+  if (nullptr == alter_column_schema || nullptr == globla_idx_schema_array) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(alter_column_schema));
   } else if (!new_column_schema.is_rowkey_column()) {
@@ -10991,8 +10992,26 @@ int ObDDLService::alter_shadow_column_for_index(
   } else {
     const ObColumnSchemaV2 *origin_shadow_column_schema = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < idx_schema_array.count(); ++i) {
-      const ObTableSchema& idx_table_schema = idx_schema_array.at(i);
-      if (idx_table_schema.get_shadow_rowkey_column_num() > 0) {
+
+      int64_t array_index = -1;
+      for (int64_t j = 0; OB_SUCC(ret) && j < globla_idx_schema_array->count(); ++j) {
+        if (idx_schema_array.at(i).get_table_id() == globla_idx_schema_array->at(j).get_table_id()) {
+          array_index = j;
+          break;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (array_index == -1) {
+        if (OB_FAIL(globla_idx_schema_array->push_back(idx_schema_array.at(i)))) {
+          LOG_WARN("fail to push back to global index schema array", K(ret), K(idx_schema_array.at(i)));
+        } else {
+          array_index = globla_idx_schema_array->count() - 1;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (globla_idx_schema_array->at(array_index).get_shadow_rowkey_column_num() > 0) {
+        ObTableSchema &idx_table_schema = globla_idx_schema_array->at(array_index);
         const ObColumnSchemaV2 *origin_shadow_column_schema = nullptr;
         if (OB_ISNULL(origin_shadow_column_schema = idx_table_schema.get_column_schema(alter_column_schema->get_column_id() + common::OB_MIN_SHADOW_COLUMN_ID))) {
           ret = OB_ENTRY_NOT_EXIST;
@@ -11090,7 +11109,7 @@ int ObDDLService::alter_table_update_index_and_view_column(
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
-    const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
+    ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(alter_table_update_aux_column(new_table_schema, new_column_schema,
@@ -11110,7 +11129,7 @@ int ObDDLService::alter_table_update_aux_column(
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
     const ObTableType table_type,
-    const ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
+    ObIArray<ObTableSchema> *global_idx_schema_array/*=NULL*/)
 {
   int ret = OB_SUCCESS;
   //update column in aux table
@@ -11144,10 +11163,23 @@ int ObDDLService::alter_table_update_aux_column(
       }
       uint64_t tid = is_index ? simple_index_infos.at(i).table_id_ : aux_vp_tid_array.at(i);
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(aux_table_schema)
-                 && OB_FAIL(schema_guard.get_table_schema(
+      } else if (OB_ISNULL(aux_table_schema)) {
+        if (OB_FAIL(schema_guard.get_table_schema(
                             tenant_id, tid, aux_table_schema))) {
-        RS_LOG(WARN, "get_table_schema failed", K(ret), K(tenant_id), K(tid));
+          RS_LOG(WARN, "get_table_schema failed", K(ret), K(tenant_id), K(tid));
+        } else if (OB_ISNULL(aux_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          RS_LOG(WARN, "aux schema should not be null", K(ret));
+        } else if (nullptr != global_idx_schema_array) {
+          if (OB_FAIL(global_idx_schema_array->push_back(*aux_table_schema))) {
+            LOG_WARN("fail to push_back to global_idx_schema_array", K(ret), K(*aux_table_schema));
+          } else {
+            aux_table_schema = &(global_idx_schema_array->at(global_idx_schema_array->count() - 1));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(aux_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         RS_LOG(WARN, "aux schema should not be null", K(ret));
@@ -12408,10 +12440,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
               RS_LOG(WARN, "failed to check new column for index", K(ret));
             } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
               RS_LOG(WARN, "fail to check primary key cover partition column", K(ret));
-            } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, origin_table_schema, new_table_schema,
-                                                                           new_column_schema, need_del_stats))) {
-              LOG_WARN("failed to update column and column group", KR(ret), K(new_column_schema));
-            } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans))) {
+            } else if (OB_FAIL(ddl_operator.update_single_column(
+                         trans, origin_table_schema, new_table_schema, new_column_schema, need_del_stats))) {
+              RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
+            } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans, global_idx_schema_array))) {
               RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
             } else if (OB_FAIL(alter_table_update_index_and_view_column(
                                  new_table_schema,
@@ -12538,12 +12570,13 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                  new_column_schema,
                                  need_del_stats))) {
                 RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
-              } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans))) {
+              } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans, global_idx_schema_array))) {
                 RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
               } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                           new_column_schema,
                                                                           ddl_operator,
-                                                                          trans))) {
+                                                                          trans,
+                                                                          global_idx_schema_array))) {
                 RS_LOG(WARN, "failed to update index column", K(ret));
               } else {
                 if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
@@ -12646,7 +12679,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                 } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                             new_column_schema,
                                                                             ddl_operator,
-                                                                            trans))) {
+                                                                            trans, global_idx_schema_array))) {
                   RS_LOG(WARN, "failed to update index column", K(ret));
                 } else {
                   if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {

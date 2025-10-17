@@ -1962,7 +1962,8 @@ int check_will_be_having_domain_index_operation(
     const AlterColumnSchema *alter_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
-    common::ObMySQLTransaction &trans);
+    common::ObMySQLTransaction &trans,
+    ObIArray<ObTableSchema> *globla_idx_schema_array);
 
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
@@ -1976,14 +1977,14 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
-      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_table_update_aux_column(
       const share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableType table_type,
-      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_sequence_in_alter_column(const share::schema::ObTableSchema &table_schema,
                                      share::schema::ObColumnSchemaV2 &column_schema,
                                      common::ObMySQLTransaction &trans,
