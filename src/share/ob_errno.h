@@ -1990,6 +1990,7 @@ constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_ERR_PS_NO_RECURSION = -11016;
 constexpr int OB_ERR_PARTITION_EXCHANGE_PART_TABLE = -11017;
 constexpr int OB_INVALID_EXTERNAL_FILE = -11018;
+constexpr int OB_HDFS_PATH_NOT_FOUND = -11032;
 constexpr int OB_INVALID_EXTERNAL_FILE_COLUMN_PATH = -11046;
 constexpr int OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH = -11047;
 constexpr int OB_ERR_DDL_RESOURCE_NOT_ENOUGH = -11048;
@@ -1997,6 +1998,8 @@ constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
 constexpr int OB_ODPS_ERROR = -11050;
 constexpr int OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH = -11051;
 constexpr int OB_EXTERNAL_ODPS_UNEXPECTED_ERROR = -11052;
+constexpr int OB_JNI_ENV_ERROR = -11056;
+constexpr int OB_JNI_JAVA_HOME_NOT_FOUND_ERROR = -11058;
 constexpr int OB_ERR_INCORRECT_STRING_VALUE_FOR_INET = -11062;
 constexpr int OB_EXTERNAL_TABLE_FORMAT_ERROR = -11063;
 constexpr int OB_EXTERNAL_ACCESS_PATH_ERROR = -11064;
@@ -4469,7 +4472,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HDFS_FUNC_UNIMPLEMENTED__USER_ERROR_MSG "HDFS: function is unimplemented"
 #define OB_HDFS_OPERATION_CANCELED__USER_ERROR_MSG "HDFS: operation is already canceled"
 #define OB_HDFS_PERMISSION_DENIED__USER_ERROR_MSG "HDFS: permission denied"
-#define OB_HDFS_PATH_NOT_FOUND__USER_ERROR_MSG "HDFS: path not found"
+#define OB_HDFS_PATH_NOT_FOUND__USER_ERROR_MSG "HDFS path message %s"
 #define OB_HDFS_FILE_ALREADY_EXISTS__USER_ERROR_MSG "HDFS: file already exists"
 #define OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY__USER_ERROR_MSG "HDFS: path is not empty directory"
 #define OB_HDFS_BUSY__USER_ERROR_MSG "HDFS: io or resource is busy"
@@ -4493,9 +4496,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_JNI_ERROR__USER_ERROR_MSG "unexpected error for jni"
 #define OB_JNI_CLASS_NOT_FOUND_ERROR__USER_ERROR_MSG "class could not be found during jni operation"
 #define OB_JNI_METHOD_NOT_FOUND_ERROR__USER_ERROR_MSG "method could not be found during jni operation"
-#define OB_JNI_ENV_ERROR__USER_ERROR_MSG "JNI env could not be found"
+#define OB_JNI_ENV_ERROR__USER_ERROR_MSG "jvm.so not found %s"
 #define OB_JNI_DELETE_REF_ERROR__USER_ERROR_MSG "JNI env could not delete ref"
-#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__USER_ERROR_MSG "JAVA_HOME could not be found"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__USER_ERROR_MSG "cur java home path %s"
 #define OB_JNI_ENSURE_CAPACTIY_ERROR__USER_ERROR_MSG "JNI cound not ensure capacity"
 #define OB_JNI_FIELD_NOT_FOUND_ERROR__USER_ERROR_MSG "field could not be found during jni operation"
 #define OB_JNI_OBJECT_NOT_FOUND_ERROR__USER_ERROR_MSG "object could not be found during jni operation"
@@ -9380,8 +9383,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HDFS_OPERATION_CANCELED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11030, HDFS: operation is already canceled"
 #define OB_HDFS_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11031, HDFS: permission denied"
 #define OB_HDFS_PERMISSION_DENIED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11031, HDFS: permission denied"
-#define OB_HDFS_PATH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11032, HDFS: path not found"
-#define OB_HDFS_PATH_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11032, HDFS: path not found"
+#define OB_HDFS_PATH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11032, HDFS path message %s"
+#define OB_HDFS_PATH_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11032, HDFS path message %s"
 #define OB_HDFS_FILE_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11033, HDFS: file already exists"
 #define OB_HDFS_FILE_ALREADY_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11033, HDFS: file already exists"
 #define OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11034, HDFS: path is not empty directory"
@@ -9428,12 +9431,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_JNI_CLASS_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11054, class could not be found during jni operation"
 #define OB_JNI_METHOD_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11055, method could not be found during jni operation"
 #define OB_JNI_METHOD_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11055, method could not be found during jni operation"
-#define OB_JNI_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11056, JNI env could not be found"
-#define OB_JNI_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11056, JNI env could not be found"
+#define OB_JNI_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11056, jvm.so not found %s"
+#define OB_JNI_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11056, jvm.so not found %s"
 #define OB_JNI_DELETE_REF_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11057, JNI env could not delete ref"
 #define OB_JNI_DELETE_REF_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11057, JNI env could not delete ref"
-#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11058, JAVA_HOME could not be found"
-#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11058, JAVA_HOME could not be found"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11058, cur java home path %s"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11058, cur java home path %s"
 #define OB_JNI_ENSURE_CAPACTIY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11059, JNI cound not ensure capacity"
 #define OB_JNI_ENSURE_CAPACTIY_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11059, JNI cound not ensure capacity"
 #define OB_JNI_FIELD_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11060, field could not be found during jni operation"

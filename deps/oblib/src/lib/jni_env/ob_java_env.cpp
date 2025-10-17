@@ -45,23 +45,18 @@ bool ObJavaEnv::is_env_inited()
     is_inited_ = true;
     if (!is_inited_java_home_) {
       is_inited_ = false;
-      LOG_WARN("java home is not inited success", K(ret));
     }
     if (!is_inited_java_opts_) {
       is_inited_ = false;
-      LOG_WARN("java opts is not inited success", K(ret));
     }
     if (!is_inited_hdfs_opts_) {
       is_inited_ = false;
-      LOG_WARN("hdfs opts is not inited success", K(ret));
     }
     if (!is_inited_conn_path_) {
       is_inited_ = false;
-      LOG_WARN("connector path is not inited success", K(ret));
     }
     if (!is_inited_cls_path_) {
       is_inited_ = false;
-      LOG_WARN("class path is not inited success", K(ret));
     }
   }
   return is_inited_;
@@ -106,12 +101,14 @@ int ObJavaEnv::setup_java_home()
     LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
   } else if (!found) {
     ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
-    LOG_WARN("unable to find out java home path", K(ret), K(temp_java_home));
+    LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
+    LOG_USER_ERROR(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, temp_java_home.ptr());
   } else {
     java_home_ = temp_java_home.ptr();
     if (OB_ISNULL(java_home_)) {
       ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to setup JAVA_HOME with null vairables", K(ret));
+      LOG_WARN("failed to setup JAVA_HOME with null vairables", K(ret), K(GCONF.ob_java_home.get_value_string()));
+      LOG_USER_WARN(OB_JNI_PARAMS_ERROR, "failed to setup JAVA_HOME with null vairables", K(ret));
     } else if (0 != setenv(JAVA_HOME, java_home_, 1)) {
       ret = OB_JNI_PARAMS_ERROR;
       LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
@@ -350,28 +347,32 @@ int ObJavaEnv::setup_java_env()
     }
   }
 
-  const char *jh = std::getenv(JAVA_HOME);
-  const char *jo = std::getenv(JAVA_OPTS);
-  const char *ljo = std::getenv(LIBHDFS_OPTS);
-  const char *ch = std::getenv(CONNECTOR_PATH);
-  const char *cp = std::getenv(CLASSPATH);
-  const char *ld = std::getenv(LD_LIBRARY_PATH);
-  LOG_INFO("setup env variables", K(ret), K(jh), K(jo), K(ljo), K(ch), K(cp), K(ld));
+  jh_ = std::getenv(JAVA_HOME);
+  jo_ = std::getenv(JAVA_OPTS);
+  ljo_ = std::getenv(LIBHDFS_OPTS);
+  ch_ = std::getenv(CONNECTOR_PATH);
+  cp_ = std::getenv(CLASSPATH);
+  ld_ = std::getenv(LD_LIBRARY_PATH);
+  LOG_INFO("setup env variables", K(ret), K(jh_), K(jo_), K(ljo_), K(ch_), K(cp_), K(ld_));
   return ret;
 }
 
 int ObJavaEnv::check_version_valid()
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(version_valid_)) {
-  } else {
+  if (OB_LIKELY(version_valid_ == VALID)) {
+    ret = OB_SUCCESS;
+    LOG_INFO("java env version is valid", K(ret));
+  } else if (OB_UNLIKELY(version_valid_ == NOT_INITED)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(version_valid_ == NOT_VALID)) {
     ret = OB_VERSION_NOT_MATCH;
-    LOG_WARN("java env version is not valid", K(ret));
+    LOG_INFO("java env version is not valid check version and try again", K(ret));
   }
   return ret;
 }
 
-int ObJavaEnv::set_version_valid(bool valid)
+int ObJavaEnv::set_version_valid(VersionValid valid)
 {
   int ret = OB_SUCCESS;
   version_valid_ = valid;

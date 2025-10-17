@@ -57,7 +57,7 @@ Outputs & filters:
       dop=2
   2 - output(nil), filter(nil), rowset=16
       columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2)})}]), partitions(p0), 
-      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
+      column_values([T_HIDDEN_PK], [fast_column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [fast_column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)])
   3 - output([T_HIDDEN_PK], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
   4 - output([T_HIDDEN_PK], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2]), filter(nil), rowset=16
       dop=2

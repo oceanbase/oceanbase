@@ -723,7 +723,7 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn &odps_colum
       is_match = true;
     }
   } else if (odps_type == OdpsType::JSON) {
-    if (ObJsonType == ob_type) {
+    if (ObJsonType == ob_type || ObVarcharType == ob_type) {
       is_match = true;
     }
   } else if (odps_type == OdpsType::TIMESTAMP_NTZ) {

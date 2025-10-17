@@ -28,7 +28,12 @@ namespace common
 
 class ObJavaEnv {
 public:
-  ObJavaEnv() : is_inited_(false), version_valid_(false), setup_env_lock_(common::ObLatchIds::JAVA_ENV_LOCK) {
+  enum VersionValid {
+    NOT_INITED = 0,
+    VALID = 1,
+    NOT_VALID = 2,
+  };
+  ObJavaEnv() : is_inited_(false), version_valid_(NOT_INITED), setup_env_lock_(common::ObLatchIds::JAVA_ENV_LOCK) {
     arena_alloc_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(OB_SYS_TENANT_ID, "JavaHomeEnv")));
   }
 
@@ -45,14 +50,20 @@ public:
   int setup_useful_path();
   int setup_java_env();
   int check_version_valid();
-  int set_version_valid(bool valid);
+  int set_version_valid(VersionValid valid);
+  const char *jh_ = nullptr;
+  const char *jo_ = nullptr;
+  const char *ljo_ = nullptr;
+  const char *ch_ = nullptr;
+  const char *cp_ = nullptr;
+  const char *ld_ = nullptr;
 
 private:
   int setup_extra_runtime_lib_path();
 
 private:
   bool is_inited_;
-  bool version_valid_;
+  VersionValid version_valid_;
   const char *java_home_;
   const char *java_opts_;
   const char *class_path_;

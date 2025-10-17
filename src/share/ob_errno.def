@@ -2852,7 +2852,7 @@ DEFINE_ERROR_DEP(OB_HDFS_RESOURCE_UNAVAILABLE, -11028, -1, "HY000", "HDFS: resou
 DEFINE_ERROR_DEP(OB_HDFS_FUNC_UNIMPLEMENTED, -11029, -1, "HY000", "HDFS: function is unimplemented");
 DEFINE_ERROR_DEP(OB_HDFS_OPERATION_CANCELED, -11030, -1, "HY000", "HDFS: operation is already canceled");
 DEFINE_ERROR_DEP(OB_HDFS_PERMISSION_DENIED, -11031, -1, "HY000", "HDFS: permission denied");
-DEFINE_ERROR_DEP(OB_HDFS_PATH_NOT_FOUND, -11032, -1, "HY000", "HDFS: path not found");
+DEFINE_ERROR_EXT(OB_HDFS_PATH_NOT_FOUND, -11032, -1, "HY000", "HDFS: path not found", "HDFS path message %s");
 DEFINE_ERROR_DEP(OB_HDFS_FILE_ALREADY_EXISTS, -11033, -1, "HY000", "HDFS: file already exists");
 DEFINE_ERROR_DEP(OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY, -11034, -1, "HY000", "HDFS: path is not empty directory");
 DEFINE_ERROR_DEP(OB_HDFS_BUSY, -11035, -1, "HY000", "HDFS: io or resource is busy");
@@ -2876,9 +2876,9 @@ DEFINE_ERROR_EXT(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, -11052, -1, "HY000", "unexpe
 DEFINE_ERROR_DEP(OB_JNI_ERROR, -11053, -1, "HY000", "unexpected error for jni")
 DEFINE_ERROR_DEP(OB_JNI_CLASS_NOT_FOUND_ERROR, -11054, -1, "HY000", "class could not be found during jni operation")
 DEFINE_ERROR_DEP(OB_JNI_METHOD_NOT_FOUND_ERROR, -11055, -1, "HY000", "method could not be found during jni operation")
-DEFINE_ERROR_DEP(OB_JNI_ENV_ERROR, -11056, -1, "HY000", "JNI env could not be found")
+DEFINE_ERROR_EXT(OB_JNI_ENV_ERROR, -11056, -1, "HY000", "JNI env could not be found", "jvm.so not found %s");
 DEFINE_ERROR_DEP(OB_JNI_DELETE_REF_ERROR, -11057, -1, "HY000", "JNI env could not delete ref")
-DEFINE_ERROR_DEP(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, -11058, -1, "HY000", "JAVA_HOME could not be found")
+DEFINE_ERROR_EXT(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, -11058, -1, "HY000", "JAVA_HOME could not be found", "cur java home path %s");)
 DEFINE_ERROR_DEP(OB_JNI_ENSURE_CAPACTIY_ERROR, -11059, -1, "HY000", "JNI cound not ensure capacity")
 DEFINE_ERROR_DEP(OB_JNI_FIELD_NOT_FOUND_ERROR, -11060, -1, "HY000", "field could not be found during jni operation")
 DEFINE_ERROR_DEP(OB_JNI_OBJECT_NOT_FOUND_ERROR, -11061, -1, "HY000", "object could not be found during jni operation")
