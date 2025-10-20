@@ -276,13 +276,9 @@ private:
                                         int64_t skip_scan_offset,
                                         ObIArray<ObRawExpr*> &prefix_exprs);
 
-  static int update_use_skip_scan(ObCostTableScanInfo &est_cost_info,
-                                  ObIArray<ObExprSelPair> &all_predicate_sel,
-                                  OptSkipScanState &use_skip_scan);
+  static int update_use_skip_scan(AccessPath &path);
 
-  static int reset_skip_scan_info(ObCostTableScanInfo &est_cost_info,
-                                  ObIArray<ObExprSelPair> &all_predicate_sel,
-                                  OptSkipScanState &use_skip_scan);
+  static int reset_skip_scan_info(AccessPath &path);
 
   static int do_storage_estimation(ObOptimizerContext &ctx,
                                    ObBatchEstTasks &tasks);
@@ -386,6 +382,16 @@ private:
                                                         const uint64_t table_id,
                                                         ObIArray<AccessPath *> &paths,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
+  static int process_ds_result(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               ObIArray<ObDSResultItem> &ds_result_items,
+                               uint64_t index_id,
+                               ObDSResultItemType type,
+                               ObIArray<ObExprSelPair> &all_predicate_sel,
+                               const double query_block_sample_ratio,
+                               const double total_rowcnt,
+                               double &filter_rowcnt,
+                               double &filter_sel);
   static int process_non_ds_filters(const OptTableMetas &table_metas,
                                     const OptSelectivityCtx &ctx,
                                     const ObDSResultItem &result_item,

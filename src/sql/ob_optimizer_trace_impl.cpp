@@ -779,6 +779,9 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   } else if (OB_DS_INDEX_SCAN_STAT == ds_result.type_ &&
              OB_FAIL(append(", tpye:index scan"))) {
     LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_DS_INDEX_SKIP_SCAN_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:index skip scan"))) {
+    LOG_WARN("failed to append msg", K(ret));
   } else if (OB_DS_INDEX_BACK_STAT == ds_result.type_ &&
              OB_FAIL(append(", tpye:index back"))) {
     LOG_WARN("failed to append msg", K(ret));

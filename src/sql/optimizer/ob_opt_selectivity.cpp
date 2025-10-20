@@ -417,7 +417,7 @@ int OptTableMeta::init(const uint64_t table_id,
   //init column ndv
   if (OB_SUCC(ret) && OB_FAIL(init_column_meta(ctx, column_ids, column_metas_))) {
     LOG_WARN("init column meta failed", K(ret));
-    }
+  }
 
   return ret;
 }
@@ -574,10 +574,14 @@ int OptTableMeta::refine_column_meta(const OptSelectivityCtx &ctx,
   int ret = OB_SUCCESS;
   bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id) ||
                          column_id == OB_HIDDEN_PK_INCREMENT_COLUMN_ID;
+  bool is_tmp_table_hidden_col = (OB_HIDDEN_SESSION_ID_COLUMN_ID == column_id);
   int64_t global_ndv = 0;
   int64_t num_null = 0;
   if (is_single_pkey) {
     col_meta.set_ndv(rows_);
+    col_meta.set_num_null(0);
+  } else if (is_tmp_table_hidden_col) {
+    col_meta.set_ndv(1);
     col_meta.set_num_null(0);
   }
   if (OB_SUCC(ret)) {
