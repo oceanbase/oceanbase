@@ -92,7 +92,7 @@ int ObTextTaaTIter::do_total_doc_cnt()
   int ret = OB_SUCCESS;
   ObEvalCtx::BatchInfoScopeGuard guard(*iter_param_->eval_ctx_);
   guard.set_batch_idx(0);
-  int64_t total_doc_cnt_int = -1;
+  int64_t total_doc_cnt = 0;
   if (OB_ISNULL(total_doc_cnt_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null total doc cnt expr", K(ret));
@@ -106,21 +106,20 @@ int ObTextTaaTIter::do_total_doc_cnt()
       }
     }
     if (OB_SUCC(ret)) {
-      ObDatum &total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_);
-      total_doc_cnt_int = total_doc_cnt.get_int();
-      if (OB_UNLIKELY(total_doc_cnt_int < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected total doc cnt", K(ret), K(total_doc_cnt));
+      if (is_valid_format(total_doc_cnt_expr_->get_format(*iter_param_->eval_ctx_))) {
+        total_doc_cnt = total_doc_cnt_expr_->get_vector(*iter_param_->eval_ctx_)->get_int(0);
+      } else {
+        total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_).get_int();
       }
     }
   } else {
-    ObDatum &total_doc_cnt = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
-    total_doc_cnt.set_int(estimated_total_doc_cnt_);
-    total_doc_cnt_int = estimated_total_doc_cnt_;
-    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt));
+    ObDatum &total_doc_cnt_datum = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
+    total_doc_cnt_datum.set_int(estimated_total_doc_cnt_);
+    total_doc_cnt = estimated_total_doc_cnt_;
+    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt_datum));
   }
   if (OB_SUCC(ret)) {
-    partition_cnt_ = MIN((total_doc_cnt_int-1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
+    partition_cnt_ = MIN((total_doc_cnt-1) / OB_HASHMAP_DEFAULT_SIZE + 1, OB_MAX_HASHMAP_COUNT);
     total_doc_cnt_calculated_ = true;
   }
   return ret;

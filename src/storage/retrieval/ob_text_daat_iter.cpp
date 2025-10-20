@@ -213,15 +213,20 @@ int ObTextBMWIter::do_total_doc_cnt()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null total doc cnt expr", K(ret));
   } else {
-    ObDatum &total_doc_cnt = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
-    total_doc_cnt.set_int(estimated_total_doc_cnt_);
-    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt));
+    ObDatum &total_doc_cnt_datum = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
+    total_doc_cnt_datum.set_int(estimated_total_doc_cnt_);
+    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt_datum));
   }
 
   if (OB_SUCC(ret)) {
-    const ObDatum &total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_);
+    int64_t total_doc_cnt = 0;
+    if (is_valid_format(total_doc_cnt_expr_->get_format(*iter_param_->eval_ctx_))) {
+      total_doc_cnt = total_doc_cnt_expr_->get_vector(*iter_param_->eval_ctx_)->get_int(0);
+    } else {
+      total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_).get_int();
+    }
     for (int64_t i = 0; i < dim_iters_->count(); ++i) {
-      static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->set_total_doc_cnt(total_doc_cnt.get_int());
+      static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->set_total_doc_cnt(total_doc_cnt);
     }
   }
   return ret;

@@ -257,8 +257,11 @@ int ObTextRetrievalTokenIter::do_token_cnt_agg(const ObDocIdExt &doc_id)
   } else if (OB_FAIL(fwd_idx_agg_iter_->get_next_row())) {
     LOG_WARN("failed to get next row from forward index iterator", K(ret));
   } else {
-    const ObDatum &word_cnt_datum = fwd_idx_agg_expr_->locate_expr_datum(*eval_ctx_);
-    token_count = word_cnt_datum.get_int();
+    if (is_valid_format(fwd_idx_agg_expr_->get_format(*eval_ctx_))) {
+      token_count = fwd_idx_agg_expr_->get_vector(*eval_ctx_)->get_int(0);
+    } else {
+      token_count = fwd_idx_agg_expr_->locate_expr_datum(*eval_ctx_).get_int();
+    }
     LOG_DEBUG("retrieval iterator get token cnt for doc", K(ret), K(doc_id), K(token_count));
   }
   return ret;
@@ -616,7 +619,12 @@ int ObTextRetrievalTokenIter::estimate_token_doc_cnt()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null total doc cnt expr", K(ret));
     } else {
-      const int64_t total_doc_cnt = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0).get_int();
+      int64_t total_doc_cnt = 0;
+      if (is_valid_format(total_doc_cnt_param_expr->get_format(*eval_ctx_))) {
+        total_doc_cnt = total_doc_cnt_param_expr->get_vector(*eval_ctx_)->get_int(0);
+      } else {
+        total_doc_cnt = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0).get_int();
+      }
       max_token_relevance_ = sql::ObExprBM25::query_token_weight(token_doc_cnt_, total_doc_cnt);
     }
   }
