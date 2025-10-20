@@ -1465,6 +1465,11 @@ public:
   static int64_t get_parallel_idx(const blocksstable::ObMacroDataSeq &start_seq);
   static bool is_mview_not_retryable(const int64_t data_format_version, const share::ObDDLType task_type);
   static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
+  static int get_tablet_ids(
+      const uint64_t tenant_id,
+      const int64_t table_id,
+      const int64_t target_table_id,
+      common::ObIArray<common::ObTabletID> &tablet_ids);
   static int obtain_snapshot(
       const share::ObDDLTaskStatus next_task_status,
       const uint64_t table_id,
