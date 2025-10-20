@@ -1688,6 +1688,7 @@ private:
   inline int set_session_state_(ObSQLSessionState state);
   //写入系统变量的默认值, deserialized scene need use base_value as baseline.
   int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
+  virtual inline int64_t get_truncated_sql_len(const ObString &stmt) { return std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length())); }
 protected:
   //============注意：下面的成员变量使用时，需要考虑并发控制================================
   struct MultiThreadData

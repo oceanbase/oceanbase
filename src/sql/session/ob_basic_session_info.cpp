@@ -6276,8 +6276,7 @@ void ObBasicSessionInfo::reset_pl_spi_query_info(int64_t time) {
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query,  volatile int64_t& query_len)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
-                                   static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = get_truncated_sql_len(stmt);
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
@@ -6309,8 +6308,7 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_l
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
-                                   static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = get_truncated_sql_len(stmt);
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
