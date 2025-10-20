@@ -1944,7 +1944,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             if (OB_SUCC(ret) && !ObStmt::is_diagnostic_stmt(stmt_type) && lib::is_mysql_mode()) {
               ob_reset_tsi_warning_buffer();
             }
-
             OZ (inner_open(ctx,
                            allocator,
                            sql,
@@ -4088,7 +4087,8 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           ObPLSqlAuditGuard audit_guard(
             *(ctx->exec_ctx_), session_info, spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
           ObSPIRetryCtrlGuard retry_guard(retry_ctrl, spi_result, session_info, ret);
-          if (cursor.is_ps_cursor()) {
+          bool is_iter_end = false;
+	  if (cursor.is_ps_cursor()) {
             spi_result.get_sql_ctx().can_reroute_sql_ = ctx->exec_ctx_->get_sql_ctx()->can_reroute_sql_;
           }
           CK (OB_NOT_NULL(spi_result.get_memory_ctx()));
@@ -4113,10 +4113,11 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                         (for_update && !is_server_cursor && !is_dbms_cursor),
                                         &session_info), K(size));
           CK (OB_NOT_NULL(spi_result.get_result_set()));
-          bool is_iter_end = false;
           CK (OB_NOT_NULL(spi_result.get_result_set()->get_field_columns()));
-          OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()->get_field_columns()));
-          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
+	  OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()->get_field_columns()));
+          OZ (fill_cursor(
+            spi_result.get_memory_ctx(),
+            *spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
           OZ (spi_cursor->row_store_.finish_add_row());
           if (OB_FAIL(ret)) {
           } else if (is_dbms_cursor) {
@@ -8961,6 +8962,27 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
     if (OB_SUCC(ret)) {
       new (cur_obj)ObObj(obj);
       current_addr += sizeof(ObObj);
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::fill_cursor(lib::MemoryContext entity,
+                              ObResultSet &result_set,
+                              ObSPICursor *cursor,
+                              int64_t new_query_start_time,
+			      bool &is_iter_end,
+                              int64_t orc_max_ret_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entity)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    WITH_CONTEXT(entity) {
+      if (OB_FAIL(fill_cursor(result_set, cursor, new_query_start_time, is_iter_end, orc_max_ret_rows))) {
+        LOG_WARN("failed to fill cursor", K(ret));
+      }
     }
   }
   return ret;
