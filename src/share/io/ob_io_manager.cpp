@@ -605,6 +605,7 @@ ObTenantIOManager::ObTenantIOManager()
     io_allocator_(),
     io_scheduler_(nullptr),
     callback_mgr_(),
+    io_cancel_count_(0),
     io_config_lock_(ObLatchIds::TENANT_IO_CONFIG_LOCK)
 {
 
@@ -1463,6 +1464,8 @@ void ObTenantIOManager::print_io_status()
       }
     }
   }
+  LOG_INFO("[IO STATUS CANCEL]", K_(tenant_id), K(io_cancel_count_));
+  ATOMIC_STORE(&io_cancel_count_, 0);
   // print io function status
   print_io_function_status();
 }

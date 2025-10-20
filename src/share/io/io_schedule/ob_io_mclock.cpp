@@ -304,6 +304,8 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
     LOG_WARN("invalid argument", K(ret), K(req));
   } else if (req.get_flag().is_unlimited()) {
     is_unlimited = true;
+  } else if (req.is_canceled_) {
+    ret = OB_CANCELED;
   } else {
     uint64_t cur_queue_index = phy_queue->queue_index_;
     DRWLock::RDLockGuard guard(group_clocks_lock_);

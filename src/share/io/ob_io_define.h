@@ -332,7 +332,7 @@ public:
   ObIOCallback *copied_callback_;
   int64_t callback_buf_size_;
   char callback_buf_[];
-  };
+};
 
 typedef common::ObDList<ObIORequest> IOReqList;
 class ObPhyQueue final

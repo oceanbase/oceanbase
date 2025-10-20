@@ -167,8 +167,9 @@ public:
   void dec_ref();
   int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
   int get_io_func_infos(ObIOFuncUsages &io_func_infos) const;
+  void inc_io_cancel_count() { ATOMIC_FAA(&io_cancel_count_, 1); }
   TO_STRING_KV(K(is_inited_), K(ref_cnt_), K(tenant_id_), K(io_config_), K(io_clock_),
-       K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_));
+       K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_), K(io_cancel_count_));
 private:
   friend class ObIORequest;
   bool is_inited_;
@@ -184,6 +185,7 @@ private:
   ObSysIOUsage io_backup_usage_; //for backup mock group
   ObIOTracer io_tracer_;
   ObIOFuncUsages io_func_infos_; // Tenant Level: IO function group usage monitor
+  int64_t io_cancel_count_;
   DRWLock io_config_lock_; //for map and config
   hash::ObHashMap<uint64_t, uint64_t> group_id_index_map_; //key:group_id, value:index
 };

@@ -808,6 +808,13 @@ void ObIORequest::cancel()
         if (time_log_.submit_ts_ > 0 && 0 == time_log_.return_ts_ && channel_ != nullptr) {
           channel_->cancel(*this);
         }
+        if (REACH_TIME_INTERVAL(1000000)) {
+          LOG_WARN("io cancelled", K(lbt()), K(*this));
+        }
+        ObRefHolder<ObTenantIOManager> tenant_holder(tenant_io_mgr_.get_ptr());
+        if (OB_NOT_NULL(tenant_holder.get_ptr())) {
+          tenant_holder.get_ptr()->inc_io_cancel_count();
+        }
       }
     }
     finish(OB_CANCELED);
