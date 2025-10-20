@@ -1017,8 +1017,8 @@ int ObTenantBalanceService::persist_job_and_task_(
     common::ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(persist_job_and_task_in_trans_(ls_array, job, tasks, trans))) {
-      LOG_WARN("failed to persist job and task in trans", KR(ret), K(job), K(tasks));
+    } else if (OB_FAIL(persist_job_and_task_in_trans_(ls_array, job_desc, job, tasks, trans))) {
+      LOG_WARN("failed to persist job and task in trans", KR(ret), K(job_desc), K(job), K(tasks));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -1040,6 +1040,7 @@ int ObTenantBalanceService::persist_job_and_task_(
 
 int ObTenantBalanceService::persist_job_and_task_in_trans_(
     const share::ObLSStatusInfoArray &ls_array,
+    const share::ObBalanceJobDesc &job_desc,
     const share::ObBalanceJob &job,
     ObArray<share::ObBalanceTask> &tasks,
     common::ObMySQLTransaction &trans)
@@ -1065,7 +1066,7 @@ int ObTenantBalanceService::persist_job_and_task_in_trans_(
     //TODO 是否需要检验primary_zone和unit_num，目前看不需要，这些随时都有可能被修改
     //只能保证最终一致性
     share::ObLSStatusInfoArray tmp_ls_array;
-    const bool check_status = job_desc_.get_enable_rebalance();
+    const bool check_status = job_desc.get_enable_rebalance();
     if (OB_FAIL(gather_ls_status_stat(tenant_id, tmp_ls_array, check_status))) {
       LOG_WARN("failed to get ls status array", KR(ret), K(tenant_id), K(check_status));
     } else {
@@ -1297,12 +1298,14 @@ int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
         job_cnt = 0;
       } else if (OB_FAIL(persist_job_and_task_in_trans_(
           ls_array_,
+          job_desc_,
           tp_help.get_balance_job(),
           tp_help.get_balance_tasks(),
           trans))) {
         LOG_WARN("failed to persist job and task", KR(ret), "job",
                  tp_help.get_balance_job(), "tasks",
-                 tp_help.get_balance_tasks());
+                 tp_help.get_balance_tasks(),
+                 "job_desc", job_desc_);
       } else {
         job_cnt = 1;
       }

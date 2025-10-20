@@ -122,6 +122,7 @@ private:
       ObArray<share::ObBalanceTask> &tasks);
   int persist_job_and_task_in_trans_(
       const share::ObLSStatusInfoArray &ls_array,
+      const share::ObBalanceJobDesc &job_desc,
       const share::ObBalanceJob &job,
       ObArray<share::ObBalanceTask> &tasks,
       common::ObMySQLTransaction &trans);
