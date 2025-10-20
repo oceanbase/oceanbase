@@ -406,11 +406,13 @@ int ObDiagnosisManager::handle_warning(int64_t err_ret, int64_t idx, ObString co
 
 void ObDiagnosisManager::reuse()
 {
-  idxs_.reuse();
-  rets_.reuse();
-  col_names_.reuse();
-  data_.reuse();
-  missing_col_idxs_.reuse();
+  idxs_.reset();
+  rets_.reset();
+  col_names_.reset();
+  data_.reset();
+  missing_col_idxs_.reset();
+
+  allocator_.reuse();
 }
 
 int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
