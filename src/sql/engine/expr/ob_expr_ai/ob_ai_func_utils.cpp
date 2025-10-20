@@ -901,32 +901,33 @@ int ObSiliconflowUtils::ObSiliconflowRerank::parse_output(common::ObIAllocator &
 
 
 int ObAIFuncUtils::get_header(ObIAllocator &allocator,
-                              ObAIFuncExprInfo *info,
+                              const ObAIFuncExprInfo &info,
+                              const ObAiModelEndpointInfo &endpoint_info,
                               ObArray<ObString> &headers)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else if (ObAIFuncUtils::is_completion_type(info)) {
+  ObString unencrypted_access_key;
+  if (OB_FAIL(endpoint_info.get_unencrypted_access_key(allocator, unencrypted_access_key))) {
+    LOG_WARN("Failed to get unencrypted access key", K(ret));
+  } else if (ObAIFuncUtils::is_completion_type(&info)) {
     ObAIFuncIComplete *complete_provider = nullptr;
-    if (OB_FAIL(get_complete_provider(allocator, info->provider_, complete_provider))) {
+    if (OB_FAIL(get_complete_provider(allocator, endpoint_info.get_provider(), complete_provider))) {
       LOG_WARN("Failed to get complete provider", K(ret));
-    } else if (OB_FAIL(complete_provider->get_header(allocator, info->api_key_, headers))) {
+    } else if (OB_FAIL(complete_provider->get_header(allocator, unencrypted_access_key, headers))) {
       LOG_WARN("Failed to get header from complete provider", K(ret));
     }
-  } else if (ObAIFuncUtils::is_dense_embedding_type(info)) {
+  } else if (ObAIFuncUtils::is_dense_embedding_type(&info)) {
     ObAIFuncIEmbed *embed_provider = nullptr;
-    if (OB_FAIL(get_embed_provider(allocator, info->provider_, embed_provider))) {
+    if (OB_FAIL(get_embed_provider(allocator, endpoint_info.get_provider(), embed_provider))) {
       LOG_WARN("Failed to get embed provider", K(ret));
-    } else if (OB_FAIL(embed_provider->get_header(allocator, info->api_key_, headers))) {
+    } else if (OB_FAIL(embed_provider->get_header(allocator, unencrypted_access_key, headers))) {
       LOG_WARN("Failed to get header from embed provider", K(ret));
     }
-  } else if (ObAIFuncUtils::is_rerank_type(info)) {
+  } else if (ObAIFuncUtils::is_rerank_type(&info)) {
     ObAIFuncIRerank *rerank_provider = nullptr;
-    if (OB_FAIL(get_rerank_provider(allocator, info->provider_, rerank_provider))) {
+    if (OB_FAIL(get_rerank_provider(allocator, endpoint_info.get_provider(), rerank_provider))) {
       LOG_WARN("Failed to get rerank provider", K(ret));
-    } else if (OB_FAIL(rerank_provider->get_header(allocator, info->api_key_, headers))) {
+    } else if (OB_FAIL(rerank_provider->get_header(allocator, unencrypted_access_key, headers))) {
       LOG_WARN("Failed to get header from rerank provider", K(ret));
     }
   }
@@ -934,28 +935,29 @@ int ObAIFuncUtils::get_header(ObIAllocator &allocator,
 }
 
 int ObAIFuncUtils::get_complete_body(ObIAllocator &allocator,
-                                    ObAIFuncExprInfo *info,
+                                    const ObAIFuncExprInfo &info,
+                                    const ObAiModelEndpointInfo &endpoint_info,
                                     ObString &prompt,
                                     ObString &content,
                                     ObJsonObject *config,
                                     ObJsonObject *&body)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else {
-    ObAIFuncIComplete *complete_provider = nullptr;
-    if (OB_FAIL(get_complete_provider(allocator, info->provider_, complete_provider))) {
-      LOG_WARN("Failed to get complete provider", K(ret));
-    } else if (OB_FAIL(complete_provider->get_body(allocator, info->model_, prompt, content, config, body))) {
-      LOG_WARN("Failed to get body from complete provider", K(ret));
-    }
+  ObString request_model_name = info.model_;
+  if (!endpoint_info.get_request_model_name().empty()) {
+    request_model_name = endpoint_info.get_request_model_name();
+  }
+
+  ObAIFuncIComplete *complete_provider = nullptr;
+  if (OB_FAIL(get_complete_provider(allocator, endpoint_info.get_provider(), complete_provider))) {
+    LOG_WARN("Failed to get complete provider", K(ret));
+  } else if (OB_FAIL(complete_provider->get_body(allocator, request_model_name, prompt, content, config, body))) {
+    LOG_WARN("Failed to get body from complete provider", K(ret));
   }
   return ret;
 }
 
-int ObAIFuncUtils::set_json_format_config(ObIAllocator &allocator, ObString &provider, ObJsonObject *config)
+int ObAIFuncUtils::set_json_format_config(ObIAllocator &allocator, const ObString &provider, ObJsonObject *config)
 {
   int ret = OB_SUCCESS;
   ObAIFuncIComplete *complete_provider = nullptr;
@@ -968,104 +970,91 @@ int ObAIFuncUtils::set_json_format_config(ObIAllocator &allocator, ObString &pro
 }
 
 int ObAIFuncUtils::get_embed_body(ObIAllocator &allocator,
-                                  ObAIFuncExprInfo *info,
+                                  const ObAIFuncExprInfo &info,
+                                  const ObAiModelEndpointInfo &endpoint_info,
                                   ObArray<ObString> &contents,
                                   ObJsonObject *config,
                                   ObJsonObject *&body)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else {
-    ObAIFuncIEmbed *embed_provider = nullptr;
-    if (OB_FAIL(get_embed_provider(allocator, info->provider_, embed_provider))) {
-      LOG_WARN("Failed to get embed provider", K(ret));
-    } else if (OB_FAIL(embed_provider->get_body(allocator, info->model_, contents, config, body))) {
-      LOG_WARN("Failed to get body from embed provider", K(ret));
-    }
+  ObString request_model_name = info.model_;
+  if (!endpoint_info.get_request_model_name().empty()) {
+    request_model_name = endpoint_info.get_request_model_name();
+  }
+
+  ObAIFuncIEmbed *embed_provider = nullptr;
+  if (OB_FAIL(get_embed_provider(allocator, endpoint_info.get_provider(), embed_provider))) {
+    LOG_WARN("Failed to get embed provider", K(ret));
+  } else if (OB_FAIL(embed_provider->get_body(allocator, request_model_name, contents, config, body))) {
+    LOG_WARN("Failed to get body from embed provider", K(ret));
   }
   return ret;
 }
 
 int ObAIFuncUtils::get_rerank_body(ObIAllocator &allocator,
-                                   ObAIFuncExprInfo *info,
+                                   const ObAIFuncExprInfo &info,
+                                   const ObAiModelEndpointInfo &endpoint_info,
                                    ObString &query,
                                    ObJsonArray *document_array,
                                    ObJsonObject *config,
                                    ObJsonObject *&body)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else {
-    ObAIFuncIRerank *rerank_provider = nullptr;
-    if (OB_FAIL(get_rerank_provider(allocator, info->provider_, rerank_provider))) {
-      LOG_WARN("Failed to get rerank provider", K(ret));
-    } else if (OB_FAIL(rerank_provider->get_body(allocator, info->model_, query, document_array, config, body))) {
-      LOG_WARN("Failed to get body from rerank provider", K(ret));
-    }
+  ObString request_model_name = info.model_;
+  if (!endpoint_info.get_request_model_name().empty()) {
+    request_model_name = endpoint_info.get_request_model_name();
+  }
+
+  ObAIFuncIRerank *rerank_provider = nullptr;
+  if (OB_FAIL(get_rerank_provider(allocator, endpoint_info.get_provider(), rerank_provider))) {
+    LOG_WARN("Failed to get rerank provider", K(ret));
+  } else if (OB_FAIL(rerank_provider->get_body(allocator, request_model_name, query, document_array, config, body))) {
+    LOG_WARN("Failed to get body from rerank provider", K(ret));
   }
   return ret;
 }
 
 int ObAIFuncUtils::parse_complete_output(ObIAllocator &allocator,
-                                        ObAIFuncExprInfo *info,
+                                        const ObAiModelEndpointInfo &endpoint_info,
                                         ObJsonObject *http_response,
                                         ObIJsonBase *&result)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else {
-    ObAIFuncIComplete *complete_provider = nullptr;
-    if (OB_FAIL(get_complete_provider(allocator, info->provider_, complete_provider))) {
-      LOG_WARN("Failed to get complete provider", K(ret));
-    } else if (OB_FAIL(complete_provider->parse_output(allocator, http_response, result))) {
-      LOG_WARN("Failed to parse output from complete provider", K(ret));
-    }
+  ObAIFuncIComplete *complete_provider = nullptr;
+  if (OB_FAIL(get_complete_provider(allocator, endpoint_info.get_provider(), complete_provider))) {
+    LOG_WARN("Failed to get complete provider", K(ret));
+  } else if (OB_FAIL(complete_provider->parse_output(allocator, http_response, result))) {
+    LOG_WARN("Failed to parse output from complete provider", K(ret));
   }
   return ret;
 }
 
 int ObAIFuncUtils::parse_embed_output(ObIAllocator &allocator,
-                                      ObAIFuncExprInfo *info,
+                                      const ObAiModelEndpointInfo &endpoint_info,
                                       ObJsonObject *http_response,
                                       ObIJsonBase *&result)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else {
-    ObAIFuncIEmbed *embed_provider = nullptr;
-    if (OB_FAIL(get_embed_provider(allocator, info->provider_, embed_provider))) {
-      LOG_WARN("Failed to get embed provider", K(ret));
-    } else if (OB_FAIL(embed_provider->parse_output(allocator, http_response, result))) {
-      LOG_WARN("Failed to parse output from embed provider", K(ret));
-    }
+  ObAIFuncIEmbed *embed_provider = nullptr;
+  if (OB_FAIL(get_embed_provider(allocator, endpoint_info.get_provider(), embed_provider))) {
+    LOG_WARN("Failed to get embed provider", K(ret));
+  } else if (OB_FAIL(embed_provider->parse_output(allocator, http_response, result))) {
+    LOG_WARN("Failed to parse output from embed provider", K(ret));
   }
   return ret;
 }
 
 int ObAIFuncUtils::parse_rerank_output(ObIAllocator &allocator,
-                                       ObAIFuncExprInfo *info,
+                                       const ObAiModelEndpointInfo &endpoint_info,
                                        ObJsonObject *http_response,
                                        ObIJsonBase *&result)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("info is null", K(ret));
-  } else {
-    ObAIFuncIRerank *rerank_provider = nullptr;
-    if (OB_FAIL(get_rerank_provider(allocator, info->provider_, rerank_provider))) {
-      LOG_WARN("Failed to get rerank provider", K(ret));
-    } else if (OB_FAIL(rerank_provider->parse_output(allocator, http_response, result))) {
-      LOG_WARN("Failed to parse output from rerank provider", K(ret));
-    }
+  ObAIFuncIRerank *rerank_provider = nullptr;
+  if (OB_FAIL(get_rerank_provider(allocator, endpoint_info.get_provider(), rerank_provider))) {
+    LOG_WARN("Failed to get rerank provider", K(ret));
+  } else if (OB_FAIL(rerank_provider->parse_output(allocator, http_response, result))) {
+    LOG_WARN("Failed to parse output from rerank provider", K(ret));
   }
   return ret;
 }
@@ -1237,7 +1226,7 @@ int ObAIFuncJsonUtils::transform_array_to_json_array(ObIAllocator &allocator, Ob
   return ret;
 }
 
-int ObAIFuncUtils::get_complete_provider(ObIAllocator &allocator, ObString &provider, ObAIFuncIComplete *&complete_provider)
+int ObAIFuncUtils::get_complete_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIComplete *&complete_provider)
 {
   int ret = OB_SUCCESS;
   if (provider.empty()) {
@@ -1264,7 +1253,7 @@ int ObAIFuncUtils::get_complete_provider(ObIAllocator &allocator, ObString &prov
   return ret;
 }
 
-int ObAIFuncUtils::get_embed_provider(ObIAllocator &allocator, ObString &provider, ObAIFuncIEmbed *&embed_provider)
+int ObAIFuncUtils::get_embed_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIEmbed *&embed_provider)
 {
   int ret = OB_SUCCESS;
   if (provider.empty()) {
@@ -1290,7 +1279,7 @@ int ObAIFuncUtils::get_embed_provider(ObIAllocator &allocator, ObString &provide
   return ret;
 }
 
-int ObAIFuncUtils::get_rerank_provider(ObIAllocator &allocator, ObString &provider, ObAIFuncIRerank *&rerank_provider)
+int ObAIFuncUtils::get_rerank_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIRerank *&rerank_provider)
 {
   int ret = OB_SUCCESS;
   if (provider.empty()) {
@@ -1313,7 +1302,7 @@ int ObAIFuncUtils::get_rerank_provider(ObIAllocator &allocator, ObString &provid
   return ret;
 }
 
-int ObAIFuncUtils::check_info_type_completion(ObAIFuncExprInfo *info)
+int ObAIFuncUtils::check_info_type_completion(const ObAIFuncExprInfo *info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
@@ -1328,7 +1317,7 @@ int ObAIFuncUtils::check_info_type_completion(ObAIFuncExprInfo *info)
   return ret;
 }
 
-int ObAIFuncUtils::check_info_type_dense_embedding(ObAIFuncExprInfo *info)
+int ObAIFuncUtils::check_info_type_dense_embedding(const ObAIFuncExprInfo *info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
@@ -1343,7 +1332,7 @@ int ObAIFuncUtils::check_info_type_dense_embedding(ObAIFuncExprInfo *info)
   return ret;
 }
 
-int ObAIFuncUtils::check_info_type_rerank(ObAIFuncExprInfo *info)
+int ObAIFuncUtils::check_info_type_rerank(const ObAIFuncExprInfo *info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
@@ -1373,7 +1362,9 @@ int ObAIFuncUtils::set_string_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   return ret;
 }
 
-int ObAIFuncUtils::get_ai_func_info(ObIAllocator &allocator, ObString &model_id, ObAIFuncExprInfo *&info)
+int ObAIFuncUtils::get_ai_func_info(ObIAllocator &allocator, const ObString &model_id,
+                                    share::schema::ObSchemaGetterGuard &guard,
+                                    ObAIFuncExprInfo *&info)
 {
   int ret = OB_SUCCESS;
   if (model_id.empty()) {
@@ -1385,11 +1376,28 @@ int ObAIFuncUtils::get_ai_func_info(ObIAllocator &allocator, ObString &model_id,
     if (OB_ISNULL(info_obj)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to allocate memory for info_obj", K(ret));
-    } else if (OB_FAIL(info_obj->init(allocator, model_id))) {
+    } else if (OB_FAIL(info_obj->init(allocator, model_id, guard))) {
       LOG_WARN("Failed to init info_obj", K(ret));
     } else {
       info = info_obj;
     }
+  }
+  return ret;
+}
+
+int ObAIFuncUtils::get_ai_func_info(ObIAllocator &allocator, const ObString &model_id, ObAIFuncExprInfo *&info)
+{
+  int ret = OB_SUCCESS;
+  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  schema::ObSchemaGetterGuard guard;
+  uint64_t tenant_id = MTL_ID();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_ai_func_info(allocator, model_id, guard, info))) {
+    LOG_WARN("Failed to init info_obj", K(ret));
   }
   return ret;
 }
@@ -1405,17 +1413,21 @@ int ObAIFuncModel::call_completion(ObString &prompt, ObJsonObject *config, ObStr
   ObString prompt_str;
   ObString result_str;
   ObAIFuncClient client;
+  ObString unencrypted_access_key;
+  ObString request_model_name = get_request_model_name();
   if (!is_completion_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info type is not completion", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "info type is not completion");
-  } else if (OB_FAIL(ObAIFuncUtils::get_complete_provider(*allocator_, info_.provider_, complete_provider))) {
+  } else if (OB_FAIL(ObAIFuncUtils::get_complete_provider(*allocator_, endpoint_info_.get_provider(), complete_provider))) {
     LOG_WARN("Failed to get complete provider", K(ret));
-  } else if (OB_FAIL(complete_provider->get_header(*allocator_, info_.api_key_, headers))) {
+  } else if (OB_FAIL(endpoint_info_.get_unencrypted_access_key(*allocator_, unencrypted_access_key))) {
+    LOG_WARN("Failed to get unencrypted access key", K(ret));
+  } else if (OB_FAIL(complete_provider->get_header(*allocator_, unencrypted_access_key, headers))) {
     LOG_WARN("Failed to get header", K(ret));
-  } else if (OB_FAIL(complete_provider->get_body(*allocator_, info_.model_, prompt_str, prompt, config, body))) {
+  } else if (OB_FAIL(complete_provider->get_body(*allocator_, request_model_name, prompt_str, prompt, config, body))) {
     LOG_WARN("Failed to get body", K(ret));
-  } else if (OB_FAIL(client.send_post(*allocator_, info_.url_, headers, body, response))) {
+  } else if (OB_FAIL(client.send_post(*allocator_, endpoint_info_.get_url(), headers, body, response))) {
     LOG_WARN("Failed to send post", K(ret));
   } else if (OB_FAIL(complete_provider->parse_output(*allocator_, response, result_base))) {
     LOG_WARN("Failed to parse output", K(ret));
@@ -1439,18 +1451,22 @@ int ObAIFuncModel::call_completion_vector(ObArray<ObString> &prompts, ObJsonObje
   ObString prompt_str;
   ObString result_str;
   ObAIFuncClient client;
+  ObString unencrypted_access_key;
+  ObString request_model_name = get_request_model_name();
   if (!is_completion_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info type is not completion", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "info type is not completion");
-  } else if (OB_FAIL(ObAIFuncUtils::get_complete_provider(*allocator_, info_.provider_, complete_provider))) {
+  } else if (OB_FAIL(ObAIFuncUtils::get_complete_provider(*allocator_, endpoint_info_.get_provider(), complete_provider))) {
     LOG_WARN("Failed to get complete provider", K(ret));
-  } else if (OB_FAIL(complete_provider->get_header(*allocator_, info_.api_key_, headers))) {
+  } else if (OB_FAIL(endpoint_info_.get_unencrypted_access_key(*allocator_, unencrypted_access_key))) {
+    LOG_WARN("Failed to get unencrypted access key", K(ret));
+  } else if (OB_FAIL(complete_provider->get_header(*allocator_, unencrypted_access_key, headers))) {
     LOG_WARN("Failed to get header", K(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < prompts.count(); i++) {
       ObString prompt = prompts[i];
-      if (OB_FAIL(complete_provider->get_body(*allocator_, info_.model_, prompt_str, prompt, config, body))) {
+      if (OB_FAIL(complete_provider->get_body(*allocator_, request_model_name, prompt_str, prompt, config, body))) {
         LOG_WARN("Failed to get body", K(ret));
       } else if (OB_FAIL(body_array.push_back(body))) {
         LOG_WARN("Failed to append body", K(ret));
@@ -1459,7 +1475,7 @@ int ObAIFuncModel::call_completion_vector(ObArray<ObString> &prompts, ObJsonObje
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(client.send_post_batch(*allocator_, info_.url_, headers, body_array, response_array))) {
+  } else if (OB_FAIL(client.send_post_batch(*allocator_, endpoint_info_.get_url(), headers, body_array, response_array))) {
     LOG_WARN("Failed to send post", K(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < response_array.count(); i++) {
@@ -1513,13 +1529,17 @@ int ObAIFuncModel::call_dense_embedding_vector(ObArray<ObString> &contents, ObJs
   ObIJsonBase *result_base = nullptr;
   ObAIFuncIEmbed *embed_provider = nullptr;
   ObAIFuncClient client;
+  ObString request_model_name = get_request_model_name();
+  ObString unencrypted_access_key;
   if (!is_dense_embedding_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info type is not dense embedding", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "info type is not dense embedding");
-  } else if (OB_FAIL(ObAIFuncUtils::get_embed_provider(*allocator_, info_.provider_, embed_provider))) {
+  } else if (OB_FAIL(ObAIFuncUtils::get_embed_provider(*allocator_, endpoint_info_.get_provider(), embed_provider))) {
     LOG_WARN("Failed to get embed provider", K(ret));
-  } else if (OB_FAIL(embed_provider->get_header(*allocator_, info_.api_key_, headers))) {
+  } else if (OB_FAIL(endpoint_info_.get_unencrypted_access_key(*allocator_, unencrypted_access_key))) {
+    LOG_WARN("Failed to get unencrypted access key", K(ret));
+  } else if (OB_FAIL(embed_provider->get_header(*allocator_, unencrypted_access_key, headers))) {
     LOG_WARN("Failed to get header", K(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < contents.count(); i++) {
@@ -1527,7 +1547,7 @@ int ObAIFuncModel::call_dense_embedding_vector(ObArray<ObString> &contents, ObJs
       ObArray<ObString> content_array;
       if (OB_FAIL(content_array.push_back(content))) {
         LOG_WARN("Failed to push back content", K(ret));
-      } else if (OB_FAIL(embed_provider->get_body(*allocator_, info_.model_, content_array, config, body))) {
+      } else if (OB_FAIL(embed_provider->get_body(*allocator_, request_model_name, content_array, config, body))) {
         LOG_WARN("Failed to get body", K(ret));
       } else if (OB_FAIL(body_array.push_back(body))) {
         LOG_WARN("Failed to append body", K(ret));
@@ -1536,7 +1556,7 @@ int ObAIFuncModel::call_dense_embedding_vector(ObArray<ObString> &contents, ObJs
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(client.send_post_batch(*allocator_, info_.url_, headers, body_array, response_array))) {
+  } else if (OB_FAIL(client.send_post_batch(*allocator_, endpoint_info_.get_url(), headers, body_array, response_array))) {
     LOG_WARN("Failed to send post", K(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < response_array.count(); i++) {
@@ -1565,17 +1585,21 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
   ObAIFuncIEmbed *embed_provider = nullptr;
   ObString result_str;
   ObAIFuncClient client;
+  ObString unencrypted_access_key;
+  ObString request_model_name = get_request_model_name();
   if (!is_dense_embedding_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info type is not dense embedding", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "info type is not dense embedding");
-  } else if (OB_FAIL(ObAIFuncUtils::get_embed_provider(*allocator_, info_.provider_, embed_provider))) {
+  } else if (OB_FAIL(ObAIFuncUtils::get_embed_provider(*allocator_, endpoint_info_.get_provider(), embed_provider))) {
     LOG_WARN("Failed to get embed provider", K(ret));
-  } else if (OB_FAIL(embed_provider->get_header(*allocator_, info_.api_key_, headers))) {
+  } else if (OB_FAIL(endpoint_info_.get_unencrypted_access_key(*allocator_, unencrypted_access_key))) {
+    LOG_WARN("Failed to get unencrypted access key", K(ret));
+  } else if (OB_FAIL(embed_provider->get_header(*allocator_, unencrypted_access_key, headers))) {
     LOG_WARN("Failed to get header", K(ret));
-  } else if (OB_FAIL(embed_provider->get_body(*allocator_, info_.model_, content, config, body))) {
+  } else if (OB_FAIL(embed_provider->get_body(*allocator_, request_model_name, content, config, body))) {
     LOG_WARN("Failed to get body", K(ret));
-  } else if (OB_FAIL(client.send_post(*allocator_, info_.url_, headers, body, response))) {
+  } else if (OB_FAIL(client.send_post(*allocator_, endpoint_info_.get_url(), headers, body, response))) {
     LOG_WARN("Failed to send post", K(ret));
   } else if (OB_FAIL(embed_provider->parse_output(*allocator_, response, result_base))) {
     LOG_WARN("Failed to parse output", K(ret));
@@ -1611,17 +1635,21 @@ int ObAIFuncModel::call_rerank(ObString &query, ObJsonArray *contents, ObJsonArr
   ObIJsonBase *result_base = nullptr;
   ObAIFuncIRerank *rerank_provider = nullptr;
   ObAIFuncClient client;
+  ObString unencrypted_access_key;
+  ObString request_model_name = get_request_model_name();
   if (!is_rerank_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info type is not rerank", K(ret));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "info type is not rerank");
-  } else if (OB_FAIL(ObAIFuncUtils::get_rerank_provider(*allocator_, info_.provider_, rerank_provider))) {
+  } else if (OB_FAIL(ObAIFuncUtils::get_rerank_provider(*allocator_, endpoint_info_.get_provider(), rerank_provider))) {
     LOG_WARN("Failed to get rerank provider", K(ret));
-  } else if (OB_FAIL(rerank_provider->get_header(*allocator_, info_.api_key_, headers))) {
+  } else if (OB_FAIL(endpoint_info_.get_unencrypted_access_key(*allocator_, unencrypted_access_key))) {
+    LOG_WARN("Failed to get unencrypted access key", K(ret));
+  } else if (OB_FAIL(rerank_provider->get_header(*allocator_, unencrypted_access_key, headers))) {
     LOG_WARN("Failed to get header", K(ret));
-  } else if (OB_FAIL(rerank_provider->get_body(*allocator_, info_.model_, query, contents, nullptr, body))) {
+  } else if (OB_FAIL(rerank_provider->get_body(*allocator_, request_model_name, query, contents, nullptr, body))) {
     LOG_WARN("Failed to get body", K(ret));
-  } else if (OB_FAIL(client.send_post(*allocator_, info_.url_, headers, body, response))) {
+  } else if (OB_FAIL(client.send_post(*allocator_, endpoint_info_.get_url(), headers, body, response))) {
     LOG_WARN("Failed to send post", K(ret));
   } else if (OB_FAIL(rerank_provider->parse_output(*allocator_, response, result_base))) {
     LOG_WARN("Failed to parse output", K(ret));
@@ -1629,6 +1657,15 @@ int ObAIFuncModel::call_rerank(ObString &query, ObJsonArray *contents, ObJsonArr
     results = static_cast<ObJsonArray *>(result_base);
   }
   return ret;
+}
+
+const ObString ObAIFuncModel::get_request_model_name()
+{
+  ObString request_model_name = info_.model_;
+  if (!endpoint_info_.get_request_model_name().empty()) {
+    request_model_name = endpoint_info_.get_request_model_name();
+  }
+  return request_model_name;
 }
 
 } // namespace common
