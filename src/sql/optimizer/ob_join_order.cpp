@@ -3139,9 +3139,6 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(params),
         K(stmt), K(ret));
-  } else if (OB_FAIL(get_generated_col_index_qual(table_id,
-                                                  helper.filters_, helper))) {
-    LOG_WARN("get prefix index qual failed");
   } else if (OB_FAIL(init_basic_text_retrieval_info(table_id,
                                                     ref_table_id,
                                                     helper))) {
@@ -3154,6 +3151,10 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
     LOG_WARN("failed to create index merge access paths", K(ret));
   } else if (ignore_normal_access_path) {
     // do nothing
+  } else if (OB_FAIL(get_generated_col_index_qual(table_id,
+                                                  helper.filters_,
+                                                  helper))) {
+    LOG_WARN("get prefix index qual failed", K(ret));
   } else if (OB_FAIL(get_valid_index_ids(table_id,
                                          ref_table_id,
                                          helper,
