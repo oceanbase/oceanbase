@@ -1649,18 +1649,6 @@ int ObPartitionExchange::exchange_partition_map_relationship_(const uint64_t ten
           } else if (!is_inc_table_partitioned && OB_FALSE_IT(new_inc_schema.set_tablet_id(base_tablet_ids.at(0)))) {
           } else if (OB_FALSE_IT(new_inc_schema.set_in_offline_ddl_white_list(true))) {
           } else if (OB_FAIL(update_exchange_table_non_schema_attributes_(tenant_id,
-                                                                          base_table_schema,
-                                                                          base_tablet_ids,
-                                                                          old_base_part_ids,
-                                                                          new_base_part_ids,
-                                                                          inc_table_schema.get_table_id(),
-                                                                          new_base_table_stat_level,
-                                                                          is_oracle_mode,
-                                                                          ddl_operator,
-                                                                          trans,
-                                                                          schema_guard))) {
-            LOG_WARN("fail to update exchange table non schema attributes", K(ret), K(old_base_part_ids), K(new_base_part_ids), K(base_table_schema), K(inc_table_schema), K(is_oracle_mode));
-          } else if (OB_FAIL(update_exchange_table_non_schema_attributes_(tenant_id,
                                                                           inc_table_schema,
                                                                           inc_tablet_ids,
                                                                           old_inc_part_ids,
@@ -1672,6 +1660,18 @@ int ObPartitionExchange::exchange_partition_map_relationship_(const uint64_t ten
                                                                           trans,
                                                                           schema_guard))) {
             LOG_WARN("fail to update exchange table non schema attributes", K(ret), K(old_inc_part_ids), K(new_inc_part_ids), K(base_table_schema), K(inc_table_schema), K(is_oracle_mode));
+          } else if (OB_FAIL(update_exchange_table_non_schema_attributes_(tenant_id,
+                                                                          base_table_schema,
+                                                                          base_tablet_ids,
+                                                                          old_base_part_ids,
+                                                                          new_base_part_ids,
+                                                                          inc_table_schema.get_table_id(),
+                                                                          new_base_table_stat_level,
+                                                                          is_oracle_mode,
+                                                                          ddl_operator,
+                                                                          trans,
+                                                                          schema_guard))) {
+            LOG_WARN("fail to update exchange table non schema attributes", K(ret), K(old_base_part_ids), K(new_base_part_ids), K(base_table_schema), K(inc_table_schema), K(is_oracle_mode));
           } else if (OB_FAIL(ddl_exchange_table_partitions(new_pt_schema,
                                                             alter_pt_add_new_part_schema,
                                                             alter_pt_drop_part_schema,
