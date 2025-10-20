@@ -45,8 +45,8 @@ public:
       probe_table_id_(OB_INVALID_ID),
       range_column_cnt_(-1),
       jf_material_control_info_(),
-      rf_max_wait_time_(0),
-      enable_runtime_filter_adaptive_apply_(true)
+      enable_runtime_filter_adaptive_apply_(true),
+      basic_table_row_count_(0)
   { }
   virtual ~ObLogJoinFilter() = default;
   const char *get_name() const;
@@ -145,11 +145,11 @@ public:
   {
     return jf_material_control_info_;
   }
-  inline int64_t get_rf_max_wait_time() const {
-    return rf_max_wait_time_;
+  inline double get_basic_table_row_count() const {
+    return basic_table_row_count_;
   }
-  inline void set_rf_max_wait_time(int64_t rf_max_wait_time) {
-    rf_max_wait_time_ = rf_max_wait_time;
+  inline void set_basic_table_row_count(double basic_table_row_count) {
+    basic_table_row_count_ = basic_table_row_count;
   }
 
   const common::ObIArray<ObRawExpr *> &get_all_join_key_left_exprs()
@@ -190,9 +190,9 @@ private:
   int64_t probe_table_id_;
   int64_t range_column_cnt_;
   ObJoinFilterMaterialControlInfo jf_material_control_info_;
-  int64_t rf_max_wait_time_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> all_join_key_left_exprs_;
   bool enable_runtime_filter_adaptive_apply_;
+  double basic_table_row_count_;
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);
 };
 

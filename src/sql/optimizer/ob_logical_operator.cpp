@@ -5766,11 +5766,14 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
             join_filter_create->set_is_shared_join_filter();
             join_filter_use->set_is_shared_join_filter();
             has_shared_join_filter = true;
-            int64_t max_wait_time_ms = 0;
-            if (OB_FAIL(calc_rf_max_wait_time(node, info.filter_table_id_, max_wait_time_ms))) {
-              LOG_WARN("failed to calc_rf_max_wait_time");
+            const OptTableMetas &table_metas = get_plan()->get_basic_table_metas();
+            const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(info.filter_table_id_);
+            if (OB_ISNULL(table_meta)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("table_meta unexpected null", K(info.filter_table_id_));
             } else {
-              join_filter_use->set_rf_max_wait_time(max_wait_time_ms);
+              join_filter_use->set_basic_table_row_count(table_meta->get_rows());
+              LOG_TRACE("calc rf basic table row count", K(node->get_width()), K(table_meta->get_rows()));
             }
           } else {
             join_filter_create->set_is_non_shared_join_filter();
@@ -5893,37 +5896,6 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
     const JoinFilterInfo &info = infos.at(last_valid_join_filter_info_idx);
     if (OB_FAIL(join_filter_create->set_all_join_key_left_exprs(info.all_join_key_left_exprs_))) {
       LOG_WARN("failed to set_all_join_key_left_exprs");
-    }
-  }
-  return ret;
-}
-
-int ObLogicalOperator::calc_rf_max_wait_time(const ObLogicalOperator *node, uint64_t table_id,
-                                             int64_t &max_wait_time_ms)
-{
-  int ret = OB_SUCCESS;
-  static constexpr int64_t net_work_speed = 100 * 1000L; // Byte per ms, i.e 100MB/s
-  static constexpr int64_t max_wait_time_ms_upper_limit = INT64_MAX >> 10; // in case of overflow
-  double tsc_output_rows = 0;
-  double totol_probe_table_size = 0;
-  ObSQLSessionInfo *session = nullptr;
-  if (OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("session is null", K(ret));
-  } else if (table_id != OB_INVALID_ID && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
-    max_wait_time_ms = 10; // at least 10ms
-    const OptTableMetas &table_metas = get_plan()->get_basic_table_metas();
-    const OptTableMeta *table_meta = nullptr;
-    if (OB_ISNULL(table_meta = table_metas.get_table_meta_by_table_id(table_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_meta unexpected null", K(table_id));
-    } else if (FALSE_IT(tsc_output_rows = table_meta->get_rows())) {
-    } else {
-      totol_probe_table_size = node->get_width() * tsc_output_rows; // Unit: Byte
-      max_wait_time_ms = std::max((int64_t)(totol_probe_table_size / net_work_speed), max_wait_time_ms);
-      max_wait_time_ms = std::min(max_wait_time_ms_upper_limit, max_wait_time_ms);// in case of overflow
-      LOG_TRACE("print calc max wait ms", K(node->get_width()), K(tsc_output_rows),
-                K(totol_probe_table_size), K(max_wait_time_ms));
     }
   }
   return ret;
