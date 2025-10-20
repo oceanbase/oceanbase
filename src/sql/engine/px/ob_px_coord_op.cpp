@@ -948,7 +948,7 @@ int ObPxCoordOp::notify_peers_mock_eof(ObDfo *dfo,
     for (int i = 0; i < task_channels_.count() && OB_SUCC(ret); ++i) {
       if (task_channels_.at(i)->get_peer() == addr) {
         OZ(reinterpret_cast<ObDtlBasicChannel *>(task_channels_.at(i))->
-           mock_eof_buffer(timeout_ts));
+           mock_eof_buffer(timeout_ts, dfo->get_dfo_id()));
       }
     }
   }

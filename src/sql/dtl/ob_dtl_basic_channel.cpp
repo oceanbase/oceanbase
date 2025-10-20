@@ -347,7 +347,7 @@ int ObDtlBasicChannel::feedup(ObDtlLinkedBuffer *&buffer)
   return common::OB_NOT_IMPLEMENT;
 }
 
-int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
+int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts, uint64_t dfo_id)
 {
   int ret = OB_SUCCESS;
   int64_t min_buf_size = ObChunkDatumStore::Block::min_buf_size(0);
@@ -370,8 +370,14 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
       buffer->seq_no() = 1;
       buffer->pos() = 0;
       if (use_interm_result_) {
-        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(buffer, id_))) {
-          LOG_WARN("fail to process internal result", K(ret));
+        if (OB_UNLIKELY(dfo_id == OB_INVALID_ID)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("dfo_id is invalid", K(ret), K(dfo_id));
+        } else {
+          buffer->set_dfo_id(dfo_id);
+          if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(buffer, id_))) {
+            LOG_WARN("fail to process internal result", K(ret));
+          }
         }
       } else {
         bool inc_recv_buf_cnt = false;

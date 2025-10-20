@@ -729,7 +729,7 @@ public:
 
   int switch_writer(const ObDtlMsg &msg);
 
-  int mock_eof_buffer(int64_t timeout_ts);
+  int mock_eof_buffer(int64_t timeout_ts, uint64_t dfo_id);
   ObDtlLinkedBuffer *alloc_buf(const int64_t payload_size);
   
   void set_bc_service(ObDtlBcastService *bc_service) { bc_service_ = bc_service; }
