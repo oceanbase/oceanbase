@@ -727,7 +727,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::finish_in_quick_select(T
     if (OB_FAIL(ret) || rows.count() <= 1) {
       // do nothing
     } else {
-      lib::ob_sort(&rows.at(0), &rows.at(rows.count()), CopyableComparer(comp_));
+      lib::ob_sort(&rows.at(0), &rows.at(0) + rows.count(), CopyableComparer(comp_));
     }
   }
   return ret;
