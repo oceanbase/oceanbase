@@ -698,7 +698,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       ObMockFKParentTableSchema &mock_fk_parent_table_schema);
 
   int check_can_drop_primary_key(
-      const share::schema::ObTableSchema &orgin_table_schema);
+      const share::schema::ObTableSchema &orgin_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard);
   int drop_primary_key(ObTableSchema &new_table_schema);
   int add_primary_key(
       const common::ObIArray<common::ObString> &pk_column_names,

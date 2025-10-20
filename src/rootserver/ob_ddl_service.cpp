@@ -5961,7 +5961,8 @@ int ObDDLService::convert_to_character(
 }
 
 // check whether drop primary key is allowed.
-int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_schema)
+int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_schema,
+                                              ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
@@ -5976,6 +5977,18 @@ int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_s
   } else if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type) {
     ret = OB_ERR_FIELD_NOT_FOUND_PART;
     LOG_WARN("can't drop primary key if table is implicit key partition table to be compatible with mysql mode", K(ret));
+  } else {
+    // check if table has HNSW index with extra info
+    bool has_hnsw_with_extra_info = false;
+    if (OB_FAIL(ObVectorIndexUtil::check_has_extra_info(origin_table_schema, schema_guard, has_hnsw_with_extra_info))) {
+      LOG_WARN("fail to check has hnsw index with extra info", K(ret), K(origin_table_schema));
+    } else if (has_hnsw_with_extra_info) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't drop primary key when table has HNSW index with extra info", K(ret), K(origin_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping primary key when table has HNSW index with extra info is");
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (fk_infos.empty()) {
     // allowed to drop primary key.
   } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -6048,7 +6061,7 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
           ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
           ObSArray<ObString> index_columns;
           index_columns.reset();
-          if (OB_FAIL(check_can_drop_primary_key(origin_table_schema))) {
+          if (OB_FAIL(check_can_drop_primary_key(origin_table_schema, schema_guard))) {
             LOG_WARN("fail to check whether to allow to drop primary key", K(ret));
           } else if (OB_FAIL(create_hidden_table_with_pk_changed(alter_table_arg,
                                                                 index_columns,

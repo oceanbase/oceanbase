@@ -22,6 +22,7 @@
 #include "sql/resolver/mv/ob_alter_mview_utils.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -4134,6 +4135,22 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());
+  } else {
+    // check if table has HNSW index with extra info
+    share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    bool has_hnsw_with_extra_info = false;
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(ObVectorIndexUtil::check_has_extra_info(*table_schema_, *schema_guard, has_hnsw_with_extra_info))) {
+      LOG_WARN("fail to check has hnsw index with extra info", K(ret), KPC(table_schema_));
+    } else if (has_hnsw_with_extra_info) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't drop primary key when table has HNSW index with extra info", K(ret), KPC(table_schema_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping primary key when table has HNSW index with extra info is");
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(is_exist_item_type(action_node_list, T_PRIMARY_KEY_DROP, is_exist_drop_pk))) {
     LOG_WARN("failed to check item type", K(ret));
   } else if (!is_exist_drop_pk) {
