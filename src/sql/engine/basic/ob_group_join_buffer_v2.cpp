@@ -406,7 +406,9 @@ int ObDriverRowBuffer::get_next_batch_from_store(int64_t max_rows, int64_t &read
 
 ObDriverRowIterator::ObDriverRowIterator():
   left_brs_(nullptr), l_idx_(0), op_(nullptr), left_(nullptr),
-  join_buffer_(), left_batch_(), rescan_params_(nullptr), is_group_rescan_(false),
+  join_buffer_(), left_batch_(),
+  right_batch_(), right_extended_times_(1),
+  rescan_params_(nullptr), is_group_rescan_(false),
   eval_ctx_(nullptr), op_max_batch_size_(0), need_backup_left_(false), left_expr_extend_size_(0), ctx_(nullptr)
 {
 
@@ -466,6 +468,7 @@ void ObDriverRowIterator::destroy()
 {
   if (op_->is_vectorized()) {
     left_batch_.reset();
+    right_batch_.reset();
   }
   if (is_group_rescan_) {
     join_buffer_.destroy();
@@ -554,10 +557,58 @@ int ObDriverRowIterator::drive_row_extend(int size)
   if (OB_FAIL(get_min_vec_size_from_drive_row(min_vec_size))) {
     LOG_WARN("failed to get min vector size of drive row", K(ret));
   } else if (left_expr_extend_size_ < size || min_vec_size < size) {
-    left_batch_.drive_row_extended(l_idx_, 0, size);
-    left_expr_extend_size_ = size;
+    if (OB_FAIL(left_batch_.driver_row_extend(l_idx_, 0, size))) {
+      LOG_WARN("failed to extend rows in driver side", K(ret), K(size), K(l_idx_),K(left_expr_extend_size_));
+    } else {
+      left_expr_extend_size_ = size;
+    }
   }
   LOG_TRACE("drive_row extended", K(l_idx_), K(size), K(left_expr_extend_size_), K(min_vec_size), K(op_->get_spec().id_));
+  return ret;
+}
+
+
+int ObDriverRowIterator::save_right_batch(const common::ObIArray<ObExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(right_batch_.init(exprs, *eval_ctx_))) {
+    LOG_WARN("failed to init right batch result holder", K(ret));
+  } else if (OB_FAIL(right_batch_.save(op_max_batch_size_))) {
+    LOG_WARN("failed to backup right batch", K(ret));
+  }
+  return ret;
+}
+
+int ObDriverRowIterator::right_rows_extend(int64_t rows_cnt, int64_t &times)
+{
+  int ret = OB_SUCCESS;
+  if (times > right_extended_times_) {
+    if (OB_FAIL(right_batch_.driven_rows_extend(0, rows_cnt, 0, times))) {
+      LOG_WARN("failed to extend rows in driven side", K(ret), K(rows_cnt), K(times));
+    } else {
+      right_extended_times_ = times;
+    }
+  } else {
+    times = right_extended_times_;
+  }
+  return ret;
+}
+
+int ObDriverRowIterator::extend_left_next_batch_rows(int64_t &expect_rows_cnt,
+                                                     int64_t times)
+{
+  int ret = OB_SUCCESS;
+  if (l_idx_ < left_brs_->size_) {
+  } else if (OB_FAIL(get_next_left_row())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failed to get next left row", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(left_batch_.driver_rows_extend(left_brs_, l_idx_, expect_rows_cnt, times))) {
+      LOG_WARN("failed to extend rows in driver side", K(ret), K(l_idx_), K(expect_rows_cnt), K(times));
+    }
+  }
   return ret;
 }
 
@@ -592,7 +643,9 @@ void ObDriverRowIterator::reset()
 {
   l_idx_ = 0;
   left_expr_extend_size_ = 0;
+  right_extended_times_ = 1;
   left_batch_.clear_saved_size();
+  right_batch_.clear_saved_size();
   if (is_group_rescan_) {
     join_buffer_.reset();
   }

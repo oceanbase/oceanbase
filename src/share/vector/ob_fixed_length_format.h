@@ -61,6 +61,29 @@ public:
     set_payload(idx, payload, length);
   };
 
+  OB_INLINE void append_rows_multiple_times(const sql::ObBitVector *src_nulls,
+                              char *values, ObLength len,
+                              const int64_t src_start_idx,
+                              const int64_t src_end_idx,
+                              const int64_t times,
+                              const int64_t dst_start_idx) override final {
+    const int64_t interval = src_end_idx - src_start_idx;
+    const ValueType *src = reinterpret_cast<const ValueType *>(values) + src_start_idx;
+    ValueType *dst = reinterpret_cast<ValueType *>(data_) + dst_start_idx;
+    if (interval > MEMCPY_THRESHOLD) {
+      for (int64_t i = 0; i < times; ++i) {
+        MEMCPY(dst + i * interval, src, sizeof(ValueType) * interval);
+      }
+    } else {
+      for (int64_t i = 0; i < interval; ++i) {
+        for (int64_t j = 0; j < times; ++j) {
+          dst[i + j * interval] = src[i];
+        }
+      }
+    }
+    repeat_nulls_in_append_rows(src_nulls, src_start_idx, src_end_idx, dst_start_idx, times);
+  };
+
   OB_INLINE int from_rows(const sql::RowMeta &row_meta, const sql::ObCompactRow **stored_rows,
                           const int64_t size, const int64_t col_idx) override final;
 

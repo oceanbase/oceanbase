@@ -1734,20 +1734,17 @@ int ObOperator::filter_vector_rows(const ObExprPtrIArray &exprs,
       LOG_DEBUG("const vector filter", K(bsize));
     } else if (OB_LIKELY(VEC_FIXED == vec->get_format())) {
       ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vec);
-      ObBitVector *nulls = fixed_vec->get_nulls();
-      int64_t *int_arr = reinterpret_cast<int64_t *>(fixed_vec->get_data());
-      ObBitVector::flip_foreach(skip, bsize,
-        [&](int64_t idx) __attribute__((always_inline)) {
-          if (0 == int_arr[idx] || nulls->at(idx)) {
-            skip.set(idx);
-            tmp_all_active = false;
-          } else {
-            output_rows++;
-          }
-          return OB_SUCCESS;
-        }
-      );
-      LOG_DEBUG("fixed vector filter", K(bsize));
+      if (OB_UNLIKELY(static_cast<ObFixedLengthBase *>(vec)->get_length() != sizeof(int64_t))) {
+        ob_abort();
+      }
+      ObFixedLengthFormat<int64_t> *vec_ptr = static_cast<ObFixedLengthFormat<int64_t> *>(vec);
+      if (vec_ptr->has_null()) {
+        brs_.merge_skip(vec_ptr->get_nulls(), brs_.size_);
+        brs_.all_rows_active_ = false;
+      }
+      brs_.apply_filter(reinterpret_cast<const int64_t *>(vec_ptr->get_data()));
+      output_rows = bsize - brs_.skip_->accumulate_bit_cnt(bsize);
+      tmp_all_active = brs_.skip_->accumulate_bit_cnt(bsize) == 0;
     } else if (VEC_UNIFORM == vec->get_format()) {
       ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vec);
       const ObDatum *datums = uniform_vec->get_datums();

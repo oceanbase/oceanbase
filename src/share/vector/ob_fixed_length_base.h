@@ -71,6 +71,13 @@ public:
                        const int64_t size,
                        const int64_t col_idx) const override final;
 
+  virtual void append_rows_multiple_times(const sql::ObBitVector *src_nulls,
+                                          char *values, ObLength len,
+                                          const int64_t src_start_idx,
+                                          const int64_t src_end_idx,
+                                          const int64_t times,
+                                          const int64_t start_dst_idx) = 0;
+
   virtual int to_rows(const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
                        const int64_t size, const int64_t col_idx) const override final;
 

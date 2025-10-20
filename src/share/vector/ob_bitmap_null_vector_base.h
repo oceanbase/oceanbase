@@ -64,6 +64,26 @@ public:
     flag_ = flag;
   }
 
+  OB_INLINE void repeat_nulls_in_append_rows(const sql::ObBitVector *src_nulls,
+                                          const int64_t src_start_idx,
+                                          const int64_t src_end_idx,
+                                          const int64_t dst_start_idx,
+                                          const int64_t times) {
+    const int64_t interval = src_end_idx - src_start_idx;
+    for (int64_t i = src_start_idx; i < src_end_idx; ++i) {
+      if (src_nulls->at(i)) {
+        for (int64_t j = 0; j < times; ++j) {
+          set_null(dst_start_idx + i - src_start_idx + j * interval);
+        }
+      } else {
+        for (int64_t j = 0; j < times; ++j) {
+          unset_null(dst_start_idx + i - src_start_idx + j * interval);
+        }
+      }
+    }
+  }
+  
+
   // Note: if need to add new flag or change the default value of an existing flag,
   // please make sure to synchronize this function accordingly.
   static uint16_t get_default_flag(bool has_null)

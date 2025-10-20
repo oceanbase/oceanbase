@@ -58,6 +58,10 @@ struct ObBatchRows
     all_rows_active_ = v;
   }
 
+  void apply_filter(const int64_t *filter);
+  void merge_skip(const ObBitVector *skip, int size);
+
+
 public:
   //TODO shengle set skip and all_rows_active_ in private members
   // bit vector for filtered rows

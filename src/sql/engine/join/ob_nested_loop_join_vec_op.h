@@ -81,7 +81,8 @@ public:
     JS_GET_LEFT_ROW = 0,
     JS_RESCAN_RIGHT_OP,
     JS_PROCESS_RIGHT_BATCH,
-    JS_OUTPUT
+    JS_OUTPUT,
+    JS_CARTESIAN_OPTIMIZED_PROCESS
   };
 
   ObNestedLoopJoinVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
@@ -124,6 +125,7 @@ private:
   int rescan_right_op();
   int perform_gi_partition_prunig();
   int process_right_batch();
+  int cartesian_optimized_process();
   int output();
   void reset_left_batch_state();
   void reset_right_batch_state();
@@ -146,6 +148,9 @@ public:
   bool no_match_row_found_;
   bool need_output_row_;
   bool defered_right_rescan_;
+  bool is_cartesian_;
+  bool cartesian_opt_;
+  int64_t  right_total_row_cnt_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinVecOp);
 };

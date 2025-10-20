@@ -18,6 +18,7 @@
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/expr/ob_expr.h"
+#include <algorithm>
 
 namespace oceanbase
 {
@@ -44,7 +45,7 @@ ObNestedLoopJoinVecOp::ObNestedLoopJoinVecOp(ObExecContext &exec_ctx,
     iter_end_(false), op_max_batch_size_(0),
     drive_iter_(), match_right_batch_end_(false),
     no_match_row_found_(true), need_output_row_(false),
-    defered_right_rescan_(false)
+    defered_right_rescan_(false), is_cartesian_(false), cartesian_opt_(false), right_total_row_cnt_(0)
 {
 }
 
@@ -64,6 +65,11 @@ int ObNestedLoopJoinVecOp::inner_open()
                                       true
                                       ))) {
     LOG_WARN("failed to init drive iterator for NLJ", KR(ret));
+  } else {
+    is_cartesian_ = (MY_SPEC.rescan_params_.count() == 0 &&
+                     MY_SPEC.other_join_conds_.count() == 0) ||
+                    (MY_SPEC.rescan_params_.count() == 0 &&
+                     INNER_JOIN == MY_SPEC.join_type_);
   }
   return ret;
 }
@@ -142,6 +148,7 @@ void ObNestedLoopJoinVecOp::reset_buf_state()
   need_output_row_ = false;
   drive_iter_.reset();
   iter_end_ = false;
+  cartesian_opt_ = false;
 }
 int ObNestedLoopJoinVecOp::inner_rescan()
 {
@@ -273,30 +280,51 @@ int ObNestedLoopJoinVecOp::process_right_batch()
   DASGroupScanMarkGuard mark_guard(ctx_.get_das_ctx(), MY_SPEC.group_rescan_);
   if (OB_FAIL(get_next_batch_from_right(right_brs))) {
     LOG_WARN("fail to get next right batch", K(ret), K(MY_SPEC));
+  } else if (is_cartesian_ && (PHY_MATERIAL == right_->get_spec().type_ ||
+                               PHY_VEC_MATERIAL == right_->get_spec().type_)) {
+    if (PHY_MATERIAL == right_->get_spec().type_ &&
+        OB_FAIL(static_cast<ObMaterialOp *>(right_)->get_material_row_count(
+            right_total_row_cnt_))) {
+      LOG_WARN("failed to get material row count in right side", K(ret),
+               K(right_->get_spec().type_));
+    } else if (PHY_VEC_MATERIAL == right_->get_spec().type_ &&
+               OB_FAIL(static_cast<ObMaterialVecOp *>(right_)
+                           ->get_material_row_count(right_total_row_cnt_))) {
+      LOG_WARN("failed to get material row count in right side", K(ret),
+               K(right_->get_spec().type_));
+    } else if (right_brs->skip_->accumulate_bit_cnt(right_brs->size_) == 0 &&
+               right_total_row_cnt_ == right_brs->size_) {
+      if (LEFT_SEMI_JOIN == MY_SPEC.join_type_ || LEFT_ANTI_JOIN == MY_SPEC.join_type_) {
+        cartesian_opt_ = true;
+      } else if ((INNER_JOIN == MY_SPEC.join_type_ ||
+                  LEFT_OUTER_JOIN == MY_SPEC.join_type_) &&
+                 right_total_row_cnt_ * 2 <= op_max_batch_size_) {
+        if (OB_FAIL(drive_iter_.save_right_batch(right_->get_spec().output_))) {
+          LOG_WARN("failed to save right batch", K(ret));
+        } else {
+          cartesian_opt_ = true;
+        }
+      }
+    }
   } else if (0 == right_brs->size_ && right_brs->end_) {
     match_right_batch_end_ = true;
     LOG_DEBUG("right rows iter end");
+  }
+
+  if (OB_FAIL(ret) || cartesian_opt_) {
   } else if (OB_FAIL(drive_iter_.drive_row_extend(right_brs->size_))) {
     LOG_WARN("failed to extend drive row", K(ret));
   } else {
     if (0 == conds.count()) {
       brs_.skip_->deep_copy(*right_brs->skip_, right_brs->size_);
     } else {
-      batch_info_guard.set_batch_size(right_brs->size_);
-      bool is_match = false;
-      for (int64_t r_idx = 0; OB_SUCC(ret) && r_idx < right_brs->size_; r_idx++) {
-        batch_info_guard.set_batch_idx(r_idx);
-        if (right_brs->skip_->exist(r_idx)) {
-          brs_.skip_->set(r_idx);
-        } else if (OB_FAIL(calc_other_conds(*right_brs->skip_, is_match))) {
-          LOG_WARN("calc_other_conds failed", K(ret), K(r_idx),
-                   K(right_brs->size_));
-        } else if (!is_match) {
-          brs_.skip_->set(r_idx);
-        } else { /*do nothing*/
-        }
-        LOG_DEBUG("cal_other_conds finished ", K(is_match), K(r_idx), K(drive_iter_.get_left_batch_idx()));
-      } // for conds end
+      if (right_brs->size_ == 0) {
+      } else if (OB_FAIL(brs_.copy(right_brs))) {
+      } else if (OB_FALSE_IT(brs_.end_ = false)) {
+        LOG_WARN("copy from right brs failed", K(ret));
+      } else if (OB_FAIL(batch_calc_other_conds(brs_))) {
+        LOG_WARN("batch calc other conditions failed", K(ret));
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -330,6 +358,67 @@ int ObNestedLoopJoinVecOp::process_right_batch()
         need_output_row_ = true;
       }
     }
+  }
+  return ret;
+}
+
+int ObNestedLoopJoinVecOp::cartesian_optimized_process()
+{
+  int ret = OB_SUCCESS;
+  if (INNER_JOIN == MY_SPEC.join_type_ || LEFT_OUTER_JOIN == MY_SPEC.join_type_) {
+    if (right_total_row_cnt_ > 0) {
+      int64_t right_extend_times = std::max(1L, std::min(op_max_batch_size_ / right_total_row_cnt_,
+                                            drive_iter_.get_left_valid_rows_cnt()));
+      if (OB_FAIL(drive_iter_.right_rows_extend(right_total_row_cnt_, right_extend_times))) {
+        LOG_WARN("failed to extend right rows", K(ret));
+      } else if (OB_FAIL(drive_iter_.extend_left_next_batch_rows(right_extend_times, right_total_row_cnt_))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to extend left rows", K(ret));
+        }
+      } else {
+        drive_iter_.set_real_ouptut_right_batch_times(right_extend_times);
+        brs_.size_ = right_total_row_cnt_ * right_extend_times;
+        brs_.reset_skip(brs_.size_);
+        if (INNER_JOIN == MY_SPEC.join_type_ && OB_FAIL(batch_calc_other_conds(brs_))) {
+          LOG_WARN("batch calc other conditions failed", K(ret));
+        }
+      }
+    } else {
+      if (INNER_JOIN == MY_SPEC.join_type_) {
+        brs_.size_ = 0;
+        ret = OB_ITER_END;
+      } else {
+        int64_t left_rows_cnt = drive_iter_.get_left_batch_size();
+        if (OB_FAIL(blank_row_batch(right_->get_spec().output_, left_rows_cnt))) {
+          LOG_WARN("failed to blank right rows", K(ret));
+        } else if (OB_FAIL(drive_iter_.extend_left_next_batch_rows(left_rows_cnt, 1))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to extend left rows", K(ret));
+          }
+        } else {
+          brs_.size_ = left_rows_cnt;
+          brs_.reset_skip(brs_.size_);
+        }
+      }
+    }
+  } else if (LEFT_SEMI_JOIN == MY_SPEC.join_type_ || LEFT_ANTI_JOIN == MY_SPEC.join_type_) {
+    if ((right_total_row_cnt_ > 0 && LEFT_SEMI_JOIN == MY_SPEC.join_type_) ||
+        (right_total_row_cnt_ == 0 && LEFT_ANTI_JOIN == MY_SPEC.join_type_)) {
+      int64_t left_rows_cnt = drive_iter_.get_left_batch_size();
+      if (OB_FAIL(drive_iter_.extend_left_next_batch_rows(left_rows_cnt, 1))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to extend left rows", K(ret));
+        }
+      } else {
+        brs_.size_ = left_rows_cnt;
+        brs_.reset_skip(brs_.size_);
+      }
+    } else {
+      brs_.size_ = 0;
+      ret = OB_ITER_END;
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
   }
   return ret;
 }
@@ -403,6 +492,8 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
       LOG_DEBUG("start process right batch", K(spec_.id_),K(drive_iter_.get_left_batch_idx()));
       if (OB_FAIL(process_right_batch())) {
         LOG_WARN("fail to process right batch", K(ret));
+      } else if (cartesian_opt_) {
+        batch_state_ = JS_CARTESIAN_OPTIMIZED_PROCESS;
       } else {
         if (need_output_row_) {
           batch_state_ = JS_OUTPUT;
@@ -418,6 +509,21 @@ int ObNestedLoopJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
       }
     } // end process right state
 
+    if (OB_SUCC(ret) && JS_CARTESIAN_OPTIMIZED_PROCESS == batch_state_) {
+      if (OB_FAIL(cartesian_optimized_process())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          brs_.size_ = 0;
+          brs_.end_ = true;
+          iter_end_ = true;
+        } else {
+          LOG_WARN("failed to process cartesian optimization path", K(ret));
+        }
+      } else {
+        break;
+      }
+    }
+    
     // start output state
     if (OB_SUCC(ret) && JS_OUTPUT == batch_state_) {
       LOG_DEBUG("start output", K(spec_.id_), K(drive_iter_.get_left_batch_idx()));
