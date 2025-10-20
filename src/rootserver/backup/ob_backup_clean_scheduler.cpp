@@ -642,6 +642,9 @@ int ObBackupCleanScheduler::backup_clean_pre_checker_(ObBackupCleanJobAttr &job_
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_type(*sql_proxy_,
           is_sys_tenant ? job_attr.executor_tenant_id_.at(0) : job_attr.tenant_id_, backup_dest, dest_type))) {
       LOG_WARN("failed to get dest type", K(ret), K(job_attr));
+      if (OB_ITER_END == ret) {
+        LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "failed to get the specified dest, please check the dest is exist");
+      }
     } else if (job_attr.backup_path_type_ != dest_type) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("delete all backup can not use data backup dest", K(ret), K(job_attr));
