@@ -2419,10 +2419,10 @@ int ObSelectLogPlan::candi_allocate_set(const ObIArray<ObSelectLogPlan*> &child_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (select_stmt->is_recursive_union()) {
-    // generate recursive union all plans
-    if (OB_FAIL(candi_allocate_recursive_union_all(child_plans))) {
-      LOG_WARN("failed to allocate recursive union all", K(ret));
-    } else { /*do nothing*/ }
+    // generate recursive union plans
+    if (OB_FAIL(candi_allocate_recursive_union(child_plans))) {
+      LOG_WARN("failed to allocate recursive union", K(ret));
+    }
   } else if (ObSelectStmt::UNION == select_stmt->get_set_op() &&
             (!select_stmt->is_set_distinct() || child_plans.count() > 2)) {
     // generate union all or union distinct with more than two children plans
@@ -3323,7 +3323,7 @@ int ObSelectLogPlan::allocate_set_distinct_as_top(ObLogicalOperator *&top)
   return ret;
 }
 
-int ObSelectLogPlan::candi_allocate_recursive_union_all(const ObIArray<ObSelectLogPlan*> &child_plans)
+int ObSelectLogPlan::candi_allocate_recursive_union(const ObIArray<ObSelectLogPlan*> &child_plans)
 {
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> all_plans;
@@ -3347,22 +3347,22 @@ int ObSelectLogPlan::candi_allocate_recursive_union_all(const ObIArray<ObSelectL
   } else if (OB_FAIL(get_minimal_cost_candidates(right_plan->get_candidate_plans().candidate_plans_,
                                                  right_best_plans))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
-  } else if (OB_FAIL(create_recursive_union_all_plan(left_best_plans,
+  } else if (OB_FAIL(create_recursive_union_plan(left_best_plans,
                                                      right_best_plans,
                                                      candi_order_items,
                                                      false,
                                                      all_plans))) {
-    LOG_WARN("failed to create recursive union all plan", K(ret));
+    LOG_WARN("failed to create recursive union plan", K(ret));
   } else if (!all_plans.empty()) {
     LOG_TRACE("succeed to generate set plans using hint", K(all_plans.count()));
   } else if (OB_FAIL(get_log_plan_hint().check_status())) {
     LOG_WARN("failed to generate plans with hint", K(ret));
-  } else if (OB_FAIL(create_recursive_union_all_plan(left_best_plans,
+  } else if (OB_FAIL(create_recursive_union_plan(left_best_plans,
                                                      right_best_plans,
                                                      candi_order_items,
                                                      true,
                                                      all_plans))) {
-    LOG_WARN("failed to create recursive union all plan", K(ret));
+    LOG_WARN("failed to create recursive union plan", K(ret));
   } else {
     LOG_TRACE("succeed to generate set plans ignore hint", K(all_plans.count()));
   }
@@ -3378,7 +3378,7 @@ int ObSelectLogPlan::candi_allocate_recursive_union_all(const ObIArray<ObSelectL
   return ret;
 }
 
-int ObSelectLogPlan::create_recursive_union_all_plan(ObIArray<CandidatePlan> &left_best_plans,
+int ObSelectLogPlan::create_recursive_union_plan(ObIArray<CandidatePlan> &left_best_plans,
                                                      ObIArray<CandidatePlan> &right_best_plans,
                                                      const ObIArray<OrderItem> &order_items,
                                                      const bool ignore_hint,
@@ -3397,12 +3397,12 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObIArray<CandidatePlan> &le
         LOG_WARN("failed to get recursive union all distribute method", K(ret));
       } else if (DistAlgo::DIST_INVALID_METHOD == dist_set_method) {
         //do nothing
-      } else if (OB_FAIL(create_recursive_union_all_plan(left_best_plans.at(i).plan_tree_,
-                                                        right_best_plans.at(j).plan_tree_,
-                                                        order_items,
-                                                        dist_set_method,
-                                                        candidate_plan.plan_tree_))) {
-        LOG_WARN("failed to create recursive union all plan", K(ret));
+      } else if (OB_FAIL(create_recursive_union_plan(left_best_plans.at(i).plan_tree_,
+                                                  right_best_plans.at(j).plan_tree_,
+                                                  order_items,
+                                                  dist_set_method,
+                                                  candidate_plan.plan_tree_))) {
+        LOG_WARN("failed to create recursive union plan", K(ret));
       } else if (OB_FAIL(all_plans.push_back(candidate_plan))) {
         LOG_WARN("failed to push back candidate plan", K(ret));
       } else {
@@ -3448,7 +3448,7 @@ int ObSelectLogPlan::get_recursive_union_all_distribute_method(ObLogicalOperator
   return ret;
 }
 
-int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_child,
+int ObSelectLogPlan::create_recursive_union_plan(ObLogicalOperator *left_child,
                                                      ObLogicalOperator *right_child,
                                                      const ObIArray<OrderItem> &order_items,
                                                      DistAlgo dist_set_method,
@@ -3493,14 +3493,16 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_chi
                                                               prefix_pos,
                                                               left_child->get_is_local_order()))) {
       LOG_WARN("failed to allocate operator for join style op", K(ret));
-    } else if (OB_FAIL(allocate_recursive_union_all_as_top(left_child, right_child, dist_set_method, top))) {
-      LOG_WARN("failed to allocate recursive union all as top", K(ret));
-    } else { /*do nothing*/ }
+    } else if (OB_FAIL(
+                 allocate_recursive_union_as_top(left_child, right_child, dist_set_method, top))) {
+      LOG_WARN("failed to allocate recursive union as top", K(ret));
+    } else { /*do nothing*/
+    }
   }
   return ret;
 }
 
-int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left_child,
+int ObSelectLogPlan::allocate_recursive_union_as_top(ObLogicalOperator *left_child,
                                                          ObLogicalOperator *right_child,
                                                          DistAlgo dist_set_method,
                                                          ObLogicalOperator *&top)
@@ -3518,13 +3520,27 @@ int ObSelectLogPlan::allocate_recursive_union_all_as_top(ObLogicalOperator *left
   } else {
     set_op->set_left_child(left_child);
     set_op->set_right_child(right_child);
-    set_op->assign_set_distinct(false);
+    set_op->assign_set_distinct(select_stmt->is_set_distinct());
     set_op->assign_set_op(select_stmt->get_set_op());
-    set_op->set_algo_type(MERGE_SET);
+    set_op->set_algo_type(select_stmt->is_set_distinct() ? HASH_SET : MERGE_SET);
     set_op->set_distributed_algo(dist_set_method);
     set_op->set_recursive_union(true);
     set_op->set_is_breadth_search(select_stmt->is_breadth_search());
-    if (OB_FAIL(set_op->set_search_ordering(select_stmt->get_search_by_items()))) {
+    // Recursvie Union Distict need child_ndv to compute row count
+    if (set_op->is_set_distinct()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < set_op->get_num_of_child(); i++) {
+        const OptTableMeta *table_meta = get_update_table_metas().get_table_meta_by_table_id(i);
+        double child_ndv = 0;
+        if (OB_NOT_NULL(table_meta)) {
+          child_ndv = table_meta->get_distinct_rows();
+        }
+        if (OB_FAIL(set_op->add_child_ndv(child_ndv))) {
+          LOG_WARN("failed to add child ndv", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_op->set_search_ordering(select_stmt->get_search_by_items()))) {
       LOG_WARN("set search order failed", K(ret));
     } else if (OB_FAIL(set_op->set_cycle_items(select_stmt->get_cycle_items()))) {
       LOG_WARN("set cycle item failed", K(ret));
@@ -5859,7 +5875,7 @@ int ObSelectLogPlan::decide_sort_keys_for_runion(const common::ObIArray<OrderIte
           ObRawExpr* real_expr = select_exprs.at(projector_offset);
           if (OB_ISNULL(real_expr)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("convert recursive union all generate operator sort failed");
+            LOG_WARN("convert recursive union generate operator sort failed");
           } else if (real_expr->is_const_expr()) {
             // do nothing.
           } else {

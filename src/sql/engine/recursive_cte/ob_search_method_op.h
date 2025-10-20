@@ -311,14 +311,13 @@ private:
 class ObBreadthFirstSearchBulkOp : public ObSearchMethodOp
 {
 public:
-  ObBreadthFirstSearchBulkOp(common::ObIAllocator &allocator,
-                             const ExprFixedArray &left_output,
+  ObBreadthFirstSearchBulkOp(common::ObIAllocator &allocator, const ExprFixedArray &left_output,
                              const common::ObIArray<ObSortFieldCollation> &sort_collations,
                              const common::ObIArray<uint64_t> &cycle_by_columns) :
-    ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns), bst_root_(),
-    search_results_(), cur_recursion_depth_(0), cur_iter_groups_(), last_iter_groups_(),
-    max_buffer_cnt_(0), result_output_buffer_(nullptr), mem_context_(nullptr),
-    malloc_allocator_(nullptr) {}
+    ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns),
+    bst_root_(), search_results_(), cur_recursion_depth_(0), cur_iter_groups_(),
+    last_iter_groups_(), max_buffer_cnt_(0), result_output_buffer_(nullptr)
+  {}
   virtual ~ObBreadthFirstSearchBulkOp() = default;
 
   virtual int reuse() override;
@@ -329,12 +328,9 @@ public:
   int get_next_nocycle_bulk(ObList<ObTreeNode, common::ObIAllocator> &result_output,
                           ObArray<ObChunkDatumStore::StoredRow *> &fake_table_bulk_rows,
                           bool need_sort);
-  int update_search_depth(uint64_t max_recursive_depth);
+  int update_search_depth();
   int sort_result_output_nodes(int64_t rows_cnt);
   int add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
-  int init_mem_context();
-  void free_input_rows_mem();
-  void free_last_iter_mem();
 
 private:
   int is_breadth_cycle_node(ObBFSTreeNode* node, ObChunkDatumStore::StoredRow *row, bool &is_cycle);
@@ -350,10 +346,6 @@ private:
   common::ObArray<ObBFSTreeNode *> last_iter_groups_;
   int64_t max_buffer_cnt_;
   ObTreeNode ** result_output_buffer_;
-  lib::MemoryContext mem_context_;
-  ObIAllocator *malloc_allocator_;
-  // for mysql mode, free last iter memory because not need check cycle
-  common::ObArray<ObChunkDatumStore::StoredRow *> last_iter_input_rows_;
 };
 
 }

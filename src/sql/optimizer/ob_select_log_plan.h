@@ -314,9 +314,9 @@ private:
 
   int allocate_set_distinct_as_top(ObLogicalOperator *&top);
 
-  int candi_allocate_recursive_union_all(const ObIArray<ObSelectLogPlan*> &child_plans);
+  int candi_allocate_recursive_union(const ObIArray<ObSelectLogPlan*> &child_plans);
 
-  int create_recursive_union_all_plan(ObIArray<CandidatePlan> &left_best_plans,
+  int create_recursive_union_plan(ObIArray<CandidatePlan> &left_best_plans,
                                       ObIArray<CandidatePlan> &right_best_plans,
                                       const ObIArray<OrderItem> &order_items,
                                       const bool ignore_hint,
@@ -325,13 +325,13 @@ private:
                                                 ObLogicalOperator *right_child,
                                                 const bool ignore_hint,
                                                 DistAlgo &dist_set_method);
-  int create_recursive_union_all_plan(ObLogicalOperator *left_child,
-                                      ObLogicalOperator *right_child,
-                                      const ObIArray<OrderItem> &candi_order_items,
-                                      DistAlgo dist_set_method,
-                                      ObLogicalOperator *&top);
+  int create_recursive_union_plan(ObLogicalOperator *left_child,
+                                  ObLogicalOperator *right_child,
+                                  const ObIArray<OrderItem> &candi_order_items,
+                                  DistAlgo dist_set_method,
+                                  ObLogicalOperator *&top);
 
-  int allocate_recursive_union_all_as_top(ObLogicalOperator *left_child,
+  int allocate_recursive_union_as_top(ObLogicalOperator *left_child,
                                           ObLogicalOperator *right_child,
                                           DistAlgo dist_set_method,
                                           ObLogicalOperator *&top);

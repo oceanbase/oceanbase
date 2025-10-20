@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_SQL_OB_RECURSIVE_UNION_ALL_OP_H_
-#define OCEANBASE_SQL_OB_RECURSIVE_UNION_ALL_OP_H_
+#ifndef OCEANBASE_SQL_OB_RECURSIVE_UNION_OP_H_
+#define OCEANBASE_SQL_OB_RECURSIVE_UNION_OP_H_
 
 #include "sql/engine/set/ob_merge_set_op.h"
 #include "sql/engine/ob_exec_context.h"
@@ -24,22 +24,29 @@ namespace oceanbase
 namespace sql
 {
 
-class ObRecursiveUnionAllSpec: public ObOpSpec
+class ObRecursiveUnionSpec: public ObOpSpec
 {
   OB_UNIS_VERSION_V(1);
 public:
-  explicit ObRecursiveUnionAllSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
-  ~ObRecursiveUnionAllSpec();
-  friend class ObRecursiveUnionAllOp;
+  explicit ObRecursiveUnionSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
+  ~ObRecursiveUnionSpec();
+  friend class ObRecursiveUnionOp;
   void set_search_pseudo_column(ObExpr *expr) { search_expr_ = expr; }
   void set_cycle_pseudo_column(ObExpr *expr) { cycle_expr_ = expr; }
   void set_identify_seq_offset(int64_t offset) { identify_seq_offset_ = offset; }
-  inline void set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType strategy)
+  inline void set_search_strategy(ObRecursiveInnerDataOracleOp::SearchStrategyType strategy)
   {
     strategy_ = strategy;
   }
   inline void set_fake_cte_table(uint64_t cte_table_id) { pump_operator_id_ = cte_table_id; };
   int set_cycle_pseudo_values(ObExpr *v, ObExpr *d_v);
+  inline void set_is_rcte_distinct(bool is_rcte_distinct) { is_rcte_distinct_ = is_rcte_distinct; }
+  inline ObHashFuncs& get_hash_funcs() { return hash_funcs_; }
+  inline ObSortFuncs& get_sort_cmp_funcs() { return sort_cmp_funcs_; }
+  inline ObSortCollations &get_deduplicate_sort_collations()
+  {
+    return deduplicate_sort_collations_;
+  }
   static const int64_t UNUSED_POS;
 
 protected:
@@ -51,7 +58,7 @@ protected:
    */
   //virtual int64_t to_string_kv(char *buf, const int64_t buf_len) const;
   // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObRecursiveUnionAllSpec);
+  DISALLOW_COPY_AND_ASSIGN(ObRecursiveUnionSpec);
 public:
   // 排序的依据列
   common::ObFixedArray<ObSortFieldCollation, common::ObIAllocator> sort_collations_;
@@ -66,28 +73,30 @@ protected:
   uint64_t pump_operator_id_;
   ObExpr *search_expr_;
   ObExpr *cycle_expr_;
-  ObRecursiveInnerDataOp::SearchStrategyType strategy_;
+  ObRecursiveInnerDataOracleOp::SearchStrategyType strategy_;
   ObExpr *cycle_value_;
   ObExpr *cycle_default_value_;
   int64_t identify_seq_offset_;
+
+  bool is_rcte_distinct_;
+  //below variables only used in recursive union distinct
+  ObHashFuncs hash_funcs_;
+  ObSortFuncs sort_cmp_funcs_;
+
+  // different from sort_collations_, the former is used in oracle mode to satisfy sort requirement
+  // but here is used for deduplicate in Recursive Union Distinct
+  ObSortCollations deduplicate_sort_collations_;
 };
 
-class ObRecursiveUnionAllOp : public ObOperator
+class ObRecursiveUnionOp : public ObOperator
 {
 public:
-  explicit ObRecursiveUnionAllOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
-      : ObOperator(exec_ctx, spec, input),
-        inner_data_(get_eval_ctx(), exec_ctx, //spec.output_,
-        MY_SPEC.get_left()->output_,
-        MY_SPEC.sort_collations_,
-        MY_SPEC.cycle_by_col_lists_,
-        MY_SPEC.output_union_exprs_,
-        MY_SPEC.identify_seq_offset_)
-  {
-  }
-  ~ObRecursiveUnionAllOp()
-  {
-  }
+  explicit ObRecursiveUnionOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input) :
+    ObOperator(exec_ctx, spec, input),
+    inner_data_(nullptr)
+  {}
+  ~ObRecursiveUnionOp()
+  {}
   virtual int inner_open() override;
   virtual int inner_close() override;
   virtual int inner_get_next_row() override;
@@ -95,17 +104,16 @@ public:
   virtual int inner_rescan() override;
   virtual void destroy()
   {
-    inner_data_.~ObRecursiveInnerDataOp();
+    if (OB_NOT_NULL(inner_data_)) {
+      inner_data_->~ObRecursiveInnerDataOp();
+    }
     ObOperator::destroy();
   }
-  void set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType strategy) {
-    inner_data_.set_search_strategy(strategy);
-  }
-  const ObRecursiveUnionAllSpec &get_spec() const
-  { return static_cast<const ObRecursiveUnionAllSpec &>(spec_); }
+  const ObRecursiveUnionSpec &get_spec() const
+  { return static_cast<const ObRecursiveUnionSpec &>(spec_); }
   int cast_result(const ObExpr *src_expr, const ObExpr *dst_expr, ObDatum *expr_datum);
 public:
-  ObRecursiveInnerDataOp inner_data_;
+  ObRecursiveInnerDataOp* inner_data_;
 };
 
 } // end namespace sql

@@ -23,13 +23,14 @@ using namespace oceanbase::sql::log_op_def;
 
 const char *ObLogSet::get_name() const
 {
-  static const char *set_op_all[ObSelectStmt::SET_OP_NUM] =
+  static const char *set_op_all[ObSelectStmt::SET_OP_NUM + 1] =
   {
     "NONE",
     "UNION ALL",
     "INTERSECT ALL",
     "EXCEPT ALL",
     "RECURSIVE UNION ALL",
+    "RECURSIVE UNION DISTINCT",
   };
   static const char *merge_set_op_distinct[ObSelectStmt::SET_OP_NUM] =
   {
@@ -51,7 +52,7 @@ const char *ObLogSet::get_name() const
     ret_char = !is_distinct_ ? set_op_all[set_op_] :
                (HASH_SET == set_algo_ ? hash_set_op_distinct[set_op_] : merge_set_op_distinct[set_op_]);
     if (is_recursive_union_) {
-      ret_char = set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
+      ret_char = is_distinct_ ? set_op_all[ObSelectStmt::SetOperator::RECURSIVE + 1] : set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
     }
   } else { /* Do nothing */ }
   return ret_char;
@@ -475,6 +476,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       }
       child_cost += cur_child_cost;
     } else {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
       double cur_child_ndv = child_ndv_.at(i);
       if (need_scale_ndv) {
         cur_child_ndv = std::min(
@@ -484,7 +486,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       if (0 == i) {
         card = cur_child_ndv;
       } else {
-        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, get_set_op());
+        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, set_type);
       }
       child_cost += cur_child_cost;
     }
@@ -998,7 +1000,12 @@ int ObLogSet::get_card_without_filter(double &card)
     } else if (0 == i) {
       card = child_ndv_.at(i);
     } else {
-      card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
+      if (0 == i) {
+        card = child_ndv_.at(i);
+      } else {
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), set_type);
+      }
     }
   }
   return ret;

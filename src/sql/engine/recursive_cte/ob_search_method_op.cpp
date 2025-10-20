@@ -519,18 +519,12 @@ int ObBreadthFirstSearchBulkOp::reuse()
   search_results_.reuse();
   cur_iter_groups_.reuse();
   last_iter_groups_.reuse();
-  free_last_iter_mem();
   return OB_SUCCESS;
 }
 
 void ObBreadthFirstSearchBulkOp::destroy()
 {
-  free_input_rows_mem();
-  free_last_iter_mem();
-  if (OB_NOT_NULL(mem_context_)) {
-    DESTROY_CONTEXT(mem_context_);
-    mem_context_ = nullptr;
-  }
+  input_rows_.reset();
 }
 
 int ObBreadthFirstSearchBulkOp::is_breadth_cycle_node(
@@ -623,15 +617,10 @@ int ObBreadthFirstSearchBulkOp::get_next_nocycle_bulk(
   return ret;
 }
 
-int ObBreadthFirstSearchBulkOp::update_search_depth(uint64_t max_recursive_depth)
+int ObBreadthFirstSearchBulkOp::update_search_depth()
 {
   int ret = OB_SUCCESS;
   cur_recursion_depth_++;
-  if (!is_oracle_mode() && cur_recursion_depth_ > max_recursive_depth) {
-    ret = OB_ERR_CTE_MAX_RECURSION_DEPTH;
-    LOG_USER_ERROR(OB_ERR_CTE_MAX_RECURSION_DEPTH, cur_recursion_depth_);
-    LOG_WARN("Recursive query aborted after too many iterations", K(ret), K(cur_recursion_depth_));
-  }
   // warning for infinite recursion or large memory
   if (OB_SUCC(ret) && cur_recursion_depth_ > 1000) {
     if (0 == (cur_recursion_depth_ & (cur_recursion_depth_ - 1))) {
@@ -644,23 +633,7 @@ int ObBreadthFirstSearchBulkOp::update_search_depth(uint64_t max_recursive_depth
 int ObBreadthFirstSearchBulkOp::add_result_rows(bool left_branch, int64_t identify_seq_offset)
 {
   int ret = OB_SUCCESS;
-  if (!is_oracle_mode()) {
-    free_last_iter_mem();
-    ARRAY_FOREACH(input_rows_, i) {
-      ObTreeNode tree_node;
-      if (OB_ISNULL(input_rows_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected input row", K(ret));
-      } else if (FALSE_IT(tree_node.stored_row_ = input_rows_.at(i))) {
-      } else if (OB_FAIL(search_results_.push_back(tree_node))) {
-        LOG_WARN("Failed to push back result rows", K(ret));
-      } else if (OB_FAIL(last_iter_input_rows_.push_back(input_rows_.at(i)))) {
-        LOG_WARN("Failed to push back last iter input rows");
-      } else {
-        LOG_DEBUG("Result node", K(tree_node));
-      }
-    }
-  } else if (is_oracle_mode() && left_branch) {
+  if (left_branch) {
     ARRAY_FOREACH(input_rows_, i) {
       void* ptr = nullptr;
       ObTreeNode tree_node;
@@ -688,7 +661,7 @@ int ObBreadthFirstSearchBulkOp::add_result_rows(bool left_branch, int64_t identi
         LOG_DEBUG("Result node", K(tree_node));
       }
     }
-  } else if (is_oracle_mode() && !left_branch) {
+  } else if (!left_branch) {
     ARRAY_FOREACH(input_rows_, i) {
       uint64_t identify_seq = 0;
       bool is_cycle = false;
@@ -707,6 +680,7 @@ int ObBreadthFirstSearchBulkOp::add_result_rows(bool left_branch, int64_t identi
         const ObDatum *cells = row->cells();
         identify_seq = cells[identify_seq_offset].get_uint();
         tree_node.stored_row_ = input_rows_.at(i);
+        LOG_INFO("[CYCLE] current identify_seq", K(i), K(identify_seq));
       }
 
       if (OB_FAIL(ret)) {
@@ -761,22 +735,10 @@ int ObBreadthFirstSearchBulkOp::sort_result_output_nodes(int64_t rows_cnt)
   return ret;
 }
 
-// if mysql mode, free last iter memory
 int ObBreadthFirstSearchBulkOp::add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
-  if (!is_oracle_mode() && OB_ISNULL(malloc_allocator_)) {
-    if (OB_FAIL(init_mem_context())) {
-      LOG_WARN("Failed to init mem context", K(ret));
-    } else if (OB_ISNULL(malloc_allocator_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Malloc allocator not init in mysql mode", K(ret));
-    }
-  }
   if (OB_SUCC(ret)) {
-    ObIAllocator *allocator = nullptr;
-    allocator = is_oracle_mode() ? &allocator_ : malloc_allocator_;
-
     ObChunkDatumStore::StoredRow *store_row = NULL;
     if (input_rows_.empty() && 0 == input_rows_.get_capacity()
         && OB_FAIL(input_rows_.reserve(INIT_ROW_COUNT))) {
@@ -784,7 +746,7 @@ int ObBreadthFirstSearchBulkOp::add_row(const ObIArray<ObExpr *> &exprs, ObEvalC
     } else if (OB_UNLIKELY(exprs.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exprs empty", K(ret));
-    } else if (OB_FAIL(save_to_store_row(*allocator, exprs, eval_ctx, store_row))) {
+    } else if (OB_FAIL(save_to_store_row(allocator_, exprs, eval_ctx, store_row))) {
       LOG_WARN("save store row failed", K(ret));
     } else if (OB_ISNULL(store_row)) {
       ret = OB_ERR_UNEXPECTED;
@@ -794,52 +756,6 @@ int ObBreadthFirstSearchBulkOp::add_row(const ObIArray<ObExpr *> &exprs, ObEvalC
     }
   }
   return ret;
-}
-
-int ObBreadthFirstSearchBulkOp::init_mem_context()
-{
-  int ret = OB_SUCCESS;
-  lib::ContextParam param;
-  param.set_mem_attr(MTL_ID(), "CTESearchBulk", ObCtxIds::WORK_AREA);
-  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
-    LOG_WARN("create entity failed", K(ret));
-  } else if (OB_ISNULL(mem_context_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null memory entity returned", K(ret));
-  } else {
-    malloc_allocator_ = &mem_context_->get_malloc_allocator();
-  }
-  return ret;
-}
-
-//RCTE operator may encounter -4013 memory problem when it want to allocate a very large memory for a new round of iteration data
-//at that time, memory is stored in input_rows_, so we have to free them before reset allocator 
-void ObBreadthFirstSearchBulkOp::free_input_rows_mem()
-{
-  if (OB_ISNULL(malloc_allocator_)) {
-    // do nothing
-  } else {
-    for (int64_t i = 0; i < input_rows_.size(); ++i) {
-      if (OB_NOT_NULL(input_rows_.at(i))) {
-        malloc_allocator_->free(input_rows_.at(i));
-      }
-    }
-    input_rows_.reset();
-  }
-}
-
-void ObBreadthFirstSearchBulkOp::free_last_iter_mem()
-{
-  if (OB_ISNULL(malloc_allocator_)) {
-    // do nothing
-  } else {
-    for (int64_t i = 0; i < last_iter_input_rows_.size(); ++i) {
-      if (OB_NOT_NULL(last_iter_input_rows_.at(i))) {
-        malloc_allocator_->free(last_iter_input_rows_.at(i));
-      }
-    }
-    last_iter_input_rows_.reset();
-  }
 }
 
 int ObBreadthFirstSearchBulkOp::save_to_store_row(ObIAllocator &allocator,
