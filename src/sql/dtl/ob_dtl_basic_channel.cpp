@@ -114,6 +114,7 @@ int SendMsgResponse::wait(ObDtlLocalChannel::DtlChannelType channel_type)
     int64_t start_t = 0;
     int64_t end_t = 0;
     int64_t interval = 60000; // ms
+    oceanbase::lib::Thread::WaitGuard wait_guard(oceanbase::lib::Thread::WAIT_FOR_PX_MSG);
     while (!finish_ && OB_SUCC(ret)) {
       // 这里为什么是while true等待，因为callback引用了当前线程一些变量，
       // 如果采用中断，提前退出，会导致callback如果晚于线程退出，则引用非法东西而core掉
