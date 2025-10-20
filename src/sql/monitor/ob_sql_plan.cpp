@@ -86,7 +86,9 @@ int ObSqlPlan::store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan)
                                         log_plan->get_plan_root(),
                                         sql_plan_infos))) {
     LOG_WARN("failed to get sql plan infos", K(ret));
-  } else if (OB_FAIL(compress_plan.compress_logical_plan(allocator_, sql_plan_infos))) {
+  }
+  // overwrite ret
+  if (OB_FAIL(compress_plan.compress_logical_plan(allocator_, sql_plan_infos))) {
     LOG_WARN("failed to compress logical plan", K(ret));
   } else if (OB_FAIL(phy_plan->set_logical_plan(compress_plan))) {
     LOG_WARN("failed to set logical plan", K(ret));
