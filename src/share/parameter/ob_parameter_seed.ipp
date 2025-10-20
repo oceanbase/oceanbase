@@ -1344,7 +1344,6 @@ DEF_STR_WITH_CHECKER(audit_log_query_sql, OB_TENANT_PARAMETER, "ALL",
          common::ObConfigAuditLogQuerySQLChecker,
          "how to record the query sql. "
          "ALL: record the original query sql. "
-         "DESENSITIVE: record the desensitive query sql. "
          "NONE: not to record query sql.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "ALL, DESENSITIVE, NONE");
