@@ -1895,6 +1895,13 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprCrc32::calc_crc32_expr_vector,                          /* 258 */
   NULL, // ObExprFromBase64::eval_from_base64_vector                     /* 259 */
   NULL, // ObExprArrayContains::eval_array_contains_vector_int32_t,      /* 260 */
+  NULL, // ObExprSecond::calc_second_vector,                             /* 261 */
+  NULL, // ObExprMicrosecond::calc_microsecond_vector,                   /* 262 */
+  NULL, // ObExprSecToTime::calc_sectotime_vector,                       /* 263 */
+  NULL, // ObExprUsecToTime::calc_usec_to_time_vector,                   /* 264 */
+  NULL, // ObExprTimestamp::calc_timestamp1_vector,                      /* 265 */
+  NULL, // ObExprWeekDay::calc_weekday_vector,                           /* 266 */
+  NULL, // ObExprTimeDiff::calc_timediff_vector,                         /* 267 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
