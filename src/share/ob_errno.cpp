@@ -12325,12 +12325,12 @@ static const _error _error_OB_ERR_NO_REFERENCED_ROW = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = ER_NO_REFERENCED_ROW_2,
       .sqlstate              = "23000",
-      .str_error             = "Cannot add or update a child row: a foreign key constraint (%.*s.%.*s) fails",
+      .str_error             = "Cannot add or update a child row: a foreign key constraint fails",
       .str_user_error        = "Cannot add or update a child row: a foreign key constraint (%.*s.%.*s) fails",
       .oracle_errno          = 2291,
-      .oracle_str_error      = "ORA-02291: integrity constraint (%.*s.%.*s) violated - parent key not found",
+      .oracle_str_error      = "ORA-02291: integrity constraint violated - parent key not found",
       .oracle_str_user_error = "ORA-02291: integrity constraint (%.*s.%.*s) violated - parent key not found",
-      .ob_str_error          = "OBE-02291: integrity constraint (%.*s.%.*s) violated - parent key not found",
+      .ob_str_error          = "OBE-02291: integrity constraint violated - parent key not found",
       .ob_str_user_error     = "OBE-02291: integrity constraint (%.*s.%.*s) violated - parent key not found"
 };
 static const _error _error_OB_ERR_FUNC_RESULT_TOO_LARGE = {
