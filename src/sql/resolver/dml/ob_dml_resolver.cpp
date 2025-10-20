@@ -15,6 +15,7 @@
 #include "sql/resolver/dml/ob_view_table_resolver.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
+#include "common/sql_mode/ob_sql_mode.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "pl/ob_pl_package.h"
 #include "sql/optimizer/ob_opt_est_utils.h"
@@ -8218,7 +8219,12 @@ int ObDMLResolver::do_expand_view(TableItem &view_item, ObChildStmtResolver &vie
       ParseResult view_result;
       ObString view_def;
 
-      ObParser parser(*params_.allocator_, session_info_->get_sql_mode(),
+      ObSQLMode sql_mode = session_info_->get_sql_mode();
+      if (view_schema->is_sys_view()) {
+        // For system views, disable ANSI_QUOTES to ensure double quotes are treated as string literals
+        sql_mode &= ~SMO_ANSI_QUOTES;
+      }
+      ObParser parser(*params_.allocator_, sql_mode,
                       session_info_->get_charsets4parser());
       if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
                               *params_.allocator_,
