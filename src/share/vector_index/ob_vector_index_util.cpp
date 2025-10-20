@@ -5263,17 +5263,8 @@ int ObVectorIndexUtil::set_vector_index_param(const ObTableSchema *&vec_index_sc
     LOG_WARN("fail to set vector param info", K(ret), K(vec_index_schema));
   } else {
     vec_extra_info.set_selectivity(selectivity);
-    // for optimize, distance expr just for order by needn't calculate
-    // using vsag calc result is ok
     if (OB_ISNULL(vector_expr)) {
       vector_expr = stmt->get_first_vector_expr();
-    }
-    if (OB_NOT_NULL(vector_expr) &&
-        vec_extra_info.is_hnsw_vec_scan() 
-        && ! vec_extra_info.is_hnsw_bq_scan()
-        &&!stmt->is_contain_vector_origin_distance_calc()) {
-      FLOG_INFO("distance needn't calc", K(ret));
-      vector_expr->add_flag(IS_CUT_CALC_EXPR);
     }
   }
   return ret;

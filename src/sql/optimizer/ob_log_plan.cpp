@@ -11955,6 +11955,25 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       }
     }
 
+    if (OB_SUCC(ret) && op->is_table_scan()) {
+      ObLogTableScan &tsc_op = static_cast<ObLogTableScan&>(*op);
+      if (tsc_op.is_vec_idx_scan()) {
+        // for optimize, distance expr just for order by needn't calculate
+        // using vsag calc result is ok
+        ObVecIndexInfo &vec_index_info = tsc_op.get_vector_index_info();
+        const sql::ObDMLStmt *stmt = tsc_op.get_stmt();
+        sql::ObRawExpr *vector_expr = stmt->get_first_vector_expr();
+        if (OB_NOT_NULL(vector_expr) 
+            && !vector_expr->has_flag(IS_CUT_CALC_EXPR) 
+            && vec_index_info.is_hnsw_vec_scan() 
+            && !vec_index_info.is_hnsw_bq_scan()
+            && !stmt->is_contain_vector_origin_distance_calc()) {
+          //FLOG_INFO("distance needn't calc, mark vector expr with IS_CUT_CALC_EXPR");
+          vector_expr->add_flag(IS_CUT_CALC_EXPR);
+        }
+      }
+    }
+
     if (OB_SUCC(ret)) {
       if (op->is_plan_root() && OB_FAIL(op->set_plan_root_output_exprs())) {
         LOG_WARN("failed to add plan root exprs", K(ret));

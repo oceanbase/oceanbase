@@ -988,7 +988,7 @@ int ObStaticEngineCG::generate_calc_exprs(
         if (OB_FAIL(ret)) {
         } else if (raw_expr->is_vector_sort_expr() && raw_expr->has_flag(IS_CUT_CALC_EXPR)) {
           raw_expr->set_is_calculated(true);
-          FLOG_INFO("for distance needn't calc", K(ret));
+          //FLOG_INFO("for distance needn't calc", K(ret));
         } else if (OB_FAIL(calc_raw_exprs.push_back(raw_expr))) {
           LOG_WARN("fail to push output expr", K(ret));
         }
