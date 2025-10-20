@@ -61,6 +61,7 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
       dist_plans_.at(0)->set_dynamic_ref_handle(pc_ctx.handle_id_);
       plan = dist_plans_.at(0);
       is_matched = true;
+      bool need_check_on_same_server = true;
 
       // fill table location for single plan using px
       // for single dist plan without px, we already fill the phy locations while calculating plan type
@@ -73,7 +74,8 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
         // do nothing
       } else if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(plan->get_table_locations(),
                                                                 pc_ctx,
-                                                                candi_table_locs))) {
+                                                                candi_table_locs,
+                                                                need_check_on_same_server))) {
         LOG_WARN("failed to get physical table locations", K(ret));
       } else if (candi_table_locs.empty()) {
         // do nothing.

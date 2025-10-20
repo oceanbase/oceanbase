@@ -384,9 +384,10 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
   return ret;
 }
 
-int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
-                                           const ObPlanCacheCtx &pc_ctx,
-                                           ObIArray<ObCandiTableLoc> &candi_table_locs)
+int ObPhyLocationGetter::get_phy_locations_and_add_to_das_ctx(
+  const ObIArray<ObTableLocation> &table_locations,
+  const ObPlanCacheCtx &pc_ctx,
+  ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
   bool has_duplicate_tbl_not_in_dml = false;
@@ -415,6 +416,10 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
       bool need_same_server = true;
       if (OB_FAIL(get_phy_locations(table_locations, pc_ctx, candi_table_locs, need_same_server))) {
         LOG_WARN("failed to get phy locations", K(ret), K(table_locations), K(pc_ctx));
+      } else if (candi_table_locs.empty()) {
+        // do nothing.
+      } else if (OB_FAIL(build_table_locs(exec_ctx.get_das_ctx(), table_locations, candi_table_locs))) {
+        LOG_WARN("failed to build table locations", K(ret), K(table_locations), K(candi_table_locs));
       }
     }
   }

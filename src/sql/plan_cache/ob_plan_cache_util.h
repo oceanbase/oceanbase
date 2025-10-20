@@ -1099,9 +1099,11 @@ public:
   // If confirmed, the fast path will be activated to directly select leader replicas for each table
   // and add them to das ctx, without the need to construct candi table locs. 
   // Otherwise, fallback to the original path and add candi table locs to das ctx manually.
-  static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
-                               const ObPlanCacheCtx &pc_ctx,
-                               ObIArray<ObCandiTableLoc> &phy_location_infos);
+  // NOTE: no matter which path is used, the table locations will be added to das ctx.
+  // use get_phy_locations instead if you only need to get phy locations.
+  static int get_phy_locations_and_add_to_das_ctx(const ObIArray<ObTableLocation> &table_locations,
+                                                  const ObPlanCacheCtx &pc_ctx,
+                                                  ObIArray<ObCandiTableLoc> &phy_location_infos);
   
   // used for matching plan
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,

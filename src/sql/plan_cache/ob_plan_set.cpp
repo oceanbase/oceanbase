@@ -2165,15 +2165,19 @@ int ObSqlPlanSet::get_phy_locations(const ObIArray<ObTableLocation> &table_locat
   int ret = OB_SUCCESS;
   if (!pc_ctx.try_get_plan_) {
     DAS_CTX(pc_ctx.exec_ctx_).clear_all_location_info();
-  }
-  if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations, pc_ctx, candi_table_locs))) {
-    LOG_WARN("failed to get phy locations", K(ret), K(table_locations));
-  } else if (candi_table_locs.empty()) {
-    // do nothing.
-  } else if (!pc_ctx.try_get_plan_
-             && OB_FAIL(ObPhyLocationGetter::build_table_locs(
-                  pc_ctx.exec_ctx_.get_das_ctx(), table_locations, candi_table_locs))) {
-    LOG_WARN("fail to init table locs", K(ret));
+    if (OB_FAIL(ObPhyLocationGetter::get_phy_locations_and_add_to_das_ctx(table_locations,
+                                                                          pc_ctx,
+                                                                          candi_table_locs))) {
+      LOG_WARN("failed to get phy locations", K(ret), K(table_locations));
+    }
+  } else {
+    bool need_check_on_same_server = true;
+    if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(table_locations,
+                                                       pc_ctx,
+                                                       candi_table_locs,
+                                                       need_check_on_same_server))) {
+      LOG_WARN("failed to get phy locations", K(ret), K(table_locations));
+    }
   }
   return ret;
 }
