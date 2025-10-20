@@ -518,4 +518,6 @@ GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
 GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
 // PL end
 
+GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump thread-level memory context");
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

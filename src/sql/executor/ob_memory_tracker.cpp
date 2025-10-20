@@ -43,21 +43,26 @@ void ObMemTrackerGuard::dump_mem_tracker_info()
           K(tree_mem_hold));
 }
 
-void ObMemTrackerGuard::update_mem_limit()
+void ObMemTrackerGuard::update_config()
 {
   int ret = common::OB_SUCCESS;
   int64_t tenant_mem_limit = lib::get_tenant_memory_limit(MTL_ID());
-  int64_t mem_quota_pct = 100;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (OB_UNLIKELY(tenant_config.is_valid())) {
-    mem_quota_pct = tenant_config->query_memory_limit_percentage;
+    mem_tracker_.mem_quota_pct_ = tenant_config->query_memory_limit_percentage;
   }
-  mem_tracker_.cache_mem_limit_ = tenant_mem_limit / 100 * mem_quota_pct;
+  mem_tracker_.cache_mem_limit_ = (0 == mem_tracker_.mem_quota_pct_) ?
+                                    0 :
+                                    tenant_mem_limit / 100 * mem_tracker_.mem_quota_pct_;
 }
 int ObMemTrackerGuard::check_status()
 {
   int ret = common::OB_SUCCESS;
-  if (nullptr != mem_tracker_.mem_context_) {
+  if (-1 == mem_tracker_.cache_mem_limit_
+    || (++mem_tracker_.check_status_times_ % UPDATE_MEM_LIMIT_THRESHOLD == 0)) {
+    update_config();
+  }
+  if (nullptr != mem_tracker_.mem_context_ && (UNLIMITED_MEM_QUOTA_PCT != mem_tracker_.mem_quota_pct_)) {
     int64_t tree_mem_hold = mem_tracker_.mem_context_->tree_mem_hold();
     mem_tracker_.cur_mem_used_ = tree_mem_hold;
     mem_tracker_.peek_mem_used_ = max(mem_tracker_.peek_mem_used_, mem_tracker_.cur_mem_used_);
@@ -65,12 +70,6 @@ int ObMemTrackerGuard::check_status()
     sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
     if (nullptr != session) {
       session->set_sql_mem_used(mem_tracker_.cur_mem_used_);
-    }
-
-    ++mem_tracker_.check_status_times_;
-    if (0 == mem_tracker_.cache_mem_limit_
-      || (mem_tracker_.check_status_times_ % UPDATE_MEM_LIMIT_THRESHOLD == 0)) {
-      update_mem_limit();
     }
     if (tree_mem_hold >= mem_tracker_.cache_mem_limit_) {
       ret = OB_EXCEED_QUERY_MEM_LIMIT;
