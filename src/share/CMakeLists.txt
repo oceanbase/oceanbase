@@ -763,6 +763,11 @@ ob_set_subtarget(ob_share domain_id
 ob_set_subtarget(ob_share semistruct
   semistruct/ob_sub_column_path.cpp
 )
+
+ob_set_subtarget(ob_share lob
+  lob/ob_lob_ext_info_log_allocator.cpp
+)
+
 if (NOT OB_BUILD_STANDALONE)
   ob_set_subtarget(ob_share dummy_license_mgr
     ob_dummy_license_utils.cpp

@@ -48,6 +48,7 @@
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/lob/ob_lob_tablet_dml.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -5184,13 +5185,17 @@ int ObLSTabletService::process_lob_before_update(
             } else {
               ObString val_str = old_datum.get_string();
               ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
-              if (!lob_common->in_row_ && rowkey_change) {
+              if (!lob_common->in_row_ && (rowkey_change || run_ctx.is_delete_insert_table_)) {
                 if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
                 } else if (OB_FAIL(ObLobTabletDmlHelper::process_lob_column_before_update(
                       run_ctx, old_rows[row_idx], new_rows[row_idx], rowkey_change, row_idx, i, old_datum, new_datum))) {
                   LOG_WARN("process_lob_column_before_update fail", K(ret), K(column), K(i), K(row_idx), K(new_datum));
+                }
+              } else if (!lob_common->in_row_) {
+                if (OB_FAIL(ObLobTabletDmlHelper::register_ext_info_commit_cb(run_ctx, column, old_rows[row_idx].storage_datums_[i]))) {
+                  LOG_WARN("register ext info commit cb fail", K(ret), K(row_idx), K(i), K(old_rows[row_idx]));
                 }
               } else {
                 new_datum.reuse();
@@ -5429,7 +5434,9 @@ int ObLSTabletService::process_old_rows(
       }
       if (OB_SUCC(ret)) {
         ObSEArray<int64_t, 8> update_idx;
-        if (OB_FAIL(update_rows_wrap(tablet_handle,
+        if (OB_FAIL(delete_lob_tablet_rows(tablet_handle, run_ctx, old_rows, row_count))){
+          LOG_WARN("failed to delete lob rows.", K(ret), K(row_count));
+        } else if (OB_FAIL(update_rows_wrap(tablet_handle,
                                      run_ctx.dml_param_.data_row_for_lob_,
                                      relative_table,
                                      run_ctx.store_ctx_,
@@ -5521,6 +5528,8 @@ int ObLSTabletService::process_old_row(
       } else if (OB_FAIL(new_row.shallow_copy(datum_row))) {
         LOG_WARN("failed to shallow copy datum row", K(ret), K(datum_row), K(new_row));
       } else if (FALSE_IT(new_row.row_flag_.set_flag(ObDmlFlag::DF_DELETE))) {
+      } else if (OB_FAIL(delete_lob_tablet_rows(tablet_handle, run_ctx, datum_row))){
+        LOG_WARN("failed to delete lob rows.", K(ret), K(datum_row));
       } else if (OB_FAIL(update_row_wrap(tablet_handle,
                                          run_ctx.dml_param_.data_row_for_lob_,
                                          relative_table,
@@ -6090,6 +6099,21 @@ int ObLSTabletService::delete_rows_in_tablet(
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
         LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(rows_info));
       }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::delete_lob_tablet_rows(
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    blocksstable::ObDatumRow *rows,
+    int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    if (OB_FAIL(delete_lob_tablet_rows(tablet_handle, run_ctx, rows[i]))) {
+      LOG_WARN("failed to delete lob rows.", K(ret), K(i), K(rows[i]));
     }
   }
   return ret;

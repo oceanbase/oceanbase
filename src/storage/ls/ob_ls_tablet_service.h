@@ -740,21 +740,6 @@ private:
       const ObIArray<uint64_t> &update_ids,
       const ObRelativeTable &relative_table,
       bool &rowkey_change);
-  static int process_delta_lob(
-      ObDMLRunningCtx &run_ctx,
-      const ObColDesc &column,
-      ObObj &old_obj,
-      ObLobLocatorV2 &delta_lob,
-      ObObj &obj);
-  static int register_ext_info_commit_cb(
-      ObDMLRunningCtx &run_ctx,
-      ObObj &col_data,
-      ObObj &ext_info_data,
-      const ObExtInfoLogHeader &header);
-  static int set_lob_storage_params(
-      ObDMLRunningCtx &run_ctx,
-      const ObColDesc &column,
-      ObLobAccessParam &lob_param);
   static int cache_rows_to_row_store(
       const int64_t row_count,
       ObDatumRow *old_rows,
@@ -892,12 +877,11 @@ private:
       ObDMLRunningCtx &run_ctx,
       blocksstable::ObDatumRow *tbl_rows,
       ObRowsInfo &rows_info);
-  static int delete_lob_col(
-      ObDMLRunningCtx &run_ctx,
-      const ObColDesc &column,
-      ObObj &obj,
-      ObLobCommon *&lob_common,
-      ObLobAccessParam &lob_param);
+  static int delete_lob_tablet_rows(
+    ObTabletHandle &tablet_handle,
+    ObDMLRunningCtx &run_ctx,
+    blocksstable::ObDatumRow *rows,
+    int64_t row_count);
   static int delete_lob_tablet_rows(
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,

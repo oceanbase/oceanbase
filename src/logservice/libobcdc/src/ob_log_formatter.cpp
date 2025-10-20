@@ -1299,6 +1299,8 @@ int ObLogFormatter::fill_normal_cols_(
         } else if (is_new_value) {
           if (! cv->is_out_row_) {
             rv->new_columns_[usr_column_idx] = &cv->string_value_;
+          } else if (stmt_task.is_delete()) {
+            LOG_TRACE("skip outrow new_cols for delete op", KPC(cv), K(stmt_task));
           } else {
             ObLobDataGetCtx *lob_data_get_ctx = nullptr;
             ObString *new_col_str = nullptr;
@@ -1344,14 +1346,14 @@ int ObLogFormatter::fill_normal_cols_(
           }
           rv->is_changed_[usr_column_idx] = (1 != cv->is_col_nop_); // column is not changed if col_value is nop(may be in minimal mode)
         } else {
-          if (stmt_task.is_insert()) {
-            LOG_TRACE("skip old_cols for insert op", K(stmt_task));
-          } else if (! cv->is_out_row_) {
+          if (! cv->is_out_row_) {
             if (cv->is_col_nop_) {
               rv->is_old_col_nop_[usr_column_idx] = true;
             } else {
               rv->old_columns_[usr_column_idx] = &cv->string_value_;
             }
+          } else if (stmt_task.is_insert()) {
+            LOG_TRACE("skip outrow old_cols for insert op", K(stmt_task));
           } else {
             ObLobDataGetCtx *lob_data_get_ctx = nullptr;
             ObString *old_col_str = nullptr;
@@ -1364,25 +1366,34 @@ int ObLogFormatter::fill_normal_cols_(
             }
 
             if (OB_SUCC(ret)) {
-              if (lob_data_get_ctx->is_ext_info_log()) {
-                if (cv->is_json()) {
-                  // old data isn't passed when data is partial json
-                  // so need set is_null_lob_columns_
-                  rv->old_columns_[usr_column_idx] = nullptr;
-                  rv->is_null_lob_columns_[usr_column_idx] = true;
+              if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()) {
+                const ObLobDataOutRowCtx *lob_data_outrow_ctx = nullptr;
+                if (OB_FAIL(lob_data_get_ctx->get_lob_out_row_ctx(false/*is_newl_col*/, lob_data_outrow_ctx))) {
+                  LOG_ERROR("get_lob_out_row_ctx failed", KR(ret), KPC(cv), K(lob_data_get_ctx));
                 } else {
+                  if (lob_data_outrow_ctx->is_diff() && lob_data_get_ctx->is_ext_info_log()) {
+                    // old data isn't passed when data is partial json
+                    // so need set is_null_lob_columns_
+                    rv->old_columns_[usr_column_idx] = nullptr;
+                    rv->is_null_lob_columns_[usr_column_idx] = true;
+                  } else {
+                    const common::ObObjType obj_type = cv->get_obj_type();
+                    cv->value_.set_string(obj_type, *old_col_str);
+
+                    if (OB_FAIL(stmt_task.parse_col(stmt_task.get_tenant_id(), column_id, *column_schema_info,
+                        tz_info_wrap, *obj2str_helper_, *cv))) {
+                      LOG_ERROR("stmt_task parse_col failed", KR(ret), K(stmt_task), K(column_id), KPC(cv));
+                    } else {
+                      rv->old_columns_[usr_column_idx] = &cv->string_value_;
+                    }
+                  }
+                }
+              } else if (lob_data_get_ctx->is_ext_info_log()) {
+                if (!cv->value_.is_lob_storage()) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
-                }
-              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()) {
-                const common::ObObjType obj_type = cv->get_obj_type();
-                cv->value_.set_string(obj_type, *old_col_str);
-
-                if (OB_FAIL(stmt_task.parse_col(stmt_task.get_tenant_id(), column_id, *column_schema_info,
-                    tz_info_wrap, *obj2str_helper_, *cv))) {
-                  LOG_ERROR("stmt_task parse_col failed", KR(ret), K(stmt_task), K(column_id), KPC(cv));
                 } else {
-                  rv->old_columns_[usr_column_idx] = &cv->string_value_;
+                  rv->old_columns_[usr_column_idx] = old_col_str;
                 }
               } else {
                 rv->old_columns_[usr_column_idx] = old_col_str;

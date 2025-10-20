@@ -181,13 +181,16 @@ public:
       ObMemCtxLockOpLinkNode *lock_op,
       const share::SCN scn);
   int register_ext_info_commit_cb(
+      storage::ObStoreCtx &store_ctx,
       const int64_t timeout,
       const blocksstable::ObDmlFlag dml_flag,
       const transaction::ObTxSEQ &seq_no_st,
       const int64_t seq_no_cnt,
       const ObString &index_data,
       const ObObjType index_data_type,
+      const transaction::ObTxReadSnapshot &snapshot,
       const storage::ObExtInfoLogHeader &header,
+      const ObTabletID &tabelt_id,
       ObObj &ext_info_data);
 public:
   virtual void reset()
@@ -261,7 +264,8 @@ public:
       memtable_(NULL),
       write_ret_(NULL),
       write_seq_no_(),
-      try_flush_redo_(true)
+      try_flush_redo_(true),
+      is_lob_ext_info_log_(false)
   {}
   ObMvccWriteGuard(const int &ret, const bool exclusive = false)
     : ObMvccWriteGuard(exclusive)
@@ -272,6 +276,8 @@ public:
   void set_memtable(ObMemtable *memtable) {
     memtable_ = memtable;
   }
+
+  void set_is_lob_ext_info_log(const bool val) { is_lob_ext_info_log_ = val; }
   /*
    * purpose of ensure replica writable
    *
@@ -289,6 +295,7 @@ private:
   const int *write_ret_;        // used to sense write result is ok or fail
   transaction::ObTxSEQ write_seq_no_;
   bool try_flush_redo_;
+  bool is_lob_ext_info_log_;
 };
 }
 }
