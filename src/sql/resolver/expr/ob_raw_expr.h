@@ -1443,6 +1443,7 @@ struct ObExprEqualCheckContext
     override_column_compare_(false),
     override_query_compare_(false),
     ignore_implicit_cast_(false),
+    ignore_char_padding_(false),
     recursion_level_(0),
     override_set_op_compare_(false),
     err_code_(common::OB_SUCCESS),
@@ -1457,6 +1458,7 @@ struct ObExprEqualCheckContext
     override_column_compare_(false),
     override_query_compare_(false),
     ignore_implicit_cast_(false),
+    ignore_char_padding_(false),
     recursion_level_(0),
     override_set_op_compare_(false),
     err_code_(common::OB_SUCCESS),
@@ -1502,6 +1504,7 @@ struct ObExprEqualCheckContext
     override_column_compare_ = false;
     override_query_compare_ = false;
     ignore_implicit_cast_ = false;
+    ignore_char_padding_ = false;
     recursion_level_ = 0;
     override_set_op_compare_ = false;
     err_code_ = OB_SUCCESS;
@@ -1515,6 +1518,7 @@ struct ObExprEqualCheckContext
   bool override_column_compare_;
   bool override_query_compare_;
   bool ignore_implicit_cast_;
+  bool ignore_char_padding_;
   int recursion_level_;
   bool override_set_op_compare_;
   int err_code_;

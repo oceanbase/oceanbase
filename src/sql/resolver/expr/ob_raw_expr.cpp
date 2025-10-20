@@ -594,6 +594,23 @@ const ObRawExpr *ObRawExpr::get_same_identify(const ObRawExpr *e,
                && T_FUN_SYS_CAST == e->get_expr_type()
                && e->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
       e = e->get_param_expr(0);
+    } else if (NULL != check_ctx && check_ctx->ignore_char_padding_
+      && e->has_flag(IS_INNER_ADDED_EXPR)) {
+      if (T_FUN_PAD == e->get_expr_type()) {
+        e = e->get_param_expr(0);
+      } else if (T_FUN_INNER_TRIM == e->get_expr_type()) {
+        e = e->get_param_expr(2);
+      } else if (T_FUN_SYS_CAST == e->get_expr_type() && e->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+        const ObRawExpr *real_expr = e->get_param_expr(0);
+        if (OB_NOT_NULL(real_expr) && (ObCharType == real_expr->get_data_type() || ObNCharType == real_expr->get_data_type())
+                                   && ObVarcharType == e->get_data_type()) {
+          e = real_expr;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
     } else {
       break;
     }
