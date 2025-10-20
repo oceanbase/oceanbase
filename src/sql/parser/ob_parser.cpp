@@ -673,6 +673,11 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
     }
     //留下最多一个分号
     remain = max(remain, semicolon_offset + 1);
+
+    if (lib::is_mysql_mode() && stmt.suffix_match("--;")) {
+      remain--;
+    }
+
     // 对于空语句的特殊处理
     if (OB_UNLIKELY(0 >= remain)) {
       ObString part; // 空串
@@ -696,6 +701,10 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
       str_len = str_len == remain ? str_len : str_len + 1;
       ObString part(str_len, stmt.ptr() + offset);
       ObString remain_part(remain, stmt.ptr() + offset);
+      bool end_with_comment = false;
+      if (lib::is_mysql_mode() && part.length() >= 2 && part.suffix_match("--")) {
+        end_with_comment = true;
+      }
       //first try parse part str, because it's have less length and need less memory
       if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
         //if parser part str failed, then try parse all remain part, avoid parse many times
@@ -705,6 +714,9 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
       }
       if (OB_SUCC(tmp_ret)) {
         int32_t single_stmt_length = parse_result.end_col_;
+        if (end_with_comment) {
+          single_stmt_length--;
+        }
         if (is_ret_first_stmt) {
           ObString first_query(single_stmt_length, stmt.ptr());
           ret = queries.push_back(first_query);
@@ -720,8 +732,8 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
             ret = queries.push_back(query);
           }
         }
-        remain -= parse_result.end_col_;
-        offset += parse_result.end_col_;
+        remain -= single_stmt_length;
+        offset += single_stmt_length;
         if (remain < 0 || offset > stmt.length()) {
           LOG_ERROR("split_multiple_stmt data error",
                     K(remain), K(offset), K(stmt.length()), K(ret));
@@ -1136,15 +1148,16 @@ int ObParser::parse(const ObString &query,
     }
   }
   //compatible mysql, mysql allow use the "--"
-  if (OB_SUCC(ret) && lib::is_mysql_mode() && stmt.case_compare("--") == 0) {
-    const char *line_str = "-- ";
-    char *buf = (char *)parse_malloc(strlen(line_str), parse_result.malloc_pool_);
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && stmt.length() >= 2 && stmt.suffix_match("--")) {
+    char *buf = (char *)parse_malloc(len + 1, parse_result.malloc_pool_);
     if (OB_UNLIKELY(NULL == buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("no memory for parser");
     } else {
-      MEMCPY(buf, line_str, strlen(line_str));
-      stmt.assign_ptr(buf, strlen(line_str));
+      MEMCPY(buf, stmt.ptr(), len);
+      buf[len] = ' ';
+      stmt.assign_ptr(buf, len + 1);
+      len++;
     }
   }
   if (OB_SUCC(ret) && OB_ISNULL(parse_result.charset_info_)) {
