@@ -1447,6 +1447,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVectorSimilarity::calc_similarity,                            /* 874 */
   NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
+  NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
