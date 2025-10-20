@@ -2078,9 +2078,18 @@ public:
 
 int ObTabletDirectLoadMgr::cancel()
 {
-  CancelSliceWriterMapFn cancel_map_fn;
-  sqc_build_ctx_.slice_mgr_map_.foreach_refactored(cancel_map_fn);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  uint32_t lock_tid = 0;
+  if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+    LOG_WARN("failed to wrlock", K(ret), KPC(this));
+  } else {
+    CancelSliceWriterMapFn cancel_map_fn;
+    sqc_build_ctx_.slice_mgr_map_.foreach_refactored(cancel_map_fn);
+  }
+  if (0 != lock_tid) {
+    unlock(lock_tid);
+  }
+  return ret;
 }
 
 int ObTabletDirectLoadMgr::close_sstable_slice(
@@ -2293,7 +2302,10 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
 
       // after finish all slice, free slice_writer
       if (OB_SUCC(ret)) {
-        if (fill_cg_finish_count == sqc_build_ctx_.sorted_slice_writers_.count()) {
+        uint32_t lock_tid = 0;
+        if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
+          LOG_WARN("failed to wrlock", K(ret), KPC(this));
+        } else if (fill_cg_finish_count == sqc_build_ctx_.sorted_slice_writers_.count()) {
           sqc_build_ctx_.sorted_slice_writers_.reset();
           FLOG_INFO("tablet_direct_mgr finish fill column group", K(sqc_build_ctx_.slice_mgr_map_.size()), K(this), K(fill_cg_finish_count));
           if (!sqc_build_ctx_.slice_mgr_map_.empty()) {
@@ -2305,6 +2317,9 @@ int ObTabletDirectLoadMgr::fill_column_group(const int64_t thread_cnt, const int
               ret = tmp_ret;
             }
           }
+        }
+        if (0 != lock_tid) {
+          unlock(lock_tid);
         }
       }
     }
