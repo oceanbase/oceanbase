@@ -1406,7 +1406,7 @@ static struct VarsInit{
       ObSysVars[95].data_type_ = ObIntType ;
       ObSysVars[95].min_val_ = "0" ;
       ObSysVars[95].max_val_ = "2147483647" ;
-      ObSysVars[95].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[95].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[95].id_ = SYS_VAR_REGEXP_STACK_LIMIT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REGEXP_STACK_LIMIT)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_REGEXP_STACK_LIMIT] = 95 ;
@@ -1421,7 +1421,7 @@ static struct VarsInit{
       ObSysVars[96].data_type_ = ObIntType ;
       ObSysVars[96].min_val_ = "0" ;
       ObSysVars[96].max_val_ = "2147483647" ;
-      ObSysVars[96].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[96].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[96].id_ = SYS_VAR_REGEXP_TIME_LIMIT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REGEXP_TIME_LIMIT)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_REGEXP_TIME_LIMIT] = 96 ;
