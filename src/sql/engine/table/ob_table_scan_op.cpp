@@ -527,6 +527,7 @@ void ObTableScanOpInput::reset()
   mbr_filters_.reset();
   range_array_pos_.reset();
   not_need_extract_query_range_ = false;
+  scan_tasks_.reset();
 }
 
 OB_DEF_SERIALIZE_SIZE(ObTableScanOpInput)
@@ -1167,7 +1168,8 @@ int ObTableScanOp::prepare_all_das_tasks()
   if (OB_SUCC(ret)) {
     // if use gi schedule and index merge, need to prepare scan range at the time of the first scan
     // or if the tasks are not all local tasks
-    if (MY_SPEC.gi_above_ && !MY_INPUT.key_ranges_.empty() && !MY_CTDEF.use_index_merge_) {
+    if (MY_SPEC.gi_above_ && (!MY_INPUT.key_ranges_.empty() || !MY_INPUT.scan_tasks_.empty())
+        && !MY_CTDEF.use_index_merge_) {
       if (OB_FAIL(prepare_das_task())) {
         LOG_WARN("prepare das task failed", K(ret));
       }
@@ -1514,6 +1516,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_extract_query_range);
   ObQueryRangeArray key_ranges;
   ObQueryRangeArray ss_key_ranges;
+  common::ObSEArray<sql::ObIExtTblScanTask *, 1> scan_tasks;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObIAllocator &range_allocator = (table_rescan_allocator_ != nullptr ?
       *table_rescan_allocator_ : ctx_.get_allocator());
@@ -1564,7 +1567,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_range(
+    } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_task(
                                                 ctx_.get_my_session()->get_effective_tenant_id(),
                                                 MY_CTDEF.scan_ctdef_,
                                                 &tsc_rtdef_.scan_rtdef_,
@@ -1572,7 +1575,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
                                                 partition_ids,
                                                 key_ranges,
                                                 range_allocator,
-                                                key_ranges,
+                                                scan_tasks,
                                                 tab_loc->loc_meta_->is_external_files_on_disk_,
                                                 ctx_))) {
       LOG_WARN("failed to prepare single scan range for external table", K(ret));
@@ -1580,11 +1583,12 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
   } else if (MY_CTDEF.scan_ctdef_.is_lake_external_table()) {
     uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
     ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
-    if (OB_FAIL(ObExternalTableUtils::prepare_lake_table_single_scan_range(ctx_,
+    if (OB_FAIL(ObExternalTableUtils::prepare_lake_table_single_scan_task(ctx_,
                                                                            tab_loc,
                                                                            MY_INPUT.tablet_loc_,
                                                                            range_allocator,
-                                                                           key_ranges))) {
+                                                                           key_ranges,
+                                                                           scan_tasks))) {
       LOG_WARN("fail to prepare lake table single scan range");
     }
   } else if (MY_CTDEF.enable_new_false_range_ && key_ranges.empty()) {
@@ -1630,12 +1634,19 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
         LOG_WARN("store key range in TSC input failed", K(ret));
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < scan_tasks.count(); ++i) {
+      ObIExtTblScanTask *scan_task = scan_tasks.at(i);
+      if (OB_FAIL(MY_INPUT.scan_tasks_.push_back(scan_task))) {
+        LOG_WARN("store external table scan task in TSC input failed", K(ret));
+      }
+    }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
     OZ(vt_result_converter_->convert_key_ranges(MY_INPUT.key_ranges_));
   }
   LOG_TRACE("prepare single scan range", K(ret), K(key_ranges), K(MY_INPUT.key_ranges_),
-                                         K(MY_INPUT.ss_key_ranges_), K(spec_.id_));
+                                         K(MY_INPUT.ss_key_ranges_), K(spec_.id_),
+                                         K(MY_INPUT.scan_tasks_));
   return ret;
 }
 
@@ -2293,7 +2304,7 @@ int ObTableScanOp::local_iter_rescan()
   } else if (OB_UNLIKELY(iter_end_)) {
     //do nothing
   } else if (((!is_false_range && MY_INPUT.key_ranges_.empty())
-              || MY_CTDEF.use_index_merge_) &&
+              || MY_CTDEF.use_index_merge_) && MY_INPUT.scan_tasks_.empty() &&
              OB_FAIL(prepare_scan_range())) {
     // if use index merge but key range is not empty
     // maybe use gi scheduler, need to prepare scan range
@@ -2949,9 +2960,12 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   ObIArray<ObNewRange> &scan_ranges = scan_op->get_scan_param().key_ranges_;
   ObIArray<ObNewRange> &ss_ranges = scan_op->get_scan_param().ss_key_ranges_;
   ObIArray<ObSpatialMBR> &mbr_filters = scan_op->get_scan_param().mbr_filters_;
+  ObIArray<ObIExtTblScanTask*> &scan_tasks = scan_op->get_scan_param().scan_tasks_;
+
   const ObIArray<ObNewRange> &input_ranges = MY_INPUT.key_ranges_;
   const ObIArray<ObNewRange> &input_ss_ranges = MY_INPUT.ss_key_ranges_;
   const ObIArray<ObSpatialMBR> &input_filters = MY_INPUT.mbr_filters_;
+  const ObIArray<ObIExtTblScanTask*> &input_scan_tasks = MY_INPUT.scan_tasks_;
   bool add_all = false;
   bool prune_all = true;
   if (!MY_SPEC.is_vt_mapping_ && OB_UNLIKELY(input_ranges.count() != input_ss_ranges.count())) {
@@ -3004,6 +3018,12 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
       LOG_WARN("store mbr_filters failed", K(ret));
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_scan_tasks.count(); ++i) {
+    ObIExtTblScanTask *task = input_scan_tasks.at(i);
+    if (OB_FAIL(scan_tasks.push_back(input_scan_tasks.at(i)))) {
+      LOG_WARN("store external table scan task failed", K(ret));
+    }
+  }
   if (OB_SUCC(ret) && prune_all && !input_ranges.empty()) {
     if (MY_CTDEF.enable_new_false_range_) {
       scan_ranges.reuse();
@@ -3025,7 +3045,7 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   if (OB_SUCC(ret)) {
     LOG_DEBUG("range after pruning", K(input_ranges), K(scan_ranges), K_(tsc_rtdef_.group_size),
               "tablet_id", scan_op->get_tablet_id(),
-              K(input_ss_ranges), K(ss_ranges));
+              K(input_ss_ranges), K(ss_ranges), K(input_scan_tasks), K(scan_tasks));
   }
   return ret;
 }
@@ -3217,6 +3237,9 @@ int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_
       MY_INPUT.ss_key_ranges_.reuse();
       MY_INPUT.mbr_filters_.reuse();
       LOG_DEBUG("do prepare!!!");
+    }
+    if (OB_SUCC(ret) && OB_FAIL(MY_INPUT.scan_tasks_.assign(info.scan_tasks_))) {
+      LOG_WARN("assign scan tasks failed", K(ret), K(info));
     }
   }
   return ret;

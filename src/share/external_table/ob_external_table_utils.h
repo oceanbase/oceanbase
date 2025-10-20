@@ -187,25 +187,6 @@ private:
 
 class ObExternalTableUtils {
  public:
-  enum ExternalTableRangeColumn {
-    PARTITION_ID = 0,
-    FILE_URL,
-    FILE_ID,
-    ROW_GROUP_NUMBER,
-    LINE_NUMBER,
-    SESSION_ID,
-    SPLIT_IDX,
-    FILE_SIZE,
-    MODIFY_TIME,
-    CONTENT_DIGEST,
-    DELETE_FILE_URLS,
-    DELETE_FILE_SIZES,
-    DELETE_FILE_MODIFY_TIMES,
-    DATA_FILE_FORMAT,
-    DELETE_FILE_FORMATS,
-    MAX_EXTERNAL_FILE_SCANKEY
-  };
-
   struct ExternalTableFileUrlCompare
   {
     bool operator()(ObExternalTableBasicFileInfo& l, ObExternalTableBasicFileInfo& r)
@@ -230,11 +211,10 @@ class ObExternalTableUtils {
                                        const int64_t &column_idx,
                                        int64_t &start_lineno,
                                        int64_t &end_lineno);
-  static int resolve_odps_start_step(const common::ObNewRange &range,
-                                       const int64_t &column_idx,
+  static int resolve_odps_start_step(const ObOdpsScanTask *scan_task,
                                        int64_t &start,
                                        int64_t &step);
-  static int convert_external_table_new_range(const common::ObString &file_url,
+  static int convert_external_table_scan_task(const common::ObString &file_url,
                                               const common::ObString &content_digest,
                                               const int64_t file_size,
                                               const int64_t modify_time,
@@ -242,37 +222,33 @@ class ObExternalTableUtils {
                                               const uint64_t ref_table_id,
                                               const common::ObNewRange &range,
                                               common::ObIAllocator &allocator,
-                                              common::ObNewRange &new_range,
+                                              ObFileScanTask *scan_task,
                                               bool &is_valid);
-  static int convert_lake_table_new_range(const sql::ObILakeTableFile *file,
-                                          const int64_t file_id,
-                                          const uint64_t part_id,
-                                          ObIAllocator &allocator,
-                                          ObNewRange &new_range);
-  static int convert_external_table_empty_range(const common::ObString &file_url,
+  static int convert_external_table_empty_task(const common::ObString &file_url,
                                                 const common::ObString &content_digest,
                                                 const int64_t file_size,
                                                 const int64_t modify_time,
                                                 const int64_t file_id,
                                                 const uint64_t ref_table_id,
                                                 common::ObIAllocator &allocator,
-                                                common::ObNewRange &new_range);
+                                                ObFileScanTask *scan_task);
 
-  static int prepare_single_scan_range(const uint64_t tenant_id,
+  static int prepare_single_scan_task(const uint64_t tenant_id,
                                        const ObDASScanCtDef &das_ctdef,
                                        ObDASScanRtDef *das_rtdef,
                                        ObExecContext &exec_ctx,
                                        ObIArray<int64_t> &partition_ids,
                                        common::ObIArray<common::ObNewRange *> &ranges,
-                                       common::ObIAllocator &range_allocator,
-                                       common::ObIArray<common::ObNewRange *> &new_range,
+                                       common::ObIAllocator &allocator,
+                                       common::ObIArray<ObIExtTblScanTask *> &scan_tasks,
                                        bool is_file_on_disk,
                                        ObExecContext &ctx);
-  static int prepare_lake_table_single_scan_range(ObExecContext &exec_ctx,
-                                                  ObDASTableLoc *tab_loc,
-                                                  ObDASTabletLoc *tablet_loc,
-                                                  ObIAllocator &range_allocator,
-                                                  ObIArray<ObNewRange *> &new_ranges);
+  static int prepare_lake_table_single_scan_task(ObExecContext &exec_ctx,
+                                                ObDASTableLoc *tab_loc,
+                                                ObDASTabletLoc *tablet_loc,
+                                                ObIAllocator &allocator,
+                                                ObIArray<ObNewRange *> &ranges,
+                                                ObIArray<ObIExtTblScanTask *> &scan_tasks);
   static int calc_assigned_files_to_sqcs(
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObIArray<int64_t> &assigned_idx,
@@ -348,44 +324,25 @@ class ObExternalTableUtils {
                            common::ObIArray<ObString> &content_digests,
                            common::ObIAllocator &allocator);
 
-  static int make_external_table_scan_range(const common::ObString &file_url,
-                                            const common::ObString &content_digest,
-                                            const int64_t file_size,
-                                            const int64_t modify_time,
-                                            const int64_t file_id,
-                                            const uint64_t ref_table_id,
-                                            const int64_t first_lineno,
-                                            const int64_t last_lineno,
-                                            const common::ObString &session_id,
-                                            const int64_t first_split_idx,
-                                            const int64_t last_split_idx,
-                                            common::ObIAllocator &allocator,
-                                            common::ObNewRange &new_range);
-  static int make_external_table_scan_range(const common::ObString &file_url,
-                                            const common::ObString &content_digest,
-                                            const int64_t file_size,
-                                            const int64_t modify_time,
-                                            const int64_t file_id,
-                                            const uint64_t ref_table_id,
-                                            const int64_t first_lineno,
-                                            const int64_t last_lineno,
-                                            const common::ObString &session_id,
-                                            const int64_t first_split_idx,
-                                            const int64_t last_split_idx,
-                                            const common::ObIArray<ObLakeDeleteFile> &delete_files,
-                                            const ObExternalFileFormat::FormatType &file_format,
-                                            common::ObIAllocator &allocator,
-                                            common::ObNewRange &new_range);
+ static int make_file_scan_task(const common::ObString &file_url,
+                                const common::ObString &content_digest,
+                                const int64_t file_size,
+                                const int64_t modify_time,
+                                const int64_t file_id,
+                                const uint64_t ref_table_id,
+                                const int64_t first_lineno,
+                                const int64_t last_lineno,
+                                ObFileScanTask *scan_task);
 
-  static int process_delete_files(const common::ObIArray<ObLakeDeleteFile> &delete_files,
-                                  common::ObIAllocator &allocator,
-                                  common::ObObj *obj_start,
-                                  common::ObObj *obj_end);
-  static int process_file_format(const ObExternalFileFormat::FormatType &file_format,
-                                 const common::ObIArray<ObLakeDeleteFile> &delete_files,
-                                 common::ObIAllocator &allocator,
-                                 common::ObObj *obj_start,
-                                 common::ObObj *obj_end);
+  static int make_odps_scan_task(const common::ObString &file_url,
+                                const uint64_t part_id,
+                                const int64_t first_lineno,
+                                const int64_t last_lineno,
+                                const common::ObString &session_id,
+                                const int64_t first_split_idx,
+                                const int64_t last_split_idx,
+                                ObOdpsScanTask &scan_task);
+
   static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
   static int get_external_file_location(const ObTableSchema &table_schema,
                                         ObSchemaGetterGuard &schema_guard,
@@ -586,14 +543,14 @@ private:
     ObIArray<common::ObString> &file_urls, ObIArray<int64_t> *file_sizes = nullptr,
     ObIArray<common::ObString> *content_digests = nullptr,
     ObIArray<int64_t> *modify_times = nullptr);
-  static int prepare_single_scan_range_(const uint64_t tenant_id,
+  static int prepare_single_scan_task_(const uint64_t tenant_id,
                                         const ObDASScanCtDef &das_ctdef,
                                         ObDASScanRtDef *das_rtdef,
                                         ObExecContext &exec_ctx,
                                         ObIArray<int64_t> &partition_ids,
                                         common::ObIArray<common::ObNewRange *> &ranges,
-                                        common::ObIAllocator &range_allocator,
-                                        common::ObIArray<common::ObNewRange *> &new_range,
+                                        common::ObIAllocator &allocator,
+                                        common::ObIArray<ObIExtTblScanTask *> &scan_tasks,
                                         bool is_file_on_disk,
                                         ObExecContext &ctx);
 private:

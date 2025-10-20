@@ -418,7 +418,7 @@ public:
                                               const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                                               int64_t parallelism,
                                               common::ObIArray<ObDASTabletLoc*> &granule_tablets,
-                                              common::ObIArray<common::ObNewRange> &granule_ranges,
+                                              common::ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                               common::ObIArray<int64_t> &granule_idx);
   static int split_granule_for_lake_table(ObExecContext &exec_ctx,
                                           ObIAllocator &allocator,
@@ -426,28 +426,28 @@ public:
                                           const ObIArray<ObDASTabletLoc *> &tablets,
                                           bool force_partition_granule,
                                           ObIArray<ObDASTabletLoc *> &granule_tablets,
-                                          ObIArray<ObNewRange> &granule_ranges,
+                                          ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                           ObIArray<int64_t> &granule_idx);
 
   static int split_granule_by_partition_line_tunnel(ObIAllocator &allocator,
                                         const ObIArray<ObDASTabletLoc *> &tablets,
                                         const ObIArray<share::ObExternalFileInfo> &external_table_files,
                                         ObIArray<ObDASTabletLoc *> &granule_tablets,
-                                        ObIArray<ObNewRange> &granule_ranges,
+                                        ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                         ObIArray<int64_t> &granule_idx);
   static int split_granule_by_total_byte(ObIAllocator &allocator,
                                          int64_t parallelism,
                                          const ObIArray<ObDASTabletLoc *> &tablets,
                                          const ObIArray<share::ObExternalFileInfo> &external_table_files,
                                          ObIArray<ObDASTabletLoc *> &granule_tablets,
-                                         ObIArray<ObNewRange> &granule_ranges,
+                                         ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                          ObIArray<int64_t> &granule_idx);
   static int split_granule_by_total_row(ObIAllocator &allocator,
                                         int64_t parallelism,
                                         const ObIArray<ObDASTabletLoc *> &tablets,
                                         const ObIArray<share::ObExternalFileInfo> &external_table_files,
                                         ObIArray<ObDASTabletLoc *> &granule_tablets,
-                                        ObIArray<ObNewRange> &granule_ranges,
+                                        ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                         ObIArray<int64_t> &granule_idx);
   /**
    * get the total task count for all partitions

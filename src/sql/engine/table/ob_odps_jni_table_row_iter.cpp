@@ -941,23 +941,27 @@ int ObODPSJNITableRowIterator::next_task_storage_row_without_data_getter(const i
   task_alloc_.reset();
   int64_t task_idx = state_.task_idx_;
   ++task_idx;
-  if (task_idx >= scan_param_->key_ranges_.count()) {
+  if (task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
     LOG_INFO("odps table iter end", K(ret), K(state_), K(task_idx), K_(read_rounds));
   } else {
     // do nothing
-    const ObString &part_spec = scan_param_->key_ranges_.at(task_idx)
-                                    .get_start_key()
-                                    .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
-                                    .get_string();
+    ObIExtTblScanTask *scan_task = scan_param_->scan_tasks_.at(task_idx);
+    const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
+    ObString part_spec;
     int64_t start = 0;
     int64_t step = 0;
-    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
-                                                    ObExternalTableUtils::LINE_NUMBER,
-                                                    start,
-                                                    step))) {
-      LOG_WARN("failed to resolve odps start step", K(ret));
+
+    if (OB_ISNULL(odps_scan_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
+    } else {
+      part_spec = odps_scan_task->file_url_;
+      if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+        LOG_WARN("failed to resolve odps start step", K(ret));
+      }
     }
+
     if (OB_FAIL(ret)) {
     } else if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
       ret = OB_ITER_END;
@@ -1137,7 +1141,7 @@ int ObODPSJNITableRowIterator::next_task_storage(const int64_t capacity)
   task_alloc_.reset();
   int64_t task_idx = state_.task_idx_;
   ++task_idx;
-  if (task_idx >= scan_param_->key_ranges_.count()) {
+  if (task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
     int tmp_ret = OB_SUCCESS;
     if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
@@ -1150,29 +1154,28 @@ int ObODPSJNITableRowIterator::next_task_storage(const int64_t capacity)
       }
     }  // 覆盖ret正确，后续查询不在做了
   } else {
-    int64_t part_id = scan_param_->key_ranges_.at(task_idx)
-                          .get_start_key()
-                          .get_obj_ptr()[ObExternalTableUtils::PARTITION_ID]
-                          .get_int();
-    const ObString &part_spec = scan_param_->key_ranges_.at(task_idx)
-                                    .get_start_key()
-                                    .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
-                                    .get_string();
-    int64_t start_split =
-        scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::SPLIT_IDX].get_int();
-    int64_t end_split =
-        scan_param_->key_ranges_.at(task_idx).get_end_key().get_obj_ptr()[ObExternalTableUtils::SPLIT_IDX].get_int();
-    const ObString &session_id = scan_param_->key_ranges_.at(task_idx)
-                                  .get_start_key()
-                                  .get_obj_ptr()[ObExternalTableUtils::SESSION_ID]
-                                  .get_string();
     int64_t start = 0;
     int64_t step = 0;
-    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
-                                                    ObExternalTableUtils::LINE_NUMBER,
-                                                    start,
-                                                    step))) {
-      LOG_WARN("failed to resolve odps start step", K(ret));
+    int64_t part_id = 0;
+    ObString part_spec;
+    int64_t start_split = 0;
+    int64_t end_split = 0;
+    ObString session_id;
+
+    ObIExtTblScanTask *scan_task = scan_param_->scan_tasks_.at(task_idx);
+    const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
+    if (OB_ISNULL(odps_scan_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
+    } else {
+      part_id = odps_scan_task->part_id_;
+      part_spec = odps_scan_task->file_url_;
+      start_split = odps_scan_task->first_split_idx_;
+      end_split = odps_scan_task->last_split_idx_;
+      session_id = odps_scan_task->session_id_;
+      if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+        LOG_WARN("failed to resolve odps start step", K(ret));
+      }
     }
 
     LOG_TRACE("task storage",
@@ -1498,23 +1501,27 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
   task_alloc_.reset();
   int64_t task_idx = state_.task_idx_;
   ++task_idx;
-  if (task_idx >= scan_param_->key_ranges_.count()) {
+  if (task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
     LOG_INFO("odps table iter end", K(ret), K(state_), K(task_idx), K_(read_rounds));
   } else {
-    int64_t part_id = scan_param_->key_ranges_.at(task_idx)
-                          .get_start_key()
-                          .get_obj_ptr()[ObExternalTableUtils::PARTITION_ID]
-                          .get_int();
-    const ObString &part_spec = scan_param_->key_ranges_.at(task_idx)
-                                    .get_start_key()
-                                    .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
-                                    .get_string();
+    ObIExtTblScanTask *scan_task = scan_param_->scan_tasks_.at(task_idx);
+    const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
+    int64_t part_id = 0;
+    ObString part_spec;
 
     int64_t start = 0;
     int64_t step = 0;
-    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
-                                                    ObExternalTableUtils::LINE_NUMBER,
+    if (OB_ISNULL(odps_scan_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
+    } else {
+      part_id = odps_scan_task->part_id_;
+      part_spec = odps_scan_task->file_url_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task,
                                                     start,
                                                     step))) {
       LOG_WARN("failed to resolve odps start step", K(ret));
@@ -1588,7 +1595,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
   int64_t task_idx = state_.task_idx_;
   ++task_idx;
 
-  if (task_idx >= scan_param_->key_ranges_.count()) {
+  if (task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
     if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
       int tmp_ret = state_.odps_jni_scanner_->do_close();
@@ -1598,23 +1605,25 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
       }
     }
   } else {
-    int64_t part_id = scan_param_->key_ranges_.at(task_idx)
-                          .get_start_key()
-                          .get_obj_ptr()[ObExternalTableUtils::PARTITION_ID]
-                          .get_int();
-    const ObString &part_spec = scan_param_->key_ranges_.at(task_idx)
-                                    .get_start_key()
-                                    .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
-                                    .get_string();
+    ObIExtTblScanTask *scan_task = scan_param_->scan_tasks_.at(task_idx);
+    const ObOdpsScanTask *odps_scan_task = static_cast<const ObOdpsScanTask *>(scan_task);
+    int64_t part_id = 0;
+    ObString part_spec;
 
     int64_t start = 0;
     int64_t step = 0;
-    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
-                                                    ObExternalTableUtils::LINE_NUMBER,
-                                                    start,
-                                                    step))) {
-      LOG_WARN("failed to resolve odps start step", K(ret));
+
+    if (OB_ISNULL(odps_scan_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
+    } else {
+      part_id = odps_scan_task->part_id_;
+      part_spec = odps_scan_task->file_url_;
+      if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+        LOG_WARN("failed to resolve odps start step", K(ret));
+      }
     }
+
     LOG_TRACE("next_task_tunnel", K(ret), K(part_id), K(part_spec), K(start), K(step));
 
     if (OB_FAIL(ret)) {

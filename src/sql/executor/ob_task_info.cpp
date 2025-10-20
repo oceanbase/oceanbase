@@ -99,6 +99,8 @@ int ObGranuleTaskInfo::assign(const ObGranuleTaskInfo &other)
       LOG_WARN("assign ranges_ failed", K(ret));
     } else if (OB_FAIL(ss_ranges_.assign(other.ss_ranges_))) {
       LOG_WARN("assign ss_ranges_ failed", K(ret));
+    } else if (OB_FAIL(scan_tasks_.assign(other.scan_tasks_))) {
+      LOG_WARN("assign scan_tasks_ failed", K(ret));
     } else {
       tablet_loc_ = other.tablet_loc_;
       task_id_ = other.task_id_;

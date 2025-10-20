@@ -88,6 +88,7 @@ public:
 	ObGranuleTaskInfo()
 	  : ranges_(),
       ss_ranges_(),
+      scan_tasks_(),
 	    tablet_loc_(nullptr),
 	    task_id_(0)
 	{ }
@@ -98,6 +99,7 @@ public:
 public:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
   common::ObSEArray<common::ObNewRange, 1> ss_ranges_;
+  common::ObSEArray<sql::ObIExtTblScanTask*, 1> scan_tasks_;
   ObDASTabletLoc *tablet_loc_;
   //just for print
   int64_t task_id_;

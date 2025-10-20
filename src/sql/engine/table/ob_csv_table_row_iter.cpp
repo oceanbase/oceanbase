@@ -146,13 +146,6 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
   }
-  for (int i = 0; i < scan_param_->key_ranges_.count(); ++i) {
-    int64_t start = 0;
-    int64_t step = 0;
-    int64_t part_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
-    const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
-    int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
-  }
 
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   const ObSQLSessionInfo *session = nullptr;
@@ -186,18 +179,21 @@ int ObCSVTableRowIterator::get_next_file_and_line_number(const int64_t task_idx,
                                                          int64_t &end_line)
 {
   int ret = OB_SUCCESS;
-  if (task_idx >= scan_param_->key_ranges_.count()) {
+  if (task_idx >= scan_param_->scan_tasks_.count()) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(ObExternalTableUtils::resolve_line_number_range(
-                                                              scan_param_->key_ranges_.at(task_idx),
-                                                              ObExternalTableUtils::LINE_NUMBER,
-                                                              start_line,
-                                                              end_line))) {
-    LOG_WARN("failed to resolve range in external table", K(ret));
   } else {
-    part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
-    file_url = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
-    file_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
+    const ObFileScanTask *scan_task =
+      static_cast<const ObFileScanTask *>(scan_param_->scan_tasks_.at(task_idx));
+    if (OB_ISNULL(scan_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null scan task", K(ret), K(task_idx));
+    } else {
+      start_line = scan_task->first_lineno_;
+      end_line = scan_task->last_lineno_;
+      part_id = scan_task->part_id_;
+      file_url = scan_task->file_url_;
+      file_id = scan_task->file_id_;
+    }
   }
   return ret;
 }
