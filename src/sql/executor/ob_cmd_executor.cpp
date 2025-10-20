@@ -265,14 +265,20 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   ObTenantDDLCountGuard tenant_ddl_guard(tenant_id);
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (OB_SUCC(ret)) {
+    bool has_global_variable = false;
+    if (stmt::T_VARIABLE_SET == static_cast<stmt::StmtType>(cmd.get_cmd_type())
+        && static_cast<ObVariableSetStmt*>(&cmd)->has_global_variable()) {
+        has_global_variable = true;
+    }
     if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
-        && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
+        && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), has_global_variable)) {
       if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count(tenant_config->cpu_quota_concurrency))) {
         LOG_WARN("fail to inc tenant ddl count", KR(ret), K(tenant_id));
+      } else {
+        DEBUG_SYNC(AFTER_TRY_INC_DDL_COUNT);
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     switch (cmd.get_cmd_type()) {
       case stmt::T_CREATE_RESOURCE_POOL: {
