@@ -217,13 +217,13 @@ protected:
 // Delete fails because no backup sets exist
 // Test: Delete piece 1 but no backup sets exist - should fail
 TEST_F(TestBackupCleanPieceSelector_BasicCases, FailToDeletePieceWhenNoBackupSetsExist) {
-    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no_full_backup_exists",
+    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no full backup exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
 // Test: Delete an active piece (piece 5) - should fail
 TEST_F(TestBackupCleanPieceSelector_BasicCases, FailToDeleteActivePiece) {
-    run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "is_active_piece",
+    run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "is active piece",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -236,7 +236,7 @@ TEST_F(TestBackupCleanPieceSelector_BasicCases, FailOnEmptyRequestList) {
 
 // Test: Delete a non-existent piece (piece 99) - should fail
 TEST_F(TestBackupCleanPieceSelector_BasicCases, FailToDeleteNonExistentPiece) {
-    run_delete_test({99}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "not_exist",
+    run_delete_test({99}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "not exist",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -297,13 +297,13 @@ TEST_F(TestBackupCleanPieceSelector_TwoPathCases, SuccessToDeleteSinglePiece) {
 
 // Test: Delete piece 2 without deleting piece 1 first - should fail (sequential constraint)
 TEST_F(TestBackupCleanPieceSelector_TwoPathCases, FailToDeletePieceWithoutSequentialOrder) {
-    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller_piece_exists",
+    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller piece exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
 // Test: Delete pieces 1,2,4,5 with gap (missing piece 3) - should fail (sequential constraint)
 TEST_F(TestBackupCleanPieceSelector_TwoPathCases, FailToDeletePiecesWithGap) {
-    run_delete_test({1,2,4,5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller_piece_exists",
+    run_delete_test({1,2,4,5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller piece exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
@@ -349,13 +349,13 @@ protected:
 // Delete fails because no backup sets exist
 // Test: Delete old piece 1 when backup dest exists but no backup sets - should fail
 TEST_F(TestBackupCleanPieceSelector_RetentionPolicyCases, FailToDeleteOldPieceWhenNoBackupSets) {
-    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no_full_backup_exists",
+    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no full backup exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
 // Test: Delete old pieces 1,2 when backup dest exists but no backup sets - should fail
 TEST_F(TestBackupCleanPieceSelector_RetentionPolicyCases, FailToDeleteOldPiecesWhenNoBackupSets) {
-    run_delete_test({1, 2 }, OB_ENTRY_NOT_EXIST, {}, "no_full_backup_exists",
+    run_delete_test({1, 2 }, OB_ENTRY_NOT_EXIST, {}, "no full backup exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
@@ -371,7 +371,7 @@ TEST_F(TestBackupCleanPieceSelector_RetentionPolicyCases, SuccessToDeleteOldPiec
 TEST_F(TestBackupCleanPieceSelector_RetentionPolicyCases, FailToDeleteOldPiecebecausseNotSequential) {
     ObArray<std::pair<int64_t, int64_t>> archive_pairs;
     archive_pairs.push_back(std::make_pair(1003, 2));
-    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller_piece_exists",
+    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller piece exists",
                     test_sets_, test_current_path_, test_pieces_, archive_pairs, 0);
 }
 
@@ -439,7 +439,7 @@ TEST_F(TestBackupCleanPieceSelector_MultiPathCases, FailToDeletePiecesFromMultip
 
 // Test: Delete piece 5 from current path but no backup sets exist - should fail
 TEST_F(TestBackupCleanPieceSelector_MultiPathCases, FailToDeletePieceWhenNoBackupSetsExist) {
-    run_delete_test({5}, OB_ENTRY_NOT_EXIST, {}, "no_full_backup_exists",
+    run_delete_test({5}, OB_ENTRY_NOT_EXIST, {}, "no full backup exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -447,7 +447,7 @@ TEST_F(TestBackupCleanPieceSelector_MultiPathCases, FailToDeletePieceWhenNoBacku
 // Test: Delete piece 5 from current path but no backup sets exist - should fail
 TEST_F(TestBackupCleanPieceSelector_MultiPathCases, FailToDeletePieceWhenNoBackupSetsExist2) {
     run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {},
-                        "cannot_delete_backup_piece_in_current_path_when_delete_policy_is_set",
+                        "cannot delete backup piece in current path when delete policy is set",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, true);
 }
 
@@ -506,25 +506,25 @@ TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, SuccessToDeleteBeforeRe
 
 // Test: Delete pieces 3,4 (piece 4's SCN 400 >= retention SCN 350) - should fail due to protection
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, FailToDeleteAcrossRetentionSCN) {
-    run_delete_test({3, 4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed_for_oldest_full_backup",
+    run_delete_test({3, 4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed for oldest full backup",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
 // Test: Delete piece 4 (protected piece with SCN 400 >= retention SCN 350) - should fail
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, FailToDeleteSingleProtectedPiece) {
-    run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed_for_oldest_full_backup",
+    run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed for oldest full backup",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
 // Test: Delete pieces 1,3 (with gap, skipping piece 2) - should fail due to sequential deletion rule
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, FailToDeleteWithGap) {
-    run_delete_test({1, 3}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller_piece_exists",
+    run_delete_test({1, 3}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller piece exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
 // Test: Delete piece 2 (without deleting piece 1 first) - should fail due to sequential deletion rule
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, SuccessWhenProtectedPieceNotRequested) {
-    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller_piece_exists",
+    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "smaller piece exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -536,7 +536,7 @@ TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, SuccessWhenFirstPieceIs
 
 // Test: Delete piece 1 (first piece in sequence) - should succeed
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention, SuccessWhenFirstPieceIsDeleted2) {
-    run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot_delete_backup_piece_in_current_path_when_delete_policy_is_set",
+    run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot delete backup piece in current path when delete policy is set",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, true);
 }
 
@@ -617,7 +617,7 @@ TEST_F(TestBackupCleanPieceSelector_ActivePathRetention_OldPathCanDelete, Succes
 }
 
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention_OldPathCanDelete, SuccessToDeleteAllOnInactivePath3) {
-    run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot_delete_backup_piece_in_current_path_when_delete_policy_is_set",
+    run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot delete backup piece in current path when delete policy is set",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, true);
 }
 
@@ -636,7 +636,7 @@ TEST_F(TestBackupCleanPieceSelector_ActivePathRetention_OldPathCanDelete, FailWh
 
 // Test: Delete piece 5 (protected piece on active path) - should fail due to retention policy
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention_OldPathCanDelete, FailWhenMixingProtectedPiece2) {
-    run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed_for_oldest_full_backup",
+    run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed for oldest full backup",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -648,7 +648,7 @@ TEST_F(TestBackupCleanPieceSelector_ActivePathRetention_OldPathCanDelete, FailWh
 
 // Test: Delete pieces 4,5,6 (including protected pieces) - should fail due to retention policy
 TEST_F(TestBackupCleanPieceSelector_ActivePathRetention_OldPathCanDelete, FailDueToBackupsetNeeded2) {
-    run_delete_test({4, 5, 6}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed_for_oldest_full_backup",
+    run_delete_test({4, 5, 6}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "needed for oldest full backup",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -701,7 +701,7 @@ protected:
 TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteAlreadyDeletedPiece) {
     // Attempt to delete piece 2, which is already marked as DELETED.
     // The system should reject this as an invalid operation.
-    run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "already_deleted",
+    run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "already deleted",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
@@ -709,7 +709,7 @@ TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteAlreadyDeletedPiec
 TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteDeletingPiece) {
     ObArray<std::pair<int64_t, int64_t>> active_dest_pairs;
     active_dest_pairs.push_back(std::make_pair(1, 1));
-    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot_delete_backup_piece_in_current_path_when_delete_policy_is_set",
+    run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot delete backup piece in current path when delete policy is set",
                     test_sets_, test_current_path_, test_pieces_, active_dest_pairs, true);
 }
 
@@ -723,7 +723,7 @@ TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteDeletingPiece2) {
 TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteNonExistentPiece) {
     // Attempt to delete piece 99, which does not exist in the metadata.
     // The system should fail fast with an unexpected error.
-    run_delete_test({99}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "not_exist",
+    run_delete_test({99}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "not exist",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
@@ -731,7 +731,7 @@ TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteNonExistentPiece) 
 TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteActivePiece) {
     // Attempt to delete piece 4, which is in ACTIVE state.
     // This is strictly forbidden.
-    run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "is_active_piece",
+    run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "is active piece",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, 0);
 }
 
@@ -739,7 +739,7 @@ TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailToDeleteActivePiece) {
 TEST_F(TestBackupCleanPieceSelector_SpecialCases, FailWhenListContainsValidAndInvalidPieces) {
     // Attempt to delete a valid piece (1) and an already deleted piece (2).
     // The presence of the invalid piece should cause the entire job to fail.
-    run_delete_test({1, 2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "already_deleted",
+    run_delete_test({1, 2}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "already deleted",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_);
 }
 
@@ -782,7 +782,7 @@ TEST_F(TestBackupCleanPieceSelector_NoBackupCases, FailWhenBackupDestExistsButNo
     test_current_path_ = backup_path;
     // No backup sets are added to test_sets_
 
-    run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot_delete_backup_piece_in_current_path_when_delete_policy_is_set",
+    run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, {}, "cannot delete backup piece in current path when delete policy is set",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, true);
 }
 
@@ -793,7 +793,7 @@ TEST_F(TestBackupCleanPieceSelector_NoBackupCases, FailWhenBackupDestExistsButNo
     test_current_path_ = backup_path;
     // No backup sets are added to test_sets_
 
-    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no_full_backup_exists",
+    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no full backup exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
@@ -802,7 +802,7 @@ TEST_F(TestBackupCleanPieceSelector_NoBackupCases, FailWhenNoBackupDestExists2) 
     backup_path.assign("file:///backup_active");
     test_current_path_ = backup_path;
     // No backup sets are added to test_sets_
-    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no_full_backup_exists",
+    run_delete_test({1}, OB_ENTRY_NOT_EXIST, {}, "no full backup exists",
                     test_sets_, test_current_path_, test_pieces_, test_dest_pairs_, false);
 }
 
