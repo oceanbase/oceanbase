@@ -18,6 +18,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
+#include "share/ob_debug_sync.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -520,6 +521,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
     piece.piece_info_.status_.set_frozen();
     piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
   } else if (piece_id == max_active_piece_id) {
+    DEBUG_SYNC(BEFORE_UPDATE_PIECE_TO_ACTIVE);
     piece.piece_info_.checkpoint_scn_ = MIN(new_round_info.checkpoint_scn_, piece.piece_info_.checkpoint_scn_);
     piece.piece_info_.status_.set_active();
     if (piece.piece_info_.checkpoint_scn_ > new_round_info.start_scn_

@@ -674,6 +674,9 @@ int ObArchivePersistHelper::switch_round_state_to(common::ObISQLClient &proxy, c
     LOG_WARN("failed to build assignments", K(ret), K(new_round));
   } else if (OB_FAIL(round_table_operator.compare_and_swap(proxy, old_round, assignments.ptr(), condition.ptr(), affected_rows))) {
     LOG_WARN("failed to switch round state", K(ret), K(old_round), K(new_round));
+  } else if (0 == affected_rows) {
+    ret = OB_EAGAIN;
+    LOG_WARN("round attr has changed, may be leader switched.", K(ret), K(old_round), K(new_round));
   }
 
   return ret;
