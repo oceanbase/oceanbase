@@ -1618,11 +1618,10 @@ int ObRawExprResolverImpl::process_array_contains_node(const ParseNode *node, Ob
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *func_expr = NULL;
+  uint32_t p = 0; // ANY and CONTAINS expr have different param position
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node));
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(2 != node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param num", K(node));
@@ -1630,24 +1629,25 @@ int ObRawExprResolverImpl::process_array_contains_node(const ParseNode *node, Ob
     LOG_WARN("fail to create raw expr", K(ret));
   } else {
     func_expr->set_func_name(N_ARRAY_CONTAINS);
-    if (OB_UNLIKELY(T_EXPR_LIST != node->children_[1]->type_)) {
+    p = node->reserved_;
+    if (p > 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid reserved", K(ret), K(p));
+    } else if (OB_UNLIKELY(T_EXPR_LIST != node->children_[1 - p]->type_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid children for array contains function", K(node), K(node->children_[1]));
-    } else if (OB_UNLIKELY(1 != node->children_[1]->num_child_)) {
+    } else if (OB_UNLIKELY(1 != node->children_[1 - p]->num_child_)) {
       ret = OB_ERR_PARAM_SIZE;
       LOG_WARN("invalid children for array contains function", K(node), K(node->children_[1]->num_child_));
     } else if (OB_FAIL(func_expr->init_param_exprs(2))) {
       LOG_WARN("failed to init param exprs", K(ret));
     } else {
       ObRawExpr *para_expr = NULL;
-      if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], para_expr)))) {
+      if (OB_FAIL(SMART_CALL(recursive_resolve(p == 0 ? node->children_[0] : node->children_[0]->children_[0], para_expr)))) {
         LOG_WARN("fail to recursive resolve expr list item", K(ret));
       } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
         LOG_WARN("fail to add param expr to expr", K(ret));
-      } else if (OB_ISNULL(node->children_[1]->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid expr list node children", K(ret), K(node->children_[0]));
-      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1]->children_[0], para_expr)))) {
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(p == 0 ? node->children_[1]->children_[0] : node->children_[1], para_expr)))) {
         LOG_WARN("fail to recursive resolve expr list item", K(ret));
       } else if (OB_FAIL(func_expr->add_param_expr(para_expr))) {
         LOG_WARN("fail to add param expr to expr", K(ret));
@@ -1655,7 +1655,7 @@ int ObRawExprResolverImpl::process_array_contains_node(const ParseNode *node, Ob
     }
   }
   if (OB_SUCC(ret)) {
-    func_expr->set_reverse_param_order(1); // param order is reversed, so set extra to 1
+    func_expr->set_reverse_param_order(1 - p); // for ANY expr, param order is reversed, so set extra to 1
     expr = func_expr;
   }
   return ret;

@@ -1515,6 +1515,7 @@ bool_pri IS NULLX %prec IS
   if ($3->type_ == T_ANY && $4->type_ == T_EXPR_LIST && $4->reserved_ == 1) {
     /* rewrite any operation to array_contains expr*/
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $1, $4);
+    $$->reserved_ = 0;
   } else {
     ParseNode *sub_query = NULL;
     malloc_non_terminal_node(sub_query, result->malloc_pool_, $3->type_, 1, $4);
@@ -3587,7 +3588,8 @@ MOD '(' expr ',' expr ')'
 }
 | CONTAINS '(' expr_list ',' expr ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $5, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUNC_SYS_ARRAY_CONTAINS, 2, $3, $5);
+  $$->reserved_ = 1;
 }
 ;
 
