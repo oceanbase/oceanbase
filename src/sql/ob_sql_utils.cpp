@@ -5564,6 +5564,9 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
           if (LENGTH_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_length()) {
             OX (obj_params.at(obj_params.count() - 1).set_length(coll->get_element_type().get_accuracy().get_length()));
           }
+          if (obj_params.at(obj_params.count() - 1).get_meta().is_null()) {
+            OX (obj_params.at(obj_params.count() - 1).set_param_meta(coll->get_element_type().get_meta_type()));
+          }
         }
       }
     }
