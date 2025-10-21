@@ -583,7 +583,7 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
   wait_minor_finish();
   wait_upload_sstable(ss_checkpoint_scn.get_val_for_tx());
 
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(gc_start);
+  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_start);
 
   // 1. sstable block write
   MacroBlockId block_id_100_1;
@@ -683,7 +683,7 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 104, ObAtomicMetaInfo::State::INIT, &gc_info_104);
 
   sleep(1);
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(gc_end);
+  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_end);
 
   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::INIT, &gc_info_105);
 
@@ -755,7 +755,7 @@ TEST_F(ObSharedStorageTest, test_timeout_block_gc)
 
   update_sslog(sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, 105, ObAtomicMetaInfo::State::COMMITTED, &gc_info_105);
 
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(gc_end);
+  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_end);
   // error gc
   LOG_INFO("start to do timeout_sstable_block gc");
   ASSERT_EQ(OB_SUCCESS,
@@ -803,7 +803,7 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   wait_minor_finish();
   wait_upload_sstable(ss_checkpoint_scn.get_val_for_tx());
 
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(gc_start);
+  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, gc_start);
 
   // sstable block write
   MacroBlockId block_id_100_1;
@@ -917,7 +917,7 @@ TEST_F(ObSharedStorageTest, test_abort_block_gc)
   // error gc
   LastSuccSCNs last_succ_scns;
   last_succ_scns.gc_abort_tablet_meta_block_scn_ = gc_start;
-  MTL(ObSSMetaService*)->get_max_committed_meta_scn(snapshot);
+  MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, snapshot);
   LOG_INFO("start to do abort_tablet_meta_block gc");
   ASSERT_EQ(OB_SUCCESS, MockSSGC::gc_tenant_in_ss_(snapshot, false, GCType::ABORT_TABLET_META_BLOCK_GC, last_succ_scns));
   LOG_INFO("start to do abort_sstable_block gc");
@@ -1198,7 +1198,7 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
 //   update_sslog<ObSSTableGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_1000);
 //
 //   share::SCN snapshot;
-//   MTL(ObSSMetaService*)->get_max_committed_meta_scn(snapshot);
+//   MTL(ObSSMetaService*)->get_max_committed_meta_scn(share::SYS_LS, snapshot);
 //   ObSSGarbageCollector::gc_failed_task_major_block_(snapshot, RunCtx.ls_id_, RunCtx.tablet_id_, SCN::min_scn());
 //
 //   // check sstable block gc

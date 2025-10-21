@@ -577,7 +577,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   {
     SCN max_decided_scn;
-    ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_max_decided_scn(false, max_decided_scn));
+    ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_max_decided_scn(false, share::SYS_LS, max_decided_scn));
     TRANS_LOG(INFO, "jianyue debug", K(max_decided_scn));
     ASSERT_EQ(true, max_decided_scn >= snapshot_version1);
   }

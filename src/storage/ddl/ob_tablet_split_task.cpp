@@ -2639,7 +2639,7 @@ int ObSplitDownloadSSTableTask::get_shared_tablet_for_split_major(
   if (OB_UNLIKELY(!dst_tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(dst_tablet_id));
-  } else if (OB_FAIL(MTL(ObSSMetaService*)->get_max_committed_meta_scn(end_version))) {
+  } else if (OB_FAIL(MTL(ObSSMetaService*)->get_max_committed_meta_scn(ls_id_, end_version))) {
     LOG_WARN("get max committed meta scn failed", K(ret));
   } else if (OB_FAIL(get_shared_tablet_versions_iter(dst_tablet_id, end_version, iter_guard, tablet_iter))) {
     LOG_WARN("get shared tablet versions iter failed", K(ret), K(dst_tablet_id), K(end_version));

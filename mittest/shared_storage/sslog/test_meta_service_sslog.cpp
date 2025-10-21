@@ -667,7 +667,7 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   SCN read_scn;
-  ret = meta_svr->get_max_committed_meta_scn(read_scn);
+  ret = meta_svr->get_max_committed_meta_scn(share::SYS_LS, read_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObSSMetaReadParam read_param;
   read_param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
@@ -846,7 +846,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_meta_snapshot_read)
   SCN before_write_scn;
   SCN after_create_scn;
   SCN after_update_scn;
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(before_write_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, before_write_scn));
 
   LOG_INFO("before write", K(before_write_scn));
 
@@ -859,7 +859,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_meta_snapshot_read)
                                                 cur_tablet_id,
                                                 transfer_scn));
 
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(after_create_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, after_create_scn));
   LOG_INFO("after create", K(after_create_scn));
 
   ObTabletHandle orig_tablet_handle;
@@ -884,7 +884,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_meta_snapshot_read)
                                             update_param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(after_update_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, after_update_scn));
   LOG_INFO("after update", K(after_update_scn));
 
   // 2. check the three version
@@ -966,7 +966,7 @@ TEST_F(ObTestSSLogMetaService, test_ls_ids_snapshot_read)
   ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
   SCN curr_scn;
   // 1. get read snapshot
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(curr_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, curr_scn));
   LOG_INFO("current meta scn", K(curr_scn));
 
   // 2. get the iter
@@ -1002,7 +1002,7 @@ TEST_F(ObTestSSLogMetaService, test_tablet_ids_snapshot_read)
   ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
   SCN curr_scn;
   // 1. get read snapshot
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(curr_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, curr_scn));
   LOG_INFO("current meta scn", K(curr_scn));
 
   // 2. get the iter
@@ -1041,7 +1041,7 @@ TEST_F(ObTestSSLogMetaService, test_get_tablet_iter)
   ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
   SCN curr_scn;
   // 1. get read snapshot
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(curr_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, curr_scn));
   LOG_INFO("current meta scn", K(curr_scn));
 
   // 2. get the iter
@@ -1079,7 +1079,7 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
   ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
   SCN curr_scn;
   // 1. get read snapshot
-  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(curr_scn));
+  EXPECT_EQ(OB_SUCCESS, meta_svr->get_max_committed_meta_scn(share::SYS_LS, curr_scn));
   LOG_INFO("current meta scn", K(curr_scn));
 
   // 2. get the iter
