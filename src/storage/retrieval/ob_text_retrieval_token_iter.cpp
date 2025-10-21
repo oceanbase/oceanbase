@@ -257,7 +257,8 @@ int ObTextRetrievalTokenIter::do_token_cnt_agg(const ObDocIdExt &doc_id)
   } else if (OB_FAIL(fwd_idx_agg_iter_->get_next_row())) {
     LOG_WARN("failed to get next row from forward index iterator", K(ret));
   } else {
-    if (is_valid_format(fwd_idx_agg_expr_->get_format(*eval_ctx_))) {
+    if (fwd_idx_agg_expr_->enable_rich_format()
+        && is_valid_format(fwd_idx_agg_expr_->get_format(*eval_ctx_))) {
       token_count = fwd_idx_agg_expr_->get_vector(*eval_ctx_)->get_int(0);
     } else {
       token_count = fwd_idx_agg_expr_->locate_expr_datum(*eval_ctx_).get_int();
@@ -620,7 +621,8 @@ int ObTextRetrievalTokenIter::estimate_token_doc_cnt()
       LOG_WARN("unexpected null total doc cnt expr", K(ret));
     } else {
       int64_t total_doc_cnt = 0;
-      if (is_valid_format(total_doc_cnt_param_expr->get_format(*eval_ctx_))) {
+      if (total_doc_cnt_param_expr->enable_rich_format()
+          && is_valid_format(total_doc_cnt_param_expr->get_format(*eval_ctx_))) {
         total_doc_cnt = total_doc_cnt_param_expr->get_vector(*eval_ctx_)->get_int(0);
       } else {
         total_doc_cnt = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0).get_int();
