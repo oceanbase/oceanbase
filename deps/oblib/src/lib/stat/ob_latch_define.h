@@ -414,7 +414,9 @@ LATCH_DEF(DEFAULT_RWLOCK, 377, "default latch", LATCH_FIFO, 2000, 0, true)// onl
 LATCH_DEF(EXT_DISK_CACHE_LOCK, 378, "external table disk cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(FD_SIMULATOR_LOCK, 379, "fd simulator lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 380, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SS_ATOMIC_FILE_LOCK, 380, "atomic procotol file lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 381, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
