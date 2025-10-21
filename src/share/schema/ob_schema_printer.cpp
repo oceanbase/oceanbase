@@ -674,6 +674,8 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             // skip doc id for multivalue index.
           } else if (index_schema->is_vec_index() && (col->is_vec_hnsw_vid_column())) { 
             // only need vec_type column to show index key, here skip vec_vid column of delta_buffer_table rowkey column
+          } else if (index_schema->is_vec_index() && col->is_doc_id_column()) {
+            // skip doc id for sparse vector index.
           } else if (!col->is_shadow_column()) {
             const ObColumnSchemaV2 *tmp_column = NULL;
             if (index_schema->is_multivalue_index_aux() && 
