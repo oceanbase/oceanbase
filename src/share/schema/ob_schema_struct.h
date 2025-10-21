@@ -686,6 +686,8 @@ public:
   int64_t get_schema_version() const { return schema_version_; }
   const ObDDLSequenceID &get_sequence_id() const { return new_sequence_id_; }
   TO_STRING_KV(K_(schema_version), K_(tenant_id), K_(new_sequence_id));
+public:
+  static bool less_than(const ObRefreshSchemaInfo &l, const ObRefreshSchemaInfo &r);
 private:
   int64_t schema_version_;
   uint64_t tenant_id_;

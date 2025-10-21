@@ -51,11 +51,16 @@ ObServerSchemaTask::ObServerSchemaTask(TYPE type)
 ObServerSchemaTask::ObServerSchemaTask(
   TYPE type,
   const uint64_t tenant_id,
-  const int64_t schema_version)
+  const int64_t schema_version,
+  const share::schema::ObRefreshSchemaInfo *schema_info)
   : type_(type), did_retry_(false), schema_info_()
 {
-  schema_info_.set_tenant_id(tenant_id);
-  schema_info_.set_schema_version(schema_version);
+  if (OB_NOT_NULL(schema_info)) {
+    schema_info_.assign(*schema_info);
+  } else {
+    schema_info_.set_tenant_id(tenant_id);
+    schema_info_.set_schema_version(schema_version);
+  }
 }
 
 bool ObServerSchemaTask::need_process_alone() const
@@ -401,8 +406,11 @@ int ObServerSchemaUpdater::process_async_refresh_tasks(
   } else {
     // For each tenant, we can only execute the async refresh schema task which has maximum schema_version.
     ObSEArray<uint64_t, UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM> tenant_ids;
+    ObArray<ObRefreshSchemaInfo> refresh_schema_infos;
+
     for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); i++) {
       const ObServerSchemaTask &cur_task = tasks.at(i);
+      const ObRefreshSchemaInfo &cur_schema_info = cur_task.schema_info_;
       if (ObServerSchemaTask::ASYNC_REFRESH != cur_task.type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cur task type should be ASYNC_REFRESH", KR(ret), K(cur_task));
@@ -436,10 +444,19 @@ int ObServerSchemaUpdater::process_async_refresh_tasks(
           }
         }
       }
+      if (FAILEDx(refresh_schema_infos.push_back(cur_schema_info))) {
+        LOG_WARN("fail to push back schema info", KR(ret), K(cur_schema_info));
+      }
     }
+
     if (OB_SUCC(ret) && tenant_ids.count() > 0) {
+      // update sequence id if refresh schema successfully,
+      // try to avoid heartbeat find sequence id is not continuous
+      // and trigger schema refresh for all tenants
       if (OB_FAIL(schema_mgr_->refresh_and_add_schema(tenant_ids))) {
         LOG_WARN("fail to refresh schema", KR(ret), K(tenant_ids));
+      } else if (OB_FAIL(schema_mgr_->try_update_last_refreshed_schema_info(refresh_schema_infos))) {
+        LOG_WARN("fail to check can update sequence id", KR(ret), K(refresh_schema_infos));
       }
     }
   }
@@ -502,14 +519,16 @@ int ObServerSchemaUpdater::try_release_schema()
   return ret;
 }
 
+// Only when schema refresh is triggered by DDL, schema_info needs to be specified
 int ObServerSchemaUpdater::async_refresh_schema(
     const uint64_t tenant_id,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const share::schema::ObRefreshSchemaInfo *schema_info)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_ADD_ASYNC_REFRESH_SCHEMA_TASK);
   ObServerSchemaTask refresh_task(ObServerSchemaTask::ASYNC_REFRESH,
-                                  tenant_id, schema_version);
+                                  tenant_id, schema_version, schema_info);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob_server_schema_updeter is not inited.", KR(ret));

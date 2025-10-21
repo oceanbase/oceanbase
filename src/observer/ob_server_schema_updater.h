@@ -58,7 +58,8 @@ public:
   // for async refresh
   explicit ObServerSchemaTask(TYPE type,
                               const uint64_t tenant_id,
-                              const int64_t schema_version);
+                              const int64_t schema_version,
+                              const share::schema::ObRefreshSchemaInfo *schema_info = nullptr);
   virtual ~ObServerSchemaTask() {}
 
   virtual bool need_process_alone() const;
@@ -102,7 +103,8 @@ public:
   int try_release_schema();
   int async_refresh_schema(
       const uint64_t tenant_id,
-      const int64_t schema_version);
+      const int64_t schema_version,
+      const share::schema::ObRefreshSchemaInfo *schema_info = nullptr);
   int process_barrier(const ObServerSchemaTask &task, bool &stopped);
   int batch_process_tasks(const common::ObIArray<ObServerSchemaTask> &batch_tasks, bool &stopped);
 private:

@@ -460,9 +460,11 @@ int ObService::submit_ls_update_task(
   return ret;
 }
 
+// Only when schema refresh is triggered by DDL, schema_info needs to be specified
 int ObService::submit_async_refresh_schema_task(
     const uint64_t tenant_id,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const share::schema::ObRefreshSchemaInfo *schema_info)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -472,7 +474,7 @@ int ObService::submit_async_refresh_schema_task(
              || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version));
-  } else if (OB_FAIL(schema_updater_.async_refresh_schema(tenant_id, schema_version))) {
+  } else if (OB_FAIL(schema_updater_.async_refresh_schema(tenant_id, schema_version, schema_info))) {
     LOG_WARN("fail to async refresh schema", KR(ret), K(tenant_id), K(schema_version));
   }
   return ret;
@@ -1491,7 +1493,7 @@ int ObService::switch_schema(
           && origin_timeout_ts >= ObTimeUtility::current_time() + LEFT_TIME) {
         THIS_WORKER.set_timeout_ts(origin_timeout_ts - LEFT_TIME);
       }
-      if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+      if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version, &schema_info))) {
         LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
       }
       THIS_WORKER.set_timeout_ts(origin_timeout_ts);
@@ -1505,7 +1507,7 @@ int ObService::switch_schema(
           && OB_TIMEOUT == ret) {
         // To set set_tenant_received_broadcast_version in advance, we reduce the abs_time,
         // if not timeout after first async_refresh_schema, we should execute async_refresh_schema again and overwrite the ret code
-        if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+        if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version, &schema_info))) {
           LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
         }
       }
