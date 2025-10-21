@@ -11811,5 +11811,23 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "sql_transpiler" : {
+    "id": 10754,
+    "name": "sql_transpiler",
+    "default_value": 0,
+    "base_value": 0,
+    "data_type": "enum",
+    "info": "control whether the sql transpiler is enabled. When enabled, PL/SQL functions are automatically transpiled into SQL expressions whenever possible, without user intervention.",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN",
+    "enum_names": [
+      "OFF",
+      "ON",
+      "BASIC"
+    ],
+    "publish_version": "4.3.5.5",
+    "info_cn": "控制是否开启 SQL Transpiler 功能。当开启时，满足条件的 PL/SQL 函数会被自动改写成 SQL 表达式，无需用户介入。",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

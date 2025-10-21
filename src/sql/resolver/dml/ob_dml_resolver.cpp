@@ -3068,6 +3068,8 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
   if (OB_ISNULL(real_ref_expr) || OB_ISNULL(params_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr or params_.session_info_ is NULL", K(ret), K(real_ref_expr), K(params_.session_info_));
+  } else if (OB_UNLIKELY(real_ref_expr->has_flag(IS_PL_SQL_TRANSPILED))) {
+    // do nothing
   } else if (real_ref_expr->is_const_raw_expr() //local variable access
              || (real_ref_expr->is_obj_access_expr() && !check_expr_has_colref(real_ref_expr)) // composite variable access
              || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package variable access, must not (system/user variable)
@@ -13599,6 +13601,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
 
   if (OB_SUCC(ret)) {
     ObArray<ObSchemaObjVersion> dependency_objects;
+    ObSEArray<ObUDFRawExpr*, 4> sql_transpiled_exprs;
     if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*params_.allocator_,
                                                          *params_.expr_factory_,
                                                          *params_.session_info_,
@@ -13615,7 +13618,8 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          current_scope_ != T_CURRENT_OF_SCOPE /*is_sql_scope*/,
-                                                         &dependency_objects))) {
+                                                         &dependency_objects,
+                                                         &sql_transpiled_exprs))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
     } else if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -13647,6 +13651,16 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                                             &db_id));
         CK (db_id != OB_INVALID_ID);
         OZ (stmt_->add_ref_obj_version(view_ref_id_, db_id, ObObjectType::VIEW, dependency_objects.at(i), *allocator_));
+      }
+
+      if (OB_SUCC(ret) && !sql_transpiled_exprs.empty()) {
+        CK (OB_NOT_NULL(params_.query_ctx_));
+
+        for (int64_t i = 0; OB_SUCC(ret) && i < sql_transpiled_exprs.count(); ++i) {
+          if (OB_FAIL(params_.query_ctx_->pl_sql_transpiled_exprs_.push_back(sql_transpiled_exprs.at(i)))) {
+            LOG_WARN("failed to push back sql transpiled expr", K(ret));
+          }
+        }
       }
     }
     OZ (check_disable_parallel_state(expr));

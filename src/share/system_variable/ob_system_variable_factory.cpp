@@ -557,6 +557,12 @@ const char *ObSysVarEnableOptimizerRowgoal::ENABLE_OPTIMIZER_ROWGOAL_NAMES[] = {
   "ON",
   0
 };
+const char *ObSysVarSqlTranspiler::SQL_TRANSPILER_NAMES[] = {
+  "OFF",
+  "ON",
+  "BASIC",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "__ob_client_capability_flag",
@@ -1337,6 +1343,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "sql_throttle_network",
   "sql_throttle_priority",
   "sql_throttle_rt",
+  "sql_transpiler",
   "sql_warnings",
   "ssl_ca",
   "ssl_capath",
@@ -2178,6 +2185,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SQL_THROTTLE_NETWORK,
   SYS_VAR_SQL_THROTTLE_PRIORITY,
   SYS_VAR_SQL_THROTTLE_RT,
+  SYS_VAR_SQL_TRANSPILER,
   SYS_VAR_SQL_WARNINGS,
   SYS_VAR_SSL_CA,
   SYS_VAR_SSL_CAPATH,
@@ -3078,7 +3086,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_enable_ps_parameter_anonymous_block",
   "ob_hnsw_extra_info_max_size",
   "_push_join_predicate",
-  "ob_sparse_drop_ratio_search"
+  "ob_sparse_drop_ratio_search",
+  "sql_transpiler"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4121,6 +4130,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObHnswExtraInfoMaxSize)
         + sizeof(ObSysVarPushJoinPredicate)
         + sizeof(ObSysVarObSparseDropRatioSearch)
+        + sizeof(ObSysVarSqlTranspiler)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11669,6 +11679,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SPARSE_DROP_RATIO_SEARCH))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObSparseDropRatioSearch));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlTranspiler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlTranspiler", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SQL_TRANSPILER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSqlTranspiler));
       }
     }
 
@@ -20896,6 +20915,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSparseDropRatioSearch())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObSparseDropRatioSearch", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SQL_TRANSPILER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSqlTranspiler)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSqlTranspiler)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSqlTranspiler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSqlTranspiler", K(ret));
       }
       break;
     }

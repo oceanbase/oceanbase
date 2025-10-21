@@ -127,6 +127,7 @@ public:
   bool need_add_pl_cache_; // indicate if this pl object need add into pl cache when re_compile
   ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
   ObPLEnumSetCtx *enum_set_ctx_;
+  ObSEArray<ObUDFRawExpr*, 4> sql_transpiled_exprs_;
 };
 
 class ObPLMockSelfArg
@@ -371,6 +372,14 @@ public:
                              ObIArray<ObRawExpr*> &real_exprs,
                              ObPLCompileUnitAST &unit_ast,
                              sql::ObRawExpr *&expr);
+
+  int try_sql_transpiler(ObObjAccessIdx &access_idx,
+                         ObPLCompileUnitAST &mock_ast,
+                         sql::ObRawExpr *&expr);
+
+  int sql_transpiler_substitute(const ObPLFunctionAST &ast,
+                                ObUDFRawExpr &udf_expr,
+                                ObRawExpr *&target_expr);
 
   static
   int resolve_obj_access_node(ParseNode *node,

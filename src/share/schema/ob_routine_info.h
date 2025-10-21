@@ -86,6 +86,8 @@ enum ObRoutineFlag
   SP_FLAG_HAS_SEQUENCE = SP_FLAG_RPS * 2,
   SP_FLAG_HAS_OUT_PARAM = SP_FLAG_HAS_SEQUENCE * 2,
   SP_FLAG_EXTERNAL_STATE = SP_FLAG_HAS_OUT_PARAM * 2,
+  SP_FLAG_MYSQL_UDTF = SP_FLAG_EXTERNAL_STATE * 2,
+  SP_FLAG_SQL_TRANSPILER_ELIGIBLE = SP_FLAG_MYSQL_UDTF * 2,
 };
 
 namespace oceanbase
@@ -174,6 +176,7 @@ public:
   virtual uint64_t get_dblink_id() const { return OB_INVALID_ID; }
   virtual uint64_t get_routine_id() const = 0;
   virtual bool is_function() const = 0;
+  virtual bool is_sql_transpiler_eligible() const = 0;
   TO_STRING_EMPTY();
 };
 
@@ -595,6 +598,13 @@ public:
 
   OB_INLINE bool is_dblink_routine() const {
     return dblink_id_ != OB_INVALID_ID;
+  }
+
+  OB_INLINE void set_sql_transpiler_eligible() { flag_ |= SP_FLAG_SQL_TRANSPILER_ELIGIBLE; }
+
+  bool is_sql_transpiler_eligible() const override
+  {
+    return SP_FLAG_SQL_TRANSPILER_ELIGIBLE == (flag_ & SP_FLAG_SQL_TRANSPILER_ELIGIBLE);
   }
 
   TO_STRING_KV(K_(tenant_id),

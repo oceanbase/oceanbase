@@ -11479,13 +11479,27 @@ static struct VarsInit{
     ObSysVars[837].alias_ = "OB_SV_SPARSE_DROP_RATIO_SEARCH" ;
     }();
 
+    [&] (){
+      ObSysVars[838].default_value_ = "0" ;
+      ObSysVars[838].info_ = "control whether the sql transpiler is enabled" ;
+      ObSysVars[838].name_ = "sql_transpiler" ;
+      ObSysVars[838].data_type_ = ObIntType ;
+      ObSysVars[838].enum_names_ = "[u'OFF', u'ON', u'BASIC']" ;
+      ObSysVars[838].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[838].id_ = SYS_VAR_SQL_TRANSPILER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_TRANSPILER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_TRANSPILER] = 838 ;
+      ObSysVars[838].base_value_ = "0" ;
+    ObSysVars[838].alias_ = "OB_SV_SQL_TRANSPILER" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 838;
+static int64_t var_amount = 839;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

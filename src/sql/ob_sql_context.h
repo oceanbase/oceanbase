@@ -837,7 +837,8 @@ public:
       has_dblink_(false),
       injected_random_status_(false),
       ori_question_marks_count_(0),
-      type_demotion_flag_(0)
+      type_demotion_flag_(0),
+      pl_sql_transpiled_exprs_()
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -884,6 +885,7 @@ public:
     ori_question_marks_count_ = 0;
     filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
+    pl_sql_transpiled_exprs_.reuse();
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -1008,6 +1010,8 @@ public:
       int8_t type_demotion_flag_reserved_   : 4;
     };
   };
+
+  ObSEArray<ObUDFRawExpr *, 4, common::ModulePageAllocator, true> pl_sql_transpiled_exprs_;
 };
 
 template<typename... Args>

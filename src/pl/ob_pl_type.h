@@ -914,7 +914,7 @@ public:
     const ObPLBlockNS *label_ns_; //当AccessType是LABEL_NS时,这里记录的是Label对应的NameSpace
   };
   union {
-    share::schema::ObIRoutineInfo *routine_info_;
+    const share::schema::ObIRoutineInfo *routine_info_;
     const ObPLBlockNS *var_ns_; //当AccessType是SUBPROGRAM_VAR时,这里记录的是VAR对应的NS
   };
   common::ObSEArray<int64_t, 4> type_method_params_;

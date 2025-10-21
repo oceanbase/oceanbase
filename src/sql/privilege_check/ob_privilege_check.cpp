@@ -789,7 +789,7 @@ int get_seq_db_name(
 
 int add_udf_expr_priv(
     const ObSqlCtx &ctx,
-    ObRawExpr *expr,
+    const ObRawExpr *expr,
     uint64_t user_id,
     ObIArray<ObOraNeedPriv> &need_privs,
     uint64_t check_flag)
@@ -800,8 +800,8 @@ int add_udf_expr_priv(
   ObOraNeedPriv need_priv;
   ObString db_name;
   ObPackedObjPriv packed_privs = 0;
-  ObUDFRawExpr *udf_expr = NULL;
-  if (OB_ISNULL(expr) || OB_ISNULL(udf_expr = static_cast<ObUDFRawExpr *>(expr))) {
+  const ObUDFRawExpr *udf_expr = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(udf_expr = static_cast<const ObUDFRawExpr *>(expr))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KPC(expr), K(ret));
   } else if (!udf_expr->get_dblink_name().empty()) {
@@ -890,6 +890,17 @@ int add_procs_priv_in_dml(
       LOG_WARN("failed to add udf priv", K(ret));
     }
   }
+
+  if (OB_SUCC(ret) && !dml_stmt->get_query_ctx()->pl_sql_transpiled_exprs_.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dml_stmt->get_query_ctx()->pl_sql_transpiled_exprs_.count(); ++i) {
+      ObRawExpr *expr = dml_stmt->get_query_ctx()->pl_sql_transpiled_exprs_.at(i);
+      if (OB_FAIL(add_udf_expr_priv(ctx, expr, user_id, need_privs, check_flag))) {
+        LOG_WARN("failed to add sql transpiled udf priv",
+                 K(ret), KPC(expr), K(i), "exprs", dml_stmt->get_query_ctx()->pl_sql_transpiled_exprs_);
+      }
+    }
+  }
+
   return ret;
 }
 
