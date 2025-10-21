@@ -140,6 +140,10 @@ int ObTableLoadStore::init()
   } else if (THIS_WORKER.is_timeout_ts_valid() && OB_UNLIKELY(THIS_WORKER.is_timeout())) {
     ret = OB_TIMEOUT;
     LOG_WARN("worker timeouted", KR(ret));
+  } else if (OB_NOT_NULL(ctx_->session_info_->get_tx_desc()) &&
+             OB_UNLIKELY(ctx_->session_info_->get_tx_desc()->is_tx_timeout())) {
+    ret = OB_TRANS_TIMEOUT;
+    LOG_WARN("trans timeout", KR(ret), KPC(ctx_->session_info_->get_tx_desc()));
   } else {
     is_inited_ = true;
   }
