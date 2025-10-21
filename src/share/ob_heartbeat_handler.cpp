@@ -83,6 +83,10 @@ bool ObHeartbeatHandler::is_rs_epoch_id_valid()
 {
   return palf::INVALID_PROPOSAL_ID != ATOMIC_LOAD(&rs_epoch_id_);
 }
+int64_t ObHeartbeatHandler::get_rs_epoch_id()
+{
+  return ATOMIC_LOAD(&rs_epoch_id_);
+}
 int ObHeartbeatHandler::handle_heartbeat(
     const share::ObHBRequest &hb_request,
     share::ObHBResponse &hb_response)

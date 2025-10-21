@@ -600,16 +600,18 @@ struct ObCheckSysTableSchemaArg
 public:
   ObCheckSysTableSchemaArg();
   ~ObCheckSysTableSchemaArg() {}
-  int init(uint64_t tenant_id);
+  int init(const uint64_t tenant_id);
   int assign(const ObCheckSysTableSchemaArg &other);
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), KDV_(data_current_version), K_(rs_addr));
+  TO_STRING_KV(K_(tenant_id), KDV_(data_current_version), K_(rs_addr), K_(rs_epoch_id));
   uint64_t get_tenant_id() const { return tenant_id_; }
   ObAddr get_rs_addr() const { return rs_addr_; }
+  int64_t get_rs_epoch_id() const { return rs_epoch_id_; }
 private:
   uint64_t tenant_id_;
   uint64_t data_current_version_;
   ObAddr rs_addr_;
+  int64_t rs_epoch_id_;
 };
 
 struct ObCheckSysTableSchemaResult
