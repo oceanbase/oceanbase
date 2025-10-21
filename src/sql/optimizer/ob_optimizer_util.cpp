@@ -8410,6 +8410,55 @@ int ObOptimizerUtil::generate_duplicate_table_replicas(ObIAllocator &allocator,
   return ret;
 }
 
+/**
+ * 获取存在于 "column = [const_raw_expr]" 这一类谓词的column
+ */
+int ObOptimizerUtil::get_simple_equal_const_filter_column(const ObDMLStmt *stmt,
+                                                          ObRawExpr *expr,
+                                                          int64_t table_id,
+                                                          ObIArray<ObRawExpr*> &col_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (T_OP_EQ == expr->get_expr_type()) {
+    ObRawExpr *left = NULL;
+    ObRawExpr *right = NULL;
+    if (2 != expr->get_param_count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr must has 2 arguments", K(ret));
+    } else if (OB_ISNULL(left = expr->get_param_expr(0)) ||
+                OB_ISNULL(right = expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexcept null param expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left, true, true)) ||
+                OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right, true, true))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if ((OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
+                OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
+      LOG_WARN("failed to get column expr without nvl", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::eliminate_implicit_cast_for_range(left, right, expr->get_expr_type()))) {
+      LOG_WARN("failed to eliminate implicit cast for range", K(ret));
+    } else if (left->is_column_ref_expr() &&
+                table_id == static_cast<ObColumnRefRawExpr*>(left)->get_table_id()) {
+      if (!right->is_const_raw_expr()) {
+        //do nothing
+      } else if (OB_FAIL(add_var_to_array_no_dup(col_exprs, left))) {
+        LOG_WARN("failed to push back column expr", K(ret));
+      }
+    } else if (right->is_column_ref_expr() &&
+                table_id == static_cast<ObColumnRefRawExpr*>(right)->get_table_id()) {
+      if (!left->is_const_raw_expr()) {
+        //do nothing
+      } else if (OB_FAIL(add_var_to_array_no_dup(col_exprs, right))) {
+        LOG_WARN("failed to push back column expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan &plan,
                                                          const uint64_t table_id,
                                                          const ObIArray<ObRawExpr*> &pushdown_filters,
@@ -8418,6 +8467,7 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan &plan,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObColumnRefRawExpr*, 8> col_exprs;
+  ObSEArray<ObRawExpr*, 8> const_col_exprs;
   ObSEArray<ObColumnRefRawExpr*, 8> pushdown_col_exprs;
   const ObDMLStmt *stmt = plan.get_stmt();
   can_pushdown = false;
@@ -8427,6 +8477,11 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan &plan,
                                                            table_id,
                                                            col_exprs))) {
       LOG_WARN("failed to get simple filter column", K(ret));
+    } else if (OB_FAIL(get_simple_equal_const_filter_column(stmt,
+                                                            restrict_infos.at(i),
+                                                            table_id,
+                                                            const_col_exprs))) {
+      LOG_WARN("failed to get simple equal const filter column", K(ret));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_filters.count(); ++i) {
@@ -8439,7 +8494,12 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan &plan,
   }
   for (int64_t i = 0; OB_SUCC(ret) && !can_pushdown && i < pushdown_col_exprs.count(); ++i) {
     ObColumnRefRawExpr *col_expr = pushdown_col_exprs.at(i);
-    if (OB_FAIL(ObTransformUtils::is_match_index(plan.get_optimizer_context().get_sql_schema_guard(),
+    bool found = false;
+    if (OB_FAIL(ObTransformUtils::find_expr(const_col_exprs, col_expr, found))) {
+      LOG_WARN("failed to find expr", K(ret));
+    } else if (found) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::is_match_index(plan.get_optimizer_context().get_sql_schema_guard(),
                                                  stmt,
                                                  col_expr,
                                                  can_pushdown,

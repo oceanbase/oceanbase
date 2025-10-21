@@ -119,8 +119,20 @@ private:
                 ObIArray<bool> &visited,
                 ObIArray<int64_t> &order);
 
+  int get_basic_table_id(const int64_t node,
+                         bool &is_basic_col,
+                         uint64_t &table_id) const;
+
+  int check_input_should_remove(const int64_t left,
+                                const int64_t right,
+                                const Type type,
+                                const ObIArray<uint8_t> &graph,
+                                ObSqlBitSet<> &expr_equal_with_const,
+                                bool &should_remove);
+
   int choose_input_preds(ObIArray<uint8_t> &chosen,
-                         ObIArray<ObRawExpr *> &output_exprs);
+                         ObIArray<ObRawExpr *> &output_exprs,
+                         ObSqlBitSet<> &expr_equal_with_const);
 
   void connect(uint8_t &left_right, uint8_t left_hub, uint8_t hub_right);
 
