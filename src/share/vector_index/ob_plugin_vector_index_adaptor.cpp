@@ -3732,7 +3732,7 @@ void ObPluginVectorIndexAdaptor::output_bitmap(roaring::api::roaring64_bitmap_t 
 int64_t ObPluginVectorIndexAdaptor::get_incr_vsag_mem_used()
 {
   int64_t size = 0;
-  if (incr_data_->is_inited()) {
+  if (OB_NOT_NULL(incr_data_) && incr_data_->is_inited()) {
     size = incr_data_->mem_ctx_->used();
   }
   return size;
@@ -3741,7 +3741,7 @@ int64_t ObPluginVectorIndexAdaptor::get_incr_vsag_mem_used()
 int64_t ObPluginVectorIndexAdaptor::get_incr_vsag_mem_hold()
 {
   int64_t size = 0;
-  if (incr_data_->is_inited()) {
+  if (OB_NOT_NULL(incr_data_) && incr_data_->is_inited()) {
     size = incr_data_->mem_ctx_->hold();
   }
   return size;
@@ -3750,7 +3750,7 @@ int64_t ObPluginVectorIndexAdaptor::get_incr_vsag_mem_hold()
 int64_t ObPluginVectorIndexAdaptor::get_snap_vsag_mem_used()
 {
   int64_t size = 0;
-  if (snap_data_->is_inited()) {
+  if (OB_NOT_NULL(snap_data_) && snap_data_->is_inited()) {
     size = snap_data_->mem_ctx_->used();
   }
   return size;
@@ -3759,7 +3759,7 @@ int64_t ObPluginVectorIndexAdaptor::get_snap_vsag_mem_used()
 int64_t ObPluginVectorIndexAdaptor::get_snap_vsag_mem_hold()
 {
   int64_t size = 0;
-  if (snap_data_->is_inited()) {
+  if (OB_NOT_NULL(snap_data_) && snap_data_->is_inited()) {
     size = snap_data_->mem_ctx_->hold();
   }
   return size;
