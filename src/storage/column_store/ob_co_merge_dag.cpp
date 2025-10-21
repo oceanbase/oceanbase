@@ -31,6 +31,7 @@ ERRSIM_POINT_DEF(EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE);
 ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_RECYCLED);
 ERRSIM_POINT_DEF(EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED);
+ERRSIM_POINT_DEF(EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     start_cg_idx_(0),
@@ -1201,15 +1202,27 @@ int ObCOMergeDagNet::schedule_rest_dag()
     LOG_WARN("dag net is not inited", K(ret), K_(is_inited));
   } else if (COMergeStatus::CTX_PREPARED > get_merge_status()) {
     // do nothing, the prepare dag has not been scheduled.
-  } else if (!is_cancel() && COMergeStatus::PREPARE_FINISHED <= get_merge_status()) {
+  } else if (COMergeStatus::PREPARE_FINISHED <= get_merge_status()) {
+    // if merge_status >= COMergeStatus::PREPARE_FINISHED,
+    // inner_create_and_schedule_dags will not be called anywhere else except here.
+    // So there will be no concurrent processing of finish dag
+    if (is_cancel()) {
+      if (!ATOMIC_LOAD(&finish_added_)) {
+        if (OB_NOT_NULL(finish_dag_)) {
+          (void)MTL(share::ObTenantDagScheduler*)->free_dag(*finish_dag_);
+          finish_dag_ = nullptr;
+        }
+      }
+    } else {
 #ifdef ERRSIM
-    ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
-    if (OB_FAIL(ret)) {
-      LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST SCHEDULE FAILED", K(ret));
-    }
+      ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
+      if (OB_FAIL(ret)) {
+        LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST SCHEDULE FAILED", K(ret));
+      }
 #endif
-    if (FAILEDx(inner_create_and_schedule_dags())) {
-      LOG_WARN("failed to create and schedule rest dags", K(ret));
+      if (FAILEDx(inner_create_and_schedule_dags())) {
+        LOG_WARN("failed to create and schedule rest dags", K(ret));
+      }
     }
   }
   return ret;
@@ -1431,6 +1444,13 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
     }
   } // ctx_lock_ unlock // avoid lock ctx_lock_ before prio_lock_
 
+#ifdef ERRSIM
+  if (OB_UNLIKELY(EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG)) {
+    LOG_INFO("ERRSIM EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG scheduler exe dag failed");
+    ret = EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG;
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "scheduler_exe_dag_failed", "ret_code", ret);
+  }
+#endif
   int64_t unscheduled_dag_idx = 0;
   // schedule all created exe dag
   if (FAILEDx(inner_add_exe_dags_into_scheduler(exe_dag_array, unscheduled_dag_idx))) {
