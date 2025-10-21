@@ -272,7 +272,7 @@ int ObDASTRMergeIter::init_doc_length_est_param()
   int ret = OB_SUCCESS;
   const ObTextAvgDocLenEstSpec &doc_len_est_spec = ir_ctdef_->avg_doc_len_est_spec_;
   doc_length_est_stat_cols_.set_allocator(&myself_allocator_);
-  if (!ir_ctdef_->need_avg_doc_len_est()) {
+  if (!ir_ctdef_->need_avg_doc_len_est() || !doc_len_est_spec.can_est_by_sum_skip_index_) {
     // skip
   } else if (OB_UNLIKELY(!doc_len_est_spec.is_valid())) {
     ret = OB_ERR_UNEXPECTED;

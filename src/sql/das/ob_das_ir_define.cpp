@@ -55,9 +55,10 @@ ObTextAvgDocLenEstSpec::ObTextAvgDocLenEstSpec(common::ObIAllocator &alloc)
 
 bool ObTextAvgDocLenEstSpec::is_valid() const
 {
-  return 1 == col_types_.count()
+  const bool col_valid = 1 == col_types_.count()
       && 1 == col_store_idxes_.count()
       && 1 == scan_col_proj_.count();
+  return col_valid || !can_est_by_sum_skip_index_;
 }
 
 OB_SERIALIZE_MEMBER(ObTextAvgDocLenEstSpec,
