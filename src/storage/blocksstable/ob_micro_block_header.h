@@ -42,7 +42,7 @@ public:
   };
   uint32_t row_count_;
   uint8_t row_store_type_;
-  union {
+  union { //FARM COMPAT WHITELIST
     struct {
       uint8_t row_index_byte_    :3;
       uint8_t extend_value_bit_  :3;
@@ -52,7 +52,8 @@ public:
       uint8_t single_version_rows_: 1;
       uint8_t contain_uncommitted_rows_: 1;
       uint8_t is_last_row_last_flag_ : 1;
-      uint8_t not_used_ : 5;
+      uint8_t is_first_row_first_flag_ : 1;
+      uint8_t not_used_ : 4;
     }; // For flat format
     uint8_t opt_;
   };
@@ -110,13 +111,14 @@ public:
       K_(column_count), K_(rowkey_column_count), K_(has_column_checksum), K_(row_count), K_(row_store_type),
       K_(opt), K_(var_column_count), K_(compressor_type), K_(row_offset), K_(original_length), K_(max_merged_trans_version), K_(min_merged_trans_version),
       K_(data_length), K_(data_zlength), K_(data_checksum), KP_(column_checksums), K_(single_version_rows),
-      K_(contain_uncommitted_rows),  K_(is_last_row_last_flag), K(is_valid()));
+      K_(contain_uncommitted_rows),  K_(is_last_row_last_flag), K_(is_first_row_first_flag), K(is_valid()));
 public:
   bool is_compressed_data() const { return data_length_ != data_zlength_; }
   bool contain_uncommitted_rows() const { return contain_uncommitted_rows_; }
   OB_INLINE bool has_string_out_row() const { return has_string_out_row_; }
   OB_INLINE bool has_lob_out_row() const { return !all_lob_in_row_; }
   bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
+  bool is_first_row_first_flag() const { return is_first_row_first_flag_; }
   bool is_contain_hash_index() const;
   bool is_trans_version_column_idx(const int64_t col_idx) const
   { return  rowkey_column_count_ > 0 && col_idx == rowkey_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(); }

@@ -136,8 +136,11 @@ TEST_F(TestObDataStoreDesc, test_col_desc)
   ObTableSchema table_schema;
   TestSchemaPrepare::prepare_schema(table_schema, rowkey_cnt, col_cnt);
 
+  ObStaticDataStoreDesc static_desc;
+  static_desc.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  static_desc.major_working_cluster_version_ = DATA_VERSION_4_2_0_0;
   ASSERT_FALSE(col_desc.is_valid());
-  ASSERT_EQ(OB_SUCCESS, col_desc.init(true/*is_major*/, table_schema, 0/*table_cg_idx*/, DATA_VERSION_4_3_2_0));
+  ASSERT_EQ(OB_SUCCESS, col_desc.init(true/*is_major*/, table_schema, 0/*table_cg_idx*/, static_desc));
   ASSERT_TRUE(col_desc.is_valid());
 
   ASSERT_EQ(true, col_desc.is_row_store_);

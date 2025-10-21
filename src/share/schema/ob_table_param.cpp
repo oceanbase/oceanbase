@@ -995,6 +995,7 @@ int ObTableParam::deserialize_columns(const char *buf, const int64_t data_len,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SET_SKIP_INDEX_ROW_STORE);
 int ObTableParam::construct_columns_and_projector(
     const ObTableSchema &table_schema,
     const common::ObIArray<uint64_t> & output_column_ids,
@@ -1022,6 +1023,7 @@ int ObTableParam::construct_columns_and_projector(
   bool need_truncate_filter = false;
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
+  bool is_delete_insert = table_schema.is_delete_insert_merge_engine();
 
   if (OB_FAIL(table_schema.get_is_column_store(is_cs))) {
     LOG_WARN("fail to get is table column store", K(ret), K(table_schema));
@@ -1030,7 +1032,7 @@ int ObTableParam::construct_columns_and_projector(
     is_column_replica_table_ = true;
     has_all_column_group = false;
   }
-  
+
   if (OB_FAIL(ret)) {
   } else if (!is_column_replica_table_ && OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
@@ -1070,6 +1072,14 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
         tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+        if (!tmp_col_extend.skip_index_attr_.has_skip_index() && is_delete_insert &&
+            (column->get_meta_type().is_temporal_type() || column->get_meta_type().is_integer_type())) {
+          if (is_cs) {
+            tmp_col_extend.skip_index_attr_.set_min_max();
+          } else if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_SET_SKIP_INDEX_ROW_STORE)) {
+            tmp_col_extend.skip_index_attr_.set_min_max();
+          }
+        }
         if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
           tmp_col_desc.col_type_.set_has_lob_header();
         }
@@ -1171,6 +1181,14 @@ int ObTableParam::construct_columns_and_projector(
           }
           col_index = idx;
           tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+          if (!tmp_col_extend.skip_index_attr_.has_skip_index() && is_delete_insert &&
+              (column->get_meta_type().is_temporal_type() || column->get_meta_type().is_integer_type())) {
+            if (is_cs) {
+              tmp_col_extend.skip_index_attr_.set_min_max();
+            } else if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_SET_SKIP_INDEX_ROW_STORE)) {
+              tmp_col_extend.skip_index_attr_.set_min_max();
+            }
+          }
         }
       }
 

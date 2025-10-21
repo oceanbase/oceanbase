@@ -88,6 +88,7 @@ default_enable_extended_rowid
 default_load_mode
 default_progressive_merge_num
 default_row_format
+default_skip_index_level
 default_storage_cache_policy
 default_table_merge_engine
 default_table_organization

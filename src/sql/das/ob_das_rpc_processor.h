@@ -59,7 +59,7 @@ protected:
   share::schema::ObSchemaGetterGuard schema_guard_;
   ObDASRemoteInfo das_remote_info_;
   //tsc monitor info
-  int64_t monitor_val_[4];
+  int64_t monitor_val_[5];
   ObTSCMonitorInfo tsc_monitor_info_;
 };
 

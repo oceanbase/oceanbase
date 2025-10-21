@@ -165,16 +165,16 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
   } else if (null_count.is_null() && min_datum.is_null() && max_datum.is_null()) {
     // min max null_count all null, expect uncertain cause by progressive merge
     fal_desc.set_uncertain();
-  } else if (OB_UNLIKELY(null_count.is_null() || null_count.get_int() < 0 || null_count.get_int() > row_count ||
+  } else if (OB_UNLIKELY((!null_count.is_null() && (null_count.get_int() < 0 || null_count.get_int() > row_count)) ||
              min_datum.is_null() != max_datum.is_null())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not correct min_max agg info", K(ret), K(col_idx), K(row_count),
              K(null_count), K(min_datum), K(max_datum));
   } else {
     // following three flags are mutually exclusive, only one can be true
-    const bool is_all_null = null_count.get_int() == row_count;
-    const bool is_all_not_null = null_count.get_int() == 0;
-    const bool has_null = null_count.get_int() > 0 && null_count.get_int() < row_count;
+    const bool is_all_null = null_count.is_null() ? false : (null_count.get_int() == row_count);
+    const bool is_all_not_null = null_count.is_null() ? false : (null_count.get_int() == 0);
+    const bool has_null = null_count.is_null() ? true : (null_count.get_int() > 0 && null_count.get_int() < row_count);
     const bool is_min_max_null = min_datum.is_null() && max_datum.is_null(); //for unsupported data, eg: lob out row, json ...
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     switch (op_type) {
@@ -651,7 +651,7 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
   } else if (is_min_prefix || is_max_prefix) {
     // has string prefix for min / max, optimize later
     fal_desc.set_uncertain();
-  } else if (OB_UNLIKELY(null_count.is_null() || null_count.get_int() < 0 || null_count.get_int() > row_count ||
+  } else if (OB_UNLIKELY((!null_count.is_null() && (null_count.get_int() < 0 || null_count.get_int() > row_count)) ||
              min_datum.is_null() != max_datum.is_null())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Not correct min_max agg info", K(ret), K(col_idx), K(row_count),
@@ -663,8 +663,8 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
                                                filter.get_op().get_eval_ctx().max_batch_size_))) {
     LOG_WARN("Failed to init exprs vector header", K(ret));
   } else {
-    const bool is_all_null = null_count.get_int() == row_count;
-    const bool has_null = null_count.get_int() > 0 && null_count.get_int() < row_count;
+    const bool is_all_null = null_count.is_null() ? false : (null_count.get_int() == row_count);
+    const bool has_null = null_count.is_null() ? true : (null_count.get_int() > 0 && null_count.get_int() < row_count);
     if (is_all_null) {
       fal_desc.set_always_false();
     } else if (OB_FAIL(check_skip_by_monotonicity(filter,

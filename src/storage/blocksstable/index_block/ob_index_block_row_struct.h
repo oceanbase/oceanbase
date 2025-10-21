@@ -108,6 +108,7 @@ public:
   bool has_string_out_row_;
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
+  bool is_first_row_first_flag_;
   bool is_serialized_agg_row_;
   bool is_clustered_index_;
   bool has_macro_block_bloom_filter_;
@@ -142,6 +143,7 @@ public:
                K_(has_string_out_row),
                K_(has_lob_out_row),
                K_(is_last_row_last_flag),
+               K_(is_first_row_first_flag),
                K_(is_serialized_agg_row),
                K_(is_clustered_index),
                K_(has_macro_block_bloom_filter));
@@ -185,14 +187,13 @@ struct ObIndexBlockRowHeader
   void reset();
   OB_INLINE bool is_valid() const
   {
-    bool aggregation_valid = (is_pre_aggregated() && is_major_node()) || !is_pre_aggregated();
     bool version_valid = INDEX_BLOCK_HEADER_V1 == version_ || INDEX_BLOCK_HEADER_V2 == version_;
     bool macro_id_valid
         = (get_macro_id() == DEFAULT_IDX_ROW_MACRO_ID) || !is_data_block() || !is_data_index()
           || (get_macro_id() != DEFAULT_IDX_ROW_MACRO_ID && is_data_block() && is_data_index() /* clustered index */);
     bool logic_id_valid = !(has_logic_micro_id() && has_shared_data_macro_id());
     bool bloom_filter_valid = (!has_macro_block_bloom_filter() || is_macro_node());
-    return aggregation_valid && version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid;
+    return version_valid && macro_id_valid && logic_id_valid && bloom_filter_valid;
   }
 
   OB_INLINE uint64_t get_version() const { return version_; }
@@ -309,11 +310,12 @@ struct ObIndexBlockRowHeader
   OB_INLINE void unset_has_logic_micro_id() { has_logic_micro_id_ = 0; }
   OB_INLINE void set_has_shared_data_macro_id() { has_shared_data_macro_id_ = 1; }
   OB_INLINE void unset_has_shared_data_macro_id() { has_shared_data_macro_id_ = 0; }
+  OB_INLINE bool is_mvcc_all_in() const
+  { return is_first_row_first_flag_ && is_last_row_last_flag_; }
 
   int fill_micro_des_meta(const bool need_deep_copy_key, ObMicroBlockDesMeta &des_meta) const;
 
-  union
-  {
+  union { //FARM COMPAT WHITELIST
     uint64_t pack_;
     struct
     {
@@ -333,7 +335,9 @@ struct ObIndexBlockRowHeader
       uint64_t has_logic_micro_id_ : 1;           // Whether this row has logic micro id
       uint64_t has_shared_data_macro_id_ : 1;     // Whether this row has shared storage macro data id
       uint64_t has_macro_block_bloom_filter_ : 1; // Whether this macro block has bloom filter (only in macro level)
-      uint64_t reserved_ : 27;
+      uint64_t is_last_row_last_flag_: 1;         // Whether the last row is with last flag
+      uint64_t is_first_row_first_flag_: 1;       // Whether the first row is with first flag
+      uint64_t reserved_ : 25;
     };
   };
   int64_t macro_id_first_id_; // Physical macro block id, set to default in leaf node
@@ -366,6 +370,8 @@ struct ObIndexBlockRowHeader
                K_(has_logic_micro_id),
                K_(has_shared_data_macro_id),
                K_(has_macro_block_bloom_filter),
+               K_(is_last_row_last_flag),
+               K_(is_first_row_first_flag),
                K(get_macro_id()),
                K_(block_offset),
                K_(block_size),
@@ -702,6 +708,12 @@ public:
   OB_INLINE sql::ObBoolMaskType get_filter_constant_type() const
   {
     return static_cast<sql::ObBoolMaskType>(filter_constant_type_);
+  }
+  OB_INLINE bool can_skip_fetch() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return is_filter_always_false() &&
+        (row_header_->is_major_node() || row_header_->is_mvcc_all_in());
   }
   OB_INLINE const ObCSRange &get_row_range() const
   {

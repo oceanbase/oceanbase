@@ -336,7 +336,7 @@ public:
   TO_STRING_KV(K_(row_count), K_(row_count_delta), K_(max_merged_trans_version),
       K_(macro_block_count), K_(micro_block_count), K_(can_mark_deletion),
       K_(contain_uncommitted_row), K_(has_string_out_row), K_(has_lob_out_row),
-      K_(is_last_row_last_flag));
+      K_(is_last_row_last_flag), K_(is_first_row_first_flag));
 public:
   int64_t row_count_;
   int64_t row_count_delta_;
@@ -348,6 +348,7 @@ public:
   bool has_string_out_row_;
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
+  bool is_first_row_first_flag_;
 };
 
 
@@ -382,6 +383,7 @@ public:
   inline int64_t get_row_count() const { return aggregate_info_.row_count_; }
   inline bool contain_uncommitted_row() const { return aggregate_info_.contain_uncommitted_row_; }
   inline bool is_last_row_last_flag() const { return aggregate_info_.is_last_row_last_flag_; }
+  inline bool is_first_row_first_flag() const { return aggregate_info_.is_first_row_first_flag_; }
   inline int64_t get_max_merged_trans_version() const { return aggregate_info_.max_merged_trans_version_; }
   TO_STRING_KV(K_(skip_index_aggregator), K_(aggregate_info),
       K_(need_data_aggregate), K_(has_reused_null_agg_in_this_micro_block), K_(is_inited));

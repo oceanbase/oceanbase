@@ -157,8 +157,8 @@ int ObBaseIndexBlockDumper::init(const ObDataStoreDesc &index_store_desc,
     }
   } else if (OB_FAIL(ObMacroBlockWriter::build_micro_writer(&container_store_desc, task_allocator, meta_micro_writer_))) {
     STORAGE_LOG(WARN, "fail to build micro writer", K(ret));
-  } else if (OB_FAIL(micro_block_adaptive_splitter_.init(container_store_desc.get_macro_block_size(),
-      ObBaseIndexBlockBuilder::MIN_INDEX_MICRO_BLOCK_ROW_CNT /*min_micro_row_count*/, true/*is_use_adaptive*/))) {
+  } else if (OB_FAIL(micro_block_adaptive_splitter_.init(container_store_desc,
+      ObBaseIndexBlockBuilder::MIN_INDEX_MICRO_BLOCK_ROW_CNT /*min_micro_row_count*/))) {
     STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret),
             "macro_store_size", container_store_desc.get_macro_store_size());
   }
@@ -223,7 +223,7 @@ int ObBaseIndexBlockDumper::append_row(const ObDatumRow &row)
   } else if (need_check_order_ && OB_FAIL(check_order(row))) {
     STORAGE_LOG(WARN, "fail to check macro meta order", K(ret), K(row));
   }
-  if(OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) {
   } else if (!enable_dump_disk_) {
     ObDataMacroBlockMeta *dst_macro_meta = nullptr;
     ObDataMacroBlockMeta tmp_macro_meta;
@@ -238,7 +238,7 @@ int ObBaseIndexBlockDumper::append_row(const ObDatumRow &row)
   } else if (0 < meta_micro_writer_->get_row_count() &&
         OB_FAIL(micro_block_adaptive_splitter_.check_need_split(meta_micro_writer_->get_block_size(),
         meta_micro_writer_->get_row_count(), container_store_desc_->get_micro_block_size(),
-        cur_macro_block_size, false /*is_keep_freespace*/, is_split))) {
+        cur_macro_block_size, false /*is_keep_freespace*/, false /*is_last_row_last_flag*/, is_split))) {
       STORAGE_LOG(WARN, "Failed to check need split", K(ret),
           "micro_block_size", container_store_desc_->get_micro_block_size(),
           "current_macro_size", cur_macro_block_size, KPC(meta_micro_writer_));

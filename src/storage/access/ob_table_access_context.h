@@ -88,6 +88,7 @@ struct ObTableScanStoreStat
     logical_read_cnt_ = 0;
     physical_read_cnt_ = 0;
     in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
+    skip_index_skip_block_cnt_ = 0;
   }
 public:
   OB_INLINE bool enable_get_row_cache() const
@@ -113,13 +114,18 @@ public:
     return (bf_access_cnt_ < common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
            || bf_filter_cnt_ > (bf_access_cnt_ / 8));
   }
+  OB_INLINE void collect_stat_info(const ObMicroIndexInfo &index_info)
+  {
+    skip_index_skip_block_cnt_ += index_info.get_micro_block_count();
+  }
   TO_STRING_KV(K_(row_cache_hit_cnt), K_(row_cache_miss_cnt), K_(row_cache_put_cnt),
                K_(bf_filter_cnt), K_(bf_access_cnt),
                K_(block_cache_hit_cnt), K_(block_cache_miss_cnt),
                K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),
                K_(micro_access_cnt), K_(pushdown_micro_access_cnt),
                K_(empty_read_cnt), K_(rowkey_prefix),
-               K_(logical_read_cnt), K_(physical_read_cnt), K_(in_row_cache_threshold));
+               K_(logical_read_cnt), K_(physical_read_cnt), K_(in_row_cache_threshold),
+               K_(skip_index_skip_block_cnt));
   int64_t row_cache_hit_cnt_;
   int64_t row_cache_miss_cnt_;
   int64_t row_cache_put_cnt_;
@@ -137,6 +143,7 @@ public:
   int64_t logical_read_cnt_;
   int64_t physical_read_cnt_;
   int64_t in_row_cache_threshold_;
+  int64_t skip_index_skip_block_cnt_;
 };
 
 struct ObTableAccessContext

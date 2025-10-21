@@ -771,9 +771,9 @@ public:
     UNUSED(column_descs);
     return common::OB_NOT_SUPPORTED;
   }
-  virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
+  virtual int get_skip_index_col_attr(const bool is_major, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
   {
-    UNUSED(skip_idx_attrs);
+    UNUSEDx(is_major, skip_idx_attrs);
     return common::OB_NOT_SUPPORTED;
   }
   virtual int get_mv_mode_struct(ObMvMode &mv_mode) const
@@ -786,6 +786,21 @@ public:
     UNUSED(type);
     return common::OB_NOT_SUPPORTED;
   }
+
+protected:
+  int set_skip_index_adaptively(
+      const ObIArray<ObObjMeta> &column_types,
+      ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_attrs) const;
+
+private:
+  int try_to_set_skip_index_col_attr(
+      const ObIArray<ObObjMeta> &column_types,
+      const ObIArray<int64_t>  &column_index,
+      ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_attrs,
+      int64_t &aggregate_row_size,
+      bool &can_add_skip_index) const;
+
+public:
   DECLARE_PURE_VIRTUAL_TO_STRING;
   const static int64_t INVAID_RET = -1;
   static common::ObString EMPTY_STRING;
@@ -1828,7 +1843,7 @@ public:
   // whether table should check merge progress
   int is_need_check_merge_progress(bool &need_check) const;
   int get_multi_version_column_descs(common::ObIArray<ObColDesc> &column_descs) const;
-  virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const override;
+  virtual int get_skip_index_col_attr(const bool is_major, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const override;
   template <typename Allocator>
   static int build_index_table_name(Allocator &allocator,
                                     const uint64_t data_table_id,
