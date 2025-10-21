@@ -417,7 +417,7 @@ int ObDDLTabletScheduler::get_unfinished_tablets(const int64_t execution_id, sha
     LOG_WARN("got argument is error", K(ret), K(ls_id), K(leader_addr));
   } else if (OB_FAIL(ObDDLUtil::get_ls_host_left_disk_space(tenant_id_, ls_id, leader_addr, left_space_size))) {
     LOG_WARN("fail to get ls host left disk space", K(ret), K(tenant_id_), K(ls_id), K(leader_addr), K(left_space_size));
-  } else if (OB_FAIL(calculate_candidate_tablets(left_space_size, tablet_queue, tablets))) {
+  } else if (OB_FAIL(calculate_candidate_tablets(left_space_size, leader_addr, tablet_queue, tablets))) {
     LOG_WARN("fail to use strategy to get tablets", K(ret), K(left_space_size), K(tablet_queue), K(tablets));
   } else {
     TCWLockGuard guard(lock_);
@@ -476,7 +476,7 @@ int ObDDLTabletScheduler::get_to_be_scheduled_tablets(share::ObLSID &ls_id, comm
   return ret;
 }
 
-int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_size, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets)
+int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_size, common::ObAddr &leader_addr, const ObIArray<ObTabletID> &in_tablets, ObIArray<ObTabletID> &out_tablets)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -543,7 +543,7 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
           }
           if (OB_SUCC(ret)) {
             bool satisfied_built_vec_index_if_need = true;
-            if (index_schema->is_vec_hnsw_index() && !ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, tenant_id_, tablet_data_row_cnt + pre_data_row_cnt)) {
+            if (index_schema->is_vec_hnsw_index() && !ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, leader_addr, tenant_id_, tablet_data_row_cnt + pre_data_row_cnt)) {
               satisfied_built_vec_index_if_need = false;
             } else if (index_schema->is_vec_ivf_index() && !ObVectorIndexUtil::check_ivf_vector_index_memory(schema_guard, tenant_id_, *index_schema, tablet_data_row_cnt + pre_data_row_cnt)) {
               satisfied_built_vec_index_if_need = false;

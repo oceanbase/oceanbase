@@ -765,8 +765,10 @@ public:
   static bool check_vector_index_memory(
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &index_schema,
+      const common::ObAddr &addr,
       const uint64_t tenant_id,
       const int64_t row_count);
+  static int get_tenant_vector_memory_used_by_inner_sql(const uint64_t tenant_id, const common::ObAddr &addr, int64_t &memory_used);
   static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const ObTableSchema &index_schema, const int64_t row_count);
   static int estimate_vector_memory_used(
       ObSchemaGetterGuard &schema_guard,

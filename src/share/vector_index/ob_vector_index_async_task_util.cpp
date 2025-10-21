@@ -1334,6 +1334,7 @@ bool ObVecIndexAsyncTask::check_task_satisfied_memory_limited(ObPluginVectorInde
   int ret = OB_SUCCESS;
   bool check_result = true;
   const int64_t snapshot_table_id = adaptor.get_snapshot_table_id();
+  common::ObAddr addr;
 
   if (tenant_id_ != OB_INVALID_TENANT_ID && snapshot_table_id != OB_INVALID_ID) {
     ObSchemaGetterGuard schema_guard;
@@ -1344,7 +1345,20 @@ bool ObVecIndexAsyncTask::check_task_satisfied_memory_limited(ObPluginVectorInde
     int64_t estimate_row_count = 0;
     // inc
     // tips: When there are many delete operations in inc data, the estimated final result may deviate significantly from the actual result.
-    if (OB_FAIL(adaptor.get_inc_index_row_cnt(current_incr_count))) {
+
+    share::ObLocationService *location_service = nullptr;
+    int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+    const int64_t retry_interval_us = 200 * 1000; // 200ms
+    if (OB_ISNULL(location_service = GCTX.location_service_)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("location_cache is null", K(ret), KP(location_service));
+    } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(GCONF.cluster_id,
+      tenant_id_, ls_id_, addr, rpc_timeout, retry_interval_us))) {
+      LOG_WARN("fail to get ls locaiton leader", K(ret), K(tenant_id_), K(ls_id_));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(adaptor.get_inc_index_row_cnt(current_incr_count))) {
       LOG_WARN("fail to get incr index number", K(ret));
     } else if (OB_FAIL(adaptor.get_snap_index_row_cnt(current_snapshot_count))) {
       LOG_WARN("fail to get snap index number", K(ret));
@@ -1356,7 +1370,7 @@ bool ObVecIndexAsyncTask::check_task_satisfied_memory_limited(ObPluginVectorInde
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("error unexpected, index table schema is null", K(ret), K(snapshot_table_id));
-    } else if (!ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, tenant_id_, estimate_row_count)) {
+    } else if (!ObVectorIndexUtil::check_vector_index_memory(schema_guard, *index_schema, addr, tenant_id_, estimate_row_count)) {
       check_result = false;
       LOG_INFO("current vsag memory maybe is not satisfy to execute async task", K(ret), K(snapshot_table_id));
     }
