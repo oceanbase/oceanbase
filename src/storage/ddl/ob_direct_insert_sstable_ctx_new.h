@@ -387,6 +387,7 @@ public:
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
   bool is_schema_item_ready() { return is_schema_item_ready_; }
+  int is_ivf_vector_index(bool &is_ivf) const;
   bool get_micro_index_clustered() { return micro_index_clustered_; }
   int64_t get_tablet_transfer_seq() { return tablet_transfer_seq_; }
   share::SCN get_reorganization_scn() const { return reorganization_scn_; }

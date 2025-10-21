@@ -630,6 +630,33 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     }
   }
 
+
+  // clean ivf build helper(if it is an IVF vector index task)
+  if (OB_SUCC(ret) && handle.is_valid() && handle.get_obj() != nullptr) {
+    ObTabletDirectLoadMgr *mgr = handle.get_obj();
+    bool is_ivf = false;
+    if (mgr->is_schema_item_ready() && OB_SUCC(mgr->is_ivf_vector_index(is_ivf)) && is_ivf) {
+      LOG_INFO("Detected IVF vector index task from schema_item, cleaning up IVF helper",
+               K(tablet_id), K(context_id));
+      ObIvfHelperKey key(tablet_id, context_id);
+      if (OB_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key))) {
+        if (ret != OB_HASH_NOT_EXIST) {
+          LOG_WARN("failed to cleanup ivf build helper, potential memory leak",
+                    K(ret), K(ls_id), K(tablet_id), K(context_id));
+        } else {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("ivf build helper not exist, already cleaned", K(ls_id), K(tablet_id), K(context_id));
+        }
+      } else {
+        LOG_WARN("Successfully cleaned up ivf build helper after ddl task finish",
+                 K(ls_id), K(tablet_id), K(context_id));
+      }
+    } else {
+      LOG_DEBUG("not an IVF vector index task, skip cleanup ivf build helper", K(tablet_id), K(context_id), K(is_ivf));
+    }
+  }
+
+
   ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
   if (OB_TMP_FAIL(tablet_exec_context_map_.erase_refactored(exec_id))) {
     LOG_WARN("erase refactored failed", K(ret), K(tmp_ret), K(exec_id));
@@ -1192,6 +1219,25 @@ bool ObTabletDirectLoadMgr::is_valid()
 {
   return is_inited_ == true && ls_id_.is_valid() && tablet_id_.is_valid()
       && is_valid_direct_load(direct_load_type_);
+}
+
+int ObTabletDirectLoadMgr::is_ivf_vector_index(bool &is_ivf) const
+{
+  int ret = OB_SUCCESS;
+  is_ivf = false;
+  const ObString &param_str = schema_item_.vec_idx_param_;
+  if (schema_item_.vec_dim_ > 0 || !param_str.empty()) {
+    ObVectorIndexParam param;
+    if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+          param_str, ObVectorIndexType::VIT_IVF_INDEX, param, false))) {
+      LOG_WARN("failed to parse vector index params", K(ret), K(param_str));
+    } else {
+      is_ivf = (param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
+                param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
+                param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ);
+    }
+  }
+  return ret;
 }
 
 int ObTabletDirectLoadMgr::update(
