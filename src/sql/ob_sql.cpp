@@ -591,7 +591,8 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
           OZ (result_set.add_field_column(column_field),
               K(i), K(question_marks_count), K(column_field));
-        } else if (OB_NOT_NULL(call_stmt) && call_stmt->get_call_proc_info()->is_out_param(i)) {
+        } else if (OB_NOT_NULL(call_stmt)
+                   && call_stmt->get_call_proc_info()->is_out_param_by_question_mark_idx(i)) {
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
         }
         OZ (result_set.add_param_column(param_field),
@@ -1204,7 +1205,6 @@ int ObSql::do_real_prepare(const ObString &sql,
   int ret = OB_SUCCESS;
   bool enable_udr = false;
   ParseResult parse_result;
-  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   ObStmt *basic_stmt = NULL;
   stmt::StmtType stmt_type = stmt::T_NONE;
   int64_t param_cnt = 0;
@@ -1213,13 +1213,9 @@ int ObSql::do_real_prepare(const ObString &sql,
   ObIAllocator &allocator = result.get_mem_pool();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
-  ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
-  ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
-                         (context.is_dynamic_sql_  || !is_inner_sql) ? DYNAMIC_SQL_MODE :
-                         session.is_for_trigger_package() ? TRIGGER_MODE : STD_MODE;
 
   // normal ps sql also a dynamic sql, we adjust is_dynamic_sql_ for normal ps sql parser.
-  context.is_dynamic_sql_ = !context.is_dynamic_sql_ ? !is_inner_sql : context.is_dynamic_sql_;
+  context.is_dynamic_sql_ = context.is_dynamic_sql_ || !is_inner_sql;
 
   bool is_from_pl = (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol());
   ObPsPrepareStatusGuard ps_status_guard(session);
@@ -1227,17 +1223,31 @@ int ObSql::do_real_prepare(const ObString &sql,
                         session.get_effective_tenant_id());
   ParamStore param_store( (ObWrapperAllocator(&allocator)) );
   pc_ctx.set_is_inner_sql(is_inner_sql);
-
-  CHECK_COMPATIBILITY_MODE(context.session_info_);
   enable_udr = context.get_enable_user_defined_rewrite();
+
   if (OB_ISNULL(context.session_info_) || OB_ISNULL(context.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
-  } else if (OB_FAIL(parser.parse(sql,
-                                  parse_result,
-                                  parse_mode))) {
-    LOG_WARN("generate syntax tree failed",
-             "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql, K(ret));
+  } else if (OB_ISNULL(context.parse_result_)) {
+    ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
+    ParseMode parse_mode = context.is_dbms_sql_               ? DBMS_SQL_MODE
+                           : context.is_dynamic_sql_          ? DYNAMIC_SQL_MODE
+                           : session.is_for_trigger_package() ? TRIGGER_MODE
+                                                              : STD_MODE;
+    CHECK_COMPATIBILITY_MODE(context.session_info_);
+    MEMSET(&parse_result, 0, SIZEOF(ParseResult));
+    if (FAILEDx(parser.parse(sql, parse_result, parse_mode))) {
+      LOG_WARN("generate syntax tree failed",
+               "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);
+    }
+  } else {
+    CK (OB_LIKELY(context.is_pre_execute_));
+    CK (OB_LIKELY(context.is_prepare_protocol_));
+    CK (OB_LIKELY(context.is_prepare_stage_));
+    MEMCPY(&parse_result, context.parse_result_, SIZEOF(ParseResult));  // shallow copy
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (is_mysql_mode()
              && ObSQLUtils::is_mysql_ps_not_support_stmt(parse_result)) {
     ret = OB_ER_UNSUPPORTED_PS;
@@ -1247,11 +1257,21 @@ int ObSql::do_real_prepare(const ObString &sql,
     LOG_WARN("There are too many parameters in the prepared statement", K(ret));
     LOG_USER_ERROR(OB_ERR_PS_TOO_MANY_PARAM);
   } else {
-    ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0 ? true : false);
+    ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0
+                                             && !context.is_prepare_with_params_);
   }
   context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
   OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
+
+  if (OB_SUCC(ret)
+      && context.is_prepare_protocol_
+      && context.is_prepare_stage_
+      && context.is_pre_execute_) {
+    CK (OB_NOT_NULL(context.prepare_params_));
+    OZ (construct_param_store(*context.prepare_params_,
+                              ectx.get_physical_plan_ctx()->get_param_store_for_update()));
+  }
 
   if (OB_FAIL(ret)) {
   } else if (result.is_simple_ps_protocol() // simple_ps_protocol only do parse
@@ -3123,6 +3143,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.is_prepare_protocol_ = context.is_prepare_protocol_;
     resolver_ctx.is_prepare_stage_ = context.is_prepare_stage_;
     resolver_ctx.is_pre_execute_ = context.is_pre_execute_;
+    resolver_ctx.is_prepare_with_params_ = context.is_prepare_with_params_;
     resolver_ctx.is_dynamic_sql_ = context.is_dynamic_sql_;
     resolver_ctx.is_dbms_sql_ = context.is_dbms_sql_;
     resolver_ctx.statement_id_ = context.statement_id_;
@@ -6336,6 +6357,33 @@ int ObSql::check_need_switch_thread(ObSqlCtx &ctx, const ObStmt *stmt, bool &nee
       LOG_WARN("failed to check stmt", K(ret), KPC(stmt));
     }
   }
+  return ret;
+}
+
+int ObSql::handle_prexec_parse_sql(ObSQLSessionInfo &session_info,
+                                   ObSqlCtx &context,
+                                   const ObString &sql,
+                                   ParseResult &parse_result,
+                                   stmt::StmtType &stmt_type,
+                                   int64_t &input_param_cnt)
+{
+  int ret = OB_SUCCESS;
+  // use the allocator consistent with ObSql::do_real_prepare
+  ObIAllocator &allocator = THIS_WORKER.get_allocator();
+  ObParser parser(allocator, session_info.get_sql_mode(), session_info.get_charsets4parser());
+  int64_t ret_param_cnt = 0;
+
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
+  CHECK_COMPATIBILITY_MODE(context.session_info_);
+  OZ (parser.parse(sql, parse_result, DYNAMIC_SQL_MODE), sql);
+  OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type));
+  CK (OB_NOT_NULL(parse_result.result_tree_));
+  OV (parse_result.question_mark_ctx_.count_ <= common::OB_MAX_PS_PARAM_COUNT,
+      OB_ERR_PS_TOO_MANY_PARAM, "too many parameters in sql", sql);
+  if (ObStmt::is_dml_write_stmt(stmt_type)) {
+    OZ (ObResolverUtils::calc_returning_param_count(*parse_result.result_tree_, ret_param_cnt));
+  }
+  OX (input_param_cnt = parse_result.question_mark_ctx_.count_ - ret_param_cnt);
   return ret;
 }
 

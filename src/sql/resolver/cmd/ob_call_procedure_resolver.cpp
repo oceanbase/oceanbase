@@ -484,8 +484,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                       &params_.package_guard_->dblink_guard_));
         }
         if (OB_SUCC(ret)) {
+          const ObRawExpr* param = params.at(i);
+          CK (OB_NOT_NULL(param));
+          if (param->get_expr_type() == T_QUESTIONMARK) {
+            OZ (call_proc_info->add_question_mark_idx(i));
+          }
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
-            const ObRawExpr* param = params.at(i);
             if (lib::is_mysql_mode()
                 && param->get_expr_type() != T_OP_GET_USER_VAR
                 && param->get_expr_type() != T_OP_GET_SYS_VAR

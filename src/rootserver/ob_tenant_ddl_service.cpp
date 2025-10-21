@@ -2291,6 +2291,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_spf_batch_rescan("true");
   ObString config_name_batch_rescan_flag("_enable_das_batch_rescan_flag");
   ObString config_value_batch_rescan_flag("15");
+  ObString config_name_prexec_prepare_with_params("_prexec_prepare_with_params");
+  ObString config_value_prexec_prepare_with_params("true");
 
   ObString config_name_enable_ps_paramterize("enable_ps_parameterize");
   ObString config_value_enable_ps_paramterize("false");
@@ -2323,6 +2325,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_spf_batch_rescan), K(config_value_spf_batch_rescan));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_batch_rescan_flag, config_value_batch_rescan_flag))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_batch_rescan_flag), K(config_value_batch_rescan_flag));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_prexec_prepare_with_params, config_value_prexec_prepare_with_params))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_prexec_prepare_with_params), K(config_value_prexec_prepare_with_params));
       } 
     }
   }

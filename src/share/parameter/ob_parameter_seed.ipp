@@ -2819,3 +2819,7 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 DEF_BOOL(_disable_record_outrow_lob_in_clog, OB_TENANT_PARAMETER, "False",
          "Whether to force outrow lob data to be written to CLOG for OBCDC synchronization when lob columns are not updated",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
+         "Control the prexec protocol prepare with or without parameters during the prepare phase.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

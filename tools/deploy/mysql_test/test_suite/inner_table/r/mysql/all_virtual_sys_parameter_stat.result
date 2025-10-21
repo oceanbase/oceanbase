@@ -558,6 +558,7 @@ _pipelined_table_function_memory_limit
 _preserve_order_for_groupby
 _preserve_order_for_pagination
 _preset_runtime_bloom_filter_size
+_prexec_prepare_with_params
 _print_sample_ppm
 _private_buffer_size
 _publish_schema_mode
