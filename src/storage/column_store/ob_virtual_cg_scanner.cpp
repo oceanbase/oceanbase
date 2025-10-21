@@ -505,6 +505,9 @@ int ObDefaultCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDefaultCGScanner not init", K(ret));
+  } else if (OB_UNLIKELY(iter_param_->enable_pd_aggregate() && nullptr == agg_group_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null agg group", K(ret), KPC(this), K(lbt()));
   } else if (OB_UNLIKELY(query_range_valid_row_count_ == 0)) {
     ret = OB_ITER_END;
   } else if (agg_group_ != nullptr) {
