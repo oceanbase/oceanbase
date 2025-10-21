@@ -985,6 +985,20 @@ int ObStaticEngineExprCG::cg_frame_layout(const ObIArray<ObRawExpr *> &exprs,
     if (use_rich_format() && rt_expr->is_fixed_length_data_) {
       rt_expr->len_ = rt_expr->res_buf_len_;
     }
+    if (OB_SUCC(ret) && T_QUESTIONMARK == rt_expr->type_) {
+      ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(exprs.at(i));
+      int64_t param_idx = 0;
+      if (OB_ISNULL(c_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("const raw expr is null", K(ret));
+      } else if (!c_expr->get_value().get_meta().is_unknown()) {
+        // do nothing if the question mark is not unknown type (e.g. null type)
+      } else if (OB_FAIL(c_expr->get_value().get_unknown(param_idx))) {
+        LOG_WARN("get question mark value failed", K(ret), K(*c_expr));
+      } else {
+        rt_expr->extra_ = param_idx;
+      }
+    }
   }
   for (int64_t expr_idx = 0;
        OB_SUCC(ret) && expr_idx < exprs.count();
