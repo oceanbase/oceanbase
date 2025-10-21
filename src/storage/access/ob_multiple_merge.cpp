@@ -1828,6 +1828,7 @@ int ObMultipleMerge::refresh_table_on_demand()
       LOG_WARN("failed to prepare truncate filter", K(ret));
     } else if (nullptr != block_row_store_ && FALSE_IT(block_row_store_->reuse())) {
     } else {
+      access_ctx_->reuse_skip_scan_factory();
       refreshed = true;
     }
 
