@@ -125,9 +125,9 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip, int64_t limit_num) {
         }
       }
 
-      idxs_.reuse();
-      rets_.reuse();
-      col_names_.reuse();
+      idxs_.reset();
+      rets_.reset();
+      col_names_.reset();
       allocator_.reuse();
     }
   } else {
