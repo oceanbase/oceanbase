@@ -125,7 +125,7 @@ public:
     UNKNOWN
   };
 
-  struct MirrorOdpsJniColumn{
+  struct MirrorOdpsJniColumn {
     MirrorOdpsJniColumn():
       type_(OdpsType::UNKNOWN),
       precision_(-1),

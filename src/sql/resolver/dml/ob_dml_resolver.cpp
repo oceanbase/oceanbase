@@ -5014,9 +5014,11 @@ int ObDMLResolver::build_column_for_odps(const ODPSType &odps_column,
       }
       case ObOdpsJniConnector::OdpsType::JSON:
       {
+        int64_t varchar_len = odps_type_length;
         column_schema.set_data_type(ObJsonType);
         column_schema.set_collation_type(ObCharset::get_system_collation());
         column_schema.set_charset_type(CHARSET_UTF8MB4);
+        column_schema.set_data_length(OB_MAX_VARCHAR_LENGTH);
         break;
       }
       case ObOdpsJniConnector::OdpsType::ARRAY:
