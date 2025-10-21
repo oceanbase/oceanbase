@@ -403,6 +403,8 @@ namespace {
     public:
     void callback(int ret) { cond_.notify(ret); }
     int wait(const int64_t time_us, int &ret) {
+      oceanbase::common::ObWaitEventGuard
+          wait_guard(oceanbase::common::ObWaitEventIds::SYNC_COMMITTING_WAIT);
       return cond_.wait(time_us, ret);
     }
     ObTransCond cond_;
