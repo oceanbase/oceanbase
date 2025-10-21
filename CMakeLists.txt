@@ -3,23 +3,25 @@ cmake_minimum_required(VERSION 3.20)
 include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
+set(OB_BUILD_VERSION "4.4.1.0")
+
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"
-    VERSION 4.4.1.0
+    VERSION ${OB_BUILD_VERSION}
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
 elseif(OB_BUILD_STANDALONE)
   project("OceanBase_standalone"
-    VERSION 4.4.1.0
+    VERSION ${OB_BUILD_VERSION}
     DESCRIPTION "OceanBase Standalone Edition"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "standalone build enabled")
 else()
   project(OceanBase
-    VERSION 4.4.1.0
+    VERSION ${OB_BUILD_VERSION}
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
