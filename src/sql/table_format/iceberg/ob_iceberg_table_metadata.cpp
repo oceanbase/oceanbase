@@ -171,9 +171,6 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
                  table_metadata_.get_schema(table_metadata_.current_schema_id, current_schema))) {
     LOG_WARN("get current schema failed", K(ret));
   } else {
-    iceberg_table_schema->set_tenant_id(tenant_id_);
-    iceberg_table_schema->set_database_id(database_id_);
-    iceberg_table_schema->set_table_id(table_id_);
     iceberg_table_schema->set_table_name(table_name_);
     iceberg_table_schema->set_schema_version(table_metadata_.current_schema_id);
     iceberg_table_schema->set_lake_table_format(share::ObLakeTableFormat::ICEBERG);
