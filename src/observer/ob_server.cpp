@@ -3468,6 +3468,7 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
       while (!tenant_schema_refreshed
           && !stop_
           && !is_dropped
+          && !is_restore
           && ObTimeUtility::current_time() < expire_time) {
 
         tenant_schema_refreshed = is_user_tenant(tenant_id) ?
