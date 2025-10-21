@@ -251,7 +251,7 @@ private:
   int check_prefix_changed(const blocksstable::ObDatumRow *row, bool &changed);
   int check_after_range_updated(
       const blocksstable::ObDatumRange &range,
-      const blocksstable::ObCommonDatumRowkey &endkey,
+      const blocksstable::ObIMicroBlockRowScanner &micro_scanner,
       bool &skipped);
   int check_scan_range(
       const blocksstable::ObDatumRow *row,

@@ -1815,6 +1815,7 @@ int ObMultipleMerge::refresh_table_on_demand()
         STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
       }
     } else if (FALSE_IT(reset_iter_array(access_param_->is_use_global_iter_pool()))) {
+    } else if (FALSE_IT(access_ctx_->reuse_skip_scan_factory())) {
     } else if (OB_FAIL(refresh_tablet_iter())) {
       STORAGE_LOG(WARN, "fail to refresh tablet iter", K(ret));
     } else if (OB_FAIL(prepare_read_tables(true/*refresh*/))) {
@@ -1828,7 +1829,6 @@ int ObMultipleMerge::refresh_table_on_demand()
       LOG_WARN("failed to prepare truncate filter", K(ret));
     } else if (nullptr != block_row_store_ && FALSE_IT(block_row_store_->reuse())) {
     } else {
-      access_ctx_->reuse_skip_scan_factory();
       refreshed = true;
     }
 

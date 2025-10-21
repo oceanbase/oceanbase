@@ -1404,6 +1404,20 @@ int ObIMicroBlockRowScanner::skip_to_range(
   return ret;
 }
 
+int ObIMicroBlockRowScanner::compare_rowkey(const ObDatumRowkey &rowkey, const bool is_cmp_end, int32_t &cmp_ret) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!rowkey.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rowkey", K(ret), K(rowkey), K(is_cmp_end), KPC(this));
+  } else if (OB_FAIL(reader_->compare_rowkey(rowkey, is_cmp_end ? reader_->row_count() - 1 : 0, cmp_ret))) {
+    LOG_WARN("failed to compare rowkey", K(ret), K(rowkey), K(is_cmp_end), KPC(this));
+  } else {
+    LOG_DEBUG("compare rowkey", K(ret), K(rowkey), K(is_cmp_end), K(cmp_ret), KPC(this));
+  }
+  return ret;
+}
+
 ////////////////////////////////// ObMicroBlockRowScanner ////////////////////////////////////////////
 int ObMicroBlockRowScanner::init(
     const storage::ObTableIterParam &param,

@@ -382,12 +382,11 @@ int ObIndexSkipScanner::skip(
     const bool first)
 {
   int ret = OB_SUCCESS;
-  const ObCommonDatumRowkey &endkey = index_info.endkey_;
   ObIndexSkipState &state = index_info.skip_state_;
   if (OB_FAIL(check_and_preprocess(first, micro_scanner, state))) {
     LOG_WARN("failed to check and preprocess", KR(ret));
   } else if (!is_disabled() && !state.is_skipped()) {
-    LOG_DEBUG("[INDEX SKIP SCAN] try skip data in block", K(first), K(state), K(endkey), KPC(this));
+    LOG_DEBUG("[INDEX SKIP SCAN] try skip data in block", K(first), K(state), KPC(this));
     bool has_data = false;
     // is_range_finished() == true means current prefix range is already determined
     // should skip to next prefix
@@ -683,24 +682,31 @@ int ObIndexSkipScanner::check_scan_range(const ObDatumRow *row, bool &is_start_e
 
 int ObIndexSkipScanner::check_after_range_updated(
     const ObDatumRange &range,
-    const ObCommonDatumRowkey &endkey,
+    const blocksstable::ObIMicroBlockRowScanner &micro_scanner,
     bool &skipped)
 {
   int ret = OB_SUCCESS;
   skipped = false;
   if (is_reverse_scan_) {
-    // TODO read the first row to check
+    int right_cmp_ret = 0;
+    const ObDatumRowkey &right_border = range.end_key_;
+    const ObBorderFlag &border_flag = range.border_flag_;
+    if (OB_FAIL(micro_scanner.compare_rowkey(right_border, false, right_cmp_ret))) {
+      LOG_WARN("failed to compare right border", KR(ret), K(range), KPC(this));
+    } else {
+      // CASE:1.5 in reverse scan
+      // same with CASE:1.4, current micro scanner is at the right of right border
+      skipped = right_cmp_ret > 0 || (0 == right_cmp_ret && !border_flag.inclusive_end());
+    }
   } else {
-    int left_cmp_ret = 1;
-    int64_t left_ne_pos = -1;
-    const bool cmp_datum_cnt = false;
+    int left_cmp_ret = 0;
     const ObDatumRowkey &left_border = range.start_key_;
     const ObBorderFlag &border_flag = range.border_flag_;
-    if (OB_FAIL(endkey.compare(left_border, datum_utils_, left_cmp_ret, cmp_datum_cnt, &left_ne_pos))) {
-      LOG_WARN("failed to compare left border", KR(ret), K(range), K(endkey), KPC(this));
+    if (OB_FAIL(micro_scanner.compare_rowkey(left_border, true, left_cmp_ret))) {
+      LOG_WARN("failed to compare left border", KR(ret), K(range), KPC(this));
     } else {
       // CASE:2.4 in forward scan
-      // same with CASE:2.1
+      // same with CASE:2.1, current micro scanner is at the left of left border
       skipped = left_cmp_ret < 0 || (0 == left_cmp_ret && !border_flag.inclusive_start());
     }
   }
@@ -828,15 +834,14 @@ int ObIndexSkipScanner::skip_in_micro(
   bool range_covered = false;
   const bool is_left_border = index_info.is_left_border();
   const bool is_right_border = index_info.is_right_border();
-  const ObCommonDatumRowkey &endkey = index_info.endkey_;
   ObIndexSkipState &state = index_info.skip_state_;
-  if (OB_FAIL(check_after_range_updated(range, endkey, skipped_by_new_range))) {
+  if (OB_FAIL(check_after_range_updated(range, micro_scanner, skipped_by_new_range))) {
     LOG_WARN("failed to check after range updated", KR(ret));
   } else if (skipped_by_new_range) {
     micro_scanner.skip_to_end();
     state.set_state(index_skip_state_.range_idx(), get_default_skip_state());
     index_skip_strategy_.add_skipped_row_count(micro_last_ - micro_start_ + 1);
-    LOG_DEBUG("[INDEX SKIP SCAN] can skip in block", K(endkey), K(range), KPC(this));
+    LOG_DEBUG("[INDEX SKIP SCAN] can skip in block", K(range), KPC(this));
   } else if (OB_FAIL(micro_scanner.skip_to_range(micro_start_, micro_last_, range, is_left_border, is_right_border,
                                                  micro_current_, has_data, range_covered))) {
     LOG_WARN("failed to skip to next prefix range", KR(ret), K(micro_scanner), KPC(this));
