@@ -63,6 +63,9 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
     // Invalid agg result for string type whose prefix max might not accurate on mbcharset
     param.min_datum_.set_null();
     param.max_datum_.set_null();
+  } else if (!ObCharset::is_bin_sort(obj_meta.get_collation_type()) && (param.is_min_prefix_ || param.is_max_prefix_)) { // only support bin collation now
+    param.min_datum_.set_null();
+    param.max_datum_.set_null();
   } else if (!param.min_datum_.is_null() && !param.is_min_prefix_ &&
              OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.min_datum_))) {
     LOG_WARN("Failed to pad column on min datum", K(ret));
@@ -813,7 +816,7 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
       LOG_WARN("Failed to check can skip by monotonicity", K(ret), K(param.min_datum_), K(param.max_datum_), K(has_null), K(filter));
     }
   }
-  LOG_DEBUG("Utilize skip index judge black filter", K(ret), K(fal_desc), K(row_count), K(param), K(filter));
+  LOG_TRACE("[SKIP INDEX] Utilize skip index judge black filter", K(ret), K(fal_desc), K(row_count), K(param), K(filter), K(is_pad_coll));
   return ret;
 }
 

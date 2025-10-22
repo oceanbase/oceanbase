@@ -1546,7 +1546,7 @@ TEST_F(TestSkipIndexFilter, test_eq_prefix)
   test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -1641,7 +1641,7 @@ TEST_F(TestSkipIndexFilter, test_ne_prefix)
   test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
 
   /********************PAD_COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -1736,7 +1736,7 @@ TEST_F(TestSkipIndexFilter, test_gt_prefix)
   test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -1829,7 +1829,7 @@ TEST_F(TestSkipIndexFilter, test_ge_prefix)
   test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -1923,7 +1923,7 @@ TEST_F(TestSkipIndexFilter, test_lt_prefix)
   test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -2017,7 +2017,7 @@ TEST_F(TestSkipIndexFilter, test_le_prefix)
   test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -2117,7 +2117,7 @@ TEST_F(TestSkipIndexFilter, test_bt_prefix)
   test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
@@ -2241,7 +2241,7 @@ TEST_F(TestSkipIndexFilter, test_in_prefix)
   test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F", "ff\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
 
   /********************PAD COLLATION********************/
-  default_collation_type_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
   min_obj.set_varchar("cc");
   min_obj.set_collation_type(default_collation_type_);
   min_datum.from_obj(min_obj);
