@@ -387,6 +387,11 @@ bool ObSqlParameterization::is_execute_mode(SQL_EXECUTION_MODE mode)
   return (PS_EXECUTE_MODE == mode || PL_EXECUTE_MODE == mode);
 }
 
+bool ObSqlParameterization::is_text_mode(SQL_EXECUTION_MODE mode)
+{
+  return TEXT_MODE == mode;
+}
+
 /* fix:
 * decide if a number param can ignore scale check when choosing plancache.
 * if current node type is expr list or number,
@@ -1038,13 +1043,14 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     fp_ctx.is_format_ = false;
   }
 
-  if (OB_FAIL(ret)) {
+ if (OB_FAIL(ret)) {
   } else if (is_prepare_mode(mode)
-            || is_transform_outline
+            || (is_text_mode(mode)
+                && (is_transform_outline
 #ifdef OB_BUILD_SPM
-            || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_
+                    || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_
 #endif
-            ) {
+            ))) {
     // if so, faster parser is needed
     // otherwise, fast parser has been done before
     pc_ctx.fp_result_.reset();

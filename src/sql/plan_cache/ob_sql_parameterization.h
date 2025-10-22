@@ -213,6 +213,7 @@ public:
   static SQL_EXECUTION_MODE get_sql_execution_mode(ObPlanCacheCtx &pc_ctx);
   static bool is_prepare_mode(SQL_EXECUTION_MODE mode);
   static bool is_execute_mode(SQL_EXECUTION_MODE mode);
+  static bool is_text_mode(SQL_EXECUTION_MODE mode);
   static bool is_ignore_scale_check(TransformTreeCtx &ctx, const ParseNode *parent);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlParameterization);
