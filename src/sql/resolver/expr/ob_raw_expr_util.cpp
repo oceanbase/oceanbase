@@ -6065,6 +6065,8 @@ int ObRawExprUtils::build_trim_expr(const ObColumnSchemaV2 *column_schema,
     LOG_WARN("fail to set collation type", K(ret));
   } else if (OB_FAIL(trim_expr->set_param_exprs(type_expr, pattern_expr, expr))) {
     LOG_WARN("fail to set param exprs", K(ret), KPC(type_expr), KPC(pattern_expr), KPC(expr));
+  } else if (OB_FAIL(trim_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("fail to add flag", K(ret));
   } else {
     trim_expr->set_data_type(ObCharType);
     trim_expr->set_func_name(ObString::make_string(N_INNER_TRIM));
@@ -6125,6 +6127,8 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("fail to build length expr", K(ret));
   } else if (OB_FAIL(pad_expr->set_param_exprs(expr, pading_word_expr, length_expr))) {
     LOG_WARN("fail to set param exprs", K(ret));
+  } else if (OB_FAIL(pad_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("fail to add flag", K(ret));
   } else {
     ObAccuracy padding_accuracy = pading_word_expr->get_accuracy();
     padding_accuracy.set_length_semantics(
@@ -7528,12 +7532,21 @@ bool ObRawExprUtils::has_prefix_str_expr(const ObRawExpr &expr,
   if (T_FUN_COLUMN_CONV == expr.get_expr_type()) {
     tmp = expr.get_param_expr(4);
   }
+  if (T_FUN_SYS_CAST == tmp->get_expr_type() && tmp->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
+      && (ObCharType == tmp->get_data_type() || ObNCharType == tmp->get_data_type())) {
+    tmp = tmp->get_param_expr(0);
+  }
+  if (T_FUN_INNER_TRIM == tmp->get_expr_type() && tmp->has_flag(IS_INNER_ADDED_EXPR)) {
+    tmp = tmp->get_param_expr(2);
+  }
   if (T_FUN_SYS_SUBSTR == tmp->get_expr_type()) {
+    ObExprEqualCheckContext equal_ctx;
+    equal_ctx.ignore_implicit_cast_ = true;
+    equal_ctx.ignore_char_padding_ = true;
     const ObRawExpr *param_expr1 = tmp->get_param_expr(0);
     if (param_expr1 != NULL
-        && param_expr1->is_column_ref_expr()
         && param_expr1->get_result_type().is_string_or_lob_locator_type()
-        && param_expr1->same_as(orig_column_expr)) {
+        && param_expr1->same_as(orig_column_expr, &equal_ctx)) {
       if (3 == tmp->get_param_count()) {
         int64_t one = 1;
         int cmp_ret = 0;

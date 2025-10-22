@@ -21837,63 +21837,75 @@ int ObJoinOrder::check_simple_prefix_cmp_expr(ObRawExpr *expr,
   } else if (OB_ISNULL(param_expr1 = expr->get_param_expr(0)) || OB_ISNULL(param_expr2 = expr->get_param_expr(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
-  } else if (T_OP_LIKE == expr->get_expr_type()) {
-    if (3 != expr->get_param_count() || OB_ISNULL(expr->get_param_expr(2))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("escape param is unexpected null", K(ret));
-    } else if (param_expr1->is_column_ref_expr() &&
-              param_expr1->get_result_type().is_string_type() &&
-              param_expr2->get_result_type().is_string_type() &&
-              expr->get_param_expr(1)->is_const_expr() &&
-              expr->get_param_expr(2)->is_const_expr()) {
-      column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-      value_expr = expr->get_param_expr(1);
-      escape_expr = expr->get_param_expr(2);
-    } else {
-      is_valid = false;
+  } else {
+    if (T_FUN_SYS_CAST == param_expr1->get_expr_type() && param_expr1->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
+        && (ObCharType == param_expr1->get_param_expr(0)->get_data_type() || ObNCharType == param_expr1->get_param_expr(0)->get_data_type())) {
+      LOG_TRACE("cast param expr1", KPC(param_expr1), KPC(param_expr1->get_param_expr(0)));
+      param_expr1 = param_expr1->get_param_expr(0);
     }
-  } else if (T_OP_IN == expr->get_expr_type()) {
-    if (T_OP_ROW == param_expr2->get_expr_type() &&
-        !param_expr2->has_generalized_column() &&
-        param_expr1->get_result_type().is_string_type() &&
-        param_expr1->is_column_ref_expr()) {
-      bool all_match = true;
-      for (int64_t j = 0; OB_SUCC(ret) && all_match && j < param_expr2->get_param_count(); ++j) {
-        if (OB_ISNULL(param_expr2->get_param_expr(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("param expr2 is null");
-        } else if (!param_expr2->get_param_expr(j)->get_result_type().is_string_type()
-            || param_expr2->get_param_expr(j)->get_collation_type() != param_expr1->get_collation_type()) {
-          all_match = false;
-        }
-      }
-      if (OB_SUCC(ret) && all_match && expr->get_param_expr(0)->is_column_ref_expr()) {
-        column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-        value_expr = expr->get_param_expr(1);
+    if (T_FUN_SYS_CAST == param_expr2->get_expr_type() && param_expr2->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
+        && (ObCharType == param_expr2->get_param_expr(0)->get_data_type() || ObNCharType == param_expr2->get_param_expr(0)->get_data_type())) {
+      LOG_TRACE("cast param expr2", KPC(param_expr2), KPC(param_expr2->get_param_expr(0)));
+      param_expr2 = param_expr2->get_param_expr(0);
+    }
+    if (T_OP_LIKE == expr->get_expr_type()) {
+      if (3 != expr->get_param_count() || OB_ISNULL(expr->get_param_expr(2))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("escape param is unexpected null", K(ret));
+      } else if (param_expr1->is_column_ref_expr() &&
+                param_expr1->get_result_type().is_string_type() &&
+                param_expr2->get_result_type().is_string_type() &&
+                param_expr2->is_const_expr() &&
+                expr->get_param_expr(2)->is_const_expr()) {
+        column_expr = static_cast<ObColumnRefRawExpr*>(param_expr1);
+        value_expr = param_expr2;
+        escape_expr = expr->get_param_expr(2);
       } else {
         is_valid = false;
       }
-    }
-  } else if (param_expr1->is_column_ref_expr() && param_expr2->is_const_expr()) {
-    if (param_expr1->get_result_type().is_string_type() //only for string and same collation
-        && param_expr2->get_result_type().is_string_type()
-        && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
-      column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
-      value_expr = expr->get_param_expr(1);
-    } else {
+    } else if (T_OP_IN == expr->get_expr_type()) {
+      if (T_OP_ROW == param_expr2->get_expr_type() &&
+          !param_expr2->has_generalized_column() &&
+          param_expr1->get_result_type().is_string_type() &&
+          param_expr1->is_column_ref_expr()) {
+        bool all_match = true;
+        for (int64_t j = 0; OB_SUCC(ret) && all_match && j < param_expr2->get_param_count(); ++j) {
+          if (OB_ISNULL(param_expr2->get_param_expr(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param expr2 is null");
+          } else if (!param_expr2->get_param_expr(j)->get_result_type().is_string_type()
+              || param_expr2->get_param_expr(j)->get_collation_type() != param_expr1->get_collation_type()) {
+            all_match = false;
+          }
+        }
+        if (OB_SUCC(ret) && all_match && expr->get_param_expr(0)->is_column_ref_expr()) {
+          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+          value_expr = expr->get_param_expr(1);
+        } else {
+          is_valid = false;
+        }
+      }
+    } else if (param_expr1->is_column_ref_expr() && param_expr2->is_const_expr()) {
+      if (param_expr1->get_result_type().is_string_type() //only for string and same collation
+          && param_expr2->get_result_type().is_string_type()
+          && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
+        column_expr = static_cast<ObColumnRefRawExpr*>(param_expr1);
+        value_expr = param_expr2;
+      } else {
+        is_valid = false;
+      }
+    } else if (param_expr1->is_const_expr() && param_expr2->is_column_ref_expr()) {
+      if (param_expr1->get_result_type().is_string_type()
+          && param_expr2->get_result_type().is_string_type()) {
+        type = get_opposite_compare_type(expr->get_expr_type());
+        column_expr = static_cast<ObColumnRefRawExpr*>(param_expr2);
+        value_expr = param_expr1;
+      } else {
+        is_valid = false;
+      }
+    } else if (param_expr1->is_column_ref_expr() && param_expr2->is_column_ref_expr()) {
       is_valid = false;
     }
-  } else if (param_expr1->is_const_expr() && param_expr2->is_column_ref_expr()) {
-    if (param_expr1->get_result_type().is_string_type()
-        && param_expr2->get_result_type().is_string_type()) {
-      type = get_opposite_compare_type(expr->get_expr_type());
-      column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
-      value_expr = expr->get_param_expr(0);
-    } else {
-      is_valid = false;
-    }
-  } else if (param_expr1->is_column_ref_expr() && param_expr2->is_column_ref_expr()) {
-    is_valid = false;
   }
   return ret;
 }
@@ -22019,10 +22031,15 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
     LOG_WARN("failed to split lossless convert or cast", K(ret));
   }
   // compare each param expr with depend_expr
+  if (T_FUN_SYS_CAST == depend_expr->get_expr_type() && (ObCharType == depend_expr->get_data_type() || ObNCharType == depend_expr->get_data_type())) {
+    depend_expr = depend_expr->get_param_expr(0);
+  }
   for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); i++) {
     ObRawExpr *param_expr = expr->get_param_expr(i);
     ObExprEqualCheckContext equal_ctx;
     equal_ctx.override_const_compare_ = true;
+    equal_ctx.ignore_implicit_cast_ = true;
+    equal_ctx.ignore_char_padding_ = true;
     bool is_same = false;
     if (OB_ISNULL(param_expr)) {
       ret = OB_ERR_UNEXPECTED;
