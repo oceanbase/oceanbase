@@ -104,8 +104,8 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
     if (OB_ISNULL(GCTX.lst_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lst_operator is null", KR(ret), K_(tenant_id));
-    } else if (OB_FAIL(GCTX.lst_operator_->get_by_tenant(tenant_id_, false/*inner_table_only*/, ls_infos))) {
-      LOG_WARN("fail to get ls infos", KR(ret), K_(tenant_id));
+    } else if (OB_TMP_FAIL(GCTX.lst_operator_->get_by_tenant(tenant_id_, false/*inner_table_only*/, ls_infos))) {
+      LOG_WARN("fail to get ls infos", KR(tmp_ret), K_(tenant_id));
     } else {
       // 3. update ls_infos cached in memory
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_infos.count(); ++i) {
