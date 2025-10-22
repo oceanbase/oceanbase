@@ -5346,7 +5346,7 @@ int ObLogTableScan::prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_inf
       LOG_WARN("failed to set agg param", K(ret));
     } else if (OB_FAIL(doc_token_cnt->formalize(session_info))) {
       LOG_WARN("failed to formalize document token count expr", K(ret));
-    } else if (FALSE_IT(need_est_avg_doc_token_cnt = get_plan()->get_optimizer_context().get_min_cluster_version() >= CLUSTER_VERSION_4_5_0_0)) {
+    } else if (FALSE_IT(need_est_avg_doc_token_cnt = get_plan()->get_optimizer_context().get_min_cluster_version() >= CLUSTER_VERSION_4_4_1_0)) {
     } else if (OB_FAIL(ObRawExprUtils::build_op_pseudo_column_expr(
         *expr_factory,
         T_PSEUDO_COLUMN,
