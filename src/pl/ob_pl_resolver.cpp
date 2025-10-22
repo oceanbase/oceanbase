@@ -12459,15 +12459,27 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   const ObUDTTypeInfo *udt_info = NULL;
   uint64_t tenant_id = OB_INVALID_ID;
   bool is_udt_type = false;
+  bool is_associative_array_with_param_assign_op_ = false;
+  bool is_assoc_array_variable_assign = false;
   CK (OB_NOT_NULL(user_type));
   OX (is_udt_type = user_type->is_udt_type());
   OZ (expr_factory_.create_raw_expr(T_FUN_PL_COLLECTION_CONSTRUCT, coll_expr));
   CK (OB_NOT_NULL(coll_expr));
+
+  OX (is_associative_array_with_param_assign_op_ = udf_info.is_associative_array_with_param_assign_op_);
   OZ (coll_expr->init_param_exprs(udf_info.ref_expr_->get_param_exprs().count()));
-  if (OB_SUCC(ret) && udf_info.param_names_.count() > 0) { // 构造函数不允许使用=>赋值
-    ret = OB_ERR_CALL_WRONG_ARG;
-    LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
-    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+  if (OB_SUCC(ret) && udf_info.param_names_.count() > 0) { // 构造函数不允许使用=>赋值（除associative array外）
+    if (user_type->is_associative_array_type()) {
+      is_associative_array_with_param_assign_op_ = true;
+      is_assoc_array_variable_assign = true;
+    } else {
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+    }
+  }
+  if (is_assoc_array_variable_assign) {
+    OZ (coll_expr->init_param_exprs(udf_info.param_exprs_.count() * 2));
   }
   CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(user_type)));
   OX (coll_expr->set_type(user_type->get_type()));
@@ -12475,7 +12487,7 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   OX (coll_expr->set_udt_id(user_type->get_user_type_id()));
   OX (coll_expr->set_elem_type(coll_type->get_element_type()));
   if (OB_SUCC(ret)) {
-    if (udf_info.is_associative_array_with_param_assign_op_) {
+    if (is_associative_array_with_param_assign_op_) {
       const ObAssocArrayType* assoc_type = NULL;
       ObPLDataType index_type;
       CK(user_type->is_associative_array_type());
@@ -12500,27 +12512,116 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   OX (res_type.set_udt_id(user_type->get_user_type_id()));
   OX (coll_expr->set_result_type(res_type));
   CK (OB_NOT_NULL(udf_info.ref_expr_));
-  for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
-    ObRawExpr *child = udf_info.ref_expr_->get_param_exprs().at(i);
-    OZ (formalize_expr(*child));
-    if (OB_FAIL(ret)) {
-    } else if (coll_type->get_element_type().is_obj_type()) {
-      if(0 == i % 2 && udf_info.is_associative_array_with_param_assign_op_) {
-        const ObAssocArrayType* assoc_type = static_cast<const ObAssocArrayType *>(coll_type);
-        const ObDataType *data_type = assoc_type->get_index_type().get_data_type();
-        CK (OB_NOT_NULL(data_type));
+  if (is_assoc_array_variable_assign) {
+    // 使用 param_names_ 与 param_exprs_ 重建 key/value 参数序列
+    const ObAssocArrayType* assoc_type = static_cast<const ObAssocArrayType *>(coll_type);
+    const ObDataType *index_dt = NULL;
+    const ObDataType *elem_dt = NULL;
+    CK (udf_info.param_names_.count() == udf_info.param_exprs_.count());
+    CK (OB_NOT_NULL(assoc_type));
+    OX (index_dt = assoc_type->get_index_type().get_data_type());
+    CK (OB_NOT_NULL(coll_type));
+    OX (elem_dt = coll_type->get_element_type().get_data_type());
+    for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.param_exprs_.count(); ++i) {
+      // name 作为 key
+      ObString name = udf_info.param_names_.at(i);
+      ObRawExpr *key_expr = NULL;
+      // 将 name 解析成局部变量/常量表达式
+      OZ (resolve_local_var(name,
+                            current_block_->get_namespace(),
+                            expr_factory_,
+                            &resolve_ctx_.session_info_,
+                            &resolve_ctx_.schema_guard_,
+                            key_expr,
+                            false));
+      CK (OB_NOT_NULL(key_expr));
+      OZ (formalize_expr(*key_expr));
+      CK (OB_NOT_NULL(index_dt));
+      OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
+                                                expr_factory_,
+                                                index_dt->get_obj_type(),
+                                                index_dt->get_collation_type(),
+                                                index_dt->get_accuracy_value(),
+                                                true,
+                                                NULL,
+                                                NULL,
+                                                key_expr,
+                                                true));
+      OZ (coll_expr->add_param_expr(key_expr));
+
+      // expr 作为 value
+      ObRawExpr *val_expr = udf_info.param_exprs_.at(i);
+      CK (OB_NOT_NULL(val_expr));
+      OZ (formalize_expr(*val_expr));
+      if (coll_type->get_element_type().is_obj_type()) {
+        CK (OB_NOT_NULL(elem_dt));
         OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
                                                   expr_factory_,
-                                                  data_type->get_obj_type(),
-                                                  data_type->get_collation_type(),
-                                                  data_type->get_accuracy_value(),
+                                                  elem_dt->get_obj_type(),
+                                                  elem_dt->get_collation_type(),
+                                                  elem_dt->get_accuracy_value(),
                                                   true,
                                                   NULL,
                                                   NULL,
-                                                  child,
+                                                  val_expr,
                                                   true));
+        OZ (coll_expr->add_param_expr(val_expr));
       } else {
-        const ObDataType *data_type = coll_type->get_element_type().get_data_type();
+        bool is_legal = true;
+        uint64_t actual_udt_id = OB_INVALID_ID;
+        if (val_expr->get_result_type().is_null()) {
+        } else if (val_expr->get_result_type().is_ext()) {
+          if (val_expr->is_obj_access_expr()) {
+            ObPLDataType actually_type;
+            const ObObjAccessRawExpr *obj_access = NULL;
+            CK (OB_NOT_NULL(obj_access = static_cast<const ObObjAccessRawExpr*>(val_expr)));
+            OZ (obj_access->get_final_type(actually_type));
+            OX (actual_udt_id = actually_type.get_user_type_id());
+          } else {
+            actual_udt_id = val_expr->get_result_type().get_udt_id();
+          }
+          if (actual_udt_id != coll_type->get_element_type().get_user_type_id()) {
+            CK (OB_NOT_NULL(current_block_));
+            if (is_mocked_anonymous_array_id(actual_udt_id)) {
+              OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
+                                                   actual_udt_id,
+                                                   coll_type->get_element_type().get_user_type_id(),
+                                                   is_legal));
+            } else {
+              OZ (check_composite_compatible(current_block_->get_namespace(),
+                                              actual_udt_id,
+                                              coll_type->get_element_type().get_user_type_id(),
+                                              is_legal));
+            }
+          }
+        } else {
+          is_legal = false;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!is_legal) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
+                  K(ret), K(actual_udt_id), K(coll_type->get_element_type()));
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+        } else {
+          OZ (coll_expr->add_param_expr(val_expr));
+        }
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
+      ObRawExpr *child = udf_info.ref_expr_->get_param_exprs().at(i);
+      OZ (formalize_expr(*child));
+      if (OB_FAIL(ret)) {
+      } else if (coll_type->get_element_type().is_obj_type()) {
+        const ObAssocArrayType* assoc_type = static_cast<const ObAssocArrayType *>(coll_type);
+        const ObDataType *data_type = NULL;
+        if (0 == i % 2 && is_associative_array_with_param_assign_op_) {
+          CK (OB_NOT_NULL(assoc_type));
+          OX (data_type = assoc_type->get_index_type().get_data_type());
+        } else {
+          OX (data_type = coll_type->get_element_type().get_data_type());
+        }
         CK (OB_NOT_NULL(data_type));
         OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
                                                   expr_factory_,
@@ -12532,51 +12633,53 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
                                                   NULL,
                                                   child,
                                                   true));
-      }
-      OZ (coll_expr->add_param_expr(child));
-    } else {
-      bool is_legal = true;
-      uint64_t actual_udt_id = OB_INVALID_ID;
-      if (child->get_result_type().is_null()) {
-      } else if (child->get_result_type().is_ext()) {
-        if (child->is_obj_access_expr()) {
-          ObPLDataType actually_type;
-          const ObObjAccessRawExpr *obj_access = NULL;
-          CK (OB_NOT_NULL(obj_access = static_cast<const ObObjAccessRawExpr*>(child)));
-          OZ (obj_access->get_final_type(actually_type));
-          OX (actual_udt_id = actually_type.get_user_type_id());
-        } else {
-          actual_udt_id = child->get_result_type().get_udt_id();
-        }
-        if (actual_udt_id != coll_type->get_element_type().get_user_type_id()) {
-          CK (OB_NOT_NULL(current_block_));
-          if (is_mocked_anonymous_array_id(actual_udt_id)) {
-            OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
-                                                 actual_udt_id,
-                                                 coll_type->get_element_type().get_user_type_id(),
-                                                 is_legal));
+        OZ (coll_expr->add_param_expr(child));
+      } else {
+        bool is_legal = true;
+        uint64_t actual_udt_id = OB_INVALID_ID;
+        if (child->get_result_type().is_null()) {
+        } else if (child->get_result_type().is_ext()) {
+          if (child->is_obj_access_expr()) {
+            ObPLDataType actually_type;
+            const ObObjAccessRawExpr *obj_access = NULL;
+            CK (OB_NOT_NULL(obj_access = static_cast<const ObObjAccessRawExpr*>(child)));
+            OZ (obj_access->get_final_type(actually_type));
+            OX (actual_udt_id = actually_type.get_user_type_id());
           } else {
-            OZ (check_composite_compatible(current_block_->get_namespace(),
-                                            actual_udt_id,
-                                            coll_type->get_element_type().get_user_type_id(),
-                                            is_legal));
+            actual_udt_id = child->get_result_type().get_udt_id();
+          }
+          if (actual_udt_id != coll_type->get_element_type().get_user_type_id()) {
+            CK (OB_NOT_NULL(current_block_));
+            if (is_mocked_anonymous_array_id(actual_udt_id)) {
+              OZ (check_anonymous_array_compatible(current_block_->get_namespace(),
+                                                   actual_udt_id,
+                                                   coll_type->get_element_type().get_user_type_id(),
+                                                   is_legal));
+            } else {
+              OZ (check_composite_compatible(current_block_->get_namespace(),
+                                              actual_udt_id,
+                                              coll_type->get_element_type().get_user_type_id(),
+                                              is_legal));
+            }
+          }
+        } else {
+          if (!(0 == i % 2 && is_associative_array_with_param_assign_op_)) { // skip key for associative array, because key type is not extend type
+            is_legal = false;
           }
         }
-      } else {
-        is_legal = false;
-      }
-      if (OB_FAIL(ret)) {
-      } else if (!is_legal) {
-        ret = OB_ERR_CALL_WRONG_ARG;
-        LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
-                K(ret), K(actual_udt_id), K(coll_type->get_element_type()));
-        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
-      } else {
-        OZ (coll_expr->add_param_expr(child));
+        if (OB_FAIL(ret)) {
+        } else if (!is_legal) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
+                  K(ret), K(actual_udt_id), K(coll_type->get_element_type()));
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+        } else {
+          OZ (coll_expr->add_param_expr(child));
+        }
       }
     }
   }
-  OX (coll_expr->is_associative_array_with_param_assign_op_ = udf_info.is_associative_array_with_param_assign_op_);
+  OX (coll_expr->is_associative_array_with_param_assign_op_ = is_associative_array_with_param_assign_op_);
   OX (expr = coll_expr);
 #else
   UNUSEDx(q_name, udf_info, user_type, expr);
