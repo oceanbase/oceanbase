@@ -16830,7 +16830,8 @@ int ObTransformUtils::check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
+int ObTransformUtils::do_trans_any_all_as_exists(ObDMLStmt* stmt,
+                                                 ObTransformerCtx *ctx,
                                                  ObRawExpr *&expr,
                                                  ObNotNullContext *not_null_ctx,
                                                  bool &trans_happened)
@@ -16850,6 +16851,7 @@ int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
   if (OB_ISNULL(ctx) ||
       OB_ISNULL(expr_factory = ctx->expr_factory_) ||
       OB_ISNULL(ctx->session_info_) ||
+      OB_ISNULL(ctx->allocator_) ||
       OB_ISNULL(left_hand = expr->get_param_expr(0)) ||
       OB_ISNULL(expr->get_param_expr(1)) ||
       OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
@@ -16885,10 +16887,11 @@ int ObTransformUtils::do_trans_any_all_as_exists(ObTransformerCtx *ctx,
           OB_ISNULL(right_stmt->get_select_item(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(left_expr));
-      } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*expr_factory,
-                                                              right_hand,
-                                                              left_expr,
-                                                              exec_param))) {
+      } else if (OB_FAIL(ObRawExprUtils::extract_exec_param_exprs(stmt,
+                                                                  *expr_factory,
+                                                                  right_hand,
+                                                                  left_expr,
+                                                                  exec_param))) {
         LOG_WARN("failed to get exec param expr", K(ret));
       } else if (OB_FAIL(query_cmp_to_exists_value_cmp(expr->get_expr_type(),
                                                       expr->has_flag(IS_WITH_ALL),

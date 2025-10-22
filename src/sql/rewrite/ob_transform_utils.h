@@ -2032,7 +2032,8 @@ public:
                                                bool used_as_condition,
                                                bool need_match_index,
                                                bool& is_valid);
-  static int do_trans_any_all_as_exists(ObTransformerCtx *ctx,
+  static int do_trans_any_all_as_exists(ObDMLStmt *stmt,
+                                        ObTransformerCtx *ctx,
                                         ObRawExpr *&expr,
                                         ObNotNullContext *not_null_ctx,
                                         bool &trans_happened);
