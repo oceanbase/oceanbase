@@ -449,6 +449,7 @@
 #include "ob_expr_current_catalog.h"
 #include "ob_expr_check_catalog_access.h"
 #include "ob_expr_md5_concat_ws.h"
+#include "ob_expr_vector_similarity.h"
 
 namespace oceanbase
 {
@@ -1418,6 +1419,20 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,//ObExprAIEmbed::eval_ai_embed,                                /* 858 */
   NULL,//ObExprAIRerank::eval_ai_rerank,                              /* 859 */
   ObExprMd5ConcatWs::calc_md5_concat_ws_expr,                          /* 860 */
+  NULL, // ObExprUDF::eval_mysql_udtf,                                 /* 861 */
+  NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
+  NULL, // ObExprFormatProfile::format_profile,                        /* 863 */
+  NULL, // ObExprLocalDynamicFilter::eval_local_dynamic_filter,        /* 864 */
+  NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
+  NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
+  NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
+  NULL, // ObExprBucket::calc_bucket_expr,                             /* 868 */
+  NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
+  NULL, // ObExprAIPrompt::eval_ai_prompt,                              /* 870 */
+  ObExprVectorL2Similarity::calc_l2_similarity,                       /* 871 */
+  ObExprVectorCosineSimilarity::calc_cosine_similarity,               /* 872 */
+  ObExprVectorIPSimilarity::calc_ip_similarity,                       /* 873 */
+  ObExprVectorSimilarity::calc_similarity,                            /* 874 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

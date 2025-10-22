@@ -248,7 +248,20 @@ int ObVectorIndexUtil::parser_params_from_string(
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("not support vector index nbits value", K(ret), K(int_value), K(new_param_value));
             }
-          }  
+          } 
+        } else if (new_param_name == "SIMILARITY") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_param_value.ptr(), new_param_value.length(), &endptr, &err);
+          if (err != 0 || (new_param_value.ptr() + new_param_value.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
+          } else if (out_val < 1.0 || out_val > 1e6) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index refine_k value", K(ret), K(out_val), K(new_param_value));
+          } else {
+            param.similarity_threshold_ = out_val;
+          }
         } else {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid vector index param name", K(ret), K(new_param_name));
@@ -321,6 +334,19 @@ int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param
         search_param.refine_k_ = query_param.refine_k_;
       }
     }
+    if (query_param.is_set_similarity_threshold_) {
+      if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_SPIV) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("similarity is not support parameter for current index", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "similarity parameter for current index is");
+      } else if (index_param.dist_algorithm_ == VIDA_IP) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("similarity is not supported for inner_product distance", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "similarity parameter for inner_product distance is");
+      } else {
+        search_param.similarity_threshold_ = query_param.similarity_threshold_;
+      }
+    }
     LOG_TRACE("vector param", K(index_param), K(query_param), K(search_param));
   }
   return ret;
@@ -373,6 +399,25 @@ int ObVectorIndexUtil::resolve_query_param(
         } else {
           param.refine_k_ = out_val;
           param.is_set_refine_k_ = 1;
+        }
+      } else if (param_name.case_compare("SIMILARITY") == 0) {
+        int err = 0;
+        char *endptr = NULL;
+        ObString value_str(static_cast<int32_t>(value_node->str_len_), value_node->str_value_);
+        double out_val = 0;
+        if (param.is_set_similarity_threshold_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate similarity param", K(ret), K(i));
+        } else if (OB_FALSE_IT(out_val = ObCharset::strntod(value_str.ptr(), value_str.length(), &endptr, &err))) {
+        } else if (err != 0 || (value_str.ptr() + value_str.length()) != endptr) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("fail to cast string to double", K(ret), K(value_str), K(err), KP(endptr));
+        } else if (out_val < 0.0 || out_val > 1.0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid vector index similarity value", K(ret), K(out_val), K(value_str));
+        } else {
+          param.similarity_threshold_ = out_val;
+          param.is_set_similarity_threshold_ = 1;
         }
       } else {
         ret = OB_INVALID_ARGUMENT;

@@ -87,6 +87,59 @@ int ObDasVecScanUtils::get_distance_expr_type(ObExpr &expr,
   return ret;
 }
 
+int ObDasVecScanUtils::get_distance_threshold_hnsw(ObExpr &expr, 
+                                                   float &similarity_threshold, 
+                                                   float &distance_threshold)
+{
+  int ret = OB_SUCCESS;
+
+  switch (expr.type_) {
+    case T_FUN_SYS_L2_DISTANCE: 
+      // l2_similarity = 1 / (1 + l2_square_distance), vsag l2_distance is l2_square_distance
+      distance_threshold = 1 / similarity_threshold - 1;
+      break;
+    // currently we don't support ip similarity
+    // case T_FUN_SYS_INNER_PRODUCT:
+    // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT: 
+    
+    case T_FUN_SYS_COSINE_DISTANCE:
+      // cosine_similarity = (1 + cosine) / 2, vsag cosine_distance = 1 - cosine
+      distance_threshold = 2 - 2 * similarity_threshold;
+      break;
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support vector sort expr", K(ret), K(expr.type_));
+      break;
+  }
+  return ret;
+}
+
+int ObDasVecScanUtils::get_distance_threshold_ivf(ObExpr &expr, 
+                                                  float &similarity_threshold, 
+                                                  float &distance_threshold)
+{
+  int ret = OB_SUCCESS;
+  
+  switch (expr.type_) {
+    case T_FUN_SYS_L2_DISTANCE: 
+      // l2_similarity = 1 / (1 + l2_square_distance), ob use l2_distance
+      distance_threshold = sqrt(1 / similarity_threshold - 1);
+      break;
+    // currently we don't support ip similarity
+    // case T_FUN_SYS_INNER_PRODUCT:
+    // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT: 
+    case T_FUN_SYS_COSINE_DISTANCE:
+      // cosine_similarity = (1 + cosine) / 2, ob cosine_distance = 1 - cosine
+      distance_threshold = 2 - 2 * similarity_threshold;
+      break;
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support vector sort expr", K(ret), K(expr.type_));
+      break;
+  }
+  return ret;
+}
+
 int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
                                            ObDASSortRtDef *sort_rtdef,
                                            ObExpr *origin_vec,

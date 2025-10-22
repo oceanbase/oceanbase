@@ -27,6 +27,7 @@
 #include "share/vector_index/ob_plugin_vector_index_serialize.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
 #include "ob_vector_index_util.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 
 
 namespace oceanbase
@@ -337,7 +338,8 @@ public:
       query_scn_(),
       row_iter_(nullptr),
       is_last_search_(false), 
-      scan_param_(nullptr) {};
+      scan_param_(nullptr),
+      distance_threshold_(FLT_MAX) {}
   ~ObVectorQueryConditions() { query_vector_.reset(); }
   bool is_inited() { return query_vector_.length() > 0 && ef_search_ > 0; }
   void reset() {
@@ -359,6 +361,7 @@ public:
   int64_t extra_column_count_;
   bool is_last_search_;
   ObTableScanParam *scan_param_;  // scan param of row_iter_
+  float distance_threshold_;
 };
 
 struct ObVidBound {

@@ -151,7 +151,7 @@ struct ObVectorIndexParam
     type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), 
     nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
     refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
-    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), nbits_(0)
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), nbits_(0), similarity_threshold_(0)
   {}
   void reset() {
     type_ = VIAT_MAX;
@@ -170,6 +170,7 @@ struct ObVectorIndexParam
     refine_k_= DEFAULT_REFINE_K;
     bq_use_fht_ = false;
     nbits_ = 0;
+    similarity_threshold_ = 0;
   };
   int assign(const ObVectorIndexParam &other) {
     int ret = OB_SUCCESS;
@@ -189,6 +190,7 @@ struct ObVectorIndexParam
     refine_k_ = other.refine_k_;
     bq_use_fht_ = other.bq_use_fht_;
     nbits_ = other.nbits_;
+    similarity_threshold_ = other.similarity_threshold_;
     return ret;
   };
   ObVectorIndexAlgorithmType type_;
@@ -209,11 +211,12 @@ struct ObVectorIndexParam
   float refine_k_;
   bool bq_use_fht_;
   int64_t nbits_;
+  float similarity_threshold_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search), 
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
-    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(nbits));
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(nbits), K_(similarity_threshold));
 
 public:
   static int build_search_param(const ObVectorIndexParam &index_param, 

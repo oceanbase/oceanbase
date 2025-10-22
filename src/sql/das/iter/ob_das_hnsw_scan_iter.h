@@ -271,7 +271,8 @@ public:
       vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
       adaptive_ctx_(),
       can_retry_(false),
-      idx_iter_first_scan_(true) {
+      idx_iter_first_scan_(true),
+      distance_threshold_(FLT_MAX) {
         extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
   
@@ -504,6 +505,7 @@ private:
   ObHnswAadaptiveCtx adaptive_ctx_;
   bool can_retry_;
   bool idx_iter_first_scan_;
+  float distance_threshold_;
 
 private:
 

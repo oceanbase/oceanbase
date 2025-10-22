@@ -580,6 +580,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_json_utils.cpp
   engine/expr/ob_expr_array.cpp
   engine/expr/ob_expr_vector.cpp
+  engine/expr/ob_expr_vector_similarity.cpp
   engine/expr/ob_array_expr_utils.cpp
   engine/expr/ob_array_cast.cpp
   engine/expr/ob_expr_vec_ivf_center_id.cpp

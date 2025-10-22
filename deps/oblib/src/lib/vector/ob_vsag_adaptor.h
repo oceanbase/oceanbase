@@ -14,6 +14,7 @@
 #define OB_VSAG_ADAPTOR_H
 
 #include <stdint.h>
+#include <float.h>
 #include <string>
 
 namespace oceanbase {
@@ -104,7 +105,7 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector, int dim, int64
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                bool need_extra_info, const char*& extra_infos,
                void* invalid = nullptr, bool reverse_filter = false,
-               bool use_extra_info_filter = false, void *allocator = nullptr, float valid_ratio = 1);
+               bool use_extra_info_filter = false, void *allocator = nullptr, float valid_ratio = 1, float distance_threshold = FLT_MAX);
 int serialize(VectorIndexPtr& index_handler, const std::string dir);
 int deserialize_bin(VectorIndexPtr& index_handler, const std::string dir);
 int fserialize(VectorIndexPtr& index_handler, std::ostream& out_stream);
