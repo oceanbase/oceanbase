@@ -177,7 +177,7 @@ void ObSRDaaTIterImpl::reset()
   is_inited_ = false;
 }
 
-void ObSRDaaTIterImpl::reuse()
+void ObSRDaaTIterImpl::reuse(const bool switch_tablet)
 {
   if (OB_NOT_NULL(dim_iters_)) {
     if (OB_NOT_NULL(merge_heap_)) {

@@ -34,13 +34,14 @@ enum ObMaxScoreRankingType : uint8_t
 struct ObBlockMaxBM25RankingParam
 {
   ObBlockMaxBM25RankingParam()
-    : doc_freq_(0), total_doc_cnt_(0), token_freq_col_idx_(0), doc_length_col_idx_(0) {}
+    : doc_freq_(0), total_doc_cnt_(0), avg_doc_token_cnt_(0.0), token_freq_col_idx_(0), doc_length_col_idx_(0) {}
   ~ObBlockMaxBM25RankingParam() = default;
   int64_t doc_freq_;
   int64_t total_doc_cnt_;
+  double avg_doc_token_cnt_;
   int64_t token_freq_col_idx_;
   int64_t doc_length_col_idx_;
-  TO_STRING_KV(K_(doc_freq), K_(total_doc_cnt), K_(token_freq_col_idx), K_(doc_length_col_idx));
+  TO_STRING_KV(K_(doc_freq), K_(total_doc_cnt), K_(avg_doc_token_cnt), K_(token_freq_col_idx), K_(doc_length_col_idx));
 };
 
 struct ObBlockMaxIPRankingParam
@@ -121,12 +122,12 @@ inline int ObBlockMaxScoreCalc<ObBlockMaxBM25RankingParam>::calc_max_score(const
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null value", K(ret), K(max_token_freq_datum), K(min_doc_length_datum));
   } else {
-    // TODO: use normalized_length instead of doc length as parameter here
     max_score = sql::ObExprBM25::eval(
         max_token_freq_datum.get_int(),
         min_doc_length_datum.get_int(),
         ranking_param_.doc_freq_,
-        ranking_param_.total_doc_cnt_);
+        ranking_param_.total_doc_cnt_,
+        ranking_param_.avg_doc_token_cnt_);
   }
   return ret;
 }

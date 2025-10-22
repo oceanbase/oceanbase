@@ -13,6 +13,7 @@
 #ifndef OB_TEXT_TAAT_ITER_H_
 #define OB_TEXT_TAAT_ITER_H_
 
+#include "ob_inv_idx_param_estimator.h"
 #include "ob_sparse_taat_iter.h"
 #include "ob_text_retrieval_token_iter.h"
 
@@ -29,21 +30,16 @@ struct ObTextTaaTParam
 {
   ObTextTaaTParam()
     : dim_iter_(nullptr), query_tokens_(nullptr), base_param_(nullptr), allocator_(nullptr),
-      total_doc_cnt_scan_param_(nullptr), estimated_total_doc_cnt_(0),
-      total_doc_cnt_iter_(nullptr), total_doc_cnt_expr_(nullptr),
-      mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE), function_lookup_mode_(false) {}
+      bm25_param_est_ctx_(), mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
+      function_lookup_mode_(false) {}
   ~ObTextTaaTParam() {}
-  TO_STRING_KV(K_(base_param), KP_(dim_iter), KP_(query_tokens), KP_(total_doc_cnt_scan_param),
-      K_(estimated_total_doc_cnt), KPC_(total_doc_cnt_iter), KPC_(total_doc_cnt_expr),
+  TO_STRING_KV(K_(base_param), KP_(dim_iter), KP_(query_tokens), K_(bm25_param_est_ctx),
       K_(mode_flag), K_(function_lookup_mode));
   ObISparseRetrievalDimIter *dim_iter_;
   ObIArray<ObString> *query_tokens_;
   ObSparseRetrievalMergeParam *base_param_;
   common::ObArenaAllocator *allocator_;
-  ObTableScanParam *total_doc_cnt_scan_param_;
-  int64_t estimated_total_doc_cnt_;
-  sql::ObDASScanIter *total_doc_cnt_iter_;
-  sql::ObExpr *total_doc_cnt_expr_;
+  ObBM25ParamEstCtx bm25_param_est_ctx_;
   ObMatchAgainstMode mode_flag_;
   bool function_lookup_mode_;
 };
@@ -53,28 +49,23 @@ class ObTextTaaTIter final : public ObSRTaaTIterImpl
 public:
   ObTextTaaTIter() : ObSRTaaTIterImpl(),
       mem_context_(nullptr),
-      query_tokens_(nullptr), estimated_total_doc_cnt_(0), total_doc_cnt_scan_param_(nullptr),
-      total_doc_cnt_iter_(nullptr), total_doc_cnt_expr_(nullptr),
+      query_tokens_(nullptr),
+      bm25_param_estimator_(),
       mode_flag_(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE),
-      total_doc_cnt_calculated_(false), function_lookup_mode_(false) {}
+      function_lookup_mode_(false) {}
   virtual ~ObTextTaaTIter() {}
 
   int init(const ObTextTaaTParam &param);
-  virtual void reuse() override;
+  virtual void reuse(const bool switch_tablet = false) override;
   virtual void reset() override;
 protected:
   virtual int pre_process() override;
-  int do_total_doc_cnt();
   virtual int update_dim_iter(const int64_t dim_idx) override;
 protected:
   lib::MemoryContext mem_context_;
   ObIArray<ObString> *query_tokens_;
-  int64_t estimated_total_doc_cnt_;
-  ObTableScanParam *total_doc_cnt_scan_param_;
-  sql::ObDASScanIter *total_doc_cnt_iter_;
-  sql::ObExpr *total_doc_cnt_expr_;
+  ObBM25ParamEstimator bm25_param_estimator_;
   ObMatchAgainstMode mode_flag_;
-  bool total_doc_cnt_calculated_;
   bool function_lookup_mode_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTextTaaTIter);

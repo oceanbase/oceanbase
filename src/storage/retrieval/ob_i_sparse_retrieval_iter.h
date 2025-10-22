@@ -131,7 +131,7 @@ public:
   ObISparseRetrievalMergeIter() : input_row_cnt_(0), output_row_cnt_(0), is_inited_(false) {}
   virtual ~ObISparseRetrievalMergeIter() {}
 
-  virtual void reuse() = 0;
+  virtual void reuse(const bool switch_tablet = false) = 0;
   virtual void reset() = 0;
   virtual int get_next_row() = 0;
   virtual int get_next_rows(const int64_t capacity, int64_t &count) = 0;

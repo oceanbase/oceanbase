@@ -84,10 +84,10 @@ void ObSRLookupIter::reset()
   LOG_DEBUG("reset sr lookup iter");
 }
 
-void ObSRLookupIter::reuse()
+void ObSRLookupIter::reuse(const bool switch_tablet)
 {
   if (OB_NOT_NULL(merge_iter_)) {
-    merge_iter_->reuse();
+    merge_iter_->reuse(switch_tablet);
   }
   rangekey_size_ = 0;
   input_row_cnt_ = 0;

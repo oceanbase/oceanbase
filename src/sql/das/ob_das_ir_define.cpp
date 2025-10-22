@@ -47,6 +47,26 @@ bool ObTextBlockMaxSpec::is_valid() const
       && 3 == doc_length_idx_;
 }
 
+ObTextAvgDocLenEstSpec::ObTextAvgDocLenEstSpec(common::ObIAllocator &alloc)
+  : col_types_(alloc),
+    col_store_idxes_(alloc),
+    scan_col_proj_(alloc),
+    can_est_by_sum_skip_index_(false) {}
+
+bool ObTextAvgDocLenEstSpec::is_valid() const
+{
+  const bool col_valid = 1 == col_types_.count()
+      && 1 == col_store_idxes_.count()
+      && 1 == scan_col_proj_.count();
+  return col_valid || !can_est_by_sum_skip_index_;
+}
+
+OB_SERIALIZE_MEMBER(ObTextAvgDocLenEstSpec,
+    col_types_,
+    col_store_idxes_,
+    scan_col_proj_,
+    can_est_by_sum_skip_index_);
+
 OB_DEF_SERIALIZE(ObDASIRScanCtDef)
 {
   int ret = OB_SUCCESS;
@@ -70,6 +90,11 @@ OB_DEF_SERIALIZE(ObDASIRScanCtDef)
   if (OB_SUCC(ret) && has_block_max_scan_) {
     OB_UNIS_ENCODE(block_max_spec_);
   }
+  if (OB_SUCC(ret) && has_avg_doc_len_est_) {
+    OB_UNIS_ENCODE(avg_doc_len_est_spec_);
+  }
+  LST_DO_CODE(OB_UNIS_ENCODE,
+    avg_doc_token_cnt_expr_);
   return ret;
 }
 
@@ -96,6 +121,11 @@ OB_DEF_DESERIALIZE(ObDASIRScanCtDef)
   if (OB_SUCC(ret) && has_block_max_scan_) {
     OB_UNIS_DECODE(block_max_spec_);
   }
+  if (OB_SUCC(ret) && has_avg_doc_len_est_) {
+    OB_UNIS_DECODE(avg_doc_len_est_spec_);
+  }
+  LST_DO_CODE(OB_UNIS_DECODE,
+    avg_doc_token_cnt_expr_);
   return ret;
 }
 
@@ -120,6 +150,11 @@ OB_DEF_SERIALIZE_SIZE(ObDASIRScanCtDef)
   if (has_block_max_scan_) {
     OB_UNIS_ADD_LEN(block_max_spec_);
   }
+  if (has_avg_doc_len_est_) {
+    OB_UNIS_ADD_LEN(avg_doc_len_est_spec_);
+  }
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+    avg_doc_token_cnt_expr_);
   return len;
 }
 

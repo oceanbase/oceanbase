@@ -4111,6 +4111,13 @@ int ObTscCgService::generate_text_ir_spec_exprs(const ObTextRetrievalInfo &tr_in
       LOG_WARN("unexpected null relevance expr", K(ret));
     } else if (OB_FAIL(cg_.generate_rt_expr(*tr_info.relevance_expr_, text_ir_scan_ctdef.relevance_expr_))) {
       LOG_WARN("cg rt expr for relevance expr failed", K(ret));
+    } else if (nullptr == tr_info.avg_doc_token_cnt_) {
+      // compatible with privious versions (before 4.5.0.0) which have not support avg doc token count estimation
+      text_ir_scan_ctdef.has_avg_doc_len_est_ = false;
+    } else if (OB_FAIL(generate_text_avg_doc_len_est_ctdef(tr_info, text_ir_scan_ctdef))) {
+      LOG_WARN("failed to generate text avg doc len est ctdef", K(ret));
+    } else {
+      text_ir_scan_ctdef.has_avg_doc_len_est_ = true;
     }
   }
 
@@ -4267,6 +4274,75 @@ int ObTscCgService::generate_text_block_max_scan_ctdef(const ObTextRetrievalInfo
     block_max_spec.max_id_idx_ = 1;
     block_max_spec.token_freq_idx_ = 2;
     block_max_spec.doc_length_idx_ = 3;
+  }
+  return ret;
+}
+
+int ObTscCgService::generate_text_avg_doc_len_est_ctdef(const ObTextRetrievalInfo &tr_info,
+                                                        ObDASIRScanCtDef &text_ir_scan_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObTextAvgDocLenEstSpec &avg_doc_len_est_spec = text_ir_scan_ctdef.avg_doc_len_est_spec_;
+  const ObTableSchema *inv_idx_schema = nullptr;
+  ObSEArray<ObColDesc, 8> inv_idx_col_ids;
+  const ObColumnSchemaV2 *col_schema = nullptr;
+  ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
+  uint64_t column_id = OB_INVALID_ID;
+  // reuse inv idx scan ctdef here, since we only need to access skip index of sum(token_cnt) on basline major sstable
+  const ObDASScanCtDef *inv_idx_scan_ctdef = text_ir_scan_ctdef.get_inv_idx_scan_ctdef();
+  if (OB_ISNULL(tr_info.avg_doc_token_cnt_) || OB_ISNULL(tr_info.token_cnt_column_) || OB_ISNULL(inv_idx_scan_ctdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(tr_info));
+  } else if (OB_FAIL(cg_.generate_rt_expr(*tr_info.avg_doc_token_cnt_, text_ir_scan_ctdef.avg_doc_token_cnt_expr_))) {
+    LOG_WARN("cg rt expr for avg doc token count expr failed", K(ret));
+  } else if (OB_FAIL(avg_doc_len_est_spec.col_types_.init(1))) {
+    LOG_WARN("failed to init avg doc len est col types", K(ret));
+  } else if (OB_FAIL(avg_doc_len_est_spec.col_store_idxes_.init(1))) {
+    LOG_WARN("failed to init avg doc len est col store idxes", K(ret));
+  } else if (OB_FAIL(avg_doc_len_est_spec.scan_col_proj_.init(1))) {
+    LOG_WARN("failed to init avg doc len est scan col proj", K(ret));
+  } else if (FALSE_IT(column_id = tr_info.token_cnt_column_->get_column_id())) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(tr_info.inv_idx_tid_, inv_idx_schema))) {
+    LOG_WARN("get inv idx schema failed", K(ret), K(tr_info.inv_idx_tid_));
+  } else if (OB_ISNULL(inv_idx_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null inv idx schema", K(ret), K(tr_info.inv_idx_tid_));
+  } else if (OB_FAIL(inv_idx_schema->get_multi_version_column_descs(inv_idx_col_ids))) {
+    LOG_WARN("get inv idx col ids failed", K(ret), KPC(inv_idx_schema));
+  } else if (OB_ISNULL(col_schema = inv_idx_schema->get_column_schema(column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get column schema", K(ret), K(column_id));
+  } else if (OB_UNLIKELY(!col_schema->get_skip_index_attr().has_sum())) {
+    text_ir_scan_ctdef.avg_doc_len_est_spec_.can_est_by_sum_skip_index_ = false;
+  } else {
+    int64_t store_idx = -1;
+    int64_t column_proj = -1;
+    for (int64_t i = 0; i < inv_idx_col_ids.count(); ++i) {
+      if (inv_idx_col_ids.at(i).col_id_ == column_id) {
+        store_idx = i;
+        break;
+      }
+    }
+    for (int64_t i = 0; i < inv_idx_scan_ctdef->access_column_ids_.count(); ++i) {
+      if (inv_idx_scan_ctdef->access_column_ids_.at(i) == column_id) {
+        column_proj = i;
+        break;
+      }
+    }
+
+    if (OB_UNLIKELY(-1 == store_idx || -1 == column_proj)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column idx not found", K(ret), K(column_id), K(store_idx), K(column_proj),
+          K(inv_idx_col_ids), KPC(inv_idx_scan_ctdef));
+    } else if (OB_FAIL(avg_doc_len_est_spec.col_types_.push_back(ObSkipIndexColType::SK_IDX_SUM))) {
+      LOG_WARN("failed to push back avg doc len est col type", K(ret));
+    } else if (OB_FAIL(avg_doc_len_est_spec.col_store_idxes_.push_back(store_idx))) {
+      LOG_WARN("failed to push back avg doc len est col store idx", K(ret));
+    } else if (OB_FAIL(avg_doc_len_est_spec.scan_col_proj_.push_back(column_proj))) {
+      LOG_WARN("failed to push back avg doc len est scan col proj", K(ret));
+    } else {
+      text_ir_scan_ctdef.avg_doc_len_est_spec_.can_est_by_sum_skip_index_ = true;
+    }
   }
   return ret;
 }

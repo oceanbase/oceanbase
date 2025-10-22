@@ -49,6 +49,7 @@ struct ObTextRetrievalInfo
     related_doc_cnt_(NULL),
     total_doc_cnt_(NULL),
     doc_token_cnt_(NULL),
+    avg_doc_token_cnt_(NULL),
     relevance_expr_(NULL),
     column_boost_idx_(-1)
   { }
@@ -80,6 +81,7 @@ struct ObTextRetrievalInfo
   ObAggFunRawExpr *related_doc_cnt_;  // count(token_cnt_column)
   ObAggFunRawExpr *total_doc_cnt_;  // count(doc_id_column) or count(data_table_rows)
   ObAggFunRawExpr *doc_token_cnt_;  // sum(token_cnt_column) or the number of doc_length_column_
+  ObRawExpr *avg_doc_token_cnt_; // avg(token_cnt_column) group by doc_id, average doc length
   ObRawExpr *relevance_expr_; // BM25
   int column_boost_idx_;
 };

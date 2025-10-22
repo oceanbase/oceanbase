@@ -117,7 +117,7 @@ void ObSPIVDaaTIter::reset()
   inner_reset();
 }
 
-void ObSPIVDaaTIter::reuse()
+void ObSPIVDaaTIter::reuse(const bool switch_tablet)
 {
   valid_docid_set_.reuse();
   result_docids_.reuse();
@@ -324,12 +324,12 @@ int ObSPIVBMWIter::set_valid_docid_set(const common::hash::ObHashSet<ObDocIdExt>
   return ret;
 }
 
-void ObSPIVBMWIter::reuse()
+void ObSPIVBMWIter::reuse(const bool switch_tablet)
 {
   valid_docid_set_.reuse();
   result_docids_.reuse();
   result_docids_curr_iter_ = OB_INVALID_INDEX_INT64;
-  ObSRBMWIterImpl::reuse();
+  ObSRBMWIterImpl::reuse(switch_tablet);
   for (int64_t i = 0; i < dim_iters_->count(); ++i) {
     static_cast<ObSPIVBlockMaxDimIter *>(dim_iters_->at(i))->reuse();
   }

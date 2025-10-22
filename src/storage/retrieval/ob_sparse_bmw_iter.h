@@ -27,7 +27,7 @@ public:
   ObSRBMWIterImpl();
   virtual ~ObSRBMWIterImpl() {}
 
-  virtual void reuse() override;
+  virtual void reuse(const bool switch_tablet = false) override;
   void reset();
   int init(
       ObSparseRetrievalMergeParam &iter_param,

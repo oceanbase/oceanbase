@@ -1317,7 +1317,9 @@ public:
                              ObRawExpr *related_token_cnt,
                              ObRawExpr *total_doc_cnt,
                              ObRawExpr *doc_token_cnt,
+                             ObRawExpr *avg_doc_token_cnt,
                              ObOpRawExpr *&bm25,
+                             const bool use_avg_doc_token_cnt_pseudo_column,
                              const ObSQLSessionInfo *session);
   static int extract_match_against_filters(const ObIArray<ObRawExpr *> &filters,
                                            ObIArray<ObRawExpr *> &other_filters,

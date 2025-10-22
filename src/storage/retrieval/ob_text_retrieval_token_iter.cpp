@@ -1097,7 +1097,7 @@ int ObTextRetrievalBlockMaxIter::calc_dim_max_score(
   return ret;
 }
 
-int ObTextRetrievalBlockMaxIter::init_block_max_iter()
+int ObTextRetrievalBlockMaxIter::init_block_max_iter(const int64_t total_doc_cnt, const double avg_doc_token_cnt)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1106,6 +1106,8 @@ int ObTextRetrievalBlockMaxIter::init_block_max_iter()
   } else if (OB_UNLIKELY(block_max_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("block max iter already initalized", K(ret));
+  } else if (FALSE_IT(ranking_param_.total_doc_cnt_ = total_doc_cnt)) {
+  } else if (FALSE_IT(ranking_param_.avg_doc_token_cnt_ = avg_doc_token_cnt)) {
   } else if (OB_FAIL(token_iter_.get_token_doc_cnt(ranking_param_.doc_freq_))) {
     LOG_WARN("failed to get token doc cnt", K(ret));
   } else if (OB_FAIL(calc_dim_max_score(*block_max_iter_param_, ranking_param_, *block_max_scan_param_))) {

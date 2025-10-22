@@ -29,11 +29,9 @@ int ObTextDaaTIter::init(const ObTextDaaTParam &param)
   } else if (OB_FAIL(ObSRDaaTIterImpl::init(*param.base_param_, *param.dim_iters_,
                                             *param.allocator_, *param.relevance_collector_))) {
     LOG_WARN("failed to init sr daat iter", K(ret));
+  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
+    LOG_WARN("failed to init bm25 param estimator", K(ret));
   } else {
-    total_doc_cnt_scan_param_ = param.total_doc_cnt_scan_param_;
-    estimated_total_doc_cnt_ = param.estimated_total_doc_cnt_;
-    total_doc_cnt_iter_ = param.total_doc_cnt_iter_;
-    total_doc_cnt_expr_ = param.total_doc_cnt_expr_;
     mode_flag_ = param.mode_flag_;
     function_lookup_mode_ = param.function_lookup_mode_;
   }
@@ -42,8 +40,7 @@ int ObTextDaaTIter::init(const ObTextDaaTParam &param)
 
 void ObTextDaaTIter::reset()
 {
-  total_doc_cnt_calculated_ = false;
-  estimated_total_doc_cnt_ = 0;
+  bm25_param_estimator_.reset();
   // this class can know the type of dim_iters_, but ObSRDaaTIterImpl maybe not
   if (OB_NOT_NULL(dim_iters_)) {
     for (int64_t i = 0; i < dim_iters_->count(); ++i) {
@@ -53,22 +50,19 @@ void ObTextDaaTIter::reset()
   ObSRDaaTIterImpl::reset();
 }
 
-void ObTextDaaTIter::reuse()
+void ObTextDaaTIter::reuse(const bool switch_tablet)
 {
-  if ((OB_NOT_NULL(dim_iters_) && 0 == dim_iters_->count()) || estimated_total_doc_cnt_ > 0) {
-    // do nothing
-  } else if (function_lookup_mode_ && OB_NOT_NULL(total_doc_cnt_scan_param_)
-      && !total_doc_cnt_scan_param_->need_switch_param_) {
+  if ((OB_NOT_NULL(dim_iters_) && 0 == dim_iters_->count())) {
     // do nothing
   } else {
-    total_doc_cnt_calculated_ = false;
+    bm25_param_estimator_.reuse(switch_tablet);
   }
   if (OB_NOT_NULL(dim_iters_)) {
     for (int64_t i = 0; i < dim_iters_->count(); ++i) {
       static_cast<ObTextRetrievalDaaTTokenIter *>(dim_iters_->at(i))->reuse();
     }
   }
-  ObSRDaaTIterImpl::reuse();
+  ObSRDaaTIterImpl::reuse(switch_tablet);
 }
 
 int ObTextDaaTIter::pre_process()
@@ -77,71 +71,31 @@ int ObTextDaaTIter::pre_process()
   if (dim_iters_->count() == 0) {
     ret = OB_ITER_END;
   } else if (iter_param_->need_project_relevance()) {
-    if (total_doc_cnt_calculated_) {
-    } else if (OB_FAIL(do_total_doc_cnt())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to do total document count", K(ret));
-      }
-    } else {
-      total_doc_cnt_calculated_ = true;
+    if (OB_FAIL(bm25_param_estimator_.do_estimation(*iter_param_->eval_ctx_))) {
+      LOG_WARN("failed to do bm25 param estimation", K(ret));
     }
-  }
-  return ret;
-}
-
-int ObTextDaaTIter::do_total_doc_cnt()
-{
-  int ret = OB_SUCCESS;
-  ObEvalCtx::BatchInfoScopeGuard guard(*iter_param_->eval_ctx_);
-  guard.set_batch_idx(0);
-  if (estimated_total_doc_cnt_ <= 0) {
-    if (OB_ISNULL(total_doc_cnt_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null total doc cnt iter", K(ret));
-    } else if (OB_FAIL(total_doc_cnt_iter_->get_next_row())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to get aggregated row from iter", K(ret));
-      }
-    }
-  } else if (OB_ISNULL(total_doc_cnt_expr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null total doc cnt expr", K(ret));
-  } else {
-    // try to do this in das iter
-    ObDatum &total_doc_cnt = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
-    total_doc_cnt.set_int(estimated_total_doc_cnt_);
-    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt));
   }
   return ret;
 }
 
 ObTextBMWIter::ObTextBMWIter()
   : ObSRBMWIterImpl(),
-    estimated_total_doc_cnt_(0),
-    total_doc_cnt_scan_param_(nullptr),
-    whole_doc_cnt_iter_(nullptr),
-    total_doc_cnt_expr_(nullptr),
-    total_doc_cnt_calculated_(false)
-{}
+    bm25_param_estimator_() {}
 
-void ObTextBMWIter::reuse()
+void ObTextBMWIter::reuse(const bool switch_tablet)
 {
-  total_doc_cnt_calculated_ = false;
+  bm25_param_estimator_.reuse(switch_tablet);
   if (OB_NOT_NULL(dim_iters_)) {
     for (int64_t i = 0; i < dim_iters_->count(); ++i) {
       static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->reuse();
     }
   }
-  ObSRBMWIterImpl::reuse();
+  ObSRBMWIterImpl::reuse(switch_tablet);
 }
 
 void ObTextBMWIter::reset()
 {
-  total_doc_cnt_calculated_ = false;
-  estimated_total_doc_cnt_ = 0;
-  total_doc_cnt_scan_param_ = nullptr;
-  whole_doc_cnt_iter_ = nullptr;
-  total_doc_cnt_expr_ = nullptr;
+  bm25_param_estimator_.reset();
   if (OB_NOT_NULL(dim_iters_)) {
     for (int64_t i = 0; i < dim_iters_->count(); ++i) {
       static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->reset();
@@ -161,11 +115,8 @@ int ObTextBMWIter::init(const ObTextDaaTParam &param)
   } else if (OB_FAIL(ObSRBMWIterImpl::init(*param.base_param_, *param.dim_iters_,
                                            *param.allocator_, *param.relevance_collector_))) {
     LOG_WARN("failed to init sr bmw iter", K(ret));
-  } else {
-    total_doc_cnt_scan_param_ = param.total_doc_cnt_scan_param_;
-    estimated_total_doc_cnt_ = param.estimated_total_doc_cnt_;
-    whole_doc_cnt_iter_ = param.total_doc_cnt_iter_;
-    total_doc_cnt_expr_ = param.total_doc_cnt_expr_;
+  } else if (OB_FAIL(bm25_param_estimator_.init(param.bm25_param_est_ctx_))) {
+    LOG_WARN("failed to init bm25 param estimator", K(ret));
   }
   return ret;
 }
@@ -178,13 +129,8 @@ int ObTextBMWIter::get_next_rows(const int64_t capacity, int64_t &count)
     LOG_WARN("not inited", K(ret));
   } else if (dim_iters_->count() == 0) {
     ret = OB_ITER_END;
-  } else if (total_doc_cnt_calculated_) {
-  } else if (OB_FAIL(do_total_doc_cnt())) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("failed to do total document count", K(ret));
-    }
-  } else {
-    total_doc_cnt_calculated_ = true;
+  } else if (OB_FAIL(bm25_param_estimator_.do_estimation(*iter_param_->eval_ctx_))) {
+    LOG_WARN("failed to do bm25 param estimation", K(ret));
   }
 
   if (FAILEDx(ObSRBMWIterImpl::get_next_rows(capacity, count))) {
@@ -195,50 +141,18 @@ int ObTextBMWIter::get_next_rows(const int64_t capacity, int64_t &count)
   return ret;
 }
 
-int ObTextBMWIter::do_total_doc_cnt()
-{
-  int ret = OB_SUCCESS;
-  ObEvalCtx::BatchInfoScopeGuard guard(*iter_param_->eval_ctx_);
-  guard.set_batch_idx(0);
-  if (estimated_total_doc_cnt_ <= 0) {
-    if (OB_ISNULL(whole_doc_cnt_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null whole doc cnt iter", K(ret));
-    } else if (OB_FAIL(whole_doc_cnt_iter_->get_next_row())) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("failed to get aggregated row from iter", K(ret));
-      }
-    }
-  } else if (OB_ISNULL(total_doc_cnt_expr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null total doc cnt expr", K(ret));
-  } else {
-    ObDatum &total_doc_cnt_datum = total_doc_cnt_expr_->locate_datum_for_write(*iter_param_->eval_ctx_);
-    total_doc_cnt_datum.set_int(estimated_total_doc_cnt_);
-    LOG_TRACE("use estimated row count as partition document count", K(ret), K(total_doc_cnt_datum));
-  }
-
-  if (OB_SUCC(ret)) {
-    int64_t total_doc_cnt = 0;
-    if (total_doc_cnt_expr_->enable_rich_format()
-        && is_valid_format(total_doc_cnt_expr_->get_format(*iter_param_->eval_ctx_))) {
-      total_doc_cnt = total_doc_cnt_expr_->get_vector(*iter_param_->eval_ctx_)->get_int(0);
-    } else {
-      total_doc_cnt = total_doc_cnt_expr_->locate_expr_datum(*iter_param_->eval_ctx_).get_int();
-    }
-    for (int64_t i = 0; i < dim_iters_->count(); ++i) {
-      static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i))->set_total_doc_cnt(total_doc_cnt);
-    }
-  }
-  return ret;
-}
-
 int ObTextBMWIter::init_before_wand_process()
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!bm25_param_estimator_.is_estimated())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bm25 param not estimated", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < dim_iters_->count(); ++i) {
     ObTextRetrievalBlockMaxIter *block_max_iter = static_cast<ObTextRetrievalBlockMaxIter *>(dim_iters_->at(i));
-    if (OB_FAIL(block_max_iter->init_block_max_iter())) {
+    if (OB_FAIL(block_max_iter->init_block_max_iter(
+        bm25_param_estimator_.get_total_doc_cnt(), bm25_param_estimator_.get_avg_doc_token_cnt()))) {
       LOG_WARN("failed to init block max iter", K(ret));
     }
   }
