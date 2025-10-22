@@ -6648,6 +6648,7 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
   bool single_part_parallel = false;
   bool is_partition_wise = false;
   int64_t plan_count = -1;
+  bool has_topn_plan = false;
   if (OB_ISNULL(top = candidate_plan.plan_tree_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got NULL plan tree", K(ret));
@@ -6687,17 +6688,10 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
     LOG_TRACE("begin to create dist window plan", K(need_normal_sort), K(need_hash_sort), K(use_topn), K(use_part_topn),
               K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
   }
-
   for (uint64_t i = WinDistAlgo::WIN_DIST_NONE; OB_SUCC(ret) && i <= WinDistAlgo::WIN_DIST_LIST; i = (i << 1)) {
     if (win_dist_methods & i) {
       WinDistAlgo win_dist_algo = get_win_dist_algo(i);
-      if (WinDistAlgo::WIN_DIST_RANGE == win_dist_algo &&
-          OB_FAIL(create_range_list_dist_win_func(win_dist_algo,
-                                                  top,
-                                                  win_func_helper,
-                                                  all_plans))) {
-        LOG_WARN("failed to create range list dist window functions", K(ret));
-      } else if (WinDistAlgo::WIN_DIST_NONE == win_dist_algo &&
+      if (WinDistAlgo::WIN_DIST_NONE == win_dist_algo &&
                  OB_FAIL(create_none_dist_win_func(top,
                                                    win_func_helper,
                                                    need_sort,
@@ -6720,21 +6714,32 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
                                                         prefix_pos,
                                                         all_plans))) {
         LOG_WARN("failed to create hash local dist win func window function", K(ret));
-      } else if (WinDistAlgo::WIN_DIST_LIST == win_dist_algo) {
-        if ((win_func_helper.use_topn_ || win_func_helper.use_part_topn_) &&
-            plan_count >= 0 && plan_count < all_plans.count()) {
-            LOG_TRACE("skip create list dist window");
-            OPT_TRACE("skip create list dist window");
-        } else if (OB_FAIL(create_range_list_dist_win_func(win_dist_algo,
-                                                           top,
-                                                           win_func_helper,
-                                                           all_plans))) {
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    has_topn_plan = (win_func_helper.use_topn_ || win_func_helper.use_part_topn_) &&
+                     plan_count >= 0 && plan_count < all_plans.count();
+    if (has_topn_plan) {
+      LOG_TRACE("skip create range/list dist window");
+      OPT_TRACE("skip create range/list dist window");
+    }
+  }
+  for (uint64_t i = WinDistAlgo::WIN_DIST_NONE; OB_SUCC(ret) && !has_topn_plan && i <= WinDistAlgo::WIN_DIST_LIST; i = (i << 1)) {
+    if (win_dist_methods & i) {
+      WinDistAlgo win_dist_algo = get_win_dist_algo(i);
+      if (WinDistAlgo::WIN_DIST_RANGE == win_dist_algo ||
+          WinDistAlgo::WIN_DIST_LIST == win_dist_algo) {
+        // range-type window need a sort before window op (partition topn is not sufficient)
+        // see DIMA-2025101600111453350 for more info
+        if (OB_FAIL(create_range_list_dist_win_func(top,
+                                                    win_func_helper,
+                                                    all_plans))) {
           LOG_WARN("failed to create range list dist window functions", K(ret));
         }
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     win_func_helper.reset_plan_options();
   }
@@ -7840,8 +7845,7 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
   return ret;
 }
 
-int ObSelectLogPlan::create_range_list_dist_win_func(const WinDistAlgo dist_method,
-                                                     ObLogicalOperator *top,
+int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                      const WinFuncOpHelper &win_func_helper,
                                                      ObIArray<CandidatePlan> &all_plans)
 {
@@ -7853,16 +7857,11 @@ int ObSelectLogPlan::create_range_list_dist_win_func(const WinDistAlgo dist_meth
   ObRawExpr *random_expr = NULL;
   ObLogicalOperator *receive = NULL;
   ObExchangeInfo exch_info;
-  ObSEArray<bool, 8> pushdown_info;
   const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
   const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
   bool single_part_parallel = false;
   bool is_partition_wise = false;
-  bool is_local_order = false;
-  bool use_part_topn = false;
-  bool use_topn = false;
-  OrderItem hash_sortkey;
-  if (OB_ISNULL(top) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+  if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(top));
   } else if (OB_FAIL(get_range_dist_keys(win_func_helper, win_func_exprs.at(0),
@@ -7878,21 +7877,6 @@ int ObSelectLogPlan::create_range_list_dist_win_func(const WinDistAlgo dist_meth
                                                       need_sort,
                                                       prefix_pos))) {
     LOG_WARN("failed to check if need sort", K(ret));
-  } else if (OB_FALSE_IT(use_part_topn = WinDistAlgo::WIN_DIST_RANGE == dist_method &&
-                                         need_sort && win_func_helper.part_cnt_ > 0 &&
-                                         !win_func_helper.force_normal_sort_ &&
-                                         win_func_helper.enable_topn_ &&
-                                         prefix_pos == 0 &&
-                                         NULL != win_func_helper.topn_const_ &&
-                                         range_dist_keys.count() == win_func_helper.sort_keys_.count())) {
-  } else if (OB_FALSE_IT(use_topn = WinDistAlgo::WIN_DIST_RANGE == dist_method &&
-                                    !win_func_helper.force_hash_sort_ &&
-                                    win_func_helper.enable_topn_ &&
-                                    win_func_helper.partition_exprs_.empty() &&
-                                    NULL != win_func_helper.topn_const_ &&
-                                    range_dist_keys.count() == win_func_helper.sort_keys_.count())) {
-  } else if (use_part_topn && OB_FAIL(create_hash_sortkey(win_func_helper.part_cnt_, sort_keys, hash_sortkey))) {
-    LOG_WARN("failed to create hash sort key", K(ret), K(win_func_helper.part_cnt_), K(sort_keys));
   } else if (OB_FAIL(get_range_list_win_func_exchange_info(win_func_helper.win_dist_method_,
                                                            range_dist_keys,
                                                            exch_info,
@@ -7904,9 +7888,9 @@ int ObSelectLogPlan::create_range_list_dist_win_func(const WinDistAlgo dist_meth
                                                      need_sort,
                                                      prefix_pos,
                                                      top->get_is_local_order(),
-                                                     (use_topn || use_part_topn) ? win_func_helper.topn_const_ : NULL,
-                                                     (use_topn || use_part_topn) ? win_func_helper.is_fetch_with_ties_ : false,
-                                                     use_part_topn ? &hash_sortkey : NULL))) {
+                                                     NULL,
+                                                     false,
+                                                     NULL))) {
     LOG_WARN("failed to allocate sort and exchange as top", K(ret));
   } else if (OB_FAIL(set_exchange_random_expr(top, random_expr))) {
     LOG_WARN("failed to set exchange random expr", K(ret));
@@ -7914,8 +7898,8 @@ int ObSelectLogPlan::create_range_list_dist_win_func(const WinDistAlgo dist_meth
                                                      win_func_exprs,
                                                      single_part_parallel,
                                                      is_partition_wise,
-                                                     use_part_topn, /* use hash sort */
-                                                     (use_topn || use_part_topn), /* use hash topn sort */
+                                                     false, /* use hash sort */
+                                                     false, /* use hash topn sort */
                                                      ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
                                                      range_dist_keys,
                                                      range_dist_keys.count(),
