@@ -236,11 +236,7 @@ public:
     decoder_allocator_.set_reserve_memory(reserve);
     semistruct_decode_ctx_.set_reserve_memory(reserve);
   }
-  virtual int get_column_datum(
-      const ObTableIterParam &iter_param,
-      const ObTableAccessContext &context,
-      const share::schema::ObColumnParam &col_param,
-      const int32_t col_offset,
+  virtual int get_raw_column_datum(const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum) override;
   virtual bool can_apply_black(const common::ObIArray<int32_t> &col_offsets) const override

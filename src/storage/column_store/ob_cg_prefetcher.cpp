@@ -91,12 +91,7 @@ int ObCGPrefetcher::init(
   }
 
   if (OB_SUCC(ret)) {
-    need_prewarm_ =
-        (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
-         ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ || ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
-          is_project_without_filter_)) &&
-        nullptr == agg_group_ &&
-        nullptr == access_ctx_->limit_param_ ;
+    update_need_prewarm();
   }
   return ret;
 }
@@ -125,12 +120,7 @@ int ObCGPrefetcher::switch_context(
   }
 
   if (OB_SUCC(ret)) {
-    need_prewarm_ =
-        (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
-         ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ || ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
-          is_project_without_filter_)) &&
-        nullptr == agg_group_ &&
-        nullptr == access_ctx_->limit_param_ ;
+    update_need_prewarm();
   }
   return ret;
 }
@@ -503,6 +493,8 @@ int ObCGPrefetcher::prefetch_micro_data()
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           // exist only in filter iter
           } else if (nullptr != sstable_index_filter_ && block_info.is_filter_constant()) {
+            access_ctx_->table_store_stat_.skip_index_skip_block_cnt_ += block_info.get_micro_block_count();
+            access_ctx_->table_store_stat_.pushdown_micro_access_cnt_ += block_info.get_micro_block_count();
             if (check_and_update_constant_filter(block_info)) {
               hit_constant_filter = true;
             } else {
@@ -534,6 +526,8 @@ int ObCGPrefetcher::prefetch_micro_data()
             if (OB_FAIL(agg_group_->fill_index_info(block_info, true))) {
               LOG_WARN("Fail to agg index info", K(ret), KPC_(agg_group));
             } else {
+              access_ctx_->table_store_stat_.skip_index_skip_block_cnt_ += block_info.get_micro_block_count();
+              access_ctx_->table_store_stat_.pushdown_micro_access_cnt_ += block_info.get_micro_block_count();
               LOG_DEBUG("[COLUMNSTORE] success to agg index info", K(ret), K(block_info));
             }
           } else if (OB_FAIL(prefetch_data_block(
@@ -657,12 +651,16 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
                          prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
       } else if (prefetcher.check_and_update_constant_filter(index_info)) {
+        prefetcher.access_ctx_->table_store_stat_.skip_index_skip_block_cnt_ += index_info.get_micro_block_count();
+        prefetcher.access_ctx_->table_store_stat_.pushdown_micro_access_cnt_ += index_info.get_micro_block_count();
       } else if (OB_FAIL(prefetcher.can_agg_micro_index(index_info, can_agg))) {
         LOG_WARN("fail to check index info", K(ret), K(index_info), KPC(prefetcher.agg_group_));
       } else if (can_agg) {
         if (OB_FAIL(prefetcher.agg_group_->fill_index_info(index_info, true))) {
           LOG_WARN("Fail to agg index info", K(ret), KPC(prefetcher.agg_group_));
         } else {
+          prefetcher.access_ctx_->table_store_stat_.skip_index_skip_block_cnt_ += index_info.get_micro_block_count();
+          prefetcher.access_ctx_->table_store_stat_.pushdown_micro_access_cnt_ += index_info.get_micro_block_count();
           LOG_DEBUG("[COLUMNSTORE] success to agg index info", K(ret), K(index_info));
         }
       } else {
@@ -858,6 +856,8 @@ int ObCGPrefetcher::prewarm()
                            *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
           LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
         } else if (nullptr != sstable_index_filter_ && block_info.is_filter_constant()) {
+          access_ctx_->table_store_stat_.skip_index_skip_block_cnt_ += block_info.get_micro_block_count();
+          access_ctx_->table_store_stat_.pushdown_micro_access_cnt_ += block_info.get_micro_block_count();
           if (check_and_update_constant_filter(block_info)) {
             prefetched_cnt++;
           } else {
@@ -889,6 +889,15 @@ int ObCGPrefetcher::prewarm()
     }
   }
   return ret;
+}
+
+void ObCGPrefetcher::update_need_prewarm()
+{
+  need_prewarm_ = (ObICGIterator::OB_CG_SCANNER == cg_iter_type_ ||
+                   ((ObICGIterator::OB_CG_ROW_SCANNER == cg_iter_type_ ||
+                     ObICGIterator::OB_CG_GROUP_BY_SCANNER == cg_iter_type_) &&
+                    is_project_without_filter_)) &&
+                  nullptr == agg_group_ && nullptr == access_ctx_->limit_param_;
 }
 
 void ObCGIndexPrefetcher::reset()

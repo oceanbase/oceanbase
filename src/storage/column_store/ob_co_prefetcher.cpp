@@ -161,9 +161,9 @@ int ObCOPrefetcher::refresh_each_levels(
   int32_t prev_block_scan_level = INVALID_LEVEL;
   int32_t level = 0;
   for (; OB_SUCC(ret) && level < index_tree_height_; level++) {
-    auto &tree_handle = static_cast<ObCOIndexTreeLevelHandle &>(tree_handles_[level]);
-    if (0 != level && OB_FAIL(tree_handle.try_advancing_fetch_idx(*this, border_rowkey, range_idx, is_reverse,
-                                                                  level, is_advanced_to))) {
+    auto &tree_handle = static_cast<ObCOIndexTreeLevelHandle&>(tree_handles_[level]);
+    if (0 != level && OB_FAIL(tree_handle.try_advancing_fetch_idx(
+                          *this, border_rowkey, range_idx, level, is_advanced_to))) {
       LOG_WARN("Failed to try advancing fetch_idx", K(ret), K(border_rowkey), K(range_idx));
     } else if (!is_advanced_to) {
       // After advance_to_border return,
@@ -398,13 +398,15 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::try_advancing_fetch_idx(
     ObCOPrefetcher &prefetcher,
     const ObDatumRowkey &border_rowkey,
     const int32_t range_idx,
-    const bool is_reverse,
     const int32_t level,
     bool &is_advanced_to)
 {
   int ret = OB_SUCCESS;
   is_advanced_to = false;
   int64_t prefetch_idx = prefetch_idx_;
+  ObQueryFlag::ScanOrder scan_order = prefetcher.access_ctx_->query_flag_.get_scan_order();
+  const bool is_reverse = ObQueryFlag::ScanOrder::Reverse == scan_order;
+  const bool compare_scan_index = ObQueryFlag::ScanOrder::KeepOrder == scan_order;
   LOG_DEBUG("[COLUMNSTORE] ObCOIndexTreeLevelHandle try_advancing_fetch_idx", K(fetch_idx_),
              K(prefetch_idx_), K(prefetch_idx), K(border_rowkey));
   // Check from prefetch_idx to (fetch_idx_ + 1).
@@ -430,7 +432,7 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::try_advancing_fetch_idx(
     } else if (range_idx != index_info.range_idx()) {
     } else {
       int cmp_ret = 0;
-      if (OB_FAIL(endkey.compare(border_rowkey, *prefetcher.datum_utils_,
+      if (OB_FAIL(endkey.compare(border_rowkey, *prefetcher.datum_utils_, compare_scan_index,
                                               cmp_ret, false))) {
         LOG_WARN("Failed to compare rowkey", K(ret), K(border_rowkey));
       } else if (!is_reverse) {
@@ -578,6 +580,20 @@ int ObCOPrefetcher::update_end_rowid_for_column_store(
   LOG_DEBUG("update_start_and_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
             K(start_row_id), K(start_offset), K(end_offset));
 
+  return ret;
+}
+
+int ObCOPrefetcher::get_border_rowkey_keep_order(ObDatumRowkey& border_rowkey) const
+{
+  INIT_SUCC(ret);
+  border_rowkey = border_rowkey_;
+  if (!access_ctx_->query_flag_.is_keep_order()) {
+  } else if (cur_range_fetch_idx_ > border_rowkey_.scan_index_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Invalid scan index in keep order blockscan!", K(*this));
+  } else if (cur_range_fetch_idx_ < border_rowkey_.scan_index_) {
+    border_rowkey.set_max_rowkey();
+  }
   return ret;
 }
 

@@ -116,6 +116,7 @@ private:
     }
     return can_continuous;
   }
+  void update_need_prewarm();
   struct ObCSIndexTreeLevelHandle : public ObIndexTreeLevelHandle {
   public:
     int prefetch(const int64_t level, ObCGPrefetcher &prefetcher);

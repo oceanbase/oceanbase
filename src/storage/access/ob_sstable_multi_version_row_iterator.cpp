@@ -215,6 +215,7 @@ int ObSSTableMultiVersionRowMultiGetter::inner_open(
       ObDatumRange tmp_multi_version_range;
       for (int i = 0; OB_SUCC(ret) && i < base_rowkeys_->count(); i++) {
         tmp_multi_version_range.reset();
+        tmp_multi_version_range.is_skip_prefetch_ = &base_rowkeys_->at(i).is_skip_prefetch_;
         if (OB_FAIL(base_rowkeys_->at(i).to_multi_version_range(*access_ctx.allocator_, tmp_multi_version_range))) {
           STORAGE_LOG(WARN, "Failed to transfer multi version range", K(ret), K(i), K(base_rowkeys_->at(i)));
         } else if (OB_FAIL(multi_version_ranges_.push_back(tmp_multi_version_range))) {

@@ -103,7 +103,7 @@ int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity, char *tran
     // ObDatumRow does not care about the free of trans_info_ptr's memory
     trans_info_ = trans_info_ptr;
 
-    STORAGE_LOG(DEBUG, "succeed to init datum row", K(ret), K_(count));
+    STORAGE_LOG(DEBUG, "succeed to init datum row", K(ret), K_(count), KPC(this));
   }
 
   return ret;

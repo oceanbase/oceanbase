@@ -708,6 +708,7 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   // step 4 : make sure tx table can be read
   if (OB_SUCC(ret) || OB_TRANS_CTX_NOT_EXIST == ret) {
     check_state_and_epoch_(read_tx_data_arg.tx_id_, read_tx_data_arg.read_epoch_, true /*need_log_error*/, ret);
+    EVENT_INC(ObStatEventIds::TX_TABLE_READ_CNT);
   }
   return ret;
 }

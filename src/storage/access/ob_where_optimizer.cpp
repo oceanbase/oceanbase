@@ -160,7 +160,7 @@ void ObWhereOptimizer::collect_filter_info(
 {
   filter_condition.filter_cost_time_ = filter.get_filter_realtime_statistics().get_filter_cost_time();
   filter_condition.filtered_row_cnt_ = filter.get_filter_realtime_statistics().get_filtered_row_cnt();
-  filter_condition.skip_index_skip_mb_cnt_ = filter.get_filter_realtime_statistics().get_skip_index_skip_mb_cnt();
+  filter_condition.skip_index_skip_block_cnt_ = filter.get_filter_realtime_statistics().get_skip_index_skip_block_cnt();
   filter.get_filter_realtime_statistics().reset();
   filter_condition.filter_ = &filter;
   if (filter_iters_ != nullptr && iter_filter_node_ != nullptr && filter.get_cg_iter_idx() != -1) {

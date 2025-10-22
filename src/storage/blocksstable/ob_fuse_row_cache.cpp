@@ -99,8 +99,7 @@ int ObFuseRowCacheKeyBase::deep_copy(char *buf, const int64_t buf_len, ObFuseRow
 }
 
 ObFuseRowCacheKey::ObFuseRowCacheKey()
-  : base_(),
-    tablet_snapshot_version_(0)
+  : base_()
 {
 }
 
@@ -108,11 +107,9 @@ ObFuseRowCacheKey::ObFuseRowCacheKey(
     const uint64_t tenant_id,
     const ObTabletID &tablet_id,
     const ObDatumRowkey &rowkey,
-    const int64_t tablet_snapshot_version,
     const int64_t schema_column_count,
     const ObStorageDatumUtils &datum_utils)
-  : base_(tenant_id, tablet_id, rowkey, schema_column_count, datum_utils),
-    tablet_snapshot_version_(tablet_snapshot_version)
+  : base_(tenant_id, tablet_id, rowkey, schema_column_count, datum_utils)
 {
 }
 
@@ -120,7 +117,7 @@ int ObFuseRowCacheKey::equal(const ObIKVCacheKey &other, bool &equal) const
 {
   int ret = OB_SUCCESS;
   const ObFuseRowCacheKey &other_key = reinterpret_cast<const ObFuseRowCacheKey &>(other);
-  return tablet_snapshot_version_ == other_key.tablet_snapshot_version_ && base_.equal(other_key.base_, equal);
+  return base_.equal(other_key.base_, equal);
 }
 
 int ObFuseRowCacheKey::hash(uint64_t &hash_value) const
@@ -128,8 +125,6 @@ int ObFuseRowCacheKey::hash(uint64_t &hash_value) const
   int ret = OB_SUCCESS;
   if (OB_FAIL(base_.hash(hash_value))) {
     LOG_WARN("Failed to hash base key", K(ret), K(*this));
-  } else {
-    hash_value = common::murmurhash(&tablet_snapshot_version_, sizeof(tablet_snapshot_version_), hash_value);
   }
   return ret;
 }
@@ -155,7 +150,6 @@ int ObFuseRowCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey
     LOG_WARN("invalid fuse row cache key", K(ret), K(*this));
   } else {
     ObFuseRowCacheKey *pfuse_key = new (buf) ObFuseRowCacheKey();
-    pfuse_key->tablet_snapshot_version_ = tablet_snapshot_version_;
     if (OB_FAIL(base_.deep_copy(buf + sizeof(ObFuseRowCacheKey), buf_len - sizeof(ObFuseRowCacheKey), pfuse_key->base_))) {
       LOG_WARN("fail to deep copy base key", K(ret));
     } else {
@@ -171,7 +165,7 @@ int ObFuseRowCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey
 
 bool ObFuseRowCacheKey::is_valid() const
 {
-  return OB_LIKELY(base_.is_valid() && tablet_snapshot_version_ >= 0);
+  return OB_LIKELY(base_.is_valid());
 }
 
 ObFuseRowCacheValue::ObFuseRowCacheValue()

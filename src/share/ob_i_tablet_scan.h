@@ -174,41 +174,71 @@ struct ObLimitParam
 
 struct ObTSCMonitorInfo
 {
+  uint64_t* block_io_wait_time_us_;
   int64_t* io_read_bytes_;
   int64_t* ssstore_read_bytes_;
-  int64_t* ssstore_read_row_cnt_;
-  int64_t* memstore_read_row_cnt_;
-  uint64_t* block_io_wait_time_us_;
+  int64_t* base_read_row_cnt_;
+  int64_t* delta_read_row_cnt_;
+  int64_t* blockscan_block_cnt_;
+  int64_t* blockscan_row_cnt_;
+  int64_t* storage_filtered_row_cnt_;
+  int64_t* skip_index_skip_block_cnt_;
 
   ObTSCMonitorInfo()
-    : io_read_bytes_(nullptr),
+    : block_io_wait_time_us_(nullptr),
+      io_read_bytes_(nullptr),
       ssstore_read_bytes_(nullptr),
-      ssstore_read_row_cnt_(nullptr),
-      memstore_read_row_cnt_(nullptr),
-      block_io_wait_time_us_(nullptr) {}
+      base_read_row_cnt_(nullptr),
+      delta_read_row_cnt_(nullptr),
+      blockscan_block_cnt_(nullptr),
+      blockscan_row_cnt_(nullptr),
+      storage_filtered_row_cnt_(nullptr),
+      skip_index_skip_block_cnt_(nullptr) {}
 
-  ObTSCMonitorInfo(int64_t* io_read_bytes,
+  ObTSCMonitorInfo(uint64_t* block_io_wait_time_us,
+                    int64_t* io_read_bytes,
                     int64_t* ssstore_read_bytes,
-                    int64_t* ssstore_read_row_cnt,
-                    int64_t* memstore_read_row_cnt,
-                    uint64_t* block_io_wait_time_us)
-    : io_read_bytes_(io_read_bytes),
+                    int64_t* base_read_row_cnt,
+                    int64_t* delta_read_row_cnt,
+                    int64_t* blockscan_block_cnt,
+                    int64_t* blockscan_row_cnt,
+                    int64_t* storage_filtered_row_cnt,
+                    int64_t* skip_index_skip_block_cnt)
+    : block_io_wait_time_us_(block_io_wait_time_us),
+      io_read_bytes_(io_read_bytes),
       ssstore_read_bytes_(ssstore_read_bytes),
-      ssstore_read_row_cnt_(ssstore_read_row_cnt),
-      memstore_read_row_cnt_(memstore_read_row_cnt),
-      block_io_wait_time_us_(block_io_wait_time_us) {}
+      base_read_row_cnt_(base_read_row_cnt),
+      delta_read_row_cnt_(delta_read_row_cnt),
+      blockscan_block_cnt_(blockscan_block_cnt),
+      blockscan_row_cnt_(blockscan_row_cnt),
+      storage_filtered_row_cnt_(storage_filtered_row_cnt),
+      skip_index_skip_block_cnt_(skip_index_skip_block_cnt) {}
 
-  void init(int64_t* io_read_bytes,
+  void init(uint64_t* block_io_wait_time_us,
+            int64_t* io_read_bytes,
             int64_t* ssstore_read_bytes,
-            int64_t* ssstore_read_row_cnt,
-            int64_t* memstore_read_row_cnt,
-            uint64_t* block_io_wait_time_us)
+            int64_t* base_read_row_cnt,
+            int64_t* delta_read_row_cnt,
+            int64_t* blockscan_block_cnt,
+            int64_t* blockscan_row_cnt,
+            int64_t* storage_filtered_row_cnt,
+            int64_t* skip_index_skip_block_cnt)
   {
+    block_io_wait_time_us_ = block_io_wait_time_us;
     io_read_bytes_ = io_read_bytes;
     ssstore_read_bytes_ = ssstore_read_bytes;
-    ssstore_read_row_cnt_ = ssstore_read_row_cnt;
-    memstore_read_row_cnt_ = memstore_read_row_cnt;
-    block_io_wait_time_us_ = block_io_wait_time_us;
+    base_read_row_cnt_ = base_read_row_cnt;
+    delta_read_row_cnt_ = delta_read_row_cnt;
+    blockscan_block_cnt_ = blockscan_block_cnt;
+    blockscan_row_cnt_ = blockscan_row_cnt;
+    storage_filtered_row_cnt_ = storage_filtered_row_cnt;
+    skip_index_skip_block_cnt_ = skip_index_skip_block_cnt;
+  }
+
+  void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us) {
+    if (OB_NOT_NULL(block_io_wait_time_us_)) {
+      *block_io_wait_time_us_ += block_io_wait_time_us;
+    }
   }
 
   void add_io_read_bytes(int64_t io_read_bytes) {
@@ -223,49 +253,83 @@ struct ObTSCMonitorInfo
     }
   }
 
-  void add_ssstore_read_row_cnt(int64_t ssstore_read_row_cnt) {
-    if (OB_NOT_NULL(ssstore_read_row_cnt_)) {
-      *ssstore_read_row_cnt_ += ssstore_read_row_cnt;
+  void add_base_read_row_cnt(int64_t base_read_row_cnt) {
+    if (OB_NOT_NULL(base_read_row_cnt_)) {
+      *base_read_row_cnt_ += base_read_row_cnt;
     }
   }
 
-  void add_memstore_read_row_cnt(int64_t memstore_read_row_cnt) {
-    if (OB_NOT_NULL(memstore_read_row_cnt_)) {
-      *memstore_read_row_cnt_ += memstore_read_row_cnt;
+  void add_delta_read_row_cnt(int64_t delta_read_row_cnt) {
+    if (OB_NOT_NULL(delta_read_row_cnt_)) {
+      *delta_read_row_cnt_ += delta_read_row_cnt;
     }
   }
 
-  void add_block_io_wait_time_us(const uint64_t block_io_wait_time_us) {
-    if (OB_NOT_NULL(block_io_wait_time_us_)) {
-      *block_io_wait_time_us_ += block_io_wait_time_us;
+  void add_blockscan_block_cnt(int64_t blockscan_block_cnt) {
+    if (OB_NOT_NULL(blockscan_block_cnt_)) {
+      *blockscan_block_cnt_ += blockscan_block_cnt;
+    }
+  }
+
+  void add_blockscan_row_cnt(int64_t blockscan_row_cnt) {
+    if (OB_NOT_NULL(blockscan_row_cnt_)) {
+      *blockscan_row_cnt_ += blockscan_row_cnt;
+    }
+  }
+
+  void add_storage_filtered_row_cnt(int64_t storage_filtered_row_cnt) {
+    if (OB_NOT_NULL(storage_filtered_row_cnt_)) {
+      *storage_filtered_row_cnt_ += storage_filtered_row_cnt;
+    }
+  }
+
+  void add_skip_index_skip_block_cnt(int64_t skip_index_skip_block_cnt) {
+    if (OB_NOT_NULL(skip_index_skip_block_cnt_)) {
+      *skip_index_skip_block_cnt_ += skip_index_skip_block_cnt;
     }
   }
 
   void reset_stat()
   {
+    if (OB_NOT_NULL(block_io_wait_time_us_)) {
+      *block_io_wait_time_us_ = 0;
+    }
     if (OB_NOT_NULL(io_read_bytes_)) {
       *io_read_bytes_ = 0;
     }
     if (OB_NOT_NULL(ssstore_read_bytes_)) {
       *ssstore_read_bytes_ = 0;
     }
-    if (OB_NOT_NULL(ssstore_read_row_cnt_)) {
-      *ssstore_read_row_cnt_ = 0;
+    if (OB_NOT_NULL(base_read_row_cnt_)) {
+      *base_read_row_cnt_ = 0;
     }
-    if (OB_NOT_NULL(memstore_read_row_cnt_)) {
-      *memstore_read_row_cnt_ = 0;
+    if (OB_NOT_NULL(delta_read_row_cnt_)) {
+      *delta_read_row_cnt_ = 0;
     }
-    if (OB_NOT_NULL(block_io_wait_time_us_)) {
-      *block_io_wait_time_us_ += 0;
+    if (OB_NOT_NULL(blockscan_block_cnt_)) {
+      *blockscan_block_cnt_ = 0;
+    }
+    if (OB_NOT_NULL(blockscan_row_cnt_)) {
+      *blockscan_row_cnt_ = 0;
+    }
+    if (OB_NOT_NULL(storage_filtered_row_cnt_)) {
+      *storage_filtered_row_cnt_ = 0;
+    }
+    if (OB_NOT_NULL(skip_index_skip_block_cnt_)) {
+      *skip_index_skip_block_cnt_ = 0;
     }
   }
 
   DEFINE_TO_STRING(
+    OB_ISNULL(block_io_wait_time_us_) ? J_KV(K(block_io_wait_time_us_)) : J_KV(K(*block_io_wait_time_us_));
     OB_ISNULL(io_read_bytes_) ? J_KV(K(io_read_bytes_)) : J_KV(K(*io_read_bytes_));
     OB_ISNULL(ssstore_read_bytes_) ? J_KV(K(ssstore_read_bytes_)) : J_KV(K(*ssstore_read_bytes_));
-    OB_ISNULL(ssstore_read_row_cnt_) ? J_KV(K(ssstore_read_row_cnt_)) : J_KV(K(*ssstore_read_row_cnt_));
-    OB_ISNULL(memstore_read_row_cnt_) ? J_KV(K(memstore_read_row_cnt_)) : J_KV(K(*memstore_read_row_cnt_));
-    OB_ISNULL(block_io_wait_time_us_) ? J_KV(K(block_io_wait_time_us_)) : J_KV(K(*block_io_wait_time_us_));
+    OB_ISNULL(base_read_row_cnt_) ? J_KV(K(base_read_row_cnt_)) : J_KV(K(*base_read_row_cnt_));
+    OB_ISNULL(delta_read_row_cnt_) ? J_KV(K(delta_read_row_cnt_)) : J_KV(K(*delta_read_row_cnt_));
+    OB_ISNULL(blockscan_block_cnt_) ? J_KV(K(blockscan_block_cnt_)) : J_KV(K(*blockscan_block_cnt_));
+    OB_ISNULL(blockscan_row_cnt_) ? J_KV(K(blockscan_row_cnt_)) : J_KV(K(*blockscan_row_cnt_));
+    OB_ISNULL(storage_filtered_row_cnt_) ? J_KV(K(storage_filtered_row_cnt_)) : J_KV(K(*storage_filtered_row_cnt_));
+    OB_ISNULL(skip_index_skip_block_cnt_) ? J_KV(K(skip_index_skip_block_cnt_)) : J_KV(K(*skip_index_skip_block_cnt_));
   )
 };
 

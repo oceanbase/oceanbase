@@ -83,7 +83,7 @@ public:
 
 protected:
   bool end_of_scan() const;
-  int open_cur_data_block();
+  int open_cur_data_block(bool blockscan=false);
   int init_micro_scanner();
   void get_data_range(const ObMicroIndexInfo &data_info, ObCSRange &range);
 
@@ -161,6 +161,8 @@ protected:
   const ObITableReadInfo *read_info_;
   common::ObFixedArray<ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
   common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> col_params_;
+  // used for CO scanner row store projection
+  common::ObFixedArray<ObStorageDatum, ObIAllocator> default_datums_;
 };
 
 class ObCGSingleRowScanner : public ObCGScanner

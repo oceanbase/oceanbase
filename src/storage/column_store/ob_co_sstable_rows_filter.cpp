@@ -307,6 +307,7 @@ int ObCOSSTableRowsFilter::apply_filter(
     // Call try_locating_cg_iter before pushdown_filter
     // to avoid skip filter because of pruning when apply_filter.
     pd_filter_info_.reuse();
+    pd_filter_info_.context_ = access_ctx_;
     pd_filter_info_.filter_ = filter;
     pd_filter_info_.disable_bypass_ = where_optimizer_ != nullptr ? where_optimizer_->is_disable_bypass() : false;
     pd_filter_info_.first_batch_ = where_optimizer_ != nullptr ? where_optimizer_->is_first_batch() : false;

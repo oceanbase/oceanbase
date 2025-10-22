@@ -2228,10 +2228,11 @@ int ObLobManager::query_outrow(ObLobAccessParam& param, ObLobQueryIter *&result)
   ObLobQueryIterHandler handler(param);
   if (OB_FAIL(handler.init(lob_ctx_.lob_meta_mngr_))) {
     LOG_WARN("init handler fail", K(ret), K(param));
-  } else  if (OB_FAIL(handler.execute())) {
+  } else if (OB_FAIL(handler.execute())) {
     LOG_WARN("handler execute fail", K(ret), K(param));
   } else {
     result = handler.result_;
+    EVENT_INC(ObStatEventIds::OUTROW_LOB_CNT);
   }
   return ret;
 }
@@ -2242,8 +2243,10 @@ int ObLobManager::query_outrow(ObLobAccessParam& param, ObString &buffer)
   ObLobQueryDataHandler handler(param, buffer);
   if (OB_FAIL(handler.init(lob_ctx_.lob_meta_mngr_))) {
     LOG_WARN("init handler fail", K(ret), K(param));
-  } else  if (OB_FAIL(handler.execute())) {
+  } else if (OB_FAIL(handler.execute())) {
     LOG_WARN("handler execute fail", K(ret), K(param));
+  } else {
+    EVENT_INC(ObStatEventIds::OUTROW_LOB_CNT);
   }
   return ret;
 }

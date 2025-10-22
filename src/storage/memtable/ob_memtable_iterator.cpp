@@ -137,6 +137,7 @@ int ObMemtableGetIterator::inner_get_next_row(const ObDatumRow *&row)
     ++rowkey_iter_;
     cur_row_.scan_index_ = 0;
     row = &cur_row_;
+    ++context_->table_store_stat_.memstore_read_row_cnt_;
     if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
                     OB_FAIL(context_->check_filtered_by_base_version(cur_row_)))) {
       TRANS_LOG(WARN, "check base version filter fail", K(ret));
@@ -285,6 +286,7 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   }
 
   if (OB_SUCC(ret)) {
+    ++context_->table_store_stat_.memstore_read_row_cnt_;
     if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
                     OB_FAIL(context_->check_filtered_by_base_version(*(const_cast<ObDatumRow *>(row)))))) {
       TRANS_LOG(WARN, "check base version filter fail", K(ret));
@@ -344,7 +346,7 @@ int ObMemtableMGetIterator::init(
   }
 
   char *trans_info_ptr = nullptr;
-  const ObITableReadInfo *read_info = param.get_read_info();
+  const ObITableReadInfo *read_info = param.get_read_info(context.use_fuse_row_cache_);
   context_ = &context;
   if (param.need_trans_info()) {
     int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
@@ -396,6 +398,9 @@ int ObMemtableMGetIterator::inner_get_next_row(const ObDatumRow *&row)
   } else {
     if (rowkey_iter_ >= rowkeys_->count()) {
       ret = OB_ITER_END;
+    } else if (rowkeys_->at(rowkey_iter_).is_skip_prefetch_) {
+      ++rowkey_iter_;
+      row = nullptr;
     } else if (OB_FAIL(memtable_->get(
                            *param_,
                            *context_,
@@ -407,6 +412,7 @@ int ObMemtableMGetIterator::inner_get_next_row(const ObDatumRow *&row)
       cur_row_.scan_index_ = rowkey_iter_;
       ++rowkey_iter_;
       row = &cur_row_;
+      ++context_->table_store_stat_.memstore_read_row_cnt_;
       if (OB_UNLIKELY(IF_NEED_CHECK_BASE_VERSION_FILTER(context_) &&
                       OB_FAIL(context_->check_filtered_by_base_version(cur_row_)))) {
         TRANS_LOG(WARN, "check base version filter fail", K(ret));
@@ -679,6 +685,7 @@ int ObMemtableMultiVersionScanIterator::inner_get_next_row(const ObDatumRow *&ro
         value_iter_->print_cur_status();
       }
     } else {
+      ++context_->table_store_stat_.memstore_read_row_cnt_;
       if (key_first_row_) {
         row_.set_first_multi_version_row();
         key_first_row_ = false;

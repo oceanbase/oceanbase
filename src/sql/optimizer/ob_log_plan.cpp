@@ -17784,6 +17784,8 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ALWAYS_USE_CO_SCAN)
+
 int ObLogPlan::will_use_column_store(const uint64_t table_id,
                                     const uint64_t index_id,
                                     const uint64_t ref_table_id,
@@ -17850,6 +17852,9 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
     use_row_store = true;
     use_column_store = false;
   } else if (ObTableAccessPolicy::COLUMN_STORE == get_optimizer_context().get_table_acces_policy()) {
+    use_row_store = false;
+    use_column_store = true;
+  } else if (has_column_store && OB_SUCCESS != ERRSIM_ALWAYS_USE_CO_SCAN) {
     use_row_store = false;
     use_column_store = true;
   } else {

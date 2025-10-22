@@ -13,6 +13,7 @@
 #ifndef OB_STORAGE_TABLE_ACCESS_PARAM_H
 #define OB_STORAGE_TABLE_ACCESS_PARAM_H
 
+#include "ob_common_types.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_datum_range.h"
 #include "ob_sstable_index_filter.h"
@@ -57,7 +58,7 @@ public:
         && (nullptr == rowkey_read_info_ || rowkey_read_info_->is_valid());
   }
   int refresh_lob_column_out_status();
-  bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const;
+  bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type = StorageScanType::NORMAL) const;
   //temp solution
   int get_cg_column_param(const share::schema::ObColumnParam *&column_param) const;
   int build_index_filter_for_row_store(common::ObIAllocator *allocator);

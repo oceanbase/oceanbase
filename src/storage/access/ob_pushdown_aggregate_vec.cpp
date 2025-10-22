@@ -729,23 +729,13 @@ int ObAggCellVec::get_def_datum(const blocksstable::ObStorageDatum *&default_dat
     default_datum = &default_datum_;
   } else {
     const ObObj &def_cell = basic_info_.col_param_->get_orig_default_value();
-    if (!def_cell.is_nop_value()) {
-      if (OB_FAIL(default_datum_.from_obj_enhance(def_cell))) {
-        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
-        // lob def value must have no lob header when not null, should add lob header for default value
-        ObString data = default_datum_.get_string();
-        ObString out;
-        if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
-          LOG_WARN("failed to fill lob header for column.", K(ret), K(def_cell), K(data));
-        } else {
-          default_datum_.set_string(out);
-        }
-      }
-      default_datum = &default_datum_;
-    } else {
+    if (def_cell.is_nop_value()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected, virtual column is not supported", K(ret), K(basic_info_.col_offset_));
+    }
+    OZ(ObNewColumnCommonDecoder::get_default_datum(*basic_info_.col_param_, /* need_padding */ false, allocator_, default_datum_));
+    if (OB_SUCC(ret)) {
+      default_datum = &default_datum_;
     }
   }
   return ret;

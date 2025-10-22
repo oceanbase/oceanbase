@@ -163,13 +163,10 @@ public:
       const int64_t row_cap,
       ObDatumRow &row_buf,
       common::ObIArray<storage::ObAggCell*> &agg_cells) override;
-  virtual int get_column_datum(
-      const ObTableIterParam &iter_param,
-      const ObTableAccessContext &context,
-      const share::schema::ObColumnParam &col_param,
+  virtual int get_raw_column_datum(
       const int32_t col_offset,
       const int64_t row_index,
-      ObStorageDatum &datum) override;
+      ObStorageDatum &datum) override final;
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,

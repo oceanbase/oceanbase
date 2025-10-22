@@ -275,6 +275,8 @@ void ObTableAccessParam::reset()
   is_inited_ = false;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_KEEP_ORDER_BLOCKSCAN)
+
 int ObTableAccessParam::init(
     const ObTableScanParam &scan_param,
     const ObTabletHandle *tablet_handle,
@@ -350,10 +352,11 @@ int ObTableAccessParam::init(
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
     iter_param_.ls_id_ = scan_param.ls_id_;
     iter_param_.is_column_replica_table_ = table_param.is_column_replica_table();
-     // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
-     // disable blockscan if use index skip scan as no large range to scan
-    if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_ ||
-                    !scan_param.scan_flag_.is_use_block_cache())) {
+    // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
+    // disable blockscan if use index skip scan as no large range to scan
+    if (OB_UNLIKELY(!scan_param.scan_flag_.is_use_block_cache() ||
+                    (scan_param.scan_flag_.is_keep_order() &&
+                     OB_SUCCESS == ERRSIM_ENABLE_KEEP_ORDER_BLOCKSCAN))) {
       iter_param_.disable_blockscan();
     }
     iter_param_.auto_split_filter_type_ = scan_param.auto_split_filter_type_;

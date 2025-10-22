@@ -1817,6 +1817,7 @@ const int64_t OB_ROW_DEFAULT_COLUMNS_COUNT = 32;
 const int64_t OB_MAX_UNUSED_COLUMNS_COUNT = 128; // drop column online.
 const int64_t OB_DEFAULT_COL_DEC_NUM = common::OB_ROW_MAX_COLUMNS_COUNT / 80;
 const int64_t OB_DEFAULT_MULTI_GET_ROWKEY_NUM = 8;
+const int64_t OB_MULTI_GET_OPEN_ROWKEY_NUM = 32;
 const int64_t OB_MAX_TIMESTAMP_LENGTH = 32;
 // nls_date_format = 'yyyy-mm-dd hh24:mi:ss.ff TZR TZD' max length of TZR is 38, max length of TZD is 6
 // 27 + 38 + 1 + 6 = 72; set OB_MAX_TIMESTAMP_TZ_LENGTH = 128 in case add new time zone with a long name

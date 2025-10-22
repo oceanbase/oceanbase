@@ -39,11 +39,12 @@ public:
   virtual ~ObCGGetter();
   void reset();
   void reuse();
+  bool is_valid() const { return is_inited_; }
   int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper,
-      const blocksstable::ObDatumRowkey &idx_key);
+      ObSSTableWrapper &wrapper);
+  int open(const blocksstable::ObDatumRowkey &idx_key);
   int get_next_row(ObMacroBlockReader &block_reader, const blocksstable::ObDatumRow *&store_row);
   int assign(const ObCGGetter &other)
   {
@@ -98,6 +99,7 @@ public:
   virtual ~ObCGSSTableRowGetter();
   virtual void reset() override;
   virtual void reuse() override;
+  void reuse_row_getters();
   int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
@@ -114,7 +116,7 @@ private:
   int init_cg_param_pool(ObTableAccessContext &context);
   int prepare_reader(const ObRowStoreType store_type);
   int get_row_id(ObSSTableReadHandle &read_handle, ObCSRowId &row_id);
-  int prepare_cg_row_getter(const ObCSRowId row_id, const ObNopPos *nop_pos, ObIArray<int32_t> &project_idxs);
+  int prepare_cg_row_getter(const ObNopPos *nop_pos, ObIArray<int32_t> &project_idxs);
   int fetch_rowkey_row(ObSSTableReadHandle &read_handle, const ObDatumRow *&store_row);
   int get_not_exist_row(const ObDatumRowkey &rowkey, ObDatumRow &row);
 

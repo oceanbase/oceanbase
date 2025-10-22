@@ -47,8 +47,8 @@ ObDASTCB::ObDASTCB()
     vec_result_iter_(),
     io_read_bytes_(0),
     ssstore_read_bytes_(0),
-    ssstore_read_row_cnt_(0),
-    memstore_read_row_cnt_(0),
+    base_read_row_cnt_(0),
+    delta_read_row_cnt_(0),
     mem_profile_key_(),
     das_execute_remote_info_(),
     tcb_lock_()
@@ -430,8 +430,8 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
         if (OB_NOT_NULL(scan_rtdef->tsc_monitor_info_)) {
           tcb->io_read_bytes_ += *scan_rtdef->tsc_monitor_info_->io_read_bytes_;
           tcb->ssstore_read_bytes_ += *scan_rtdef->tsc_monitor_info_->ssstore_read_bytes_;
-          tcb->ssstore_read_row_cnt_ += *scan_rtdef->tsc_monitor_info_->ssstore_read_row_cnt_;
-          tcb->memstore_read_row_cnt_ += *scan_rtdef->tsc_monitor_info_->memstore_read_row_cnt_;
+          tcb->base_read_row_cnt_ += *scan_rtdef->tsc_monitor_info_->base_read_row_cnt_;
+          tcb->delta_read_row_cnt_ += *scan_rtdef->tsc_monitor_info_->delta_read_row_cnt_;
           scan_rtdef->tsc_monitor_info_->reset_stat();
         }
 
@@ -833,8 +833,8 @@ int ObDASTaskResultMgr::erase_task_result(int64_t task_id, bool need_unreg_dm)
 int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
                                              int64_t &io_read_bytes,
                                              int64_t &ssstore_read_bytes,
-                                             int64_t &ssstore_read_row_cnt,
-                                             int64_t &memstore_read_row_cnt)
+                                             int64_t &base_read_row_cnt,
+                                             int64_t &delta_read_row_cnt)
 {
   int ret = OB_SUCCESS;
   bool has_more = false;
@@ -895,8 +895,8 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
         if (tcb->packet_cnt_ == 0) {
           io_read_bytes += tcb->io_read_bytes_;
           ssstore_read_bytes += tcb->ssstore_read_bytes_;
-          ssstore_read_row_cnt += tcb->ssstore_read_row_cnt_;
-          memstore_read_row_cnt += tcb->memstore_read_row_cnt_;
+          base_read_row_cnt += tcb->base_read_row_cnt_;
+          delta_read_row_cnt += tcb->delta_read_row_cnt_;
         }
         tcb->packet_cnt_++;
       }

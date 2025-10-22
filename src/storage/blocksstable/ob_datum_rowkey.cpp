@@ -27,7 +27,8 @@ ObDatumRowkey ObDatumRowkey::MIN_ROWKEY(&ObDatumRowkey::MIN_DATUM, 1);
 ObDatumRowkey ObDatumRowkey::MAX_ROWKEY(&ObDatumRowkey::MAX_DATUM, 1);
 
 ObDatumRowkey::ObDatumRowkey(ObStorageDatum *datums, const int64_t datum_cnt)
-  : datum_cnt_(datum_cnt),
+  : is_skip_prefetch_(false),
+    datum_cnt_(datum_cnt),
     group_idx_(0),
     hash_(0),
     datums_(datums),
@@ -35,7 +36,8 @@ ObDatumRowkey::ObDatumRowkey(ObStorageDatum *datums, const int64_t datum_cnt)
 {}
 
 ObDatumRowkey::ObDatumRowkey(ObStorageDatumBuffer &datum_buffer)
-  : datum_cnt_(datum_buffer.get_capacity()),
+  : is_skip_prefetch_(false),
+    datum_cnt_(datum_buffer.get_capacity()),
     group_idx_(0),
     hash_(0),
     datums_(datum_buffer.get_datums()),
@@ -152,6 +154,48 @@ int ObDatumRowkey::compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumU
   return ret;
 }
 
+int ObDatumRowkey::compare(const ObDatumRowkey &rhs,
+                           const ObStorageDatumUtils &datum_utils,
+                           const bool compare_scan_idx,
+                           int &cmp_ret,
+                           const bool compare_datum_cnt) const
+{
+  INIT_SUCC(ret);
+  cmp_ret = 0;
+  if (!compare_scan_idx) {
+  } else if (this->scan_index_ > rhs.scan_index_) {
+    cmp_ret = 1;
+  } else if (this->scan_index_ < rhs.scan_index_) {
+    cmp_ret = -1;
+  }
+  if (0 != cmp_ret) {
+  } else if (OB_FAIL(compare(rhs, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare rowkey!");
+  }
+  return ret;
+}
+
+int ObDatumRowkey::compare(const ObCommonDatumRowkey &rhs,
+                           const ObStorageDatumUtils &datum_utils,
+                           const bool compare_scan_idx,
+                           int &cmp_ret,
+                           const bool compare_datum_cnt) const
+{
+  INIT_SUCC(ret);
+  cmp_ret = 0;
+  if (!compare_scan_idx) {
+  } else if (this->scan_index_ > rhs.get_scan_index()) {
+    cmp_ret = 1;
+  } else if (this->scan_index_ < rhs.get_scan_index()) {
+    cmp_ret = -1;
+  }
+  if (0 != cmp_ret) {
+  } else if (OB_FAIL(compare(rhs, datum_utils, cmp_ret, compare_datum_cnt))) {
+    STORAGE_LOG(WARN, "Failed to compare rowkey!");
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObDatumRowkey)
 {
   int ret = OB_SUCCESS;
@@ -197,7 +241,7 @@ DEF_TO_STRING(ObDatumRowkey)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(datum_cnt), K_(group_idx), K_(hash));
+  J_KV(K_(is_skip_prefetch), K_(datum_cnt), K_(group_idx), K_(scan_index), K_(hash));
   J_COMMA();
   J_ARRAY_START();
   if (nullptr != buf && buf_len >= 0) {
@@ -462,6 +506,7 @@ int ObDatumRowkey::to_multi_version_range(common::ObIAllocator &allocator, ObDat
 
 void ObDatumRowkey::reuse()
 {
+  is_skip_prefetch_ = false;
   group_idx_ = 0;
   store_rowkey_.reset();
   hash_ = 0;
@@ -603,6 +648,21 @@ int ObCommonDatumRowkey::compare(const ObCommonDatumRowkey &rhs, const ObStorage
   return ret;
 }
 
+int ObCommonDatumRowkey::compare(const ObDatumRowkey &rhs,
+                                 const ObStorageDatumUtils &datum_utils,
+                                 const bool compare_scan_idx,
+                                 int &cmp_ret,
+                                 const bool compare_datum_cnt) const
+{
+  INIT_SUCC(ret);
+  if (OB_FAIL(rhs.compare(
+          *this, datum_utils, compare_scan_idx, cmp_ret, compare_datum_cnt))) {
+  } else {
+    cmp_ret = -cmp_ret;
+  }
+  return ret;
+}
+
 int ObCommonDatumRowkey::deep_copy(ObDatumRowkey &dest, common::ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
@@ -613,6 +673,9 @@ int ObCommonDatumRowkey::deep_copy(ObDatumRowkey &dest, common::ObIAllocator &al
     ret = rowkey_->deep_copy(dest, allocator);
   } else {
     ret = discrete_rowkey_->deep_copy(dest, allocator);
+  }
+  if (OB_SUCC(ret)) {
+    dest.scan_index_ = this->scan_index_;
   }
   return ret;
 }
@@ -629,11 +692,21 @@ int ObCommonDatumRowkey::get_column_int(const int64_t col_idx, int64_t &int_val)
   return ret;
 }
 
+void ObCommonDatumRowkey::set_scan_index(int64_t scan_index)
+{
+  scan_index_ = scan_index;
+}
+
+int64_t ObCommonDatumRowkey::get_scan_index() const
+{
+  return scan_index_;
+}
+
 DEF_TO_STRING(ObCommonDatumRowkey)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(type), K_(key_ptr));
+  J_KV(K_(type), K_(scan_index), K_(key_ptr));
   J_COMMA();
   if (is_compact_rowkey()) {
     J_KV(KPC_(rowkey));

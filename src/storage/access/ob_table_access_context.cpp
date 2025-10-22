@@ -218,6 +218,8 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     table_scan_stat_ = &scan_param.main_table_scan_stat_;
     limit_param_ = scan_param.limit_param_.is_valid() ? &scan_param.limit_param_ : NULL;
     table_scan_stat_->reset();
+    table_store_stat_.in_bf_cache_threshold_ = scan_param.in_bf_cache_threshold_;
+    table_store_stat_.in_fuse_row_cache_threshold_ = scan_param.in_fuse_row_cache_threshold_;
     table_store_stat_.in_row_cache_threshold_ = scan_param.in_row_cache_threshold_;
     trans_version_range_ = trans_version_range;
     need_scn_ = scan_param.need_scn_ ||

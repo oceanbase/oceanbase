@@ -141,6 +141,8 @@ public:
         tx_seq_base_(-1),
         read_version_range_(),
         need_update_tablet_param_(false),
+        in_bf_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+        in_fuse_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
         in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
         mds_collector_(nullptr),
         row_scan_cnt_(NULL),
@@ -184,6 +186,8 @@ public:
   int64_t tx_seq_base_;  // used by lob when main table is read_latest
   ObVersionRange read_version_range_;
   bool need_update_tablet_param_; // whether need to update tablet-level param, such as split filter param
+  int64_t in_bf_cache_threshold_;
+  int64_t in_fuse_row_cache_threshold_;
   int64_t in_row_cache_threshold_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
   uint64_t *row_scan_cnt_;

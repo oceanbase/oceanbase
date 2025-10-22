@@ -251,25 +251,11 @@ int ObAggCell::prepare_def_datum()
   if (def_datum_.is_nop()) {
     def_datum_.reuse();
     const ObObj &def_cell = basic_info_.col_param_->get_orig_default_value();
-    if (!def_cell.is_nop_value()) {
-      if (OB_FAIL(def_datum_.from_obj_enhance(def_cell))) {
-        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      } else if (OB_FAIL(pad_column_if_need(def_datum_, allocator_, false))) {
-        LOG_WARN("Failed to pad default datum", K(ret), K_(basic_info), K_(def_datum));
-      } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
-        // lob def value must have no lob header when not null, should add lob header for default value
-        ObString data = def_datum_.get_string();
-        ObString out;
-        if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
-          LOG_WARN("failed to fill lob header for column.", K(ret), K(def_cell), K(data));
-        } else {
-          def_datum_.set_string(out);
-        }
-      }
-    } else {
+    if (def_cell.is_nop_value()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected, virtual column is not supported", K(ret), K(basic_info_.col_offset_));
     }
+    OZ(ObNewColumnCommonDecoder::get_default_datum(*basic_info_.col_param_, basic_info_.need_padding(), allocator_, def_datum_));
   }
   return ret;
 }

@@ -50,7 +50,6 @@ public:
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) {
     int ret = common::OB_SUCCESS;
     if (OB_SUCC(inner_get_next_row(row))) {
-      EVENT_INC(ObStatEventIds::MEMSTORE_READ_ROW_COUNT);
     }
     return ret;
   }
@@ -86,7 +85,8 @@ public:
 
 protected:
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
-
+public:
+  TO_STRING_KV(K_(is_inited), K_(rowkey_iter), KPC_(rowkey), K_(cur_row));
 private:
   // means GETITER
   static const uint64_t VALID_MAGIC_NUM = 0x5245544954454700;
@@ -158,6 +158,8 @@ public:
       const void *query_range) override;
   virtual void reset();
   virtual void reuse() override { reset(); }
+  TO_STRING_KV(K_(is_inited), K_(rowkey_iter), KPC_(rowkeys), K_(cur_row));
+public:
   static const int64_t ROW_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
 
 protected:

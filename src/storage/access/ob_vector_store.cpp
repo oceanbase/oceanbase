@@ -131,26 +131,9 @@ int ObVectorStore::init(const ObTableAccessParam &param, common::hash::ObHashSet
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected column id", K(ret), K(out_cols_projector.at(i)), K(out_cols_param->count()));
         } else {
-          const common::ObObjMeta &obj_meta = out_cols_param->at(out_cols_projector.at(i))->get_meta_type();
           col_param = out_cols_param->at(out_cols_projector.at(i));
-          ObObj def_cell(out_cols_param->at(out_cols_projector.at(i))->get_orig_default_value());
           blocksstable::ObStorageDatum default_datum;
-          if (def_cell.is_nop_value()) {
-            default_datum.set_nop();
-          } else if (OB_FAIL(default_datum.from_obj(def_cell, expr->obj_datum_map_))) {
-            LOG_WARN("convert obj to datum failed", K(ret), K(def_cell));
-          } else if (obj_meta.is_lob_storage() && !def_cell.is_null()) {
-            // lob def value must have no lob header when not null
-            // When do lob pushdown, should add lob header for default value
-            ObString data = default_datum.get_string();
-            ObString out;
-            if (OB_FAIL(ObLobManager::fill_lob_header(*context_.stmt_allocator_, data, out))) {
-              LOG_WARN("failed to fill lob header for column", K(ret), K(i), K(def_cell), K(data));
-            } else {
-              default_datum.set_string(out);
-            }
-          }
-
+          OZ(ObNewColumnCommonDecoder::get_default_datum(*col_param, false, *context_.stmt_allocator_, default_datum));
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(col_params_.push_back(col_param))) {
             LOG_WARN("failed to push back col param", K(ret), K(col_params_.count()));
@@ -403,7 +386,6 @@ int ObVectorStore::fill_output_rows(
       if (OB_UNLIKELY(IterEndState::LIMIT_ITER_END == iter_end_flag_)) {
         ret = OB_ITER_END;
       }
-      EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, row_capacity);
     }
   }
   LOG_TRACE("[Vectorized] vector store copy rows", K(ret),
@@ -454,7 +436,6 @@ int ObVectorStore::fill_group_by_rows(
     if (OB_FAIL(fill_group_idx(group_idx))) {
       LOG_WARN("Failed to fill group idx", K(ret));
     } else {
-      EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, count_);
       set_end();
       if (!group_by_cell_->is_processing()) {
         begin_index = end_index;
@@ -591,7 +572,6 @@ int ObVectorStore::fill_rows(const int64_t group_idx, const int64_t row_count)
       LOG_WARN("Failed to fill group idx", K(ret));
     } else {
       set_end();
-      EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, row_count);
     }
   }
   return ret;

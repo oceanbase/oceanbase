@@ -511,14 +511,12 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       }
     }
 
+    if (NULL != access_ctx_->table_scan_stat_) {
+      access_ctx_->table_scan_stat_->out_row_cnt_++;
+    }
     if (OB_ITER_END == ret) {
       update_and_report_tablet_stat();
       scan_state_ = ScanState::NONE;
-    }
-    if (OB_SUCC(ret)) {
-      if (NULL != access_ctx_->table_scan_stat_) {
-        access_ctx_->table_scan_stat_->out_row_cnt_++;
-      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -750,6 +748,8 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
   if (OB_ITER_END == ret) {
     update_and_report_tablet_stat();
     scan_state_ = ScanState::NONE;
+  } else if (OB_FAIL(ret)) {
+    LOG_WARN("Failed to get_next_normal rows", KPC(this));
   }
   LOG_TRACE("[Vectorized] get next rows", K(ret), K(count), K(capacity), KPC(block_row_store_));
 
@@ -917,7 +917,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             } else {
               ObDatumRow *out_row = nullptr;
               if (access_param_->iter_param_.use_new_format() &&
-                  (need_init_expr_header || (agg_store_vec->has_aggr_with_expr() && 0 == agg_store_vec->get_row_count())) &&
+                  (need_init_expr_header || 0 == agg_store_vec->get_row_count()) &&
                   OB_FAIL(init_exprs_uniform_header(access_param_->output_exprs_, access_param_->get_op()->get_eval_ctx(), batch_size))) {
                 LOG_WARN("Failed to init vector", K(ret), KPC_(access_param));
               } else if (OB_FAIL(process_fuse_row(
@@ -991,8 +991,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
 
 void ObMultipleMerge::report_tablet_stat()
 {
-  if (OB_ISNULL(access_ctx_) || OB_ISNULL(access_param_)) {
-  } else if (0 == access_ctx_->table_store_stat_.physical_read_cnt_
+  if (OB_ISNULL(access_ctx_) || OB_ISNULL(access_ctx_->table_scan_stat_) || OB_ISNULL(access_param_)) {
+  } else if (0 == access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ && 0 == access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_
       && (0 == access_ctx_->table_store_stat_.micro_access_cnt_ || !access_param_->iter_param_.enable_pd_blockscan())) {
     // empty query, ignore it
   } else {
@@ -1002,8 +1002,10 @@ void ObMultipleMerge::report_tablet_stat()
     tablet_stat.ls_id_ = access_ctx_->ls_id_.id();
     tablet_stat.tablet_id_ = access_ctx_->tablet_id_.id();
     tablet_stat.query_cnt_ = 1;
-    tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_store_stat_.logical_read_cnt_;
-    tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.physical_read_cnt_;
+    tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_scan_stat_->out_row_cnt_ + access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
+    tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ +
+                                         access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_ +
+                                         access_ctx_->table_store_stat_.memstore_read_row_cnt_;
     tablet_stat.scan_micro_block_cnt_ = access_param_->iter_param_.enable_pd_blockscan() ? access_ctx_->table_store_stat_.micro_access_cnt_ : 0;
     tablet_stat.pushdown_micro_block_cnt_ = access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
     if (!tablet_stat.is_valid()) {
@@ -1019,7 +1021,8 @@ int ObMultipleMerge::update_and_report_tablet_stat()
   int ret = OB_SUCCESS;
   EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
   if (NULL != access_ctx_->table_scan_stat_) {
-    access_ctx_->table_scan_stat_->access_row_cnt_ += access_ctx_->table_store_stat_.logical_read_cnt_;
+    access_ctx_->table_scan_stat_->access_row_cnt_ += access_ctx_->table_scan_stat_->out_row_cnt_ +
+                                                      access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
     access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
     access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
     access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
@@ -1030,7 +1033,24 @@ int ObMultipleMerge::update_and_report_tablet_stat()
     access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
-    LOG_DEBUG("[ROW_CACHE_ADJUST] update tablet stat", K(access_ctx_->table_store_stat_), KPC(access_ctx_->table_scan_stat_));
+    if (NULL != access_ctx_->table_scan_stat_->tsc_monitor_info_) {
+      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_base_read_row_cnt(access_ctx_->table_store_stat_.major_sstable_read_row_cnt_);
+      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_delta_read_row_cnt(access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_ +
+                                                                               access_ctx_->table_store_stat_.memstore_read_row_cnt_);
+      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_blockscan_block_cnt(access_ctx_->table_store_stat_.pushdown_micro_access_cnt_);
+      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_blockscan_row_cnt(access_ctx_->table_store_stat_.blockscan_row_cnt_);
+      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_storage_filtered_row_cnt(access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
+      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_skip_index_skip_block_cnt(access_ctx_->table_store_stat_.skip_index_skip_block_cnt_);
+    }
+    EVENT_ADD(ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_);
+    EVENT_ADD(ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.major_sstable_read_row_cnt_);
+    EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ +
+                                                      access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_);
+    EVENT_ADD(ObStatEventIds::MEMSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.memstore_read_row_cnt_);
+    EVENT_ADD(ObStatEventIds::BLOCKSCAN_BLOCK_CNT, access_ctx_->table_store_stat_.pushdown_micro_access_cnt_);
+    EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, access_ctx_->table_store_stat_.blockscan_row_cnt_);
+    EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
+    LOG_DEBUG("[CACHE_DYNAMIC_ADJUST] update tablet stat", K(access_ctx_->table_store_stat_), KPC(access_ctx_->table_scan_stat_));
   }
   const compaction::ObBasicMergeScheduler *scheduler = nullptr;
   if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {
@@ -1050,7 +1070,6 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
   bool need_skip = false;
   bool is_filter_filtered = false;
   out_row = nullptr;
-  access_ctx_->table_store_stat_.logical_read_cnt_++;
   if (OB_FAIL((not_using_static_engine)
           ?  project_row(in_row,
                          access_param_->iter_param_.out_cols_project_,
@@ -1086,6 +1105,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
     }
     if (OB_FAIL(ret)) {
     } else if (is_filter_filtered) {
+      ++access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
       LOG_DEBUG("store row is filtered", K(in_row));
     } else if (nullptr != access_ctx_->limit_param_
                && access_ctx_->out_cnt_ < access_ctx_->limit_param_->offset_) {
@@ -1259,6 +1279,17 @@ void ObMultipleMerge::reclaim_iter_array()
     }
   }
   di_base_iters_.reuse();
+}
+
+ERRSIM_POINT_DEF(EN_FUSE_ROW_CACHE_FORCE_CONTROL);
+bool ObMultipleMerge::is_fuse_row_cache_force_disable() const
+{
+  return OB_INVALID_ARGUMENT == EN_FUSE_ROW_CACHE_FORCE_CONTROL;
+}
+
+bool ObMultipleMerge::is_fuse_row_cache_force_enable() const
+{
+  return OB_ERR_UNEXPECTED == EN_FUSE_ROW_CACHE_FORCE_CONTROL;
 }
 
 int ObMultipleMerge::open()
@@ -2091,7 +2122,8 @@ void ObMultipleMerge::dump_table_statistic_for_4377()
   LOG_ERROR("==================== End table info ====================");
 }
 
-int ObMultipleMerge::check_base_version(const bool is_di_merge_scan) const {
+int ObMultipleMerge::check_base_version(const bool is_di_merge_scan) const
+{
   int ret = OB_SUCCESS;
   if (access_param_->iter_param_.is_delete_insert_) {
     ObITable *table = nullptr;
@@ -2117,13 +2149,38 @@ int ObMultipleMerge::check_base_version(const bool is_di_merge_scan) const {
   return ret;
 }
 
-void ObMultipleMerge::set_base_version() const {
+void ObMultipleMerge::set_base_version() const
+{
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
   if (!access_ctx_->is_mview_query() && is_scan()) {
     access_ctx_->trans_version_range_.base_version_ = major_table_version_;
     LOG_DEBUG("set base version", K_(access_ctx_->trans_version_range));
   }
+}
+
+int ObMultipleMerge::check_final_result(const ObNopPos &nop_pos, bool &final_result)
+{
+  int ret = OB_SUCCESS;
+  int64_t nop_count = nop_pos.count();
+  if (final_result) {
+  } else if (nop_count < 1 || nop_count > 2) {
+  } else {
+    int64_t schema_rowkey_cnt = access_param_->iter_param_.get_read_info()->get_schema_rowkey_count();
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < nop_count; ++i) {
+      int64_t pos = 0;
+      if (OB_FAIL(nop_pos.get_nop_pos(i, pos))) {
+        STORAGE_LOG(WARN, "get nop position failed", K(ret));
+      } else if (pos < schema_rowkey_cnt || pos > schema_rowkey_cnt + 1) {
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      final_result = (nop_count == i);
+    }
+  }
+  return ret;
 }
 
 int64_t ObMultipleMerge::generate_read_tables_version() const
@@ -2154,6 +2211,8 @@ int ObMultipleMerge::prepare_di_base_blockscan(bool di_base_only, ObDatumRow *ro
     STORAGE_LOG(WARN, "row is null or row_flag is not exist", K(ret));
   } else if (OB_FAIL(rowkey.assign(row->storage_datums_, rowkey_col_cnt))) {
     STORAGE_LOG(WARN, "assign rowkey failed", K(ret), K(rowkey_col_cnt));
+  } else {
+    rowkey.scan_index_ = row->scan_index_;
   }
   if (OB_FAIL(ret)) {
   } else if (nullptr == get_di_base_iter()) {

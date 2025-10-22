@@ -83,8 +83,8 @@ int ObDASExtraData::fetch_result()
     if (OB_NOT_NULL(tsc_monitor_info_)) {
       tsc_monitor_info_->add_io_read_bytes(result_.io_read_bytes_);
       tsc_monitor_info_->add_ssstore_read_bytes(result_.ssstore_read_bytes_);
-      tsc_monitor_info_->add_ssstore_read_row_cnt(result_.ssstore_read_row_cnt_);
-      tsc_monitor_info_->add_memstore_read_row_cnt(result_.memstore_read_row_cnt_);
+      tsc_monitor_info_->add_base_read_row_cnt(result_.base_read_row_cnt_);
+      tsc_monitor_info_->add_delta_read_row_cnt(result_.delta_read_row_cnt_);
     }
   }
   return ret;

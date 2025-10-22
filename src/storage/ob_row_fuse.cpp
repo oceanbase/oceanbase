@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #include "storage/ob_row_fuse.h"
 
 namespace oceanbase
@@ -61,7 +60,7 @@ int ObNopPos::get_nop_pos(const int64_t idx, int64_t &pos) const
   int ret = OB_SUCCESS;
   if (idx < 0 || idx >= count_) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(idx), K_(count));
   } else {
     pos = nops_[idx];
   }
@@ -242,7 +241,7 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
         ret = common::OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(former), K(result), K(nop_pos.count()));
       } else {
-        STORAGE_LOG(DEBUG, "start to fuse", K(former), K(result), K(nop_pos.count()));
+        STORAGE_LOG(DEBUG, "start to fuse", K(former), K(result), K(nop_pos));
         int64_t idx = -1;
         int64_t left_cnt = 0;
         bool is_former_nop = true;
@@ -264,7 +263,7 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
         final_result = (0 == left_cnt);
         result.count_ = MAX(result.count_, former.count_);
         nop_pos.count_ = left_cnt;
-        STORAGE_LOG(DEBUG, "fuse row", K(ret), K(former), K(result));
+        STORAGE_LOG(DEBUG, "fuse row", K(ret), K(former), K(result), K(nop_pos));
       }
     } else {
       ret = common::OB_INVALID_ARGUMENT;

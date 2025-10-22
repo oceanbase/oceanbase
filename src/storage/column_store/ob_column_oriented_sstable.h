@@ -172,7 +172,7 @@ public:
       const int64_t new_progressive_merge_step = OB_INVALID_INDEX_INT64 /*only used for co merge*/);
   int set_progressive_merge_step(const int64_t progressive_merge_step);
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
-  OB_INLINE bool is_all_cg_base() const { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
+  OB_INLINE bool is_all_cg_base() const override final { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
   OB_INLINE bool is_rowkey_cg_base() const { return ObCOSSTableBaseType::ROWKEY_CG_TYPE == base_type_; }
   OB_INLINE bool is_inited() const { return is_cgs_empty_co_table() || is_cs_valid(); }
   OB_INLINE bool is_cs_valid() const {

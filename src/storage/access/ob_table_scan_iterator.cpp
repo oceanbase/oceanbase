@@ -565,7 +565,7 @@ int ObTableScanIterator::init_and_open_get_merge_iter_()
       main_table_ctx_.use_fuse_row_cache_ = !single_merge_->is_read_memtable_only();
     }
   } else {
-    INIT_AND_OPEN_ITER(get_merge_, table_scan_range_.get_rowkeys(), false);
+    INIT_AND_OPEN_ITER(get_merge_, table_scan_range_.get_rowkeys(), true);
   }
   return ret;
 }

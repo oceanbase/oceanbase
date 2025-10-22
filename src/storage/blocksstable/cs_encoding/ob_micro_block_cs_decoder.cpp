@@ -581,6 +581,8 @@ int ObCSEncodeBlockGetReader::init(const ObMicroBlockData &block_data,
       LOG_WARN("fail to init transform helper", K(ret));
     } else if (OB_FAIL(do_init(block_data, request_cnt))) {
       LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
+    } else {
+      original_data_length_ = transform_helper_.get_micro_block_header()->original_length_;
     }
   }
   return ret;
@@ -949,6 +951,8 @@ int ObMicroBlockCSDecoder::init(
 
     if (OB_FAIL(do_init(block_data))) {
       LOG_WARN("do init failed", K(ret));
+    } else {
+      original_data_length_ = transform_helper_.get_micro_block_header()->original_length_;
     }
 
     LOG_DEBUG("init ObMicroBlockCSDecoder", K(ret), K(block_data), K(read_info));
@@ -1711,10 +1715,7 @@ int ObMicroBlockCSDecoder::get_row_count(int32_t col_id, const int32_t *row_ids,
   return ret;
 }
 
-int ObMicroBlockCSDecoder::get_column_datum(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
-    const share::schema::ObColumnParam &col_param,
+int ObMicroBlockCSDecoder::get_raw_column_datum(
     const int32_t col_offset,
     const int64_t row_index,
     ObStorageDatum &datum)
@@ -1730,11 +1731,6 @@ int ObMicroBlockCSDecoder::get_column_datum(
     datum.reuse();
     if (OB_FAIL(decoders_[col_offset].decode(row_index, datum))) {
       LOG_WARN("Decode cell failed", K(ret));
-    } else if (col_param.get_meta_type().is_lob_storage() && !datum.is_null()
-               && !datum.is_nop() && !datum.get_lob_data().in_row_) {
-      if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
-        LOG_WARN("Failed to fill lob loactor", K(ret), K(datum), K(context), K(iter_param));
-      }
     }
   }
 

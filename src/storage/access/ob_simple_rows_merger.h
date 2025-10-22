@@ -40,7 +40,7 @@ public:
   virtual int count() const override;
   virtual bool empty() const override;
   virtual bool is_unique_champion() const override;
-  TO_STRING_KV(K_(is_inited), K_(table_cnt), K_(item_cnt))
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(table_cnt), K_(item_cnt));
 
 private:
   bool is_inited_;

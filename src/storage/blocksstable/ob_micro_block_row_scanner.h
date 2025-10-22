@@ -79,7 +79,7 @@ public:
       const ObCGBitmap *parent_bitmap,
       const ObCSRowId micro_start_id,
       int64_t &access_count);
-  int filter_pushdown_filter(
+  virtual int filter_pushdown_filter(
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter,
       sql::PushdownFilterInfo &filter_info,
@@ -95,7 +95,8 @@ public:
       const int64_t datum_offset,
       uint32_t *len_array,
       const bool is_padding_mode,
-      const bool init_vector_header = true);
+      const bool init_vector_header = true,
+      const ObIArray<ObStorageDatum>* default_datums = nullptr);
   int advance_to_border(
       const ObDatumRowkey &rowkey,
       int64_t &start_offset,
@@ -202,9 +203,9 @@ protected:
   int init_bitmap(ObCGBitmap *&bitmap, bool is_all_true);
   int inner_get_next_row_blockscan(const ObDatumRow *&row);
 private:
-  int apply_black_filter_batch(
+  int apply_filter_batch(
       sql::ObPushdownFilterExecutor *parent,
-      sql::ObBlackFilterExecutor &filter,
+      sql::ObPhysicalFilterExecutor &filter,
       sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
 protected:
@@ -414,7 +415,7 @@ private:
 };
 
 // multi version sstable micro block scanner for mow tables
-class ObMultiVersionDIMicroBlockRowScanner final : public ObMultiVersionMicroBlockRowScanner
+class ObMultiVersionDIMicroBlockRowScanner : public ObMultiVersionMicroBlockRowScanner
 {
 public:
   ObMultiVersionDIMicroBlockRowScanner(common::ObIAllocator &allocator)

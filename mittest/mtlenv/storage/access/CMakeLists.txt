@@ -1,3 +1,4 @@
+storage_dml_unittest(test_all_cg_row_scanner)
 storage_dml_unittest(test_block_cache)
 storage_dml_unittest(test_cg_group_by_scanner)
 storage_dml_unittest(test_cs_cg_group_by_scanner)

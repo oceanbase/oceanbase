@@ -14,10 +14,8 @@
 #define OB_STORAGE_BLOCKSSTABLE_OB_IMICRO_BLOCK_READER_H_
 
 //#include "ob_imicro_block_reader.h"
-#include "share/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "common/ob_store_format.h"
-#include "common/ob_store_range.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/access/ob_table_read_info.h"
 #include "ob_block_sstable_struct.h"
@@ -25,6 +23,7 @@
 #include "ob_micro_block_hash_index.h"
 #include "ob_micro_block_header.h"
 #include "sql/engine/expr/ob_expr_add.h"
+#include "storage/column_store/ob_column_store_util.h"
 
 namespace oceanbase
 {
@@ -355,15 +354,20 @@ public:
   {
     return OB_NOT_SUPPORTED;
   }
-  virtual int get_column_datum(
+  int get_column_datum(
       const ObTableIterParam &iter_param,
       const ObTableAccessContext &context,
       const share::schema::ObColumnParam &col_param,
       const int32_t col_offset,
       const int64_t row_index,
+      ObStorageDatum &datum);
+  // only used by ObRAWIndexBlockRowIterator and get_column_datum
+  virtual int get_raw_column_datum(
+      const int32_t col_offset,
+      const int64_t row_index,
       ObStorageDatum &datum)
   {
-    UNUSEDx(iter_param, context, col_param, col_offset, row_index, datum);
+    UNUSEDx(col_offset, row_index, datum);
     return OB_NOT_SUPPORTED;
   }
   virtual bool can_pushdown_decoder(

@@ -29,7 +29,7 @@ class ObFuseRowCacheFetcher final
 public:
   ObFuseRowCacheFetcher();
   ~ObFuseRowCacheFetcher() = default;
-  int init(const StorageScanType type, const ObTabletID &tablet_id, const ObITableReadInfo *read_info, const int64_t tablet_version,
+  int init(const StorageScanType type, const ObTabletID &tablet_id, const ObITableReadInfo *read_info,
            const int64_t read_start_version, const int64_t read_snapshot_version);
   int get_fuse_row_cache(const blocksstable::ObDatumRowkey &rowkey, blocksstable::ObFuseRowValueHandle &handle);
   int put_fuse_row_cache(const blocksstable::ObDatumRowkey &rowkey, blocksstable::ObDatumRow &row);
@@ -38,7 +38,6 @@ private:
   StorageScanType type_;
   ObTabletID tablet_id_;
   const ObITableReadInfo *read_info_;
-  int64_t tablet_version_;
   int64_t read_start_version_;
   int64_t read_snapshot_version_;
 };

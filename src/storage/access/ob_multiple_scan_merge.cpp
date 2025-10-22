@@ -296,6 +296,7 @@ int ObMultipleScanMerge::locate_blockscan_border()
     } else {
       border_key.set_max_rowkey();
     }
+    border_key.scan_index_ = INT32_MAX;
   } else {
     if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized()) {
       access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size());
@@ -321,7 +322,7 @@ int ObMultipleScanMerge::locate_blockscan_border()
       } else {
         item.iter_idx_ = iter_idx;
         if (OB_FAIL(rows_merger_->push(item))) {
-          LOG_WARN("loser tree push error", K(ret));
+          LOG_WARN("loser tree push error", K(ret), KPC_(rows_merger));
         }
       }
     }
@@ -336,6 +337,7 @@ int ObMultipleScanMerge::locate_blockscan_border()
         } else {
           border_key.set_max_rowkey();
         }
+        border_key.scan_index_ = INT32_MAX;
       } else if (OB_FAIL(rows_merger_->rebuild())) {
         LOG_WARN("loser tree rebuild fail", K(ret), K_(consumer_cnt));
       } else if (OB_FAIL(rows_merger_->top(top_item))) {
@@ -348,6 +350,8 @@ int ObMultipleScanMerge::locate_blockscan_border()
         const int64_t rowkey_cnt = access_param_->iter_param_.get_schema_rowkey_count();
         if (OB_FAIL(border_key.assign(top_item->row_->storage_datums_, rowkey_cnt))) {
           LOG_WARN("Fail to assign border key", K(ret), K(rowkey_cnt));
+        } else {
+          border_key.scan_index_ = top_item->row_->scan_index_;
         }
       }
     }
@@ -425,6 +429,9 @@ int ObMultipleScanMerge::supply_consume()
       if (OB_ITER_END != ret) {
         if (OB_PUSHDOWN_STATUS_CHANGED != ret) {
           STORAGE_LOG(WARN, "failed to get next row from iterator", K(ret), "index", iter_idx, "iterator", *iter);
+        } else if (1 != consumer_cnt_) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "get_next_row returns OB_PUSHDOWN_STATUS_CHANGED with consumer_cnt larger than 1", K(ret), "index", iter_idx, "iterator", *iter);
         }
       } else {
         ret = OB_SUCCESS;
@@ -436,14 +443,13 @@ int ObMultipleScanMerge::supply_consume()
       item.iter_idx_ = iter_idx;
       if (1 == consumer_cnt_) {
         if (OB_FAIL(rows_merger_->push_top(item))) {
-          STORAGE_LOG(WARN, "push top error", K(ret));
+          STORAGE_LOG(WARN, "push top error", K(ret), KPC_(rows_merger));
         }
       } else {
         if (OB_FAIL(rows_merger_->push(item))) {
-          STORAGE_LOG(WARN, "loser tree push error", K(ret));
+          STORAGE_LOG(WARN, "loser tree push error", K(ret), KPC_(rows_merger));
         }
       }
-      REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
     }
   }
 
@@ -506,7 +512,6 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             } else {
               consumer_cnt_ = 0;
               need_supply_consume = false;
-              REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             }
           } else if (OB_FAIL(ObRowFuse::fuse_row(*(item.row_), row, nop_pos_, final_result))) {
             STORAGE_LOG(WARN, "failed to merge rows", K(ret), KPC(item.row_), K(row));
@@ -514,7 +519,6 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             //success to get row directly from iterator without merge
             need_supply_consume = false;
             row.scan_index_ = item.row_->scan_index_;
-            REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             break;
           } else {
             //need retry
@@ -664,6 +668,7 @@ int ObMultipleScanMerge::prepare_blockscan(ObStoreRowIterator &iter)
     } else {
       rowkey.set_max_rowkey();
     }
+    rowkey.scan_index_ = INT32_MAX;
   } else if (OB_FAIL(rows_merger_->top(top_item))) {
     STORAGE_LOG(WARN, "Failed to get top item", K(ret));
   } else if (OB_ISNULL(top_item) || OB_ISNULL(top_item->row_)) {
@@ -671,6 +676,8 @@ int ObMultipleScanMerge::prepare_blockscan(ObStoreRowIterator &iter)
     STORAGE_LOG(WARN, "item or row is null", K(ret), KP(top_item));
   } else if (OB_FAIL(rowkey.assign(top_item->row_->storage_datums_, rowkey_col_cnt))) {
     STORAGE_LOG(WARN, "assign rowkey failed", K(ret));
+  } else {
+    rowkey.scan_index_ = top_item->row_->scan_index_;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(iter.refresh_blockscan_checker(rowkey))) {

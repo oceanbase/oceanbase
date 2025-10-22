@@ -472,9 +472,12 @@ int ObDictColumnDecoder::check_skip_block(
     ObStorageDatum max_datum = *(ObDictValueIterator(&ctx, dict_val_cnt, filter.is_padding_mode()) - 1);
     if (OB_FAIL(check_skip_by_monotonicity(filter,
                                            min_datum,
+                                           false, /* is_min_prefix */
                                            max_datum,
+                                           false, /* is_max_prefix */
                                            *pd_filter_info.skip_bit_,
                                            has_null,
+                                           false, /* is_pad_coll mock value */
                                            &result_bitmap,
                                            bool_mask))) {
       LOG_WARN("Failed to check can skip by monotonicity", K(ret), K(min_datum), K(max_datum), K(filter));

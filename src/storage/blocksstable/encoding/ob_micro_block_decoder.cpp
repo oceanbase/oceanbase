@@ -2137,10 +2137,7 @@ int ObMicroBlockDecoder::get_col_datums(
   return ret;
 }
 
-int ObMicroBlockDecoder::get_column_datum(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
-    const share::schema::ObColumnParam &col_param,
+int ObMicroBlockDecoder::get_raw_column_datum(
     const int32_t col_offset,
     const int64_t row_index,
     ObStorageDatum &datum)
@@ -2163,10 +2160,6 @@ int ObMicroBlockDecoder::get_column_datum(
       datum.reuse();
       if (OB_FAIL(decoders_[col_offset].decode(datum, row_index, bs, row_data, row_len))) {
         LOG_WARN("Decode cell failed", K(ret));
-      } else if (col_param.get_meta_type().is_lob_storage() && !datum.is_null() && !datum.get_lob_data().in_row_) {
-        if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
-          LOG_WARN("Failed to fill lob loactor", K(ret), K(datum), K(context), K(iter_param));
-        }
       }
     }
   }

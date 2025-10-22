@@ -137,6 +137,7 @@ public:
   int update_end_rowid_for_column_store(
       const int64_t start_offset,
       const int64_t end_offset);
+  int get_border_rowkey_keep_order(ObDatumRowkey& border_rowkey) const;
 
   INHERIT_TO_STRING_KV("ObCOPrefetcher", ObIndexTreeMultiPassPrefetcher, K_(block_scan_state),
                          K_(block_scan_start_row_id), K_(block_scan_border_row_id));
@@ -149,7 +150,6 @@ private:
         ObCOPrefetcher &prefetcher,
         const ObDatumRowkey &border_rowkey,
         const int32_t range_idx,
-        const bool is_reverse,
         const int32_t level,
         bool &is_advanced_to);
     int advance_to_border(

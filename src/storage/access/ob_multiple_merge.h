@@ -38,7 +38,6 @@ class ObMultipleMerge : public ObQueryRowIterator
 public:
   typedef common::ObSEArray<ObStoreRowIterator *, 8> MergeIterators;
 public:
-
   ObMultipleMerge();
   virtual ~ObMultipleMerge();
   virtual int init(
@@ -62,6 +61,8 @@ public:
   // used for mview table scan
   virtual int open(ObTableScanRange &table_scan_range) { return OB_NOT_SUPPORTED; }
 
+  bool is_fuse_row_cache_force_disable() const;
+  bool is_fuse_row_cache_force_enable() const;
   void disable_padding() { need_padding_ = false; }
   void disable_fill_default() { need_fill_default_ = false; }
   void disable_fill_virtual_column() { need_fill_virtual_columns_ = false; }
@@ -74,6 +75,15 @@ public:
   OB_INLINE void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
   OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || use_di_merge_scan(); }
   OB_INLINE blocksstable::ObDatumRow &get_unprojected_row() { return unprojected_row_; }
+
+  INHERIT_TO_STRING_KV("ObQueryRowIterator", ObQueryRowIterator, K_(scan_cnt),
+                       K_(range_idx_delta), K_(curr_scan_index),
+                       K_(di_base_curr_scan_index), K_(major_table_version),
+                       K_(need_padding), K_(need_fill_default),
+                       K_(need_output_row_with_nop), K_(inited),
+                       K_(iter_del_row), K_(read_memtable_only),
+                       K_(is_unprojected_row_valid), K_(scan_state));
+
 protected:
   int open();
   virtual int calc_scan_range() = 0;
@@ -102,6 +112,7 @@ protected:
   ObStoreRowIterator *get_di_base_iter() { return di_base_iters_.count() > 0 ? di_base_iters_[0] : nullptr; }
   int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
   virtual int get_range_count() const { return 1; }
+  int check_final_result(const ObNopPos &nop_pos, bool &final_result);
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);

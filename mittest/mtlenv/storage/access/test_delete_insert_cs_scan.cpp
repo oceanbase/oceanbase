@@ -51,6 +51,11 @@
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "unittest/storage/test_schema_prepare.h"
 #include "test_merge_basic.h"
+#include "storage/blocksstable/ob_micro_block_row_scanner.h"
+#include "storage/memtable/ob_memtable_block_reader.h"
+#include "storage/access/ob_sstable_row_scanner.h"
+#include "storage/column_store/ob_co_sstable_row_scanner.h"
+#include "storage/column_store/ob_cg_scanner.h"
 
 namespace oceanbase
 {
@@ -121,6 +126,402 @@ public:
   };
 };
 
+class ObMockMicroBlockRowScanner : public ObMicroBlockRowScanner
+{
+public:
+  ObMockMicroBlockRowScanner(ObIAllocator &alloc) :
+                             ObMicroBlockRowScanner(alloc)
+  {}
+
+  virtual int filter_pushdown_filter(
+      sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor *filter,
+      sql::PushdownFilterInfo &pd_filter_info,
+      const bool can_use_vectorize,
+      common::ObBitmap &bitmap) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(nullptr == reader_ || nullptr == filter || !filter->is_filter_node())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid argument", K(ret), KP(reader_), KPC(filter));
+    } else if (filter->is_truncate_node()) {
+      if (OB_FAIL(reader_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
+        LOG_WARN("Failed to pushdown truncate scn filter", K(ret));
+      }
+    } else if (filter->is_sample_node()) {
+      if (ObIMicroBlockReader::MemtableReader == reader_->get_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("memtable does not support sample pushdown", KR(ret), KP(this), KP(reader_));
+      } else if (OB_FAIL(static_cast<ObSampleFilterExecutor *>(filter)->apply_sample_filter(
+                  pd_filter_info,
+                  sstable_->is_major_sstable(),
+                  bitmap))) {
+        LOG_WARN("Failed to execute sample pushdown filter", K(ret));
+      }
+    // use uniform base currently, support new format later
+    // TODO(hanling): If the new vectorization format does not start counting from the 0th row, it can be computed in batches.
+    } else if (can_use_vectorize &&
+              filter->get_op().enable_rich_format_ &&
+              OB_FAIL(init_exprs_uniform_header(filter->get_cg_col_exprs(),
+                                                filter->get_op().get_eval_ctx(),
+                                                filter->get_op().get_eval_ctx().max_batch_size_))) {
+      LOG_WARN("Failed to init exprs vector header", K(ret));
+    } else {
+      switch (reader_->get_type())
+      {
+        case ObIMicroBlockReader::Decoder:
+        case ObIMicroBlockReader::CSDecoder: {
+          ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+          // change to black filter in below situation
+          // 1. if need project lob column and micro block has outrow lob
+          // 2. if it is semistruct_filter_node, but not cs decoder (beacuase semistrcut white filter only support cs decoder)
+          if ((param_->has_lob_column_out() && reader_->has_lob_out_row())
+              || (filter->is_semistruct_filter_node() && ObIMicroBlockReader::CSDecoder != reader_->get_type())) {
+            sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
+            if (OB_FAIL(decoder->filter_pushdown_filter(parent,
+                                                        *physical_filter,
+                                                        pd_filter_info,
+                                                        bitmap))) {
+              LOG_WARN("Failed to execute pushdown filter", K(ret));
+            }
+          } else if (filter->is_filter_black_node()) {
+            sql::ObBlackFilterExecutor *black_filter = static_cast<sql::ObBlackFilterExecutor *>(filter);
+            if (can_use_vectorize && black_filter->can_vectorized()) {
+              if (OB_FAIL(apply_filter_batch(
+                          parent,
+                          *black_filter,
+                          pd_filter_info,
+                          bitmap))) {
+                LOG_WARN("Failed to execute black pushdown filter in batch", K(ret));
+              }
+            } else if (OB_FAIL(decoder->filter_pushdown_filter(
+                        parent,
+                        *black_filter,
+                        pd_filter_info,
+                        bitmap))) {
+              LOG_WARN("Failed to execute black pushdown filter", K(ret));
+            }
+          } else {
+            if (OB_FAIL(decoder->filter_pushdown_filter(
+                        parent,
+                        *static_cast<sql::ObWhiteFilterExecutor *>(filter),
+                        pd_filter_info,
+                        bitmap))) {
+              LOG_WARN("Failed to execute white pushdown filter", K(ret));
+            }
+          }
+          break;
+        }
+
+        case ObIMicroBlockReader::MemtableReader: {
+          if (OB_FAIL(
+                  memtable_reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+            LOG_WARN("failed to execute memtable pushdown filter");
+          }
+          break;
+        }
+
+        case ObIMicroBlockReader::Reader:
+        case ObIMicroBlockReader::NewFlatReader: {
+          if (OB_FAIL(reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+            LOG_WARN("Failed to execute pushdown filter", K(ret));
+          }
+          break;
+        }
+
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unknown type of reader", KR(ret), K(reader_->get_type()));
+          break;
+        }
+      }
+    }
+
+    return ret;
+  }
+};
+
+class ObMockMultiVersionDIMicroBlockRowScanner : public ObMultiVersionDIMicroBlockRowScanner
+{
+public:
+  ObMockMultiVersionDIMicroBlockRowScanner(ObIAllocator &alloc) : ObMultiVersionDIMicroBlockRowScanner(alloc)
+  {}
+
+  virtual int filter_pushdown_filter(
+      sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor *filter,
+      sql::PushdownFilterInfo &pd_filter_info,
+      const bool can_use_vectorize,
+      common::ObBitmap &bitmap) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(nullptr == reader_ || nullptr == filter || !filter->is_filter_node())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid argument", K(ret), KP(reader_), KPC(filter));
+    } else if (filter->is_truncate_node()) {
+      if (OB_FAIL(reader_->filter_pushdown_truncate_filter(parent, *filter, pd_filter_info, bitmap))) {
+        LOG_WARN("Failed to pushdown truncate scn filter", K(ret));
+      }
+    } else if (filter->is_sample_node()) {
+      if (ObIMicroBlockReader::MemtableReader == reader_->get_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("memtable does not support sample pushdown", KR(ret), KP(this), KP(reader_));
+      } else if (OB_FAIL(static_cast<ObSampleFilterExecutor *>(filter)->apply_sample_filter(
+                  pd_filter_info,
+                  sstable_->is_major_sstable(),
+                  bitmap))) {
+        LOG_WARN("Failed to execute sample pushdown filter", K(ret));
+      }
+    // use uniform base currently, support new format later
+    // TODO(hanling): If the new vectorization format does not start counting from the 0th row, it can be computed in batches.
+    } else if (can_use_vectorize &&
+              filter->get_op().enable_rich_format_ &&
+              OB_FAIL(init_exprs_uniform_header(filter->get_cg_col_exprs(),
+                                                filter->get_op().get_eval_ctx(),
+                                                filter->get_op().get_eval_ctx().max_batch_size_))) {
+      LOG_WARN("Failed to init exprs vector header", K(ret));
+    } else {
+      switch (reader_->get_type())
+      {
+        case ObIMicroBlockReader::Decoder:
+        case ObIMicroBlockReader::CSDecoder: {
+          ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+          // change to black filter in below situation
+          // 1. if need project lob column and micro block has outrow lob
+          // 2. if it is semistruct_filter_node, but not cs decoder (beacuase semistrcut white filter only support cs decoder)
+          if ((param_->has_lob_column_out() && reader_->has_lob_out_row())
+              || (filter->is_semistruct_filter_node() && ObIMicroBlockReader::CSDecoder != reader_->get_type())) {
+            sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
+            if (OB_FAIL(decoder->filter_pushdown_filter(parent,
+                                                        *physical_filter,
+                                                        pd_filter_info,
+                                                        bitmap))) {
+              LOG_WARN("Failed to execute pushdown filter", K(ret));
+            }
+          } else if (filter->is_filter_black_node()) {
+            sql::ObBlackFilterExecutor *black_filter = static_cast<sql::ObBlackFilterExecutor *>(filter);
+            if (can_use_vectorize && black_filter->can_vectorized()) {
+              if (OB_FAIL(apply_filter_batch(
+                          parent,
+                          *black_filter,
+                          pd_filter_info,
+                          bitmap))) {
+                LOG_WARN("Failed to execute black pushdown filter in batch", K(ret));
+              }
+            } else if (OB_FAIL(decoder->filter_pushdown_filter(
+                        parent,
+                        *black_filter,
+                        pd_filter_info,
+                        bitmap))) {
+              LOG_WARN("Failed to execute black pushdown filter", K(ret));
+            }
+          } else {
+            if (OB_FAIL(decoder->filter_pushdown_filter(
+                        parent,
+                        *static_cast<sql::ObWhiteFilterExecutor *>(filter),
+                        pd_filter_info,
+                        bitmap))) {
+              LOG_WARN("Failed to execute white pushdown filter", K(ret));
+            }
+          }
+          break;
+        }
+
+        case ObIMicroBlockReader::MemtableReader: {
+          if (OB_FAIL(
+                  memtable_reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+            LOG_WARN("failed to execute memtable pushdown filter");
+          }
+          break;
+        }
+
+        case ObIMicroBlockReader::Reader:
+        case ObIMicroBlockReader::NewFlatReader: {
+          if (OB_FAIL(reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+            LOG_WARN("Failed to execute pushdown filter", K(ret));
+          }
+          break;
+        }
+
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unknown type of reader", KR(ret), K(reader_->get_type()));
+          break;
+        }
+      }
+    }
+
+    return ret;
+  }
+};
+
+class ObMockMultipleScanMerge : public ObMultipleScanMerge
+{
+public:
+  ObMockMultipleScanMerge() : ObMultipleScanMerge()
+  {}
+
+  int init_micro_scanner(ObSSTable *sstable, ObIMicroBlockRowScanner *&micro_scanner)
+  {
+    int ret = OB_SUCCESS;
+    ObMockMultiVersionDIMicroBlockRowScanner *mv_di_micro_data_scanner = nullptr;
+    ObMultiVersionMicroBlockRowScanner *mv_micro_data_scanner = nullptr;
+    ObMockMicroBlockRowScanner *micro_data_scanner = nullptr;
+  #define INIT_MICRO_DATA_SCANNER(ptr, type)                                                \
+    do {                                                                                    \
+      if (ptr == nullptr) {                                                                 \
+        if (OB_ISNULL(ptr = OB_NEWx(type, long_life_allocator_, *long_life_allocator_))) {  \
+          ret = OB_ALLOCATE_MEMORY_FAILED;                                                  \
+          LOG_WARN("Failed to alloc memory for scanner", K(ret));                           \
+        } else if (OB_FAIL(ptr->init(access_param_->iter_param_, *access_ctx_, sstable))) {              \
+          LOG_WARN("Fail to init micro scanner", K(ret));                                   \
+        }                                                                                   \
+      } else if (OB_LIKELY(!ptr->is_valid())) {                                             \
+        if (OB_FAIL(ptr->switch_context(access_param_->iter_param_, *access_ctx_, sstable))) {           \
+          LOG_WARN("Failed to switch micro scanner", K(ret), KPC(ptr), KPC(&access_param_->iter_param_));   \
+        }                                                                                   \
+      }                                                                                     \
+      if (OB_SUCC(ret)) {                                                                   \
+        micro_scanner = ptr;                                                               \
+      }                                                                                     \
+    } while(0)
+
+    if (sstable->is_multi_version_minor_sstable()) {
+      if (access_param_->iter_param_.is_delete_insert_) {
+        INIT_MICRO_DATA_SCANNER(mv_di_micro_data_scanner, ObMockMultiVersionDIMicroBlockRowScanner);
+      } else {
+        INIT_MICRO_DATA_SCANNER(mv_micro_data_scanner, ObMultiVersionMicroBlockRowScanner);
+      }
+    } else {
+      INIT_MICRO_DATA_SCANNER(micro_data_scanner, ObMockMicroBlockRowScanner);
+    }
+  #undef INIT_MICRO_DATA_SCANNER
+
+    return ret;
+  }
+
+  virtual int construct_iters() override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(range_) || OB_ISNULL(di_base_range_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "range or di_base_range is NULL", K(ret), KP(range_), KP(di_base_range_));
+    } else if (OB_UNLIKELY(iters_.count() > 0 && iters_.count() + di_base_iters_.count() != tables_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
+          "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
+    } else if (tables_.count() > 0) {
+      STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
+                  K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(tables), KPC_(access_param));
+      ObITable *table = NULL;
+      ObStoreRowIterator *iter = NULL;
+      const ObTableIterParam *iter_param = NULL;
+      const bool use_cache_iter = iters_.count() > 0 || di_base_iters_.count() > 0; // rescan with the same iters and different range
+
+      if (access_param_->iter_param_.is_delete_insert_) {
+        if (OB_FAIL(tables_.at(0, table))) {  // only one di base iter currently
+          STORAGE_LOG(WARN, "Fail to get 0th store, ", K(ret), K_(tables));
+        } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "Fail to get 0th access param", K(ret), KPC(table));
+        } else if (table->is_major_sstable()) {
+          if (!use_cache_iter) {
+            if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *di_base_range_, iter))) {
+              STORAGE_LOG(WARN, "Fail to get di base iterator", K(ret), KPC(table), K(*iter_param));
+            } else if (OB_FAIL(di_base_iters_.push_back(iter))) {
+              iter->~ObStoreRowIterator();
+              STORAGE_LOG(WARN, "Fail to push di base iter to di base iterator array", K(ret));
+            }
+          } else if (OB_ISNULL(iter = di_base_iters_.at(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "Unexpected null di_base_iters_", K(ret), "idx", 0, K(di_base_iters_));
+          } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, di_base_range_))) {
+            STORAGE_LOG(WARN, "failed to init scan di_base_iters_", K(ret), "idx", 0);
+          }
+          if OB_SUCC(ret) {
+            ObCOSSTableRowScanner *sstable_scanner = static_cast<ObCOSSTableRowScanner *>(iter);
+            FOREACH_CNT_X(cg_iter, sstable_scanner->rows_filter_->filter_iters_, OB_SUCC(ret)) {
+              ObCGScanner *cg_scanner = static_cast<ObCGScanner *>(*cg_iter);
+              ObIMicroBlockRowScanner *micro_scanner = nullptr;
+              if (OB_FAIL(init_micro_scanner(cg_scanner->sstable_, micro_scanner))) {
+                STORAGE_LOG(WARN, "Failed to init micro scanner", K(ret));
+              } else {
+                cg_scanner->micro_scanner_ = micro_scanner;
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            STORAGE_LOG(DEBUG, "add di base iter for consumer", KPC(table));
+          }
+        }
+      }
+
+      consumer_cnt_ = 0;
+      int32_t di_base_cnt = di_base_iters_.count();
+      if (OB_FAIL(ret) || di_base_cnt == tables_.count()) {
+      } else if (OB_FAIL(set_rows_merger(tables_.count() - di_base_cnt))) {
+        STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(di_base_cnt), K(tables_));
+      } else {
+        const int64_t table_cnt = tables_.count() - 1;
+        for (int64_t i = table_cnt; OB_SUCC(ret) && i >= di_base_cnt; --i) {
+          if (OB_FAIL(tables_.at(i, table))) {
+            STORAGE_LOG(WARN, "Fail to get ith store, ", K(ret), K(i), K_(tables));
+          } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "Fail to get access param", K(ret), K(i), KPC(table));
+          } else if (!use_cache_iter) {
+            if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *range_, iter))) {
+              STORAGE_LOG(WARN, "Fail to get iterator", K(ret), K(i), KPC(table), K(*iter_param));
+            } else if (OB_FAIL(iters_.push_back(iter))) {
+              iter->~ObStoreRowIterator();
+              STORAGE_LOG(WARN, "Fail to push iter to iterator array", K(ret), K(i));
+            }
+          } else if (OB_ISNULL(iter = iters_.at(table_cnt - i))) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "Unexpected null iter", K(ret), "idx", table_cnt - i, K_(iters));
+          } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, range_))) {
+            STORAGE_LOG(WARN, "failed to init scan iter", K(ret), "idx", table_cnt - i);
+          }
+
+          if OB_SUCC(ret) {
+            ObIMicroBlockRowScanner *micro_scanner = nullptr;
+            if (OB_FAIL(init_micro_scanner(static_cast<ObSSTable *>(table), micro_scanner))) {
+              STORAGE_LOG(WARN, "Failed to init micro scanner", K(ret));
+            } else {
+              ObSSTableRowScanner<> *sstable_scanner = static_cast<ObSSTableRowScanner<> *>(iter);
+              sstable_scanner->micro_scanner_ = micro_scanner;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            consumers_[consumer_cnt_++] = i - di_base_cnt;
+            STORAGE_LOG(DEBUG, "add iter for consumer", K(i), KPC(table));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan()) {
+        if (ScanState::DI_BASE == scan_state_) {
+          if (OB_FAIL(get_di_base_iter()->refresh_blockscan_checker(curr_rowkey_))) {
+            STORAGE_LOG(WARN, "Failed to refresh di base blockscan checker", K(ret), K(curr_rowkey_));
+          }
+        } else if (0 == consumer_cnt_ && 0 < di_base_iters_.count()) {
+          if (OB_FAIL(prepare_di_base_blockscan(true))) {
+            STORAGE_LOG(WARN, "Failed to prepare di base blockscan", K(ret));
+          } else {
+            scan_state_ = ScanState::DI_BASE;
+          }
+        } else if (consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter()) {
+          if (OB_FAIL(locate_blockscan_border())) {
+            STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(iters_.count()), K(di_base_iters_.count()), K_(tables));
+          }
+        }
+      }
+      STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(di_base_iters_.count()));
+    }
+    return ret;
+  }
+};
+
 class TestDeleteInsertCSScan : public TestMergeBasic
 {
 public:
@@ -147,8 +548,14 @@ public:
   void fake_freeze_info();
   void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
   int convert_to_co_sstable(ObTableHandleV2 &row_store, ObTableHandleV2 &co_store);
+  void test_keep_order_blockscan(
+      const char **major_data,
+      const char **inc_data,
+      const char *expected,
+      int64_t expected_count,
+      std::initializer_list<std::initializer_list<int>>&& intervals);
 
-public:
+  public:
   static const int64_t DATUM_ARRAY_CNT = 1024;
   static const int64_t DATUM_RES_SIZE = 10;
   static const int64_t SQL_BATCH_SIZE = 256;
@@ -567,6 +974,116 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
   return ret;
 }
 
+void prepare_ranges(ObIArray<ObDatumRange>* ranges, std::initializer_list<std::initializer_list<int>> intervals)
+{
+  ranges->reset();
+  for (const auto& interval : intervals) {
+    ObDatumRange range;
+    range.start_key_.datums_ = new ObStorageDatum();
+    ASSERT_NE(nullptr, range.start_key_.datums_);
+    range.start_key_.datums_[0].set_int(interval.begin()[0]);
+    range.start_key_.datum_cnt_ = 1;
+    range.end_key_.datums_ = new ObStorageDatum();
+    ASSERT_NE(nullptr, range.end_key_.datums_);
+    range.end_key_.datums_[0].set_int(interval.begin()[1]);
+    range.end_key_.datum_cnt_ = 1;
+    range.set_left_closed();
+    range.set_right_closed();
+    OK(ranges->push_back(range));
+  }
+}
+
+void TestDeleteInsertCSScan::test_keep_order_blockscan(
+      const char **major_data,
+      const char **inc_data,
+      const char *expected,
+      int64_t expected_count,
+      std::initializer_list<std::initializer_list<int>>&& intervals)
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator table_store_iter;
+
+  ObTableHandleV2 handle1;
+
+  int schema_rowkey_cnt = 1;
+  int64_t snapshot_version = 50;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_tx(0);
+  scn_range.end_scn_.convert_for_tx(50);
+  prepare_table_schema(major_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+  reset_writer(snapshot_version);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+  ObTableHandleV2 co_sstable;
+  ASSERT_EQ(OB_SUCCESS, convert_to_co_sstable(handle1, co_sstable));
+  STORAGE_LOG(INFO, "finish convert co sstable");
+  table_store_iter.add_table(co_sstable.get_table());
+
+  ObTableHandleV2 handle2;
+
+  snapshot_version = 100;
+  scn_range.start_scn_.convert_for_tx(50);
+  scn_range.end_scn_.convert_for_tx(100);
+  reset_writer(snapshot_version);
+  prepare_one_macro(inc_data, 1);
+  prepare_data_end(handle2);
+  table_store_iter.add_table(handle2.get_table());
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 2;
+
+  ObMockIterator res_iter;
+  ObArray<ObDatumRange> ranges;
+
+  prepare_ranges(&ranges, intervals);
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_scan_param(trans_version_range, table_store_iter);
+  access_param_.iter_param_.is_delete_insert_ = false;
+  access_param_.iter_param_.pd_storage_flag_.set_blockscan_pushdown(true);
+  context_.query_flag_.scan_order_ = ObQueryFlag::ScanOrder::KeepOrder;
+
+  ObMultipleMultiScanMerge scan_merge;
+  ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
+  ASSERT_EQ(OB_SUCCESS, scan_merge.open(ranges));
+  scan_merge.disable_padding();
+  scan_merge.disable_fill_virtual_column();
+  int64_t count = 0;
+  int64_t total_count = 0;
+  ret = OB_SUCCESS;
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(expected));
+
+  while (OB_SUCC(ret)) {
+    ret = scan_merge.get_next_rows(count, SQL_BATCH_SIZE);
+    if (ret != OB_SUCCESS && ret != OB_ITER_END) {
+      STORAGE_LOG(ERROR, "error return value", K(ret), K(count));
+      ASSERT_EQ(1, 0);
+    }
+    if (count > 0) {
+      ObMockScanMergeIterator merge_iter(count);
+      ASSERT_EQ(OB_SUCCESS, merge_iter.init(reinterpret_cast<ObVectorStore *>(scan_merge.block_row_store_),
+                                            query_allocator_, *access_param_.iter_param_.get_read_info()));
+      bool is_equal = res_iter.equals<ObMockScanMergeIterator, ObStoreRow>(merge_iter, false, false, false, true);
+      ASSERT_TRUE(is_equal);
+
+      total_count += count;
+      STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
+    } else {
+      break;
+    }
+  }
+  ASSERT_EQ(expected_count, total_count);
+
+  handle1.reset();
+  handle2.reset();
+  scan_merge.reset();
+}
+
 TEST_F(TestDeleteInsertCSScan, test_co_scan)
 {
   int ret = OB_SUCCESS;
@@ -858,7 +1375,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_filter)
                                                *access_param_.iter_param_.get_read_info(),
                                                access_param_.iter_param_.pushdown_filter_));
 
-  ObMultipleScanMerge scan_merge;
+  ObMockMultipleScanMerge scan_merge;
   ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
@@ -1055,7 +1572,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_version_row_filter)
                             ObWhiteFilterOperatorType::WHITE_OP_NE,
                             *access_param_.iter_param_.get_read_info(),
                             access_param_.iter_param_.pushdown_filter_));
-  ObMultipleScanMerge scan_merge;
+  ObMockMultipleScanMerge scan_merge;
   ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
@@ -1505,7 +2022,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
                             ObWhiteFilterOperatorType::WHITE_OP_NE,
                             *access_param_.iter_param_.get_read_info(),
                             access_param_.iter_param_.pushdown_filter_));
-  ObMultipleScanMerge scan_merge;
+  ObMockMultipleScanMerge scan_merge;
   ASSERT_EQ(OB_SUCCESS, scan_merge.init(access_param_, context_, get_table_param_));
   ASSERT_EQ(OB_SUCCESS, scan_merge.open(range));
   scan_merge.disable_padding();
@@ -1840,6 +2357,176 @@ TEST_F(TestDeleteInsertCSScan, test_refresh_table)
   handle1.reset();
   handle2.reset();
   scan_merge.reset();
+}
+
+TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_basic)
+{
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  "
+      "multi_version_row_flag\n"
+      "1        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "2        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "3        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "4        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "5        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "6        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "7        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "8        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "9        -50       0            9       9    INSERT    NORMAL      "
+      "CLF\n";
+
+  const char *inc_data[1];
+  inc_data[0] = "bigint   bigint  bigint     bigint bigint  flag     flag_type "
+                " multi_version_row_flag\n"
+                "1          -70      0          99     99     UPDATE    NORMAL "
+                "       CLF\n"
+                "10         -70      0           9      9     INSERT    NORMAL "
+                "       CLF\n";
+
+  const char *expected =
+      "bigint  bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1         99      99    INSERT    NORMAL      CLF\n"
+      "2          9       9    INSERT    NORMAL      CLF\n"
+      "3          9       9    INSERT    NORMAL      CLF\n"
+      "4          9       9    INSERT    NORMAL      CLF\n"
+      "5          9       9    INSERT    NORMAL      CLF\n"
+      "6          9       9    INSERT    NORMAL      CLF\n"
+      "7          9       9    INSERT    NORMAL      CLF\n"
+      "8          9       9    INSERT    NORMAL      CLF\n"
+      "9          9       9    INSERT    NORMAL      CLF\n"
+      "10         9       9    INSERT    NORMAL      CLF\n";
+
+  test_keep_order_blockscan(major_data, inc_data, expected, 10, {{1, 4}, {5, 10}});
+}
+
+TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_simple)
+{
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  "
+      "multi_version_row_flag\n"
+      "1        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "2        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "3        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "4        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "5        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "6        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "7        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "8        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "9        -50       0            9       9    INSERT    NORMAL      "
+      "CLF\n";
+
+  const char *inc_data[1];
+  inc_data[0] = "bigint   bigint  bigint     bigint bigint  flag     flag_type "
+                " multi_version_row_flag\n"
+                "1          -70      0          99     99     UPDATE    NORMAL "
+                "       CLF\n"
+                "10         -70      0           9      9     INSERT    NORMAL "
+                "       CLF\n";
+
+  const char *expected =
+      "bigint  bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "5          9       9    INSERT    NORMAL      CLF\n"
+      "6          9       9    INSERT    NORMAL      CLF\n"
+      "7          9       9    INSERT    NORMAL      CLF\n"
+      "8          9       9    INSERT    NORMAL      CLF\n"
+      "9          9       9    INSERT    NORMAL      CLF\n"
+      "10         9       9    INSERT    NORMAL      CLF\n"
+      "1         99      99    INSERT    NORMAL      CLF\n"
+      "2          9       9    INSERT    NORMAL      CLF\n"
+      "3          9       9    INSERT    NORMAL      CLF\n"
+      "4          9       9    INSERT    NORMAL      CLF\n";
+
+  test_keep_order_blockscan(major_data, inc_data, expected, 10, {{5, 10}, {1, 4}});
+}
+
+TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
+{
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  "
+      "multi_version_row_flag\n"
+      "1        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "2        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "3        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "4        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "5        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "6        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "7        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "8        -50       0            9       9    INSERT    NORMAL      CLF\n"
+      "9        -50       0            9       9    INSERT    NORMAL      "
+      "CLF\n";
+
+  const char *inc_data[1];
+  inc_data[0] = "bigint   bigint  bigint     bigint bigint  flag     flag_type "
+                " multi_version_row_flag\n"
+                "10          -70     0          99     99     INSERT    NORMAL "
+                "       CLF\n"
+                "11          -70     0          99     99     INSERT    NORMAL "
+                "       CLF\n";
+
+  const char *expected =
+      "bigint  bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "10         99      99   INSERT    NORMAL      CLF\n"
+      "11         99      99   INSERT    NORMAL      CLF\n"
+      "1          9       9    INSERT    NORMAL      CLF\n"
+      "2          9       9    INSERT    NORMAL      CLF\n"
+      "3          9       9    INSERT    NORMAL      CLF\n"
+      "4          9       9    INSERT    NORMAL      CLF\n"
+      "5          9       9    INSERT    NORMAL      CLF\n"
+      "6          9       9    INSERT    NORMAL      CLF\n"
+      "7          9       9    INSERT    NORMAL      CLF\n"
+      "8          9       9    INSERT    NORMAL      CLF\n"
+      "9          9       9    INSERT    NORMAL      CLF\n";
+
+  test_keep_order_blockscan(
+      major_data, inc_data, expected, 11, {{10, 11}, {1, 9}});
+}
+
+TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
+{
+  const char *major_data[1];
+  major_data[0] =
+
+      "bigint   bigint  bigint     bigint bigint  flag     flag_type "
+      " multi_version_row_flag\n"
+      "10         -50      0           99     99     INSERT    NORMAL "
+      "       CLF\n"
+      "11         -50      0           99     99     INSERT    NORMAL "
+      "       CLF\n";
+
+  const char *inc_data[1];
+  inc_data[0] =
+      "bigint   bigint  bigint      bigint bigint  flag     flag_type  "
+      "multi_version_row_flag\n"
+      "1        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "2        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "3        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "4        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "5        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "6        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "7        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "8        -70       0            9       9    INSERT    NORMAL      CLF\n"
+      "9        -70       0            9       9    INSERT    NORMAL      "
+      "CLF\n";
+
+  const char *expected =
+      "bigint  bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "10         99      99   INSERT    NORMAL      CLF\n"
+      "11         99      99   INSERT    NORMAL      CLF\n"
+      "1          9       9    INSERT    NORMAL      CLF\n"
+      "2          9       9    INSERT    NORMAL      CLF\n"
+      "3          9       9    INSERT    NORMAL      CLF\n"
+      "4          9       9    INSERT    NORMAL      CLF\n"
+      "5          9       9    INSERT    NORMAL      CLF\n"
+      "6          9       9    INSERT    NORMAL      CLF\n"
+      "7          9       9    INSERT    NORMAL      CLF\n"
+      "8          9       9    INSERT    NORMAL      CLF\n"
+      "9          9       9    INSERT    NORMAL      CLF\n";
+
+  test_keep_order_blockscan(
+      major_data, inc_data, expected, 11, {{10, 11}, {1, 9}});
 }
 
 }

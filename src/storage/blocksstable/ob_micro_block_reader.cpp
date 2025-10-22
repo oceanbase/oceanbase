@@ -1351,10 +1351,7 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_aggregate_result(
 }
 
 template<bool EnableNewFlatFormat>
-int ObMicroBlockReader<EnableNewFlatFormat>::get_column_datum(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
-    const share::schema::ObColumnParam &col_param,
+int ObMicroBlockReader<EnableNewFlatFormat>::get_raw_column_datum(
     const int32_t col_offset,
     const int64_t row_index,
     ObStorageDatum &datum)
@@ -1365,7 +1362,6 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_column_datum(
     LOG_WARN("ObMicroBlockReader is not inited", K(ret));
   } else if(OB_UNLIKELY(nullptr == header_ ||
                         nullptr == read_info_ ||
-                        col_offset >= read_info_->get_columns_index().count() ||
                         row_index < 0 || row_index >= header_->row_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC_(header), KPC_(read_info), K(col_offset), K(row_index));
@@ -1391,10 +1387,6 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_column_datum(
       datum.set_null();
     } else if (OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
       LOG_WARN("Failed to convert storage datum", K(ret), K(tmp_datum), K(obj_type), K(map_type));
-    } else if (col_param.get_meta_type().is_lob_storage() && !datum.get_lob_data().in_row_) {
-      if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
-        LOG_WARN("Failed to fill lob loactor", K(ret), K(datum), K(context), K(iter_param));
-      }
     }
   }
   return ret;

@@ -28,6 +28,8 @@ public:
 public:
   int open(const common::ObIArray<blocksstable::ObDatumRange> &ranges);
   virtual void reset();
+  INHERIT_TO_STRING_KV("ObMultipleScanMerge", ObMultipleScanMerge, KPC_(ranges));
+
 protected:
   virtual int calc_scan_range() override;
   int inner_calc_scan_range(const ObIArray<blocksstable::ObDatumRange> *&ranges,

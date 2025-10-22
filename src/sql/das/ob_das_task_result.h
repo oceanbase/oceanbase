@@ -88,8 +88,8 @@ public:
                K_(is_exiting),
                K_(io_read_bytes),
                K_(ssstore_read_bytes),
-               K_(ssstore_read_row_cnt),
-               K_(memstore_read_row_cnt),
+               K_(base_read_row_cnt),
+               K_(delta_read_row_cnt),
                K_(mem_profile_key),
                K_(interrupt_info));
 
@@ -120,8 +120,8 @@ public:
 
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
-  int64_t ssstore_read_row_cnt_;
-  int64_t memstore_read_row_cnt_;
+  int64_t base_read_row_cnt_;
+  int64_t delta_read_row_cnt_;
   ObDASTCBMemProfileKey mem_profile_key_;
 
   // for detect & interrupt
@@ -320,8 +320,8 @@ public:
   int iterator_task_result(ObDASDataFetchRes &res,
                            int64_t &io_read_bytes,
                            int64_t &ssstore_read_bytes,
-                           int64_t &ssstore_read_row_cnt,
-                           int64_t &memstore_read_row_cnt);
+                           int64_t &base_read_row_cnt,
+                           int64_t &delta_read_row_cnt);
   int remove_expired_results();
 
 private:
