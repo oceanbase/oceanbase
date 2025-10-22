@@ -344,7 +344,7 @@ public:
                                      bool is_check_mode = false,
                                      bool is_sql_scope = false,
                                      ObIArray<ObSchemaObjVersion> *dep_tbl = nullptr,
-                                     ObIArray<ObUDFRawExpr*> *sql_transpiled_exprs = nullptr);
+                                     ObQueryCtx *query_ctx = nullptr);
   static int resolve_external_param_info(ExternalParams &param_info,
                                          const ObSQLSessionInfo &session_info,
                                          ObRawExprFactory &expr_factory,

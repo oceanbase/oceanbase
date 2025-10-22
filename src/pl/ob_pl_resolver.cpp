@@ -19220,6 +19220,9 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
     // do nothing
   } else if (!resolve_ctx_.is_sql_scope_) {
     // do nothing
+  } else if (OB_NOT_NULL(get_resolve_ctx().params_.query_ctx_)
+               && get_resolve_ctx().params_.query_ctx_->forbid_pl_sql_transpiler_) {
+    // do nothing
   } else if (OB_ISNULL(access_idx.get_sysfunc_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL sysfunc_expr", K(ret), K(access_idx));
@@ -19268,7 +19271,10 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
         LOG_WARN("failed to add flag CNT_PL_UDF", K(ret), K(ast), K(tmp_expr));
       } else if (OB_FAIL(tmp_expr->add_flag(IS_PL_SQL_TRANSPILED))) {
         LOG_WARN("failed to add flag IS_PL_SQL_TRANSPILED", K(ret), K(ast), K(tmp_expr));
-      } else if (OB_FAIL(resolve_ctx_.sql_transpiled_exprs_.push_back(udf_expr))) {
+      } else if (OB_ISNULL(get_resolve_ctx().params_.query_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL query ctx", K(ret), K(ast), K(udf_expr), K(lbt()));
+      } else if (OB_FAIL(get_resolve_ctx().params_.query_ctx_->pl_sql_transpiled_exprs_.push_back(udf_expr))) {
         LOG_WARN("failed to push back pl sql transpiled expr", K(ret), K(ast), K(udf_expr));
       } else {
         expr = tmp_expr;
@@ -19291,6 +19297,8 @@ int ObPLResolver::sql_transpiler_substitute(const ObPLFunctionAST &ast,
   CK (OB_NOT_NULL(target_expr));
   
   if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (target_expr->has_flag(IS_PL_SQL_TRANSPILED)) {
     // do nothing
   } else if (T_QUESTIONMARK == target_expr->get_expr_type() && static_cast<ObConstRawExpr *>(target_expr)->get_value().is_unknown()) {
     const ObConstRawExpr &sym_pos = *static_cast<ObConstRawExpr *>(target_expr);
@@ -19339,7 +19347,11 @@ int ObPLResolver::sql_transpiler_substitute(const ObPLFunctionAST &ast,
         const_expr->set_obj_param(const_expr->get_value());
       }
 
-      if (OB_SUCC(ret)) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(tmp_expr->add_flag(IS_PL_SQL_TRANSPILED))) {
+        LOG_WARN("failed to add flag IS_PL_SQL_TRANSPILED", K(ret), K(tmp_expr));
+      } else {
         target_expr = tmp_expr;
       }
     }
@@ -19350,7 +19362,8 @@ int ObPLResolver::sql_transpiler_substitute(const ObPLFunctionAST &ast,
       LOG_WARN("failed to sql_transpiler_substitute after strip column conv",
                K(ret), K(ast), K(udf_expr), K(target_expr));
     }
-  } else if (T_FUN_SYS_CAST == target_expr->get_expr_type()) {
+  } else if (T_FUN_SYS_CAST == target_expr->get_expr_type()
+               && !ob_is_decimal_int_tc(target_expr->get_result_type().get_type())) {
     target_expr = target_expr->get_param_expr(CAST_REAL_EXPR_IDX);
 
     if (OB_FAIL(SMART_CALL(sql_transpiler_substitute(ast, udf_expr, target_expr)))) {

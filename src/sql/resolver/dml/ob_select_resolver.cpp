@@ -1302,6 +1302,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
     if (!is_oracle_mode()) {
       OZ (check_oracle_compat_groupby(group_by, is_oracle_compat_groupby_));
       select_stmt->set_is_oracle_compat_groupby(is_oracle_compat_groupby_);
+      select_stmt->get_query_ctx()->forbid_pl_sql_transpiler_ = true;
     }
   }
   if (OB_SUCC(ret) && (start_with != NULL || connect_by != NULL)) {

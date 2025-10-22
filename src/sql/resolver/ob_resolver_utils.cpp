@@ -8450,7 +8450,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              bool is_check_mode,
                                              bool is_sql_scope,
                                              ObIArray<ObSchemaObjVersion> *dep_tbl,
-                                             ObIArray<ObUDFRawExpr*> *sql_transpiled_exprs)
+                                             ObQueryCtx *query_ctx)
 {
   int ret = OB_SUCCESS;
   if (NULL == package_guard) {
@@ -8500,6 +8500,8 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
         pl_resolver.get_current_namespace() = *ns;
       }
 
+      OX (pl_resolver.get_resolve_ctx().params_.query_ctx_ = query_ctx);
+
       if (OB_SUCC(ret)) {
         ObPLDependencyGuard switch_guard(&pl_resolver.get_external_ns(), pl_resolver.get_current_namespace().get_external_ns());
         if (OB_FAIL(pl_resolver.resolve_qualified_name(q_name, columns, real_exprs, func_ast, expr))) {
@@ -8515,11 +8517,6 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
         if (OB_SUCC(ret) && OB_NOT_NULL(dep_tbl)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {
             OZ (dep_tbl->push_back(func_ast.get_dependency_table().at(i)));
-          }
-        }
-        if (OB_SUCC(ret) && OB_NOT_NULL(sql_transpiled_exprs) && !pl_resolver.get_resolve_ctx().sql_transpiled_exprs_.empty()) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < pl_resolver.get_resolve_ctx().sql_transpiled_exprs_.count(); ++i) {
-            OZ (sql_transpiled_exprs->push_back(pl_resolver.get_resolve_ctx().sql_transpiled_exprs_.at(i)));
           }
         }
       }

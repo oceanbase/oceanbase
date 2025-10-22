@@ -127,7 +127,6 @@ public:
   bool need_add_pl_cache_; // indicate if this pl object need add into pl cache when re_compile
   ObSEArray<const ObUserDefinedType *, 32> type_buffer_;
   ObPLEnumSetCtx *enum_set_ctx_;
-  ObSEArray<ObUDFRawExpr*, 4> sql_transpiled_exprs_;
 };
 
 class ObPLMockSelfArg
@@ -278,6 +277,7 @@ public:
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
+  inline ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
   inline ObPLBlockNS &get_current_namespace() const { return current_block_->get_namespace(); }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return current_subprogram_path_; }
   inline int push_subprogram_path(int64_t idx) { return current_subprogram_path_.push_back(idx); }

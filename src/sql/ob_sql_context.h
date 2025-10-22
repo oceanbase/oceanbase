@@ -841,7 +841,8 @@ public:
       injected_random_status_(false),
       ori_question_marks_count_(0),
       type_demotion_flag_(0),
-      pl_sql_transpiled_exprs_()
+      pl_sql_transpiled_exprs_(),
+      forbid_pl_sql_transpiler_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -889,6 +890,7 @@ public:
     filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
     pl_sql_transpiled_exprs_.reuse();
+    forbid_pl_sql_transpiler_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -1015,6 +1017,7 @@ public:
   };
 
   ObSEArray<ObUDFRawExpr *, 4, common::ModulePageAllocator, true> pl_sql_transpiled_exprs_;
+  bool forbid_pl_sql_transpiler_ = false;
 };
 
 template<typename... Args>
