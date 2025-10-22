@@ -377,7 +377,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   ASSERT_LE(total_ckpt_micro_cnt * min_micro_size, cache_stat.micro_stat().total_micro_size_);
   ASSERT_GE(total_ckpt_micro_cnt * max_micro_size, cache_stat.micro_stat().total_micro_size_);
   ASSERT_EQ(cur_data_blk_used_cnt, cache_stat.phy_blk_stat().data_blk_used_cnt_);
-  ASSERT_EQ(true, phy_blk_mgr.super_blk_.is_valid_checkpoint());
+  ASSERT_EQ(true, phy_blk_mgr.super_blk_.exist_valid_checkpoint());
   micro_cache->admin_info_.set_micro_meta_compressor_type(compress_type);
 
   // 3.2 write new data into object_storage
