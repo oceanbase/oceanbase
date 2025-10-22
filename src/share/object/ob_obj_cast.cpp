@@ -11385,9 +11385,9 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
             LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
           }
         } else {
-          if (OB_FAIL(ObArrayCastUtils::string_cast_array(in_str, arr_dst, dst_arr_type->element_type_))) {
-            LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
-          }
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("binary string cast to array is not supported", K(ret), K(dst_coll_info));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "binary string cast to array");
         } 
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
                  || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {

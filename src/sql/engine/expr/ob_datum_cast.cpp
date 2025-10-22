@@ -11647,9 +11647,9 @@ CAST_FUNC_NAME(string, collection)
             LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
           }
         } else {
-          if (OB_FAIL(ObArrayCastUtils::string_cast_array(in_str, arr_dst, static_cast<ObCollectionArrayType *>(dst_coll_type)->element_type_))) {
-            LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
-          }
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("binary string cast to array is not supported", K(ret), K(dst_coll_info));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "binary string cast to array");
         }
       } else if (dst_coll_type->type_id_ == ObNestedType::OB_MAP_TYPE || dst_coll_type->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
         bool is_sparse_vector = dst_coll_type->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE;
