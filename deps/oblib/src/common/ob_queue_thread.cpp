@@ -63,6 +63,8 @@ int ObCond::wait()
   }
   if (need_wait) {
     pthread_mutex_lock(&mutex_);
+    oceanbase::common::ObWaitEventGuard
+      wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_COND_WAIT, 0, reinterpret_cast<uint64_t>(this));
     while (OB_SUCC(ret) && false == ATOMIC_CAS(&bcond_, true, false)) {
       int tmp_ret = ob_pthread_cond_wait(&cond_, &mutex_);
       if (ETIMEDOUT == tmp_ret) {
@@ -95,6 +97,8 @@ int ObCond::timedwait(const int64_t time_us)
     struct timespec ts;
     ts.tv_sec = abs_time / 1000000;
     ts.tv_nsec = (abs_time % 1000000) * 1000;
+    oceanbase::common::ObWaitEventGuard
+      wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_COND_WAIT, 0, reinterpret_cast<uint64_t>(this));
     pthread_mutex_lock(&mutex_);
     while (OB_SUCC(ret) && false == ATOMIC_CAS(&bcond_, true, false)) {
       int tmp_ret = ob_pthread_cond_timedwait(&cond_, &mutex_, &ts);
