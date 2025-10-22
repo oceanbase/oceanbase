@@ -274,11 +274,6 @@ int ObTableLoadCoordinatorCtx::check_status(ObTableLoadStatusType status) const
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(exec_ctx_->check_status())) {
-      LOG_WARN("fail to check status", KR(ret));
-    }
-  }
   return ret;
 }
 

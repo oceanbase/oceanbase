@@ -241,7 +241,12 @@ int ObTableLoadStoreTransPXWriter::check_status()
   const int64_t cycle = row_count_ / CHECK_STATUS_CYCLE;
   if (cycle > last_check_status_cycle_) {
     last_check_status_cycle_ = cycle;
-    if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::LOADING))) {
+    transaction::ObTxDesc *tx_desc = nullptr;
+    if (OB_NOT_NULL(tx_desc = store_ctx_->ctx_->session_info_->get_tx_desc()) &&
+        OB_UNLIKELY(tx_desc->is_tx_timeout())) {
+      ret = OB_TRANS_TIMEOUT;
+      LOG_WARN("trans timeout", KR(ret), KPC(tx_desc));
+    } else if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::LOADING))) {
       LOG_WARN("fail to check status", KR(ret));
     } else if (OB_FAIL(trans_->check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
       LOG_WARN("fail to check trans status", KR(ret));
