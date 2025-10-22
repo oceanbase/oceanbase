@@ -154,6 +154,7 @@ WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock"
 WAIT_EVENT_DEF(BACKUP_VALIDATE_SERVICE_COND_WAIT, 18117, "backup validate service condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(HMS_CLIENT_POOL_COND_WAIT, 18118, "hms client pool condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(HA_CREATE_TABLET_COND_WAIT, 18119, "ha create tablet condition wait", "address", "", "", CONCURRENCY, false, true)
+WAIT_EVENT_DEF(OBJECT_DEVICE_ASYNC_IO_WAIT, 18120, "object device async io wait", "", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
