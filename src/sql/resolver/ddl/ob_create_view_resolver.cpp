@@ -54,6 +54,7 @@ int ObCreateViewResolver::add_hidden_tablet_seq_col(ObTableSchema &table_schema)
     hidden_pk.set_is_hidden(true);
     hidden_pk.set_charset_type(CHARSET_BINARY);
     hidden_pk.set_collation_type(CS_TYPE_BINARY);
+    hidden_pk.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt64Type]);
     if (OB_FAIL(hidden_pk.set_column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME))) {
       SQL_RESV_LOG(WARN, "failed to set column name", KR(ret));
     } else {
