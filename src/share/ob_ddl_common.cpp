@@ -1857,11 +1857,12 @@ int ObDDLUtil::release_snapshot(
     }
 
     if (OB_FAIL(ret)) {
+    } else if (tablet_ids.count() <= 0) {
     } else if (OB_FAIL(task->batch_release_snapshot(snapshot_version, tablet_ids))) {
       LOG_WARN("failed to release snapshot", K(ret));
     }
     task->add_event_info("release snapshot finish");
-    LOG_INFO("release snapshot finished", K(ret), K(snapshot_version), K(table_id), K(target_table_id), K(schema_version), "ddl_event_info", ObDDLEventInfo());
+    LOG_INFO("release snapshot finished", K(ret), K(snapshot_version), K(table_id), K(target_table_id), K(tablet_ids), K(schema_version), "ddl_event_info", ObDDLEventInfo());
   }
   return ret;
 }
