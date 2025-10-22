@@ -369,29 +369,33 @@ ObTenantConfig *ObTenantConfigMgr::get_tenant_config_with_lock(
 {
   int ret = OB_SUCCESS;
   ObTenantConfig *config = nullptr;
-  DRWLock::RDLockGuard guard(rwlock_);
-  do {
-    if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config)) && timeout_us > 0) {
-      ob_usleep(10 * 1000L);
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
-        LOG_WARN("failed to get tenant config, retry for 1s", K(tenant_id), K(ret));
+
+  if (!GCTX.is_obcdc()) {
+    DRWLock::RDLockGuard guard(rwlock_);
+    do {
+      if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config)) && timeout_us > 0) {
+        ob_usleep(10 * 1000L);
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
+          LOG_WARN("failed to get tenant config, retry for 1s", K(tenant_id), K(ret));
+        }
+      } else {
+        break;
       }
-    } else {
-      break;
+    } while (!REACH_TIME_INTERVAL(timeout_us));
+    if (OB_FAIL(ret)) {
+      if (fallback_tenant_id > 0 && OB_INVALID_ID != fallback_tenant_id) {
+        if (OB_FAIL(config_map_.get_refactored(ObTenantID(fallback_tenant_id), config))) {
+          LOG_WARN("failed to get fallback tenant config", K(fallback_tenant_id), K(ret));
+        }
+      } else {
+        LOG_WARN("failed to get tenant config", K(tenant_id), K(ret));
+      }
     }
-  } while (!REACH_TIME_INTERVAL(timeout_us));
-  if (OB_FAIL(ret)) {
-    if (fallback_tenant_id > 0 && OB_INVALID_ID != fallback_tenant_id) {
-      if (OB_FAIL(config_map_.get_refactored(ObTenantID(fallback_tenant_id), config))) {
-        LOG_WARN("failed to get fallback tenant config", K(fallback_tenant_id), K(ret));
-      }
-    } else {
-      LOG_WARN("failed to get tenant config", K(tenant_id), K(ret));
+    if (OB_SUCC(ret) && OB_NOT_NULL(config)) {
+      config->ref(); // remember to unref outside
     }
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(config)) {
-    config->ref(); // remember to unref outside
-  }
+
   return config;
 }
 

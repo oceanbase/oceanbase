@@ -108,6 +108,7 @@ void ObLogMetaManager::set_column_encoding_(const common::ObObjType &col_type,
 
 ObLogMetaManager::ObLogMetaManager() : inited_(false),
                                        enable_output_hidden_primary_key_(false),
+                                       enable_output_virtual_generated_column_(false),
                                        obj2str_helper_(NULL),
                                        ddl_table_meta_(NULL),
                                        db_meta_map_(),
@@ -123,7 +124,8 @@ ObLogMetaManager::~ObLogMetaManager()
 }
 
 int ObLogMetaManager::init(ObObj2strHelper *obj2str_helper,
-    const bool enable_output_hidden_primary_key)
+    const bool enable_output_hidden_primary_key,
+    const bool enable_output_virtual_generated_column)
 {
   int ret = OB_SUCCESS;
 
@@ -147,6 +149,7 @@ int ObLogMetaManager::init(ObObj2strHelper *obj2str_helper,
     LOG_ERROR("build ddl meta fail", KR(ret));
   } else {
     enable_output_hidden_primary_key_ = enable_output_hidden_primary_key;
+    enable_output_virtual_generated_column_ = enable_output_virtual_generated_column;
     obj2str_helper_ = obj2str_helper;
     inited_ = true;
   }
@@ -160,6 +163,7 @@ void ObLogMetaManager::destroy()
 
   inited_ = false;
   enable_output_hidden_primary_key_ = false;
+  enable_output_virtual_generated_column_ = false;
   obj2str_helper_ = NULL;
 
   // note: destroy tb_schema_info_map first, then destroy allocator
@@ -936,7 +940,11 @@ int ObLogMetaManager::build_column_metas_(
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::schema::ObColDesc> column_ids;
-  const bool ignore_virtual_column = true;
+  bool ignore_virtual_column = true;
+  if (OB_UNLIKELY(enable_output_virtual_generated_column_)) {
+    // need to get the virtual column
+    ignore_virtual_column = false;
+  }
   const uint64_t tenant_id = table_schema->get_tenant_id();
   IObCDCTimeZoneInfoGetter *tz_info_getter = TCTX.timezone_info_getter_;
   ObTimeZoneInfoWrap *tz_info_wrap = nullptr;
@@ -981,11 +989,15 @@ int ObLogMetaManager::build_column_metas_(
       LOG_DEBUG("finish build column idx map", K(usr_column_cnt), K(column_stored_idx_to_usr_idx));
     }
 
-    for (int16_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < column_cnt && ! stop_flag; column_stored_idx ++) {
+    // The column_stored_idx is maintained separately to filter out columns that are not stored in the log, such as the virtual generated columns.
+    int16_t column_stored_idx = 0;
+    bool is_last_column = false;
+    for (int16_t column_idx = 0; OB_SUCC(ret) && column_idx < column_cnt && ! stop_flag; column_idx ++) {
+      is_last_column = (column_cnt - 1 == column_idx);
       IColMeta *col_meta = NULL;
-      const share::schema::ObColDesc &col_desc = column_ids.at(column_stored_idx);
+      const share::schema::ObColDesc &col_desc = column_ids.at(column_idx);
       const uint64_t column_id = col_desc.col_id_;
-      const int16_t usr_column_idx = column_stored_idx_to_usr_idx.at(column_stored_idx);
+      const int16_t usr_column_idx = column_stored_idx_to_usr_idx.at(column_idx);
       const bool is_usr_column = (-1 != usr_column_idx);
       const auto *column_table_schema = table_schema->get_column_schema(column_id);
 
@@ -1009,12 +1021,16 @@ int ObLogMetaManager::build_column_metas_(
             is_usr_column,
             usr_column_idx,
             tb_schema_info,
-            tz_info_wrap))) {
+            tz_info_wrap,
+            is_last_column))) {
           LOG_ERROR("set_column_schema_info_ fail", KR(ret), KPC(table_schema), K(tb_schema_info),
               K(column_stored_idx), K(usr_column_idx), KPC(column_table_schema));
         }
       }
 
+      if (! column_table_schema->is_virtual_generated_column()) {
+        ++column_stored_idx;
+      }
     } // while
 
     for (int64_t idx = 0, col_meta_cnt = col_metas.count(); OB_SUCC(ret) && idx < col_meta_cnt && ! stop_flag; idx++) {
@@ -1644,7 +1660,7 @@ int ObLogMetaManager::build_unique_keys_with_index_column_(
       LOG_WARN("ignore shadow column", "table_name", table_schema->get_table_name(),
           "table_id", table_schema->get_table_id(),
           "column_name", column_schema->get_column_name(), K(index_info));
-    } else if (column_schema->is_virtual_generated_column()) {
+    } else if (!enable_output_virtual_generated_column_ && column_schema->is_virtual_generated_column()) {
       LOG_WARN("ignore virtual generate column", "table_name", table_schema->get_table_name(),
           "table_id", table_schema->get_table_id(),
           "column_name", column_schema->get_column_name(), K(index_info));
@@ -2084,10 +2100,11 @@ int ObLogMetaManager::set_table_schema_(
     ret = OB_INVALID_ARGUMENT;
   } else {
     tb_schema_info.set_non_hidden_column_count(non_hidden_column_cnt);
-
     MulVerTableKey table_key(version, tenant_id, table_id);
 
-    if (OB_FAIL(tb_schema_info_map_.insert(table_key, &tb_schema_info))) {
+    if (OB_FAIL(tb_schema_info.handle_after_adding_all_columns())) {
+      LOG_ERROR("tb_schema_info handle_after_adding_all_columns fail", KR(ret), K(table_key), K(tb_schema_info));
+    } else if (OB_FAIL(tb_schema_info_map_.insert(table_key, &tb_schema_info))) {
       LOG_ERROR("tb_schema_info_map_ insert fail", KR(ret), K(table_key), K(tb_schema_info));
     } else {
       LOG_INFO("set_table_schema succ", "schema_version", version, K(tenant_id),
@@ -2173,13 +2190,14 @@ int ObLogMetaManager::set_column_schema_info_(
     const bool is_usr_column,
     const int16_t usr_column_idx,
     TableSchemaInfo &tb_schema_info,
-    const ObTimeZoneInfoWrap *tz_info_wrap)
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    const bool is_last_column)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("meta manager has not inited");
     ret = OB_NOT_INIT;
+    LOG_ERROR("meta manager has not inited");
   // For ObDatumRow format, we can not get column id.
   // So we need maintain __pk_increment column regardless of whether output hidden primary key.
   // init_column_schema_info(...) enable_output_hidden_primary_key_ is equal to true
@@ -2190,6 +2208,7 @@ int ObLogMetaManager::set_column_schema_info_(
       is_usr_column,
       usr_column_idx,
       tz_info_wrap,
+      is_last_column,
       *obj2str_helper_))) {
     LOG_ERROR("tb_schema_info init_column_schema_info fail", KR(ret),
         "table_id", table_schema.get_table_id(),

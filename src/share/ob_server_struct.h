@@ -285,6 +285,7 @@ struct ObGlobalContext
   observer::ObStartupAccelTaskHandler* startup_accel_handler_;
   bool in_bootstrap_;
   plugin::ObPluginMgr *plugin_mgr_ = nullptr;
+  bool is_obcdc_;
 
   static ObGlobalContext& get_instance();
   void init();
@@ -292,6 +293,8 @@ struct ObGlobalContext
   // Refer to the high availability zone design document
   // 
   bool is_observer() const;
+  OB_INLINE void set_is_obcdc(const bool is_obcdc) { is_obcdc_ = is_obcdc; }
+  OB_INLINE bool is_obcdc() const { return is_obcdc_; }
   common::ObClusterRole get_cluster_role() const;
   share::ServerServiceStatus get_server_service_status() const;
   /*

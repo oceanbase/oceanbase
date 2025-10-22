@@ -46,7 +46,8 @@ ColumnSchemaInfo::ColumnSchemaInfo()
       collection_info_(NULL),
       is_rowkey_(false),
       udt_set_id_(0),
-      sub_type_(0)
+      sub_type_(0),
+      column_temp_expr_(NULL)
 {
   // default column is delete
 }
@@ -147,6 +148,8 @@ void ColumnSchemaInfo::reset()
   is_rowkey_ = false;
   udt_set_id_ = 0;
   sub_type_ = 0;
+
+  column_temp_expr_ = NULL;
 }
 
 void ColumnSchemaInfo::get_extended_type_info(common::ObArrayHelper<common::ObString> &str_array) const
@@ -484,8 +487,11 @@ TableSchemaInfo::TableSchemaInfo(ObIAllocator &allocator)
       rowkey_info_(),
       user_column_idx_array_(NULL),
       user_column_idx_array_cnt_(0),
+      stored_column_idx_array_(NULL),
+      virtual_col_array_(),
       column_schema_array_(NULL),
       column_schema_array_cnt_(0),
+      column_schema_consumed_index_(0),
       column_id_hash_arr_(nullptr),
       udt_schema_info_map_(nullptr)
 {
@@ -530,6 +536,8 @@ int TableSchemaInfo::init(const TABLE_SCHEMA *table_schema)
       LOG_ERROR("init_rowkey_info_ fail", KR(ret), K(table_schema));
     } else if (OB_FAIL(init_user_column_idx_array_(user_column_idx_array_cnt_))) {
       LOG_ERROR("init_user_column_idx_array_ fail", KR(ret), K(user_column_idx_array_cnt_));
+    } else if (OB_FAIL(init_stored_column_idx_array_(user_column_idx_array_cnt_))) {
+      LOG_ERROR("init_stored_column_idx_array_ fail", KR(ret), K(user_column_idx_array_cnt_));
     } else if (OB_FAIL(init_column_schema_array_(column_schema_array_cnt_))) {
       LOG_ERROR("init_column_schema_array_ fail", KR(ret), K(column_schema_array_cnt_));
     } else if (OB_FAIL(init_column_id_hash_array_(column_schema_array_cnt_))) {
@@ -571,6 +579,8 @@ void TableSchemaInfo::destroy()
     column_id_hash_arr_ = NULL;
   }
   destroy_user_column_idx_array_();
+  destroy_stored_column_idx_array_();
+  virtual_col_array_.reset();
   destroy_column_schema_array_();
   destroy_udt_schema_info_map_();
 }
@@ -593,17 +603,17 @@ int TableSchemaInfo::init_rowkey_info_(const TABLE_SCHEMA *table_schema)
 int TableSchemaInfo::init_user_column_idx_array_(const int64_t cnt)
 {
   int ret = OB_SUCCESS;
-  int64_t alloc_size = cnt * sizeof(user_column_idx_array_[0]);
+  const int64_t alloc_size = cnt * sizeof(user_column_idx_array_[0]);
 
   if (OB_UNLIKELY(cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(cnt));
-  } else if (OB_ISNULL(user_column_idx_array_ = static_cast<int16_t *>(allocator_.alloc(alloc_size)))) {
+  } else if (OB_ISNULL(user_column_idx_array_ = static_cast<uint64_t *>(allocator_.alloc(alloc_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory fail", KR(ret), K(user_column_idx_array_), K(alloc_size), K(cnt));
   } else {
     for (int64_t idx = 0; OB_SUCC(ret) && idx < cnt; ++idx) {
-      user_column_idx_array_[idx] = OB_INVALID_INDEX;
+      user_column_idx_array_[idx] = OB_INVALID_ID;
     }
   }
 
@@ -619,10 +629,38 @@ void TableSchemaInfo::destroy_user_column_idx_array_()
   }
 }
 
+int TableSchemaInfo::init_stored_column_idx_array_(const int64_t cnt)
+{
+  int ret = OB_SUCCESS;
+  const int64_t alloc_size = cnt * sizeof(stored_column_idx_array_[0]);
+
+  if (OB_UNLIKELY(cnt <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(cnt));
+  } else if (OB_ISNULL(stored_column_idx_array_ = static_cast<uint64_t *>(allocator_.alloc(alloc_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate memory fail", KR(ret), K(stored_column_idx_array_), K(alloc_size), K(cnt));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cnt; ++idx) {
+      stored_column_idx_array_[idx] = OB_INVALID_ID;
+    }
+  }
+
+  return ret;
+}
+
+void TableSchemaInfo::destroy_stored_column_idx_array_()
+{
+  if (NULL != stored_column_idx_array_) {
+    allocator_.free(stored_column_idx_array_);
+    stored_column_idx_array_ = NULL;
+  }
+}
+
 int TableSchemaInfo::init_column_schema_array_(const int64_t cnt)
 {
   int ret = OB_SUCCESS;
-  int64_t alloc_size = cnt * sizeof(column_schema_array_[0]);
+  const int64_t alloc_size = cnt * sizeof(column_schema_array_[0]);
 
   if (OB_UNLIKELY(cnt <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -650,6 +688,7 @@ void TableSchemaInfo::destroy_column_schema_array_()
     allocator_.free(column_schema_array_);
     column_schema_array_ = NULL;
     column_schema_array_cnt_ = 0;
+    column_schema_consumed_index_ = 0;
   }
 }
 
@@ -664,7 +703,22 @@ int TableSchemaInfo::init_column_id_hash_array_(const int64_t column_count)
     LOG_ERROR("alloc mem for column_id_hash_arr_ failed", KR(ret), K(id_hash_array_size));
   } else if (OB_ISNULL(column_id_hash_arr_ = new (buf) ColumnIdxHashArray(id_hash_array_size))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("new column_schema_array_ failed", KR(ret));
+    LOG_ERROR("new column_id_hash_arr_ failed", KR(ret));
+  }
+
+  return ret;
+}
+
+int TableSchemaInfo::alloc_column_schema_(ColumnSchemaInfo *&column_schema_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(column_schema_consumed_index_ < 0 || column_schema_consumed_index_ >= column_schema_array_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), K(column_schema_info), KPC(this));
+  } else {
+    column_schema_info = &column_schema_array_[column_schema_consumed_index_];
+    ++column_schema_consumed_index_;
   }
 
   return ret;
@@ -695,6 +749,7 @@ int TableSchemaInfo::init_column_schema_info(
     const bool is_usr_column,
     const int16_t usr_column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
+    const bool is_last_column,
     ObObj2strHelper &obj2str_helper)
 {
   int ret = OB_SUCCESS;
@@ -706,7 +761,9 @@ int TableSchemaInfo::init_column_schema_info(
   const bool is_rowkey_col = column_table_schema.is_rowkey_column();
   const int16_t rowkey_idx = column_table_schema.get_rowkey_position() -1;
   ColumnSchemaInfo *column_schema_info = NULL;
-  bool is_heap_table_pk_increment_column = table_schema.is_table_with_hidden_pk_column()  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
+  const bool is_heap_table_pk_increment_column = table_schema.is_table_with_hidden_pk_column()  && (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id);
+  const bool is_virtual_generated_column = column_table_schema.is_virtual_generated_column();
+  const bool is_stored_inlog_column = ! is_virtual_generated_column;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -714,10 +771,7 @@ int TableSchemaInfo::init_column_schema_info(
   } else if (OB_UNLIKELY(column_stored_idx < 0 || (is_usr_column && usr_column_idx < 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(column_stored_idx));
-  } else if (OB_FAIL(get_column_schema_info(
-      column_stored_idx,
-      true,/*is_column_stored_idx*/
-      column_schema_info))) {
+  } else if (OB_FAIL(alloc_column_schema_(column_schema_info))) {
     LOG_ERROR("get_column_schema_info fail", KR(ret), K(column_id), K(column_stored_idx),
         KPC(column_schema_info), K(is_usr_column), K(is_heap_table_pk_increment_column));
   } else if (OB_ISNULL(column_schema_info)) {
@@ -745,10 +799,14 @@ int TableSchemaInfo::init_column_schema_info(
         K(table_schema), K(column_table_schema));
   } else if (OB_FAIL(set_column_schema_info_for_column_id_(column_id, column_schema_info))) {
     LOG_ERROR("set_column_stored_idx_for_column_id_ failed", KR(ret), K(column_id), K(column_stored_idx), K(column_table_schema), KPC(column_schema_info));
-  } else if (is_usr_column && OB_FAIL(set_user_column_idx_(usr_column_idx, column_stored_idx))) {
-    LOG_ERROR("set_user_column_id_ fail", KR(ret),K(column_id), K(usr_column_idx), K(column_stored_idx));
+  } else if (is_usr_column && OB_FAIL(set_column_id_of_user_column_idx_(usr_column_idx, column_id))) {
+    LOG_ERROR("set_column_id_of_user_column_idx_ fail", KR(ret), K(column_id), K(usr_column_idx), K(column_stored_idx));
+  } else if (is_stored_inlog_column && OB_FAIL(set_column_id_of_stored_column_idx_(column_stored_idx, column_id))) {
+    LOG_ERROR("set_column_id_of_stored_column_idx_ fail", KR(ret), K(column_id), K(usr_column_idx), K(column_stored_idx));
   } else if (is_rowkey_col && OB_FAIL(rowkey_info_.set_column_stored_idx(rowkey_idx, column_stored_idx))) {
-    LOG_ERROR("set_user_column_id_ fail", KR(ret),K(column_id), K(rowkey_idx), K(column_stored_idx));
+    LOG_ERROR("set_column_stored_idx fail", KR(ret), K(column_id), K(rowkey_idx), K(column_stored_idx));
+  } else if (is_virtual_generated_column && OB_FAIL(push_virtual_col_info_(column_id, table_schema, column_table_schema))) {
+    LOG_ERROR("push_virtual_col_info_ fail", KR(ret), K(column_id), K(column_table_schema));
   } else if (OB_FAIL(add_udt_column_(column_schema_info))) {
     LOG_ERROR("add_udt_column_ fail", KR(ret),
         K(column_stored_idx), K(is_heap_table_pk_increment_column),
@@ -758,6 +816,7 @@ int TableSchemaInfo::init_column_schema_info(
         "table_id", table_schema.get_table_id(),
         "table_name", table_schema.get_table_name(),
         "version", table_schema.get_schema_version(),
+        K(is_last_column),
         "column_id", column_table_schema.get_column_id(),
         "column_name", column_table_schema.get_column_name(),
         "rowkey_pos", column_table_schema.get_rowkey_position(),
@@ -770,6 +829,33 @@ int TableSchemaInfo::init_column_schema_info(
   return ret;
 }
 
+int TableSchemaInfo::handle_after_adding_all_columns()
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("TableSchemaInfo has not inited", KR(ret));
+  } else if (OB_FAIL(build_reverse_mapping_when_add_last_col_())) {
+    LOG_ERROR("build_reverse_mapping_when_add_last_col_ failed", KR(ret), KPC(this));
+  } else {
+    if (TCONF.test_mode_on) {
+      ObSEArray<uint64_t, 16> column_user_idx_to_col_id_array;
+      ObSEArray<uint64_t, 16> column_stored_idx_to_col_id_array;
+
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < user_column_idx_array_cnt_; ++idx) {
+        column_user_idx_to_col_id_array.push_back(user_column_idx_array_[idx]);
+        column_stored_idx_to_col_id_array.push_back(stored_column_idx_array_[idx]);
+      }
+      LOG_DEBUG("handle_after_adding_all_columns", K(column_user_idx_to_col_id_array),
+          K(column_stored_idx_to_col_id_array),
+          K(virtual_col_array_));
+    }
+  }
+
+  return ret;
+}
+
 template int TableSchemaInfo::init_column_schema_info(
     const ObTableSchema &table_schema,
     const ObColumnSchemaV2 &column_table_schema,
@@ -777,15 +863,17 @@ template int TableSchemaInfo::init_column_schema_info(
     const bool is_usr_column,
     const int16_t usr_column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
+    const bool is_last_column,
     ObObj2strHelper &obj2str_helper);
 
- template int TableSchemaInfo::init_column_schema_info(
+template int TableSchemaInfo::init_column_schema_info(
     const datadict::ObDictTableMeta &table_schema,
     const datadict::ObDictColumnMeta &column_table_schema,
     const int16_t column_stored_idx,
     const bool is_usr_column,
     const int16_t usr_column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
+    const bool is_last_column,
     ObObj2strHelper &obj2str_helper);
 
 int TableSchemaInfo::get_column_schema_info_of_column_id(
@@ -793,6 +881,7 @@ int TableSchemaInfo::get_column_schema_info_of_column_id(
     ColumnSchemaInfo *&column_schema_info) const
 {
   int ret = OB_SUCCESS;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("TableSchemaInfo is not inited", KR(ret));
@@ -821,31 +910,37 @@ int TableSchemaInfo::get_column_schema_info(
 {
   int ret = OB_SUCCESS;
   int16_t column_stored_idx = column_idx;
+  uint64_t column_id = OB_INVALID_ID;
   column_schema_info = NULL;
 
-  if (! is_column_stored_idx) {
-    if (OB_UNLIKELY(OB_INVALID_INDEX == column_idx
-        || column_idx >= user_column_idx_array_cnt_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("invalid user_column_index", KR(ret),
-          K(column_idx),K(is_column_stored_idx), KPC(this));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("TableSchemaInfo has not inited", KR(ret));
+  } else {
+    if (! is_column_stored_idx) {
+      if (OB_UNLIKELY(OB_INVALID_INDEX == column_idx
+            || column_idx >= user_column_idx_array_cnt_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid user_column_index", KR(ret),
+            K(column_idx),K(is_column_stored_idx), KPC(this));
+      } else {
+        column_id = user_column_idx_array_[column_idx];
+      }
     } else {
-      column_stored_idx = user_column_idx_array_[column_idx];
+      column_id = stored_column_idx_array_[column_idx];
     }
   }
 
   // range of user columns:
   // OB_APP_MIN_COLUMN_ID: 16
   // OB_MIN_SHADOW_COLUMN_ID: 32767
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("TableSchemaInfo has not inited", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_INDEX == column_stored_idx)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == column_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(column_idx), K(column_stored_idx), K(is_column_stored_idx), KPC(this));
-  } else if (OB_ISNULL(column_schema_info = &column_schema_array_[column_stored_idx])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("column_schema_info is null", KR(ret), K(column_idx), K(column_stored_idx), K(is_column_stored_idx), KPC(this));
+  } else if (OB_FAIL(get_column_schema_info_of_column_id(column_id, column_schema_info))) {
+    LOG_ERROR("get_column_schema_info_of_column_id failed", KR(ret), K(column_id), K(column_idx), K(column_stored_idx),
+        K(is_column_stored_idx), KPC(this));
   } else {
   }
 
@@ -874,9 +969,9 @@ int TableSchemaInfo::get_column_schema_info_for_rowkey(
   return ret;
 }
 
-int TableSchemaInfo::set_user_column_idx_(
+int TableSchemaInfo::set_column_id_of_user_column_idx_(
     const int16_t user_column_index,
-    const int16_t column_stored_index)
+    const uint64_t column_id)
 {
   int ret = OB_SUCCESS;
 
@@ -887,7 +982,118 @@ int TableSchemaInfo::set_user_column_idx_(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(user_column_index), K_(user_column_idx_array_cnt));
   } else {
-    user_column_idx_array_[user_column_index] = column_stored_index;
+    user_column_idx_array_[user_column_index] = column_id;
+  }
+
+  return ret;
+}
+
+int TableSchemaInfo::set_column_id_of_stored_column_idx_(
+    const int16_t column_stored_index,
+    const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("TableSchemaInfo has not inited", KR(ret));
+  } else if (OB_UNLIKELY(column_stored_index < 0 || column_stored_index >= user_column_idx_array_cnt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(column_stored_index), K_(user_column_idx_array_cnt));
+  } else {
+    stored_column_idx_array_[column_stored_index] = column_id;
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
+int TableSchemaInfo::push_virtual_col_info_(
+    const uint64_t virtual_col_id,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("TableSchemaInfo has not inited", KR(ret));
+  } else {
+    const uint64_t table_id = table_schema.get_table_id();
+    const char *table_name = table_schema.get_table_name();
+    const char *column_name = column_schema.get_column_name();
+    VirtualColInfo virtual_col_info;
+    virtual_col_info.col_id_ = virtual_col_id;
+    ObArray<uint64_t> deped_cols;
+
+    if (OB_FAIL(column_schema.get_cascaded_column_ids(deped_cols))) {
+      LOG_ERROR("get_cascaded_column_ids from column_schema failed", KR(ret),
+          K(table_id), K(table_name), K(virtual_col_id), K(column_name), K(column_schema));
+    } else {
+      ARRAY_FOREACH_N(deped_cols, dep_col_idx, dep_col_cnt) {
+        const uint64_t deped_col_id = deped_cols.at(dep_col_idx);
+        VirtualColDepInfo virtual_col_dep_info(deped_col_id);
+
+        if (OB_FAIL(virtual_col_info.dep_col_infos_.push_back(virtual_col_dep_info))) {
+          LOG_ERROR("dep_col_infos_ of virtual_col_info push_back failed", KR(ret),
+            K(table_id), K(table_name), K(virtual_col_id), K(column_name), K(column_schema), K(virtual_col_dep_info));
+        }
+      } // ARRAY_FOREACH_N
+
+      if (OB_SUCC(ret)) {
+        if OB_FAIL(virtual_col_array_.push_back(virtual_col_info)) {
+          LOG_ERROR("virtual_col_array_ push_back failed", KR(ret), K(table_id), K(table_name),
+              K(virtual_col_id), K(virtual_col_info));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int TableSchemaInfo::build_reverse_mapping_when_add_last_col_()
+{
+  int ret = OB_SUCCESS;
+
+  ARRAY_FOREACH_N(virtual_col_array_, vir_col_idx, vir_col_cnt) {
+    VirtualColInfo &virtual_col_info = virtual_col_array_[vir_col_idx];
+    ObArray<VirtualColDepInfo> &dep_col_infos = virtual_col_info.dep_col_infos_;
+
+    ARRAY_FOREACH_N(dep_col_infos, dep_col_idx, dep_col_cnt) {
+      VirtualColDepInfo &vir_col_dep_info = dep_col_infos[dep_col_idx];
+
+      if (OB_FAIL(find_the_user_column_index_based_on_col_id_(vir_col_dep_info))) {
+        LOG_ERROR("find_the_user_column_index_based_on_col_id_ failed", KR(ret),
+            K(vir_col_dep_info), K(virtual_col_info));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int TableSchemaInfo::find_the_user_column_index_based_on_col_id_(
+    VirtualColDepInfo &vir_col_dep_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_find = false;
+  LOG_DEBUG("find_the_user_column_index_based_on_col_id_", K(vir_col_dep_info));
+
+  for (int64_t user_column_index = 0; OB_SUCC(ret) && ! is_find && user_column_index < user_column_idx_array_cnt_;
+      ++user_column_index) {
+    const uint64_t column_id = user_column_idx_array_[user_column_index];
+
+    LOG_DEBUG("find_the_user_column_index_based_on_col_id_", K(user_column_index), K(column_id));
+
+    if (column_id == vir_col_dep_info.col_id_) {
+      vir_col_dep_info.usr_column_idx_ = user_column_index;
+      is_find = true;
+    }
+  } // for
+
+  if (! is_find) {
+    ret = OB_ENTRY_NOT_EXIST;
   }
 
   return ret;
@@ -898,6 +1104,7 @@ int TableSchemaInfo::add_udt_column_(ColumnSchemaInfo *column_info)
   int ret = OB_SUCCESS;
   uint64_t udt_set_id = 0;
   ObCDCUdtSchemaInfo *udt_schema_info = nullptr;
+
   if (OB_ISNULL(column_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("add null hidden column info", KR(ret));
@@ -939,6 +1146,7 @@ int TableSchemaInfo::add_udt_column_(ColumnSchemaInfo *column_info)
       LOG_ERROR("add udt column fail", KR(ret), K(udt_set_id), KP(udt_schema_info));
     }
   } // end if is_udt_column
+
   return ret;
 }
 

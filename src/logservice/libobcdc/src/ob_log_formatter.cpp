@@ -16,25 +16,30 @@
 
 #include "ob_log_formatter.h"
 
-#include "share/schema/ob_table_schema.h"           // TableSchemaType
-#include "lib/string/ob_string.h"                   // ObString
-#include "storage/tx/ob_trans_define.h"             // ObTransID
-
-#include "ob_log_meta_manager.h"        // IObLogMetaManager
-#include "ob_log_utils.h"               // obj2str
-#include "ob_log_schema_getter.h"       // IObLogSchemaGetter, DBSchemaInfo
-#include "ob_obj2str_helper.h"          // ObObj2strHelper
-#include "ob_log_binlog_record_pool.h"  // IObLogBRPool
-#include "ob_log_tenant.h"              // ObLogTenantGuard, ObLogTenant
-#include "ob_log_config.h"              // TCONF
-#include "ob_log_resource_collector.h"  // IObLogResourceCollector
-#include "ob_cdc_lob_ctx.h"             // ObLobDataGetCtx
-#include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
-#include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager
-#include "ob_cdc_lob_aux_table_parse.h"      // ObCDCLobAuxMetaStorager
-#include "ob_cdc_udt.h"                 // ObCDCUdtValueBuilder
-#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
+#include "share/schema/ob_table_schema.h"  // TableSchemaType
+#include "lib/string/ob_string.h"          // ObString
+#include "storage/tx/ob_trans_define.h"    // ObTransID
+#include "ob_log_meta_manager.h"           // IObLogMetaManager
+#include "ob_log_utils.h"                  // obj2str
+#include "ob_log_schema_getter.h"          // IObLogSchemaGetter, DBSchemaInfo
+#include "ob_log_instance.h"               // IObLogErrHandler, TCTX
+#include "ob_obj2str_helper.h"             // ObObj2strHelper
+#include "ob_log_trans_ctx_mgr.h"          // IObLogTransCtxMgr
+#include "ob_log_binlog_record_pool.h"     // IObLogBRPool
+#include "ob_log_storager.h"               // IObLogStorager
+#include "ob_log_tenant.h"                 // ObLogTenantGuard, ObLogTenant
+#include "ob_log_config.h"                 // TCONF
+#include "ob_log_resource_collector.h"     // IObLogResourceCollector
+#include "ob_cdc_lob_ctx.h"                // ObLobDataGetCtx
+#include "ob_cdc_lob_data_merger.h"        // IObCDCLobDataMerger
+#include "ob_cdc_lob_aux_meta_storager.h"  // ObCDCLobAuxMetaStorager
+#include "ob_cdc_lob_aux_table_parse.h"    // ObCDCLobAuxMetaStorager
+#include "ob_cdc_udt.h"                    // ObCDCUdtValueBuilder
+#include "ob_log_trace_id.h"               // ObLogTraceIdGuard
 #include "ob_log_timezone_info_getter.h"
+#include "lib/container/ob_se_array.h"     // ObSEArray
+#include "common/row/ob_row.h"
+#include "storage/lob/ob_lob_manager.h"    // ObLogManager
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -57,6 +62,8 @@ void ObLogFormatter::RowValue::reset()
   (void)memset(new_columns_, 0, sizeof(new_columns_));
   (void)memset(old_columns_, 0, sizeof(old_columns_));
   (void)memset(orig_default_value_, 0, sizeof(orig_default_value_));
+  (void)memset(new_column_objs_, 0, sizeof(new_column_objs_));
+  (void)memset(old_column_objs_, 0, sizeof(old_column_objs_));
   (void)memset(is_rowkey_, 0, sizeof(is_rowkey_));
   (void)memset(is_changed_, 0, sizeof(is_changed_));
   (void)memset(is_null_lob_columns_, 0, sizeof(is_null_lob_columns_));
@@ -75,6 +82,8 @@ int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_
     (void)memset(new_columns_, 0, column_num * sizeof(new_columns_[0]));
     (void)memset(old_columns_, 0, column_num * sizeof(old_columns_[0]));
     (void)memset(orig_default_value_, 0, column_num * sizeof(orig_default_value_[0]));
+    (void)memset(new_column_objs_, 0, column_num * sizeof(new_column_objs_[0]));
+    (void)memset(old_column_objs_, 0, column_num * sizeof(old_column_objs_[0]));
     (void)memset(is_rowkey_, 0, column_num * sizeof(is_rowkey_[0]));
     (void)memset(is_changed_, 0, column_num * sizeof(is_changed_[0]));
     (void)memset(is_null_lob_columns_, 0, column_num * sizeof(is_null_lob_columns_[0]));
@@ -101,9 +110,10 @@ ObLogFormatter::ObLogFormatter() : inited_(false),
                                    hbase_util_(NULL),
                                    skip_hbase_mode_put_column_count_not_consistency_(false),
                                    enable_output_hidden_primary_key_(false),
+                                   enable_output_virtual_generated_column_(false),
                                    log_entry_task_count_(0),
-                                   stmt_in_lob_merger_count_(0)
-
+                                   stmt_in_lob_merger_count_(0),
+                                   calc_generated_column_array_(NULL)
 {
 }
 
@@ -125,7 +135,8 @@ int ObLogFormatter::init(const int64_t thread_num,
       const bool enable_hbase_mode,
       ObLogHbaseUtil &hbase_util,
       const bool skip_hbase_mode_put_column_count_not_consistency,
-      const bool enable_output_hidden_primary_key)
+      const bool enable_output_hidden_primary_key,
+      const bool enable_output_virtual_generated_column)
 {
   int ret = OB_SUCCESS;
 
@@ -162,11 +173,26 @@ int ObLogFormatter::init(const int64_t thread_num,
     hbase_util_ = &hbase_util;
     skip_hbase_mode_put_column_count_not_consistency_ = skip_hbase_mode_put_column_count_not_consistency;
     enable_output_hidden_primary_key_ = enable_output_hidden_primary_key;
+    enable_output_virtual_generated_column_ = enable_output_virtual_generated_column;
     log_entry_task_count_ = 0;
     stmt_in_lob_merger_count_ = 0;
     inited_ = true;
     LOG_INFO("Formatter init succ", K(working_mode_), "working_mode", print_working_mode(working_mode_),
         K(thread_num), K(queue_size));
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::init_after(const int64_t thread_num)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
+  } else if (OB_FAIL(init_calc_generated_column_array_(thread_num))) {
+    LOG_ERROR("init calc_generated_column_utils_array fail", KR(ret), K(thread_num));
   }
 
   return ret;
@@ -179,6 +205,7 @@ void ObLogFormatter::destroy()
   inited_ = false;
 
   destroy_row_value_array_();
+  destory_calc_generated_column_array_();
 
   working_mode_ = WorkingMode::UNKNOWN_MODE;
   obj2str_helper_ = NULL;
@@ -194,6 +221,7 @@ void ObLogFormatter::destroy()
   hbase_util_ = NULL;
   skip_hbase_mode_put_column_count_not_consistency_ = false;
   enable_output_hidden_primary_key_ = false;
+  enable_output_virtual_generated_column_ = false;
   log_entry_task_count_ = 0;
   stmt_in_lob_merger_count_ = 0;
 }
@@ -335,6 +363,7 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
       *dml_stmt_task,
       rv,
       cur_stmt_need_callback,
+      thread_index,
       stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("handle_dml_stmt_ failed", KR(ret), KPC(dml_stmt_task), K(cur_stmt_need_callback));
@@ -373,6 +402,7 @@ int ObLogFormatter::handle_dml_stmt_(
     DmlStmtTask &dml_stmt_task,
     RowValue *row_value,
     bool &cur_stmt_need_callback,
+    const int64_t thread_index,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -393,6 +423,7 @@ int ObLogFormatter::handle_dml_stmt_(
         *row_value,
         *br,
         cur_stmt_need_callback,
+        thread_index,
         stop_flag))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("handle_dml_stmt_with_online_schema_ failed", KR(ret), K(dml_stmt_task), KPC(br));
@@ -405,6 +436,7 @@ int ObLogFormatter::handle_dml_stmt_(
         *row_value,
         *br,
         cur_stmt_need_callback,
+        thread_index,
         stop_flag))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("handle_dml_stmt_with_dict_schema_ failed", KR(ret), K(dml_stmt_task), KPC(br));
@@ -495,6 +527,7 @@ int ObLogFormatter::handle_dml_stmt_with_online_schema_(
     RowValue &row_value,
     ObLogBR &br,
     bool &cur_stmt_need_callback,
+    const int64_t thread_index,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -565,6 +598,7 @@ int ObLogFormatter::handle_dml_stmt_with_online_schema_(
         dml_stmt_task,
         br,
         cur_stmt_need_callback,
+        thread_index,
         stop_flag))) {
       LOG_ERROR("format_row failed", KR(ret), K(dml_stmt_task), K(cur_stmt_need_callback),
           "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
@@ -581,6 +615,7 @@ int ObLogFormatter::handle_dml_stmt_with_dict_schema_(
     RowValue &row_value,
     ObLogBR &br,
     bool &cur_stmt_need_callback,
+    const int64_t thread_index,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -656,6 +691,7 @@ int ObLogFormatter::handle_dml_stmt_with_dict_schema_(
         dml_stmt_task,
         br,
         cur_stmt_need_callback,
+        thread_index,
         stop_flag))) {
       LOG_ERROR("format_row failed", KR(ret), K(dml_stmt_task), K(cur_stmt_need_callback),
           "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
@@ -744,6 +780,7 @@ int ObLogFormatter::format_row_(
     DmlStmtTask &dml_stmt_task,
     ObLogBR &br,
     bool &cur_stmt_need_callback,
+    const int64_t thread_index,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -757,6 +794,7 @@ int ObLogFormatter::format_row_(
       &table_schema,
       new_column_cnt,
       cur_stmt_need_callback,
+      thread_index,
       stop_flag))) {
     LOG_ERROR("build_row_value_ fail", KR(ret), K(tenant_id), K(dml_stmt_task), K(row_value),
         K(new_column_cnt), K(cur_stmt_need_callback));
@@ -1054,6 +1092,40 @@ void ObLogFormatter::destroy_row_value_array_()
   }
 }
 
+int ObLogFormatter::init_calc_generated_column_array_(const int64_t calc_generated_column_num)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(calc_generated_column_num <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(calc_generated_column_num));
+  } else {
+    int64_t size = sizeof(sql::ObCalcGeneratedColumn) * calc_generated_column_num;
+    void *ptr = allocator_.alloc(size);
+
+    if (OB_ISNULL(calc_generated_column_array_ = static_cast<sql::ObCalcGeneratedColumn *>(ptr))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate memory for ObCalcGeneratedColumn fail", KR(ret), K(size), K(calc_generated_column_num));
+    } else {
+      for (int64_t index = 0; OB_SUCC(ret) && index < calc_generated_column_num; index++) {
+        new (&calc_generated_column_array_[index]) sql::ObCalcGeneratedColumn();
+        if (OB_FAIL(calc_generated_column_array_[index].init())) {
+          LOG_ERROR("calc_generated_column init fail", KR(ret), K(index));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObLogFormatter::destory_calc_generated_column_array_()
+{  
+  if (NULL != calc_generated_column_array_) {
+    allocator_.free(static_cast<void *>(calc_generated_column_array_));
+    calc_generated_column_array_ = NULL;
+  }
+}
+
 template<class TABLE_SCHEMA>
 int ObLogFormatter::build_row_value_(
     const uint64_t tenant_id,
@@ -1062,6 +1134,7 @@ int ObLogFormatter::build_row_value_(
     const TABLE_SCHEMA *simple_table_schema,
     int64_t &new_column_cnt,
     bool &cur_stmt_need_callback,
+    const int64_t thread_index,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -1143,6 +1216,16 @@ int ObLogFormatter::build_row_value_(
       else if (OB_FAIL(fill_normal_cols_(*stmt_task, rv, *old_cols, *new_lob_ctx_cols, simple_table_schema,
           *tb_schema_info, tz_info_wrap, false))) {
         LOG_ERROR("fill normal old columns fail", KR(ret), K(rv), KPC(old_cols));
+      }
+      // fill new virtual generated column value
+      else if (OB_UNLIKELY(enable_output_virtual_generated_column_) && OB_FAIL(fill_virtual_generated_cols_(*tb_schema_info,
+          *stmt_task, rv, true/*is_new_row*/, simple_table_schema, tz_info_wrap, thread_index, stop_flag))) {
+         LOG_ERROR("fill virtual generated new columns fail", KR(ret), K(rv), K(simple_table_schema), K(tb_schema_info));
+      }
+      // fill old virtual generated column value
+      else if (OB_UNLIKELY(enable_output_virtual_generated_column_) && old_cols->num_ > 0 && OB_FAIL(fill_virtual_generated_cols_(
+          *tb_schema_info, *stmt_task, rv, false/*is_new_row*/, simple_table_schema, tz_info_wrap, thread_index, stop_flag))) {
+        LOG_ERROR("fill virtual generated old columns fail", KR(ret), K(rv), K(simple_table_schema), K(tb_schema_info));
       } else if (OB_FAIL(fill_rowkey_cols_(rv, *rowkey_cols, simple_table_schema,
               *tb_schema_info))) {
         LOG_ERROR("fill_rowkey_cols_ fail", KR(ret), K(rv), KPC(rowkey_cols),
@@ -1299,6 +1382,7 @@ int ObLogFormatter::fill_normal_cols_(
         } else if (is_new_value) {
           if (! cv->is_out_row_) {
             rv->new_columns_[usr_column_idx] = &cv->string_value_;
+            rv->new_column_objs_[usr_column_idx] = cv->is_col_nop_ ? nullptr : &cv->value_;
           } else if (stmt_task.is_delete()) {
             LOG_TRACE("skip outrow new_cols for delete op", KPC(cv), K(stmt_task));
           } else {
@@ -1310,6 +1394,24 @@ int ObLogFormatter::fill_normal_cols_(
               }
             } else {
               new_col_str = &(lob_data_get_ctx->get_new_lob_column_value());
+            }
+
+            if (OB_SUCC(ret) && OB_UNLIKELY(enable_output_virtual_generated_column_)) {
+              common::ObIAllocator &allocator = stmt_task.get_redo_log_entry_task().get_allocator();
+              ObString new_col_str_with_header;
+              ObObj *new_col_obj = nullptr;
+
+              if (OB_ISNULL(new_col_obj = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj))))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_ERROR("alloc new_col_obj failed", KR(ret));
+              } else if (OB_FAIL(storage::ObLobManager::fill_lob_header(allocator, *new_col_str, new_col_str_with_header))) {
+                LOG_ERROR("fill lob header fail", KR(ret), K(new_col_str));
+              } else {
+                new (new_col_obj) ObObj();
+                new_col_obj->set_string(cv->get_obj_type(), new_col_str_with_header);
+                new_col_obj->set_has_lob_header();
+                rv->new_column_objs_[usr_column_idx] = new_col_obj;
+              }
             }
 
             if (OB_SUCC(ret)) {
@@ -1351,6 +1453,7 @@ int ObLogFormatter::fill_normal_cols_(
               rv->is_old_col_nop_[usr_column_idx] = true;
             } else {
               rv->old_columns_[usr_column_idx] = &cv->string_value_;
+              rv->old_column_objs_[usr_column_idx] = &cv->value_;
             }
           } else if (stmt_task.is_insert()) {
             LOG_TRACE("skip outrow old_cols for insert op", K(stmt_task));
@@ -1363,6 +1466,24 @@ int ObLogFormatter::fill_normal_cols_(
               }
             } else {
               old_col_str = &(lob_data_get_ctx->get_old_lob_column_value());
+            }
+
+            if (OB_SUCC(ret) && OB_UNLIKELY(enable_output_virtual_generated_column_)) {
+              common::ObIAllocator &allocator = stmt_task.get_redo_log_entry_task().get_allocator();
+              ObString old_col_str_with_header;
+              ObObj *old_col_obj = nullptr;
+
+              if (OB_ISNULL(old_col_obj = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj))))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_ERROR("alloc old_col_obj failed", KR(ret));
+              } else if (OB_FAIL(storage::ObLobManager::fill_lob_header(allocator, *old_col_str, old_col_str_with_header))) {
+                LOG_ERROR("fill lob header fail", KR(ret), K(old_col_str));
+              } else {
+                new (old_col_obj) ObObj();
+                old_col_obj->set_string(cv->get_obj_type(), old_col_str_with_header);
+                old_col_obj->set_has_lob_header();
+                rv->old_column_objs_[usr_column_idx] = old_col_obj;
+              }
             }
 
             if (OB_SUCC(ret)) {
@@ -1478,6 +1599,301 @@ int ObLogFormatter::fill_rowkey_cols_(
         }
       }
     } // for
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::fill_virtual_generated_cols_(
+    TableSchemaInfo &tb_schema_info,
+    DmlStmtTask &stmt_task,
+    RowValue *rv,
+    const bool is_new_row,
+    const ObSimpleTableSchemaV2 *simple_table_schema,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    const int64_t thread_index,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
+  } else if (OB_ISNULL(rv) || OB_ISNULL(simple_table_schema) || OB_ISNULL(tz_info_wrap)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(rv), K(simple_table_schema), K(tz_info_wrap));
+  } else {
+    ObLogSchemaGuard schema_guard;
+    const ObTableSchema *full_table_schema = nullptr;
+    const uint64_t tenant_id = simple_table_schema->get_tenant_id();
+    const uint64_t table_id = simple_table_schema->get_table_id();
+    const int64_t schema_version = simple_table_schema->get_schema_version();
+    IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+    if (OB_ISNULL(schema_getter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("schema_getter is NULL", KR(ret));
+    } else {
+      RETRY_FUNC(stop_flag, *schema_getter, get_schema_guard_and_full_table_schema, tenant_id, table_id, schema_version,
+          GET_SCHEMA_TIMEOUT, schema_guard, full_table_schema);
+
+      if (OB_SUCC(ret) && OB_FAIL(cal_virtual_generated_columns_(tb_schema_info, stmt_task, rv, is_new_row, full_table_schema,
+          tz_info_wrap, thread_index))) {
+        LOG_ERROR("calc_virtual_generated_columns fail", KR(ret), K(is_new_row), K(tb_schema_info), K(thread_index));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::fill_virtual_generated_cols_(
+    TableSchemaInfo &tb_schema_info,
+    DmlStmtTask &stmt_task,
+    RowValue *rv,
+    const bool is_new_row,
+    const datadict::ObDictTableMeta *table_meta,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    const int64_t thread_index,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
+  } else if (OB_ISNULL(rv) || OB_ISNULL(table_meta) || OB_ISNULL(tz_info_wrap)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(rv), K(table_meta), K(tz_info_wrap));
+  } else if (OB_FAIL(cal_virtual_generated_columns_(tb_schema_info, stmt_task, rv, is_new_row, table_meta, tz_info_wrap, thread_index))) {
+    LOG_ERROR("cal_virtual_generated_columns_ fail", KR(ret), K(is_new_row), K(tb_schema_info), K(thread_index));
+  }
+
+  return ret;  
+}
+
+template<class TABLE_SCHEMA>
+int ObLogFormatter::cal_virtual_generated_columns_(
+    TableSchemaInfo &tb_schema_info,
+    DmlStmtTask &stmt_task,
+    RowValue *rv,
+    const bool is_new_row,
+    const TABLE_SCHEMA *full_table_schema,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    const int64_t thread_index)
+{
+  int ret = OB_SUCCESS;
+  const VirtualColInfoArray &virtual_col_info_array = tb_schema_info.get_vir_col_info_arrry();
+  ARRAY_FOREACH(virtual_col_info_array, idx) {
+    const VirtualColInfo &virtual_col_info = virtual_col_info_array[idx];
+    if (OB_FAIL(cal_virtual_generated_column_value_(tb_schema_info, stmt_task, rv, is_new_row, full_table_schema,
+        tz_info_wrap, thread_index, virtual_col_info))) {
+      LOG_ERROR("cal_virtual_generated_column_value_ failed", KR(ret), K(virtual_col_info), K(is_new_row), K(tb_schema_info));
+    }
+  }
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogFormatter::cal_virtual_generated_column_value_(
+    TableSchemaInfo &tb_schema_info,
+    DmlStmtTask &stmt_task,
+    RowValue *rv,
+    const bool is_new_row,
+    const TABLE_SCHEMA *full_table_schema,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    const int64_t thread_index,
+    const VirtualColInfo &virtual_col_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(rv) || OB_ISNULL(full_table_schema) || OB_ISNULL(tz_info_wrap)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(rv), K(full_table_schema), K(tz_info_wrap));
+  } else {
+    ObIAllocator &allocator = stmt_task.get_redo_log_entry_task().get_allocator();
+
+    const uint64_t virtual_gen_column_id = virtual_col_info.col_id_;
+    ColumnSchemaInfo *column_schema_info = nullptr;
+    const int64_t dependcy_column_cnt = virtual_col_info.dep_col_infos_.count();
+    ObObj cells[dependcy_column_cnt];
+    common::ObSEArray<sql::ObCalcGeneratedColumnInfo *, 4> dependcy_column_infos;
+    sql::ObTempExpr *column_temp_expr = nullptr;
+    bool is_expr_in_cache = false;
+    bool has_nop_val = false;
+
+    // try get column_temp_expr from column_schema_info
+    if (OB_FAIL(tb_schema_info.get_column_schema_info_of_column_id(virtual_gen_column_id, column_schema_info))) {
+      LOG_ERROR("get_column_schema failed", KR(ret), K(virtual_gen_column_id));
+    } else if (OB_ISNULL(column_schema_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("column_schema_info is nullptr", KR(ret), K(virtual_gen_column_id), K(column_schema_info));
+    } else if (FALSE_IT(column_temp_expr = column_schema_info->get_column_temp_expr())) {
+    } else if (OB_NOT_NULL(column_temp_expr)) {
+      is_expr_in_cache = true;
+    } else {
+      LOG_INFO("column_temp_expr not in column_schema_info", K(virtual_gen_column_id), K(column_schema_info));
+    }
+
+    // construct dependcy_column_infos
+    if (OB_SUCC(ret)) {
+      common::ObSEArray<sql::ObCalcGeneratedColumnInfo *, 4> empty_dependcy_column_infos;
+      ObNewRow empty_dependcy_column_vals;
+      for (int64_t idx = 0; OB_SUCC(ret) && !has_nop_val && idx < dependcy_column_cnt; idx++) {
+        const uint64_t column_id = virtual_col_info.dep_col_infos_[idx].col_id_;
+        const auto *column_schema = full_table_schema->get_column_schema(column_id);
+        ColumnSchemaInfo *column_schema_info = nullptr;
+        int16_t usr_column_idx = 0;
+        sql::ObCalcGeneratedColumnInfo *dep_generated_column_info = nullptr;
+
+        if (OB_ISNULL(dep_generated_column_info = static_cast<sql::ObCalcGeneratedColumnInfo *>(
+            allocator.alloc(sizeof(sql::ObCalcGeneratedColumnInfo))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc memory for ObCalcGeneratedColumnInfo fail", KR(ret));
+        } else if (FALSE_IT(new (dep_generated_column_info) ObCalcGeneratedColumnInfo(allocator))) {
+        } else if (OB_FAIL(tb_schema_info.get_column_schema_info_of_column_id(column_id, column_schema_info))) {
+          LOG_ERROR("get_column_schema failed", KR(ret), K(column_id));
+        } else if (OB_ISNULL(column_schema_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("column_schema_info is NULL", KR(ret), K(column_id), K(column_schema_info));
+        } else if (FALSE_IT(usr_column_idx = column_schema_info->get_usr_column_idx())) {
+        } else if (!is_expr_in_cache && OB_FAIL(construct_generated_column_info_(full_table_schema, column_schema,
+            column_schema_info, false/*is_generated_column*/, empty_dependcy_column_infos, empty_dependcy_column_vals,
+            *dep_generated_column_info))) {
+          LOG_ERROR("construct dep generated column info failed", KR(ret), KPC(column_schema), KPC(column_schema_info));
+        } else if (!is_expr_in_cache && dependcy_column_infos.push_back(dep_generated_column_info)) {
+          LOG_ERROR("push_back dep_generated_column_info fail", KR(ret), K(usr_column_idx), K(dep_generated_column_info));
+        } else if (is_new_row) {
+          if (OB_ISNULL(rv->new_column_objs_[usr_column_idx])) {
+            if (OB_ISNULL(rv->old_column_objs_[usr_column_idx])) {
+              has_nop_val = true;
+            } else {
+              cells[idx] = *rv->old_column_objs_[usr_column_idx];
+            }
+          } else {
+            cells[idx] = *rv->new_column_objs_[usr_column_idx];
+          }
+        } else {
+          if (OB_ISNULL(rv->old_column_objs_[usr_column_idx])) {
+            has_nop_val = true;
+          } else {
+            cells[idx] = *rv->old_column_objs_[usr_column_idx];
+          }
+        }
+      }
+    }
+
+    // calculate virtual generated column
+    if (OB_SUCC(ret)) {
+      if (has_nop_val) {
+        if (is_new_row) {
+          rv->is_changed_[column_schema_info->get_usr_column_idx()] = false;
+        }
+        // mark column value padding, maybe minimal or outrow lob
+        rv->is_old_col_nop_[column_schema_info->get_usr_column_idx()] = true;
+      } else {
+        const auto *column_schema = full_table_schema->get_column_schema(virtual_gen_column_id);
+        sql::ObCalcGeneratedColumnInfo virtual_generated_column_info(allocator);
+        ObNewRow dependcy_column_vals(cells, dependcy_column_cnt);
+        ObObj res_obj;
+
+        if (is_expr_in_cache) {
+          if (OB_FAIL(calc_generated_column_array_[thread_index].calc_generated_column(column_temp_expr, dependcy_column_vals, res_obj))) {
+            LOG_ERROR("calc_generated_column fail", KR(ret), K(dependcy_column_vals));
+          }
+        } else {
+          if (OB_FAIL(construct_generated_column_info_(full_table_schema, column_schema, column_schema_info,
+              true/*is_generated_column*/, dependcy_column_infos, dependcy_column_vals, virtual_generated_column_info))) {
+            LOG_ERROR("construct dep generated column info failed", KR(ret), KPC(column_schema), KPC(column_schema_info),
+                K(dependcy_column_infos), K(dependcy_column_vals));
+          } else if (OB_FAIL(calc_generated_column_array_[thread_index].calc_generated_column(virtual_generated_column_info,
+              tb_schema_info.get_allocator(), column_temp_expr, res_obj))) {
+            LOG_ERROR("calc_generated_column fail", KR(ret), K(virtual_generated_column_info), K(dependcy_column_vals));
+          } else {
+            column_schema_info->set_column_temp_expr(column_temp_expr);
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          ObString *res_str = nullptr;
+          if (OB_ISNULL(res_str = static_cast<ObString *>(allocator.alloc(sizeof(ObString))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory for res_str", KR(ret));
+          } else if (OB_FAIL(obj2str_helper_->obj2str(full_table_schema->get_tenant_id(),
+                                                      full_table_schema->get_table_id(),
+                                                      column_schema->get_column_id(),
+                                                      res_obj, *res_str, allocator, true/*string_deep_copy*/,
+                                                      column_schema->get_extended_type_info(),
+                                                      column_schema_info->get_collection_info(),
+                                                      column_schema->get_accuracy(),
+                                                      column_schema->get_collation_type(),
+                                                      tz_info_wrap))) {
+            LOG_ERROR("obj2str_helper obj2str fail", KR(ret),
+                "tenant_id", full_table_schema->get_tenant_id(),
+                "table_id", full_table_schema->get_table_id(),
+                "column_id", column_schema->get_column_id(),
+                K(res_obj), K(column_schema), K(tz_info_wrap));
+          } else if (is_new_row) {
+            rv->new_columns_[column_schema_info->get_usr_column_idx()] = res_str;
+            rv->is_changed_[column_schema_info->get_usr_column_idx()] = true;
+          } else {
+            rv->old_columns_[column_schema_info->get_usr_column_idx()] = res_str;
+          }
+        }
+
+        // reuse after obj2str becuase obj2str need to deep_copy res_obj, therefore string_deep_copy is true
+        calc_generated_column_array_[thread_index].reuse();
+      }
+    }
+  }
+  return ret;
+}
+
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
+int ObLogFormatter::construct_generated_column_info_(
+    const TABLE_SCHEMA *table_schema,
+    const COLUMN_SCHEMA *column_schema,
+    const ColumnSchemaInfo *column_schema_info,
+    const bool is_generated_column,
+    const common::ObSEArray<sql::ObCalcGeneratedColumnInfo *, 4> &dependcy_column_infos,
+    ObNewRow &dependcy_column_vals,
+    sql::ObCalcGeneratedColumnInfo &generated_column_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(table_schema) || OB_ISNULL(column_schema) || OB_ISNULL(column_schema_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(table_schema), K(column_schema), K(column_schema_info));
+  } else {
+    generated_column_info.column_define_ = column_schema->get_cur_default_value().get_binary();
+    generated_column_info.table_id_ = table_schema->get_table_id();
+    generated_column_info.column_id_ = column_schema->get_column_id();
+    generated_column_info.column_flags_ = column_schema->get_column_flags();
+    generated_column_info.col_name_ = column_schema->get_column_name();
+    generated_column_info.index_position_ = column_schema->get_index_position();
+    generated_column_info.rowkey_position_ = column_schema->get_rowkey_position();
+    generated_column_info.srs_id_ = column_schema->get_srs_id();
+    generated_column_info.sub_type_ = column_schema->get_sub_data_type();
+    generated_column_info.accuracy_ = column_schema->get_accuracy();
+    generated_column_info.udt_set_id_ = column_schema->get_udt_set_id();
+    generated_column_info.meta_type_ = column_schema->get_meta_type();
+    column_schema_info->get_extended_type_info(generated_column_info.extended_type_info_);
+    generated_column_info.is_autoincrement_ = column_schema->is_autoincrement();
+    generated_column_info.is_not_null_for_read_ = column_schema->is_not_null_for_read();
+    generated_column_info.is_not_null_for_write_ = column_schema->is_not_null_for_write();
+    generated_column_info.is_not_null_validate_column_ = column_schema->is_not_null_validate_column();
+    generated_column_info.is_rowkey_column_ = column_schema->is_rowkey_column();
+    generated_column_info.is_index_column_ = column_schema->is_index_column();
+    generated_column_info.is_zero_fill_ = column_schema->is_zero_fill();
+    generated_column_info.is_hidden_ = column_schema->is_hidden();
+    generated_column_info.is_generated_column_ = column_schema->is_generated_column();
+    generated_column_info.dependcy_row_ = &dependcy_column_vals;
+    generated_column_info.local_session_vars_.assign(column_schema->get_local_session_var());
+    ARRAY_FOREACH(dependcy_column_infos, idx) {
+      if (OB_FAIL(generated_column_info.dependcy_column_infos_.push_back(dependcy_column_infos[idx]))) {
+        LOG_ERROR("push_back dependcy_column_info fail", K(idx),
+            "dependcy_column_info", dependcy_column_infos[idx]);
+      }
+    }
   }
 
   return ret;

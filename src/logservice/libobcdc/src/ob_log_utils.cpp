@@ -727,7 +727,7 @@ void column_cast(common::ObObj &obj, const share::schema::ObColumnSchemaV2 &colu
   }
 }
 
-void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info)
+void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info, const bool is_out_row)
 {
   // Neither the NULL type nor the Ext type update Meta information
   if (! obj.is_null() && ! obj.is_ext()) {
@@ -740,6 +740,11 @@ void column_cast(common::ObObj &obj, const ColumnSchemaInfo &column_schema_info)
       obj.set_scale(column_schema_info.get_accuracy().get_precision());
     } else {
       obj.set_scale(column_schema_info.get_accuracy().get_scale());
+    }
+
+    // outrow doesn't have lob_header so can't set lob_header
+    if (obj.is_lob_storage() && !is_out_row) {
+      obj.set_has_lob_header();
     }
   }
 }

@@ -150,6 +150,9 @@ int ObLogMetaDataBaselineLoader::read(
         if (OB_ITER_END != ret) {
           LOG_ERROR("data_dict_iterator next_dict_heaer failed", KR(ret), K(tenant_id));
         }
+      } else if (OB_UNLIKELY(TCONF.enable_output_virtual_generated_column) && 4 > meta_header.get_version()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_ERROR("DATA_DICT BASELINE DATA IS NOT COMPAT WITH OBCDC, SYNC VIRTUAL GENERATED COLUMN IS NOT SUPPORTED FOR OB VERSION BEFORE 4.2.5 OR IN [4.3.0, 4.3.4)", KR(ret));
       } else {
         const datadict::ObDictMetaType &meta_type = meta_header.get_dict_meta_type();
 
