@@ -5782,7 +5782,13 @@ CAST_FUNC_NAME(float, bit)
   {
     float val_float = child_res->get_float();
     // 这里没必要调用SET_RES_BIT,因为ret一定为OB_SUCCESS
-    res_datum.set_bit(static_cast<uint64_t>(val_float));
+    if (val_float < 0) {
+      int64_t val_int64 = static_cast<int64_t>(val_float);
+      uint64_t val_uint64 = static_cast<uint64_t>(val_int64);
+      res_datum.set_bit(val_uint64);
+    } else {
+      res_datum.set_bit(static_cast<uint64_t>(val_float));
+    }
   }
   return ret;
 }
@@ -6113,7 +6119,14 @@ CAST_FUNC_NAME(double, bit)
 {
   EVAL_ARG()
   {
-    res_datum.set_bit(static_cast<uint64_t>(child_res->get_double()));
+    double val_double= child_res->get_double();
+    if (val_double < 0) {
+      int64_t val_int64 = static_cast<int64_t>(val_double);
+      uint64_t val_uint64 = static_cast<uint64_t>(val_int64);
+      res_datum.set_bit(val_uint64);
+    } else {
+      res_datum.set_bit(static_cast<uint64_t>(val_double));
+    }
   }
   return ret;
 }
