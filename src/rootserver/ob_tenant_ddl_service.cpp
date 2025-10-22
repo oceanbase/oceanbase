@@ -2394,10 +2394,11 @@ int ObTenantDDLService::modify_tenant(const ObModifyTenantArg &arg)
   } else if (!is_restore && (0 != arg.sys_var_list_.count())) {
     // The physical recovery may be in the system table recovery stage, and it is necessary to avoid
     // the situation where SQL cannot be executed and hang
+    const uint64_t tenant_id = orig_tenant_schema->get_tenant_id();
     if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(
-                orig_tenant_schema->get_tenant_id(), schema_guard))) {
+                tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard with version in inner table",
-               K(ret), "tenant_id",  orig_tenant_schema->get_tenant_id());
+               K(ret), "tenant_id", tenant_id);
     } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_name, orig_tenant_schema))) {
       ret = OB_TENANT_NOT_EXIST;
       LOG_USER_ERROR(OB_TENANT_NOT_EXIST, tenant_name.length(), tenant_name.ptr());
