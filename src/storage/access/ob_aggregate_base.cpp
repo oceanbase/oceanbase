@@ -28,6 +28,7 @@ ObAggCellBase::ObAggCellBase(common::ObIAllocator &allocator, const share::ObAgg
     param_prop_(param_prop),
     is_assigned_to_group_by_processor_(false),
     skip_index_datum_is_prefix_(false),
+    ignore_eval_index_info_(false),
     is_inited_(false)
 {
 }

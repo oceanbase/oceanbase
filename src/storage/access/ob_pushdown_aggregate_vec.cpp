@@ -619,7 +619,7 @@ int ObAggCellVec::can_use_index_info(
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggCellVec not inited", K(ret));
   } else {
-    if (index_info.has_agg_data() && can_use_index_info()) {
+    if (!ignore_eval_index_info_ && index_info.has_agg_data() && can_use_index_info()) {
       if (OB_FAIL(read_agg_datum(index_info, col_index))) {
         LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
       } else {
@@ -1098,6 +1098,8 @@ int ObCountAggCellVec::can_use_index_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggCellVec not inited", K(ret));
+  } else if (ignore_eval_index_info_) {
+    can_agg = false;
   } else if (!exclude_null_ && is_param_null_prop()) {
     can_agg = true;
   } else {
@@ -1508,6 +1510,8 @@ int ObSumOpNSizeAggCellVec::can_use_index_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggCellVec not init", K(ret));
+  } else if (ignore_eval_index_info_) {
+    can_agg = false;
   } else if (!exclude_null_ && is_fixed_length_type()) {
     can_agg = true;
   } else {
@@ -1553,7 +1557,7 @@ int ObStrPrefixMinAggCellVec::can_use_index_info(const blocksstable::ObMicroInde
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggCellVec not inited", K(ret));
   } else {
-    if (index_info.has_agg_data() && can_use_index_info()) {
+    if (!ignore_eval_index_info_ && index_info.has_agg_data() && can_use_index_info()) {
       if (OB_FAIL(read_agg_datum(index_info, col_index))) {
         LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
       } else {
@@ -1584,7 +1588,7 @@ int ObStrPrefixMaxAggCellVec::can_use_index_info(const blocksstable::ObMicroInde
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggCellVec not inited", K(ret));
   } else {
-    if (index_info.has_agg_data() && can_use_index_info()) {
+    if (!ignore_eval_index_info_ && index_info.has_agg_data() && can_use_index_info()) {
       if (OB_FAIL(read_agg_datum(index_info, col_index))) {
         LOG_WARN("Failed to read agg datum", K(ret), K_(basic_info), K(col_index), K(index_info));
       } else {
@@ -2017,9 +2021,14 @@ int ObGroupByCellVec::output_extra_group_by_result(int64_t &count, const ObTable
         }
       }
     }
+    LOG_TRACE("[GROUP BY PUSHDOWN] output group by distinct values", K(ret), K(count), K_(projected_cnt), K_(distinct_cnt),
+              "distinct values", sql::ToStrVectorHeader(*group_by_col_expr_, eval_ctx_, nullptr, sql::EvalBound(count, true)));
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
       if (OB_FAIL(agg_cells_.at(i)->collect_result(true/*fill_output*/, group_by_col_expr_, 0, projected_cnt_, count))) {
         LOG_WARN("Failed to collect result for agg cell", K(ret), K(i), K_(projected_cnt), K(count));
+      } else {
+        LOG_TRACE("[GROUP BY PUSHDOWN] output group by aggregate results", K(ret), K(i), K(count), K_(projected_cnt), K_(distinct_cnt),
+                  "aggregate results", sql::ToStrVectorHeader(*agg_cells_.at(i)->get_agg_expr(), eval_ctx_, nullptr, sql::EvalBound(count, true)));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2028,7 +2037,6 @@ int ObGroupByCellVec::output_extra_group_by_result(int64_t &count, const ObTable
         ret = OB_ITER_END;
       }
     }
-    LOG_DEBUG("[GROUP BY PUSHDOWN] output group by result", K(ret), K(count), K_(projected_cnt), K_(distinct_cnt));
   }
   return ret;
 }
@@ -2088,7 +2096,7 @@ int ObGroupByCellVec::assign_agg_cells(const sql::ObExpr *col_expr, common::ObIA
       if (OB_FAIL(agg_idxs.push_back(i))) {
         LOG_WARN("Failed to push back", K(ret));
       } else {
-        agg_cell->set_assigned_to_group_by_processor();
+        agg_cell->set_assigned_to_group_by_processor(true);
       }
     }
   }
@@ -2144,6 +2152,21 @@ int ObGroupByCellVec::clear_evaluated_infos()
       } else {
         agg_cell->clear_evaluated_infos();
       }
+    }
+  }
+  return ret;
+}
+
+int ObGroupByCellVec::clear_agg_cell_assign_status()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    ObAggCellVec *agg_cell = agg_cells_.at(i);
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), K(i), K_(agg_cells));
+    } else {
+      agg_cell->set_assigned_to_group_by_processor(false);
     }
   }
   return ret;

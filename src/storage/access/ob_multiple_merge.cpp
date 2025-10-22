@@ -323,6 +323,14 @@ int ObMultipleMerge::save_curr_rowkey()
   // TODO remove this after delete store_rowkey from memtable
   const ObColDescIArray *rowkey_col_descs = nullptr;
   blocksstable::ObDatumRowkey di_base_border_rowkey;
+  ObAggStoreBase *agg_store = nullptr;
+  if (access_param_->iter_param_.enable_pd_aggregate()) {
+    if (access_param_->iter_param_.plan_use_new_format()) {
+      agg_store = static_cast<ObAggregatedStoreVec *>(block_row_store_);
+    } else {
+      agg_store = static_cast<ObAggregatedStore *>(block_row_store_);
+    }
+  }
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -336,6 +344,8 @@ int ObMultipleMerge::save_curr_rowkey()
     if (OB_ISNULL(iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("di base iter is null", K(ret));
+    } else if (nullptr != agg_store && OB_FAIL(agg_store->set_ignore_eval_index_info(true))) { // disable eval index info temporarily
+      LOG_WARN("Failed to set ignore eval index info", K(ret));
     } else if (OB_FAIL(iter->get_next_rowkey(ScanState::DI_BASE == scan_state_,
                                              di_base_curr_scan_index_,
                                              di_base_curr_rowkey_,
@@ -344,6 +354,9 @@ int ObMultipleMerge::save_curr_rowkey()
       if (OB_ERR_UNSUPPORTED_TYPE != ret) {
         LOG_WARN("Failed to get di base rowkey", K(ret), KPC(iter));
       }
+    }
+    if (OB_SUCC(ret) && nullptr != agg_store && OB_FAIL(agg_store->set_ignore_eval_index_info(false))) {
+      LOG_WARN("Failed to set ignore eval index info", K(ret));
     }
   } else {
     di_base_curr_rowkey_.reset();
@@ -1814,7 +1827,7 @@ int ObMultipleMerge::refresh_table_on_demand()
   } else if (get_table_param_->sample_info_.is_block_sample() ||
              (nullptr != block_row_store_ && !block_row_store_->can_refresh())) {
     // TODO : @yuanzhe refactor block sample for table refresh
-    STORAGE_LOG(DEBUG, "skip refresh table for block sample or aggregated in prefetch",
+    STORAGE_LOG(DEBUG, "skip refresh table for block sample, aggregated in prefetch or group by pushdown",
         K(get_table_param_->sample_info_.is_block_sample()), KPC(block_row_store_));
   } else if (OB_FAIL(check_need_refresh_table(need_refresh))) {
     STORAGE_LOG(WARN, "fail to check need refresh table", K(ret));
@@ -1858,7 +1871,8 @@ int ObMultipleMerge::refresh_table_on_demand()
     } else if (OB_UNLIKELY(access_param_->iter_param_.need_truncate_filter()) &&
                OB_FAIL(prepare_truncate_filter())) {
       LOG_WARN("failed to prepare truncate filter", K(ret));
-    } else if (nullptr != block_row_store_ && FALSE_IT(block_row_store_->reuse())) {
+    } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
+      STORAGE_LOG(WARN, "fail to reuse block row store", K(ret));
     } else {
       refreshed = true;
     }
