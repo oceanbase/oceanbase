@@ -3411,10 +3411,12 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
       LOG_WARN("schema service is NULL", KR(ret));
     } else {
       bool is_dropped = false;
+      bool is_restore = false;
       bool tenant_schema_refreshed = false;
       while (!tenant_schema_refreshed
           && !stop_
           && !is_dropped
+          && !is_restore
           && ObTimeUtility::current_time() < expire_time) {
 
         tenant_schema_refreshed = is_user_tenant(tenant_id) ?
@@ -3422,6 +3424,10 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
         if (OB_FAIL(gctx_.schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
           LOG_WARN("fail to check tenant has been dropped at observer startup", KR(ret), K(tenant_id));
         } else if (is_dropped) {
+          // ignore
+        } else if (OB_FAIL(gctx_.schema_service_->check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+          LOG_WARN("fail to check tenant is restore at observer startup", KR(ret), K(tenant_id));
+        } else if (is_restore) {
           // ignore
         } else if (!tenant_schema_refreshed) {
           // check wait and retry
