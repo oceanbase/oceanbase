@@ -212,6 +212,11 @@ public:
                                 ObGeoConstParamCache* const_param_cache, 
                                 const ObSrsItem *srs,
                                 lib::MemoryContext *mem_ctx, bool& res);
+  static int get_contains_res(ObGeometry &geo1, ObGeometry &geo2, 
+                              ObExpr *gis_arg1, ObExpr *gis_arg2,
+                              ObGeoConstParamCache* const_param_cache, 
+                              const ObSrsItem *srs,
+                              lib::MemoryContext *mem_ctx, bool& res);
 private:
   static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double &factor);
   static int init_box_by_geo(ObGeometry &geo, lib::MemoryContext& ctx, ObGeogBox *&box_ptr);

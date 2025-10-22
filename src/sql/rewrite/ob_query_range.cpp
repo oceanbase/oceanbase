@@ -10460,6 +10460,9 @@ int ObQueryRange::get_spatial_relationship_by_mask(ObKeyPart *out_key_part, ObDo
       MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
       if (nullptr != strstr(cmp_str, "ANYINTERACT")) {
         op_type = ObDomainOpType::T_GEO_INTERSECTS;
+      } else if (nullptr != strstr(cmp_str, "CONTAINS")) {
+        // Support CONTAINS for spatial index optimization
+        op_type = ObDomainOpType::T_GEO_COVERS;
       } else {
         // other spatial relationsh is not supported yet, no need to continue
         op_type = ObDomainOpType::T_DOMAIN_OP_END;
@@ -10481,15 +10484,24 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObDomain
     if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
       LOG_WARN("set keypart whole range failed", K(ret));
     }
-  } else if (op_type == ObDomainOpType::T_GEO_RELATE 
-          && (OB_FAIL(get_spatial_relationship_by_mask(out_key_part, new_op_type)) || new_op_type != ObDomainOpType::T_GEO_INTERSECTS)) { 
-    // set whole range when can not get mask of sdo_relate
-    if (OB_FAIL(ret)) {
+  } else if (op_type == ObDomainOpType::T_GEO_RELATE) {
+    // Parse mask parameter to get actual spatial relationship type
+    if (OB_FAIL(get_spatial_relationship_by_mask(out_key_part, new_op_type))) {
       LOG_WARN("get invalid spatial_relationship_by_mask", K(ret), K(new_op_type));
-    } else if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
-      LOG_WARN("set keypart whole range failed", K(ret));
+      // On error, set to whole range (full table scan)
+      if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+        LOG_WARN("set keypart whole range failed", K(ret));
+      }
+    } else if (new_op_type == ObDomainOpType::T_DOMAIN_OP_END) {
+      // Unsupported mask type, set to whole range (full table scan)
+      if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+        LOG_WARN("set keypart whole range failed", K(ret));
+      }
     }
-  } else {
+    // For supported types (T_GEO_INTERSECTS, T_GEO_COVERS), continue to use spatial index
+  }
+  
+  if (OB_SUCC(ret) && new_op_type != ObDomainOpType::T_DOMAIN_OP_END) {
     // check srid
     uint64_t columnid = out_key_part->id_.column_id_;
     ObGeoColumnInfo column_info;

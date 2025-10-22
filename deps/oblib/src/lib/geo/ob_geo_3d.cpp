@@ -55,6 +55,16 @@ ObGeoType ObGeometry3D::type(uint64_t pos) const
   return geo_type;
 }
 
+int ObGeometry3D::accept(ObGeo3DVisitor &visitor)
+{
+  int ret = OB_SUCCESS;
+  set_pos(0);
+  if (OB_FAIL(visit_wkb_inner(visitor))) {
+    LOG_WARN("fail to accept 3d visitor", K(ret));
+  }
+  return ret;
+}
+
 int ObGeometry3D::to_2d_geo(ObIAllocator &allocator, ObGeometry *&res, uint32_t srid)
 {
   int ret = OB_SUCCESS;

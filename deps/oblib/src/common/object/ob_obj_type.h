@@ -1114,6 +1114,8 @@ enum ObUDTType
   T_OBJ_SDO_GEOMETRY = 300028,
   T_OBJ_SDO_ELEMINFO_ARRAY = 300029,
   T_OBJ_SDO_ORDINATE_ARRAY = 300030,
+  T_OBJ_SDO_DIM_ELEMENT = 300031,
+  T_OBJ_SDO_DIM_ARRAY = 300032
 };
 
 // reserved sub schema id for system defined types

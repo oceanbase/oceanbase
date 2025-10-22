@@ -101,9 +101,9 @@ int ObExprSdoRelate::get_params(ObExpr *param_expr, ObArenaAllocator& temp_alloc
       cmp_str[upper_str.length()] = '\0';
       MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
       if (nullptr != strstr(cmp_str, ObSdoRelationship::ANYINTERACT) && OB_FALSE_IT(mask.anyinteract_ = 1)) {
-      } else if (mask.anyinteract_ != 1 
-                && (strstr(cmp_str, ObSdoRelationship::CONTAINS)
-                || strstr(cmp_str, ObSdoRelationship::COVEREDBY)
+      } else if (mask.anyinteract_ != 1 && nullptr != strstr(cmp_str, ObSdoRelationship::CONTAINS) && OB_FALSE_IT(mask.contains_ = 1)) {
+      } else if ((mask.anyinteract_ != 1 && mask.contains_ != 1)
+                && (strstr(cmp_str, ObSdoRelationship::COVEREDBY)
                 || strstr(cmp_str, ObSdoRelationship::COVERS)
                 || strstr(cmp_str, ObSdoRelationship::EQUAL)
                 || strstr(cmp_str, ObSdoRelationship::ON)
@@ -111,9 +111,9 @@ int ObExprSdoRelate::get_params(ObExpr *param_expr, ObArenaAllocator& temp_alloc
                 || strstr(cmp_str, ObSdoRelationship::OVERLAPBDYINTERSECT)
                 || strstr(cmp_str, ObSdoRelationship::INSIDE)
                 || strstr(cmp_str, ObSdoRelationship::TOUCH))) {
-        // other spatial relationsh is not supported yet, no need to continue
+        // other spatial relationship not supported yet
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not sopported yet.", K(ret));
+        LOG_WARN("spatial relationship not supported yet.", K(ret));
       }
     }
   }
@@ -263,13 +263,28 @@ int ObExprSdoRelate::eval_sdo_relate(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
           // check each relation ship, util res is true
           if (OB_FAIL(ret)) {
           } else if (!result && mask.anyinteract_ == 1) {
-            bool tmp_result = false;
-            if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2, const_param_cache, srs, mem_ctx, tmp_result))) {
-              LOG_WARN("fail to get interact res", K(ret));
+            // return false immediately if box intersects is false
+            bool box_intersects = true;
+            if (OB_FAIL(ObGeoExprUtils::check_box_intersects(*geo1, *geo2, *mem_ctx, const_param_cache, is_geo1_cached, is_geo2_cached, box_intersects))) {
+              LOG_WARN("check box intersects failed", K(ret));
+            } else if (!box_intersects) {
+              result = false;
             } else {
-              result = (result || tmp_result);
+              bool tmp_result = false;
+              if (OB_FAIL(ObGeoExprUtils::get_intersects_res(*geo1, *geo2, gis_arg1, gis_arg2, const_param_cache, srs, mem_ctx, tmp_result))) {
+                LOG_WARN("fail to get interact res", K(ret));
+              } else {
+                result = (result || tmp_result);
+              }
             }
+        } else if (!result && mask.contains_ == 1) {
+          bool tmp_result = false;
+          if (OB_FAIL(ObGeoExprUtils::get_contains_res(*geo1, *geo2, gis_arg1, gis_arg2, const_param_cache, srs, mem_ctx, tmp_result))) {
+            LOG_WARN("fail to get contains res", K(ret));
+          } else {
+            result = (result || tmp_result);
           }
+        }
           // set result
           if (OB_FAIL(ret)) {
           } else {
@@ -291,5 +306,6 @@ int ObExprSdoRelate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
   return OB_SUCCESS;
 }
 
-}
-}
+
+}// namespace sql
+}// namespace oceanbase

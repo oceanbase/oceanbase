@@ -1305,78 +1305,165 @@ void ObGeoConstParamCache::add_cached_geo(int arg_idx, common::ObCachedGeom *cac
   }
 }
 
+namespace {
+  enum class BinaryRelationOp { INTERSECTS, CONTAINS };
+
+  static int eval_binary_relation_common(BinaryRelationOp op,
+                                         oceanbase::common::ObGeometry &geo1,
+                                         oceanbase::common::ObGeometry &geo2,
+                                         oceanbase::sql::ObExpr *gis_arg1,
+                                         oceanbase::sql::ObExpr *gis_arg2,
+                                         oceanbase::sql::ObGeoConstParamCache *const_param_cache,
+                                         const oceanbase::common::ObSrsItem *srs,
+                                         lib::MemoryContext *mem_ctx,
+                                         bool &res)
+  {
+    INIT_SUCC(ret);
+    oceanbase::common::ObGeoEvalCtx gis_context(*mem_ctx);
+    oceanbase::common::ObArenaAllocator &temp_allocator = (*mem_ctx)->get_arena_allocator();
+    bool result = false;
+    if (op == BinaryRelationOp::CONTAINS) {
+      if (OB_FAIL(gis_context.append_geo_arg(&geo2)) || OB_FAIL(gis_context.append_geo_arg(&geo1))) {
+        LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
+      }
+    } else {
+      if (OB_FAIL(gis_context.append_geo_arg(&geo1)) || OB_FAIL(gis_context.append_geo_arg(&geo2))) {
+        LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
+      }
+    }
+
+    bool box_intersects = true;
+    if (OB_FAIL(ret)) {
+    } else {
+      // MBR quick rejection for INTERSECTS
+      if (op == BinaryRelationOp::INTERSECTS) {
+        bool is_geo1_cached = false;
+        bool is_geo2_cached = false;
+        if (OB_NOT_NULL(const_param_cache)) {
+          is_geo1_cached = (gis_arg1 != nullptr && gis_arg1->is_static_const_ && const_param_cache->get_cached_geo(0) != nullptr);
+          is_geo2_cached = (gis_arg2 != nullptr && gis_arg2->is_static_const_ && const_param_cache->get_cached_geo(1) != nullptr);
+        }
+        if (OB_FAIL(ObGeoExprUtils::check_box_intersects(geo1, geo2, *mem_ctx, const_param_cache, is_geo1_cached, is_geo2_cached, box_intersects))) {
+          LOG_WARN("check box intersects failed", K(ret));
+        } else if (!box_intersects) {
+          res = false;
+        }
+      }
+
+      oceanbase::common::ObCachedGeom *cache_geo = NULL;
+      oceanbase::common::ObGeometry *other_geo = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (box_intersects && OB_NOT_NULL(const_param_cache)) {
+        if (gis_arg1->is_static_const_) {
+          cache_geo = const_param_cache->get_cached_geo(0);
+          if (cache_geo == NULL
+              && OB_FAIL(oceanbase::common::ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
+                                                                                  temp_allocator,
+                                                                                  const_param_cache->get_const_param_cache(0),
+                                                                                  srs,
+                                                                                  cache_geo))) {
+            LOG_WARN("add geo1 to const cache failed", K(ret));
+          } else {
+            other_geo = &geo2;
+            const_param_cache->add_cached_geo(0, cache_geo);
+          }
+        } else if (gis_arg2->is_static_const_) {
+          cache_geo = const_param_cache->get_cached_geo(1);
+          if (cache_geo == NULL
+              && OB_FAIL(oceanbase::common::ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
+                                                                                  temp_allocator,
+                                                                                  const_param_cache->get_const_param_cache(1),
+                                                                                  srs,
+                                                                                  cache_geo))) {
+            LOG_WARN("add geo2 to const cache failed", K(ret));
+          } else {
+            other_geo = &geo1;
+            const_param_cache->add_cached_geo(1, cache_geo);
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!box_intersects) {
+      } else if (OB_NOT_NULL(cache_geo)) {
+        if (op == BinaryRelationOp::CONTAINS) {
+          if (OB_FAIL(cache_geo->contains(*other_geo, gis_context, result))) {
+            LOG_WARN("get contains result from cache failed", K(ret));
+          } else {
+            res = result;
+          }
+        } else {
+          if (OB_FAIL(cache_geo->intersects(*other_geo, gis_context, result))) {
+            LOG_WARN("get intersects result failed", K(ret));
+          } else {
+            res = result;
+          }
+        }
+      } else if (op == BinaryRelationOp::CONTAINS
+                  && oceanbase::common::ObGeoTypeUtil::use_point_polygon_short_circuit(geo2, geo1, T_FUN_SYS_ST_CONTAINS)) {
+        result = false;
+        if (OB_FAIL(oceanbase::common::ObGeoTypeUtil::get_point_polygon_res(&geo2, &geo1, T_FUN_SYS_ST_CONTAINS, result))) {
+          LOG_WARN("fail to get res.", K(ret));
+        } else {
+          res = result;
+        }
+      } else if (op == BinaryRelationOp::INTERSECTS
+                  && oceanbase::common::ObGeoTypeUtil::use_point_polygon_short_circuit(geo1, geo2, T_FUN_SYS_ST_INTERSECTS)) {
+        result = false;
+        if (OB_FAIL(oceanbase::common::ObGeoTypeUtil::get_point_polygon_res(&geo1, &geo2, T_FUN_SYS_ST_INTERSECTS, result))) {
+          LOG_WARN("fail to get res.", K(ret));
+        } else {
+          res = result;
+        }
+      } else if (op == BinaryRelationOp::CONTAINS
+                  && OB_FAIL(oceanbase::common::ObGeoFunc<oceanbase::common::ObGeoFuncType::Within>::gis_func::eval(gis_context, result))) {
+        LOG_WARN("eval Within functor failed", K(ret));
+        oceanbase::sql::ObGeoExprUtils::geo_func_error_handle(ret, N_SDO_CONTAINS);
+      } else if (op == BinaryRelationOp::INTERSECTS
+                  && OB_FAIL(oceanbase::common::ObGeoFunc<oceanbase::common::ObGeoFuncType::Intersects>::geo_func::eval(gis_context, result))) {
+        LOG_WARN("eval st intersection failed", K(ret));
+        oceanbase::sql::ObGeoExprUtils::geo_func_error_handle(ret, N_SDO_ANYINTERACT);
+      } else if (op == BinaryRelationOp::INTERSECTS
+                 && lib::is_mysql_mode() && geo1.type() == oceanbase::common::ObGeoType::POINT
+                 && geo2.type() == oceanbase::common::ObGeoType::POINT
+                 && result == true
+                 && OB_FAIL(oceanbase::common::ObGeoTypeUtil::eval_point_box_intersects(srs, &geo1, &geo2, result))) {
+        LOG_WARN("eval box intersection failed", K(ret));
+      } else {
+        res = result;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!box_intersects) {
+      } else if (OB_NOT_NULL(cache_geo)) {
+      } else {
+      }
+    }
+
+    return ret;
+  }
+} // anonymous namespace
+
 int ObGeoExprUtils::get_intersects_res(ObGeometry &geo1, ObGeometry &geo2, 
                                       ObExpr *gis_arg1, ObExpr *gis_arg2,
                                       ObGeoConstParamCache* const_param_cache, 
                                       const ObSrsItem *srs,
                                       lib::MemoryContext *mem_ctx, bool& res)
 {
-  INIT_SUCC(ret);
-  ObGeoEvalCtx gis_context(*mem_ctx);
-  ObArenaAllocator &temp_allocator = (*mem_ctx)->get_arena_allocator();
-  bool result = false;
-  if (OB_FAIL(gis_context.append_geo_arg(&geo1)) || OB_FAIL(gis_context.append_geo_arg(&geo2))) {
-    LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
-  } else {
-    ObCachedGeom *cache_geo = NULL;
-    ObGeometry *geo;
-    if (OB_NOT_NULL(const_param_cache)) {
-      if (gis_arg1->is_static_const_) {
-        cache_geo = const_param_cache->get_cached_geo(0);
-        if (cache_geo == NULL 
-          && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
-                                                            temp_allocator,
-                                                            const_param_cache->get_const_param_cache(0),
-                                                            srs,
-                                                            cache_geo))) {
-          LOG_WARN("add geo2 to const cache failed", K(ret));
-        } else {
-          geo = &geo2;
-          const_param_cache->add_cached_geo(0, cache_geo);
-        }
-      } else if (gis_arg2->is_static_const_) {
-        cache_geo = const_param_cache->get_cached_geo(1);
-        if (cache_geo == NULL 
-          && OB_FAIL(ObGeoTypeUtil::create_cached_geometry(*const_param_cache->get_allocator(),
-                                                            temp_allocator,
-                                                            const_param_cache->get_const_param_cache(1),
-                                                            srs,
-                                                            cache_geo))) {
-          LOG_WARN("add geo2 to const cache failed", K(ret));
-        } else {
-          geo = &geo1;
-          const_param_cache->add_cached_geo(1, cache_geo);
-        }
-      }
-    }
+  return eval_binary_relation_common(BinaryRelationOp::INTERSECTS,
+                                     geo1, geo2, gis_arg1, gis_arg2,
+                                     const_param_cache, srs, mem_ctx, res);
+}
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(cache_geo)) {
-      if (OB_FAIL(cache_geo->intersects(*geo, gis_context, result))) {
-        LOG_WARN("get intersects result failed", K(ret));
-      } else {
-        res = result;
-      }
-    } else if (ObGeoTypeUtil::use_point_polygon_short_circuit(geo1, geo2, T_FUN_SYS_ST_INTERSECTS)) {
-      result = false;
-      if (OB_FAIL(ObGeoTypeUtil::get_point_polygon_res(&geo1, &geo2, T_FUN_SYS_ST_INTERSECTS, result))) {
-        LOG_WARN("fail to get res.", K(ret));
-      }
-    } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Intersects>::geo_func::eval(gis_context, result))) {
-      LOG_WARN("eval st intersection failed", K(ret));
-      ObGeoExprUtils::geo_func_error_handle(ret, N_ST_INTERSECTS);
-    } else if (lib::is_mysql_mode() && geo1.type() == ObGeoType::POINT
-                    && geo2.type() == ObGeoType::POINT
-                    && result == true
-                    && OB_FAIL(ObGeoTypeUtil::eval_point_box_intersects(srs, &geo1, &geo2, result))) {
-      LOG_WARN("eval box intersection failed", K(ret));
-    } 
-    if (OB_FAIL(ret)) {
-    } else {
-      res = result;
-    }
-  }
-  return ret;
+int ObGeoExprUtils::get_contains_res(ObGeometry &geo1, ObGeometry &geo2, 
+                                    ObExpr *gis_arg1, ObExpr *gis_arg2,
+                                    ObGeoConstParamCache* const_param_cache, 
+                                    const ObSrsItem *srs,
+                                    lib::MemoryContext *mem_ctx, bool& res)
+{
+  return eval_binary_relation_common(BinaryRelationOp::CONTAINS,
+                                     geo1, geo2, gis_arg1, gis_arg2,
+                                     const_param_cache, srs, mem_ctx, res);
 }
 
 

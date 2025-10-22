@@ -48,5 +48,19 @@ int ObGeoVertexCollectVisitor::visit(ObIWkbPoint *geo)
   return ret;
 }
 
+int ObGeo3DVertexCollectVisitor::visit_pointz_inner(double x, double y, double z)
+{
+  int ret = OB_SUCCESS;
+  ObPoint3dVertex vertex;
+  vertex.x = x;
+  vertex.y = y;
+  vertex.z = z;
+  
+  if (OB_FAIL(vertexes_.push_back(vertex))) {
+    LOG_WARN("failed to add 3D vertex to collection", K(ret), K(x), K(y), K(z));
+  }
+  return ret;
+}
+
 } // namespace common
 } // namespace oceanbase

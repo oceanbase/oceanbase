@@ -2304,6 +2304,9 @@ int ObRangeGenerator::get_spatial_relationship_by_mask(const ObObj& extra, ObDom
       MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
       if (nullptr != strstr(cmp_str, "ANYINTERACT")) {
         op_type = ObDomainOpType::T_GEO_INTERSECTS;
+      } else if (nullptr != strstr(cmp_str, "CONTAINS")) {
+        // Support CONTAINS for spatial index optimization
+        op_type = ObDomainOpType::T_GEO_COVERS;
       } else {
         // other spatial relationsh is not supported yet, no need to continue
         op_type = ObDomainOpType::T_DOMAIN_OP_END;
