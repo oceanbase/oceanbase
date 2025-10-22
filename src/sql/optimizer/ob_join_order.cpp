@@ -7698,7 +7698,7 @@ int ObJoinOrder::need_compare_batch_rescan(const JoinPath &first_path,
                                          range_row_count))) {
       LOG_WARN("failed get rescan path index id", K(ret));
     } else if (!simple_rescan_path) {
-      need_compare = true;
+      need_compare = false;
     } else if (PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
       need_compare = false;
     } else if (OB_FAIL(get_rescan_path_index_id(*second_path.right_path_,
@@ -7708,7 +7708,7 @@ int ObJoinOrder::need_compare_batch_rescan(const JoinPath &first_path,
                                                 range_row_count))) {
       LOG_WARN("failed get rescan path index id", K(ret));
     } else if (!simple_rescan_path) {
-      need_compare = true;
+      need_compare = false;
     } else if (PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
       need_compare = false;
     } else if (first_table_id == second_table_id && first_index_id == second_index_id) {

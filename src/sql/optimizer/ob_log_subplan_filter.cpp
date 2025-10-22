@@ -1079,7 +1079,7 @@ int ObLogSubPlanFilter::need_compare_batch_rescan(const ObLogSubPlanFilter &firs
                                                                    range_row_count))) {
         LOG_WARN("failed get rescan path index id", K(ret));
       } else if (!simple_rescan_path) {
-        need_compare = true;
+        need_compare = false;
       } else if (ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
         need_compare = false;
       } else if (OB_FAIL(ObOptimizerUtil::get_rescan_path_index_id(op2,
@@ -1089,7 +1089,7 @@ int ObLogSubPlanFilter::need_compare_batch_rescan(const ObLogSubPlanFilter &firs
                                                                    range_row_count))) {
         LOG_WARN("failed get rescan path index id", K(ret));
       } else if (!simple_rescan_path) {
-        need_compare = true;
+        need_compare = false;
       } else if (ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
         need_compare = false;
       } else if (first_table_id == second_table_id && first_index_id == second_index_id) {
