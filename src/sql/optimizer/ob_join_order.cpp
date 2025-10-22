@@ -3637,7 +3637,8 @@ int ObJoinOrder::generate_candi_index_merge_tree(const uint64_t ref_table_id,
           }
         }
       }
-      if (is_deduced_expr) {
+      if (OB_FAIL(ret)) {
+      } else if (is_deduced_expr) {
         // do nothing
       } else if (OB_ISNULL(filter)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3659,7 +3660,7 @@ int ObJoinOrder::generate_candi_index_merge_tree(const uint64_t ref_table_id,
                                                          prune_happened))) {
         LOG_WARN("failed to generate one index merge tree for filter", K(ret), KPC(filter));
       } else if (!is_valid) {
-        // do nothing
+        prune_happened = true;
       } else if (OB_FAIL(candi_index_tree->children_.push_back(candi_node))) {
         LOG_WARN("failed to push back candi node", K(ret));
       } else if (OB_FAIL(valid_ori_filters.push_back(filter))) {
@@ -4387,6 +4388,7 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
   const TableItem *table_item = NULL;
   ObSEArray<ObRawExpr*, 4> all_match_exprs;
   ObSEArray<ObRawExpr*, 4> rowkey_exprs;
+  ObSEArray<ObRawExpr*, 4> deduced_filters;
   if (OB_ISNULL(root_node)|| OB_ISNULL(allocator_)
       || OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())
       || OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id))) {
@@ -4483,6 +4485,23 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     } else {
       index_merge_path->strong_sharding_ = sharding_info;
     }
+  }
+
+  // remove deduced table filters
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_merge_path->filter_.count(); ++i) {
+    ObRawExpr *filter = index_merge_path->filter_.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < deduced_exprs_info_.count(); ++j) {
+      if (deduced_exprs_info_.at(j).deduced_expr_ == filter) {
+        if (OB_FAIL(deduced_filters.push_back(filter))) {
+          LOG_WARN("failed to push back filter", K(ret));
+        }
+        break;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(index_merge_path->filter_, deduced_filters))) {
+    LOG_WARN("remove dup failed", K(ret));
   }
 
   // prepare func lookup tr_infos for index merge path, we only need match exprs which is not in index.
