@@ -639,6 +639,7 @@ int ObSortOpImpl::init_partition_topn(const int64_t est_rows)
   } else {
     MEMSET(pt_buckets_, 0, sizeof(PartHeapNode*) * bucket_cnt);
   }
+  pt_row_cnt_ = 0;
   return ret;
 }
 
@@ -867,6 +868,7 @@ void ObSortOpImpl::reuse()
     cur_heap_idx_ = 0;
     part_group_cnt_ = 0;
     topn_heap_ = NULL;
+    pt_row_cnt_ = 0;
   } else if (NULL != topn_heap_) {
     reuse_topn_heap(topn_heap_);
   }
@@ -1266,6 +1268,9 @@ int ObSortOpImpl::add_part_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
   } else if (OB_UNLIKELY(part_group_cnt_ > max_bucket_cnt_) &&
              OB_FAIL(enlarge_partition_topn_buckets())) {
     LOG_WARN("failed to enlarge partition topn buckets");
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(store_row)) {
+    pt_row_cnt_++;
   }
   return ret;
 }
@@ -1697,6 +1702,7 @@ int ObSortOpImpl::do_dump()
       topn_heap_ = NULL;
       got_first_row_ = false;
       rows_ = &quick_sort_array_;
+      pt_row_cnt_ = 0;
     }
 
     if (OB_SUCC(ret)) {

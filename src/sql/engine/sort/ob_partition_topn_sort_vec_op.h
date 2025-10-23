@@ -180,6 +180,13 @@ public:
   void reset_row_idx() {
     row_idx_ = 0;
   }
+  int64_t get_ht_bucket_size() const {
+    int64_t ret = 0;
+    ret += max_bucket_cnt_ * sizeof(PartTopnNode*);
+    ret += part_group_cnt_ * sizeof(PartTopnNode);
+    ret += pt_row_cnt_ * sizeof(Store_Row*);
+    return ret;
+  }
 
 private:
   struct TopnNode
@@ -407,6 +414,7 @@ private:
   TopNSortFunc topn_sort_func_{nullptr};
   ObPartTopnRowBuffer pt_row_buffer_;
   bool got_first_row_{false};
+  int64_t pt_row_cnt_{0};
 };
 
 } // end namespace sql
