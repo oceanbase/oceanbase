@@ -3517,6 +3517,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLInterfaceStmt &s)
   ObLLVMValue interface_name_length;
   ObLLVMValue ret_err;
   const ObString interface_name = s.get_entry();
+  bool raise_warnings = (0 == interface_name.compare("DBMS_MVIEW_MYSQL_REFRESH"));
   CK (!interface_name.empty());
   OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
   OZ (generator_.generate_global_string(interface_name, entry, interface_name_length));
@@ -3527,8 +3528,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLInterfaceStmt &s)
       ret_err));
   OZ (generator_.check_success(ret_err,
       s.get_stmt_id(),
-      s.get_block()->in_notfound(),
-      s.get_block()->in_warning()));
+      raise_warnings ? raise_warnings : s.get_block()->in_notfound(),
+      raise_warnings ? raise_warnings : s.get_block()->in_warning()));
   OZ (generator_.register_dispatch_map(s.get_stmt_id(), generator_.get_current()), s);
   return ret;
 }
