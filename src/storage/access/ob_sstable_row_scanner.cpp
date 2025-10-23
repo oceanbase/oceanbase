@@ -632,13 +632,18 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
       if (OB_UNLIKELY(can_batch_scan())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected block scan status", K(ret), KPC(this));
-      } else if (OB_FAIL(micro_scanner_->get_next_border_rows(prefetcher_.get_border_rowkey()))) {
-        if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
-        } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Fail to get next border rows", K(ret));
-        } else if (prefetcher_.cur_micro_data_fetch_idx_ < read_handle.micro_end_idx_) {
-          ret = OB_SUCCESS;
-        }
+      } else {
+        do {
+          if (OB_FAIL(micro_scanner_->get_next_border_rows(prefetcher_.get_border_rowkey()))) {
+            if (OB_PUSHDOWN_STATUS_CHANGED == ret) {
+            } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              LOG_WARN("Fail to get next border rows", K(ret));
+            } else if (prefetcher_.cur_micro_data_fetch_idx_ < read_handle.micro_end_idx_) {
+              ret = OB_SUCCESS;
+              break;
+            }
+          }
+        } while (OB_SUCC(ret) && iter_param_->enable_pd_aggregate() && !block_row_store_->is_end());
       }
     }
   }
