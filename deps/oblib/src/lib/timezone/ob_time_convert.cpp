@@ -6988,7 +6988,6 @@ int ObTimeConverter::decode_otimestamp(const ObObjType obj_type,
       }
     } else {
       ob_time.parts_[DT_OFFSET_MIN] = static_cast<int32_t>(offset_hour >= 0 ? (offset_hour * MINS_PER_HOUR + offset_min) : (0 - (0 - offset_hour * MINS_PER_HOUR + offset_min)));
-      ob_time.is_tz_name_valid_ = true;
     }
   }
 
