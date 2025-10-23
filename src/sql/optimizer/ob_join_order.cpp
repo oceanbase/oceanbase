@@ -2732,7 +2732,6 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index info entry should not be null", K(ret));
   } else {
-    ObSEArray<uint64_t, 8> filter_column_ids;
     bool is_index_back = ignore_index_back_dim ? false : index_info_entry->is_index_back();
     const OrderingInfo *ordering_info = &index_info_entry->get_ordering_info();
     ObSEArray<uint64_t, 8> interest_column_ids;
@@ -2771,11 +2770,6 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index schema should not be null", K(ret));
-      } else if (OB_FAIL(extract_filter_column_ids(restrict_infos,
-                                                   data_table_id == index_table_id,
-                                                   *index_schema,
-                                                   filter_column_ids))) {
-        LOG_WARN("extract filter column ids failed", K(ret));
       }
       if (OB_SUCC(ret)) {
         /*
@@ -2797,10 +2791,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                                  *allocator_))) {
           LOG_WARN("add index back dim failed", K(is_index_back), K(ret));
         } else if (!ignore_order_dim &&
-                   OB_FAIL(index_dim.add_interesting_order_dim(is_index_back,
-                                                               can_extract_range,
-                                                               filter_column_ids,
-                                                               interest_column_ids,
+                   OB_FAIL(index_dim.add_interesting_order_dim(interest_column_ids,
                                                                const_column_info,
                                                                *allocator_))) {
           LOG_WARN("add interesting order dim failed", K(interest_column_ids), K(ret));
@@ -5829,65 +5820,6 @@ int ObJoinOrder::check_expr_overlap_index(const ObRawExpr* qual,
   } else if (ObOptimizerUtil::overlap_exprs(cur_vars, keys)) {
     overlap = true;
   } else { /*do nothing*/ }
-  return ret;
-}
-
-/* 拿到quals中涉及的 column的列的id 这个函数在抽取不出query range和 interesting order的情况下调用 */
-int ObJoinOrder::extract_filter_column_ids(const ObIArray<ObRawExpr*> &quals,
-                                           const bool is_data_table,
-                                           const ObTableSchema &index_schema,
-                                           ObIArray<uint64_t> &filter_column_ids)
-{
-  int ret = OB_SUCCESS;
-  filter_column_ids.reset();
-  if (quals.count() > 0) {
-    ObArray<ObRawExpr *> column_exprs;
-    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(quals, column_exprs))) {
-      LOG_WARN("extract_column_expr error", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
-        const ObColumnRefRawExpr *column = static_cast<ObColumnRefRawExpr *>(column_exprs.at(i));
-        if (OB_ISNULL(column)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column expr should not be null", K(ret), K(i));
-        } else {
-          uint64_t column_id = column->get_column_id();
-          bool has = false;
-          if (is_data_table) {
-            has = true;
-          } else if (index_schema.is_spatial_index()) {
-            const ObRowkeyInfo* rowkey_info = &index_schema.get_rowkey_info();
-            const ObColumnSchemaV2 *column_schema = NULL;
-            uint64_t index_column_id = OB_INVALID_ID;
-            for (int col_idx = 0;  OB_SUCC(ret) && col_idx < rowkey_info->get_size(); ++col_idx) {
-              if (OB_FAIL(rowkey_info->get_column_id(col_idx, index_column_id))) {
-                LOG_WARN("Failed to get column id", K(ret));
-              } else if (OB_ISNULL(column_schema = (index_schema.get_column_schema(index_column_id)))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("failed to get column schema", K(index_column_id), K(ret));
-              } else if (column_schema->is_spatial_cellid_column()) {
-                uint64_t geo_col_id = column_schema->get_geo_col_id();
-                if (geo_col_id == column_id) {
-                  has = true;
-                  column_id = index_column_id;
-                }
-              }
-            }
-          } else if (OB_FAIL(index_schema.has_column(column_id, has))) {
-            LOG_WARN("check has column failed", K(column_id), K(has), K(ret));
-          }
-          if (OB_SUCC(ret) && has) {
-            if (!ObRawExprUtils::contain_id(filter_column_ids, column_id)) {
-              if (OB_FAIL(filter_column_ids.push_back(column_id))) {
-                LOG_WARN("failed to push back column_ids", K(ret));
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  LOG_TRACE("extract filter column ids finish", K(ret), K(filter_column_ids), K(quals.count()));
   return ret;
 }
 

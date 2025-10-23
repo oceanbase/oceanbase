@@ -95,31 +95,20 @@ class ObInterestOrderDim : public ObSkylineDim
 public:
   friend class ObOptimizerTraceImpl;
   ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
-    is_interesting_order_(false),
-    need_index_back_(false),
-    can_extract_range_(false)
+    is_interesting_order_(false)
   { }
   virtual ~ObInterestOrderDim() {}
   void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
   int add_const_column_info(const common::ObIArray<bool> &const_column_info);
-  void set_index_back(const bool index_back) { need_index_back_ = index_back; }
-  void set_extract_range(const bool can) { can_extract_range_ = can; }
-  int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
-               "column_ids", column_ids_,
-               K_(need_index_back),
-               K_(can_extract_range),
-               "filter column_ids", filter_column_ids_);
+               K_(column_ids),
+               K_(const_column_info));
 private:
   bool is_interesting_order_;
   common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> column_ids_;
   common::ObSEArray<bool, 8, common::ModulePageAllocator, true> const_column_info_;
-  // some filter conditions on index columns
-  bool need_index_back_;
-  bool can_extract_range_;
-  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> filter_column_ids_;
 };
 
 //consider query range subset
@@ -261,10 +250,7 @@ public:
   void set_index_id(const uint64_t index_id) { index_id_ = index_id; }
   int add_index_back_dim(const bool is_index_back,
                          common::ObIAllocator &allocator);
-  int add_interesting_order_dim(const bool is_index_back,
-                                const bool can_extract_range,
-                                const common::ObIArray<uint64_t> &filter_column_ids,
-                                const common::ObIArray<uint64_t> &interest_column_ids,
+  int add_interesting_order_dim(const common::ObIArray<uint64_t> &interest_column_ids,
                                 const common::ObIArray<bool> &const_column_info,
                                 common::ObIAllocator &allocator);
   int add_query_range_dim(const common::ObIArray<uint64_t> &prefix_range_ids,
