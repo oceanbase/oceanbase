@@ -211,16 +211,34 @@ protected:
            || get_total_used_size() >= profile_.get_global_bound_size();
   }
 
-  int64_t get_ht_bucket_size() // calculate partition sort hash table needed size
+  int64_t get_ht_bucket_size() // calculate hash table needed size
+  {
+    int64_t ret = 0;
+    if (part_cnt_ != 0) {
+      if (use_partition_topn_sort_) {
+        ret = get_partition_topn_ht_bucket_size();
+      } else {
+        ret = get_partition_sort_ht_bucket_size();
+      }
+    }
+    return ret;
+  }
+
+  int64_t get_total_used_size()
+  {
+    return mem_context_->used() + get_partition_sort_ht_bucket_size();
+  }
+  int64_t get_partition_topn_ht_bucket_size() // calculate partition topn sort hash table needed size
+  {
+    OB_ASSERT(nullptr != partition_topn_sort_);
+    return partition_topn_sort_->get_ht_bucket_size();
+  }
+  int64_t get_partition_sort_ht_bucket_size() // calculate partition sort hash table needed size
   {
     int64_t row_cnt = sk_store_.get_row_cnt();
     return ((part_cnt_ == 0) ? 0 :
           (row_cnt * FIXED_PART_NODE_SIZE * 2) +                          // size of(part_hash_nodes_)
           (next_pow2(std::max(16L, row_cnt)) * FIXED_PART_BKT_SIZE * 2)); // size of(buckets_)
-  }
-  int64_t get_total_used_size()
-  {
-    return mem_context_->used() + get_ht_bucket_size();
   }
   inline int64_t get_tmp_buffer_mem_bound() {
     // The memory reserved for ObSortVecOpEagerFilter should be deducted when topn filter is enabled.
