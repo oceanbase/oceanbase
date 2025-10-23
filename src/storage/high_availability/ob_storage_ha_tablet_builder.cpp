@@ -850,15 +850,6 @@ int ObStorageHATabletsBuilder::build_copy_tablet_sstable_info_arg_(
   arg.reset();
   ObTabletID tablet_id;
 
-#ifdef ERRSIM
-  const int64_t errsim_tablet_id = GCONF.errsim_migration_tablet_id;
-  if (errsim_tablet_id == tablet_id.id()) {
-    SERVER_EVENT_SYNC_ADD("storage_ha", "before_copy_ddl_sstable",
-                          "tablet_id", tablet_id);
-    DEBUG_SYNC(BEFORE_COPY_DDL_SSTABLE);
-  }
-#endif
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
@@ -875,6 +866,14 @@ int ObStorageHATabletsBuilder::build_copy_tablet_sstable_info_arg_(
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else {
+#ifdef ERRSIM
+  const int64_t errsim_tablet_id = GCONF.errsim_migration_tablet_id;
+  if (errsim_tablet_id == tablet_id.id()) {
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_copy_ddl_sstable",
+                          "tablet_id", tablet_id);
+    DEBUG_SYNC(BEFORE_COPY_DDL_SSTABLE);
+  }
+#endif
     arg.tablet_id_ = tablet_id;
     const ObSSTableArray &major_sstable_array = table_store_wrapper.get_member()->get_major_sstables();
     const ObSSTableArray &minor_sstable_array = table_store_wrapper.get_member()->get_minor_sstables();
