@@ -313,6 +313,7 @@ int ObTablet::calc_tablet_data_usage()
     }
   }
   if (OB_SUCC(ret)) {
+    tablet_meta_.space_usage_.reset();
     tablet_meta_.space_usage_.occupy_bytes_ = occupy_bytes;
     tablet_meta_.space_usage_.data_size_ = required_bytes;
   }
