@@ -590,136 +590,137 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
 }
 
+// Test parent directory creation failure with three fallback scenarios
 TEST_F(TestSSReaderWriter, test_file_alloc_success_but_parent_dir_fail)
 {
   int ret = OB_SUCCESS;
   ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
   ASSERT_NE(nullptr, file_manager);
-  ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
-  ASSERT_NE(nullptr, disk_space_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
 
-  // Record initial disk space usage for verification
-  int64_t initial_used_size = disk_space_manager->get_macro_cache_used_size();
-  LOG_INFO("Initial disk space usage", K(initial_used_size));
+  // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
+  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // preread_task_ will affect local disk size, so preread_task_ need to disble
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
 
-  // 1. prepare write buffer and info first
   const int64_t write_size = 8192;
-  char write_buf[write_size];
-  memset(write_buf, 'b', write_size);
 
-  ObStorageObjectWriteInfo write_info;
-  write_info.io_desc_.set_wait_event(1);
-  write_info.buffer_ = write_buf;
-  write_info.offset_ = 0;
-  write_info.size_ = write_size;
-  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  write_info.mtl_tenant_id_ = MTL_ID();
-  write_info.set_tmp_file_valid_length(write_size);
-  write_info.io_desc_.set_unsealed();
+  // Case 1: Meta does not exist - should use write_through_on_meta_not_exist
+  {
+    LOG_INFO("=== Case 1: test_fallback_meta_not_exist ===");
+    uint64_t tmp_file_id = 601;
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmp_file_id);
+    macro_id.set_third_id(1);  // segment_id
+    ASSERT_TRUE(macro_id.is_valid());
 
-  // 2. setup macro id for a tmp file with non-existing directory
-  uint64_t tmp_file_id = 501;
-  MacroBlockId macro_id;
-  macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
-  macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
-  macro_id.set_second_id(tmp_file_id);  // tmp_file_id
-  macro_id.set_third_id(2);             // segment_id
-  ASSERT_TRUE(macro_id.is_valid());
+    // Inject error to simulate parent dir creation failure for new segment
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
 
-  // 3. Execute async append file with error injection
-  // Expected behavior:
-  // - File space allocation succeeds (enough space for 8KB)
-  // - Parent directory creation fails (-4184) due to ERRSIM
-  // - System releases allocated file space
-  // - Falls back to object storage (write_through)
+    // Execute write - should fallback to write_through_on_meta_not_exist
+    write_tmp_file_data(macro_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+    LOG_INFO("async append file completed with meta_not_exist fallback", K(macro_id));
 
-  // Enable error injection to simulate disk space exhaustion during parent dir creation
-  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
+    // Disable error injection
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
 
-  ObStorageObjectHandle write_object_handle;
-  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
-
-  int64_t used_size_before_write = disk_space_manager->get_macro_cache_used_size();
-  LOG_INFO("Disk usage before write", K(used_size_before_write));
-
-  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_append_file(write_info, write_object_handle));
-  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-  LOG_INFO("async append file completed with expected fallback", K(macro_id));
-
-  // Disable error injection
-  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
-
-  // 4. Verify that file space was properly released (no space leak)
-  int64_t used_size_after_write = disk_space_manager->get_macro_cache_used_size();
-  LOG_INFO("Disk usage after write", K(used_size_after_write));
-
-  // The used size should not increase significantly since file was written to object storage
-  // and allocated space was properly released
-  int64_t space_diff = used_size_after_write - used_size_before_write;
-  ASSERT_LT(space_diff, write_size) << "File space should have been released after parent dir creation failure";
-  LOG_INFO("Space difference verification passed", K(space_diff), K(write_size));
-
-  // 5. verify data integrity by reading back from object storage
-  ObStorageObjectReadInfo read_info;
-  read_info.macro_block_id_ = macro_id;
-  read_info.io_desc_.set_wait_event(1);
-  char read_buf[write_size] = { 0 };
-  read_info.buf_ = read_buf;
-  read_info.offset_ = 0;
-  read_info.size_ = write_size;
-  read_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  read_info.mtl_tenant_id_ = MTL_ID();
-
-  ObStorageObjectHandle read_object_handle;
-  ObSSTmpFileReader tmp_file_reader;
-  ASSERT_EQ(OB_SUCCESS, tmp_file_reader.aio_read(read_info, read_object_handle));
-  ASSERT_EQ(OB_SUCCESS, read_object_handle.wait());
-  ASSERT_NE(nullptr, read_object_handle.get_buffer());
-  ASSERT_EQ(read_info.size_, read_object_handle.get_data_size());
-  ASSERT_EQ(0, memcmp(write_buf, read_object_handle.get_buffer(), write_size));
-  LOG_INFO("data integrity verification passed - file written to object storage");
-
-  // 6. verify object storage fallback through multiple methods
-  bool is_local_exist = false;
-
-  // Check if file exists locally (should be false after fallback)
-  ASSERT_EQ(OB_SUCCESS, file_manager->is_exist_local_file(macro_id, 0/*ls_epoch_id*/, is_local_exist));
-  LOG_INFO("local file existence check", K(is_local_exist), K(macro_id));
-  ASSERT_FALSE(is_local_exist) << "File should not exist locally after fallback to object storage";
-
-  // For temporary files, check object storage fallback through segment metadata
-  // This is more reliable than is_exist_remote_file for TMP_FILE type
-  TmpFileSegId seg_id(macro_id.second_id(), macro_id.third_id());
-  TmpFileMetaHandle meta_handle;
-  bool is_meta_exist = false;
-  bool is_in_object_storage = false;
-
-  ASSERT_EQ(OB_SUCCESS, file_manager->get_segment_file_mgr().try_get_seg_meta(seg_id, meta_handle, is_meta_exist));
-  if (is_meta_exist && meta_handle.is_valid()) {
-    is_in_object_storage = !meta_handle.is_in_local();
-    LOG_INFO("segment metadata check", K(is_meta_exist), "is_in_local", meta_handle.is_in_local(), K(is_in_object_storage));
-  } else {
-    LOG_INFO("segment metadata not found", K(is_meta_exist), K(meta_handle.is_valid()));
+    // Verify
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, write_size/*size*/);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+    LOG_INFO("=== Case 1 completed successfully ===");
   }
 
-  // Verify object storage fallback through multiple indicators:
-  // 1. File not in local cache (is_local_exist = false)
-  // 2. Successful data read from object storage
-  bool object_storage_verified = (!is_local_exist) &&
-                                  (read_object_handle.get_data_size() == write_size) &&
-                                  (memcmp(write_buf, read_object_handle.get_buffer(), write_size) == 0);
+  // Case 2: Meta exists + append sealed - should use write_through_with_remote_seg
+  {
+    LOG_INFO("=== Case 2: test_fallback_meta_exist_sealed ===");
+    uint64_t tmp_file_id = 602;
 
-  LOG_INFO("object storage fallback verification",
-           K(is_local_exist), K(object_storage_verified),
-           "read_data_size", read_object_handle.get_data_size(),
-           "space_released_properly", space_diff < write_size);
+    // 1. First write: create initial segment in object storage (disk exhausted)
+    int64_t avail_size = 0;
+    exhaust_tmp_file_disk_size(avail_size);
 
-  ASSERT_TRUE(object_storage_verified)
-    << "Expected successful object storage fallback: file allocation succeeded, "
-    << "parent dir creation failed, space released, and data written to object storage. "
-    << "Local exists: " << is_local_exist
-    << ", Space difference: " << space_diff << " (should be < " << write_size << ")";
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmp_file_id);
+    macro_id.set_third_id(2);  // segment_id
+    ASSERT_TRUE(macro_id.is_valid());
 
+    // Write initial segment to object storage (no parent dir created since disk exhausted)
+    write_tmp_file_data(macro_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    // 2. Second write: append sealed segment with parent dir failure
+
+    // Release disk space for allocation but inject parent dir creation failure
+    release_tmp_file_disk_size(avail_size);
+    check_tmp_file_disk_size_enough(write_size * 2);
+
+    // Inject error to simulate parent dir creation failure
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
+
+    // Append sealed segment - should fallback
+    write_tmp_file_data(macro_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, true/*is_sealed*/, write_buf_);
+    LOG_INFO("async append sealed file completed with meta_exist fallback", K(macro_id));
+
+    // Disable error injection
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
+
+    // Verify
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, write_size * 2/*size*/);
+    check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+    LOG_INFO("=== Case 2 completed successfully ===");
+  }
+
+  // Case 3: Meta exists + append unsealed - should use write_through_with_remote_seg
+  {
+    LOG_INFO("=== Case 3: test_fallback_meta_exist_unsealed ===");
+    uint64_t tmp_file_id = 603;
+
+    // 1. First write: create initial segment in object storage (disk exhausted)
+    int64_t avail_size = 0;
+    exhaust_tmp_file_disk_size(avail_size);
+
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmp_file_id);
+    macro_id.set_third_id(3);  // segment_id
+    ASSERT_TRUE(macro_id.is_valid());
+
+    // Write initial segment to object storage (no parent dir created since disk exhausted)
+    write_tmp_file_data(macro_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    // 2. Second write: append unsealed segment with parent dir failure
+
+    // Release disk space for allocation but inject parent dir creation failure
+    release_tmp_file_disk_size(avail_size);
+    check_tmp_file_disk_size_enough(write_size * 2);
+
+    // Inject error to simulate parent dir creation failure
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
+
+    // Append unsealed segment - should fallback
+    write_tmp_file_data(macro_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+    LOG_INFO("async append unsealed file completed with meta_exist fallback", K(macro_id));
+
+    // Disable error injection
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
+
+    // Verify
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, write_size * 2/*size*/);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size * 2/*valid_length*/);
+    LOG_INFO("=== Case 3 completed successfully ===");
+  }
 }
 
 TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
