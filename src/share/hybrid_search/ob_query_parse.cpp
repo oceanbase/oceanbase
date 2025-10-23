@@ -800,11 +800,11 @@ int ObESQueryParser::parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&que
   if (OB_ISNULL(query_req = OB_NEWx(ObQueryReqFromJson, &alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create query request", K(ret));
-  } else if (OB_FAIL(check_is_basic_query(req_node, 0))) {
+  } else if (OB_FAIL(check_is_basic_query(req_node, 0, query_req))) {
     LOG_WARN("fail to check is basic query", K(ret));
   }
 
-  ObEsQueryInfo query_info(query_req, QUERY_ITEM_QUERY, is_basic_query_);
+  ObEsQueryInfo query_info(query_req, QUERY_ITEM_QUERY, query_req->is_basic_query_);
   if (OB_SUCC(ret) && OB_FAIL(parse_single_term(req_node, query_info))) {
     LOG_WARN("unexpectd json type", K(ret));
   }
@@ -828,7 +828,7 @@ int ObESQueryParser::parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&que
   } else {
     score_expr = query_info.score_expr_;
     condition_expr = query_info.condition_expr_;
-    if (is_basic_query_ && check_need_construct_msm_expr(query_info)) {
+    if (query_req->is_basic_query_ && check_need_construct_msm_expr(query_info)) {
       if (OB_FAIL(construct_basic_query_select_items_with_query_string(query_info, query_info.basic_query_score_items_))) {
         LOG_WARN("fail to construct basic query select items with query string", K(ret));
       } else {
@@ -837,7 +837,7 @@ int ObESQueryParser::parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&que
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_NOT_NULL(basic_query_condition_expr) && OB_FAIL(outer_filter_items_.push_back(basic_query_condition_expr))) {
+  } else if (OB_NOT_NULL(basic_query_condition_expr) && OB_FAIL(query_req->outer_filter_items_.push_back(basic_query_condition_expr))) {
     LOG_WARN("failed add term to outer filter items", K(ret));
   } else if (OB_NOT_NULL(condition_expr) && OB_FAIL(query_req->condition_items_.push_back(condition_expr))) {
       LOG_WARN("failed add term to query request", K(ret));
@@ -845,7 +845,7 @@ int ObESQueryParser::parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&que
       LOG_WARN("failed add term to score items", K(ret));
   } else if (OB_FAIL(parse_basic_table(table_name_, query_req))) {
     LOG_WARN("fail to parse basic table", K(ret));
-  } else if (need_construct_sub_query() && OB_FAIL(construct_sub_query_with_minimum_should_match(query_req))) {
+  } else if (query_req->outer_filter_items_.count() > 0 && OB_FAIL(construct_sub_query_with_minimum_should_match(query_req))) {
     LOG_WARN("fail to construct query with minimum should match", K(ret));
   } else if (query_req->score_items_.empty()) {
     if (OB_FAIL(set_default_score(query_req, 0.0))) {
@@ -995,7 +995,7 @@ int ObESQueryParser::parse_bool(ObIJsonBase &req_node, ObEsQueryInfo &query_info
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> condition_items;
   BoolQueryMinShouldMatchInfo bq_msm_info;
   query_info.query_item_ = QUERY_ITEM_BOOL;
-  query_info.is_basic_query_ = is_basic_query_;
+  query_info.is_basic_query_ = query_req->is_basic_query_;
   if (req_node.json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
     LOG_WARN("unexpectd json type", K(ret), K(req_node.json_type()));
@@ -1125,7 +1125,7 @@ int ObESQueryParser::parse_must_clauses(ObIJsonBase &req_node, ObQueryReqFromJso
     } else if (OB_FAIL(req_node.get_array_element(i, clause_val))) {
       LOG_WARN("unexpectd json type", K(ret), K(i));
     }
-    ObEsQueryInfo sub_query_info(query_req, QUERY_ITEM_MUST, is_basic_query_, need_cal_score);
+    ObEsQueryInfo sub_query_info(query_req, QUERY_ITEM_MUST, query_req->is_basic_query_, need_cal_score);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(parse_single_term(*clause_val, sub_query_info))) {
       LOG_WARN("unexpectd json type", K(ret), K(i));
@@ -1133,7 +1133,7 @@ int ObESQueryParser::parse_must_clauses(ObIJsonBase &req_node, ObQueryReqFromJso
       LOG_WARN("failed add term to score items", K(ret), K(i));
     } else if (OB_NOT_NULL(sub_query_info.condition_expr_) && OB_FAIL(condition_items.push_back(sub_query_info.condition_expr_))) {
       LOG_WARN("failed add term to condition items", K(ret), K(i));
-    } else if (is_basic_query_ && sub_query_info.qs_msm_info_.msm_val_ > 1) {
+    } else if (query_req->is_basic_query_ && sub_query_info.qs_msm_info_.msm_val_ > 1) {
       if (OB_FAIL(construct_basic_query_select_items_with_query_string(sub_query_info, sub_query_info.basic_query_score_items_))) {
         LOG_WARN("fail to construct basic query select items with query string", K(ret));
       }
@@ -1141,8 +1141,8 @@ int ObESQueryParser::parse_must_clauses(ObIJsonBase &req_node, ObQueryReqFromJso
   }
   if (OB_SUCC(ret)) {
     ObReqOpExpr *tmp_condition_expr = nullptr;
-    if (is_basic_query_ && tmp_outer_filter_items_.count() > 0) {
-      if (OB_FAIL(construct_basic_query_filter_condition_with_and_expr())) {
+    if (query_req->is_basic_query_ && query_req->tmp_outer_filter_items_.count() > 0) {
+      if (OB_FAIL(construct_basic_query_filter_condition_with_and_expr(query_req))) {
         LOG_WARN("fail to construct basic query filter condition with and expr", K(ret));
       }
     }
@@ -1251,7 +1251,7 @@ int ObESQueryParser::parse_should_clauses(ObIJsonBase &req_node, ObQueryReqFromJ
     } else if (OB_FAIL(clause_val->get_key(0, key))) {
       LOG_WARN("fail to get key", K(ret), K(i));
     }
-    bool is_basic_query = is_basic_query_ && bq_msm_info.has_where_condition_;
+    bool is_basic_query = query_req->is_basic_query_ && bq_msm_info.has_where_condition_;
     ObEsQueryInfo sub_query_info(query_req, QUERY_ITEM_SHOULD, is_basic_query, need_cal_score);
     sub_query_info.bq_msm_info_ = bq_msm_info;
 
@@ -1269,11 +1269,11 @@ int ObESQueryParser::parse_should_clauses(ObIJsonBase &req_node, ObQueryReqFromJ
         }
       } else if (sub_query_info.bq_msm_info_.msm_val_ > 1) {
         if (key.case_compare("query_string") == 0) {
-          if (OB_FAIL(construct_alias_column_expr_to_select_items_with_query_string(*sub_query_info.query_req_, sub_query_info))) {
+          if (OB_FAIL(construct_alias_column_expr_to_select_items_with_query_string(*query_req, sub_query_info))) {
             LOG_WARN("fail to construct basic query select items with query string", K(ret));
           }
         } else {
-          if (OB_FAIL(construct_alias_column_expr_to_select_items(*sub_query_info.query_req_, sub_query_info))) {
+          if (OB_FAIL(construct_alias_column_expr_to_select_items(*query_req, sub_query_info))) {
             LOG_WARN("fail to construct alias column expr to select items", K(ret));
           }
         }
@@ -1286,8 +1286,8 @@ int ObESQueryParser::parse_should_clauses(ObIJsonBase &req_node, ObQueryReqFromJ
     common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> expr_array;
 
     if (!condition_items.empty()) {
-      if (is_basic_query_) {
-        if (OB_FAIL(construct_basic_query_filter_condition_with_or_expr(bq_msm_info.msm_val_, bq_msm_info.msm_expr_, condition_items, should_condition))) {
+      if (query_req->is_basic_query_) {
+        if (OB_FAIL(construct_basic_query_filter_condition_with_or_expr(bq_msm_info, query_req, condition_items, should_condition))) {
           LOG_WARN("fail to construct basic query filter condition with or expr", K(ret));
         }
       } else {
@@ -1327,13 +1327,13 @@ int ObESQueryParser::parse_filter_clauses(ObIJsonBase &req_node, ObQueryReqFromJ
     } else if (OB_FAIL(req_node.get_array_element(i, clause_val))) {
       LOG_WARN("unexpectd json type", K(ret), K(i));
     }
-    ObEsQueryInfo sub_query_info(query_req, QUERY_ITEM_FILTER, is_basic_query_, false);
+    ObEsQueryInfo sub_query_info(query_req, QUERY_ITEM_FILTER, query_req->is_basic_query_, false);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(parse_single_term(*clause_val, sub_query_info))) {
       LOG_WARN("unexpectd json type", K(ret), K(i));
     } else if (OB_NOT_NULL(sub_query_info.condition_expr_) && OB_FAIL(condition_items.push_back(sub_query_info.condition_expr_))) {
       LOG_WARN("failed add term to condition items", K(ret), K(i));
-    } else if (is_basic_query_ && sub_query_info.qs_msm_info_.msm_val_ > 1) {
+    } else if (query_req->is_basic_query_ && sub_query_info.qs_msm_info_.msm_val_ > 1) {
       if (OB_FAIL(construct_basic_query_select_items_with_query_string(sub_query_info, sub_query_info.basic_query_score_items_))) {
         LOG_WARN("fail to construct basic query select items with query string", K(ret));
       }
@@ -1341,8 +1341,8 @@ int ObESQueryParser::parse_filter_clauses(ObIJsonBase &req_node, ObQueryReqFromJ
   }
   if (OB_SUCC(ret)) {
     ObReqOpExpr *tmp_condition_expr = nullptr;
-    if (is_basic_query_ && tmp_outer_filter_items_.count() > 0) {
-      if (OB_FAIL(construct_basic_query_filter_condition_with_and_expr())) {
+    if (query_req->is_basic_query_ && query_req->tmp_outer_filter_items_.count() > 0) {
+      if (OB_FAIL(construct_basic_query_filter_condition_with_and_expr(query_req))) {
         LOG_WARN("fail to construct basic query filter condition with and expr", K(ret));
       }
     }
@@ -2895,6 +2895,8 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
     LOG_WARN("fail to create query request", K(ret));
   } else if (OB_FAIL(construct_required_params(params_name, 3, required_params))) {
     LOG_WARN("fail to create required params set", K(ret));
+  } else {
+    query_req->is_basic_query_ = false;
   }
   ObReqColumnExpr *vec_field = NULL;
   ObReqConstExpr *query_vec = NULL;
@@ -3267,7 +3269,7 @@ int ObESQueryParser::construct_sub_query_with_minimum_should_match(ObQueryReqFro
   ObReqOpExpr *and_expr = nullptr;
   ObString sub_query_name("_fts0");
   ObReqColumnExpr *col_expr = nullptr;
-  if (OB_FAIL(ObReqOpExpr::construct_op_expr(and_expr, alloc_, T_OP_AND, outer_filter_items_))) {
+  if (OB_FAIL(ObReqOpExpr::construct_op_expr(and_expr, alloc_, T_OP_AND, query_req->outer_filter_items_))) {
     LOG_WARN("fail to construct and expr", K(ret));
   } else if (OB_FAIL(wrap_sub_query(sub_query_name, query_req))) {
     LOG_WARN("fail to wrap sub query", K(ret));
@@ -3953,17 +3955,17 @@ int ObESQueryParser::process_phrase_keywords(common::ObIArray<ObReqConstExpr *> 
   return ret;
 }
 
-int ObESQueryParser::check_is_basic_query(ObIJsonBase &req_node, int depth)
+int ObESQueryParser::check_is_basic_query(ObIJsonBase &req_node, int depth, ObQueryReqFromJson *query_req)
 {
   int ret = OB_SUCCESS;
   ObString key;
   ObIJsonBase *sub_node = nullptr;
 
   if (depth <= 1) {
-    is_basic_query_ = true;
+    query_req->is_basic_query_ = true;
   }
   if (depth > 1) {
-    is_basic_query_ = false;
+    query_req->is_basic_query_ = false;
   } else if (req_node.json_type() == ObJsonNodeType::J_ARRAY) {
     uint64_t count = req_node.element_count();
     for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
@@ -3981,11 +3983,11 @@ int ObESQueryParser::check_is_basic_query(ObIJsonBase &req_node, int depth)
           LOG_WARN("fail to get sub node", K(ret));
         } else if (check_is_bool_query(elem_key)) {
           if (elem_key == "bool") {
-            if (OB_FAIL(check_is_basic_query(*elem_sub_node, depth + 1))) {
+            if (OB_FAIL(check_is_basic_query(*elem_sub_node, depth + 1, query_req))) {
               LOG_WARN("fail to check is basic query", K(ret));
             }
           } else {
-            if (OB_FAIL(check_is_basic_query(*elem_sub_node, depth))) {
+            if (OB_FAIL(check_is_basic_query(*elem_sub_node, depth, query_req))) {
               LOG_WARN("fail to check is basic query", K(ret));
             }
           }
@@ -4004,11 +4006,11 @@ int ObESQueryParser::check_is_basic_query(ObIJsonBase &req_node, int depth)
         LOG_WARN("fail to get sub node", K(ret));
       } else if (check_is_bool_query(k)) {
         if (k == "bool") {
-          if (OB_FAIL(check_is_basic_query(*sn, depth + 1))) {
+          if (OB_FAIL(check_is_basic_query(*sn, depth + 1, query_req))) {
             LOG_WARN("fail to check is basic query", K(ret));
           }
         } else {
-          if (OB_FAIL(check_is_basic_query(*sn, depth))) {
+          if (OB_FAIL(check_is_basic_query(*sn, depth, query_req))) {
             LOG_WARN("fail to check is basic query", K(ret));
           }
         }
@@ -4018,20 +4020,20 @@ int ObESQueryParser::check_is_basic_query(ObIJsonBase &req_node, int depth)
   return ret;
 }
 
-int ObESQueryParser::construct_basic_query_filter_condition_with_and_expr()
+int ObESQueryParser::construct_basic_query_filter_condition_with_and_expr(ObQueryReqFromJson *query_req)
 {
   int ret = OB_SUCCESS;
   ObReqOpExpr *and_expr = NULL;
-  if (OB_FAIL(ObReqOpExpr::construct_op_expr(and_expr, alloc_, T_OP_AND, tmp_outer_filter_items_))) {
+  if (OB_FAIL(ObReqOpExpr::construct_op_expr(and_expr, alloc_, T_OP_AND, query_req->tmp_outer_filter_items_))) {
     LOG_WARN("fail to construct and expr", K(ret));
-  } else if (OB_FAIL(outer_filter_items_.push_back(and_expr))) {
+  } else if (OB_FAIL(query_req->outer_filter_items_.push_back(and_expr))) {
     LOG_WARN("fail to push and expr to outer filter items", K(ret));
   }
-  tmp_outer_filter_items_.reset();
+  query_req->tmp_outer_filter_items_.reset();
   return ret;
 }
 
-int ObESQueryParser::construct_basic_query_filter_condition_with_or_expr(uint64_t msm_val, ObReqConstExpr *msm_expr, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&or_expr)
+int ObESQueryParser::construct_basic_query_filter_condition_with_or_expr(BoolQueryMinShouldMatchInfo &bq_msm_info, ObQueryReqFromJson *query_req, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&or_expr)
 {
   int ret = OB_SUCCESS;
   ObReqOpExpr *tmp_or_expr = NULL;
@@ -4039,6 +4041,8 @@ int ObESQueryParser::construct_basic_query_filter_condition_with_or_expr(uint64_
   ObReqOpExpr *add_expr = NULL;
   // construct or expr, it is used to filter inner query to get the initial result
   // format: or_expr = items[0] OR items[1] OR ... OR items[n-1]
+  uint64_t msm_val = bq_msm_info.msm_val_;
+  ObReqConstExpr *msm_expr = bq_msm_info.msm_expr_;
   if (msm_val == 0 || items.count() == 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(msm_val), K(items.count()));
@@ -4068,9 +4072,9 @@ int ObESQueryParser::construct_basic_query_filter_condition_with_or_expr(uint64_
   // construct ge expr, it is used to filter outer query
   // format: (item[0] > 0) + (item[1] > 0) + ... + (item[n-1] > 0) >= msm_val
   if (OB_FAIL(ret)) {
-  } else if (tmp_outer_filter_items_.count() > 0) {
-    if (tmp_outer_filter_items_.count() == 1) {
-      if (OB_FAIL(outer_filter_items_.push_back(tmp_outer_filter_items_.at(0)))) {
+  } else if (query_req->tmp_outer_filter_items_.count() > 0) {
+    if (query_req->tmp_outer_filter_items_.count() == 1) {
+      if (OB_FAIL(query_req->outer_filter_items_.push_back(query_req->tmp_outer_filter_items_.at(0)))) {
         LOG_WARN("fail to push single item to outer filter items", K(ret));
       }
     } else {
@@ -4078,25 +4082,25 @@ int ObESQueryParser::construct_basic_query_filter_condition_with_or_expr(uint64_
       if (OB_FAIL(ObReqConstExpr::construct_const_numeric_expr(zero_score_expr, alloc_, 0, ObIntType))) {
         LOG_WARN("fail to create zero score expr", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_outer_filter_items_.count(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < query_req->tmp_outer_filter_items_.count(); i++) {
         ObReqOpExpr *gt_expr = nullptr;
-        ObReqExpr *item = tmp_outer_filter_items_.at(i);
+        ObReqExpr *item = query_req->tmp_outer_filter_items_.at(i);
         if (OB_FAIL(ObReqOpExpr::construct_binary_op_expr(gt_expr, alloc_, T_OP_GT, item, zero_score_expr))) {
           LOG_WARN("fail to create gt expr", K(ret));
         } else {
-          tmp_outer_filter_items_.at(i) = gt_expr;
+          query_req->tmp_outer_filter_items_.at(i) = gt_expr;
         }
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObReqOpExpr::construct_op_expr(add_expr, alloc_, T_OP_ADD, tmp_outer_filter_items_))) {
+      } else if (OB_FAIL(ObReqOpExpr::construct_op_expr(add_expr, alloc_, T_OP_ADD, query_req->tmp_outer_filter_items_))) {
         LOG_WARN("fail to construct add expr", K(ret));
       } else if (OB_FAIL(ObReqOpExpr::construct_binary_op_expr(ge_expr, alloc_, T_OP_GE, add_expr, msm_expr))) {
         LOG_WARN("fail to create ge expr", K(ret));
-      } else if (OB_FAIL(outer_filter_items_.push_back(ge_expr))) {
+      } else if (OB_FAIL(query_req->outer_filter_items_.push_back(ge_expr))) {
         LOG_WARN("fail to push ge expr to outer filter items", K(ret));
       } else {
-        tmp_outer_filter_items_.reset();
+        query_req->tmp_outer_filter_items_.reset();
       }
     }
   }
@@ -4148,7 +4152,7 @@ int ObESQueryParser::construct_basic_query_select_items_with_query_string(ObEsQu
       LOG_WARN("fail to create add expr", K(ret));
     } else if (OB_FAIL(ObReqOpExpr::construct_binary_op_expr(ge_expr, alloc_, T_OP_GE, add_expr, query_info.qs_msm_info_.msm_expr_))) {
       LOG_WARN("fail to create ge expr", K(ret));
-    } else if (OB_FAIL(tmp_outer_filter_items_.push_back(ge_expr))) {
+    } else if (OB_FAIL(query_req->tmp_outer_filter_items_.push_back(ge_expr))) {
       LOG_WARN("fail to push ge expr to outer filter items", K(ret));
     } else {
       query_info.basic_query_condition_expr_ = ge_expr;
@@ -4175,7 +4179,7 @@ int ObESQueryParser::construct_alias_column_expr_to_select_items(ObQueryReqFromJ
     LOG_WARN("fail to assign column name", K(ret));
   } else if (OB_FAIL(ObReqColumnExpr::construct_column_expr(col_expr, alloc_, wi_score_str))) {
     LOG_WARN("fail to construct column expr", K(ret));
-  } else if (OB_FAIL(tmp_outer_filter_items_.push_back(col_expr))) {
+  } else if (OB_FAIL(query_req.tmp_outer_filter_items_.push_back(col_expr))) {
     LOG_WARN("fail to push column expr to outer filter items", K(ret));
   } else if (OB_FALSE_IT(query_info.condition_expr_->set_alias(wi_score_str))) {
   } else if (OB_FAIL(query_req.select_items_.push_back(query_info.condition_expr_))) {
@@ -4229,7 +4233,7 @@ int ObESQueryParser::construct_alias_column_expr_to_select_items_with_query_stri
       LOG_WARN("fail to create add expr", K(ret));
     } else if (OB_FAIL(ObReqOpExpr::construct_binary_op_expr(outer_gt_expr, alloc_, T_OP_GT, add_expr, zero_score_expr))) {
       LOG_WARN("fail to create gt expr", K(ret));
-    } else if (OB_FAIL(tmp_outer_filter_items_.push_back(outer_gt_expr))) {
+    } else if (OB_FAIL(query_req.tmp_outer_filter_items_.push_back(outer_gt_expr))) {
       LOG_WARN("fail to push gt expr to outer filter items", K(ret));
     }
   }

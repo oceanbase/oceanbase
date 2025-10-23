@@ -202,19 +202,17 @@ class ObESQueryParser
 public :
   ObESQueryParser(ObIAllocator &alloc, common::ObString *table_name) : alloc_(alloc), source_cols_(),
     need_json_wrap_(false), table_name_(*table_name), user_cols_(), item_seq_(0), out_cols_(nullptr), enable_es_mode_(false),
-    fusion_config_(), default_size_(nullptr), is_basic_query_(true) {}
+    fusion_config_(), default_size_(nullptr) {}
   ObESQueryParser(ObIAllocator &alloc, bool need_json_wrap,
                   const common::ObString *table_name,
                   const common::ObString *database_name = nullptr,
-                  bool enable_es_mode = false,
-                  bool is_basic_query = true)
+                  bool enable_es_mode = false)
     : alloc_(alloc), source_cols_(), need_json_wrap_(need_json_wrap), table_name_(*table_name), database_name_(*database_name),
       user_cols_(), item_seq_(0), out_cols_(nullptr), enable_es_mode_(enable_es_mode), fusion_config_(), default_size_(nullptr) {}
   virtual ~ObESQueryParser() {}
   int parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req);
   inline ColumnIndexNameMap &get_index_name_map() { return index_name_map_; }
   inline ObIArray<ObString> &get_user_column_names() { return user_cols_; }
-  inline bool need_construct_sub_query() {return outer_filter_items_.count() > 0;}
 private :
   int parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
   int parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
@@ -315,8 +313,8 @@ private :
   bool check_need_construct_msm_expr(ObEsQueryInfo &query_info);
 
   /// use in basic query
-  int construct_basic_query_filter_condition_with_and_expr();
-  int construct_basic_query_filter_condition_with_or_expr(uint64_t msm_val, ObReqConstExpr *msm_expr, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&or_expr);
+  int construct_basic_query_filter_condition_with_and_expr(ObQueryReqFromJson *query_req);
+  int construct_basic_query_filter_condition_with_or_expr(BoolQueryMinShouldMatchInfo &bq_msm_info, ObQueryReqFromJson *query_req, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&or_expr);
   int construct_basic_query_select_items_with_query_string(ObEsQueryInfo &query_info, common::ObIArray<ObReqExpr *> &score_items);
   int construct_alias_column_expr_to_select_items(ObQueryReqFromJson &query_req, const ObEsQueryInfo &query_info);
   int construct_alias_column_expr_to_select_items_with_query_string(ObQueryReqFromJson &query_req, const ObEsQueryInfo &query_info);
@@ -329,10 +327,6 @@ private :
   common::ObString database_name_;
   ColumnIndexNameMap index_name_map_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> user_cols_;
-
-  // for construct basic query filter condition in outer query
-  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> tmp_outer_filter_items_;
-  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> outer_filter_items_;
   uint32_t item_seq_;
 
   ObIArray<ObString> *out_cols_;
@@ -340,7 +334,6 @@ private :
   bool enable_es_mode_ = false;
   ObRankFusion fusion_config_;
   ObReqConstExpr *default_size_;
-  bool is_basic_query_;
   static const ObString SCORE_NAME;
   static const ObString FTS_SCORE_NAME;
   static const ObString VS_SCORE_NAME;
@@ -353,7 +346,7 @@ private :
   static const ObString FTS_ALIAS;
   static const ObString VS_ALIAS;
 
-  int check_is_basic_query(ObIJsonBase &req_node, int depth);
+  int check_is_basic_query(ObIJsonBase &req_node, int depth, ObQueryReqFromJson *query_req);
   inline bool check_is_bool_query(ObString &key) {
     return key == "must" || key == "must_not" ||
            key == "should" || key == "filter" ||
