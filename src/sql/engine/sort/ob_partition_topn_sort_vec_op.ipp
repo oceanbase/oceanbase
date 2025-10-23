@@ -346,6 +346,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::do_sort() {
       }
     }
   }
+  comp_.set_cmp_range(0, comp_.get_cnt());
   return ret;
 }
 
