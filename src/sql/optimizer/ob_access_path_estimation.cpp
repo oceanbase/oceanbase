@@ -155,7 +155,8 @@ int ObAccessPathEstimation::inner_estimate_rowcount(ObOptimizerContext &ctx,
   if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods, hint_specify_methods))) {
     LOG_WARN("failed to get valid est methods", K(ret));
   } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs,
-                                            valid_methods & hint_specify_methods ? valid_methods & hint_specify_methods : valid_methods,
+                                            valid_methods,
+                                            hint_specify_methods,
                                             method))) {
     LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
   } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, filter_exprs, valid_methods, method))) {
@@ -208,7 +209,7 @@ int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
     } else if (!is_success) {
       valid_methods &= ~EST_DS_BASIC;
       valid_methods &= ~EST_DS_FULL;
-      if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
+      if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, EST_INVALID, method))) {
         LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
       }
     }
@@ -383,6 +384,7 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
                                                    common::ObIArray<AccessPath*> &paths,
                                                    const ObIArray<ObRawExpr*> &filter_exprs,
                                                    const ObBaseTableEstMethod &valid_methods,
+                                                   const ObBaseTableEstMethod &hint_specify_methods,
                                                    ObBaseTableEstMethod& method)
 {
   int ret = OB_SUCCESS;
@@ -402,16 +404,20 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   * 3. Complex scene (with complex predicates): higher the priority of dynamic sampling because it is more accurate.
  */
 
-  static const int64_t priority_cnt = 7;
   static const ObBaseTableEstMethod EST_STORAGE_DEFAULT = EST_STORAGE | EST_DEFAULT;
   static const ObBaseTableEstMethod EST_STORAGE_STAT = EST_STORAGE | EST_STAT;
   static const ObBaseTableEstMethod EST_DS_STORAGE = EST_DS_BASIC | EST_STORAGE;
-  static const ObBaseTableEstMethod complex_est_priority[priority_cnt] =
-      {EST_DS_FULL, EST_STORAGE_STAT, EST_STAT, EST_DS_STORAGE, EST_DS_BASIC, EST_STORAGE_DEFAULT, EST_DEFAULT};
-  static const ObBaseTableEstMethod simple_est_priority[priority_cnt]  =
-      {EST_STORAGE_STAT, EST_STAT, EST_STORAGE_DEFAULT, EST_DEFAULT, EST_DS_FULL, EST_DS_STORAGE, EST_DS_BASIC};
-  static const ObBaseTableEstMethod default_est_priority[priority_cnt] =
-      {EST_STORAGE_STAT, EST_STAT, EST_DS_FULL, EST_DS_STORAGE, EST_DS_BASIC, EST_STORAGE_DEFAULT, EST_DEFAULT};
+  static const ObBaseTableEstMethod EST_DS_FULL_STORAGE = EST_DS_FULL | EST_STORAGE;
+  ObBaseTableEstMethod complex_est_priority[] =
+      {EST_DS_FULL_STORAGE, EST_DS_FULL, EST_STORAGE_STAT, EST_STAT, EST_DS_STORAGE, EST_DS_BASIC, EST_STORAGE_DEFAULT, EST_DEFAULT};
+  ObBaseTableEstMethod simple_est_priority[]  =
+      {EST_STORAGE_STAT, EST_STAT, EST_STORAGE_DEFAULT, EST_DEFAULT, EST_DS_FULL_STORAGE, EST_DS_FULL, EST_DS_STORAGE, EST_DS_BASIC};
+  ObBaseTableEstMethod default_est_priority[] =
+      {EST_STORAGE_STAT, EST_STAT, EST_DS_FULL_STORAGE, EST_DS_FULL, EST_DS_STORAGE, EST_DS_BASIC, EST_STORAGE_DEFAULT, EST_DEFAULT};
+  static const int64_t priority_cnt = ARRAYSIZEOF(complex_est_priority);
+  STATIC_ASSERT(ARRAYSIZEOF(complex_est_priority) == ARRAYSIZEOF(simple_est_priority) &&
+                ARRAYSIZEOF(complex_est_priority) == ARRAYSIZEOF(default_est_priority),
+                "the size of priority array should be the same");
   method = EST_INVALID;
   bool is_simple_scene = false;
   bool is_complex_scene = false;
@@ -421,6 +427,19 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   ObLogPlan *log_plan = nullptr;
   const ObDMLStmt *stmt = nullptr;
   const OptSelectivityCtx* sel_ctx = nullptr;
+  if (hint_specify_methods & valid_methods) {
+    for (int64_t i = 0; i < priority_cnt; i ++) {
+      if (!(hint_specify_methods & complex_est_priority[i])) {
+        complex_est_priority[i] = EST_INVALID;
+      }
+      if (!(hint_specify_methods & simple_est_priority[i])) {
+        simple_est_priority[i] = EST_INVALID;
+      }
+      if (!(hint_specify_methods & default_est_priority[i])) {
+        default_est_priority[i] = EST_INVALID;
+      }
+    }
+  }
 
   if (OB_ISNULL(ctx.get_session_info()) || OB_UNLIKELY(paths.empty()) ||
       OB_ISNULL(paths.at(0)) || OB_ISNULL(join_order = paths.at(0)->parent_) ||
@@ -2579,7 +2598,9 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                     only_ds_filter,
                                                                     no_ds_data))) {
         LOG_WARN("failed to update table stat info by dynamic sampling", K(ret));
-      } else if (only_ds_basic_stat || no_ds_data) {
+      } else if (no_ds_data) {
+        is_success = false;
+      } else if (only_ds_basic_stat) {
         if (OB_FAIL(process_statistics_estimation(ctx, paths))) {
           LOG_WARN("failed to process statistics estimation", K(ret));
         }

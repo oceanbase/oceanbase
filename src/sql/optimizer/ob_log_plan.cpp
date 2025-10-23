@@ -2382,9 +2382,9 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
       OPT_TRACE_TITLE("Now", left_tree, "join", right_tree, join_info);
       if (OB_FAIL(ret)) {
         //do nothing
-      } else if (OB_FAIL(join_tree->revise_cardinality(left_tree,
-                                                       right_tree,
-                                                       join_info))) {
+      } else if (OB_FAIL(join_tree->calc_cardinality(left_tree,
+                                                     right_tree,
+                                                     join_info))) {
         LOG_WARN("failed to revise ambient card", K(ret));
       } else if (OB_FAIL(join_tree->generate_join_paths(*left_tree,
                                                         *right_tree,
