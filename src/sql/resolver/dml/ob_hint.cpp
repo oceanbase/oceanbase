@@ -3432,8 +3432,7 @@ bool ObWindowDistHint::WinDistOption::is_valid() const
     bret = false;
   } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
              WinDistAlgo::WIN_DIST_NONE != algo_ &&
-             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_ &&
-             WinDistAlgo::WIN_DIST_RANGE != algo_
+             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_
             && (use_hash_sort_ || use_topn_sort_)) {
     bret = false;
   } else {

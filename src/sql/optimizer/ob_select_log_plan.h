@@ -781,8 +781,7 @@ private:
                                 const bool is_partition_wise,
                                 const int64_t prefix_pos,
                                 ObIArray<CandidatePlan> &all_plans);
-  int create_range_list_dist_win_func(const WinDistAlgo dist_method,
-                                      ObLogicalOperator *top,
+  int create_range_list_dist_win_func(ObLogicalOperator *top,
                                       const WinFuncOpHelper &win_func_helper,
                                       ObIArray<CandidatePlan> &all_plans);
   int get_range_dist_keys(const WinFuncOpHelper &win_func_helper,
