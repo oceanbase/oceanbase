@@ -550,6 +550,7 @@ int ObCgroupCtrl::set_cgroup_config_(const char *group_path, const char *config_
 {
   int ret = OB_SUCCESS;
   char config_path[PATH_BUFSIZE];
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
   snprintf(config_path, PATH_BUFSIZE, "%s/%s", group_path, config_name);
   bool exist_cgroup = false;
   if (OB_FAIL(check_cgroup_root_dir())) {
@@ -560,6 +561,11 @@ int ObCgroupCtrl::set_cgroup_config_(const char *group_path, const char *config_
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path));
   } else if (OB_FAIL(write_string_to_file_(config_path, config_value))) {
     LOG_WARN("set cgroup config failed", K(ret), K(config_path), K(config_value));
+  }
+  const int64_t used_ts = ObTimeUtility::fast_current_time() - start_ts;
+  if (used_ts > 100 * 1000) {
+    LOG_WARN("set cgroup config cost too much time", K(ret),
+        K(used_ts), KP(group_path), KP(config_name), KP(config_value));
   }
   return ret;
 }
