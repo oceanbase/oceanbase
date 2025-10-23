@@ -804,7 +804,7 @@ int ObCOSSTableV2::cg_scan(
     LOG_WARN("failed to fetch cg table wrapper", K(ret), K(param), KPC(this));
   } else if (project_single_row) {
     if (param.cg_idx_ >= cs_meta_.column_group_cnt_) {
-      ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGScanner, cg_scanner);
+      ALLOCATE_CG_ITER(context, param.cg_idx_, ObDefaultCGSingleRowScanner, cg_scanner);
     } else {
       ALLOCATE_CG_ITER(context, param.cg_idx_, ObCGSingleRowScanner, cg_scanner);
     }

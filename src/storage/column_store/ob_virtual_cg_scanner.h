@@ -126,6 +126,10 @@ private:
   ObAggGroupBase *agg_group_;
 };
 
+// ObDefaultCGSingleRowScanner is used for single row scan
+// keep this for cg iter pool
+class ObDefaultCGSingleRowScanner : public ObDefaultCGScanner{};
+
 class ObDefaultCGGroupByScanner final : public ObDefaultCGScanner, public ObICGGroupByProcessor
 {
 public:
