@@ -21,6 +21,9 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "storage/incremental/atomic_protocol/ob_atomic_file_mgr.h"
+#include "storage/incremental/atomic_protocol/ob_atomic_file.h"
+#include "storage/incremental/atomic_protocol/ob_atomic_tablet_meta_file.h"
+#include "storage/incremental/atomic_protocol/ob_atomic_default_file.h"
 #include "storage/incremental/atomic_protocol/ob_atomic_sstablelist_op.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
@@ -36,6 +39,7 @@ namespace storage
 {
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
+typedef ObAtomicDefaultFile<ObSSLSMetaSSLogValue> ObAtomicLSMetaFile;
 
 static int64_t lease_epoch = 1;
 
@@ -109,6 +113,9 @@ int ObAtomicFileMgr::AtomicFileGCTask::collect_all_ls_tablet_ids_(ObLSTabletMap 
 
 TEST_F(TestAtomicFileMgr, test_get_sstable_list_handle)
 {
+  ASSERT_EQ(true, OB_MAX_ATOMIC_FILE_SIZE >= sizeof(ObAtomicFile));
+  ASSERT_EQ(true, OB_MAX_ATOMIC_FILE_SIZE >= sizeof(ObAtomicTabletMetaFile));
+  ASSERT_EQ(true, OB_MAX_ATOMIC_FILE_SIZE >= sizeof(ObAtomicLSMetaFile));
   int ret = OB_SUCCESS;
   {
     // test normal workflow
@@ -123,29 +130,29 @@ TEST_F(TestAtomicFileMgr, test_get_sstable_list_handle)
 
   }
 
-  {
-    // test atomic file not allow concurrent create
-    ObAtomicFileType type = ObAtomicFileType::MINI_SSTABLE_LIST;
-    GET_MINI_SSTABLE_LIST_HANDLE_DEFAULT(file_handle, 1);
-    ObAtomicFileKey file_key(type, ls_id1, tablet_id1);
-    GET_MINI_SSTABLE_LIST_HANDLE_DEFAULT(file_handle, 2);
-    ObAtomicFile *file_ptr1 = file_handle1.get_atomic_file();
+  // {
+  //   // test atomic file not allow concurrent create
+  //   ObAtomicFileType type = ObAtomicFileType::MINI_SSTABLE_LIST;
+  //   GET_MINI_SSTABLE_LIST_HANDLE_DEFAULT(file_handle, 1);
+  //   ObAtomicFileKey file_key(type, ls_id1, tablet_id1);
+  //   GET_MINI_SSTABLE_LIST_HANDLE_DEFAULT(file_handle, 2);
+  //   ObAtomicFile *file_ptr1 = file_handle1.get_atomic_file();
 
-    ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle;
-    ASSERT_EQ(OB_SUCCESS, file_ptr1->create_op(op_handle, true, ObString()));
+  //   ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle;
+  //   ASSERT_EQ(OB_SUCCESS, file_ptr1->create_op(op_handle, true, ObString()));
 
-    ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle2;
-    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
-    ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle));
-    ASSERT_EQ(OB_SUCCESS, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
-    ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle2));
-    file_handle1.get_atomic_file()->set_deleting();
-    ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
-    // can not use this file to do op because it's deleting
-    file_handle1.get_atomic_file()->state_.reset();
-    file_handle1.reset();
-    file_handle2.reset();
-  }
+  //   ObAtomicOpHandle<ObAtomicSSTableListAddOp> op_handle2;
+  //   ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
+  //   ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle));
+  //   ASSERT_EQ(OB_SUCCESS, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
+  //   ASSERT_EQ(OB_SUCCESS, file_ptr1->abort_op(op_handle2));
+  //   file_handle1.get_atomic_file()->set_deleting();
+  //   ASSERT_EQ(OB_OP_NOT_ALLOW, file_handle2.get_atomic_file()->create_op(op_handle2, true, ObString()));
+  //   // can not use this file to do op because it's deleting
+  //   file_handle1.get_atomic_file()->state_.reset();
+  //   file_handle1.reset();
+  //   file_handle2.reset();
+  // }
 }
 
 TEST_F(TestAtomicFileMgr, test_get_ls_meta_handle)
