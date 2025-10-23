@@ -101,6 +101,9 @@ int ObPxPools::create_pool(int64_t group_id, ObPxPool *&pool)
       } else {
         pool->set_tenant_id(tenant_id_);
         pool->set_group_id(group_id);
+        if (OBCG_DEFAULT == group_id) {
+          pool->set_thread_group_id(OB_THREAD_GROUP_PX);
+        }
         pool->set_run_wrapper(MTL_CTX());
         if (OB_FAIL(pool->start())) {
           LOG_WARN("fail startup px pool", K(group_id), K(tenant_id_), K(ret));
@@ -2067,6 +2070,24 @@ void ObTenant::update_token_usage()
     }
     thread_list_lock_.unlock();
     IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
+  }
+  if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {
+    int64_t group_cpu_time_inc[OB_TENANT_THREAD_GROUP_MAXNUM];
+    MEMSET(group_cpu_time_inc, 0, sizeof(group_cpu_time_inc));
+    for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
+      DLIST_FOREACH_REMOVESAFE(group_list_node_, group_thread_list_array_[i])
+      {
+        int64_t inc = 0;
+        Thread *thread = group_list_node_->get_data();
+        if (OB_SUCC(thread->get_group_cpu_time_inc(inc))) {
+          group_cpu_time_inc[i] += inc;
+        }
+      }
+    }
+    thread_list_lock_.unlock();
+    for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
+      IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[i], group_cpu_time_inc[i]);
+    }
   }
 }
 

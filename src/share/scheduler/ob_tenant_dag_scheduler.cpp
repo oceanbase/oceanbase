@@ -1697,7 +1697,7 @@ int ObTenantDagWorker::init(const int64_t check_period)
     COMMON_LOG(WARN, "dag worker is inited twice", K(ret));
   } else if (OB_FAIL(cond_.init(ObWaitEventIds::DAG_WORKER_COND_WAIT))) {
     COMMON_LOG(WARN, "failed to init cond", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagWorker, tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::DagWorker, tg_id_, 0, OB_THREAD_GROUP_DAG))) {
     COMMON_LOG(WARN, "TG create dag worker failed", K(ret));
   } else {
     check_period_ = check_period;

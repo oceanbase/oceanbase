@@ -59,6 +59,15 @@ int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
     worker->set_worker_level(level);
     worker->set_group(group);
     worker->set_numa_info(tenant->id(), GCONF._enable_numa_aware, group_index);
+    if (OBCG_DEFAULT == group_id) {
+      worker->set_thread_group_id(OB_THREAD_GROUP_DEFAULT);
+    } else if (OBCG_OLAP_ASYNC_JOB == group_id) {
+      worker->set_thread_group_id(OB_THREAD_GROUP_OLAP_ASYNC);
+    } else if (OBCG_DBMS_SCHED_JOB == group_id) {
+      worker->set_thread_group_id(OB_THREAD_GROUP_DBMS_SCHE);
+    } else if (OBCG_LQ == group_id) {
+      worker->set_thread_group_id(OB_THREAD_GROUP_LARGE_QUERY);
+    }
     if (OB_FAIL(worker->start())) {
       ob_delete(worker);
       worker = nullptr;

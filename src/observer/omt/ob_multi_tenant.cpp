@@ -2677,6 +2677,40 @@ int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_ti
   return ret;
 }
 
+int ObMultiTenant::get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t group_id, int64_t &cpu_time)
+{
+  int ret = OB_SUCCESS;
+  ObTenant *tenant = nullptr;
+  cpu_time = 0;
+  uint64_t cg_group_id = OB_INVALID_GROUP_ID;
+  cg_group_id = ObTenantThreadGroupSet::instance().get_group_cg_id(group_id);
+  /*
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_INVALID_GROUP_ID != cg_group_id) {
+    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time, cg_group_id);
+  } else {
+    if (!lock_.try_rdlock()) {
+      ret = OB_EAGAIN;
+    } else {
+      if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+      } else {
+        cpu_time = tenant->get_group_cpu_time(group_id);
+      }
+      lock_.unlock();
+    }
+  }
+  */
+  if (!lock_.try_rdlock()) {
+    ret = OB_EAGAIN;
+  } else {
+    if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+    } else {
+      cpu_time = tenant->get_group_cpu_time(group_id);
+    }
+    lock_.unlock();
+  }
+  return ret;
+}
+
 
 int ObMultiTenant::get_tenant_cpu(
     const uint64_t tenant_id, double &min_cpu, double &max_cpu) const

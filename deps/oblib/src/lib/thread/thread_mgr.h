@@ -115,7 +115,7 @@ extern void set_tenant_tg_helper(TGHelper *tg_helper);
 class ITG
 {
 public:
-  ITG() : tg_helper_(nullptr) {}
+  ITG() : tg_helper_(nullptr), thread_group_id_(OB_INVALID_GROUP_ID) {}
   virtual ~ITG() {}
   int64_t get_tenant_id() const
   { return NULL == tg_helper_ ? common::OB_SERVER_TENANT_ID : tg_helper_->id(); }
@@ -125,6 +125,7 @@ public:
   virtual void stop() = 0;
   virtual void wait() = 0;
   virtual void wait_only() {}
+  virtual void set_thread_group_id(uint64_t group_id) { thread_group_id_ = group_id; }
 
   virtual int set_runnable(TGRunnable &runnable)
   {
@@ -213,6 +214,7 @@ public:
   }
   TGHelper *tg_helper_;
   TGCommonAttr attr_;
+  uint64_t thread_group_id_;
 };
 
 template<enum TGType type>
@@ -374,6 +376,9 @@ public:
     } else {
       th_ = new (buf_) MyThreadPool();
       th_->runnable_= &runnable;
+      if (OB_INVALID_GROUP_ID != thread_group_id_) {
+        th_->set_thread_group_id(thread_group_id_);
+      }
     }
     return ret;
   }
@@ -1026,7 +1031,8 @@ public:
   // tenant isolation
   int create_tg_tenant(int tg_def_id,
                        int &tg_id,
-                       int64_t qsize = 0)
+                       int64_t qsize = 0,
+                       uint64_t thread_group_id = OB_INVALID_GROUP_ID)
   {
     tg_id = -1;
     int ret = common::OB_SUCCESS;
@@ -1055,6 +1061,7 @@ public:
         tg_helper->tg_create_cb(tg_id);
       }
       tg->set_queue_size(qsize);
+      tg->set_thread_group_id(thread_group_id);
       tgs_[tg_id] = tg;
       OB_LOG(INFO, "create tg succeed",
              "tg_id", tg_id,

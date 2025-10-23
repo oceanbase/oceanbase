@@ -496,6 +496,7 @@ public:
   OB_INLINE double get_token_usage() const { return token_usage_; }
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
   OB_INLINE int64_t get_cpu_time() const { return ATOMIC_LOAD(&cpu_time_us_); }
+  OB_INLINE int64_t get_group_cpu_time(uint64_t group_id) const { return ATOMIC_LOAD(&group_cpu_time_us_[group_id]); }
   int64_t get_rusage_time();
   // sql throttle
   void update_sql_throttle_metrics(const ObSqlThrottleMetrics &metrics)

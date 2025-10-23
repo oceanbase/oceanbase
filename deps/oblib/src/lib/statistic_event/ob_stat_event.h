@@ -948,6 +948,12 @@ STAT_EVENT_SET_DEF(KV_CACHE_HOLD, "kvcache hold", ObStatClassIds::RESOURCE, 1400
 STAT_EVENT_SET_DEF(UNMANAGED_MEMORY_SIZE, "unmanaged memory size", ObStatClassIds::RESOURCE, 140019, false, true, true, "Memory (in bytes) allocated by library functions using mmap. This is a global memory value that records in real time the memory allocated and released via mmap/unmap calls from library functions. It refers to memory allocated using mmap by third-party library functions called by observer.") // FARM COMPAT WHITELIST
 STAT_EVENT_SET_DEF(HIDDEN_SYS_DATA_DISK_SIZE, "hidden sys data disk size", ObStatClassIds::RESOURCE, 140020, false, true, true, "Disk size (in bytes) of the hidden sys tenant configuration in shared storage mode. For non-sys tenants, this value is displayed as 0. For sys tenants, there are two scenarios: 1. If the value of the hidden parameter _ss_hidden_sys_tenant_data_disk_size is 0, then HIDDEN_SYS_DATA_DISK_SIZE is set to twice the value of the hidden parameter _hidden_sys_tenant_memory at observer startup. 2. If _ss_hidden_sys_tenant_data_disk_size is non-zero, then HIDDEN_SYS_DATA_DISK_SIZE is set to the value of this hidden parameter.")
 
+STAT_EVENT_SET_DEF(DEFAULT_GROUP_CPU_TIME, "default group cpu time", ObStatClassIds::RESOURCE, 140021, false, true, true, "default group cpu time for RPC, SQL and inner tasks.")
+STAT_EVENT_SET_DEF(OLAP_ASYN_JOB_GROUP_CPU_TIME, "olap async job group cpu time", ObStatClassIds::RESOURCE, 140022, false, true, true, "olap async job group cpu time.")
+STAT_EVENT_SET_DEF(DBMS_SCHED_JOB_GROUP_CPU_TIME, "dbms sched job group cpu time", ObStatClassIds::RESOURCE, 140023, false, true, true, "dbms sched job group cpu time.")
+STAT_EVENT_SET_DEF(LARGE_QUERY_GROUP_CPU_TIME, "large query group cpu time", ObStatClassIds::RESOURCE, 140024, false, true, true, "large query group cpu time.")
+STAT_EVENT_SET_DEF(PX_GROUP_CPU_TIME, "PX group cpu time", ObStatClassIds::RESOURCE, 140025, false, true, true, "PX group cpu time.")
+STAT_EVENT_SET_DEF(DAG_GROUP_CPU_TIME, "DAG group cpu time", ObStatClassIds::RESOURCE, 140026, false, true, true, "DAG group cpu time.")
 //CLOG
 
 // DEBUG

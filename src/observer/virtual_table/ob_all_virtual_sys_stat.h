@@ -20,6 +20,7 @@
 #include "observer/virtual_table/ob_all_virtual_diag_index_scan.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "share/resource_manager/ob_tenant_thread_group_statistic.h"
 
 namespace oceanbase
 {

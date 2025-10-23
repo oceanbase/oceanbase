@@ -29,6 +29,7 @@
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "share/resource_manager/ob_tenant_thread_group_statistic.h"
 namespace oceanbase
 {
 namespace common {
@@ -804,7 +805,7 @@ public:
     return get<ObTimerService *>();
   }
 
-
+  int64_t group_cpu_time_us_[share::OB_TENANT_THREAD_GROUP_MAXNUM] CACHE_ALIGNED;
 private:
   int create_mtl_module();
   int init_mtl_module();
@@ -892,6 +893,7 @@ private:
   using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
   using ThreadList = common::ObDList<ThreadListNode>;
   ThreadList thread_list_;
+  ThreadList group_thread_list_array_[OB_TENANT_THREAD_GROUP_MAXNUM];
   lib::ObMutex thread_list_lock_;
   int64_t marked_prepare_gc_ts_;
 };

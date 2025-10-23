@@ -36,6 +36,7 @@ public:
         init_threads_(n_threads),
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
+        thread_group_id_(OB_INVALID_GROUP_ID),
         stop_(true),
         run_wrapper_(nullptr),
         numa_info_()
@@ -95,7 +96,8 @@ public:
   virtual void wait();
   void destroy();
   virtual void run(int64_t idx);
-   void set_numa_info(uint64_t tenant_id, bool enable_numa_aware, int32_t group_index);
+  void set_numa_info(uint64_t tenant_id, bool enable_numa_aware, int32_t group_index);
+  void set_thread_group_id(uint64_t group_id) { thread_group_id_ = group_id; }
 
 public:
   template <class Functor>
@@ -144,6 +146,7 @@ private:
   int64_t init_threads_;
   Thread **threads_;
   int64_t stack_size_;
+  uint64_t thread_group_id_;
   bool stop_;
   // protect for thread count changing.
   common::SpinRWLock lock_ __attribute__((__aligned__(16)));

@@ -112,6 +112,7 @@ ObTenantBase::ObTenantBase(const uint64_t id, const int64_t epoch, bool enable_t
     mini_mode_(false),
     marked_prepare_gc_ts_(0)
 {
+  MEMSET(group_cpu_time_us_, 0, sizeof(group_cpu_time_us_));
 }
 #undef CONSTRUCT_MEMBER
 
@@ -355,10 +356,23 @@ int ObTenantBase::pre_run()
   ObTenantEnv::set_tenant(this);
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
+    ThreadListNode *group_node  = lib::Thread::current().get_group_thread_list_node();
+    uint64_t thread_group_id = lib::Thread::current().get_thread_group_id();
+    ThreadList *group_thread_list = NULL;
+    if (OB_INVALID_GROUP_ID != thread_group_id && thread_group_id < OB_TENANT_THREAD_GROUP_MAXNUM) {
+      group_thread_list = &group_thread_list_array_[thread_group_id];
+    }
     lib::ObMutexGuard guard(thread_list_lock_);
     if (!thread_list_.add_last(node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("add to thread list fail", K(ret));
+    } else {
+      if (NULL != group_thread_list) {
+        if (!group_thread_list->add_last(group_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("add to group thread list fail", K(thread_group_id), K(ret));
+        }
+      }
     }
   }
   ATOMIC_INC(&thread_count_);
@@ -382,7 +396,22 @@ int ObTenantBase::end_run()
   ObTenantEnv::set_tenant(nullptr);
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
+    ThreadListNode *group_node  = lib::Thread::current().get_group_thread_list_node();
+    uint64_t thread_group_id = lib::Thread::current().get_thread_group_id();
+    ThreadList *group_thread_list = NULL;
+    if (OB_INVALID_GROUP_ID != thread_group_id && thread_group_id < OB_TENANT_THREAD_GROUP_MAXNUM) {
+      group_thread_list = &group_thread_list_array_[thread_group_id];
+    }
     lib::ObMutexGuard guard(thread_list_lock_);
+
+    if (NULL != group_thread_list) {
+      int64_t inc = 0;
+      lib::Thread *thread = node->get_data();
+      if (OB_SUCC(thread->get_group_cpu_time_inc(inc))) {
+        IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[thread_group_id], inc);
+      }
+      group_thread_list->remove(group_node);
+    }
     thread_list_.remove(node);
   }
   ATOMIC_DEC(&thread_count_);
