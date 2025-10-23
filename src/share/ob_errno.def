@@ -2754,6 +2754,9 @@ DEFINE_ERROR(OB_ERR_ALTER_INVALID_UDT, -9832, -1, "HY000", "cannot alter a type 
 DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_TYPE_ILLEGAL, -9833, -1, "HY000", "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute", 718, "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute");
 DEFINE_ERROR(OB_ERR_ALTER_HAS_DEPENDENT, -9834, -1, "HY000", "must specify either CASCADE or INVALIDATE option");
 DEFINE_ERROR(OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD, -9835, -1, "HY000", "materialized view can not use direct load");
+DEFINE_PLS_ERROR(OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE, -9836, -1, "HY000", "FORALL bulk index cannot be used in INTO clause", 437, "FORALL bulk index cannot be used in INTO clause");
+DEFINE_PLS_ERROR(OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE, -9837, -1, "HY000", "FORALL bulk IN-bind variables cannot be used here", 440, "FORALL bulk IN-bind variables cannot be used here");
+DEFINE_PLS_ERROR(OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX, -9838, -1, "HY000", "bulk SQL attributes must use a single index", 431, "bulk SQL attributes must use a single index");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
