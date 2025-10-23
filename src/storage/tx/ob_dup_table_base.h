@@ -546,16 +546,27 @@ struct DupTableDurableLease
 {
   int64_t request_ts_;
   int64_t lease_interval_us_;
+  union  LeaseFlag {
+    int64_t flag_val_;
+    struct {
+      bool is_new_lease_;
+
+      TO_STRING_KV(K(is_new_lease_));
+    } flag_bit_;
+  } flag_;
 
   void reset()
   {
     request_ts_ = -1;
     lease_interval_us_ = -1;
+    memset(&flag_.flag_val_, 0, sizeof(flag_.flag_val_));
   }
+
+  bool is_valid() { return request_ts_ >= 0 && lease_interval_us_ >= 0; }
 
   DupTableDurableLease() { reset(); }
 
-  TO_STRING_KV(K(request_ts_), K(lease_interval_us_));
+  TO_STRING_KV(K(request_ts_), K(lease_interval_us_), K(flag_.flag_bit_));
 
   OB_UNIS_VERSION(1);
 };
