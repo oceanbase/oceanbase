@@ -547,7 +547,7 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
         const ObDASBaseCtDef *child_attach_ctdef = attach_ctdef->children_[i];
         ObDASBaseRtDef *child_attach_rtdef = attach_rtdef->children_[i];
         if (child_attach_ctdef->op_type_ == ObDASOpType::DAS_OP_SORT && root_iter->get_children()[i]->get_type() != ObDASIterType::DAS_ITER_SORT) {
-          // index merge in the fts: skip sort case
+          // index merge in the fts/mvi: skip sort case
           child_attach_ctdef = child_attach_ctdef->children_[0];
           child_attach_rtdef = child_attach_rtdef->children_[0];
         }
@@ -3852,7 +3852,30 @@ int ObDASIterUtils::create_index_merge_child_tree(ObTableScanParam &scan_param,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected ir iter type", K(ret), K(rtdef->op_type_));
     }
+  } else if (merge_ctdef->merge_node_types_.at(child_index) == INDEX_MERGE_MULTIVALUE_INDEX) {
+    ObDASIter *mvi_iter = nullptr;
+    const ObDASBaseCtDef *ctdef = (child_ctdef->op_type_ == DAS_OP_SORT) ? child_ctdef->children_[0] : child_ctdef;
+    ObDASBaseRtDef *rtdef = (child_rtdef->op_type_ == DAS_OP_SORT) ? child_rtdef->children_[0] : child_rtdef;
+    if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null mvi ctdef or rtdef", K(ret));
+    } else if (OB_FAIL(create_mvi_lookup_tree(scan_param,
+                                              alloc,
+                                              ctdef,
+                                              rtdef,
+                                              related_tablet_ids,
+                                              tx_desc,
+                                              snapshot,
+                                              mvi_iter))) {
+      LOG_WARN("failed to create multivalue index lookup tree", K(ret));
+    } else {
+      child_iter = mvi_iter;
+      if (OB_FAIL(get_mvi_scan_iter_and_rtdef(mvi_iter, ctdef, rtdef, child_scan_iter, child_scan_rtdef))) {
+        LOG_WARN("failed to get mvi scan iter and rtdef", K(ret));
+      }
+    }
   }
+
 
   if (return_early) {
   } else if (OB_SUCC(ret) && OB_NOT_NULL(child_iter)) {
@@ -4736,6 +4759,55 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
           LOG_WARN("failed to create local lookup iter", K(ret));
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObDASIterUtils::get_mvi_scan_iter_and_rtdef(ObDASIter *mvi_iter,
+                                                const ObDASBaseCtDef *attach_ctdef,
+                                                ObDASBaseRtDef *attach_rtdef,
+                                                ObDASScanIter *&output_scan_iter,
+                                                ObDASScanRtDef *&output_scan_rtdef)
+{
+  int ret = OB_SUCCESS;
+  output_scan_iter = nullptr;
+  output_scan_rtdef = nullptr;
+  const ObDASSortCtDef *sort_ctdef = nullptr;
+  ObDASSortRtDef *sort_rtdef = nullptr;
+  if (OB_ISNULL(mvi_iter) || OB_ISNULL(attach_rtdef)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("mvi_iter or attach_rtdef is null", K(ret));
+  } else if (mvi_iter->get_type() != ObDASIterType::DAS_ITER_SORT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("iter must be sort iter", K(ret), K(mvi_iter->get_type()));
+  } else if(OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef, attach_rtdef, DAS_OP_SORT, sort_ctdef, sort_rtdef))) {
+    LOG_WARN("find sort def failed", K(ret));
+  } else {
+    if (OB_NOT_NULL(mvi_iter->get_children()) &&
+        mvi_iter->get_children_cnt() > 0 &&
+        OB_NOT_NULL(mvi_iter->get_children()[0])) {
+      ObDASIter *child_iter = mvi_iter->get_children()[0];
+      if (child_iter->get_type() == ObDASIterType::DAS_ITER_LOCAL_LOOKUP) {
+        output_scan_iter = static_cast<ObDASScanIter *>(child_iter->get_children()[0]);
+        const ObDASIRAuxLookupCtDef *mvi_lookup_ctdef = nullptr;
+        ObDASIRAuxLookupRtDef *mvi_lookup_rtdef = nullptr;
+        if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef, attach_rtdef, DAS_OP_IR_AUX_LOOKUP, mvi_lookup_ctdef, mvi_lookup_rtdef))) {
+          LOG_WARN("find ir aux lookup def failed", K(ret));
+        } else {
+          output_scan_rtdef = static_cast<ObDASScanRtDef *>(mvi_lookup_rtdef->children_[0]);
+        }
+      } else if (child_iter->get_type() == ObDASIterType::DAS_ITER_SCAN) {
+        output_scan_iter = static_cast<ObDASScanIter *>(child_iter);
+        output_scan_rtdef = static_cast<ObDASScanRtDef *>(sort_rtdef->children_[0]);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sort iter's child is neither mvi lookup iter nor scan iter", K(ret), K(child_iter->get_type()));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sort iter has no children", K(ret));
     }
   }
 

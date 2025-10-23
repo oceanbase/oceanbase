@@ -307,8 +307,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     }
   }
 
-  if (OB_SUCC(ret) && op.is_multivalue_index_scan()) {
-    if (OB_FAIL(generate_multivalue_ir_ctdef(op, tsc_ctdef, root_ctdef))) {
+  if (OB_SUCC(ret) && op.is_multivalue_index_scan() && !op.use_index_merge()) {
+    if (OB_FAIL(generate_multivalue_ir_ctdef(op, tsc_ctdef, root_ctdef, false))) {
       LOG_WARN("failed to generate multivalue ir ctdef", K(ret));
     } else {
       need_attach = true;
@@ -1494,7 +1494,7 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
         LOG_WARN("Expected basic column", K(ret),
                  K(*col_expr), K(col_expr->has_flag(IS_COLUMN)),
                  K(col_expr->get_table_id()), K(real_table_id), K(op.get_real_ref_table_id()), K(op.get_ref_table_id()), K(op.get_table_id()), K(op.get_real_index_table_id()));
-      } else if (op.is_tsc_with_domain_id() && table_schema->is_user_table() && ObDomainIdUtils::is_domain_id_index_col_expr(col_expr)) {
+      } else if ((op.is_tsc_with_domain_id() && table_schema->is_user_table() && ObDomainIdUtils::is_domain_id_index_col_expr(col_expr))) {
         // skip domain id column in data table
         is_domain_id_access_expr = true;
         ObIndexType index_type = ObIndexType::INDEX_TYPE_MAX;
@@ -1666,6 +1666,7 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
   if (OB_FAIL(generate_access_ctdef(op, cg_ctx, scan_ctdef, domain_id_expr, domain_id_col_ids, has_rowscn))) {
     LOG_WARN("generate access ctdef failed", K(ret), K(scan_ctdef.ref_table_id_));
   }
+
   //2. generate pushdown aggr column
   if (OB_SUCC(ret)) {
     if (OB_FAIL(generate_pushdown_aggr_ctdef(op, cg_ctx, scan_ctdef))) {
@@ -2112,27 +2113,46 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
 
 int ObTscCgService::generate_multivalue_ir_ctdef(const ObLogTableScan &op,
                                                  ObTableScanCtDef &tsc_ctdef,
-                                                 ObDASBaseCtDef *&root_ctdef)
+                                                 ObDASBaseCtDef *&root_ctdef,
+                                                 bool is_index_merge)
 {
   int ret = OB_SUCCESS;
 
   int64_t rowkey_cnt = 0;
   const ObTableSchema *table_schema = nullptr;
-  ObDASScanCtDef *scan_ctdef = &tsc_ctdef.scan_ctdef_;
+  ObDASScanCtDef *scan_ctdef = nullptr;
   ObDASSortCtDef *sort_ctdef = nullptr;
-  if (OB_FAIL(cg_.opt_ctx_->get_schema_guard()->get_table_schema(MTL_ID(), op.get_real_ref_table_id(), table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(op.get_ref_table_id()));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr to table schema", K(ret));
-  } else if (FALSE_IT(rowkey_cnt = table_schema->get_rowkey_column_num())){
-  } else if (OB_FAIL(scan_ctdef->rowkey_exprs_.init(rowkey_cnt))) {
-    LOG_WARN("failed to init rowkey exprs", K(ret));
+
+  if (is_index_merge) {
+    // For index merge, use root_ctdef as scan_ctdef
+    scan_ctdef = static_cast<ObDASScanCtDef*>(root_ctdef);
+    scan_ctdef->is_index_merge_ = true;
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
-      ObExpr *expr = scan_ctdef->result_output_.at(i);
-      if (OB_FAIL(scan_ctdef->rowkey_exprs_.push_back(expr))) {
-        LOG_WARN("append rowkey exprs failed", K(ret));
+    scan_ctdef = &tsc_ctdef.scan_ctdef_;
+    scan_ctdef->is_index_merge_ = false;
+  }
+
+  if (!is_index_merge) {
+    // Only initialize rowkey_exprs when not in index merge mode
+    if (OB_FAIL(cg_.opt_ctx_->get_schema_guard()->get_table_schema(MTL_ID(), op.get_real_ref_table_id(), table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(op.get_ref_table_id()));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to table schema", K(ret));
+    } else if (FALSE_IT(rowkey_cnt = table_schema->get_rowkey_column_num())){
+    } else if (OB_FAIL(scan_ctdef->rowkey_exprs_.init(rowkey_cnt))) {
+      LOG_WARN("failed to init rowkey exprs", K(ret));
+    } else {
+      if (scan_ctdef->result_output_.count() == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result count is 0", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+          ObExpr *expr = scan_ctdef->result_output_.at(i);
+          if (OB_FAIL(scan_ctdef->rowkey_exprs_.push_back(expr))) {
+            LOG_WARN("append rowkey exprs failed", K(ret));
+          }
+        }
       }
     }
   }
@@ -2841,6 +2861,9 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
               // corresponding retrieval info with increment idx.
               cg_ctx.incre_merge_fts_idx();
               scan_ctdef->ir_scan_type_ = ObTSCIRScanType::OB_IR_INV_IDX_SCAN;
+            } else if (child->node_type_ == INDEX_MERGE_MULTIVALUE_INDEX) {
+              // Set multivalue index scan type
+              scan_ctdef->ir_scan_type_ = ObTSCIRScanType::OB_IR_MULTIVALUE_IDX_SCAN;
             } else {
               cg_ctx.is_func_lookup_ = false;
               cg_ctx.is_merge_fts_index_ = false;
@@ -2874,6 +2897,13 @@ int ObTscCgService::generate_index_merge_node_ctdef(const ObLogTableScan &op,
                 ObDASBaseCtDef *ir_scan_ctdef = nullptr;
                 if (OB_FAIL(generate_text_ir_ctdef(op, cg_ctx, tsc_ctdef, *scan_ctdef, ir_scan_ctdef))) {
                   LOG_WARN("failed to generate text ir ctdef", K(ret));
+                } else {
+                  child_ctdef = ir_scan_ctdef;
+                }
+              } else if (INDEX_MERGE_MULTIVALUE_INDEX == child->node_type_) {
+                ObDASBaseCtDef *ir_scan_ctdef = scan_ctdef;
+                if (OB_FAIL(generate_multivalue_ir_ctdef(op, tsc_ctdef, ir_scan_ctdef, true))) {
+                  LOG_WARN("failed to generate multivalue ir ctdef", K(ret));
                 } else {
                   child_ctdef = ir_scan_ctdef;
                 }
@@ -3648,6 +3678,10 @@ int ObTscCgService::extract_vector_das_output_column_ids(const ObTableSchema &in
             LOG_WARN("failed to push output vid col id", K(ret));
           }
         }
+        break;
+      }
+      case ObTSCIRScanType::OB_IR_MULTIVALUE_IDX_SCAN: {
+        // Multivalue index scan doesn't need vector specific output columns
         break;
       }
       case ObTSCIRScanType::OB_VEC_DELTA_BUF_SCAN:

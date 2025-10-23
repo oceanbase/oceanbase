@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_plan.h"
+#include "sql/optimizer/ob_join_order.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join_filter.h"
@@ -3142,6 +3143,50 @@ int ObLogPlan::allocate_cte_table_path(CteTablePath *cte_table_path,
   return ret;
 }
 
+bool ObLogPlan::is_multivalue_index_in_path(const AccessPath *ap)
+{
+  if (OB_ISNULL(ap)) {
+    return false;
+  }
+
+  // Check if the access path itself is a multivalue index
+  bool is_multivalue_index = ap->est_cost_info_.index_meta_info_.is_multivalue_index_;
+
+  // If it's an IndexMergePath, check children for multivalue index
+  if (!is_multivalue_index && ap->is_index_merge_path()) {
+    const IndexMergePath *index_merge_path = static_cast<const IndexMergePath*>(ap);
+    if (OB_NOT_NULL(index_merge_path->root_)) {
+      is_multivalue_index = check_multivalue_index_in_node(index_merge_path->root_);
+    }
+  }
+
+  return is_multivalue_index;
+}
+
+bool ObLogPlan::check_multivalue_index_in_node(const ObIndexMergeNode *node)
+{
+  if (OB_ISNULL(node)) {
+    return false;
+  }
+
+  // Check if current node is multivalue index
+  if (node->node_type_ == INDEX_MERGE_MULTIVALUE_INDEX) {
+    return true;
+  }
+
+  // If it's INDEX_MERGE_UNION, recursively check children
+  if (node->node_type_ == INDEX_MERGE_UNION || node->node_type_ == INDEX_MERGE_INTERSECT) {
+    for (int64_t i = 0; i < node->children_.count(); ++i) {
+      const ObIndexMergeNode *child = node->children_.at(i);
+      if (OB_NOT_NULL(child) && check_multivalue_index_in_node(child)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 int ObLogPlan::allocate_access_path(AccessPath *ap,
                                     ObLogicalOperator *&out_access_path_op)
 {
@@ -3150,6 +3195,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
   const TableItem *table_item = NULL;
+  bool is_multivalue_index = false;
   if (OB_ISNULL(ap) || OB_ISNULL(get_stmt()) || OB_ISNULL(ap->parent_)
       || OB_ISNULL(ap->get_strong_sharding()) || OB_ISNULL(ap->table_partition_info_)
       || OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())
@@ -3179,7 +3225,9 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_is_index_global(ap->is_global_index_);
     scan->set_index_back(ap->est_cost_info_.index_meta_info_.is_index_back_);
     scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
-    scan->set_is_multivalue_index(ap->est_cost_info_.index_meta_info_.is_multivalue_index_);
+    // Check if this access path contains multivalue index
+    is_multivalue_index = is_multivalue_index_in_path(ap);
+    scan->set_is_multivalue_index(is_multivalue_index);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -3255,8 +3303,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         LOG_WARN("failed to set table scan filters", K(ret));
       } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
         LOG_WARN("failed to append pushdown filters", K(ret));
-      } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ &&
-                 OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
+      } else if (is_multivalue_index && OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
         LOG_WARN("failed to prepare multivalue retrieval scan", K(ret));
       }
     }

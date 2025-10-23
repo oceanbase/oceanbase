@@ -540,6 +540,14 @@ private:
     ObIAllocator &alloc,
     ObDASIvfScanIterParam &param,
     ObDASIvfBaseScanIter *&result);
+
+  // Get MVI scan iter and rtdef from MVI lookup iter
+  static int get_mvi_scan_iter_and_rtdef(ObDASIter *mvi_iter,
+                                         const ObDASBaseCtDef *attach_ctdef,
+                                         ObDASBaseRtDef *attach_rtdef,
+                                         ObDASScanIter *&output_scan_iter,
+                                         ObDASScanRtDef *&output_scan_rtdef);
+
   ObDASIterUtils() = delete;
   ~ObDASIterUtils() = delete;
 };

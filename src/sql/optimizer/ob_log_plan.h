@@ -59,6 +59,7 @@ class ObLogTableScan;
 class ObLogDelUpd;
 class AllocExchContext;
 class ObJoinOrder;
+class ObIndexMergeNode;
 class AccessPath;
 class Path;
 class JoinPath;
@@ -2207,6 +2208,11 @@ public:
   int get_enable_rich_vector_format(omt::ObTenantConfigGuard &tenant_config, bool &enable) const;
   bool get_need_accurate_cardinality() const { return need_accurate_cardinality_; }
   void set_need_accurate_cardinality(bool need) { need_accurate_cardinality_ = need; }
+
+  // Helper function to check if access path contains multivalue index
+  static bool is_multivalue_index_in_path(const AccessPath *ap);
+  // Helper function to recursively check multivalue index in index merge node
+  static bool check_multivalue_index_in_node(const ObIndexMergeNode *node);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

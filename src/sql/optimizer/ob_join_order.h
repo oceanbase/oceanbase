@@ -802,7 +802,8 @@ class Path
     INDEX_MERGE_INTERSECT,
     // SCAN NODE TYPE
     INDEX_MERGE_SCAN,
-    INDEX_MERGE_FTS_INDEX
+    INDEX_MERGE_FTS_INDEX,
+    INDEX_MERGE_MULTIVALUE_INDEX
   };
 
   /**
@@ -824,7 +825,7 @@ class Path
     static int formalize_index_merge_tree(ObIndexMergeNode *&node);
     int set_scan_direction(const ObOrderDirection &direction);
     inline bool is_merge_node() const {return INDEX_MERGE_UNION == node_type_ || INDEX_MERGE_INTERSECT == node_type_; }
-    inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_; }
+    inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_ || INDEX_MERGE_MULTIVALUE_INDEX == node_type_; }
 
     TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(index_tid), KPC_(ap), K_(scan_node_idx));
 
@@ -1626,6 +1627,13 @@ struct MergeKeyInfoHelper
     int get_matched_inv_index_tids(ObMatchFunRawExpr *match_expr,
                                    uint64_t ref_table_id,
                                    ObIArray<uint64_t> &inv_idx_tids);
+    int get_matched_multivalue_index_tid(ObRawExpr *multivalue_expr,
+                                         uint64_t ref_table_id,
+                                         uint64_t &multivalue_idx_tid);
+    int check_multivalue_index_match_column(uint64_t json_column_id,
+                                           const ObTableSchema *table_schema,
+                                           const ObTableSchema *multivalue_idx_schema,
+                                           bool &found_matched_index);
     int get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                       ObRawExpr *vector_expr,
                                       const uint64_t table_id,
@@ -2106,7 +2114,8 @@ struct MergeKeyInfoHelper
 
     int extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                   const ObIArray<ObRawExpr*> &predicates,
-                                                  ObQueryRangeProvider *&query_range);
+                                                  ObQueryRangeProvider *&query_range,
+                                                  const bool is_index_merge_path = false);
 
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,

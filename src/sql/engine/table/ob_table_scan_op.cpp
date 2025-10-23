@@ -1734,13 +1734,32 @@ int ObTableScanOp::prepare_range_for_each_index(int64_t group_idx,
         if (OB_FAIL(SMART_CALL(prepare_range_for_each_index(group_idx, need_sort, allocator, child_rtdef)))) {
           LOG_WARN("failed to prepare range for each index", KPC(child_rtdef), K(ret));
         }
-      } else if (INDEX_MERGE_SCAN == node_type) {
+      } else if (INDEX_MERGE_SCAN == node_type || INDEX_MERGE_MULTIVALUE_INDEX == node_type) {
+        // Handle both regular scan and multivalue index scan with the same logic
         ObDASScanRtDef *scan_rtdef = nullptr;
         if (child_rtdef->op_type_ == DAS_OP_TABLE_SCAN) {
           scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef);
         } else if (child_rtdef->op_type_ == DAS_OP_SORT) {
           OB_ASSERT(child_rtdef->children_cnt_ == 1);
-          scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef->children_[0]);
+          if (INDEX_MERGE_MULTIVALUE_INDEX == node_type) {
+            // Special handling for multivalue index: deeper nesting
+            OB_ASSERT(OB_NOT_NULL(child_rtdef->children_[0]));
+            OB_ASSERT(child_rtdef->children_[0]->children_cnt_ >= 1);
+            OB_ASSERT(OB_NOT_NULL(child_rtdef->children_[0]->children_[0]));
+            // Check if child_rtdef->children_[0]->children_[0] is DAS_OP_IR_AUX_LOOKUP
+            bool is_skip_rowkey_doc = (child_rtdef->children_[0]->children_[0]->op_type_ != DAS_OP_IR_AUX_LOOKUP);
+            if (is_skip_rowkey_doc) {
+              // If skip_rowkey_doc is true, use child_rtdef->children_[0]->children_[0] as scan_rtdef
+              scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef->children_[0]->children_[0]);
+            } else {
+              // If skip_rowkey_doc is false (IR_AUX_LOOKUP), use the deeper child
+              OB_ASSERT(child_rtdef->children_[0]->children_[0]->children_cnt_ >= 1);
+              OB_ASSERT(OB_NOT_NULL(child_rtdef->children_[0]->children_[0]->children_[0]));
+              scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef->children_[0]->children_[0]->children_[0]);
+            }
+          } else {
+            scan_rtdef = static_cast<ObDASScanRtDef*>(child_rtdef->children_[0]);
+          }
         }
         if (OB_ISNULL(scan_rtdef)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1802,8 +1821,8 @@ int ObTableScanOp::prepare_range_for_each_index(int64_t group_idx,
             if (OB_UNLIKELY(need_sort) && key_ranges.count() > 1) {
               lib::ob_sort(key_ranges.begin(), key_ranges.end(), ObNewRangeCmp());
             }
-            for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
-              key_range = key_ranges.at(i);
+            for (int64_t j = 0; OB_SUCC(ret) && j < key_ranges.count(); ++j) {
+              key_range = key_ranges.at(j);
               key_range->table_id_ = scan_ctdef->ref_table_id_;
               key_range->group_idx_ = group_idx;
               if (OB_FAIL(scan_rtdef->key_ranges_.push_back(*key_range)) ||

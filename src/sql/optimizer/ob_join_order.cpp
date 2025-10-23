@@ -1127,7 +1127,8 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                && OB_FAIL(extract_multivalue_preliminary_query_range(range_columns,
                                                                      is_oracle_inner_index_table ?
                                                                        agent_table_filter : helper.filters_,
-                                                                     query_range_provider))) {
+                                                                     query_range_provider,
+                                                                     helper.is_index_merge_))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if(is_fts_index && OB_FAIL(extract_fts_preliminary_query_range(range_columns,
                                                                           is_oracle_inner_index_table
@@ -3581,8 +3582,8 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
       LOG_WARN("get unexpected null index schema", K(ret));
     } else if (ref_table_id == index_id ||
                (index_schema->is_index_local_storage() &&
-                (index_schema->is_normal_index() || index_schema->is_fts_index() || index_schema->is_unique_index()))) {
-      /* primary table, local normal index and local fts index are available for index merge now */
+               (index_schema->is_normal_index() || index_schema->is_fts_or_multivalue_index() || index_schema->is_unique_index()))) {
+      /* primary table, local normal index, local fts index and local multivalue index are available for index merge now */
       if (OB_FAIL(index_schema->get_rowkey_column_ids(index_column_ids))) {
         LOG_WARN("failed to get all column ids", K(ret));
       } else if (OB_FAIL(valid_index_ids.push_back(index_id))) {
@@ -3799,7 +3800,13 @@ int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
     } else if (OB_FAIL(candi_node->filter_.push_back(filter))) {
       LOG_WARN("failed to push back filter", K(ret));
     } else {
-      candi_node->node_type_ = filter->has_flag(CNT_MATCH_EXPR) ? INDEX_MERGE_FTS_INDEX : INDEX_MERGE_SCAN;
+      if (filter->has_flag(CNT_MATCH_EXPR)) {
+        candi_node->node_type_ = INDEX_MERGE_FTS_INDEX;
+      } else if (filter->is_multivalue_expr()) {
+        candi_node->node_type_ = INDEX_MERGE_MULTIVALUE_INDEX;
+      } else {
+        candi_node->node_type_ = INDEX_MERGE_SCAN;
+      }
     }
   }
   return ret;
@@ -3885,6 +3892,18 @@ int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
       // do nothing
     } else if (OB_FAIL(candicate_index_tids.push_back(inv_index_tid))) {
       LOG_WARN("failed to push back index id", K(inv_index_tid), K(ret));
+    }
+  } else if (filters.at(0)->is_multivalue_expr()) {
+    /* direct choose corresponding multivalue index */
+    uint64_t multivalue_index_tid = OB_INVALID_ID;
+    if (OB_FAIL(get_matched_multivalue_index_tid(filters.at(0),
+                                                 ref_table_id,
+                                                 multivalue_index_tid))) {
+      LOG_WARN("failed to get matched multivalue index tid", K(ret), KPC(filters.at(0)), K(ref_table_id));
+    } else if (!ObOptimizerUtil::find_item(valid_index_ids, multivalue_index_tid)) {
+      // do nothing
+    } else if (OB_FAIL(candicate_index_tids.push_back(multivalue_index_tid))) {
+      LOG_WARN("failed to push back index id", K(multivalue_index_tid), K(ret));
     }
   } else {
     // get all indexes which satisfy the index prefix condition
@@ -4102,7 +4121,7 @@ int ObJoinOrder::prune_one_index_merge_node(const uint64_t table_id,
       LOG_WARN("access path of scan node is null", K(ret), KPC(candi_node));
     } else {
       sum_child_sel = candi_node->ap_->est_cost_info_.prefix_filter_sel_;
-      force_preserve = INDEX_MERGE_FTS_INDEX == candi_node->node_type_;
+      force_preserve = INDEX_MERGE_FTS_INDEX == candi_node->node_type_ || INDEX_MERGE_MULTIVALUE_INDEX == candi_node->node_type_;
       prune_happened |= !candi_node->ap_->get_query_range_provider()->is_new_query_range()
                         || !candi_node->ap_->get_query_range_provider()->get_unprecise_range_exprs().empty();
     }
@@ -6316,7 +6335,8 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
 
 int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                      const ObIArray<ObRawExpr*> &predicates,
-                                                     ObQueryRangeProvider *&query_range)
+                                                     ObQueryRangeProvider *&query_range,
+                                                     const bool is_index_merge_path)
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
@@ -6330,7 +6350,7 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::preprocess_multivalue_range_exprs(*allocator_, predicates, new_predicates))) {
+  } else if (OB_FAIL(ObOptimizerUtil::preprocess_multivalue_range_exprs(*allocator_, predicates, new_predicates, is_index_merge_path))) {
     LOG_WARN("failed to preprocess multivalue range exprs", K(ret));
   } else if (opt_ctx->enable_new_query_range()) {
     void *ptr = allocator_->alloc(sizeof(ObPreRangeGraph));
@@ -20773,6 +20793,104 @@ int ObJoinOrder::get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
     if (OB_SUCC(ret) && OB_INVALID_ID == inv_idx_tid) {
       ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
       LOG_WARN("all fulltext index not found", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_matched_multivalue_index_tid(ObRawExpr *multivalue_expr,
+                                                  uint64_t ref_table_id,
+                                                  uint64_t &multivalue_idx_tid)
+{
+  int ret = OB_SUCCESS;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+  if (OB_ISNULL(multivalue_expr) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
+      OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get main table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(table_schema->get_simple_index_infos(index_infos))) {
+    LOG_WARN("failed to get index infos", K(ret));
+  } else {
+    // Extract the JSON column from multivalue expression
+    ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(multivalue_expr);
+    ObRawExpr *json_expr = expr->get_json_domain_param_expr();
+    if (OB_ISNULL(json_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get json domain param expr", K(ret));
+    } else if (!json_expr->is_column_ref_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("json expr is not column ref expr", K(ret));
+    } else {
+      ObColumnRefRawExpr *json_col_ref = static_cast<ObColumnRefRawExpr*>(json_expr);
+      uint64_t json_column_id = json_col_ref->get_column_id();
+      bool found_matched_index = false;
+
+      // Find multivalue index that matches the JSON column
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count() && !found_matched_index; ++i) {
+        const ObTableSchema *multivalue_idx_schema = nullptr;
+        const ObAuxTableMetaInfo &index_info = index_infos.at(i);
+        if (!share::schema::is_multivalue_index_aux(index_info.index_type_)) {
+          // skip non-multivalue indexes
+        } else if (OB_FAIL(schema_guard->get_table_schema(index_info.table_id_, multivalue_idx_schema))) {
+          LOG_WARN("failed to get index schema", K(ret));
+        } else if (OB_ISNULL(multivalue_idx_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected index schema", K(ret), KPC(multivalue_idx_schema));
+        } else if (OB_FAIL(check_multivalue_index_match_column(json_column_id,
+                                                              table_schema,
+                                                              multivalue_idx_schema,
+                                                              found_matched_index))) {
+          LOG_WARN("failed to check multivalue index match column", K(ret));
+        } else if (found_matched_index && multivalue_idx_schema->can_read_index() && multivalue_idx_schema->is_index_visible()) {
+          multivalue_idx_tid = index_info.table_id_;
+        } else {
+          found_matched_index = false;
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_INVALID_ID == multivalue_idx_tid) {
+        ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+        LOG_WARN("all multivalue index not found", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_multivalue_index_match_column(uint64_t json_column_id,
+                                                     const ObTableSchema *table_schema,
+                                                     const ObTableSchema *multivalue_idx_schema,
+                                                     bool &found_matched_index)
+{
+  int ret = OB_SUCCESS;
+  found_matched_index = false;
+
+  if (OB_ISNULL(multivalue_idx_schema) || OB_ISNULL(table_schema) || OB_UNLIKELY(!multivalue_idx_schema->is_multivalue_index())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table / index schema", K(ret), KPC(table_schema), KPC(multivalue_idx_schema));
+  } else {
+    // Find the multivalue generated column in the index
+    for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < multivalue_idx_schema->get_column_count(); ++col_idx) {
+      const ObColumnSchemaV2 *trav_col_schema = nullptr;
+      if (OB_ISNULL(trav_col_schema = multivalue_idx_schema->get_column_schema_by_idx(col_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null col schema", K(ret), K(col_idx), KPC(multivalue_idx_schema));
+      } else if (trav_col_schema->is_multivalue_generated_column()) {
+        // Direct comparison between json_column_id and multivalue generated column ID
+        if (trav_col_schema->get_column_id() == json_column_id) {
+          found_matched_index = true;
+          break;
+        }
+        break;
+      }
     }
   }
   return ret;
