@@ -14,6 +14,7 @@
 
 #include "ob_tablet_table_store_iterator.h"
 #include "storage/tablet/ob_tablet_table_store.h"
+#include "storage/blocksstable/ob_storage_cache_suite.h"
 
 namespace oceanbase
 {
@@ -30,7 +31,8 @@ ObTableStoreIterator::ObTableStoreIterator(const bool reverse, const bool need_l
     pos_(INT64_MAX),
     memstore_retired_(nullptr),
     transfer_src_table_store_handle_(nullptr),
-    split_extra_table_store_handles_()
+    split_extra_table_store_handles_(),
+    aggregated_guard_created_(false)
 {
   step_ = reverse ? -1 : 1;
   sstable_handle_array_.set_attr(ObMemAttr(MTL_ID(), "TblHdlArray"));
@@ -228,7 +230,6 @@ int ObTableStoreIterator::alloc_split_extra_table_store_handle(ObStorageMetaHand
 int ObTableStoreIterator::add_table(ObITable *table)
 {
   int ret = OB_SUCCESS;
-  ObSSTable *sstable = nullptr;
   TablePtr table_ptr;
   if (OB_ISNULL(table)) {
     ret = OB_INVALID_ARGUMENT;
@@ -236,7 +237,7 @@ int ObTableStoreIterator::add_table(ObITable *table)
   } else if (FALSE_IT(table_ptr.table_ = table)) {
   } else if (table->is_memtable()) {
     // lifetime guaranteed by tablet_handle_
-  } else if (static_cast<ObSSTable *>(table)->is_loaded() || !need_load_sstable_) {
+  } else if (static_cast<ObSSTable *>(table)->is_loaded() || !need_load_sstable_ || aggregated_guard_created_) {
     // lifetime guaranteed by table_store_handle_
   } else if (OB_FAIL(get_table_ptr_with_meta_handle(static_cast<ObSSTable *>(table), table_ptr))) {
     LOG_WARN("fail to get table ptr with meta handle", K(ret), KPC(table));
@@ -440,6 +441,124 @@ int ObTableStoreIterator::set_retire_check()
   if (OB_SUCC(ret) && OB_NOT_NULL(first_memtable)) {
     ObITabletMemtable *memtable = static_cast<ObITabletMemtable *>(first_memtable);
     memstore_retired_ = &memtable->get_read_barrier();
+  }
+  return ret;
+}
+
+int ObTableStoreIterator::get_unloaded_sstable(common::ObIArray<TablePtr*> &table_ptr_aggregate)
+{
+  int ret = OB_SUCCESS;
+  // collect unloaded sstable
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ptr_array_.count(); ++i) {
+    TablePtr &table_ptr = table_ptr_array_.at(i);
+    if (OB_UNLIKELY(!table_ptr.table_->is_sstable())) {
+      continue;
+    }
+    ObSSTable *table = static_cast<ObSSTable *>(table_ptr.table_);
+
+    if (table->is_loaded() ||
+        (table_ptr.hdl_idx_ != -1 && sstable_handle_array_.at(table_ptr.hdl_idx_).has_sent_io())) {
+      // do not need to load sstable meta
+    } else {
+      // get cache meta handle
+      int64_t hdl_idx = sstable_handle_array_.count();
+      if (OB_FAIL(sstable_handle_array_.push_back(ObStorageMetaHandle()))) {
+        LOG_WARN("fail to push sstable meta handle", K(ret));
+      } else {
+        // ObStorageMetaHandle::cache_handle_ will be allocated here
+        ret = ObTabletTableStore::load_sstable_from_cache(table->get_addr(), table->is_co_sstable(), sstable_handle_array_.at(hdl_idx));
+        switch (ret) {
+          case OB_SUCCESS: {
+            // loaded from cache
+            ObSSTable *sstable = nullptr;
+            if (OB_FAIL(sstable_handle_array_.at(hdl_idx).get_sstable(sstable))) {
+              LOG_WARN("fail to get sstable from meta handle", K(ret), K(sstable_handle_array_.at(hdl_idx)), KP(table));
+            } else {
+              table_ptr.table_ = sstable;
+              table_ptr.hdl_idx_ = hdl_idx;
+            }
+            break;
+          }
+          case OB_ENTRY_NOT_EXIST: {
+            // not loaded, add to aggregate array
+            if (OB_FAIL(table_ptr_aggregate.push_back(&table_ptr))) {
+              LOG_WARN("fail to push table handle into array", K(ret));
+            } else {
+              table_ptr.hdl_idx_ = hdl_idx;
+            }
+            break;
+          }
+          default: {
+            LOG_WARN("fail to load sstable from cache", K(ret), K(table->get_addr()), K(table->is_valid()));
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableStoreIterator::load_sstable_meta_with_aggregate_io()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_LIKELY(need_load_sstable_)) {
+    common::ObSEArray<TablePtr*, 4> table_ptr_aggregate;
+    if (OB_FAIL(get_unloaded_sstable(table_ptr_aggregate))) {
+      LOG_WARN("fail to get unloaded sstable", K(ret));
+    } else if (table_ptr_aggregate.count() == 1) {
+      // single sstable fast path
+      TablePtr *table_ptr = table_ptr_aggregate.at(0);
+      ObSSTable *table = static_cast<ObSSTable *>(table_ptr->table_);
+      ObStorageMetaHandle &sstable_meta_hdl = sstable_handle_array_.at(table_ptr->hdl_idx_);
+      ObStorageMetaValue::MetaType meta_type = table->is_co_sstable()
+                                           ? ObStorageMetaValue::MetaType::CO_SSTABLE
+                                           : ObStorageMetaValue::MetaType::SSTABLE;
+      ObStorageMetaKey meta_key(MTL_ID(), table->get_addr());
+      if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().prefetch(meta_type, meta_key, sstable_meta_hdl, nullptr))) {
+        LOG_WARN("fail to prefetch meta", K(ret), K(meta_type), K(meta_key));
+      }
+    } else if(table_ptr_aggregate.count() > 1) {
+      // mutilple sstable
+      common::hash::ObHashSet<blocksstable::MacroBlockId> block_id_set;
+      common::hash::ObHashSet<blocksstable::MacroBlockId>::const_iterator block_id_iter;
+
+      if (OB_FAIL(block_id_set.create(table_ptr_aggregate.count(), "BlkIdSetBkt", "BlkIdSetNode", MTL_ID()))) {
+        LOG_WARN("create block_id set for batch load sstable meta failed", KR(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_ptr_aggregate.count(); ++i) {
+          TablePtr *table_ptr = table_ptr_aggregate.at(i);
+          ObSSTable *table = static_cast<ObSSTable *>(table_ptr->table_);
+
+          ret = block_id_set.set_refactored(table->get_addr().block_id());
+          if (OB_SUCCESS != ret && OB_HASH_EXIST != ret) {
+            LOG_WARN("fail to set block id", K(ret), K(table->get_addr().block_id()));
+          }
+        }
+
+        block_id_iter = block_id_set.begin();
+        while (OB_SUCC(ret) && block_id_iter != block_id_set.end()) {
+          common::ObSEArray<AggregatedInfo, 4> aggregated_infos;
+
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_ptr_aggregate.count(); ++i) {
+            TablePtr *table_ptr = table_ptr_aggregate.at(i);
+            ObSSTable *table = static_cast<ObSSTable *>(table_ptr->table_);
+            ObStorageMetaHandle *sstable_meta_hdl = &sstable_handle_array_.at(table_ptr->hdl_idx_);
+            if (table->get_addr().block_id() == block_id_iter->first) {
+              if(OB_FAIL(aggregated_infos.push_back({table, sstable_meta_hdl}))) {
+                LOG_WARN("fail to push aggregated info to array", K(ret));
+              }
+            }
+          }
+          if (OB_SUCC(ret) && OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().get_meta_aggregated(aggregated_infos))) {
+            LOG_WARN("fail to get meta aggregated and bypass cache", K(ret), K(aggregated_infos));
+          }
+
+          ++block_id_iter;
+        }
+      }
+    }
   }
   return ret;
 }

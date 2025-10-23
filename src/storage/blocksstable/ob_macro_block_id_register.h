@@ -37,13 +37,13 @@
 
   STORAGE_OBJECT_TYPE_INFO(PRIVATE_DATA_MACRO, "PRIVATE_DATA_MACRO", false/*is_pin_local*/, false/*is_read_through*/, \
     false/*is_write_through*/, false/*is_overwrite*/, true/*is_support_fd_cache*/, \
-    /*is_valid second_id:tablet_id, third_id:server_id, fourth_id:macro_transfer_seq+tenant_seq */ \
-    ((file_id_.second_id() > 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() > 0) && (file_id_.macro_transfer_seq() >= 0) && (file_id_.tenant_seq() >= 0)), \
+    /*is_valid second_id:tablet_id, third_id:server_id, fourth_id:macro_transfer_epoch+tenant_seq */ \
+    ((file_id_.second_id() > 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() > 0) && (file_id_.macro_transfer_epoch() >= 0) && (file_id_.tenant_seq() >= 0)), \
     /*to_local_path_format: tenant_id_epoch_id/tablet_data/scatter_id/tablet_id/transfer_seq/data/svr%ldseq%ld */ \
     (databuff_printf(path_, length, pos, "%s/%lu_%ld/%s/%02ld/%ld/%ld/%s/%s%ld%s%ld", \
                      OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, \
                      TABLET_DATA_DIR_STR, (file_id_.second_id() % ObDirManager::PRIVATE_MACRO_SCATTER_DIR_NUM), \
-                     file_id_.second_id(), file_id_.macro_transfer_seq(), \
+                     file_id_.second_id(), file_id_.macro_transfer_epoch(), \
                      DATA_MACRO_DIR_STR, SVR_KEY_STR, file_id_.third_id(), SEQ_KEY_STR, file_id_.tenant_seq())), \
     /*local_path_to_macro_id*/ \
     const char *sub_path = nullptr; \
@@ -68,7 +68,7 @@
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO); \
         macro_id.set_second_id(tablet_id); \
-        macro_id.set_macro_transfer_seq(transfer_seq); \
+        macro_id.set_macro_transfer_epoch(transfer_seq); \
         macro_id.set_third_id(server_id); \
         macro_id.set_tenant_seq(seq_id); \
       } \
@@ -77,21 +77,21 @@
     (databuff_printf(path_, length, pos, "%s/%s_%ld/%s_%ld/%lu_%ld/%s/%ld/%ld/%s/%s%ld%s%ld", \
                      object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, SERVER_DIR_STR, \
                      file_id_.third_id(), tenant_id, tenant_epoch_id, TABLET_DATA_DIR_STR, file_id_.second_id(), \
-                     file_id_.macro_transfer_seq(), DATA_MACRO_DIR_STR, SVR_KEY_STR, file_id_.third_id(), SEQ_KEY_STR, file_id_.tenant_seq())), \
+                     file_id_.macro_transfer_epoch(), DATA_MACRO_DIR_STR, SVR_KEY_STR, file_id_.third_id(), SEQ_KEY_STR, file_id_.tenant_seq())), \
     /*get_parent_dir: tenant_id_epoch_id/tablet_data/scatter_id/tablet_id/transfer_seq/data/ */ \
-    (OB_DIR_MGR.get_local_tablet_id_macro_dir(path, length, tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_seq(), ObMacroType::DATA_MACRO)), \
+    (OB_DIR_MGR.get_local_tablet_id_macro_dir(path, length, tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_epoch(), ObMacroType::DATA_MACRO)), \
     /*create_parent_dir*/ \
-    (OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_seq())))
+    (OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_epoch())))
 
   STORAGE_OBJECT_TYPE_INFO(PRIVATE_META_MACRO, "PRIVATE_META_MACRO", false/*is_pin_local*/, false/*is_read_through*/, \
     false/*is_write_through*/, false/*is_overwrite*/, true/*is_support_fd_cache*/, \
-    /*is_valid second_id:tablet_id, third_id:server_id, fourth_id:macro_transfer_seq+tenant_seq */ \
-    ((file_id_.second_id() > 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() > 0) && (file_id_.macro_transfer_seq() >= 0) && (file_id_.tenant_seq() >= 0)), \
+    /*is_valid second_id:tablet_id, third_id:server_id, fourth_id:macro_transfer_epoch+tenant_seq */ \
+    ((file_id_.second_id() > 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() > 0) && (file_id_.macro_transfer_epoch() >= 0) && (file_id_.tenant_seq() >= 0)), \
     /*to_local_path_format: tenant_id_epoch_id/tablet_data/scatter_id/tablet_id/transfer_seq/meta/svr%ldseq%ld */ \
     (databuff_printf(path_, length, pos, "%s/%lu_%ld/%s/%02ld/%ld/%ld/%s/%s%ld%s%ld", \
                      OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, \
                      TABLET_DATA_DIR_STR, (file_id_.second_id() % ObDirManager::PRIVATE_MACRO_SCATTER_DIR_NUM), \
-                     file_id_.second_id(), file_id_.macro_transfer_seq(), \
+                     file_id_.second_id(), file_id_.macro_transfer_epoch(), \
                      META_MACRO_DIR_STR, SVR_KEY_STR, file_id_.third_id(), SEQ_KEY_STR, file_id_.tenant_seq())), \
     /*local_path_to_macro_id*/ \
     const char *sub_path = nullptr; \
@@ -116,7 +116,7 @@
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_META_MACRO); \
         macro_id.set_second_id(tablet_id); \
-        macro_id.set_macro_transfer_seq(transfer_seq); \
+        macro_id.set_macro_transfer_epoch(transfer_seq); \
         macro_id.set_third_id(server_id); \
         macro_id.set_tenant_seq(seq_id); \
       } \
@@ -125,11 +125,11 @@
     (databuff_printf(path_, length, pos, "%s/%s_%ld/%s_%ld/%lu_%ld/%s/%ld/%ld/%s/%s%ld%s%ld", \
                      object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, SERVER_DIR_STR, \
                      file_id_.third_id(), tenant_id, tenant_epoch_id, TABLET_DATA_DIR_STR, file_id_.second_id(), \
-                     file_id_.macro_transfer_seq(), META_MACRO_DIR_STR, SVR_KEY_STR, file_id_.third_id(), SEQ_KEY_STR, file_id_.tenant_seq())), \
+                     file_id_.macro_transfer_epoch(), META_MACRO_DIR_STR, SVR_KEY_STR, file_id_.third_id(), SEQ_KEY_STR, file_id_.tenant_seq())), \
     /*get_parent_dir: tenant_id_epoch_id/tablet_data/scatter_id/tablet_id/transfer_seq/meta/ */ \
-    (OB_DIR_MGR.get_local_tablet_id_macro_dir(path, length, tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_seq(), ObMacroType::META_MACRO)), \
+    (OB_DIR_MGR.get_local_tablet_id_macro_dir(path, length, tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_epoch(), ObMacroType::META_MACRO)), \
     /*create_parent_dir*/ \
-    (OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_seq())))
+    (OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(tenant_id, tenant_epoch_id, file_id.second_id(), file_id.macro_transfer_epoch())))
 
   STORAGE_OBJECT_TYPE_INFO(SHARED_MINI_DATA_MACRO, "SHARED_MINI_DATA_MACRO", false/*is_pin_local*/, false/*is_read_through*/, \
     true/*is_write_through*/, false/*is_overwrite*/, true/*is_support_fd_cache*/, \
@@ -672,14 +672,14 @@
 
   STORAGE_OBJECT_TYPE_INFO(PRIVATE_TABLET_META, "PRIVATE_TABLET_META", false/*is_pin_local*/, false/*is_read_through*/, \
     false/*is_write_through*/, false/*is_overwrite*/, false/*is_support_fd_cache*/, \
-    /*is_valid second_id:ls_id, third_id:tablet_id, fourth_id:meta_transfer_seq+meta_version_id */ \
-    ((file_id_.second_id() >= 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() > 0) && (file_id_.meta_transfer_seq() >= 0) && (file_id_.meta_version_id() >= 0)), \
+    /*is_valid second_id:ls_id, third_id:tablet_id, fourth_id:meta_transfer_epoch+meta_version_id */ \
+    ((file_id_.second_id() >= 0) && (file_id_.second_id() < INT64_MAX) && (file_id_.third_id() > 0) && (file_id_.meta_transfer_epoch() >= 0) && (file_id_.meta_version_id() >= 0)), \
     /*to_local_path_format: tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/scatter_id/tablet_id/transfer_seq/ver%ld */ \
     (databuff_printf(path_, length, pos, "%s/%lu_%ld/%s/%ld_%ld/%s/%02ld/%ld/%ld/%s%ld", \
                      OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id, \
                      LS_DIR_STR, file_id_.second_id(), ls_epoch_id_, TABLET_META_DIR_STR, \
                      (file_id_.third_id() % ObDirManager::PRIVATE_TABLET_META_SCATTER_DIR_NUM), \
-                     file_id_.third_id(), file_id_.meta_transfer_seq(), VER_KEY_STR, file_id_.meta_version_id())), \
+                     file_id_.third_id(), file_id_.meta_transfer_epoch(), VER_KEY_STR, file_id_.meta_version_id())), \
     /*local_path_to_macro_id*/ \
     char format[512] = {0}; \
     int num = 0; \
@@ -692,12 +692,12 @@
       int64_t epoch_id = 0; \
       int64_t scatter_id = 0; \
       int64_t tablet_id = 0; \
-      int64_t meta_transfer_seq = 0; \
+      int64_t meta_transfer_epoch = 0; \
       int64_t meta_version_id = 0; \
       if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld_%%ld/%s/%%ld/%%ld/%%ld/%s%%ld.T%hhu", \
                   TABLET_META_DIR_STR, VER_KEY_STR, (uint8_t)ObStorageObjectType::PRIVATE_TABLET_META))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
-      } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, &epoch_id, &scatter_id, &tablet_id, &meta_transfer_seq, &meta_version_id))) { \
+      } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, &epoch_id, &scatter_id, &tablet_id, &meta_transfer_epoch, &meta_version_id))) { \
       } else if (OB_UNLIKELY(6 != num)) { \
         ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
         LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
@@ -706,7 +706,7 @@
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META); \
         macro_id.set_second_id(ls_id); \
         macro_id.set_third_id(tablet_id); \
-        macro_id.set_meta_transfer_seq(meta_transfer_seq); \
+        macro_id.set_meta_transfer_epoch(meta_transfer_epoch); \
         macro_id.set_meta_version_id(meta_version_id); \
       } \
     }, \
@@ -714,11 +714,11 @@
     (databuff_printf(path_, length, pos, "%s/%s_%ld/%s_%lu/%lu_%ld/%s/%ld/%s/%ld/%ld/%s%ld", \
                      object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, SERVER_DIR_STR, server_id, \
                      tenant_id, tenant_epoch_id, LS_DIR_STR, file_id_.second_id(), TABLET_META_DIR_STR, \
-                     file_id_.third_id(), file_id_.meta_transfer_seq(), VER_KEY_STR, file_id_.meta_version_id())), \
+                     file_id_.third_id(), file_id_.meta_transfer_epoch(), VER_KEY_STR, file_id_.meta_version_id())), \
     /*get_parent_dir: tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/scatter_id/tablet_id/transfer_seq */ \
-    (OB_DIR_MGR.get_tablet_meta_tablet_id_transfer_seq_dir(path, length, tenant_id, tenant_epoch_id, file_id.second_id(), ls_epoch_id, file_id.third_id(), file_id.meta_transfer_seq())), \
+    (OB_DIR_MGR.get_tablet_meta_tablet_id_transfer_seq_dir(path, length, tenant_id, tenant_epoch_id, file_id.second_id(), ls_epoch_id, file_id.third_id(), file_id.meta_transfer_epoch())), \
     /*create_parent_dir*/ \
-    (OB_DIR_MGR.create_tablet_meta_tablet_id_transfer_seq_dir(tenant_id, tenant_epoch_id, file_id.second_id(), ls_epoch_id, file_id.third_id(), file_id.meta_transfer_seq())))
+    (OB_DIR_MGR.create_tablet_meta_tablet_id_transfer_seq_dir(tenant_id, tenant_epoch_id, file_id.second_id(), ls_epoch_id, file_id.third_id(), file_id.meta_transfer_epoch())))
 
   STORAGE_OBJECT_TYPE_INFO(PRIVATE_SLOG_FILE, "PRIVATE_SLOG_FILE", false/*is_pin_local*/, false/*is_read_through*/, \
     false/*is_write_through*/, true/*is_overwrite slog is overwrite local cache do not need alloc and stat*/, false/*is_support_fd_cache*/, \

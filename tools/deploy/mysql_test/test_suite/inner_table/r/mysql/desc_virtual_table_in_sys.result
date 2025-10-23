@@ -2228,6 +2228,23 @@ cg_idx	bigint(20)	NO		NULL
 data_checksum	bigint(20)	NO		NULL	
 table_flag	bigint(20)	NO		NULL	
 rec_scn	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_ss_diagnose_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+type	varchar(64)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+diagnose_info	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_diagnose_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ss_diagnose_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_diagnose_info limit 1;
 desc information_schema.SESSION_VARIABLES;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			

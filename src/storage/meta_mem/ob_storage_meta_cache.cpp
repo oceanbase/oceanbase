@@ -17,6 +17,7 @@
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/meta_mem/ob_aggregated_storage_meta_io.h"
 
 namespace oceanbase
 {
@@ -234,7 +235,7 @@ int ObStorageMetaValue::process_sstable(
     ObStorageMetaCacheValue *cache_value = handle.get_cache_value();
     ObStorageMetaValue value(MetaType::SSTABLE, tiny_meta);
     if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().put_and_fetch(key, value, cache_value->value_, cache_value->cache_handle_))) {
-      LOG_WARN("fail to put and fetch value into storage meta cache", K(ret), K(key), K(value), K(cache_value));
+      LOG_WARN("fail to put and fetch value into storage meta cache", K(ret), K(key), K(value), KPC(cache_value));
     } else {
       LOG_DEBUG("succeed to process sstable", K(ret), K(value), KPC(cache_value));
     }
@@ -279,6 +280,44 @@ int ObStorageMetaValue::process_co_sstable(
   if (OB_NOT_NULL(tiny_meta)) {
     tiny_meta->~ObIStorageMetaObj();
   }
+  return ret;
+}
+
+int ObStorageMetaValue::process_aggregated_storage_meta(
+  ObAggregatedStorageMetaIOInfo &aggr_io_info,
+  const char *buf,
+  const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(size <= 0) || OB_UNLIKELY(!aggr_io_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(aggr_io_info));
+  } else {
+    uint64_t first_meta_offset = aggr_io_info.first_meta_offset_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_io_info.aggr_params_.count(); ++i) {
+      ObStorageMetaValueHandle &handle = aggr_io_info.aggr_params_.at(i).cache_handle_;
+      const ObStorageMetaKey &key = aggr_io_info.aggr_params_.at(i).meta_key_;
+      const ObStorageMetaValue::MetaType &type = aggr_io_info.aggr_params_.at(i).meta_type_;
+
+      switch (type) {
+        case ObStorageMetaValue::MetaType::SSTABLE:
+          if (OB_FAIL(process_sstable(handle, key, buf + key.get_meta_addr().offset() - first_meta_offset, key.get_meta_addr().size(), nullptr))) {
+            LOG_WARN("fail to process sstable", K(ret), K(type), K(key), K(handle));
+          }
+          break;
+        case ObStorageMetaValue::MetaType::CO_SSTABLE:
+          if (OB_FAIL(process_co_sstable(handle, key, buf + key.get_meta_addr().offset() - first_meta_offset, key.get_meta_addr().size(), nullptr))) {
+            LOG_WARN("fail to process co sstable", K(ret), K(type), K(key), K(handle));
+          }
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("fail to process unexpected meta type", K(ret), K(type), K(key), K(handle));
+          break;
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -439,6 +478,11 @@ bool ObStorageMetaHandle::is_valid() const
   return valid_cache_handle || valid_io_handle;
 }
 
+bool ObStorageMetaHandle::has_sent_io() const
+{
+  return !io_handle_.is_empty();
+}
+
 int ObStorageMetaHandle::wait()
 {
   int ret = OB_SUCCESS;
@@ -550,6 +594,31 @@ int ObStorageMetaCache::get_meta(
   return ret;
 }
 
+int ObStorageMetaCache::get_meta_without_prefetch(
+    const ObStorageMetaValue::MetaType type,
+    const ObStorageMetaKey &key,
+    ObStorageMetaHandle &meta_handle,
+    const ObTablet *tablet) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!key.is_valid() || type >= ObStorageMetaValue::MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(key), K(type));
+  } else if (OB_FAIL(meta_handle.cache_handle_.new_value(MTL(ObTenantMetaMemMgr *)->get_meta_cache_io_allocator()))) {
+    LOG_WARN("fail to new cache handle value", K(ret));
+  } else if (OB_FAIL(get(key, meta_handle.cache_handle_.get_cache_value()->value_,
+      meta_handle.cache_handle_.get_cache_value()->cache_handle_))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("fail to get storage meta from cache", K(ret), K(type), K(key));
+    } else {
+      EVENT_INC(ObStatEventIds::STORAGE_META_CACHE_MISS);
+    }
+  } else {
+    meta_handle.phy_addr_ = key.get_meta_addr();
+    EVENT_INC(ObStatEventIds::STORAGE_META_CACHE_HIT);
+  }
+  return ret;
+}
+
 int ObStorageMetaCache::bypass_get_meta(
     const ObStorageMetaValue::MetaType type,
     const ObStorageMetaKey &key,
@@ -605,6 +674,64 @@ int ObStorageMetaCache::batch_get_meta_and_bypass_cache(
   return ret;
 }
 
+// these meta must be in the same block
+// meta_handle.cache_handle_ must be created before calling this function
+int ObStorageMetaCache::get_meta_aggregated(
+    const common::ObIArray<AggregatedInfo> &aggr_infos)
+{
+  int ret = OB_SUCCESS;
+  ObAggregatedStorageMetaIOInfo aggr_io_info;
+  if (OB_FAIL(aggr_io_info.init(aggr_infos))) {
+    LOG_WARN("fail to init aggr_io_info", K(ret), K(aggr_infos), K(aggr_io_info));
+  } else if (OB_UNLIKELY(!aggr_io_info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr_io_info", K(ret), K(aggr_io_info));
+  } else {
+    ObMetaDiskAddr meta_addr;
+    meta_addr.set_block_addr(aggr_io_info.macro_id_,
+      aggr_io_info.first_meta_offset_,
+      aggr_io_info.total_meta_size_,
+      aggr_io_info.disk_type_);
+
+    // create ObAggregatedStorageMetaIOCallback
+    void *buf = nullptr;
+    common::ObIAllocator &io_allocator = MTL(ObTenantMetaMemMgr *)->get_meta_cache_io_allocator();
+    ObAggregatedStorageMetaIOCallback *callback = nullptr;
+    if (OB_ISNULL(buf = io_allocator.alloc(sizeof(ObAggregatedStorageMetaIOCallback)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate callback memory failed", K(ret));
+    } else {
+      callback = new (buf) ObAggregatedStorageMetaIOCallback(&io_allocator, aggr_io_info, meta_addr);
+
+      ObSharedObjectReadInfo read_info;
+      read_info.addr_ = meta_addr;
+      read_info.io_callback_ = callback;
+      read_info.io_desc_.set_mode(ObIOMode::READ);
+      read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+      read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+      read_info.ls_epoch_ = 0; /* ls_epoch for share storage */
+
+      // send aggregated IO request
+      if (OB_FAIL(ObSharedObjectReaderWriter::async_read(read_info, aggr_infos.at(0).element<1>()->io_handle_))) {
+        LOG_WARN("fail to async read", K(ret), K(read_info));
+      }
+
+      // for async IO, we need to set the io handle to the same as the first meta handle
+      for (int64_t i = 1; OB_SUCC(ret) && i < aggr_infos.count(); ++i) {
+        aggr_infos.at(i).element<1>()->io_handle_ = aggr_infos.at(0).element<1>()->io_handle_;
+      }
+
+      // avoid double_free with io_handle
+      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) {
+        callback->~ObAggregatedStorageMetaIOCallback();
+        io_allocator.free(callback);
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObStorageMetaCache::prefetch(
     const ObStorageMetaValue::MetaType type,
     const ObStorageMetaKey &key,
@@ -628,7 +755,7 @@ int ObStorageMetaCache::prefetch(
                                                    key,
                                                    meta_handle.cache_handle_,
                                                    tablet,
-                                                   nullptr/*bypass_cache if nullptr*/);
+                                                   nullptr/*bypass_cache if not nullptr*/);
       if (OB_FAIL(read_io(key.get_meta_addr(), *callback, meta_handle))) {
         LOG_WARN("fail to read storage meta from io", K(ret), K(key), K(meta_handle));
       }
@@ -666,7 +793,7 @@ int ObStorageMetaCache::get_meta_and_bypass_cache(
                                                    key,
                                                    handle.cache_handle_,
                                                    nullptr/*tablet*/,
-                                                   &allocator/*bypass_cache if nullptr*/);
+                                                   &allocator/*bypass_cache if not nullptr*/);
       if (OB_FAIL(read_io(key.get_meta_addr(), *callback, handle))) {
         LOG_WARN("fail to read storage meta from io", K(ret), K(key), K(handle));
       }

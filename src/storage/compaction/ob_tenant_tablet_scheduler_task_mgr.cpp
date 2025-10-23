@@ -71,6 +71,10 @@ void ObTenantTabletSchedulerTaskMgr::MergeLoopTask::runTimerTask()
       LOG_WARN("Fail to merge all partition", K(ret));
     }
     cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
+#ifdef OB_BUILD_SHARED_STORAGE
+    EVENT_INC(ObStatEventIds::SS_SSTABLE_SCHED_MINOR_MERGE_COUNT);
+    EVENT_ADD(ObStatEventIds::SS_SSTABLE_SCHED_MINOR_MERGE_TIME, cost_ts);
+#endif
     LOG_INFO("MergeLoopTask", K(cost_ts));
   }
 }

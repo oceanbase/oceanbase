@@ -117,11 +117,11 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
     const compaction::ObMergeType merge_type,
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    const int64_t schedule_transfer_seq);
+    const int32_t schedule_transfer_epoch);
   virtual bool is_valid() const override;
   VIRTUAL_TO_STRING_KV(K_(skip_get_tablet), "merge_type", merge_type_to_str(merge_type_), K_(merge_version),
      K_(ls_id), K_(tablet_id), "exec_mode", exec_mode_to_str(exec_mode_),
-     K_(need_swap_tablet_flag), K_(is_reserve_mode), K_(schedule_transfer_seq), K(reorganization_scn_));
+     K_(need_swap_tablet_flag), K_(is_reserve_mode), K_(schedule_transfer_epoch), K(reorganization_scn_));
 
   bool skip_get_tablet_;
   bool need_swap_tablet_flag_;
@@ -129,7 +129,7 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
   ObExecMode exec_mode_;
   compaction::ObMergeType merge_type_;
   int64_t merge_version_;
-  int64_t schedule_transfer_seq_; // only affect minor and major now
+  int32_t schedule_transfer_epoch_; // only affect minor and major now
   share::SCN reorganization_scn_; // for shared storage merge
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;

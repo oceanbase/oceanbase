@@ -243,15 +243,16 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
    * Current Dag Path: prepare_dag -> minor_dag -> schedule_dag
    * Optimization: use ObMinorMergeTask instead of the MinorDags && ScheduleDags?
    */
-
+  const int32_t private_transfer_epoch = ctx.static_param_.private_transfer_epoch_;
   ObCOMergeScheduleDag *schedule_dag = nullptr;
   ObTabletMergeExecuteDag *minor_exe_dag = nullptr;
   result.version_range_.multi_version_start_ = ctx.get_tablet()->get_multi_version_start();
   result.version_range_.base_version_ = 0;
   result.version_range_.snapshot_version_ = ctx.get_tablet()->get_snapshot_version();
-  result.transfer_seq_ = ctx.get_tablet()->get_transfer_seq();
+  result.private_transfer_epoch_ = private_transfer_epoch;
+
   ObTabletMergeDagParam dag_param(MINOR_MERGE, ctx.get_ls_id(),
-                                  ctx.get_tablet_id(), ctx.get_schedule_transfer_seq());
+                                  ctx.get_tablet_id(), private_transfer_epoch);
   if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->alloc_dag(minor_exe_dag))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(ctx.get_tablet()->get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
@@ -1725,10 +1726,10 @@ int ObCOMergeDagNet::get_compat_mode()
           0/*timeout_us*/,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_transfer_seq_))) {
-    LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
+  } else if (OB_FAIL(ObTablet::check_transfer_epoch_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_transfer_epoch_))) {
+    LOG_WARN("tmp tablet transfer epoch not eq with old transfer epoch", K(ret),
         "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_seq", basic_param_.schedule_transfer_seq_);
+        "old_transfer_epoch", basic_param_.schedule_transfer_epoch_);
   } else {
     basic_param_.dag_net_id_ = get_dag_id();
     basic_param_.skip_get_tablet_ = true;

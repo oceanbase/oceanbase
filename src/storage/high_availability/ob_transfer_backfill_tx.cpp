@@ -204,6 +204,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         tablet_info.reorganization_scn_ = src_transfer_info.transfer_start_scn_;
         tablet_info.tablet_status_ = ObTabletStatus::TRANSFER_OUT;
         tablet_info.transfer_seq_ = src_transfer_info.transfer_seq_;
+
         if (!tablet_info.is_valid()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("tablet info should be valid", K(ret), K(tablet_info));

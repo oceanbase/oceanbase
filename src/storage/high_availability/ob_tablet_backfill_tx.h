@@ -79,7 +79,6 @@ public:
       ObTabletBackfillTXDag *dag,
       const SCN &backfill_scn,
       const int64_t ls_rebuild_seq,
-      const int64_t dest_transfer_seq,
       ObTabletHandle &tablet_handle,
       storage::ObTableHandleV2 &backfill_table_handle);
   virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const override;

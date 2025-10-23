@@ -22,6 +22,11 @@ static const char *read_mode_name = "READ";
 static const char *read_mode_name_short = "R";
 static const char *write_mode_name = "WRITE";
 static const char *write_mode_name_short = "W";
+enum ObIODirType : int {
+  OB_DIR_TYPE_LOCAL = 0,
+  OB_DIR_TYPE_SS_PRIVATE = 1,
+  OB_DIR_TYPE_SS_PUBLIC = 2
+};
 const char *oceanbase::common::get_io_mode_string(const ObIOMode mode)
 {
   const char *ret_name = "UNKNOWN";
@@ -221,6 +226,7 @@ ObIOFlag::ObIOFlag()
       need_close_dev_and_fd_(false),
       is_buffered_read_(true),
       is_preread_(false),
+      ss_dir_type_(ObIODirType::OB_DIR_TYPE_LOCAL),
       reserved_(0),
       group_id_(USER_RESOURCE_OTHER_GROUP_ID),
       sys_module_id_(OB_INVALID_ID)
@@ -245,6 +251,7 @@ void ObIOFlag::reset()
   is_sealed_ = true;
   need_close_dev_and_fd_ = false;
   is_buffered_read_ = true;
+  ss_dir_type_ = ObIODirType::OB_DIR_TYPE_LOCAL;
   is_preread_ = false;
   reserved_ = 0;
   group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
@@ -459,6 +466,25 @@ bool ObIOFlag::is_preread() const
   return is_preread_;
 }
 
+void ObIOFlag::set_ss_private_dir()
+{
+  ss_dir_type_ = ObIODirType::OB_DIR_TYPE_SS_PRIVATE;
+}
+
+void ObIOFlag::set_ss_public_dir()
+{
+  ss_dir_type_ = ObIODirType::OB_DIR_TYPE_SS_PUBLIC;
+}
+
+bool ObIOFlag::is_ss_private_dir() const
+{
+  return ss_dir_type_ == ObIODirType::OB_DIR_TYPE_SS_PRIVATE;
+}
+
+bool ObIOFlag::is_ss_public_dir() const
+{
+  return ss_dir_type_ == ObIODirType::OB_DIR_TYPE_SS_PUBLIC;
+}
 
 bool oceanbase::common::is_atomic_write_callback(const ObIOCallbackType type)
 {
@@ -2041,10 +2067,32 @@ void ObIOHandle::estimate()
       EVENT_INC(ObStatEventIds::IO_READ_COUNT);
       EVENT_ADD(ObStatEventIds::IO_READ_BYTES, result_->size_);
       EVENT_ADD(ObStatEventIds::IO_READ_DELAY, result_delay);
+
+      // SS directory type statistics for read
+      if (result_->flag_.is_ss_private_dir() && result_->is_limit_net_bandwidth_req_) { // private
+        EVENT_INC(ObStatEventIds::IO_REMOTE_PRIVATE_READ_COUNT);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PRIVATE_READ_BYTES, result_->size_);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PRIVATE_READ_DELAY, result_delay);
+      } else if (result_->flag_.is_ss_public_dir() && result_->is_limit_net_bandwidth_req_) { // public
+        EVENT_INC(ObStatEventIds::IO_REMOTE_PUBLIC_READ_COUNT);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PUBLIC_READ_BYTES, result_->size_);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PUBLIC_READ_DELAY, result_delay);
+      }
     } else {
       EVENT_INC(ObStatEventIds::IO_WRITE_COUNT);
       EVENT_ADD(ObStatEventIds::IO_WRITE_BYTES, result_->size_);
       EVENT_ADD(ObStatEventIds::IO_WRITE_DELAY, result_delay);
+
+      // SS directory type statistics for write
+      if (result_->flag_.is_ss_private_dir() && result_->is_limit_net_bandwidth_req_) { // private
+        EVENT_INC(ObStatEventIds::IO_REMOTE_PRIVATE_WRITE_COUNT);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PRIVATE_WRITE_BYTES, result_->size_);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PRIVATE_WRITE_DELAY, result_delay);
+      } else if (result_->flag_.is_ss_public_dir() && result_->is_limit_net_bandwidth_req_) { // public
+        EVENT_INC(ObStatEventIds::IO_REMOTE_PUBLIC_WRITE_COUNT);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PUBLIC_WRITE_BYTES, result_->size_);
+        EVENT_ADD(ObStatEventIds::IO_REMOTE_PUBLIC_WRITE_DELAY, result_delay);
+      }
     }
     static const int64_t LONG_IO_PRINT_TRIGGER_US = 1000L * 1000L * 3L; // 3s
     if (result_delay > LONG_IO_PRINT_TRIGGER_US) {

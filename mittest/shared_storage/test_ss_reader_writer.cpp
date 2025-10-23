@@ -424,7 +424,7 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(100); // seq_id
-  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(server_id);  //tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;
@@ -983,11 +983,11 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   uint64_t ls_id = 1001;
   uint64_t ls_epoch_id = 1;
   uint64_t tablet_id = 200001;
-  int64_t transfer_seq = 0;
+  int64_t transfer_epoch = 0;
   int64_t version_id = 1;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_ls_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_meta_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, transfer_seq));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, transfer_epoch));
 
   // 1. write to local cache
   MacroBlockId macro_id;
@@ -995,7 +995,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
   macro_id.set_second_id(ls_id);
   macro_id.set_third_id(tablet_id);
-  macro_id.set_meta_transfer_seq(transfer_seq);
+  macro_id.set_meta_transfer_epoch(transfer_epoch);
   macro_id.set_meta_version_id(version_id); // meta_version_id
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;
@@ -1080,7 +1080,7 @@ TEST_F(TestSSReaderWriter, private_macro_write_less_read_more)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(900); // seq_id
-  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(server_id);  //tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;

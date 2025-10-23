@@ -11402,7 +11402,27 @@ def_table_schema(
   vtable_route_policy = 'local',
 )
 
-# 11130: __all_virtual_ss_diagnose_info
+def_table_schema(
+  owner = 'cxf262476',
+  table_name    = '__all_virtual_ss_diagnose_info',
+  table_id      = '11130',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+    ('create_time', 'timestamp'),
+    ('diagnose_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 ################################################################
 # INFORMATION SCHEMA
@@ -17763,11 +17783,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15528: __all_virtual_backup_validate_job_history
 # 15529: __all_virtual_backup_validate_task
 # 15530: __all_virtual_backup_validate_task_history
-
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531', all_def_keywords['__all_virtual_tenant_ss_storage_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
-# 15534: __all_virtual_ss_diagnose_info
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keywords['__all_virtual_ss_diagnose_info']))
 # 15535: __all_virtual_wr_active_session_history_v2
 
 # 余留位置（此行之前占位）

@@ -89,10 +89,12 @@ public:
       const bool has_truncate_info = false);
   int init(
       const ObTabletMeta &old_tablet_meta,
-      const share::SCN &flush_scn);
+      const share::SCN &flush_scn,
+      const int32_t private_transfer_epoch);
   int init(
       const ObMigrationTabletParam &param,
-      const bool is_transfer);
+      const bool is_transfer,
+      const int32_t private_transfer_epoch);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
@@ -286,6 +288,8 @@ public:
   int assign(const ObMigrationTabletParam &param);
   int build_deleted_tablet_info(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
   int get_tablet_status_for_transfer(ObTabletCreateDeleteMdsUserData &user_data) const;
+  const share::ObLSID &get_transfer_src_ls_id() const { return transfer_info_.ls_id_; }
+  const share::ObLSID &get_transfer_dest_ls_id() const { return ls_id_; }
 
   // Return the max tablet checkpoint scn which is the max scn among clog_checkpoint_scn,
   // mds_checkpoint_scn and ddl_checkpoint_scn.

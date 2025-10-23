@@ -192,13 +192,13 @@ public:
       const share::ObLSID ls_id,
       const int64_t ls_epoch,
       const ObTabletID tablet_id,
-      const int64_t tablet_transfer_seq,
+      const int32_t private_transfer_epoch,
       const int64_t meta_version)
     : data_version_(data_version),
       ls_id_(ls_id),
       ls_epoch_(ls_epoch),
       tablet_id_(tablet_id),
-      tablet_transfer_seq_(tablet_transfer_seq),
+      private_transfer_epoch_(private_transfer_epoch),
       snapshot_version_(0),
       start_macro_seq_(0),
       ddl_redo_callback_(nullptr),
@@ -206,6 +206,7 @@ public:
       #ifdef OB_BUILD_SHARED_STORAGE
       , op_handle_(nullptr),
       file_(nullptr),
+      update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
       reorganization_scn_(0),
       meta_version_(meta_version)
       #endif
@@ -215,7 +216,7 @@ public:
   ObTabletPersisterParam(
       const uint64_t data_version,
       const ObTabletID tablet_id,
-      const int64_t tablet_transfer_seq,
+      const int32_t private_transfer_epoch,
       const int64_t snapshot_version,
       const int64_t start_macro_seq,
       blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback = nullptr,
@@ -225,7 +226,7 @@ public:
     ls_id_(),
     ls_epoch_(0),
     tablet_id_(tablet_id),
-    tablet_transfer_seq_(tablet_transfer_seq),
+    private_transfer_epoch_(private_transfer_epoch),
     snapshot_version_(snapshot_version),
     start_macro_seq_(start_macro_seq),
     ddl_redo_callback_(ddl_redo_callback),
@@ -233,6 +234,7 @@ public:
     #ifdef OB_BUILD_SHARED_STORAGE
     , op_handle_(nullptr),
     file_(nullptr),
+    update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
     reorganization_scn_(0),
     meta_version_(0)
     #endif
@@ -255,7 +257,7 @@ public:
     ls_id_(ls_id),
     ls_epoch_(0),
     tablet_id_(tablet_id),
-    tablet_transfer_seq_(OB_INVALID_TRANSFER_SEQ),
+    private_transfer_epoch_(OB_INVALID_TRANSFER_SEQ),
     snapshot_version_(0),
     start_macro_seq_(start_macro_seq),
     ddl_redo_callback_(ddl_redo_callback),
@@ -286,7 +288,7 @@ public:
     #endif
   }
 
-  TO_STRING_KV(K_(data_version), K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(tablet_transfer_seq),
+  TO_STRING_KV(K_(data_version), K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(private_transfer_epoch),
    K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
    #ifdef OB_BUILD_SHARED_STORAGE
    , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn), K_(meta_version)
@@ -297,7 +299,7 @@ public:
   share::ObLSID ls_id_;
   int64_t ls_epoch_;
   ObTabletID tablet_id_;
-  int64_t tablet_transfer_seq_;
+  int32_t private_transfer_epoch_;
   int64_t snapshot_version_;
   int64_t start_macro_seq_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;

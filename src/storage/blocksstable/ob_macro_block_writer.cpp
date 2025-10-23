@@ -2016,10 +2016,10 @@ int ObMacroBlockWriter::alloc_block()
   } else {
     if (data_store_desc_->is_for_index_or_meta()) {
       storage_opt.set_private_meta_macro_object_opt(data_store_desc_->get_tablet_id().id(),
-                                                    data_store_desc_->get_tablet_transfer_seq());
+                                                    data_store_desc_->get_private_transfer_epoch());
     } else {
       storage_opt.set_private_object_opt(data_store_desc_->get_tablet_id().id(),
-                                         data_store_desc_->get_tablet_transfer_seq());
+                                         data_store_desc_->get_private_transfer_epoch());
     }
   }
   if (OB_FAIL(ret)) {

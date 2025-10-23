@@ -288,7 +288,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(100); // seq_id
-  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(server_id);  //tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;

@@ -1548,9 +1548,9 @@ bool ObSSTableIndexBuilder::micro_index_clustered() const
   return data_store_desc_.get_desc().micro_index_clustered();
 }
 
-int64_t ObSSTableIndexBuilder::get_tablet_transfer_seq() const
+int32_t ObSSTableIndexBuilder::get_private_transfer_epoch() const
 {
-  return data_store_desc_.get_desc().get_tablet_transfer_seq();
+  return data_store_desc_.get_desc().get_private_transfer_epoch();
 }
 
 int ObSSTableIndexBuilder::close(ObSSTableMergeRes &res,
@@ -3965,7 +3965,7 @@ bool ObIndexBlockRebuilder::use_absolute_offset(const ObITable::TableKey &table_
     && !table_key.slice_range_.is_merge_slice(); // not ddl merge slice
 }
 
-int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq) const
+int ObIndexBlockRebuilder::get_tablet_transfer_epoch(int32_t &tablet_transfer_epoch) const
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -3975,7 +3975,7 @@ int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable_builder_ shoulde not be nullptr", K(ret), KP(sstable_builder_));
   } else {
-    tablet_transfer_seq = sstable_builder_->get_tablet_transfer_seq();
+    tablet_transfer_epoch = sstable_builder_->get_private_transfer_epoch();
   }
   return ret;
 }

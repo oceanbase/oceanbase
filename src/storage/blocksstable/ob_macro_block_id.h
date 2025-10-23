@@ -101,6 +101,7 @@ public:
   bool is_meta() const; // shared meta or private meta
   bool is_tablet_local_cache_object() const; // shared data or private data or shared meta or private meta, which has tablet info
   bool is_private_macro() const; // private data/meta macro block in ss mode
+  bool is_private() const; // private objects in ss mode, including private tablet meta, private data/meta macro...
   bool is_macro_write_cache_ctrl_obj_type() const; // macro write cache controlled by _ss_local_cache_control in ss mode
   void set_id_mode(const uint64_t id_mode) { id_mode_ = id_mode; }
   // Local mode
@@ -119,12 +120,12 @@ public:
   void set_incarnation_id(const uint64_t incarnation_id) { incarnation_id_ = incarnation_id; }
   int64_t column_group_id() const { return column_group_id_; }
   void set_column_group_id(const uint64_t column_group_id) { column_group_id_ = column_group_id; }
-  int64_t macro_transfer_seq() const { return macro_transfer_epoch_; }
-  void set_macro_transfer_seq(const int64_t macro_transfer_seq) { macro_transfer_epoch_ = macro_transfer_seq; }
+  int64_t macro_transfer_epoch() const { return macro_transfer_epoch_; }
+  void set_macro_transfer_epoch(const int64_t macro_transfer_epoch) { macro_transfer_epoch_ = macro_transfer_epoch; }
   uint64_t tenant_seq() const { return tenant_seq_; }
   void set_tenant_seq(const uint64_t tenant_seq) { tenant_seq_ = tenant_seq; }
-  int64_t meta_transfer_seq() const { return meta_transfer_epoch_; }
-  void set_meta_transfer_seq(const int64_t meta_transfer_seq) { meta_transfer_epoch_ = meta_transfer_seq; }
+  int64_t meta_transfer_epoch() const { return meta_transfer_epoch_; }
+  void set_meta_transfer_epoch(const int64_t meta_transfer_epoch) { meta_transfer_epoch_ = meta_transfer_epoch; }
   uint64_t meta_version_id() const { return meta_version_id_; }
   void set_meta_version_id(const uint64_t meta_version_id) { meta_version_id_ = meta_version_id; }
   bool meta_is_inner_tablet() const;

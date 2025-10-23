@@ -296,13 +296,13 @@ int ObTenantMetaMemMgr::fetch_tenant_config()
 
 int ObTenantMetaMemMgr::check_allow_tablet_gc(
     const ObTabletID &tablet_id,
-    const int64_t transfer_seq,
+    const int32_t transfer_epoch,
     bool &allow)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
   allow = false;
-  ObDieingTabletMapKey key(tablet_id.id(), transfer_seq);
+  ObDieingTabletMapKey key(tablet_id.id(), transfer_epoch);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been inited", K(ret));
@@ -830,12 +830,17 @@ int ObTenantMetaMemMgr::push_tablet_into_gc_queue(ObTablet *tablet)
   } else {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     const ObTabletMapKey key(tablet_meta.ls_id_, tablet_meta.tablet_id_);
-    const ObDieingTabletMapKey dieing_tablet_key(key, tablet->get_transfer_seq());
+    int32_t transfer_epoch = -1;
+    if (OB_FAIL(tablet->get_private_transfer_epoch(transfer_epoch))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
+    }
+    const ObDieingTabletMapKey dieing_tablet_key(key, transfer_epoch);
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
 
     const ObTabletPointerHandle &ptr_handle = tablet->get_pointer_handle();
     ObTabletPointer *tablet_ptr = nullptr;
-    if (OB_ISNULL(tablet_ptr = ptr_handle.get_tablet_pointer())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tablet_ptr = ptr_handle.get_tablet_pointer())) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("unexpected null tablet pointer", K(ret), K(key), K(ptr_handle));
     } else if (OB_FAIL(tablet_ptr->remove_tablet_from_old_version_chain(tablet))) {
@@ -1838,16 +1843,21 @@ int ObTenantMetaMemMgr::get_current_version_for_tablet(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is NULL", K(ret), K(tablet_handle));
     } else {
-      const ObDieingTabletMapKey dieing_key(key, tablet_handle.get_obj()->get_transfer_seq());
+      int32_t transfer_epoch = -1;
+      if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
+        LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
+      }
+      const ObDieingTabletMapKey dieing_key(key, transfer_epoch);
       bool exist_in_external = false;
-      if (OB_FAIL(external_tablet_cnt_map_.check_exist(dieing_key, exist_in_external))) {
+      if (FAILEDx(external_tablet_cnt_map_.check_exist(dieing_key, exist_in_external))) {
         LOG_WARN("fail to check ex_tablet exist or not", K(ret), K(dieing_key), K(exist_in_external));
       } else {
         tablet_version = static_cast<int64_t>(tablet_ptr->get_addr().block_id().meta_version_id());
         last_gc_version = tablet_ptr->get_last_gc_version();
         tablet_fingerprint = reinterpret_cast<uintptr_t>(tablet_ptr);
-        tablet_transfer_seq = tablet_ptr->get_addr().block_id().meta_transfer_seq();
+        tablet_transfer_seq = tablet_ptr->get_addr().block_id().meta_transfer_epoch();
         allow_tablet_version_gc = tablet_ptr->is_old_version_chain_empty() && !exist_in_external;
+        OB_ASSERT(tablet_transfer_seq == transfer_epoch);
         FLOG_INFO("PRINT TABLET ADDRESS", K(ret), K(tablet_ptr->get_addr()), K(tablet_handle.get_obj()->get_tablet_addr()),
           K(tablet_version), K(last_gc_version), K(tablet_fingerprint));
       }
@@ -2282,20 +2292,20 @@ int ObTenantMetaMemMgr::insert_or_update_ss_tablet(const ObSSTabletMapKey &key, 
   return ret;
 }
 
-int ObTenantMetaMemMgr::inc_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq)
+int ObTenantMetaMemMgr::inc_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch)
 {
   int ret = OB_SUCCESS;
-  const ObDieingTabletMapKey dieing_key(tablet_id, tablet_transfer_seq);
+  const ObDieingTabletMapKey dieing_key(tablet_id, tablet_transfer_epoch);
   if (OB_FAIL(external_tablet_cnt_map_.reg_tablet(dieing_key))) {
     LOG_WARN("fail to inc external tablet cnt", K(ret), K(dieing_key));
   }
   return ret;
 }
 
-int ObTenantMetaMemMgr::dec_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq)
+int ObTenantMetaMemMgr::dec_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch)
 {
   int ret = OB_SUCCESS;
-  const ObDieingTabletMapKey dieing_key(tablet_id, tablet_transfer_seq);
+  const ObDieingTabletMapKey dieing_key(tablet_id, tablet_transfer_epoch);
   if (OB_FAIL(external_tablet_cnt_map_.unreg_tablet(dieing_key))) {
     LOG_WARN("fail to dec external tablet cnt", K(ret), K(dieing_key));
   }
@@ -2351,7 +2361,7 @@ int ObTenantMetaMemMgr::push_tablet_pointer_to_fly_map_if_need_(
     const ObTabletMapKey &key)
 {
   int ret = OB_SUCCESS;
-  int64_t tablet_transfer_seq = -1;
+  int32_t tablet_transfer_epoch = -1;
   ObTabletPointer *tablet_ptr = nullptr;
   ObTabletPointerHandle tp_handle(tablet_map_);
   ObTabletHandle t_handle;
@@ -2379,10 +2389,11 @@ int ObTenantMetaMemMgr::push_tablet_pointer_to_fly_map_if_need_(
   } else if (!t_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet_handle", K(ret), K(t_handle));
+  } else if (OB_FAIL(t_handle.get_obj()->get_private_transfer_epoch(tablet_transfer_epoch))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", t_handle.get_obj()->get_tablet_meta());
   } else { // need push tablet_ptr to flying map
     bool exist = false;
-    tablet_transfer_seq = t_handle.get_obj()->get_transfer_seq();
-    ObDieingTabletMapKey dieing_tablet_key(key, tablet_transfer_seq);
+    ObDieingTabletMapKey dieing_tablet_key(key, tablet_transfer_epoch);
 
     if (OB_FAIL(flying_tablet_map_.check_exist(dieing_tablet_key, exist))) {
       LOG_WARN("failed to check exist", K(ret), K(dieing_tablet_key));
@@ -2401,7 +2412,7 @@ int ObTenantMetaMemMgr::push_tablet_pointer_to_fly_map_if_need_(
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(tablet_ptr)) {
       int tmp_ret = OB_SUCCESS;
-      ObDieingTabletMapKey dieing_tablet_key(key, tablet_transfer_seq);
+      ObDieingTabletMapKey dieing_tablet_key(key, tablet_transfer_epoch);
       if (OB_TMP_FAIL(flying_tablet_map_.erase(dieing_tablet_key))) {
         LOG_WARN("fail to erase tablet from tablet_pointer", K(tmp_ret), K(dieing_tablet_key));
       } else {

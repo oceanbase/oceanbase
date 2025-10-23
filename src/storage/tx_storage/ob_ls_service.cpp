@@ -539,7 +539,9 @@ int ObLSService::post_create_ls_(const int64_t create_type,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool need_online = false;
-  if (OB_FAIL(ls->check_ls_need_online(need_online))) {
+  if (OB_FAIL(ls->start())) {
+    LOG_WARN("ls start failed", K(ret));
+  } else if (OB_FAIL(ls->check_ls_need_online(need_online))) {
     LOG_WARN("check ls need online failed", K(ret));
   } else if (need_online &&
              OB_FAIL(ls->online_without_lock())) {

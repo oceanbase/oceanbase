@@ -303,7 +303,7 @@ public:
       const ObTabletID &tablet_id,
       const uintptr_t tablet_fingerprint,
       const int64_t new_gc_version);
-  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int64_t transfer_seq, bool &allow);
+  int check_allow_tablet_gc(const ObTabletID &tablet_id, const int32_t transfer_epoch, bool &allow);
   int get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos);
   int check_tablet_has_sstable_need_upload(const SCN &ls_ss_checkpoint_scn, const ObTabletMapKey &key, bool &need_upload);
   int get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
@@ -345,8 +345,8 @@ public:
 
   int inc_ref_in_leak_checker(const int32_t index);
   int dec_ref_in_leak_checker(const int32_t index);
-  int inc_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
-  int dec_external_tablet_cnt(const uint64_t tablet_id, const int64_t tablet_transfer_seq);
+  int inc_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch);
+  int dec_external_tablet_cnt(const uint64_t tablet_id, const int32_t tablet_transfer_epoch);
   int insert_or_update_ss_tablet(const ObSSTabletMapKey &key, const ObTabletHandle &tablet_hdl);
   int fetch_ss_tablet(const ObSSTabletMapKey &key, ObTabletHandle &tablet_hdl);
   int schedule_load_bloomfilter(const storage::ObITable::TableKey &sstable_key,

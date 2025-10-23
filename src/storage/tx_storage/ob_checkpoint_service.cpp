@@ -20,6 +20,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "observer/ob_srv_network_frame.h"
 #include "storage/incremental/share/ob_shared_ls_meta.h"
+#include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/ob_ss_checkpoint_rpc.h"
 #endif
@@ -622,6 +623,7 @@ private:
       scn_ts_gap / 1000 / 1000, "MAX LSN GAP(MB)", max_lsn_gap / 1024 / 1024
   void throttle_flush_if_needed(const ObSSLSMeta &ss_ls_meta, LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls)
   {
+    const bool prev_flush_disabled = ls.flush_is_disabled();
     if (is_leader_(ls)) {
       bool ckpt_lag_too_large = false;
       // use 16GB as default lsn gap
@@ -665,6 +667,17 @@ private:
         (void)ls.enable_flush();
         FLOG_INFO("enable ls flush because this ls is not leader", K(ls.get_ls_id()));
       }
+    }
+    const bool cur_flush_disabled = ls.flush_is_disabled();
+    if (prev_flush_disabled != cur_flush_disabled) {
+      const char* INFO = "Disable flush state change";
+      ADD_SS_DIAGNOSE_INFO(ObSSDiagnoseInfo::DIA_TYPE_SS_CKPT,
+                           ls.get_ls_id(),
+                           ObTabletID(0),
+                           ObClockGenerator::getClock(),
+                           K(INFO),
+                           K(prev_flush_disabled),
+                           K(cur_flush_disabled));
     }
   }
 #undef  PRINT_CKPT_INFO_WRAPPER

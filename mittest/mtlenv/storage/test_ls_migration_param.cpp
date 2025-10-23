@@ -285,7 +285,9 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   const bool is_transfer = false;
-  ret = dst_handle.get_obj()->init_with_migrate_param(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer(), is_transfer);
+  int32_t private_transfer_epoch = -1;
+  ASSERT_EQ(OB_SUCCESS, src_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch));
+  ret = dst_handle.get_obj()->init_with_migrate_param(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer(), is_transfer, private_transfer_epoch);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   const ObTabletMeta &src_meta = src_handle.get_obj()->get_tablet_meta();

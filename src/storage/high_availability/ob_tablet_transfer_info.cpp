@@ -50,16 +50,19 @@ int ObTabletTransferInfo::init(
     const share::ObLSID &ls_id,
     const share::SCN &transfer_start_scn,
     const int64_t transfer_seq,
+    const int32_t private_transfer_epoch,
     const share::SCN &src_reorganization_scn)
 {
   int ret = OB_SUCCESS;
   if (!ls_id.is_valid()
    || !transfer_start_scn.is_valid_and_not_min()
    || transfer_seq < 0
-   || !src_reorganization_scn.is_valid()) {
+   || !src_reorganization_scn.is_valid()
+   || !ObTabletTransferInfo::is_private_transfer_epoch_valid(private_transfer_epoch)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init transfer info get invalid argument",
-      K(ret), K(ls_id), K(transfer_start_scn), K(transfer_seq), K(src_reorganization_scn));
+      K(ret), K(ls_id), K(transfer_start_scn), K(transfer_seq), K(src_reorganization_scn),
+      K(private_transfer_epoch));
   } else {
     ls_id_ = ls_id;
     transfer_start_scn_ = transfer_start_scn;
@@ -67,6 +70,7 @@ int ObTabletTransferInfo::init(
     has_transfer_table_ = true;
     unused_is_transfer_out_deleted_ = false;
     src_reorganization_scn_ = src_reorganization_scn;
+    private_transfer_epoch_ = private_transfer_epoch;
   }
   return ret;
 }
@@ -88,6 +92,7 @@ bool ObTabletTransferInfo::is_valid() const
       && transfer_start_scn_.is_valid()
       && transfer_seq_ >= 0;
       // won't check src_reorganization_scn_ for compatibility
+      // won't check transfer_epoch cause it's inited at dest.
 }
 
 bool ObTabletTransferInfo::has_transfer_table() const

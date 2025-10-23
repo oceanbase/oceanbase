@@ -977,16 +977,18 @@ int ObTabletSplitUtil::check_and_build_mds_sstable_merge_ctx(
     static_param.merge_scn_                          = end_scn;
     static_param.create_snapshot_version_            = 0;
     static_param.need_parallel_minor_merge_          = false;
-    static_param.tablet_transfer_seq_                  = dest_tablet_handle.get_obj()->get_transfer_seq();
     static_param.rec_scn_ = rec_scn;
-    tablet_merge_ctx.static_desc_.tablet_transfer_seq_ = dest_tablet_handle.get_obj()->get_transfer_seq();
     if (GCTX.is_shared_storage_mode()) {
       static_param.dag_param_.exec_mode_                = ObExecMode::EXEC_MODE_OUTPUT;
       tablet_merge_ctx.static_desc_.exec_mode_          = ObExecMode::EXEC_MODE_OUTPUT;
       tablet_merge_ctx.static_desc_.reorganization_scn_ = end_scn;
     }
-
-    if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
+    int32_t transfer_epoch = -1;
+    if (OB_FAIL(dest_tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), K(dest_tablet_handle));
+    } else if (FALSE_IT(static_param.private_transfer_epoch_ = transfer_epoch)) {
+    } else if (FALSE_IT(tablet_merge_ctx.static_desc_.private_transfer_epoch_ = transfer_epoch)) {
+    } else if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_handle), K(dest_tablet_handle), K(tablet_merge_ctx));
     }
   }

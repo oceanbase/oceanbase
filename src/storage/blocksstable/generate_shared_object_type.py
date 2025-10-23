@@ -34,6 +34,7 @@ BASE_FUNCTION_SIGNATURES = {
     'local_path_to_macro_id': 'int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const',
     'get_parent_dir': 'int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const',
     'create_parent_dir': 'int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const',
+    'remote_path_to_macro_id': 'int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const',
     'get_effective_tablet_id': 'int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const',
     'opt_to_string': 'int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const',
     'get_object_id': 'int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const'
@@ -239,6 +240,7 @@ public:
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
   virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const { return OB_NOT_SUPPORTED; }
+  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const { return OB_NOT_SUPPORTED; }
   virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
                              const MacroBlockId &file_id, const uint64_t tenant_id,
                              const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
@@ -334,6 +336,61 @@ static int get_ls_inner_tablet_id_(const char *str, int64_t &tablet_id)
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+static int prewarm_file_to_remote_path_format(char *path, const int64_t length, int64_t &pos,
+  const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id,
+  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id)
+{
+  int ret = OB_SUCCESS;
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%lu/%s_%lu/%s/%ld/%ld/%s/%s/%s%ld",
+              object_storage_root_dir, CLUSTER_DIR_STR, cluster_id,
+              TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id.second_id(),
+              file_id.fourth_id(), MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, file_id.third_id()))) {
+    LOG_WARN("fail to databuff printf", KR(ret));
+  }
+  return ret;
+}
+
+static int prewarm_file_remote_path_to_macro_id(const char *path, const ObStorageObjectType type, MacroBlockId &macro_id)
+{
+  int ret = OB_SUCCESS;
+  char format[512] = {0};
+  int num = 0;
+  const char *sub_path = nullptr;
+  // /tablet_id/reorganization_scn/major/prewarm_info/scn%ld
+  if (OB_ISNULL(path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), KP(path));
+  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 5))) {
+    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
+  } else {
+    int64_t tablet_id = 0;
+    int64_t scn_id = 0;
+    int64_t fourth_id = 0;
+    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/%s/%s/%s%%ld.T%hhu",
+                MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, (uint8_t)type))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &fourth_id, &scn_id))) {
+    } else if (OB_UNLIKELY(3 != num)) {
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
+    } else {
+      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+      macro_id.set_storage_object_type((uint64_t)type);
+      macro_id.set_second_id(tablet_id);
+      macro_id.set_third_id(scn_id);
+      macro_id.set_fourth_id(fourth_id);
+    }
+  }
+  return ret;
+}
+#endif
 
 const char *get_storage_objet_type_str(const ObStorageObjectType type)
 {
@@ -767,9 +824,12 @@ public:
                                          '                                    const MacroBlockId &file_id, const char *object_storage_root_dir,\n'
                                          '                                    const uint64_t cluster_id, const uint64_t tenant_id,\n'
                                          '                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;')
+        if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
+            shared_storage_functions.append('  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;')
 
         if cfg.get('local_path_to_macro_id') and cfg['local_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
             shared_storage_functions.append('  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;')
+
 
         if cfg.get('get_parent_dir') and cfg['get_parent_dir'] != 'OB_NOT_SUPPORTED':
             shared_storage_functions.append('  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,\n'
@@ -830,6 +890,11 @@ def generate_class_implementations():
             impl += '  const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id,\n'
             impl += '  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const\n'
             impl += extract_function_body(cfg['to_remote_path_format'])
+            shared_storage_impls.append(impl)
+
+        if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
+            impl = f'\nint {class_name}::remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const\n'
+            impl += extract_function_body(cfg['remote_path_to_macro_id'])
             shared_storage_impls.append(impl)
 
         if cfg.get('local_path_to_macro_id') and cfg['local_path_to_macro_id'] != 'OB_NOT_SUPPORTED':

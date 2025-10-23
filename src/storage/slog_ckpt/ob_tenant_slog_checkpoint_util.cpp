@@ -123,6 +123,7 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
         src_tablet = tmp_tablet_handle.get_obj();
       }
 
+      int32_t private_transfer_epoch = 0;
       if (OB_FAIL(ret)) {
       } else if (SKIPPED == status) {
       } else if (GCTX.is_shared_storage_mode() &&
@@ -136,9 +137,11 @@ int ObTenantSlogCkptUtil::write_and_apply_tablet(
         }
       } else if (OB_NOT_NULL(src_tablet) && OB_FAIL(src_tablet->get_ls_epoch(ls_epoch))) {
         STORAGE_LOG(WARN, "failed to get ls epoch", K(ret), K(tablet_key));
+      } else if (OB_NOT_NULL(src_tablet) && OB_FAIL(src_tablet->get_private_transfer_epoch(private_transfer_epoch))) {
+        STORAGE_LOG(WARN, "failed to get transfer epoch", K(ret), "tablet_meta", src_tablet->get_tablet_meta());
       }
 
-      const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, nullptr != src_tablet ? src_tablet->get_transfer_seq() : 0, tablet_meta_version);
+      const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, private_transfer_epoch, tablet_meta_version);
       if (OB_FAIL(ret)) {
       } else if (SKIPPED == status) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *src_tablet, new_tablet_handle))) {

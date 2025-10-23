@@ -757,6 +757,7 @@ ob_set_subtarget(ob_storage common_mixed
   checkpoint/ob_checkpoint_executor.cpp
   checkpoint/ob_data_checkpoint.cpp
   checkpoint/ob_freeze_checkpoint.cpp
+  meta_mem/ob_aggregated_storage_meta_io.cpp
   meta_mem/ob_external_tablet_cnt_map.cpp
   meta_mem/ob_flying_tablet_pointer_map.cpp
   meta_mem/ob_meta_obj_struct.cpp

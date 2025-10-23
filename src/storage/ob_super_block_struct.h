@@ -298,14 +298,14 @@ public:
 // Due to the design of slog, the log_id_'s initial value must be 1
 #define SET_FIRST_VALID_SLOG_CURSOR(cursor) (set_cursor(cursor, 1/*file_id*/, 1/*log_id*/, 0/*offset*/))
 
-
+// UNUSED?
 struct ObActiveTabletItem
 {
 public:
   ObActiveTabletItem();
   ObActiveTabletItem(const common::ObTabletID tablet_id, const int64_t union_id);
   bool is_valid() const;
-  int64_t get_transfer_seq() const { return meta_transfer_seq_; }
+  int64_t get_transfer_epoch() const { return meta_transfer_seq_; }
   uint64_t get_tablet_meta_version() const { return meta_version_id_; }
 
   TO_STRING_KV(K_(tablet_id), K_(meta_transfer_seq), K_(meta_version_id));
@@ -369,11 +369,11 @@ public:
     const ObPendingFreeTabletStatus status,
     const int64_t free_time,
     const GCTabletType gc_type,
-    const int64_t tablet_transfer_seq,
+    const int32_t tablet_transfer_epoch,
     const int64_t last_gc_version)
     : tablet_id_(tablet_id), tablet_meta_version_(tablet_meta_version),
       status_(status), free_time_(free_time),
-      gc_type_(gc_type), tablet_transfer_seq_(tablet_transfer_seq),
+      gc_type_(gc_type), tablet_transfer_seq_(tablet_transfer_epoch),
       last_gc_version_(last_gc_version)
   {}
 

@@ -65,7 +65,7 @@ public:
       macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
       macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
       macro_id.set_second_id(tablet_id_); // tablet_id
-      macro_id.set_macro_transfer_seq(0); // transfer_seq
+      macro_id.set_macro_transfer_epoch(0); // transfer_seq
       macro_id.set_tenant_seq(server_id_); // server_id
 
       for (int64_t i = 0; i < read_times_; ++i) {
@@ -148,7 +148,7 @@ void TestSSFdCache::prepare()
     macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
     macro_id.set_second_id(tablet_id_); // tablet_id
     macro_id.set_third_id(i + 1); // seq_id
-    macro_id.set_macro_transfer_seq(0); // transfer_seq
+    macro_id.set_macro_transfer_epoch(0); // transfer_seq
     macro_id.set_tenant_seq(server_id_); // server_id
     ASSERT_TRUE(macro_id.is_valid());
     ObStorageObjectHandle write_object_handle;

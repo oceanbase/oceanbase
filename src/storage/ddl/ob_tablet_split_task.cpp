@@ -522,17 +522,20 @@ int ObTabletSplitCtx::prepare_index_builder(
         const int64_t snapshot_version = sstable->is_major_sstable() ?
           sstable->get_snapshot_version() : sstable->get_end_scn().get_val_for_tx();
         const ObStorageSchema *clipped_storage_schema = nullptr;
+        int32_t transfer_epoch = -1;
         if (OB_FAIL(get_clipped_storage_schema_on_demand(
             param.source_tablet_id_, *sstable, *storage_schema,
             true/*try_create*/, clipped_storage_schema))) {
           LOG_WARN("get storage schema via sstable failed", K(ret));
         } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, dst_tablet_id, tablet_handle))) {
           LOG_WARN("get tablet failed", K(ret));
+        } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
+          LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
         } else if (OB_FAIL(data_desc.init(
             true/*is_ddl*/, *clipped_storage_schema, param.ls_id_,
             dst_tablet_id, merge_type, snapshot_version, param.data_format_version_,
             tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
-            tablet_handle.get_obj()->get_transfer_seq(),
+            transfer_epoch,
             split_reorganization_scn, sstable->get_end_scn(),
             nullptr/*cg_schema*/,
             0/*table_cg_idx*/,
@@ -1343,12 +1346,15 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
         sstable_->get_snapshot_version() : sstable_->get_end_scn().get_val_for_tx();
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
+    int32_t transfer_epoch = -1;
     if (OB_FAIL(prepare_macro_seq_param(i/*dest_tablet_index*/, macro_seq_param))) {
       LOG_WARN("prepare macro seq par failed", K(ret), K(macro_seq_param));
     } else if (OB_FAIL(context_->index_builder_map_.get_refactored(task_key, sst_idx_builder))) {
       LOG_WARN("get refactored failed", K(ret));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(context_->ls_handle_, dst_tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, clipped_storage_schema,
                                       param_->ls_id_,
                                       dst_tablet_id,
@@ -1356,7 +1362,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
                                       snapshot_version,
                                       param_->data_format_version_,
                                       micro_index_clustered,
-                                      tablet_handle.get_obj()->get_transfer_seq(),
+                                      transfer_epoch,
                                       split_reorganization_scn,
                                       sstable_->get_end_scn(),
                                       nullptr/*cg_schema*/,

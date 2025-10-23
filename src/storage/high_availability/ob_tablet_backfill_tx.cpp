@@ -1608,10 +1608,11 @@ int ObTabletTableFinishBackfillTXTask::prepare_merge_ctx_()
   bool unused_finish_flag = false;
   int64_t local_rebuild_seq = 0;
   ObTabletBackfillTXDag *dag = static_cast<ObTabletBackfillTXDag *>(get_dag());
+
   if (OB_FAIL(tablets_table_mgr_->get_local_rebuild_seq(local_rebuild_seq))) {
     LOG_WARN("failed to get local rebuild seq", K(ret), K(ls_id_), K(tablet_info_), K(table_handle_));
   } else if (OB_FAIL(tablet_merge_ctx_.init(dag, backfill_tx_ctx_->backfill_scn_, local_rebuild_seq,
-      tablet_info_.transfer_seq_, tablet_handle_, table_handle_))) {
+                                    tablet_handle_, table_handle_))) {
     LOG_WARN("failed to init tablet merge ctx", K(ret), K(ls_id_), K(tablet_info_), K(table_handle_));
   } else if (OB_FAIL(tablet_merge_ctx_.build_ctx(unused_finish_flag))) {
     LOG_WARN("failed to build ctx", K(ret), K(ls_id_), K(tablet_info_));
@@ -2132,6 +2133,7 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
   SCN max_decided_scn;
   ObTabletCreateDeleteMdsUserData user_data;
   const bool is_shared_storage = GCTX.is_shared_storage_mode();
+  int32_t private_transfer_epoch = -1;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2150,8 +2152,10 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     ret = OB_EAGAIN;
     LOG_WARN("shared storage max decided scn should not smaller than backfill scn", K(ret),
         K(tablet_info_), K(max_decided_scn), KPC(backfill_tx_ctx_));
-  }  else if (OB_FAIL(tablet_merge_ctx.tablet_handle_.assign(tablet_handle_))) {
+  } else if (OB_FAIL(tablet_merge_ctx.tablet_handle_.assign(tablet_handle_))) {
     LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle_));
+  } else if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
   } else {
     // Shared storage will use START_TRANSFER_OUT commit_scn to dump mds sstable
     // Because src tablet will put all mds data into shared-storage.
@@ -2175,9 +2179,9 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     //TODO(muwei): backfill need using same code with minor merge in 4.4.
     static_param.need_parallel_minor_merge_ = false;
     // double set insurance
-    static_param.tablet_transfer_seq_ = tablet_info_.transfer_seq_;
     static_param.ls_rebuild_seq_ = ls->get_rebuild_seq();
-    tablet_merge_ctx.static_desc_.tablet_transfer_seq_ = tablet_info_.transfer_seq_;
+    static_param.private_transfer_epoch_ = private_transfer_epoch;
+    tablet_merge_ctx.static_desc_.private_transfer_epoch_ = private_transfer_epoch;
 
     if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id_), K(tablet_info_), K(tablet_merge_ctx));
@@ -2297,7 +2301,8 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
   int ret = OB_SUCCESS;
   compaction::ObStaticMergeParam &static_param = tablet_merge_ctx.static_param_;
   bool unused_finish_flag = false;
-
+  ObTablet *tablet = nullptr;
+  int32_t private_transfer_epoch = -1;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet mds table backfill tx task do not init", K(ret));
@@ -2308,6 +2313,11 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
     LOG_WARN("failed to get ls", K(ret), KPC(ha_dag_net_ctx_));
   } else if (OB_FAIL(tablet_merge_ctx.tablet_handle_.assign(tablet_handle_))) {
     LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle_));
+  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tablet", K(ret), K(tablet));
+  } else if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
   } else {
     // init tablet merge dag param
     static_param.dag_param_.ls_id_ = ls_id_;
@@ -2321,8 +2331,9 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
     static_param.merge_scn_ = backfill_tx_ctx_->backfill_scn_;
     static_param.create_snapshot_version_ = 0;
     static_param.need_parallel_minor_merge_ = false;
-    static_param.tablet_transfer_seq_ = tablet_info_.transfer_seq_;
     static_param.rec_scn_ = const_cast<ObITable *>(mds_sstable_array.at(0).get_table())->get_rec_scn();
+    static_param.private_transfer_epoch_ = private_transfer_epoch;
+
     if (OB_FAIL(tablet_merge_ctx.prepare_merge_tables(mds_sstable_array))) {
       LOG_WARN("failed to prepare merge tables", K(ret), K(mds_sstable_array));
     } else if (OB_FAIL(tablet_merge_ctx.prepare_schema())) {
@@ -2506,11 +2517,13 @@ int ObTabletBackfillMergeCtx::init(
     ObTabletBackfillTXDag *dag,
     const SCN &backfill_scn,
     const int64_t ls_rebuild_seq,
-    const int64_t dest_transfer_seq,
     ObTabletHandle &tablet_handle,
     storage::ObTableHandleV2 &backfill_table_handle)
 {
   int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  int32_t private_transfer_epoch = -1;
+
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tablet backfill merge ctx already init", K(ret));
@@ -2519,12 +2532,17 @@ int ObTabletBackfillMergeCtx::init(
     LOG_WARN("init tablet backfill merge ctx get invalid argument", K(ret), KP(dag), K(backfill_scn), K(tablet_handle), K(backfill_table_handle), K(ls_rebuild_seq));
   } else if (OB_FAIL(tablet_handle_.assign(tablet_handle))) {
     LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tablet", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
+    LOG_WARN("failed to get private transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
   } else {
     dag_ = dag;
     backfill_scn_ = backfill_scn;
     backfill_table_handle_ = backfill_table_handle;
     ls_rebuild_seq_ = ls_rebuild_seq;
-    static_param_.tablet_transfer_seq_ = dest_transfer_seq;
+    static_param_.private_transfer_epoch_ = private_transfer_epoch;
     is_inited_ = true;
   }
   return ret;
@@ -2597,9 +2615,10 @@ int ObTabletBackfillMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge
       //snapshot_info is only for calculate multi version start, backfill will not change mulit version start
       get_merge_table_result.snapshot_info_.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       get_merge_table_result.snapshot_info_.snapshot_ = get_tablet()->get_multi_version_start();
-      //src_tablet_transfer_seq, should not be used to write block;
-      get_merge_table_result.transfer_seq_ = get_tablet()->get_transfer_seq();
-      if (OB_FAIL(get_tablet()->get_recycle_version(get_merge_table_result.version_range_.multi_version_start_,
+      //src_tablet_transfer_epoch, should not be used to write block;
+      if (OB_FAIL(get_tablet()->get_private_transfer_epoch(get_merge_table_result.private_transfer_epoch_))) {
+        LOG_WARN("Fail to get transfer epoch", K(ret), "tablet_meta", get_tablet()->get_tablet_meta());
+      } else if (OB_FAIL(get_tablet()->get_recycle_version(get_merge_table_result.version_range_.multi_version_start_,
                                                     get_merge_table_result.version_range_.base_version_))) {
         LOG_WARN("Fail to get table store recycle version", K(ret), K_(get_merge_table_result.version_range), KPC(get_tablet()));
       }

@@ -611,9 +611,12 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             }
           } else if (OB_UNLIKELY(!is_in_memory)) {
             STORAGE_LOG(WARN, "add macro ref cnt in write lock, may poor performance", K(key), K(disk_addr));
+            int32_t transfer_epoch = -1;
             if (CLICK_FAIL(t->deserialize_post_work(allocator))) {
               STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-            } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), t->get_transfer_seq()))) {
+            } else if (CLICK_FAIL(t->get_private_transfer_epoch(transfer_epoch))) {
+              STORAGE_LOG(WARN, "fail to get transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
+            } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), transfer_epoch))) {
                 // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
               STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
             } else {
@@ -624,9 +627,12 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
 
         if (OB_SUCC(ret) && force_alloc_new && is_in_memory) {
           // tmp_guard is kept, so do post work outside write lock is safe
+          int32_t transfer_epoch = -1;
           if (CLICK_FAIL(t->deserialize_post_work(allocator))) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-          } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), t->get_transfer_seq()))) {
+          } else if (CLICK_FAIL(t->get_private_transfer_epoch(transfer_epoch))) {
+            STORAGE_LOG(WARN, "fail to get transfer epoch", K(ret), "tablet_meta", t->get_tablet_meta());
+          } else if (CLICK_FAIL(t3m->inc_external_tablet_cnt(t->get_tablet_id().id(), transfer_epoch))) {
             // !CAUTION: t3m->inc_external_tablet_cnt must be the last step which can modify ret; or, we have to dec_external_tablet_cnt in the failure process
             STORAGE_LOG(WARN, "fail to inc external tablet cnt", K(ret), KP(t), KPC(t));
           } else {

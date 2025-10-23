@@ -577,7 +577,7 @@ ObActiveTabletItem::ObActiveTabletItem(const common::ObTabletID tablet_id, const
 
 bool ObActiveTabletItem::is_valid() const {
   return tablet_id_.is_valid()
-      && get_transfer_seq() != share::OB_INVALID_TRANSFER_SEQ
+      && get_transfer_epoch() != share::OB_INVALID_TRANSFER_SEQ
       && get_tablet_meta_version() != blocksstable::ObStorageObjectOpt::INVALID_TABLET_VERSION;
 }
 

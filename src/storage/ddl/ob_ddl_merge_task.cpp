@@ -797,6 +797,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
   const int64_t cg_idx = table_key.is_column_store_sstable() ? table_key.get_column_group_id() : -1/*negative value means row store*/;
   const SCN end_scn = table_key.get_end_scn();
   const bool micro_index_clustered = tablet.get_tablet_meta().micro_index_clustered_;
+  int32_t transfer_epoch = -1;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0
       || OB_ISNULL(storage_schema) || !reorganization_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -812,11 +813,14 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
       LOG_WARN("unexpected table key is minor sstable", K(ret), K(table_key));
     } else {
       const ObStorageColumnGroupSchema &cur_cg_schema = cg_schemas.at(cg_idx);
-      if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema, ls_id, tablet_id,
+      int32_t transfer_epoch = -1;
+      if (OB_FAIL(tablet.get_private_transfer_epoch(transfer_epoch))) {
+        LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+      } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema, ls_id, tablet_id,
                                  compaction::ObMergeType::MAJOR_MERGE,
                                  snapshot_version, data_format_version,
                                  tablet.get_tablet_meta().micro_index_clustered_,
-                                 tablet.get_transfer_seq(), reorganization_scn,
+                                 transfer_epoch, reorganization_scn,
                                  end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
@@ -826,6 +830,8 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                   K(micro_index_clustered));
       }
     }
+  } else if (OB_FAIL(tablet.get_private_transfer_epoch(transfer_epoch))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else if (OB_FAIL(data_desc.init(true/*is_ddl*/,
                                     *storage_schema,
                                     ls_id,
@@ -834,7 +840,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                     snapshot_version,
                                     data_format_version,
                                     tablet.get_tablet_meta().micro_index_clustered_,
-                                    tablet.get_transfer_seq(),
+                                    transfer_epoch,
                                     reorganization_scn,
                                     end_scn))) {
     // use storage schema to init ObDataStoreDesc

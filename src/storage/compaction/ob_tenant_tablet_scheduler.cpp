@@ -27,6 +27,7 @@
 #include "storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/ob_ss_tablet_merge_helper.h"
+#include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #endif
 #include "storage/compaction/ob_schedule_status_cache.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
@@ -1310,8 +1311,9 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
     } else {
       LOG_WARN("failed to check need merge", K(ret), K(merge_type), K(tablet_id), K(tablet_handle));
     }
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(result.private_transfer_epoch_))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet_handle));
   } else {
-    result.transfer_seq_ = tablet_handle.get_obj()->get_transfer_seq();
     int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
     {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -1341,8 +1343,12 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
       const int64_t parallel_dag_cnt = minor_range_mgr.exe_range_array_.count() + parallel_results.count();
       const int64_t total_sstable_cnt = result.handle_.get_count();
       const int64_t create_time = common::ObTimeUtility::fast_current_time();
-      ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id,
-          tablet_handle.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_);
+      int32_t transfer_epoch = -1;
+      if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
+        LOG_WARN("failed to get transfer epoch", K(ret), K(tablet_handle));
+      }
+
+      ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id, transfer_epoch);
       for (int64_t k = 0; OB_SUCC(ret) && k < parallel_results.count(); ++k) {
         if (OB_UNLIKELY(parallel_results.at(k).handle_.get_count() <= 1)) {
           LOG_WARN("invalid parallel result", K(ret), K(k), K(parallel_results));
@@ -1556,7 +1562,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (schedule_minor_flag
              && GCTX.is_shared_storage_mode()
-             && !ObTabletSSMinorMergeHelper::can_schedule_local_minor(ls_id, tablet)) {
+             && !ObTabletSSMinorMergeHelper::can_schedule_local_minor(ls_handle, tablet)) {
     LOG_INFO("disable local minor in shared storage", K(ret), K(ls_id), K(tablet));
 #endif
   } else if (schedule_minor_flag
@@ -1970,6 +1976,11 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
     if (table_store_meta_info.minor_tables_cnt_ < minor_compact_trigger) {
       ret = OB_NO_NEED_MERGE;
     } else {
+      if (table_store_meta_info.minor_tables_cnt_ > minor_compact_trigger * 3) {
+        MTL(ObSSDiagnoseInfoMgr*)->add_diagnose_tablet(ls_id, tablet_id, ObSSDiagnoseInfo::DIA_TYPE_SSTABLE_MINOR);
+      } else {
+        MTL(ObSSDiagnoseInfoMgr*)->delete_diagnose_tablet(ls_id, tablet_id, ObSSDiagnoseInfo::DIA_TYPE_SSTABLE_MINOR);
+      }
       ret = ObPartitionMergePolicy::get_ss_minor_merge_tables(ls, tablet, result);
     }
   } else {
@@ -1980,12 +1991,14 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
     LOG_TRACE("tablet no need merge", K(ret), K(merge_type), K(ls_id), K(tablet_id), K(tablet_handle));
   } else if (OB_FAIL(ret)) {
     LOG_WARN("failed to check need merge", K(ret), K(merge_type), K(ls_id), K(tablet_id), K(tablet_handle));
+  } else if (OB_FAIL(tablet.get_private_transfer_epoch(result.private_transfer_epoch_))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
   } else {
-    result.transfer_seq_ = tablet.get_transfer_seq();
     const int64_t parallel_dag_cnt = 1;
     const int64_t total_sstable_cnt = result.handle_.get_count();
     const int64_t create_time = common::ObTimeUtility::fast_current_time();
-    ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id, tablet.get_transfer_seq());
+
+    ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id, result.private_transfer_epoch_);
     dag_param.exec_mode_ = compaction::ObExecMode::EXEC_MODE_OUTPUT;
     if (OB_FAIL(fill_minor_compaction_param(tablet_handle, result, total_sstable_cnt, parallel_dag_cnt, create_time, dag_param))) {
       LOG_WARN("failed to fill compaction param for ranking dags later", K(ret), K(result));

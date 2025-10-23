@@ -568,7 +568,7 @@ TEST_F(TestSSTableMacroInfo, test_huge_block_ids)
   ObLinkedMacroInfoWriteParam write_param;
   write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
   write_param.tablet_id_ = tablet_id;
-  write_param.tablet_transfer_seq_ = 0;
+  write_param.tablet_transfer_epoch_ = 0;
   write_param.start_macro_seq_ = macro_start_seq;
   ObSharedObjectsWriteCtx linked_block_write_ctx;
   ObSArray<ObSharedObjectsWriteCtx> total_ctxs;
@@ -648,7 +648,7 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   ObLinkedMacroInfoWriteParam write_param;
   write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
   write_param.tablet_id_ = tablet_id;
-  write_param.tablet_transfer_seq_ = 0;
+  write_param.tablet_transfer_epoch_ = 0;
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,
                                   write_param,
@@ -732,7 +732,7 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ObLinkedMacroInfoWriteParam write_param;
   write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
   write_param.tablet_id_ = tablet_id;
-  write_param.tablet_transfer_seq_ = 0;
+  write_param.tablet_transfer_epoch_ = 0;
   write_param.start_macro_seq_ = macro_start_seq;
   ASSERT_EQ(OB_SUCCESS, sstable.persist_linked_block_if_need(
                                   allocator_,

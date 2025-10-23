@@ -27,6 +27,7 @@
 #include "unittest/storage/sslog/test_mock_palf_kv.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
+#include "test_gc_util.h"
 
 namespace oceanbase
 {
@@ -144,7 +145,7 @@ public:
 
     if (OB_FAIL(MTL(ObSSMetaService *)->get_max_committed_meta_scn(SYS_LS, snapshot))) {
       LOG_WARN("get max_committed_meta_scn from ss_meta_srv failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
+    } else if (OB_FAIL(get_ls_id_list(snapshot, ls_id_list))) {
       LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
     } else if (OB_FAIL(build_gc_task_with_gc_start_and_end_scn_(snapshot,
                                                                 is_for_sslog_table,
@@ -222,7 +223,7 @@ public:
           LOG_WARN("ObSSMetaService should not be null", KR(ret));
       } else if (OB_FAIL(ss_meta_srv->get_max_committed_meta_scn(SYS_LS, snapshot))) {
           LOG_WARN("get snapshot failed", KR(ret));
-      } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
+      } else if (OB_FAIL(get_ls_id_list(snapshot, ls_id_list))) {
           LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
       }
     }
@@ -241,19 +242,6 @@ using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
 
 
-class TestRunCtx
-{
-public:
-  uint64_t tenant_id_ = 1;
-  int64_t tenant_epoch_ = 0;
-  ObLSID ls_id_;
-  int64_t ls_epoch_;
-  ObTabletID tablet_id_;
-  int64_t time_sec_ = 0;
-  ObLS *ls_;
-};
-
-TestRunCtx RunCtx;
 
 class ObCheckDirEmptOp : public ObBaseDirEntryOperator
 {
@@ -277,189 +265,6 @@ int ObCheckDirEmptOp::func(const dirent *entry)
   }
   file_cnt_++;
   return OB_ERR_EXIST_OBJECT;
-}
-
-static void insert_sslog(
-    const sslog::ObSSLogMetaType sslog_type,
-    const int64_t op_id,
-    const ObAtomicMetaInfo::State state,
-    const ObSSTableGCInfo &gc_info)
-{
-  int64_t affected_rows = 0;
-  ObSSMetaReadParam param;
-  share::SCN transfer_scn;
-  transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
-
-  ObAtomicExtraInfo extra_info;
-  extra_info.meta_info_.op_id_ = op_id;
-  extra_info.meta_info_.epoch_id_ = 1;
-  extra_info.meta_info_.state_ = state;
-  extra_info.meta_info_.not_exist_ = false;
-  int64_t gc_info_size = gc_info.get_serialize_size();
-  char *gc_info_buf = (char *)mtl_malloc(gc_info_size, "gc_unittest");
-  int64_t pos = 0;
-
-  ASSERT_EQ(OB_SUCCESS, gc_info.serialize(gc_info_buf, gc_info_size, pos));
-  ASSERT_EQ(OB_SUCCESS, extra_info.gc_info_.assign(ObString(pos, gc_info_buf)));
-
-  ObAtomicMetaKey meta_key;
-  const common::ObString meta_value = "bizhu_test";
-
-
-  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_meta_key(param, meta_key));
-  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::insert_sslog_row(param.meta_type_,
-                                                       meta_key.get_string_key(),
-                                                       meta_value,
-                                                       extra_info,
-                                                       affected_rows));
-}
-
-static void gen_block_id(
-    const int64_t op_id,
-    const ObStorageObjectType type,
-    const int64_t seq,
-    MacroBlockId &block_id,
-    const int64_t cg_id = 0)
-{
-  blocksstable::ObStorageObjectOpt opt;
-  if (ObStorageObjectType::SHARED_TABLET_SUB_META == type) {
-    opt.set_ss_tablet_sub_meta_opt(RunCtx.ls_id_.id(), RunCtx.tablet_id_.id(), op_id,
-        seq /* start_seq */, RunCtx.tablet_id_.is_ls_inner_tablet(), 0);
-
-  } else if (ObStorageObjectType::SHARED_MAJOR_DATA_MACRO == type) {
-    opt.set_ss_share_object_opt(type, RunCtx.tablet_id_.is_ls_inner_tablet(), RunCtx.ls_id_.id(),
-        RunCtx.tablet_id_.id(), seq, cg_id /* column_group_id */, 0);
-  } else {
-    opt.set_ss_share_object_opt(type, RunCtx.tablet_id_.is_ls_inner_tablet(), RunCtx.ls_id_.id(),
-        RunCtx.tablet_id_.id(), (op_id << 32) | (seq & 0xFFFFFFFF), cg_id /* column_group_id */, 0);
-
-  }
-  ASSERT_EQ(OB_SUCCESS, ObObjectManager::ss_get_object_id(opt, block_id));
-  ASSERT_TRUE(block_id.is_valid());
-}
-
-static void write_block(
-    const MacroBlockId &block_id)
-{
-
-  ObStorageObjectWriteInfo write_info;
-
-  const int64_t WRITE_IO_SIZE = DIO_READ_ALIGN_SIZE * 256; // 1MB
-  char write_buf[WRITE_IO_SIZE];
-  write_buf[0] = '\0';
-  const int64_t mid_offset = WRITE_IO_SIZE / 2;
-  memset(write_buf, 'a', mid_offset);
-  memset(write_buf + mid_offset, 'b', WRITE_IO_SIZE - mid_offset);
-  write_info.io_desc_.set_wait_event(1);
-  write_info.buffer_ = write_buf;
-  write_info.offset_ = 0;
-  write_info.size_ = WRITE_IO_SIZE;
-  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  write_info.mtl_tenant_id_ = MTL_ID();
-
-  ObStorageObjectHandle write_object_handle;
-  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(block_id));
-  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info, write_object_handle));
-  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-  write_object_handle.reset();
-}
-
-template<typename T>
-static void update_sslog(
-    const sslog::ObSSLogMetaType sslog_type,
-    const int64_t op_id,
-    const ObAtomicMetaInfo::State state,
-    const T *gc_info = NULL,
-    const ObSSMetaUpdateMetaInfo *meta_info = NULL)
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  int64_t pos = 0;
-  ObSSMetaReadParam param;
-  share::SCN transfer_scn;
-  transfer_scn.set_min();
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
-
-  ObAtomicMetaKey meta_key;
-  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_meta_key(param, meta_key));
-
-  // read
-  share::SCN row_scn_ret;
-  ObString value;
-  ObSSLogIteratorGuard iter(true, true);
-  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, false, sslog_type, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
-  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
-                                                    share::SCN::invalid_scn(),
-                                                    iter));
-  sslog::ObSSLogMetaType type;
-  ObString key;
-  ObString info;
-
-  ret = iter.get_next_row(row_scn_ret, type, key, value, info);
-  if (OB_FAIL(ret)) {
-    SERVER_LOG(WARN, "failed to get_next_row", K(key), K(value), K(sslog_type), K(op_id), K(state));
-  }
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(type, param.meta_type_);
-  ASSERT_EQ(key, meta_key.get_string_key());
-  ASSERT_EQ(true, row_scn_ret > SCN::min_scn());
-
-
-  ObAtomicExtraInfo check_extra_info;
-  pos = 0;
-  ASSERT_EQ(OB_SUCCESS, check_extra_info.deserialize(info.ptr(), info.length(), pos));
-  SERVER_LOG(INFO, "read for update sslog row", K(key), K(value), K(check_extra_info), K(sslog_type), K(op_id), K(state));
-
-  // update
-  ObAtomicExtraInfo extra_info;
-  extra_info.assign(check_extra_info);
-  extra_info.meta_info_.op_id_ = op_id;
-  extra_info.meta_info_.state_ = state;
-
-  if (NULL != gc_info)
-  {
-    const int64_t gc_info_size = gc_info->get_serialize_size();
-    char *gc_info_buf = (char *)mtl_malloc(gc_info_size, "gc_unittest");
-    pos = 0;
-    ASSERT_EQ(OB_SUCCESS, gc_info->serialize(gc_info_buf, gc_info_size, pos));
-    ASSERT_EQ(OB_SUCCESS, extra_info.gc_info_.assign(ObString(pos, gc_info_buf)));
-  }
-
-  if (NULL != meta_info) {
-    extra_info.meta_info_.not_exist_ = false;
-    pos = 0;
-    ObSSTabletSSLogValue ret_meta_value;
-    ObMetaDiskAddr addr;
-    addr.type_ = 2;
-    addr.second_id_ = 0;
-    addr.size_ = ObLogConstants::MAX_LOG_FILE_SIZE;
-    ASSERT_TRUE(addr.is_valid());
-
-    common::ObArenaAllocator allocator;
-    ASSERT_EQ(OB_SUCCESS, ret_meta_value.deserialize(allocator, addr, value.ptr(), value.length(), pos));
-    SERVER_LOG(INFO, "read for update sslog row (update_meta_info)", K(key), K(value), K(check_extra_info), K(ret_meta_value.get_meta_info()), K(sslog_type), K(op_id), K(state));
-
-    ObSSTabletSSLogValue meta_value;
-    meta_value.set_meta_info(*meta_info);
-    meta_value.tablet_ = ret_meta_value.tablet_;
-    meta_value.data_version_ = DATA_CURRENT_VERSION;
-    meta_value.macro_info_ = ret_meta_value.tablet_->macro_info_addr_.get_ptr();
-    const int64_t meta_value_size = meta_value.get_serialize_size();
-    char *meta_value_buf = (char*)mtl_malloc(meta_value_size, "gc_unittest");
-    pos = 0;
-    ASSERT_EQ(OB_SUCCESS, meta_value.serialize(meta_value_buf, meta_value_size, pos));
-    value.assign_ptr(meta_value_buf, meta_value_size);
-  }
-
-  // write
-  ASSERT_EQ(OB_SUCCESS, ObAtomicFile::update_sslog_row(param.meta_type_,
-                                                       meta_key.get_string_key(),
-                                                       value,
-                                                       info,
-                                                       extra_info,
-                                                       false,
-                                                       affected_rows));
 }
 
 class ObSharedStorageTest : public ObSimpleClusterTestBase
@@ -1434,7 +1239,7 @@ int main(int argc, char **argv)
   GCONF.system_memory.set_value("5G");
 
   LOG_INFO("main>>>");
-  oceanbase::unittest::RunCtx.time_sec_ = time_sec;
+  oceanbase::RunCtx.time_sec_ = time_sec;
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

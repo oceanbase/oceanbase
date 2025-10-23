@@ -172,12 +172,14 @@ int ObDagParamFunc::fill_param(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(merge_snapshot_version),
       K(exec_mode));
+  }
+  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_transfer_epoch_))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
   } else {
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
     param.merge_type_ = merge_type;
     param.merge_version_ = merge_snapshot_version;
-    param.schedule_transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     param.exec_mode_ = exec_mode;
     param.reorganization_scn_ = tablet.get_reorganization_scn();
   }
@@ -201,13 +203,15 @@ int ObDagParamFunc::fill_param(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(merge_snapshot_version),
       K(exec_mode));
+  }
+  if (FAILEDx(tablet.get_private_transfer_epoch(param.schedule_transfer_epoch_))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), K(tablet));
   } else {
     param.ls_id_ = ls_id;
     param.tablet_id_ = tablet.get_tablet_meta().tablet_id_;
     param.merge_type_ = merge_type;
     param.merge_version_ = merge_snapshot_version;
     param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
-    param.schedule_transfer_seq_ = tablet.get_tablet_meta().transfer_info_.transfer_seq_;
     param.exec_mode_ = exec_mode;
     param.reorganization_scn_ = tablet.get_reorganization_scn();
     if (OB_UNLIKELY(nullptr != dag_net_id)) {

@@ -216,6 +216,11 @@ public:
       const ObMetaDiskAddr &addr,
       const bool load_co_sstable,
       ObStorageMetaHandle &handle);
+  // load sstable from cache with @addr, cache miss is allowed, loaded object lifetime guaranteed by @handle
+  static int load_sstable_from_cache(
+      const ObMetaDiskAddr &addr,
+      const bool load_co_sstable,
+      ObStorageMetaHandle &handle);
   // load @orig_sstable on demand, return @loaded_sstable.
   // Lifetime guaranteed by loaded_sstable_handle if is loaded.
   static int load_sstable_on_demand(

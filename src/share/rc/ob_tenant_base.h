@@ -124,6 +124,7 @@ class ObTenantMdsService;
   class ObSSMetaService;
   class ObSSGarbageCollectorService;
   class ObStorageCachePolicyService;
+  class ObSSDiagnoseInfoMgr;
 #else
 #endif
   class ObGlobalIteratorPool;
@@ -331,6 +332,7 @@ namespace detector
 #define SSLogGTSService transaction::ObSSLogGTSService*,
 #define SSLogUIDService transaction::ObSSLogUIDService*,
 #define TabletSplitTaskCache share::ObTabletSplitTaskCache*,
+#define SSDiagnoseInfoMgr storage::ObSSDiagnoseInfoMgr*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
@@ -353,6 +355,7 @@ namespace detector
 #define SSLogGTSService
 #define SSLogUIDService
 #define TabletSplitTaskCache
+#define SSDiagnoseInfoMgr
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -501,6 +504,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       SSLogGTSService                               \
       SSLogUIDService                               \
       TabletSplitTaskCache                          \
+      SSDiagnoseInfoMgr                             \
       share::ObStorageIOUsageRepoter*,              \
       share::ObResourceLimitCalculator*,            \
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \

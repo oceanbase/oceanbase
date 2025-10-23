@@ -57,7 +57,7 @@ public:
     const share::schema::ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
-    const int64_t tablet_transfer_seq,
+    const int32_t private_transfer_epoch,
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const share::SCN &end_scn,
@@ -73,7 +73,7 @@ public:
   TO_STRING_KV(
       K_(ls_id),
       K_(tablet_id),
-      K_(tablet_transfer_seq),
+      K_(private_transfer_epoch),
       "merge_type", merge_type_to_str(merge_type_),
       K_(snapshot_version),
       K_(end_scn),
@@ -110,7 +110,7 @@ public:
   ObCompressorType compressor_type_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  int64_t tablet_transfer_seq_;
+  int32_t private_transfer_epoch_;
   int64_t macro_block_size_;
   int64_t macro_store_size_; //macro_block_size_ * reserved_percent
   int64_t micro_block_size_limit_;
@@ -298,7 +298,7 @@ public:
   STATIC_DESC_FUNC(compaction::ObMergeType, merge_type);
   STATIC_DESC_FUNC(const share::ObLSID&, ls_id);
   STATIC_DESC_FUNC(const ObTabletID&, tablet_id);
-  STATIC_DESC_FUNC(int64_t, tablet_transfer_seq);
+  STATIC_DESC_FUNC(int64_t, private_transfer_epoch);
   STATIC_DESC_FUNC(int64_t, progressive_merge_round);
   STATIC_DESC_FUNC(int64_t, schema_version);
   STATIC_DESC_FUNC(int64_t, snapshot_version);
@@ -401,7 +401,7 @@ struct ObWholeDataStoreDesc
     const int64_t snapshot_version,
     const int64_t cluster_version,
     const bool micro_index_clustered,
-    const int64_t tablet_transfer_seq,
+    const int32_t tablet_transfer_epoch,
     const share::SCN &reorganization_scn,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,

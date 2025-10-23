@@ -21,7 +21,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
 struct ObTabletTransferInfo final
 {
   OB_UNIS_VERSION(1);
@@ -35,6 +34,7 @@ public:
       const share::ObLSID &ls_id,
       const share::SCN &transfer_start_scn,
       const int64_t transfer_seq,
+      const int32_t private_transfer_epoch,
       const share::SCN &src_reorganization_scn);
   void reset();
   bool is_valid() const;
