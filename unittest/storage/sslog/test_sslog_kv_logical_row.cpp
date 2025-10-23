@@ -214,42 +214,32 @@ TEST_F(TestSSLogKVLogicalRow, basic_read)
 
   PALF_KV.print_all_kv("BASIC_READ_ROW");
 
-  char META_KEY_RES[ObSSLogKVRowPhysicalBuf::MAX_KEY_BUF_LEN];
-  char META_VAL_RES[ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN];
-  char EXTRA_INFO_RES[ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN];
-  ObString META_KEY_STR_RES;
-  ObString META_VAL_STR_RES;
-  ObString EXTRA_INFO_STR_RES;
-  ObSSLogMetaType META_TYPE_RES;
-  META_KEY_STR_RES.assign_ptr(META_KEY_RES, ObSSLogKVRowPhysicalBuf::MAX_KEY_BUF_LEN);
-  META_VAL_STR_RES.assign_ptr(META_VAL_RES, ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN);
-  EXTRA_INFO_STR_RES.assign_ptr(EXTRA_INFO_RES, ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN);
-
   const bool IS_PREFIX_READ = false;
-  ObSSLogTableLogicalRow logical_row;
   ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
-  std::string meta_key_str("ID_META");
+  std::string meta_key_str("ID_META_3");
   ObString META_KEY;
   META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
 
-  ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
+  ObSSLogKVResultSet result_set;
+  transaction::TransModulePageAllocator allocator;
+  const ObSSLogKVRowUserKey *res_user_key;
+  const ObSSLogKVResultRow::VersionVal *res_version_val;
 
-  share::SCN row_scn_res;
-  ASSERT_EQ(logical_row.read_row(share::SCN::max_scn()), OB_SUCCESS);
-  logical_row.get_row_scn(row_scn_res);
-  logical_row.get_meta_type(META_TYPE_RES);
-  logical_row.get_meta_key(META_KEY_STR_RES);
-  logical_row.get_meta_value(META_VAL_STR_RES);
-  logical_row.get_extra_info(EXTRA_INFO_STR_RES);
+  ASSERT_EQ(OB_SUCCESS, result_set.init(&PALF_KV, META_TYPE, META_KEY, share::SCN::max_scn(),
+                                        share::SCN::max_scn(), &allocator, IS_PREFIX_READ,
+                                        false /*include_oldest_version*/));
+  ASSERT_EQ(OB_SUCCESS, result_set.get_next(res_user_key, res_version_val));
+  share::SCN row_scn_res = res_version_val->val_version_;
 
-  // ASSERT_EQ(share::SCN::invalid_scn(), row_scn_res); TODO : fix with row_version
-  ASSERT_EQ(ObSSLogMetaType::SSLOG_LS_META, META_TYPE_RES);
-  ASSERT_TRUE(META_KEY_STR_RES.prefix_match(ObString("ID_META_")));
-  ASSERT_TRUE(META_VAL_STR_RES.prefix_match(ObString("ID_META_TEST_VAL_")));
-  ASSERT_TRUE(EXTRA_INFO_STR_RES.prefix_match(ObString("ID_META_EXTRA_INFO_")));
+  ASSERT_EQ(row_scn_res.is_valid_and_not_min(), true);
+  ASSERT_EQ(ObSSLogMetaType::SSLOG_LS_META, res_user_key->meta_type_);
+  ASSERT_TRUE(res_user_key->meta_key_.prefix_match(ObString("ID_META_")));
+  ASSERT_TRUE(res_version_val->user_val_.meta_val_.prefix_match(ObString("ID_META_TEST_VAL_")));
+  ASSERT_TRUE(res_version_val->user_val_.extra_info_.prefix_match(ObString("ID_META_EXTRA_INFO_")));
 
-  TRANS_LOG(INFO, "basic read result", K(META_VAL_STR_RES), K(EXTRA_INFO_STR_RES),
-            K(META_KEY_STR_RES), K(row_scn_res), K(META_TYPE_RES));
+  TRANS_LOG(INFO, "basic read result", KPC(res_user_key),KPC(res_version_val), K(row_scn_res));
+
+  ASSERT_EQ(OB_ITER_END, result_set.get_next(res_user_key, res_version_val));
 }
 
 TEST_F(TestSSLogKVLogicalRow, basic_multi_version_read)
@@ -261,33 +251,59 @@ TEST_F(TestSSLogKVLogicalRow, basic_multi_version_read)
   INIT_AND_INSERT_ROW(5, OB_SUCCESS);
 
   PALF_KV.print_all_kv("BASIC_READ_ROW");
-
-  char META_VAL_RES[ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN];
-  char EXTRA_INFO_RES[ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN];
-  ObString META_VAL_STR_RES;
-  ObString EXTRA_INFO_STR_RES;
-  META_VAL_STR_RES.assign_ptr(META_VAL_RES, ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN);
-  EXTRA_INFO_STR_RES.assign_ptr(EXTRA_INFO_RES, ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN);
-
+  //
+  // char META_VAL_RES[ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN];
+  // char EXTRA_INFO_RES[ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN];
+  // ObString META_VAL_STR_RES;
+  // ObString EXTRA_INFO_STR_RES;
+  // META_VAL_STR_RES.assign_ptr(META_VAL_RES, ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN);
+  // EXTRA_INFO_STR_RES.assign_ptr(EXTRA_INFO_RES, ObSSLogKVRowPhysicalBuf::MAX_VAL_BUF_LEN);
+  //
+  // const bool IS_PREFIX_READ = false;
+  // ObSSLogTableLogicalRow logical_row;
+  // ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
+  // std::string meta_key_str("ID_META");
+  // ObString META_KEY;
+  // META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
+  //
+  // ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
+  //
+  // ObArray<ObSSLogTableLogicalRow *> logical_rows;
+  // ObSSLogMultiVersionReadParam param(share::SCN::max_scn(), share::SCN::min_scn(), false);
+  //
+  // ASSERT_EQ(logical_row.read_multi_version_row(param, logical_rows), OB_SUCCESS);
+  //
+  // for (int64_t i = 0; i < logical_rows.count(); i++) {
+  //   TRANS_LOG(INFO, "basic multi_version read result", K(*logical_rows[i]));
+  //   ASSERT_TRUE(
+  //       logical_rows[i]->physical_key_.user_key_.meta_key_.prefix_match(ObString("ID_META")));
+  // }
   const bool IS_PREFIX_READ = false;
-  ObSSLogTableLogicalRow logical_row;
   ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
   std::string meta_key_str("ID_META");
   ObString META_KEY;
   META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
 
-  ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
+  ObSSLogKVResultSet result_set;
+  transaction::TransModulePageAllocator allocator;
+  const ObSSLogKVRowUserKey *res_user_key;
+  const ObSSLogKVResultRow::VersionVal *res_version_val;
 
-  ObArray<ObSSLogTableLogicalRow *> logical_rows;
-  ObSSLogMultiVersionReadParam param(share::SCN::max_scn(), share::SCN::min_scn(), false);
+  ASSERT_EQ(OB_SUCCESS, result_set.init(&PALF_KV, META_TYPE, META_KEY, share::SCN::min_scn(),
+                                        share::SCN::max_scn(), &allocator, IS_PREFIX_READ,
+                                        false /*include_oldest_version*/));
 
-  ASSERT_EQ(logical_row.read_multi_version_row(param, logical_rows), OB_SUCCESS);
+  int ret = OB_SUCCESS;
 
-  for (int64_t i = 0; i < logical_rows.count(); i++) {
-    TRANS_LOG(INFO, "basic multi_version read result", K(*logical_rows[i]));
-    ASSERT_TRUE(
-        logical_rows[i]->physical_key_.user_key_.meta_key_.prefix_match(ObString("ID_META")));
+  while (ret == OB_SUCCESS) {
+    ret = result_set.get_next(res_user_key, res_version_val);
+    if (ret == OB_SUCCESS) {
+      TRANS_LOG(INFO, "basic multi_version read result", KPC(res_user_key), KPC(res_version_val));
+      ASSERT_TRUE(res_user_key->meta_key_.prefix_match(ObString("ID_META")));
+    }
   }
+
+  ASSERT_EQ(ret, OB_ITER_END);
 }
 
 TEST_F(TestSSLogKVLogicalRow, gc_old_version_kv)
@@ -370,7 +386,6 @@ TEST_F(TestSSLogKVLogicalRow, read_ulinked_version)
   ASSERT_EQ(logical_row_1.update_row(update_param, META_VAL_1, EXTRA_INFO_1), OB_ENTRY_NOT_EXIST);
   PALF_KV.watch_key_errsim_ = false;
 
-
   const bool IS_PREFIX_READ = false;
   ObSSLogMetaType META_TYPE = ObSSLogMetaType::SSLOG_LS_META;
   std::string meta_key_str("ID_META");
@@ -378,19 +393,27 @@ TEST_F(TestSSLogKVLogicalRow, read_ulinked_version)
   META_KEY.assign_ptr(meta_key_str.c_str(), meta_key_str.size());
 
   {
-    ObSSLogTableLogicalRow logical_row;
-    ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
-    share::SCN row_scn_res;
-    ASSERT_EQ(logical_row.read_row(share::SCN::max_scn()), OB_EAGAIN);
-  }
+    ObSSLogKVResultSet result_set;
+    transaction::TransModulePageAllocator allocator;
+    const ObSSLogKVRowUserKey *res_user_key;
+    const ObSSLogKVResultRow::VersionVal *res_version_val;
 
-  {
-    ObSSLogTableLogicalRow logical_row;
-    ObArray<ObSSLogTableLogicalRow *> logical_rows;
-    ObSSLogMultiVersionReadParam param(share::SCN::max_scn(), share::SCN::min_scn(), false);
+    ASSERT_EQ(OB_SUCCESS, result_set.init(&PALF_KV, META_TYPE, META_KEY_1, share::SCN::max_scn(),
+                                          share::SCN::max_scn(), &allocator, IS_PREFIX_READ,
+                                          false /*include_oldest_version*/));
+    ASSERT_EQ(OB_SUCCESS, result_set.get_next(res_user_key, res_version_val));
+    share::SCN row_scn_res = res_version_val->val_version_;
 
-    ASSERT_EQ(logical_row.init(&PALF_KV, META_TYPE, META_KEY, IS_PREFIX_READ), OB_SUCCESS);
-    ASSERT_EQ(logical_row.read_multi_version_row(param, logical_rows), OB_EAGAIN);
+    ASSERT_EQ(row_scn_res.is_valid_and_not_min(), true);
+    ASSERT_EQ(ObSSLogMetaType::SSLOG_LS_META, res_user_key->meta_type_);
+    ASSERT_TRUE(res_user_key->meta_key_.prefix_match(ObString("ID_META_")));
+    ASSERT_FALSE(res_version_val->user_val_.meta_val_.prefix_match(META_VAL_1));
+    ASSERT_FALSE(res_version_val->user_val_.extra_info_.prefix_match(EXTRA_INFO_1));
+
+    TRANS_LOG(INFO, "basic read result", K(META_KEY), KPC(res_user_key), KPC(res_version_val),
+              K(row_scn_res));
+
+    ASSERT_EQ(OB_ITER_END, result_set.get_next(res_user_key, res_version_val));
   }
 }
 
