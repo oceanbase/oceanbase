@@ -1779,6 +1779,10 @@ DEF_TIME(_transfer_task_retry_interval, OB_TENANT_PARAMETER, "1m", "[0s,)",
         "Range: [0s, +∞). Default: 1m",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_skip_checking_ls_migration_required_size, OB_TENANT_PARAMETER, "False",
+        "Skip checking ls migration required size",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // end of transfer
 
 DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "0s", "[0s,]",
