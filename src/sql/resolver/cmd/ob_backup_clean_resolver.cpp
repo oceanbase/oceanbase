@@ -200,10 +200,6 @@ int ObBackupCleanResolver::resolve(const ParseNode &parse_tree)
                   K(ret), "cluster_version", GET_MIN_CLUSTER_VERSION());
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "manual backup clean");
       }
-    } else if (share::ObNewBackupCleanType::TYPE::DELETE_BACKUP_ALL == clean_type) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("manual backup clean clear path is not supported now", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "manual backup clean clear path");
     }
 
     // get clean parameters and tenant ids if needed
