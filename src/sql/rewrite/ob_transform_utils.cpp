@@ -6084,6 +6084,29 @@ int ObTransformUtils::generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
   return ret;
 }
 
+int ObTransformUtils::generate_unique_key_from_group_exprs(ObTransformerCtx *ctx,
+                                                           ObSelectStmt *select_stmt,
+                                                           ObIArray<ObRawExpr *> &unique_keys)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx) || OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params are invalid", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < select_stmt->get_group_expr_size(); i++) {
+      ObRawExpr *group_expr = select_stmt->get_group_exprs().at(i);
+      if (OB_ISNULL(group_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("group expr is null", K(ret));
+      } else if (FALSE_IT(group_expr->set_explicited_reference())) {
+      } else if (OB_FAIL(unique_keys.push_back(group_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
 int StmtUniqueKeyProvider::generate_unique_key(ObTransformerCtx *ctx,
                                                ObDMLStmt *stmt,
                                                ObSqlBitSet<> &ignore_tables,
@@ -9670,53 +9693,57 @@ int StmtUniqueKeyProvider::recursive_set_stmt_unique(ObSelectStmt *select_stmt,
   } else {
     sel_item_count = select_stmt->get_select_item_size();
     col_item_count = select_stmt->get_column_size();
-    ObIArray<TableItem *> &table_items = select_stmt->get_table_items();
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-      TableItem *cur_table = table_items.at(i);
-      int32_t bit_id = OB_INVALID_INDEX;
-      if (OB_ISNULL(cur_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table item is null", K(ret), K(cur_table));
-      } else if (OB_UNLIKELY(OB_INVALID_INDEX ==
-                (bit_id = select_stmt->get_table_bit_index(cur_table->table_id_)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid table bit index", K(ret), K(cur_table->table_id_), K(bit_id));
-      } else if (!origin_output_rel_ids.has_member(bit_id)) {
-      // semi join 中的表, 不会输出
-      } else if (cur_table->is_generated_table() || cur_table->is_temp_table()) {
-        in_temp_table_ = in_temp_table || cur_table->is_temp_table();
-        ObSelectStmt *view_stmt = NULL;
-        ObSEArray<ObRawExpr*, 4> stmt_unique_keys;
-        ObSEArray<ObRawExpr*, 4> column_exprs;
-        if (OB_ISNULL(view_stmt = cur_table->ref_query_)) {
+    if (select_stmt->has_group_by() && OB_FAIL(ObTransformUtils::generate_unique_key_from_group_exprs(ctx, select_stmt, added_unique_keys))) {
+      LOG_WARN("failed to generate unique key from group exprs", K(ret));
+    } else if (added_unique_keys.empty()) {
+      ObIArray<TableItem *> &table_items = select_stmt->get_table_items();
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
+        TableItem *cur_table = table_items.at(i);
+        int32_t bit_id = OB_INVALID_INDEX;
+        if (OB_ISNULL(cur_table)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("view_stmt = stmt is null", K(ret), K(view_stmt));
-        } else if (OB_FAIL(SMART_CALL(recursive_set_stmt_unique(view_stmt,
-                                                                ctx,
-                                                                false,
-                                                                &stmt_unique_keys)))) {
-          LOG_WARN("recursive set stmt unique failed", K(ret));
-        } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx,
-                                                                    *cur_table,
-                                                                    select_stmt,
-                                                                    column_exprs))) {
-          //为view生成column exprs
-          LOG_WARN("failed to create columns for view", K(ret));
-        } else if (OB_FAIL(ObTransformUtils::convert_select_expr_to_column_expr(stmt_unique_keys,
-                                                                                *view_stmt,
-                                                                                *select_stmt,
-                                                                                cur_table->table_id_,
+          LOG_WARN("table item is null", K(ret), K(cur_table));
+        } else if (OB_UNLIKELY(OB_INVALID_INDEX ==
+                  (bit_id = select_stmt->get_table_bit_index(cur_table->table_id_)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid table bit index", K(ret), K(cur_table->table_id_), K(bit_id));
+        } else if (!origin_output_rel_ids.has_member(bit_id)) {
+        // semi join 中的表, 不会输出
+        } else if (cur_table->is_generated_table() || cur_table->is_temp_table()) {
+          in_temp_table_ = in_temp_table || cur_table->is_temp_table();
+          ObSelectStmt *view_stmt = NULL;
+          ObSEArray<ObRawExpr*, 4> stmt_unique_keys;
+          ObSEArray<ObRawExpr*, 4> column_exprs;
+          if (OB_ISNULL(view_stmt = cur_table->ref_query_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("view_stmt = stmt is null", K(ret), K(view_stmt));
+          } else if (OB_FAIL(SMART_CALL(recursive_set_stmt_unique(view_stmt,
+                                                                  ctx,
+                                                                  false,
+                                                                  &stmt_unique_keys)))) {
+            LOG_WARN("recursive set stmt unique failed", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx,
+                                                                      *cur_table,
+                                                                      select_stmt,
+                                                                      column_exprs))) {
+            //为view生成column exprs
+            LOG_WARN("failed to create columns for view", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::convert_select_expr_to_column_expr(stmt_unique_keys,
+                                                                                  *view_stmt,
+                                                                                  *select_stmt,
+                                                                                  cur_table->table_id_,
+                                                                                  added_unique_keys))) {
+            //找到stmt unique keys对应的本层column expr
+            LOG_WARN("failed to get stmt unique keys columns expr", K(ret));
+          }
+        } else if (!cur_table->is_basic_table()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect table item type", K(*cur_table), K(ret));
+        } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx, select_stmt,
+                                                                                cur_table,
                                                                                 added_unique_keys))) {
-          //找到stmt unique keys对应的本层column expr
-          LOG_WARN("failed to get stmt unique keys columns expr", K(ret));
+          LOG_WARN("failed to generate unique key", K(ret));
         }
-      } else if (!cur_table->is_basic_table()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect table item type", K(*cur_table), K(ret));
-      } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx, select_stmt,
-                                                                               cur_table,
-                                                                               added_unique_keys))) {
-        LOG_WARN("failed to generate unique key", K(ret));
       }
     }
   }
