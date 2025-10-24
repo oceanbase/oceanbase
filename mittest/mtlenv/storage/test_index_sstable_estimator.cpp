@@ -114,7 +114,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_whole_range)
   ObDatumRange range;
   range.set_whole_range();
 
-  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_.get_obj()->get_rowkey_read_info(), context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
@@ -127,7 +127,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_range)
 {
   ObDatumRange range;
   generate_range(100, -1, range);
-  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_.get_obj()->get_rowkey_read_info(), context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
@@ -140,7 +140,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_left_range)
 {
   ObDatumRange range;
   generate_range(-1, 100, range);
-  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_.get_obj()->get_rowkey_read_info(), context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
@@ -153,7 +153,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_right_range)
 {
   ObDatumRange range;
   generate_range(row_cnt_ - 100, -1, range);
-  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_.get_obj()->get_rowkey_read_info(), context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
@@ -166,7 +166,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_middle_range)
 {
   ObDatumRange range;
   generate_range(100, row_cnt_ - 100, range);
-  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_.get_obj()->get_rowkey_read_info(), context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);
@@ -179,7 +179,7 @@ TEST_F(TestIndexSSTableEstimator, estimate_major_sstable_noexist_range)
 {
   ObDatumRange range;
   generate_range(row_cnt_, row_cnt_, range);
-  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_, context_.query_flag_, range);
+  ObIndexSSTableEstimateContext esti_ctx(sstable_, tablet_handle_.get_obj()->get_rowkey_read_info(), context_.query_flag_, range);
 
   ObPartitionEst part_est;
   ObIndexBlockScanEstimator estimator(esti_ctx);

@@ -113,6 +113,8 @@ struct ObIndexBlockRowHeader
   OB_INLINE int64_t get_master_key_id() const { return master_key_id_; }
   OB_INLINE const char *get_encrypt_key() const { return encrypt_key_; }
   OB_INLINE uint64_t get_row_count() const { return row_count_; }
+  OB_INLINE uint64_t get_macro_block_count() const { return macro_block_count_; }
+  OB_INLINE uint64_t get_micro_block_count() const { return micro_block_count_; }
   OB_INLINE uint64_t get_schema_version() const { return schema_version_; }
   OB_INLINE const MacroBlockId &get_macro_id() const { return macro_id_; }
   OB_INLINE void fill_deserialize_meta(ObMicroBlockDesMeta &des_meta) const
@@ -276,6 +278,16 @@ public:
   OB_INLINE uint64_t get_row_count_delta() const
   {
     return OB_NOT_NULL(minor_meta_info_) ? minor_meta_info_->row_count_delta_ : 0;
+  }
+  OB_INLINE uint64_t get_macro_block_count() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_macro_block_count();
+  }
+  OB_INLINE uint64_t get_micro_block_count() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->get_micro_block_count();
   }
   OB_INLINE int64_t get_max_merged_trans_version() const
   {

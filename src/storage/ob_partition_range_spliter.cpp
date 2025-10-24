@@ -953,10 +953,10 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
       total_size = 0;
       macro_block_cnt = 0;
       estimate_micro_block_cnt = 0;
-      ObSSTableSecMetaIterator *macro_meta_iter = nullptr;
-      ObDataMacroBlockMeta macro_meta;
       const ObStorageDatumUtils &datum_utils = index_read_info.get_datum_utils();
       int cmp_ret = 0;
+
+
       if (OB_FAIL(datum_range.from_range(store_range, temp_allocator))) {
         STORAGE_LOG(WARN, "Failed to transfer store range", K(ret), K(store_range));
       } else if (OB_FAIL(sstable->get_last_rowkey(temp_allocator, sstable_endkey))) {
@@ -967,32 +967,25 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
       } else if (cmp_ret < 0) {
         // sstable not in range
         STORAGE_LOG(DEBUG, "Skip empty range", K(ret), K(datum_range), KPC(sstable));
-      } else if (OB_FAIL(sstable->scan_secondary_meta(
-          allocator_,
-          datum_range,
-          index_read_info,
-          ObMacroBlockMetaType::DATA_BLOCK_META,
-          macro_meta_iter))) {
-        STORAGE_LOG(DEBUG, "Skip empty range", K(ret), K(datum_range), KPC(sstable));
       } else {
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(macro_meta_iter->get_next(macro_meta))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
-              STORAGE_LOG(WARN, "Fail to get next macro block meta", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-              break;
-            }
-          } else {
-            total_size += macro_meta.val_.occupy_size_;
-            macro_block_cnt++;
-            estimate_micro_block_cnt += macro_meta.val_.micro_block_count_;
-          }
-        }
-        if (OB_NOT_NULL(macro_meta_iter)) {
-          macro_meta_iter->~ObSSTableSecMetaIterator();
+        ObQueryFlag query_flag(ObQueryFlag::Forward,
+            false, /*is daily merge scan*/
+            false, /*is read multiple macro block*/
+            false, /*sys task scan, read one macro block in single io*/
+            false /*is full row scan?*/,
+            false,
+            false);
+        const ObIndexSSTableEstimateContext context(*sstable, index_read_info, query_flag, datum_range);
+        ObIndexBlockScanEstimator scan_estimator(context);
+        if (OB_FAIL(scan_estimator.estimate_block_count(macro_block_cnt, estimate_micro_block_cnt))) {
+          STORAGE_LOG(WARN, "Fail to estimate cost of scan.", K(ret));
+        } else {
+          total_size = macro_block_cnt * OB_DEFAULT_MACRO_BLOCK_SIZE;
+          STORAGE_LOG(DEBUG, "estimate_scan_cost", K(ret), K(datum_range), K(total_size),
+              K(macro_block_cnt), K(estimate_micro_block_cnt));
         }
       }
+
     }
   }
   return ret;
@@ -1205,6 +1198,7 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(
   int ret = OB_SUCCESS;
   ObSEArray<ObITable *, DEFAULT_STORE_CNT_IN_STORAGE> tables;
   total_size = 0;
+  int64_t estimate_size = 0, range_size = 0;
 
   if (OB_UNLIKELY(0 == table_iter.count() || range_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1212,16 +1206,43 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(
                 K(range_array));
   } else if (OB_FAIL(get_split_tables(table_iter, tables))) {
     STORAGE_LOG(WARN, "Failed to get all sstables", K(ret), K(table_iter));
+  } else if (OB_FAIL(try_estimate_range_size(range_array, tables, estimate_size))) {
+    STORAGE_LOG(WARN, "fail to estimate range size");
   } else if (tables.empty()) {
     // only small tables, can not support arbitary range split
-    total_size = 0;
+    total_size = estimate_size;
   } else {
     RangeSplitInfoArray range_info_array;
     if (OB_FAIL(get_range_split_infos(tables, index_read_info, range_array, range_info_array, total_size))) {
       STORAGE_LOG(WARN, "Failed to get range split info array", K(ret));
+    } else {
+      total_size = estimate_size + range_size;
     }
   }
 
+  return ret;
+}
+
+int ObPartitionMultiRangeSpliter::try_estimate_range_size(
+    const common::ObIArray<common::ObStoreRange> &range_array,
+    ObIArray<ObITable *> &tables,
+    int64_t &total_size)
+{
+  int ret = OB_SUCCESS;
+  total_size = 0;
+
+  if (OB_UNLIKELY(range_array.count() >= RANGE_COUNT_THRESOLD)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
+      const ObITable * table = tables.at(i);
+      if (table->is_sstable()
+           && static_cast<const ObSSTable *>(table)->get_data_macro_block_count() * FAST_ESTIMATE_THRESOLD / 100 <= range_array.count()) {
+        total_size += static_cast<const ObSSTable *>(table)->get_data_macro_block_count() * DEFAULT_MACRO_BLOCK_SIZE;
+        if (OB_FAIL(tables.remove(i))) {
+          STORAGE_LOG(WARN, "fail to remove table", K(ret), K(i));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -1499,17 +1520,35 @@ int ObPartitionMultiRangeSpliter::get_range_split_infos(ObIArray<ObITable *> &ta
     STORAGE_LOG(WARN, "Invalid argument to get range split info", K(ret), K(tables), K(range_array));
   } else {
     ObRangeSplitInfo range_info;
+    const int64_t sample_cnt = MAX(1, range_array.count() / RANGE_COUNT_THRESOLD);
     for (int64_t i = 0; OB_SUCC(ret) && i < range_array.count(); i++) {
-      if (FALSE_IT(range_spliter_.reset())) {
-      } else if (OB_FAIL(range_spliter_.get_range_split_info(
-          tables, index_read_info, range_array.at(i), range_info))) {
-        STORAGE_LOG(WARN, "Failed to get range split info", K(ret), K(i), K(range_array.at(i)));
+      if (range_array.at(i).is_single_rowkey()) {
+        range_info.reset();
+        range_info.store_range_ = &range_array.at(i);
+        range_info.tables_ = &tables;
+        range_info.index_read_info_ = &index_read_info;
+        range_info.total_size_ = DEFAULT_MICRO_BLOCK_SIZE;
+        range_info.max_macro_block_count_ = 1;
+        range_info.max_estimate_micro_block_cnt_ = 1;
+      } else {
+        const bool need_sample = i < RANGE_COUNT_THRESOLD || ((i - RANGE_COUNT_THRESOLD) % sample_cnt == 0);
+        if (need_sample) {
+          range_info.reset();
+          range_spliter_.reset();
+          if (OB_FAIL(range_spliter_.get_range_split_info(
+                  tables, index_read_info, range_array.at(i), range_info))) {
+            STORAGE_LOG(WARN, "Failed to get range split info", K(ret), K(i), K(range_array.at(i)));
+          }
+        } else {
+          range_info.store_range_ = &range_array.at(i);
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(range_info_array.push_back(range_info))) {
         STORAGE_LOG(WARN, "Failed to push back range info", K(ret), K(range_info));
       } else {
         STORAGE_LOG(DEBUG, "get single range split info", K(range_info));
         total_size += range_info.total_size_;
-        range_info.reset();
       }
     }
     STORAGE_LOG(DEBUG, "get total range split info", K(total_size), K(tables), K(range_info_array));

@@ -69,11 +69,9 @@ ObIndexBlockScanEstimator::~ObIndexBlockScanEstimator()
   index_block_row_scanner_.reset();
 }
 
-int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
+int ObIndexBlockScanEstimator::cal_total_estimate_result(ObEstimatedResult &result)
 {
   int ret = OB_SUCCESS;
-  ObEstimatedResult result;
-
   common::ObSEArray<int32_t, 1> agg_projector;
   common::ObSEArray<share::schema::ObColumnSchemaV2, 1> agg_column_schema;
   if (OB_UNLIKELY(!context_.is_valid())) {
@@ -82,7 +80,7 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
   } else if (OB_FAIL(index_block_row_scanner_.init(
               agg_projector,
               agg_column_schema,
-              context_.tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),
+              context_.index_read_info_.get_datum_utils(),
               allocator_,
               context_.query_flag_,
               context_.sstable_.get_macro_offset()))) {
@@ -107,7 +105,17 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  return ret;
+}
+
+int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
+{
+  int ret = OB_SUCCESS;
+  ObEstimatedResult result;
+
+  if (OB_FAIL(cal_total_estimate_result(result))) {
+    STORAGE_LOG(WARN, "Failed to get total estimate result", K(ret), K(root_index_block_));
+  } else {
     part_est.physical_row_count_ = result.total_row_count_ - result.excluded_row_count_;
     if (context_.sstable_.is_multi_version_minor_sstable()) {
       part_est.logical_row_count_ = result.total_row_count_delta_ - result.excluded_row_count_delta_;
@@ -116,6 +124,21 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
     }
   }
   STORAGE_LOG(DEBUG, "estimate result", K(ret), K(result), K(part_est));
+  return ret;
+}
+
+int ObIndexBlockScanEstimator::estimate_block_count(int64_t &macro_block_cnt,
+                                                    int64_t &micro_block_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObEstimatedResult result(true /* for block */);
+  if (OB_FAIL(cal_total_estimate_result(result))) {
+    STORAGE_LOG(WARN, "Failed to get total estimate result", K(ret), K(root_index_block_));
+  } else {
+    macro_block_cnt = MAX(result.macro_block_cnt_, 1);
+    micro_block_cnt = MAX(result.micro_block_cnt_, 1);
+    STORAGE_LOG(TRACE, "estimate block count result", K(ret), K(result), K(macro_block_cnt), K(micro_block_cnt));
+  }
   return ret;
 }
 
@@ -148,6 +171,8 @@ int ObIndexBlockScanEstimator::cal_total_row_count(ObEstimatedResult &result)
       } else {
         result.total_row_count_ += tmp_micro_index_info.get_row_count();
         result.total_row_count_delta_ += tmp_micro_index_info.get_row_count_delta();
+        result.macro_block_cnt_ += tmp_micro_index_info.get_macro_block_count();
+        result.micro_block_cnt_ += tmp_micro_index_info.get_micro_block_count();
       }
     }
     if (OB_ITER_END == ret) {
@@ -212,6 +237,8 @@ int ObIndexBlockScanEstimator::estimate_excluded_border_row_count(bool is_left, 
               border_micro_index_info = tmp_micro_index_info;
             } else {
               result.excluded_row_count_ += tmp_micro_index_info.get_row_count();
+              result.macro_block_cnt_ -= tmp_micro_index_info.get_macro_block_count();
+              result.micro_block_cnt_ -= tmp_micro_index_info.get_micro_block_count();
               if (context_.sstable_.is_multi_version_minor_sstable()) {
                 result.excluded_row_count_delta_ += tmp_micro_index_info.get_row_count_delta();
               }
@@ -252,20 +279,24 @@ int ObIndexBlockScanEstimator::goto_next_level(
   if (OB_FAIL(prefetch_index_block_data(micro_index_info, micro_handle))) {
     STORAGE_LOG(WARN, "Failed to prefetch index block", K(ret), K(micro_index_info));
   } else if (micro_index_info.is_data_block()) {
-    ObPartitionEst tmp_part_est;
-    int64_t logical_row_count = 0, physical_row_count = 0;
-    if (OB_FAIL(estimate_data_block_row_count(
-        range,
-        micro_handle,
-        context_.sstable_.is_multi_version_minor_sstable(),
-        tmp_part_est))) {
-      STORAGE_LOG(WARN, "Failed to estimate data block row count", K(ret), K(micro_handle));
-    } else {
-      result.excluded_row_count_ += tmp_part_est.physical_row_count_;
-      if (context_.sstable_.is_multi_version_minor_sstable()) {
-        result.excluded_row_count_delta_ += tmp_part_est.logical_row_count_;
-      }
+    if (result.only_block_) {
       ret = OB_ITER_END;
+    } else {
+      ObPartitionEst tmp_part_est;
+      int64_t logical_row_count = 0, physical_row_count = 0;
+      if (OB_FAIL(estimate_data_block_row_count(
+              range,
+              micro_handle,
+              context_.sstable_.is_multi_version_minor_sstable(),
+              tmp_part_est))) {
+        STORAGE_LOG(WARN, "Failed to estimate data block row count", K(ret), K(micro_handle));
+      } else {
+        result.excluded_row_count_ += tmp_part_est.physical_row_count_;
+        if (context_.sstable_.is_multi_version_minor_sstable()) {
+          result.excluded_row_count_delta_ += tmp_part_est.logical_row_count_;
+        }
+        ret = OB_ITER_END;
+      }
     }
   } else {
     index_block_data_.reset();
@@ -342,7 +373,7 @@ int ObIndexBlockScanEstimator::estimate_data_block_row_count(
   if (OB_FAIL(micro_handle.get_data_block_data(macro_reader_, block_data))) {
     STORAGE_LOG(WARN, "Failed to get block data", K(ret), K(micro_handle));
   } else if (OB_FAIL(block_scanner.estimate_row_count(
-		      context_.tablet_handle_.get_obj()->get_rowkey_read_info(),
+              context_.index_read_info_,
               block_data,
               range,
               consider_multi_version,

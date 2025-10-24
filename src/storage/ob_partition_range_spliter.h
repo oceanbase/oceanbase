@@ -283,6 +283,8 @@ public:
       common::ObIAllocator &allocator,
       common::ObArrayArray<common::ObStoreRange> &multi_range_split_array);
 private:
+  static const int64_t RANGE_COUNT_THRESOLD = 30;
+  static const int64_t FAST_ESTIMATE_THRESOLD = 50;
   static const int64_t MIN_SPLIT_TASK_SIZE = 16 << 10;
   static const int64_t MIN_SPLIT_TARGET_SSTABLE_SIZE = MIN_SPLIT_TASK_SIZE * 3;
   static const int64_t SPLIT_TASK_SIZE_HIGH_WATER_MARK_FACTOR = 125;
@@ -292,6 +294,8 @@ private:
   typedef common::ObSEArray<common::ObStoreRange, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitArray;
   typedef common::ObSEArray<ObRangeSplitInfo, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitInfoArray;
 private:
+  int try_estimate_range_size(const common::ObIArray<common::ObStoreRange> &range_array,
+      ObIArray<ObITable *> &tables, int64_t &total_size);
   int get_split_tables(ObTableStoreIterator &table_iter, common::ObIArray<ObITable *> &tables);
   int split_multi_ranges(RangeSplitInfoArray &range_info_array,
                          const int64_t expected_task_count,

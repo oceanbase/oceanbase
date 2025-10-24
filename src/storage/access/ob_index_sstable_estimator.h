@@ -39,40 +39,46 @@ struct ObPartitionEst
 struct ObIndexSSTableEstimateContext
 {
 public:
+
   ObIndexSSTableEstimateContext(
       blocksstable::ObSSTable &sstable,
-      const ObTabletHandle &tablet_handle,
+      const ObITableReadInfo &index_read_info,
       const common::ObQueryFlag &query_flag,
       const blocksstable::ObDatumRange &datum_range)
       : sstable_(sstable),
-      tablet_handle_(tablet_handle),
-      query_flag_(query_flag),
-      range_(datum_range) {}
+        index_read_info_(index_read_info),
+        query_flag_(query_flag),
+        range_(datum_range) {}
+
   ~ObIndexSSTableEstimateContext() {}
   OB_INLINE bool is_valid() const
   {
-    return  tablet_handle_.is_valid() && range_.is_valid();
+    return range_.is_valid();
   }
 
-  TO_STRING_KV(K_(tablet_handle), K_(query_flag), K_(range));
+  TO_STRING_KV(K_(query_flag), K(range_));
   blocksstable::ObSSTable &sstable_;
-  const ObTabletHandle &tablet_handle_;
+  const ObITableReadInfo &index_read_info_;
   const common::ObQueryFlag &query_flag_;
   const blocksstable::ObDatumRange &range_;
+
 };
 
 struct ObEstimatedResult
 {
-  ObEstimatedResult() : total_row_count_(0), total_row_count_delta_(0),
-    excluded_row_count_(0), excluded_row_count_delta_(0)
-  {
-  }
+  ObEstimatedResult(const bool only_block = false)
+  : total_row_count_(0), total_row_count_delta_(0), excluded_row_count_(0),
+    excluded_row_count_delta_(0), macro_block_cnt_(0), micro_block_cnt_(0), only_block_(only_block)
+  {}
   int64_t total_row_count_;
   int64_t total_row_count_delta_;
   int64_t excluded_row_count_;
   int64_t excluded_row_count_delta_;
-  TO_STRING_KV(K_(total_row_count), K_(total_row_count_delta),
-    K_(excluded_row_count), K_(excluded_row_count_delta));
+  uint64_t macro_block_cnt_;
+  uint64_t micro_block_cnt_;
+  bool only_block_;
+  TO_STRING_KV(K_(total_row_count), K_(total_row_count_delta), K_(excluded_row_count),
+      K_(excluded_row_count_delta), K_(macro_block_cnt), K_(micro_block_cnt), K_(only_block));
 };
 
 class ObIndexBlockScanEstimator
@@ -81,7 +87,9 @@ public:
   ObIndexBlockScanEstimator(const ObIndexSSTableEstimateContext &context);
   ~ObIndexBlockScanEstimator();
   int estimate_row_count(ObPartitionEst &part_est);
+  int estimate_block_count(int64_t &macro_block_cnt, int64_t &micro_block_cnt);
 private:
+  int cal_total_estimate_result(ObEstimatedResult &result);
   int cal_total_row_count(ObEstimatedResult &result);
   int estimate_excluded_border_row_count(bool is_left, ObEstimatedResult &result);
   int goto_next_level(

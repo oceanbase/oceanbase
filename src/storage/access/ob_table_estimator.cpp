@@ -187,7 +187,7 @@ int ObTableEstimator::estimate_sstable_scan_row_count(
     LOG_WARN("invalid get arguments.", K(ret), K(base_input.table_id_), K(key_range));
   } else {
     const ObIndexSSTableEstimateContext context(
-        *sstable, base_input.tablet_handle_, base_input.query_flag_, key_range);
+        *sstable, base_input.tablet_handle_.get_obj()->get_rowkey_read_info(), base_input.query_flag_, key_range);
     ObIndexBlockScanEstimator scan_estimator(context);
     if (OB_FAIL(scan_estimator.estimate_row_count(part_est))) {
       LOG_WARN("Fail to estimate cost of scan.", K(ret), K(base_input.table_id_));
