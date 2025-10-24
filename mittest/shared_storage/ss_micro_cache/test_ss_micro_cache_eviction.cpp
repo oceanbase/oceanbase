@@ -224,7 +224,7 @@ TEST_F(TestSSMicroCacheEviction, test_delete_ghost_micro)
 
 /*
   step1: write cache_file_size * 50% data to T1, then read this part of data again and transfer it to T2.
-  step2: write cache_file_size until usage of cache_data_block reach limit.
+  step2: write cache_file_size until the usage of data_block reaches limit.
   step3: adjust arc_limit to 0, and the background thread clears all micro_meta which is persisted.
   step4: check the number of micro_cnt, total_micro_cnt <= bg_mem_blk.max_micro_cnt + fg_mem_blk.max_micro_cnt,
          and all used phy_blk is added into reusable_set.
