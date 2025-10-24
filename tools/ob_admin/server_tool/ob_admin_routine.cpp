@@ -1062,8 +1062,8 @@ DEF_COMMAND(SERVER, dump_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_
 
     if (OB_SUCC(ret)) {
       blocksstable::MacroBlockId macro_id;
-      macro_id.set_ss_version(version);
-      macro_id.set_ss_id_mode(mode);
+      macro_id.set_version_v2();
+      macro_id.set_id_mode(mode);
       macro_id.set_storage_object_type(obj_type);
       macro_id.set_incarnation_id(incar_id);
       macro_id.set_column_group_id(cg_id);
@@ -1214,8 +1214,8 @@ DEF_COMMAND(SERVER, get_ss_micro_block_meta, 1, "tenant_id:micro_key_mode:micro_
       } else {
         ObSSMicroBlockId micro_id;
         MacroBlockId &macro_id = micro_id.macro_id_;
-        macro_id.set_ss_version(ver);
-        macro_id.set_ss_id_mode(mode);
+        macro_id.set_version_v2();
+        macro_id.set_id_mode(mode);
         macro_id.set_storage_object_type(obj_type);
         macro_id.set_incarnation_id(incar_id);
         macro_id.set_column_group_id(cg_id);
@@ -1325,8 +1325,8 @@ DEF_COMMAND(SERVER, del_ss_local_tmpfile, 1, "tenant_id:tmpfile_id")
     COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()));
   } else {
     MacroBlockId macro_id;
-    macro_id.set_ss_version(MacroBlockId::MACRO_BLOCK_ID_VERSION_V2);
-    macro_id.set_ss_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_version_v2();
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
     macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
     macro_id.set_second_id(tmpfile_id);
     arg.macro_id_ = macro_id;
@@ -1496,8 +1496,8 @@ DEF_COMMAND(SERVER, download_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:in
 
     if (OB_SUCC(ret)) {
       blocksstable::MacroBlockId macro_id;
-      macro_id.set_ss_version(version);
-      macro_id.set_ss_id_mode(mode);
+      macro_id.set_version_v2();
+      macro_id.set_id_mode(mode);
       macro_id.set_storage_object_type(obj_type);
       macro_id.set_incarnation_id(incar_id);
       macro_id.set_column_group_id(cg_id);
@@ -1826,8 +1826,8 @@ DEF_COMMAND(SERVER, del_ss_macro_cache, 1, "tenant_id:ver:mode:obj_type:incar_id
       }
       if (OB_FAIL(ret)) {
       } else {
-        macro_id.set_ss_version(version);
-        macro_id.set_ss_id_mode(mode);
+        macro_id.set_version_v2();
+        macro_id.set_id_mode(mode);
         macro_id.set_storage_object_type(obj_type);
         macro_id.set_incarnation_id(incar_id);
         macro_id.set_column_group_id(cg_id);

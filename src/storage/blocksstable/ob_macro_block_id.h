@@ -111,8 +111,6 @@ public:
   void set_write_seq(const uint64_t write_seq) { write_seq_ = write_seq; }
 
   // Share mode
-  void set_ss_version(const uint64_t ss_version) { ss_version_ = ss_version; }
-  void set_ss_id_mode(const uint64_t ss_mode_id) { ss_id_mode_ = ss_mode_id; }
   ObStorageObjectType storage_object_type() const { return static_cast<ObStorageObjectType>(storage_object_type_); }
   const ObStorageObjectTypeBase &get_type_instance() const;
   void set_storage_object_type(const uint64_t storage_object_type) { storage_object_type_ = storage_object_type; }
@@ -199,13 +197,13 @@ private:
 private:
   union {
     int64_t first_id_;
-    // for share nothing mode
+    // common used
     struct {
       uint64_t write_seq_ : SF_BIT_WRITE_SEQ;
       uint64_t id_mode_   : SF_BIT_ID_MODE;
       uint64_t version_   : SF_BIT_VERSION;
     };
-    // for share storage mode
+    // only used for ss mode, but hide 'ss_id_mode_ & ss_version_'
     struct {
       uint64_t storage_object_type_ : SF_BIT_STORAGE_OBJECT_TYPE;
       uint64_t incarnation_id_  : SF_BIT_INCARNATION_ID;
