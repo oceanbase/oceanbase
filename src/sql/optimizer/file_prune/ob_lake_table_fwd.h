@@ -58,7 +58,15 @@ public:
   int64_t file_size_ = 0;
   int64_t modification_time_ = 0;
   iceberg::DataFileFormat file_format_;
-  TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time));
+  int64_t dv_content_offset_ = 0;
+  int64_t dv_content_size_in_bytes_ = 0;
+  TO_STRING_KV(K_(type),
+               K_(file_url),
+               K_(file_size),
+               K_(modification_time),
+               K_(file_format),
+               K_(dv_content_offset),
+               K_(dv_content_size_in_bytes));
 };
 
 enum class LakeFileType{

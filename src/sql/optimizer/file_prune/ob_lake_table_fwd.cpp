@@ -89,11 +89,20 @@ int ObLakeDeleteFile::assign(const ObLakeDeleteFile &other)
     file_size_ = other.file_size_;
     modification_time_ = other.modification_time_;
     file_format_ = other.file_format_;
+    dv_content_offset_ = other.dv_content_offset_;
+    dv_content_size_in_bytes_ = other.dv_content_size_in_bytes_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObLakeDeleteFile, type_, file_url_, file_size_, modification_time_, file_format_);
+OB_SERIALIZE_MEMBER(ObLakeDeleteFile,
+                    type_,
+                    file_url_,
+                    file_size_,
+                    modification_time_,
+                    file_format_,
+                    dv_content_offset_,
+                    dv_content_size_in_bytes_);
 
 int ObIOptLakeTableFile::assign(const ObIOptLakeTableFile &other)
 {
