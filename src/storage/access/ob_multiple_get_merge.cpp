@@ -523,7 +523,7 @@ int ObMultipleGetMerge::project_final_row(const ObDatumRow &fuse_row, ObDatumRow
   row.count_ = read_info->get_request_count();
   const ObIArray<int32_t> *projector = (cols_index.rowkey_mode_ || !access_ctx_->use_fuse_row_cache_) ? nullptr : &cols_index.array_;
   STORAGE_LOG(DEBUG, "try to project row", K(ret), K(get_row_range_idx_), K(cols_index), K(access_ctx_->use_fuse_row_cache_),
-                                          KPC(projector), K(rowkeys_->at(get_row_range_idx_)), K(fuse_row), K(row));
+                                          KPC(projector), K(rowkeys_->at(get_row_range_idx_)), K(fuse_row), K(row.count_));
   if (OB_FAIL(project_row(fuse_row, projector, 0/*range idx delta*/, row))) {
     STORAGE_LOG(WARN, "fail to project row", K(ret), K(fuse_row), K(cols_index));
   } else {
