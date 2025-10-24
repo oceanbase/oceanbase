@@ -497,6 +497,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
     LOG_WARN("fail get item", K(key), K(ret));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("item is NULL", K(ret));
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObTenantInfoLoader is NULL", K(ret));
@@ -606,9 +607,9 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
         item->prefetching_ = false;
       }
     }
+    item->alloc_mutex_.unlock();
   }
   if (nullptr != item) {
-    item->alloc_mutex_.unlock();
     sequence_cache_.revert(item);
   }
   if (OB_SUCC(ret) && wrap_around && wrap_around_clean_cache) {
