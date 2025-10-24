@@ -80,6 +80,17 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
       types[i].set_calc_accuracy(elem_type_.get_accuracy());
       types[i].set_calc_meta(elem_type_.get_meta_type());
     }
+    const ObCollectionConstructRawExpr *pl_expr
+          = static_cast<const ObCollectionConstructRawExpr*>(type_ctx.get_raw_expr());
+    CK(OB_NOT_NULL(pl_expr));
+    if(pl_expr->is_associative_array_with_param_assign_op_) {
+      if(0 == i % 2) {
+        pl::ObPLDataType index_type = pl_expr->get_index_type();
+        CK(OB_NOT_NULL(index_type.get_data_type()));
+        OX(types[i].set_calc_accuracy(index_type.get_data_type()->get_accuracy()));
+        OX(types[i].set_calc_meta(index_type.get_data_type()->get_meta_type()));
+      }
+    }
   }
   OX (type.set_type(ObExtendType));
   OX (type.set_extend_type(type_));
@@ -106,6 +117,11 @@ int ObExprCollectionConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
       info->not_null_ = pl_expr.is_not_null();
       info->capacity_ = pl_expr.get_capacity();
       info->udt_id_ = pl_expr.get_udt_id();
+      info->is_associative_array_with_param_assign_op_ = pl_expr.is_associative_array_with_param_assign_op_;
+      if (info->is_associative_array_with_param_assign_op_) {
+        CK(OB_NOT_NULL(pl_expr.get_index_type().get_data_type()));
+        OX(info->index_type_ = *pl_expr.get_index_type().get_data_type());
+      }
       if (pl_expr.get_elem_type().is_obj_type()) {
         CK(OB_NOT_NULL(pl_expr.get_elem_type().get_data_type()));
         OX(info->elem_type_ = *pl_expr.get_elem_type().get_data_type());
@@ -177,7 +193,13 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
   // check types
   for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
     const ObExpr *e = expr.args_[i];
-    if (ObNullType != e->datum_meta_.type_
+    if (0 == i % 2 && info->is_associative_array_with_param_assign_op_) {
+      if (ObNullType != e->datum_meta_.type_
+        && e->datum_meta_.type_ != info->index_type_.get_obj_type()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("check type failed", K(ret), K(*e), K(info->elem_type_));
+      }
+    }else if (ObNullType != e->datum_meta_.type_
         && e->datum_meta_.type_ != info->elem_type_.get_obj_type()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("check type failed", K(ret), K(*e), K(info->elem_type_));
@@ -285,14 +307,17 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
     OX (coll->set_not_null(info->not_null_));
 
     // recursive construction is not needed
-    OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
-                                         ns,
-                                         *coll,
-                                         expr.arg_cnt_));
-    if (OB_SUCC(ret) && coll->is_associative_array() && expr.arg_cnt_ > 0) {
-      OX (coll->set_first(1));
-      OX (coll->set_last(coll->get_count()));
+    if(!info->is_associative_array_with_param_assign_op_) {
+      OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
+                                           ns,
+                                           *coll,
+                                           expr.arg_cnt_));
+      if (OB_SUCC(ret) && coll->is_associative_array() && expr.arg_cnt_ > 0) {
+        OX (coll->set_first(1));
+        OX (coll->set_last(coll->get_count()));
+      }
     }
+
     if (OB_SUCC(ret)) {
       if (info->elem_type_.get_meta_type().is_ext()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
@@ -362,22 +387,76 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
           }
         }
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
-          const ObDatum &d = expr.args_[i]->locate_expr_datum(ctx);
-          ObObj v;
-          CK (OB_NOT_NULL(coll->get_data()));
-          OZ(d.to_obj(v, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_));
-          if (OB_SUCC(ret) && !v.is_null()) {
-            TYPE_CHECK(v, info->elem_type_.get_meta_type().get_type());
+        if(info->is_associative_array_with_param_assign_op_) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i += 2) {
+            const ObDatum &d = expr.args_[i]->locate_expr_datum(ctx);
+            ObObj key;
+            int64_t index = OB_INVALID_INDEX;
+            int64_t search_end = OB_INVALID_INDEX;
+            const ObDatum &d_for_data = expr.args_[i + 1]->locate_expr_datum(ctx);
+            ObObj v;
+            OZ(d.to_obj(key, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_));
+            if (OB_SUCC(ret) && !key.is_null()) {
+              TYPE_CHECK(key, info->index_type_.get_obj_type());
+            }
+            OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                      info->index_type_.get_obj_type(),
+                                                      info->index_type_.get_accuracy(),
+                                                      alloc,
+                                                      &key));
+
+            pl::ObPLAssocArray* assoc_array = static_cast<pl::ObPLAssocArray*>(coll);
+            CK(OB_NOT_NULL(assoc_array));
+            if(i != 0) {
+              OZ(assoc_array->search_key(key, index, search_end, assoc_array->get_count()));
+            } else {
+              OX(search_end = 0);
+            }
+            OZ((ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
+                                                              session->get_pl_context()->get_current_ctx(),
+                                                              *alloc,
+                                                              *assoc_array,
+                                                              1)));
+            OZ(assoc_array->insert_sort(key, assoc_array->get_count() - 1, search_end, assoc_array->get_count() - 1));
+            OZ(assoc_array->update_first_last(OB_INVALID_INDEX == search_end ? 0 : search_end));
+
+            CK (OB_NOT_NULL(assoc_array->get_key()));
+            OZ (deep_copy_obj(*coll->get_allocator(),
+                              key,
+                              static_cast<ObObj*>(assoc_array->get_key())[i / 2]));
+
+            OZ(d_for_data.to_obj(v, expr.args_[i + 1]->obj_meta_, expr.args_[i + 1]->obj_datum_map_));
+            if (OB_SUCC(ret) && !v.is_null()) {
+              TYPE_CHECK(v, info->elem_type_.get_meta_type().get_type());
+            }
+            OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                      info->elem_type_.get_obj_type(),
+                                                      info->elem_type_.get_accuracy(),
+                                                      alloc,
+                                                      &v));
+            CK (OB_NOT_NULL(assoc_array->get_data()));
+            OZ (deep_copy_obj(*coll->get_allocator(),
+                              v,
+                              static_cast<ObObj*>(assoc_array->get_data())[i / 2]));
           }
-          OZ (ObSPIService::spi_pad_char_or_varchar(session,
-                                                    info->elem_type_.get_obj_type(),
-                                                    info->elem_type_.get_accuracy(),
-                                                    alloc,
-                                                    &v));
-          OZ (deep_copy_obj(*coll->get_allocator(),
-                            v,
-                            static_cast<ObObj*>(coll->get_data())[i]));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+            const ObDatum &d = expr.args_[i]->locate_expr_datum(ctx);
+            ObObj v;
+            CK (OB_NOT_NULL(coll->get_data()));
+            OZ(d.to_obj(v, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_));
+            if (OB_SUCC(ret) && !v.is_null()) {
+              TYPE_CHECK(v, info->elem_type_.get_meta_type().get_type());
+            }
+            OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                      info->elem_type_.get_obj_type(),
+                                                      info->elem_type_.get_accuracy(),
+                                                      alloc,
+                                                      &v));
+            OZ (deep_copy_obj(*coll->get_allocator(),
+                              v,
+                              static_cast<ObObj*>(coll->get_data())[i]));
+          }
         }
       }
     }

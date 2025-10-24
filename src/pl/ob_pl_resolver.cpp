@@ -12474,6 +12474,17 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   OX (coll_expr->set_capacity(user_type->is_varray_type() ? static_cast<const ObVArrayType*>(user_type)->get_capacity() : OB_INVALID_SIZE));
   OX (coll_expr->set_udt_id(user_type->get_user_type_id()));
   OX (coll_expr->set_elem_type(coll_type->get_element_type()));
+  if (OB_SUCC(ret)) {
+    if (udf_info.is_associative_array_with_param_assign_op_) {
+      const ObAssocArrayType* assoc_type = NULL;
+      ObPLDataType index_type;
+      CK(user_type->is_associative_array_type());
+      OX(assoc_type = static_cast<const ObAssocArrayType *>(coll_type));
+      CK(OB_NOT_NULL(assoc_type));
+      OX(index_type = assoc_type->get_index_type());
+      OX(coll_expr->set_index_type(index_type));
+    }
+  }
   OZ (coll_expr->set_access_names(q_name.access_idents_));
   OX (coll_expr->set_func_name(coll_type->get_name()));
   if (is_udt_type) {
@@ -12494,18 +12505,34 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
     OZ (formalize_expr(*child));
     if (OB_FAIL(ret)) {
     } else if (coll_type->get_element_type().is_obj_type()) {
-      const ObDataType *data_type = coll_type->get_element_type().get_data_type();
-      CK (OB_NOT_NULL(data_type));
-      OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
-                                                 expr_factory_,
-                                                 data_type->get_obj_type(),
-                                                 data_type->get_collation_type(),
-                                                 data_type->get_accuracy_value(),
-                                                 true,
-                                                 NULL,
-                                                 NULL,
-                                                 child,
-                                                 true));
+      if(0 == i % 2 && udf_info.is_associative_array_with_param_assign_op_) {
+        const ObAssocArrayType* assoc_type = static_cast<const ObAssocArrayType *>(coll_type);
+        const ObDataType *data_type = assoc_type->get_index_type().get_data_type();
+        CK (OB_NOT_NULL(data_type));
+        OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
+                                                  expr_factory_,
+                                                  data_type->get_obj_type(),
+                                                  data_type->get_collation_type(),
+                                                  data_type->get_accuracy_value(),
+                                                  true,
+                                                  NULL,
+                                                  NULL,
+                                                  child,
+                                                  true));
+      } else {
+        const ObDataType *data_type = coll_type->get_element_type().get_data_type();
+        CK (OB_NOT_NULL(data_type));
+        OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
+                                                  expr_factory_,
+                                                  data_type->get_obj_type(),
+                                                  data_type->get_collation_type(),
+                                                  data_type->get_accuracy_value(),
+                                                  true,
+                                                  NULL,
+                                                  NULL,
+                                                  child,
+                                                  true));
+      }
       OZ (coll_expr->add_param_expr(child));
     } else {
       bool is_legal = true;
@@ -12549,6 +12576,7 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
       }
     }
   }
+  OX (coll_expr->is_associative_array_with_param_assign_op_ = udf_info.is_associative_array_with_param_assign_op_);
   OX (expr = coll_expr);
 #else
   UNUSEDx(q_name, udf_info, user_type, expr);
@@ -12565,12 +12593,14 @@ int ObPLResolver::resolve_associative_array_construct(const ObQualifiedName &q_n
 #ifdef OB_BUILD_ORACLE_PL
   const ObAssocArrayType *assoc_array_type = NULL;
   CK (OB_NOT_NULL(assoc_array_type = static_cast<const ObAssocArrayType*>(user_type)));
-  if (OB_SUCC(ret)
-     && !assoc_array_type->get_index_type().is_pl_integer_type()
-     && udf_info.ref_expr_->get_param_exprs().count() > 0) { //index by varchar does not allow the use of a constructor without specifying an index
-    ret = OB_ERR_CALL_WRONG_ARG;
-    LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
-    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+  if(!udf_info.is_associative_array_with_param_assign_op_) {
+    if (OB_SUCC(ret)
+      && !assoc_array_type->get_index_type().is_pl_integer_type()
+      && udf_info.ref_expr_->get_param_exprs().count() > 0) { //index by varchar does not allow the use of a constructor without specifying an index
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call to", K(ret));
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udf_info.udf_name_.length(), udf_info.udf_name_.ptr());
+    }
   }
   OZ (resolve_collection_construct(q_name, udf_info, user_type, expr));
 #else
