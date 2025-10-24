@@ -14,6 +14,8 @@
 #include "ob_ddl_alter_auto_part_attr.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "storage/ddl/ob_ddl_lock.h"
+#include "share/schema/ob_schema_printer.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -256,6 +258,34 @@ int ObAlterAutoPartAttrOp::alter_table_auto_part_attr_if_need(
           /* case 1: part func is empty, like: alter table partition by range() size('xxx'); */
           /* if table is none part table, and part func is empty, set partition type "range" */
           /* we will set part func type in table_schema.enable_auto_partition according to old table schema potential part func, do nothing here */
+          if (!table_schema.is_partitioned_table()) {
+            HEAP_VAR(ObTableSchema, tmp_table_schema) {
+            ObArray<uint64_t> presetting_partition_keys;
+            ObArenaAllocator tmp_allocator;
+            int64_t buf_len = OB_MAX_TEXT_LENGTH;
+            int64_t pos = 0;
+            char *buf = static_cast<char *>(tmp_allocator.alloc(buf_len));
+            share::schema::ObSchemaPrinter schema_printer(schema_guard);
+            // enable_auto_partition is only hack for get_presetting_partition_keys, which requires is_auto_partitioned_table
+            if (OB_FAIL(tmp_table_schema.assign(table_schema))) {
+              LOG_WARN("failed to assign", K(ret));
+            } else if (OB_FAIL(tmp_table_schema.enable_auto_partition(alter_part_option.get_auto_part_size(), alter_part_option.get_part_func_type()))) {
+              LOG_WARN("fail to enable auto partition", K(ret), K(alter_part_option));
+            } else if (OB_FAIL(tmp_table_schema.get_presetting_partition_keys(presetting_partition_keys))) {
+              LOG_WARN("failed to get presetting partition key", K(ret), K(table_schema));
+            } else if (OB_ISNULL(buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc", KR(ret));
+            } else if (OB_FAIL(schema_printer.print_column_list(table_schema, presetting_partition_keys, buf, buf_len, pos))) {
+              LOG_WARN("failed to print part func expr", K(ret), K(table_schema.get_table_id()), K(presetting_partition_keys));
+            } else {
+              ObString preset_part_func_expr(pos, buf);
+              if (OB_FAIL(check_auto_part_table_unique_index(table_schema, preset_part_func_expr, schema_guard))) {
+                LOG_WARN("fail to check auto part table unique index.", K(ret), K(table_schema));
+              }
+            }
+            }
+          }
         } else {
           /* case 2: part func is not empty, like : alter table partition by range(c1) size('xxx'); */
           if (OB_FAIL(check_auto_part_table_unique_index(table_schema, alter_part_func_expr, schema_guard))) {
@@ -731,8 +761,12 @@ int ObAlterAutoPartAttrOp::check_auto_part_table_unique_index(
   } else {
     // get index table id
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    bool is_oracle_mode = false;
+    ObArenaAllocator allocator;
     if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get simple_index_infos failed", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check oracle mode", K(ret), K(tenant_id), K(table_id));
     }
     const ObTableSchema *index_schema = nullptr;
     int64_t index_table_id = OB_INVALID_ID;
@@ -751,7 +785,8 @@ int ObAlterAutoPartAttrOp::check_auto_part_table_unique_index(
       } else {
         // check main table partition key is included in unique local index key.
         ObArray<ObString> alter_part_column_array;
-        if (OB_FAIL(split_on(alter_table_part_func_expr, ',', alter_part_column_array))) {
+        if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(
+                alter_table_part_func_expr, is_oracle_mode, allocator, alter_part_column_array))) {
           LOG_WARN("fail to split func expr", K(ret), K(alter_table_part_func_expr));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < alter_part_column_array.count(); ++i) {
