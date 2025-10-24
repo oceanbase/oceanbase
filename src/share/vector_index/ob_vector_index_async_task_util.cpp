@@ -766,7 +766,7 @@ int ObVecIndexAsyncTaskUtil::extract_one_task_sql_result(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret));
   } else {
-    int64_t target_scn = task.target_scn_.convert_to_ts();
+    int64_t target_scn = OB_INVALID_ID;
     EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", task.tenant_id_, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "table_id", task.table_id_, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", task.tablet_id_, uint64_t);
