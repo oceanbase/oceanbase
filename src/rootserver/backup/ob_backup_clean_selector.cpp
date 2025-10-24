@@ -1087,11 +1087,13 @@ int ObBackupDeleteSelector::get_delete_backup_all_infos(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
-  } else if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
-    LOG_WARN("failed to set backup dest", K(ret), "dest_path", job_attr_->backup_path_);
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(
                         *sql_proxy_, job_attr_->tenant_id_, backup_dest, job_attr_->dest_id_))) {
-    LOG_WARN("failed to get dest_id", K(ret), "tenant_id", job_attr_->tenant_id_, "dest_id", job_attr_->dest_id_);
+    LOG_WARN("failed to get dest_id", K(ret), "tenant_id", job_attr_->tenant_id_,
+             "dest_id", job_attr_->dest_id_, K(backup_dest));
   } else if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA == job_attr_->backup_path_type_) {
     if (OB_FAIL(check_current_backup_dest_(failure_info))) {
       LOG_WARN("failed to check current backup dest", K(ret));

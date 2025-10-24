@@ -637,11 +637,12 @@ int ObBackupCleanScheduler::backup_clean_pre_checker_(ObBackupCleanJobAttr &job_
     ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_MAX;
     LOG_INFO("system tenant check if target user tenant has ever use this dest", K(job_attr));
     ObBackupDest backup_dest;
-    if (OB_FAIL(backup_dest.set(job_attr.backup_path_))) {
-      LOG_WARN("failed to set backup dest", K(ret), K(job_attr));
+    if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+        is_sys_tenant ? job_attr.executor_tenant_id_.at(0) : job_attr.tenant_id_, job_attr.backup_path_, backup_dest))) {
+      LOG_WARN("failed to get backup dest", K(ret), "path", job_attr.backup_path_);
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_type(*sql_proxy_,
           is_sys_tenant ? job_attr.executor_tenant_id_.at(0) : job_attr.tenant_id_, backup_dest, dest_type))) {
-      LOG_WARN("failed to get dest type", K(ret), K(job_attr));
+      LOG_WARN("failed to get dest type", K(ret), K(job_attr), K(backup_dest));
       if (OB_ITER_END == ret) {
         LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "failed to get the specified dest, please check the dest is exist");
       }
@@ -1216,8 +1217,9 @@ int ObUserTenantBackupDeleteMgr::move_to_history_()
         ObBackupDest backup_dest;
         if (job_attr_->result_ != OB_SUCCESS) {
           LOG_WARN("job is not success, do not delete backup dest in storage info table", K(*job_attr_));
-        } else if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
-          LOG_WARN("failed to init backup dest", K(ret), "path", job_attr_->backup_path_);
+        } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+          LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
         } else if (OB_FAIL(backup_service_->check_leader())) {
           LOG_WARN("failed to check leader", K(ret));
         } else if (OB_FAIL(ObBackupStorageInfoOperator::remove_backup_storage_info(
@@ -1725,8 +1727,9 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
               transaction::tablelock::SHARE_ROW_EXCLUSIVE,
               false))) {
         LOG_WARN("failed to lock policy table", K(ret));
-      } else if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
-        LOG_WARN("failed to set backup dest", K(ret), "backup_path", job_attr_->backup_path_);
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
       } else if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("failed to check leader", K(ret));
       } else if (OB_FAIL(ObBackupStorageInfoOperator::set_backup_dest_status(
@@ -1835,8 +1838,9 @@ int ObUserTenantBackupDeleteMgr::delete_backup_all_meta_info_files_()
 {
   int ret = OB_SUCCESS;
   ObBackupDest backup_dest;
-  if (OB_FAIL(backup_dest.set(job_attr_->backup_path_))) {
-    LOG_WARN("failed to init backup dest", K(ret), "path", job_attr_->backup_path_);
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_,
+                                job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), "path", job_attr_->backup_path_);
   } else {
     if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA == job_attr_->backup_path_type_) {
       if (OB_FAIL(delete_backup_dest_meta_info_files_(backup_dest))) {
