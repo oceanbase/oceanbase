@@ -251,6 +251,16 @@
 #define APPLY168(f, ...) APPLY_VARGS(f, APPLY167(f, ##__VA_ARGS__))
 #define APPLY169(f, ...) APPLY_VARGS(f, APPLY168(f, ##__VA_ARGS__))
 #define APPLY170(f, ...) APPLY_VARGS(f, APPLY169(f, ##__VA_ARGS__))
+#define APPLY171(f, ...) APPLY_VARGS(f, APPLY170(f, ##__VA_ARGS__))
+#define APPLY172(f, ...) APPLY_VARGS(f, APPLY171(f, ##__VA_ARGS__))
+#define APPLY173(f, ...) APPLY_VARGS(f, APPLY172(f, ##__VA_ARGS__))
+#define APPLY174(f, ...) APPLY_VARGS(f, APPLY173(f, ##__VA_ARGS__))
+#define APPLY175(f, ...) APPLY_VARGS(f, APPLY174(f, ##__VA_ARGS__))
+#define APPLY176(f, ...) APPLY_VARGS(f, APPLY175(f, ##__VA_ARGS__))
+#define APPLY177(f, ...) APPLY_VARGS(f, APPLY176(f, ##__VA_ARGS__))
+#define APPLY178(f, ...) APPLY_VARGS(f, APPLY177(f, ##__VA_ARGS__))
+#define APPLY179(f, ...) APPLY_VARGS(f, APPLY178(f, ##__VA_ARGS__))
+#define APPLY180(f, ...) APPLY_VARGS(f, APPLY179(f, ##__VA_ARGS__))
 #define APPLY(n, f, ...) APPLY ## n (f, ##__VA_ARGS__)
 
 // select nth argument
@@ -491,7 +501,8 @@
     140, 141, 142, 143, 144, 145, 146, 147, 148, 149, \
     150, 151, 152, 153, 154, 155, 156, 157, 158, 159, \
     160, 161, 162, 163, 164, 165, 166, 167, 168, 169, \
-    170
+    170, 171, 172, 173, 174, 175, 176, 177, 178, 179, \
+    180
 
 #define MSTR(X) #X
 
