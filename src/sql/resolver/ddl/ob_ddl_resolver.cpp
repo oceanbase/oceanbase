@@ -3650,7 +3650,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                                                    session_info_->get_effective_tenant_id(),
                                                    enable_decimalint_type,
                                                    enable_mysql_compatible_dates,
-                                                   convert_real_to_decimal))) {
+                                                   convert_real_to_decimal,
+                                                   is_external_table))) {
       LOG_WARN("resolve data type failed", K(ret), K(column.get_column_name_str()));
     } else if (ObExtendType == data_type.get_obj_type()) {
       const ParseNode *name_node = type_node->children_[0];

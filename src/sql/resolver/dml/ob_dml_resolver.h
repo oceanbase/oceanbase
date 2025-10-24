@@ -1042,6 +1042,9 @@ public:
   static int build_column_schemas_for_odps(const common::ObIArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn> &column_list,
                                            const common::ObIArray<ObString> &part_col_names,
                                            ObTableSchema& table_schema);
+  static int build_column_for_odps(const ObODPSTableRowIterator::OdpsColumn &odps_column,
+                                   ObColumnSchemaV2 &column_schema,
+                                   common::ObIAllocator &allocator);
   static int set_partition_info_for_odps(ObTableSchema &table_schema,
                                          const common::ObIArray<ObString> &part_col_names);
 #endif

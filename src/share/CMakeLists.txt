@@ -508,6 +508,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_directory_mgr.cpp
   schema/ob_directory_sql_service.cpp
   schema/ob_error_info.cpp
+  schema/ob_external_table_column_schema_helper.cpp
   schema/ob_keystore_mgr.cpp
   schema/ob_keystore_sql_service.cpp
   schema/ob_label_se_policy_mgr.cpp

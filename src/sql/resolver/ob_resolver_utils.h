@@ -412,7 +412,8 @@ public:
                                uint64_t tenant_id,
                                const bool enable_decimal_int_type,
                                const bool enable_mysql_compatible_dates,
-                               const bool convert_real_type_to_decimal = false);
+                               const bool convert_real_type_to_decimal = false,
+                               const bool is_external_table = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,
                                       common::ObDataType &data_type,

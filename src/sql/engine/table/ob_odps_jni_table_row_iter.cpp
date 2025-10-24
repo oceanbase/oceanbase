@@ -744,7 +744,7 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn &odps_colum
       is_match = true;
     }
   } else if (odps_type == OdpsType::JSON) {
-    if (ObJsonType == ob_type) {
+    if (ObJsonType == ob_type || ObVarcharType == ob_type) {
       is_match = true;
     }
   } else if (odps_type == OdpsType::TIMESTAMP_NTZ) {
@@ -2516,7 +2516,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             datums[row_idx].set_null();
           }
         }
-      } else if ((ObVarcharType == type && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
+      } else if ((ObVarcharType == type && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY || column.type_ == OdpsType::JSON)) ||
                   ((ObTinyTextType == type || ObTextType == type || ObLongTextType == type || ObMediumTextType == type) 
                       && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
                   (ObJsonType == type && column.type_ == OdpsType::JSON)) {

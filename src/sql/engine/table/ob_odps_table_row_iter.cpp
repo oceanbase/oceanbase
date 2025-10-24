@@ -585,7 +585,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
     }
     case apsara::odps::sdk::ODPS_JSON:
     {
-      if (ObJsonType == ob_type) {
+      if (ObJsonType == ob_type || ObVarcharType == ob_type) {
         is_match = true;
       }
       break;

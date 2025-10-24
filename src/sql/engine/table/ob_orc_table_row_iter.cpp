@@ -563,6 +563,7 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
           func = &DataLoader::load_int32_vec;
         } else if (ob_is_time_tc(datum_type.type_) ||
                    ob_is_mysql_date_tc(datum_type.type_) ||
+                   (is_oracle_mode() && ob_is_datetime(datum_type.type_)) || // oracle 模式下 date类型映射到datetime
                    ObTimestampType == datum_type.type_ ||
                    ObTimestampLTZType == datum_type.type_) {
           func = &DataLoader::load_date_to_time_or_stamp;
