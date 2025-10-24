@@ -18,6 +18,7 @@
 
 #include "lib/utility/ob_macro_utils.h"
 #include "objit/common/ob_item_type.h"
+#include "pl/ob_pl_resolver.h"
 #include "pl/wrap/ob_pl_wrap_allocator.h"
 #include "pl/wrap/ob_pl_wrap_decoder.h"
 #include "share/ob_define.h"
@@ -36,34 +37,6 @@ namespace oceanbase
 {
 namespace sql
 {
-
-#define CHECK_CIPHER_PARSE_TREE(parse_tree, type)                        \
-  do {                                                                   \
-    CK (OB_LIKELY(type == (parse_tree).type_));                          \
-    CK (OB_LIKELY(2 == (parse_tree).num_child_));                        \
-    CK (OB_NOT_NULL((parse_tree).children_));                            \
-    CK (OB_NOT_NULL((parse_tree).children_[0]));                         \
-    CK (OB_NOT_NULL((parse_tree).children_[1]));                         \
-    CK (OB_LIKELY(T_SP_NAME == (parse_tree).children_[0]->type_));       \
-    CK (OB_LIKELY(T_BASE64_CIPHER == (parse_tree).children_[1]->type_)); \
-  } while (0)
-
-#define CHECK_CREATE_DDL_PARSE_TREE(parse_tree)                               \
-  do {                                                                        \
-    /* T_STMT_LIST */                                                         \
-    CK (OB_LIKELY(T_STMT_LIST == (parse_tree)->type_));                       \
-    CK (OB_LIKELY(1 == (parse_tree)->num_child_));                            \
-    CK (OB_NOT_NULL((parse_tree)->children_));                                \
-    /* T_CREATE_XXX */                                                        \
-    CK (OB_NOT_NULL((parse_tree)->children_[0]));                             \
-    CK (OB_LIKELY(1 == (parse_tree)->children_[0]->num_child_));              \
-    CK (OB_NOT_NULL((parse_tree)->children_[0]->children_));                  \
-    /* T_XXX_SOURCE */                                                        \
-    CK (OB_NOT_NULL((parse_tree)->children_[0]->children_[0]));               \
-    CK (OB_NOT_NULL((parse_tree)->children_[0]->children_[0]->children_));    \
-    /* T_SP_NAME */                                                           \
-    CK (OB_NOT_NULL((parse_tree)->children_[0]->children_[0]->children_[0])); \
-  } while (0)
 
 int ObCreateWrappedResolver::resolve_base64_cipher(ObIAllocator& allocator,
                                                    const ObSQLSessionInfo& session,
@@ -100,7 +73,7 @@ int ObCreateWrappedResolver::resolve_base64_cipher(ObIAllocator& allocator,
   return ret;
 }
 
-int ObCreateWrappedResolver::check_object_name_match(const ParseNode *n1, const ParseNode *n2)
+int ObCreateWrappedResolver::verify_object_name_match(const ParseNode *n1, const ParseNode *n2)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(n1) && OB_NOT_NULL(n2));
@@ -130,19 +103,75 @@ int ObCreateWrappedResolver::check_object_name_match(const ParseNode *n1, const 
   return ret;
 }
 
-int ObCreateWrappedResolver::check_plwrap_version_compatible()
+int ObCreateWrappedResolver::verify_cipher_parse_tree(const ParseNode& cipher_parse_tree,
+                                                      const ObItemType& type)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_LIKELY(type == cipher_parse_tree.type_));
+  CK (OB_LIKELY(2 == cipher_parse_tree.num_child_));
+  CK (OB_NOT_NULL(cipher_parse_tree.children_));
+  CK (OB_NOT_NULL(cipher_parse_tree.children_[0]));
+  CK (OB_NOT_NULL(cipher_parse_tree.children_[1]));
+  CK (OB_LIKELY(T_SP_NAME == cipher_parse_tree.children_[0]->type_));
+  CK (OB_LIKELY(T_BASE64_CIPHER == cipher_parse_tree.children_[1]->type_));
+  return ret;
+}
+
+int ObCreateWrappedResolver::verify_create_ddl_parse_tree(const ParseNode &plain_parse_tree)
+{
+  int ret = OB_SUCCESS;
+  /* T_CREATE_XXX */
+  CK (OB_LIKELY(1 == plain_parse_tree.num_child_));
+  CK (OB_NOT_NULL(plain_parse_tree.children_));
+  /* T_XXX_SOURCE */
+  CK (OB_NOT_NULL(plain_parse_tree.children_[0]));
+  CK (OB_NOT_NULL(plain_parse_tree.children_[0]->children_));
+  /* T_SP_NAME */
+  CK (OB_NOT_NULL(plain_parse_tree.children_[0]->children_[0]));
+  return ret;
+}
+
+int ObCreateWrappedResolver::transform_on_condition_compile(const ParseNode* parse_tree,
+                                                            const ParseNode*& new_parse_tree)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(parse_tree));
+  CK (OB_LIKELY(T_STMT_LIST == parse_tree->type_));
+  CK (OB_LIKELY(1 == parse_tree->num_child_));
+  CK (OB_NOT_NULL(parse_tree->children_));
+  CK (OB_NOT_NULL(parse_tree->children_[0]));
+  if (OB_FAIL(ret)) {
+  } else if (T_SP_PRE_STMTS == parse_tree->children_[0]->type_) {
+    CK (OB_NOT_NULL(wrap_rslv_params_.allocator_));
+    OZ (ObPLResolver::resolve_condition_compile(*wrap_rslv_params_.allocator_,
+                                                wrap_rslv_params_.session_info_,
+                                                wrap_rslv_params_.schema_checker_->get_schema_guard(),
+                                                wrap_rslv_params_.package_guard_,
+                                                wrap_rslv_params_.sql_proxy_,
+                                                nullptr,
+                                                parse_tree->children_[0],
+                                                new_parse_tree));
+    CK (OB_NOT_NULL(new_parse_tree));
+  } else {
+    CK (OB_NOT_NULL(new_parse_tree = parse_tree->children_[0]));
+  }
+  OZ (verify_create_ddl_parse_tree(*new_parse_tree));
+  return ret;
+}
+
+int ObCreateWrappedResolver::verify_plwrap_version_compatible()
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   uint64_t tenant_data_version = 0;
-  CK (OB_NOT_NULL(params_.session_info_));
-  OX (tenant_id = params_.session_info_->get_effective_tenant_id());
+  CK (OB_NOT_NULL(wrap_rslv_params_.session_info_));
+  OX (tenant_id = wrap_rslv_params_.session_info_->get_effective_tenant_id());
   OZ (GET_MIN_DATA_VERSION(tenant_id, tenant_data_version));
   if (OB_SUCC(ret) && DATA_VERSION_4_3_5_1 > tenant_data_version) {
     // binary rollback is not allowed after target data version is settled, which allows wrapped
     // system package to be created after the target_data_version is increased.
-    CK (OB_NOT_NULL(params_.sql_proxy_));
-    share::ObGlobalStatProxy proxy(*params_.sql_proxy_, tenant_id);
+    CK (OB_NOT_NULL(wrap_rslv_params_.sql_proxy_));
+    share::ObGlobalStatProxy proxy(*wrap_rslv_params_.sql_proxy_, tenant_id);
     uint64_t target_data_version = 0;
     OZ (proxy.get_target_data_version(false, target_data_version));
     if (OB_SUCC(ret) && DATA_VERSION_4_3_5_1 > target_data_version) {
@@ -165,9 +194,9 @@ int ObCreateWrappedPackageResolver::resolve(const ParseNode& cipher_parse_tree)
   ObCreatePackageStmt *stmt = nullptr;
   ObString package_source{cipher_parse_tree.str_len_, cipher_parse_tree.str_value_};
 
-  OZ (check_plwrap_version_compatible());
+  OZ (verify_plwrap_version_compatible());
   // 1. decode cipher ddl & parse plain ddl
-  CHECK_CIPHER_PARSE_TREE(cipher_parse_tree, T_CREATE_WRAPPED_PACKAGE);
+  OZ (verify_cipher_parse_tree(cipher_parse_tree, T_CREATE_WRAPPED_PACKAGE));
   CK (OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(session_info_));
   OZ (resolve_base64_cipher(*allocator_,
@@ -179,10 +208,10 @@ int ObCreateWrappedPackageResolver::resolve(const ParseNode& cipher_parse_tree)
 
   // 2. resolve plain ddl parse tree
   CK (OB_NOT_NULL(plain_parse_tree = plain_parse_result.result_tree_));
-  CHECK_CREATE_DDL_PARSE_TREE(plain_parse_tree);
-  OZ (check_object_name_match(cipher_parse_tree.children_[0],
-                              plain_parse_tree->children_[0]->children_[0]->children_[0]));
-  OZ (ObCreatePackageResolver::resolve(*(plain_parse_tree->children_[0])));
+  OZ (transform_on_condition_compile(plain_parse_tree, plain_parse_tree));
+  OZ (verify_object_name_match(cipher_parse_tree.children_[0],
+                               plain_parse_tree->children_[0]->children_[0]));
+  OZ (ObCreatePackageResolver::resolve(*(plain_parse_tree)));
 
   // 3. replace plain body with cipher body
   CK (OB_NOT_NULL(stmt = static_cast<ObCreatePackageStmt*>(get_basic_stmt())));
@@ -201,9 +230,9 @@ int ObCreateWrappedPackageBodyResolver::resolve(const ParseNode& cipher_parse_tr
   ObCreatePackageStmt *stmt = nullptr;
   ObString package_body_source{cipher_parse_tree.str_len_, cipher_parse_tree.str_value_};
 
-  OZ (check_plwrap_version_compatible());
+  OZ (verify_plwrap_version_compatible());
   // 1. decode cipher ddl & parse plain ddl
-  CHECK_CIPHER_PARSE_TREE(cipher_parse_tree, T_CREATE_WRAPPED_PACKAGE_BODY);
+  OZ (verify_cipher_parse_tree(cipher_parse_tree, T_CREATE_WRAPPED_PACKAGE_BODY));
   CK (OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(session_info_));
   OZ (resolve_base64_cipher(*allocator_,
@@ -215,10 +244,10 @@ int ObCreateWrappedPackageBodyResolver::resolve(const ParseNode& cipher_parse_tr
 
   // 2. resolve plain ddl parse tree
   CK (OB_NOT_NULL(plain_parse_tree = plain_parse_result.result_tree_));
-  CHECK_CREATE_DDL_PARSE_TREE(plain_parse_tree);
-  OZ (check_object_name_match(cipher_parse_tree.children_[0],
-                              plain_parse_tree->children_[0]->children_[0]->children_[0]));
-  OZ (ObCreatePackageBodyResolver::resolve(*(plain_parse_tree->children_[0])));
+  OZ (transform_on_condition_compile(plain_parse_tree, plain_parse_tree));
+  OZ (verify_object_name_match(cipher_parse_tree.children_[0],
+                               plain_parse_tree->children_[0]->children_[0]));
+  OZ (ObCreatePackageBodyResolver::resolve(*(plain_parse_tree)));
 
   // 3. replace plain body with cipher body
   CK (OB_NOT_NULL(stmt = static_cast<ObCreatePackageStmt*>(get_basic_stmt())));
@@ -242,9 +271,9 @@ int ObCreateWrappedTypeResolver::resolve(const ParseNode& cipher_parse_tree)
   ObCreateUDTStmt *stmt = nullptr;
   ObString type_source{cipher_parse_tree.str_len_, cipher_parse_tree.str_value_};
 
-  OZ (check_plwrap_version_compatible());
+  OZ (verify_plwrap_version_compatible());
   // 1. decode cipher ddl & parse plain ddl
-  CHECK_CIPHER_PARSE_TREE(cipher_parse_tree, T_CREATE_WRAPPED_TYPE);
+  OZ (verify_cipher_parse_tree(cipher_parse_tree, T_CREATE_WRAPPED_TYPE));
   CK (OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(session_info_));
   OZ (resolve_base64_cipher(*allocator_,
@@ -256,10 +285,10 @@ int ObCreateWrappedTypeResolver::resolve(const ParseNode& cipher_parse_tree)
 
   // 2. resolve plain ddl parse tree
   CK (OB_NOT_NULL(plain_parse_tree = plain_parse_result.result_tree_));
-  CHECK_CREATE_DDL_PARSE_TREE(plain_parse_tree);
-  OZ (check_object_name_match(cipher_parse_tree.children_[0],
-                              plain_parse_tree->children_[0]->children_[0]->children_[0]));
-  OZ (ObCreateUDTResolver::resolve(*(plain_parse_tree->children_[0])));
+  OZ (transform_on_condition_compile(plain_parse_tree, plain_parse_tree));
+  OZ (verify_object_name_match(cipher_parse_tree.children_[0],
+                               plain_parse_tree->children_[0]->children_[0]));
+  OZ (ObCreateUDTResolver::resolve(*(plain_parse_tree)));
 
   // 3. replace plain body with cipher body
   CK (OB_NOT_NULL(stmt = static_cast<ObCreateUDTStmt*>(get_basic_stmt())));
@@ -283,9 +312,9 @@ int ObCreateWrappedTypeBodyResolver::resolve(const ParseNode& cipher_parse_tree)
   ObCreateUDTStmt *stmt = nullptr;
   ObString type_body_source{cipher_parse_tree.str_len_, cipher_parse_tree.str_value_};
 
-  OZ (check_plwrap_version_compatible());
+  OZ (verify_plwrap_version_compatible());
   // 1. decode cipher ddl & parse plain ddl
-  CHECK_CIPHER_PARSE_TREE(cipher_parse_tree, T_CREATE_WRAPPED_TYPE_BODY);
+  OZ (verify_cipher_parse_tree(cipher_parse_tree, T_CREATE_WRAPPED_TYPE_BODY));
   CK (OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(session_info_));
   OZ (resolve_base64_cipher(*allocator_,
@@ -297,10 +326,10 @@ int ObCreateWrappedTypeBodyResolver::resolve(const ParseNode& cipher_parse_tree)
 
   // 2. resolve plain ddl parse tree
   CK (OB_NOT_NULL(plain_parse_tree = plain_parse_result.result_tree_));
-  CHECK_CREATE_DDL_PARSE_TREE(plain_parse_tree);
-  OZ (check_object_name_match(cipher_parse_tree.children_[0],
-                              plain_parse_tree->children_[0]->children_[0]->children_[0]));
-  OZ (ObCreateUDTBodyResolver::resolve(*(plain_parse_tree->children_[0])));
+  OZ (transform_on_condition_compile(plain_parse_tree, plain_parse_tree));
+  OZ (verify_object_name_match(cipher_parse_tree.children_[0],
+                               plain_parse_tree->children_[0]->children_[0]));
+  OZ (ObCreateUDTBodyResolver::resolve(*(plain_parse_tree)));
 
   // 3. replace plain body with cipher body
   CK (OB_NOT_NULL(stmt = static_cast<ObCreateUDTStmt*>(get_basic_stmt())));
@@ -324,9 +353,9 @@ int ObCreateWrappedFunctionResolver::resolve(const ParseNode& cipher_parse_tree)
   const ParseNode* plain_parse_tree = nullptr;
   ObCreateRoutineStmt *stmt = nullptr;
 
-  OZ (check_plwrap_version_compatible());
+  OZ (verify_plwrap_version_compatible());
   // 1. decode cipher ddl & parse plain ddl
-  CHECK_CIPHER_PARSE_TREE(cipher_parse_tree, T_CREATE_WRAPPED_FUNCTION);
+  OZ (verify_cipher_parse_tree(cipher_parse_tree, T_CREATE_WRAPPED_FUNCTION));
   CK (OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(session_info_));
   OZ (resolve_base64_cipher(*allocator_,
@@ -338,10 +367,10 @@ int ObCreateWrappedFunctionResolver::resolve(const ParseNode& cipher_parse_tree)
 
   // 2. resolve plain ddl parse tree
   CK (OB_NOT_NULL(plain_parse_tree = plain_parse_result.result_tree_));
-  CHECK_CREATE_DDL_PARSE_TREE(plain_parse_tree);
-  OZ (check_object_name_match(cipher_parse_tree.children_[0],
-                              plain_parse_tree->children_[0]->children_[0]->children_[0]));
-  OZ (ObCreateFunctionResolver::resolve(*(plain_parse_tree->children_[0])));
+  OZ (transform_on_condition_compile(plain_parse_tree, plain_parse_tree));
+  OZ (verify_object_name_match(cipher_parse_tree.children_[0],
+                               plain_parse_tree->children_[0]->children_[0]));
+  OZ (ObCreateFunctionResolver::resolve(*(plain_parse_tree)));
 
   // 3. replace plain routine body with cipher routine body
   CK (OB_NOT_NULL(stmt = static_cast<ObCreateRoutineStmt*>(get_basic_stmt())));
@@ -357,9 +386,9 @@ int ObCreateWrappedProcedureResolver::resolve(const ParseNode& cipher_parse_tree
   const ParseNode* plain_parse_tree = nullptr;
   ObCreateRoutineStmt *stmt = nullptr;
 
-  OZ (check_plwrap_version_compatible());
+  OZ (verify_plwrap_version_compatible());
   // 1. decode cipher ddl & parse plain ddl
-  CHECK_CIPHER_PARSE_TREE(cipher_parse_tree, T_CREATE_WRAPPED_PROCEDURE);
+  OZ (verify_cipher_parse_tree(cipher_parse_tree, T_CREATE_WRAPPED_PROCEDURE));
   CK (OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(session_info_));
   OZ (resolve_base64_cipher(*allocator_,
@@ -371,10 +400,10 @@ int ObCreateWrappedProcedureResolver::resolve(const ParseNode& cipher_parse_tree
 
   // 2. resolve plain ddl parse tree
   CK (OB_NOT_NULL(plain_parse_tree = plain_parse_result.result_tree_));
-  CHECK_CREATE_DDL_PARSE_TREE(plain_parse_tree);
-  OZ (check_object_name_match(cipher_parse_tree.children_[0],
-                              plain_parse_tree->children_[0]->children_[0]->children_[0]));
-  OZ (ObCreateProcedureResolver::resolve(*(plain_parse_tree->children_[0])));
+  OZ (transform_on_condition_compile(plain_parse_tree, plain_parse_tree));
+  OZ (verify_object_name_match(cipher_parse_tree.children_[0],
+                               plain_parse_tree->children_[0]->children_[0]));
+  OZ (ObCreateProcedureResolver::resolve(*(plain_parse_tree)));
 
   // 3. replace plain routine body with cipher routine body
   CK (OB_NOT_NULL(stmt = static_cast<ObCreateRoutineStmt*>(get_basic_stmt())));
