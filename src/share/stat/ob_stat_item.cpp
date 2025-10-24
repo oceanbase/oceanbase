@@ -488,7 +488,8 @@ int ObStatItem::cast_int(const ObObj &obj, int64_t &ret_value)
   return ret;
 }
 
-void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic)
+void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
+                           int64_t scnt, int64_t mcnt)
 {
   // skip empty partition
   if (rc > 0) {
@@ -498,6 +499,8 @@ void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int
     macro_block_count_ += mac;
     micro_block_count_ += mic;
     part_cnt_ ++;
+    sstable_row_cnt_ += scnt;
+    memtable_row_cnt_ += mcnt;
   }
 }
 
@@ -678,6 +681,7 @@ void ObGlobalNdvEval::add(int64_t ndv, const char *llc_bitmap)
   if (ndv > global_ndv_) {
     global_ndv_ = ndv;
   }
+  liner_ndv_ += ndv;
 }
 
 void ObGlobalNdvEval::update_llc(char *dst_llc_bitmap, const char *src_llc_bitmap, bool force_update)
@@ -701,6 +705,11 @@ int64_t ObGlobalNdvEval::get() const
     num_distinct = get_ndv_from_llc(global_llc_bitmap_);
   }
   return num_distinct;
+}
+
+int64_t ObGlobalNdvEval::get_liner_ndv() const
+{
+  return liner_ndv_;
 }
 
 //splict the get function in to two, so get function should be used outside the NdvEval.

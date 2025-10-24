@@ -609,7 +609,9 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
                            opt_tbl_stat->get_avg_row_size(),
                            opt_tbl_stat->get_data_size(),
                            opt_tbl_stat->get_macro_block_num(),
-                           opt_tbl_stat->get_micro_block_num());
+                           opt_tbl_stat->get_micro_block_num(),
+                           opt_tbl_stat->get_sstable_row_count(),
+                           opt_tbl_stat->get_memtable_row_count());
           sample_size += opt_tbl_stat->get_sample_size();
         }
       }
@@ -625,6 +627,8 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
         table_stat->set_macro_block_num(global_tstat.get_macro_block_count());
         table_stat->set_micro_block_num(global_tstat.get_micro_block_count());
         table_stat->set_stattype_locked(param.stattype_);
+        table_stat->set_sstable_row_count(global_tstat.get_sstable_row_cnt());
+        table_stat->set_memtable_row_count(global_tstat.get_memtable_row_cnt());
         LOG_TRACE("succeed to derive global tbl stat", K(*table_stat));
       }
     }
@@ -673,6 +677,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         int64_t sample_size = 0;
         int64_t total_row_cnt = 0;
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
+        ObNdvScaleAlgo ndv_scale_algo = param.column_params_.at(i).ndv_scale_algo_;
 
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
           ObOptColumnStat *opt_col_stat = NULL;
@@ -716,7 +721,14 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           }
         }
         if (OB_SUCC(ret)) {
-          int64_t num_distinct = ndv_eval.get() == 0 ? 0 : ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
+          int64_t num_distinct = 0;
+          if (ndv_eval.get() != 0) {
+            if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
+              num_distinct = std::min(not_null_eval.get(), total_row_cnt);
+            } else {
+              num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
+            }
+          }
           col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_ : OB_INVALID_ID);
           col_stat->set_partition_id(partition_id);
           col_stat->set_column_id(param.column_params_.at(i).column_id_);

@@ -75,7 +75,7 @@ private:
 class ObBasicStatsEstimator : public ObStatsEstimator
 {
 public:
-  explicit ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
+  explicit ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator, bool can_re_estimate = true);
 
   static int estimate_block_count(ObExecContext &ctx,
                                   const ObTableStatParam &param,
@@ -286,6 +286,8 @@ private:
   static int add_global_skip_rate(ObGlobalSkipRateStat &global_skip_rate,
                                   EstimateSkipRateRes &estimate_res,
                                   BlockNumStat *block_num_stat = NULL);
+private:
+  bool can_re_estimate_;
 };
 }
 }

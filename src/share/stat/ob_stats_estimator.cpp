@@ -34,7 +34,8 @@ ObStatsEstimator::ObStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator) 
   where_string_(),
   stat_items_(),
   results_(),
-  sample_value_(100.0)
+  sample_value_(100.0),
+  is_block_sample_(false)
 {}
 
 int ObStatsEstimator::gen_select_filed()
@@ -131,6 +132,7 @@ int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
       real_len = sprintf(buf, "SAMPLE (%lf)", est_percent);
     } else {
       real_len = sprintf(buf, "SAMPLE BLOCK (%lf)", est_percent);
+      is_block_sample_ = true;
     }
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(real_len < 0)) {
@@ -463,7 +465,10 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
             if (OB_FAIL(decode(allocator_))) {
               LOG_WARN("failed to decode results", K(ret));
             } else if (need_copy_basic_stat &&
-                       OB_FAIL(copy_basic_opt_stat(src_opt_stat, dst_opt_stats))) {
+                       OB_FAIL(copy_basic_opt_stat(gather_param.column_params_,
+                                                   gather_param.partition_id_block_map_,
+                                                   src_opt_stat,
+                                                   dst_opt_stats))) {
               LOG_WARN("failed to copy stat to target opt stat", K(ret));
             } else {
               results_.reset();
@@ -592,7 +597,9 @@ int ObStatsEstimator::decode(ObIAllocator &allocator)
   return ret;
 }
 
-int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
+int ObStatsEstimator::copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &column_params,
+                                          const PartitionIdBlockMap *partition_id_block_map,
+                                          ObOptStat &src_opt_stat,
                                           ObIArray<ObOptStat> &dst_opt_stats)
 {
   int ret = OB_SUCCESS;
@@ -611,15 +618,26 @@ int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
       } else if (dst_opt_stats.at(i).table_stat_->get_partition_id() == partition_id) {
         find_it = true;
         int64_t row_cnt = tmp_tab_stat->get_row_count();
-        if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
-          row_cnt = static_cast<int64_t>(row_cnt * 100 / sample_value_);
+        if (sample_value_ >= 0.000001 &&
+            sample_value_ < 100.0 &&
+            OB_FAIL(scale_row_count(partition_id_block_map,
+                                    partition_id,
+                                    tmp_tab_stat->get_row_count(),
+                                    sample_value_,
+                                    row_cnt))) {
+          LOG_WARN("failed to scale row count", K(ret));
+        } else {
+          dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
+          dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
+          dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
+          if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(),
+                                          row_cnt,
+                                          column_params,
+                                          tmp_col_stats,
+                                          dst_opt_stats.at(i).column_stats_))) {
+            LOG_WARN("failed to copy col stat", K(ret));
+          } else {/*do nothing*/}
         }
-        dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
-        dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
-        dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
-        if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(), row_cnt, tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
-          LOG_WARN("failed to copy col stat", K(ret));
-        } else {/*do nothing*/}
       } else {/*do nothing*/}
     }
     if (OB_SUCC(ret) && !find_it) {
@@ -631,6 +649,7 @@ int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
 
 int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
                                            const int64_t total_row_cnt,
+                                           const ObIArray<ObColumnStatParam> &column_params,
                                            ObIArray<ObOptColumnStat *> &src_col_stats,
                                            ObIArray<ObOptColumnStat *> &dst_col_stats)
 {
@@ -638,6 +657,9 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
   if (OB_UNLIKELY(src_col_stats.count() != dst_col_stats.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(src_col_stats.count()), K(dst_col_stats.count()), K(ret));
+  } else if (OB_UNLIKELY(column_params.count() != src_col_stats.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(column_params.count()), K(src_col_stats.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < dst_col_stats.count(); ++i) {
       if (OB_ISNULL(dst_col_stats.at(i)) || OB_ISNULL(src_col_stats.at(i))) {
@@ -647,10 +669,18 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
         int64_t num_not_null = src_col_stats.at(i)->get_num_not_null();
         int64_t num_null = src_col_stats.at(i)->get_num_null();
         int64_t num_distinct = src_col_stats.at(i)->get_num_distinct();
+        ObNdvScaleAlgo ndv_scale_algo = column_params.at(i).ndv_scale_algo_;
         if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
-          num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
           num_not_null = static_cast<int64_t>(num_not_null * 100 / sample_value_);
           num_null = static_cast<int64_t>(num_null * 100 / sample_value_);
+          if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
+            num_distinct = std::min(num_not_null, total_row_cnt);
+          } else if (ndv_scale_algo == NDV_SCALE_ALGO_LINEAR && is_block_sample_) {
+            num_distinct = static_cast<int64_t>(num_distinct * 100 / sample_value_);
+            num_distinct = std::min(num_distinct, total_row_cnt);
+          } else {
+            num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
+          }
         }
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());
@@ -677,6 +707,39 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObStatsEstimator::scale_row_count(const PartitionIdBlockMap *partition_id_block_map,
+                                      int64_t partition_id,
+                                      int64_t row_cnt,
+                                      double &sample_value,
+                                      int64_t &scaled_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  BlockNumStat *block_num_stat = NULL;
+  if (OB_ISNULL(partition_id_block_map)) {
+    if (sample_value >= 0.000001 && sample_value < 100.0) {
+      scaled_row_cnt = static_cast<int64_t>(row_cnt * 100 / sample_value);
+    }
+  } else if (OB_FAIL(partition_id_block_map->get_refactored(partition_id, block_num_stat))) {
+    if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+      ret = OB_SUCCESS;
+      if (sample_value >= 0.000001 && sample_value < 100.0) {
+        scaled_row_cnt = static_cast<int64_t>(row_cnt * 100 / sample_value);
+      }
+    } else {
+      LOG_WARN("failed to get refactored", K(ret));
+    }
+  } else if (OB_ISNULL(block_num_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(block_num_stat));
+  } else if (block_num_stat->sstable_row_cnt_ + block_num_stat->memtable_row_cnt_ > 0) {
+    scaled_row_cnt = block_num_stat->sstable_row_cnt_ + block_num_stat->memtable_row_cnt_;
+    sample_value = static_cast<double>(row_cnt) / scaled_row_cnt * 100.0;
+  } else if (sample_value >= 0.000001 && sample_value < 100.0) {
+    scaled_row_cnt = static_cast<int64_t>(row_cnt * 100 / sample_value);
   }
   return ret;
 }

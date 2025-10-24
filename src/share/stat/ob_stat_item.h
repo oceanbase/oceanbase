@@ -312,7 +312,8 @@ public:
       sstable_row_cnt_(0), memtable_row_cnt_(0)
   {}
 
-  void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
+  void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
+           int64_t scnt, int64_t mcnt);
   int add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
           ObIArray<int64_t> &cg_macro_arr, ObIArray<int64_t> &cg_micro_arr,
           int64_t scnt, int64_t mcnt);
@@ -408,7 +409,7 @@ class ObGlobalNdvEval
   const int64_t NUM_LLC_BUCKET = ObOptColumnStat::NUM_LLC_BUCKET;
 
 public:
-  ObGlobalNdvEval() : global_ndv_(0), part_cnt_(0)
+  ObGlobalNdvEval() : global_ndv_(0), part_cnt_(0), liner_ndv_(0)
   {
     MEMSET(global_llc_bitmap_, 0, ObOptColumnStat::NUM_LLC_BUCKET);
   }
@@ -416,7 +417,7 @@ public:
   void add(int64_t ndv, const char *llc_bitmap);
 
   int64_t get() const;
-
+  int64_t get_liner_ndv() const;
   void get_llc_bitmap(char *llc_bitmap, const int64_t llc_bitmap_size) const;
 
   static double select_alpha_value(const int64_t num_bucket);
@@ -427,6 +428,7 @@ private:
   int64_t global_ndv_;
   int64_t part_cnt_;
   char global_llc_bitmap_[ObOptColumnStat::NUM_LLC_BUCKET];
+  int64_t liner_ndv_;
 };
 
 class ObGlobalMaxEval
