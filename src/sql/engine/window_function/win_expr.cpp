@@ -604,6 +604,8 @@ int NthValue::generate_extra()
 {
   int ret = OB_SUCCESS;
   last_result_is_valid_ = false;
+  last_result_ = nullptr;
+  last_result_capacity_ = 0;
   return ret;
 }
 
