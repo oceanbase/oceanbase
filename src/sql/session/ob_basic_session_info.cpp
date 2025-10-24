@@ -1235,8 +1235,6 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       LOG_INFO("fail to generate system config in pc str");
     } else {
       global_vars_version_ = 0;
-      set_enable_mysql_compatible_dates(
-        static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
     }
   }
   return ret;
@@ -1965,6 +1963,7 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
       } else {
         (void)config_in_pc_str_.assign(buf, int32_t(pos));
         inf_pc_configs_.update_version(cluster_config_version, cached_tenant_config_version_);
+        set_enable_mysql_compatible_dates(inf_pc_configs_.enable_mysql_compatible_dates_);
       }
       OX (eval_sys_var_config_hash_val());
     }
@@ -5543,8 +5542,6 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
     OZ (gen_configs_in_pc_str());
-    set_enable_mysql_compatible_dates(
-      static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
   }
   return ret;
 }

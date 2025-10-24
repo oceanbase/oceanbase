@@ -229,9 +229,6 @@ int ObMPBase::load_system_variables(const ObSysVariableSchema &sys_variable_sche
       LOG_WARN("fail to gen sys var in pc str", K(ret));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to gen configs in pc string", K(ret));
-    } else {
-      session.set_enable_mysql_compatible_dates(
-        session.get_enable_mysql_compatible_dates_from_config());
     }
   }
   return ret;
