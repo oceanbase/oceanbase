@@ -267,18 +267,14 @@ int ObIMvccCtx::register_row_replay_cb(
     }
 #endif
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(append_callback(cb))) {
-      {
-        ObRowLatchGuard guard(value->latch_);
-        cb->unlink_trans_node();
-      }
+    if (FAILEDx(append_callback(cb))) {
       TRANS_LOG(WARN, "append callback failed", K(ret));
     }
 
     if (OB_FAIL(ret)) {
+      ObRowLatchGuard guard(value->latch_);
+      cb->unlink_trans_node();
       free_mvcc_row_callback(cb);
-      TRANS_LOG(WARN, "append callback failed", K(ret));
     }
   }
   return ret;
