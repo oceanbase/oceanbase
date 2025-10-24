@@ -20911,80 +20911,82 @@ int ObJoinOrder::get_query_tokens_by_boolean_mode(ObMatchFunRawExpr *match_expr,
   const ObCollationType &cs_type = match_expr->get_search_key()->get_collation_type();
   const ObCollationType dst_type = ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI;
 
-  ObString str_dest;
-  if (cs_type != dst_type) {
-    ObString tmp_out;
-    if (OB_FAIL(ObCharset::tolower(cs_type, search_text_string, tmp_out, *allocator_))) {
-      LOG_WARN("failed to casedown string", K(ret), K(cs_type), K(search_text_string));
-    } else if (OB_FAIL(common::ObCharset::charset_convert(*allocator_, tmp_out, cs_type, dst_type, str_dest))) {
-      LOG_WARN("failed to convert string", K(ret), K(cs_type), K(search_text_string));
-    }
-  } else if (OB_FAIL(ObCharset::tolower(cs_type, search_text_string, str_dest, *allocator_))){
-    LOG_WARN("failed to casedown string", K(ret), K(cs_type), K(search_text_string));
-  }
-
-  void *buf = nullptr;
-  FtsParserResult *fts_parser;
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(FtsParserResult)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
-  } else {
-    fts_parser = static_cast<FtsParserResult *>(buf);
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(buf = allocator_->alloc(str_dest.length() + 1))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
-  } else {
-    MEMSET(buf, 0, str_dest.length() + 1);
-    MEMCPY(buf, str_dest.ptr(), str_dest.length());
-  }
-  if (OB_FAIL(ret)) {
-  } else if (FALSE_IT(fts_parse_docment(static_cast<char *>(buf), str_dest.length(), allocator_, fts_parser))) {
-  } else if (FTS_OK != fts_parser->ret_) {
-    if (FTS_ERROR_MEMORY == fts_parser->ret_) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else if (FTS_ERROR_SYNTAX == fts_parser->ret_) {
-      ret = OB_ERR_PARSER_SYNTAX;
-    } else if (FTS_ERROR_OTHER == fts_parser->ret_) {
-      ret = OB_ERR_UNEXPECTED;
-    }
-    LOG_WARN("failed to parse query text", K(ret), K(fts_parser->err_info_.str_));
-  } else if (OB_ISNULL(fts_parser->root_)) {
-    // do nothing
-  } else {
-    FtsNode *node = fts_parser->root_;
-    ObFtsEvalNode *parant_node =nullptr;
-    hash::ObHashMap<ObString, int32_t> tokens_map;
-    const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
-    ObArray<ObString> query_token;
-    bool dummy_has_duplicate_boolean_tokens = false;
-    if (OB_FAIL(tokens_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
-      LOG_WARN("failed to create token map", K(ret));
-    } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_node_create(parant_node, node, cs_type, *allocator_, query_token, tokens_map, dummy_has_duplicate_boolean_tokens))) {
-      LOG_WARN("failed to get query tokens", K(ret));
-    } else {
-      for (hash::ObHashMap<ObString, int32_t>::const_iterator iter = tokens_map.begin();
-          OB_SUCC(ret) && iter != tokens_map.end();
-          ++iter) {
-        const ObString &token = iter->first;
-        ObString token_string;
-        ObConstRawExpr *token_expr = NULL;
-        if (OB_FAIL(ob_write_string(*allocator_, token, token_string))) {
-          LOG_WARN("failed to deep copy query token", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*OPT_CTX.get_exec_ctx()->get_expr_factory(),
-                                                                   ObVarcharType,
-                                                                   token_string,
-                                                                   cs_type,
-                                                                   token_expr))) {
-          LOG_WARN("failed to build const string expr", K(ret));
-        } else if (OB_FAIL(query_tokens.push_back(token_expr))) {
-          LOG_WARN("failed to append query token", K(ret));
-        }
+  if (search_text_string.length() != 0) {
+    ObString str_dest;
+    if (cs_type != dst_type) {
+      ObString tmp_out;
+      if (OB_FAIL(ObCharset::tolower(cs_type, search_text_string, tmp_out, *allocator_))) {
+        LOG_WARN("failed to casedown string", K(ret), K(cs_type), K(search_text_string));
+      } else if (OB_FAIL(common::ObCharset::charset_convert(*allocator_, tmp_out, cs_type, dst_type, str_dest))) {
+        LOG_WARN("failed to convert string", K(ret), K(cs_type), K(search_text_string));
       }
-      allocator_->free(buf);
-      parant_node->release();
+    } else if (OB_FAIL(ObCharset::tolower(cs_type, search_text_string, str_dest, *allocator_))){
+      LOG_WARN("failed to casedown string", K(ret), K(cs_type), K(search_text_string));
+    }
+
+    void *buf = nullptr;
+    FtsParserResult *fts_parser;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(FtsParserResult)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
+    } else {
+      fts_parser = static_cast<FtsParserResult *>(buf);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(buf = allocator_->alloc(str_dest.length() + 1))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate enough memory", K(sizeof(FtsParserResult)), K(ret));
+    } else {
+      MEMSET(buf, 0, str_dest.length() + 1);
+      MEMCPY(buf, str_dest.ptr(), str_dest.length());
+    }
+    if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(fts_parse_docment(static_cast<char *>(buf), str_dest.length(), allocator_, fts_parser))) {
+    } else if (FTS_OK != fts_parser->ret_) {
+      if (FTS_ERROR_MEMORY == fts_parser->ret_) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else if (FTS_ERROR_SYNTAX == fts_parser->ret_) {
+        ret = OB_ERR_PARSER_SYNTAX;
+      } else if (FTS_ERROR_OTHER == fts_parser->ret_) {
+        ret = OB_ERR_UNEXPECTED;
+      }
+      LOG_WARN("failed to parse query text", K(ret), K(fts_parser->err_info_.str_));
+    } else if (OB_ISNULL(fts_parser->root_)) {
+      // do nothing
+    } else {
+      FtsNode *node = fts_parser->root_;
+      ObFtsEvalNode *parant_node =nullptr;
+      hash::ObHashMap<ObString, int32_t> tokens_map;
+      const int64_t ft_word_bkt_cnt = MAX(search_text_string.length() / 10, 2);
+      ObArray<ObString> query_token;
+      bool dummy_has_duplicate_boolean_tokens = false;
+      if (OB_FAIL(tokens_map.create(ft_word_bkt_cnt, common::ObMemAttr(MTL_ID(), "FTWordMap")))) {
+        LOG_WARN("failed to create token map", K(ret));
+      } else if (OB_FAIL(ObFtsEvalNode::fts_boolean_node_create(parant_node, node, cs_type, *allocator_, query_token, tokens_map, dummy_has_duplicate_boolean_tokens))) {
+        LOG_WARN("failed to get query tokens", K(ret));
+      } else {
+        for (hash::ObHashMap<ObString, int32_t>::const_iterator iter = tokens_map.begin();
+            OB_SUCC(ret) && iter != tokens_map.end();
+            ++iter) {
+          const ObString &token = iter->first;
+          ObString token_string;
+          ObConstRawExpr *token_expr = NULL;
+          if (OB_FAIL(ob_write_string(*allocator_, token, token_string))) {
+            LOG_WARN("failed to deep copy query token", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*OPT_CTX.get_exec_ctx()->get_expr_factory(),
+                                                                    ObVarcharType,
+                                                                    token_string,
+                                                                    cs_type,
+                                                                    token_expr))) {
+            LOG_WARN("failed to build const string expr", K(ret));
+          } else if (OB_FAIL(query_tokens.push_back(token_expr))) {
+            LOG_WARN("failed to append query token", K(ret));
+          }
+        }
+        allocator_->free(buf);
+        parant_node->release();
+      }
     }
   }
   return ret;
