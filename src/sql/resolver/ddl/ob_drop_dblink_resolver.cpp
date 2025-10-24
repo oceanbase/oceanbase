@@ -80,7 +80,7 @@ int ObDropDbLinkResolver::resolve(const ParseNode &parse_tree)
     if (OB_ISNULL(name_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
-    } else if (name_node->str_len_ >= OB_MAX_DBLINK_NAME_LENGTH) {
+    } else if (name_node->str_len_ > OB_MAX_DBLINK_NAME_LENGTH) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
     } else {
