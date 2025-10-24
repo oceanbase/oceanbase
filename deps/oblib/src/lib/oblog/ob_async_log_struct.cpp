@@ -21,7 +21,8 @@ namespace common
 ObPLogItem::ObPLogItem()
   : ObIBaseLogItem(), fd_type_(MAX_FD_FILE),
     log_level_(OB_LOG_LEVEL_NONE), tl_type_(common::OB_INVALID_INDEX), is_force_allow_(false),
-    is_size_overflow_(false), timestamp_(0), header_pos_(0), buf_size_(0), pos_(0)
+    is_size_overflow_(false), is_cached_item_(false), is_large_item_(false), timestamp_(0), header_pos_(0),
+    buf_size_(0), pos_(0), slot_(INT64_MAX)
 {
 }
 

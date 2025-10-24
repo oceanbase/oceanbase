@@ -46,6 +46,7 @@
 #include "common/ob_common_utility.h"
 #include "lib/oblog/ob_log_dba_event.h"
 #include "lib/ob_abort.h"
+#include "lib/queue/ob_fixed_queue.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 64
 #define OB_LOG_MAX_SUB_MOD_SIZE 64
@@ -275,6 +276,7 @@ private:
 //named DuoLong.
 class ObLogger : public ObBaseLogWriter
 {
+typedef common::ObFixedQueue<void> LogItemPool;
 private:
   static constexpr int LOG_ITEM_SIZE = sizeof(ObPLogItem);
 public:
@@ -301,6 +303,8 @@ public:
   static const int64_t GROUP_COMMIT_MAX_ITEM_COUNT = 4;
   static const char *PERF_LEVEL;
   static const int64_t NORMAL_LOG_SIZE = 1 << 10;
+  static const int64_t LOG_POOL_N_WAY = 16;
+  static const int64_t LARGE_LOG_POOL_N_WAY = 4;
 
   static const char *const SECURITY_AUDIT_FILE_NAME_FORMAT;
 
@@ -357,7 +361,7 @@ public:
   ObLogger();
   virtual ~ObLogger();
   virtual int init(const ObBaseLogWriterCfg &log_cfg,
-                   const bool is_arb_replica);
+                   const bool is_arb_replica, int64_t memory_limit = (4L << 30));
   virtual void stop();
   virtual void wait();
   virtual void destroy();
@@ -435,6 +439,8 @@ public:
   int64_t get_elec_total_write_count() const { return log_file_[FD_ELEC_FILE].write_count_; }
   int64_t get_trace_total_write_count() const { return log_file_[FD_TRACE_FILE].write_count_; }
   int64_t get_alert_total_write_count() const { return log_file_[FD_ALERT_FILE].write_count_; }
+  int64_t get_alloc_item_from_cache_count() const { return alloc_from_cache_count_; }
+  int64_t get_alloc_item_from_allocator_count() const { return alloc_from_allocator_count_; }
 
   ObPLogFileStruct &get_elec_log() { return *(log_file_ + FD_ELEC_FILE); }
 
@@ -730,6 +736,15 @@ public:
 
   bool is_svr_file_opened();
 
+  struct PreparePlogConfig {
+    int n_way_;
+    int prealloc_count_;
+    int log_size_;
+    void **prealloc_items_;
+    LogItemPool *log_item_pool_;
+  };
+
+  int prepare_prealloc_plog_items_impl(PreparePlogConfig& config);
 private:
   //@brief If version <= 0, return true.
   //If version > 0, return version > level_version_ and if true, update level_version_.
@@ -916,6 +931,12 @@ private:
   bool info_as_wdiag_;
   std::deque<std::string> file_list_;//to store the names of log-files
   std::deque<std::string> wf_file_list_;//to store the names of warning log-files
+  LogItemPool log_item_pool_[LOG_POOL_N_WAY];
+  void *prealloc_plog_items_[LOG_POOL_N_WAY];
+  LogItemPool large_log_item_pool_[LARGE_LOG_POOL_N_WAY];
+  void *large_prealloc_plog_items_[LARGE_LOG_POOL_N_WAY];
+  int64_t alloc_from_cache_count_;
+  int64_t alloc_from_allocator_count_;
 };
 
 inline ObLogger& ObLogger::get_logger()
