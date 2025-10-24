@@ -856,7 +856,9 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
     const int64_t AMPLIFICATION_FACTOR = 10;
     if (ef_search > EF_SEARCH_LIMIT) {
       int64_t index_number = hnsw->get_index_number();
-      topk = topk < index_number ? topk : index_number;
+      if (0 != index_number) {
+        topk = topk < index_number ? topk : index_number;
+      }
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
@@ -896,7 +898,9 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
     const int64_t AMPLIFICATION_FACTOR = 10;
     if (ef_search > EF_SEARCH_LIMIT) {
       int64_t index_number = hnsw->get_index_number();
-      topk = topk < index_number ? topk : index_number;
+      if (0 != index_number) {
+        topk = topk < index_number ? topk : index_number;
+      }
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
       ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
