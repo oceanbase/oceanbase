@@ -85,9 +85,12 @@ int ObILakeTableMetadata::build_table_schema(share::schema::ObTableSchema *&tabl
   if (OB_FAIL(do_build_table_schema(table_schema))) {
     LOG_WARN("do_build_table_schema failed", K(ret));
   } else {
-    table_schema->set_table_id(table_id_);
-    table_schema->set_database_id(database_id_);
+    // 因为 table_schema 可能是从 ObKVCache 里面拿出来的
+    // 此时里面的 database_id 和 table_id 可能是以前 sql 查询临时生成的 id
+    // 所以这里我们要对其进行覆写
     table_schema->set_tenant_id(tenant_id_);
+    table_schema->set_database_id(database_id_);
+    table_schema->set_table_id(table_id_);
     table_schema->set_catalog_id(catalog_id_);
     table_schema->set_table_type(schema::EXTERNAL_TABLE);
     table_schema->set_collation_type(CS_TYPE_UTF8MB4_BIN);
