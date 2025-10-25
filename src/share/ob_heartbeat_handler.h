@@ -59,6 +59,7 @@ public:
   static int handle_heartbeat(
       const share::ObHBRequest &hb_request,
       share::ObHBResponse &hb_response);
+  static int64_t get_rs_epoch_id();
   static bool is_rs_epoch_id_valid();
   static int check_disk_status(ObServerHealthStatus &server_health_status);
 private:
