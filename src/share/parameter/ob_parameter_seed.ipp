@@ -2816,7 +2816,9 @@ DEF_BOOL(_enable_async_load_sys_package, OB_CLUSTER_PARAMETER, "False",
 DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
          "Enable pl recompile task.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(enable_pl_rich_error_msg, OB_TENANT_PARAMETER, "False",
+         "specifies whether add ip:port, time and trace id to PLSQL sqlerrm.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "False",
          "Enable or disable px task rebalance.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

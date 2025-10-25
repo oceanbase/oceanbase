@@ -99,6 +99,13 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
   pl::ObPLSqlCodeInfo *sqlcode_info = NULL;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   bool is_sqlcode = (expr.extra_ == 1);
+  bool enable_config = false;
+  uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    enable_config = tenant_config->enable_pl_rich_error_msg
+                    && ObServerConfig::get_instance().enable_rich_error_msg;
+  }
   CK(OB_NOT_NULL(session));
   CK(expr.arg_cnt_ <= 1);
   CK (OB_NOT_NULL(sqlcode_info = session->get_pl_sqlcode_info()));
@@ -184,6 +191,44 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         }
       }
       OX (expr_datum.set_string(sqlerrm_result, strlen(sqlerrm_result)));
+    }
+  }
+
+  // if both enable_rich_error_msg and enable_pl_rich_error_msg are enabled, read current expr_datum string
+  // and append addr/time/trace into a new eval buffer so caller sees augmented result.
+  if (OB_SUCC(ret) && enable_config && !is_sqlcode) {
+    // get current string from expr_datum
+    const ObString cur = expr_datum.get_string();
+    const char *cur_ptr = cur.ptr();
+    int64_t cur_len = (NULL != cur_ptr ? static_cast<int64_t>(cur.length()) : 0);
+
+    // prepare addr/time/trace
+    const ObAddr addr = ObCurTraceId::get_addr();
+    struct timeval tv;
+    struct tm tm;
+    char addr_buf[MAX_IP_PORT_LENGTH];
+    (void)gettimeofday(&tv, NULL);
+    if (NULL == ::localtime_r((const time_t *)&tv.tv_sec, &tm)) {
+      memset(&tm, 0, sizeof(tm));
+    }
+    addr.ip_port_to_string(addr_buf, sizeof(addr_buf));
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+
+    // Buffer size reference: response_packet
+    int64_t maxSize = 512;
+    char *new_buf = expr.get_str_res_mem(ctx, maxSize);
+    if (OB_NOT_NULL(new_buf)) {
+      int64_t new_pos = 0;
+      if (cur_len > 0) {
+        OZ (databuff_printf(new_buf, maxSize, new_pos, "%.*s", static_cast<int>(cur_len), cur_ptr));
+      }
+      OZ (databuff_printf(new_buf, maxSize, new_pos,
+                          "\n[%s] [%04d-%02d-%02d %02d:%02d:%02d.%06ld] [%s]",
+                          addr_buf,
+                          tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                          tm.tm_hour, tm.tm_min, tm.tm_sec, (long)tv.tv_usec,
+                          ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))));
+      OX (expr_datum.set_string(new_buf, new_pos));
     }
   }
 

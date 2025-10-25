@@ -119,6 +119,7 @@ enable_monotonic_weak_read
 enable_ob_error_msg_style
 enable_ob_ratelimit
 enable_perf_event
+enable_pl_rich_error_msg
 enable_ps_parameterize
 enable_rebalance
 enable_record_trace_id
