@@ -256,6 +256,7 @@ public:
 
   bool is_tenant_not_refreshed(const uint64_t tenant_id);
   bool is_tenant_refreshed(const uint64_t tenant_id) const;
+  int check_all_tenant_schema_refreshed(bool &all_refreshed);
 
   // sql should retry when tenant is normal but never refresh schema successfully.
   bool is_schema_error_need_retry(
@@ -355,7 +356,9 @@ public:
                              bool check_bootstrap = false);
   // Trigger an asynchronous refresh task and wait for the refresh result
   int async_refresh_schema(const uint64_t tenant_id,
-                           const int64_t schema_version);
+                           const int64_t schema_version,
+                           const share::schema::ObRefreshSchemaInfo *schema_info = nullptr);
+  int try_update_last_refreshed_schema_info(common::ObArray<share::schema::ObRefreshSchemaInfo> &refresh_schema_infos);
   int add_schema(const uint64_t tenant_id, const bool force_add = false);
 
   int try_eliminate_schema_mgr();

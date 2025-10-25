@@ -849,6 +849,12 @@ bool ObRefreshSchemaInfo::is_valid() const
   return true;
 }
 
+// ATTENTION: before use this function for sorting, make sure all sequence ids are comparable
+bool ObRefreshSchemaInfo::less_than(const ObRefreshSchemaInfo &l, const ObRefreshSchemaInfo &r)
+{
+  return ObDDLSequenceID::LESS_THAN == l.get_sequence_id().compare_to_other_id(r.get_sequence_id());
+}
+
 // In 4.3.5.2 we add a new member(new_sequence_id_) of type ObDDLSequenceID for ObRefreshSchemaInfo.
 // ObDDLSequenceID supports both old logic and new logic to manage seq_id_.
 // A bool membership in ObDDLSequenceID indicates which logic to use.

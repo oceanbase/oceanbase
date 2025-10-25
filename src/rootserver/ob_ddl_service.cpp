@@ -31263,13 +31263,24 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         ObRefreshSchemaInfo schema_info;
         schema_info.set_tenant_id(tenant_id);
         schema_info.set_schema_version(schema_version);
+        bool all_tenant_schema_refreshed = false;
         if (OB_ISNULL(schema_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("schema_service is null", K(ret));
         } else if (OB_FAIL(schema_service->inc_sequence_id())) {
           LOG_WARN("increase sequence_id failed", K(ret));
+        } else if (FALSE_IT(schema_info.set_sequence_id(schema_service->get_sequence_id()))) {
         } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
           LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
+        } else if (OB_FAIL(schema_service_->check_all_tenant_schema_refreshed(all_tenant_schema_refreshed))) {
+          LOG_WARN("fail to check all tenant schema refreshed", KR(ret));
+        }
+        // notify_refresh_schema will skip rs, so update rs sequence_id here.
+        // We need to check all tenant schema refreshed, because schema refresh is driven by heartbeat after observer restart.
+        // Otherwise, sequence_id will be updated here even if some tenants' schema is not refreshed,
+        // and schema refresh driven by heartbeat may skip these tenants.
+        else if (all_tenant_schema_refreshed && OB_FAIL(schema_service_->set_last_refreshed_schema_info(schema_info))) {
+          LOG_WARN("fail to set last refreshed schema info", KR(ret));
         } else if (OB_NOT_NULL(publish_schema_version)) {
           *publish_schema_version = schema_version;
         }

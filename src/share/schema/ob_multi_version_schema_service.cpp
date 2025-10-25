@@ -2302,9 +2302,11 @@ int ObMultiVersionSchemaService::switch_allocator_(
   return ret;
 }
 
+// Only when schema refresh is triggered by DDL, schema_info needs to be specified
 int ObMultiVersionSchemaService::async_refresh_schema(
     const uint64_t tenant_id,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const share::schema::ObRefreshSchemaInfo *schema_info)
 {
   ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::WAIT_REFRESH_SCHEMA);
   int ret = OB_SUCCESS;
@@ -2361,7 +2363,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("observice is null", K(ret));
           } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(
-                             tenant_id, schema_version))) {
+                             tenant_id, schema_version, schema_info))) {
             if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
               ret = OB_SUCCESS;
             } else {
@@ -2383,9 +2385,72 @@ int ObMultiVersionSchemaService::async_refresh_schema(
       }
     }
   }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(schema_info)) {
+    // When a refresh task with a smaller sequence id refreshes to a larger schema_version ahead of time,
+    // the refresh task with a larger sequence id will be skipped directly.
+    // Therefore, we need to try to update sequence id here.
+    ObArray<ObRefreshSchemaInfo> schema_infos;
+    if (OB_FAIL(schema_infos.push_back(*schema_info))) {
+      LOG_WARN("fail to push back refresh schema info", KR(ret));
+    } else if (OB_FAIL(try_update_last_refreshed_schema_info(schema_infos))) {
+      LOG_WARN("fail to update last refreshed schema info", KR(ret));
+    }
+  }
+
   return ret;
 }
 
+int ObMultiVersionSchemaService::try_update_last_refreshed_schema_info(
+    ObArray<ObRefreshSchemaInfo> &refresh_schema_infos)
+{
+  int ret = OB_SUCCESS;
+  ObRefreshSchemaInfo local_schema_info;
+  if (refresh_schema_infos.empty()) {
+    // no need to update schema info, skip
+  } else if (OB_FAIL(get_last_refreshed_schema_info(local_schema_info))) {
+    LOG_WARN("fail to get local schema info", KR(ret));
+  } else {
+    // check if the sequence_ids are comparable, and the sys_leader_epoch is the same
+    bool consecutive = true;
+    const ObDDLSequenceID &local_sequence_id = local_schema_info.get_sequence_id();
+
+    for (int64_t i = 0; OB_SUCC(ret) && consecutive && i < refresh_schema_infos.count(); i++) {
+      const ObRefreshSchemaInfo &schema_info = refresh_schema_infos.at(i);
+      const ObDDLSequenceID &sequence_id = schema_info.get_sequence_id();
+      if (ObDDLSequenceID::NOT_COMPARABLE == sequence_id.compare_to_other_id(local_sequence_id)
+          || sequence_id.get_sys_leader_epoch() != local_sequence_id.get_sys_leader_epoch()) {
+        consecutive = false;
+      }
+    }
+
+    if (OB_SUCC(ret) && consecutive) {
+      lib::ob_sort(refresh_schema_infos.begin(), refresh_schema_infos.end(), ObRefreshSchemaInfo::less_than);
+    }
+
+    ObDDLSequenceID pre_sequence_id = local_sequence_id;
+    for (int64_t i = 0; OB_SUCC(ret) && consecutive && i < refresh_schema_infos.count(); i++) {
+      const ObRefreshSchemaInfo &schema_info = refresh_schema_infos.at(i);
+      const ObDDLSequenceID &sequence_id = schema_info.get_sequence_id();
+      if (ObDDLSequenceID::ONE_OVER != sequence_id.compare_to_other_id(pre_sequence_id)) {
+        consecutive = false;
+      } else {
+        pre_sequence_id = sequence_id;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const ObRefreshSchemaInfo &max_schema_info = refresh_schema_infos.at(refresh_schema_infos.count() - 1);
+      if (!consecutive) {
+        // sequence id is non-consecutive, do not update schema info
+      } else if (OB_FAIL(set_last_refreshed_schema_info(max_schema_info))) {
+        LOG_WARN("fail to set last refreshed schema info", KR(ret), K(max_schema_info));
+      }
+    }
+  }
+
+  return ret;
+}
 
 /*
  * 1. If tenant_id is OB_INVALID_TENANT_ID, it means refresh the schema of all tenants,
@@ -3930,6 +3995,24 @@ bool ObMultiVersionSchemaService::is_tenant_refreshed(const uint64_t tenant_id) 
     bret = !schema_not_refreshed;
   }
   return bret;
+}
+
+int ObMultiVersionSchemaService::check_all_tenant_schema_refreshed(bool &all_refreshed)
+{
+  int ret = OB_SUCCESS;
+  all_refreshed = true;
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant ids failed", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+      if (!is_tenant_refreshed(tenant_ids.at(i))) {
+        all_refreshed = false;
+        break;
+      }
+    }
+  }
+  return ret;
 }
 
 // sql should retry when tenant is normal but never refresh schema successfully.
