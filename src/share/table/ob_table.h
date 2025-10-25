@@ -1627,6 +1627,7 @@ enum class ObTableDirectLoadOperationType {
   GET_STATUS = 3,
   INSERT = 4,
   HEART_BEAT = 5,
+  DETACH = 6,
   MAX_TYPE
 };
 

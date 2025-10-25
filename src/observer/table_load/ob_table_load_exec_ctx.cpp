@@ -83,8 +83,8 @@ int ObTableLoadClientExecCtx::check_status()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
     LOG_WARN("fail to check status", KR(ret));
-  } else if (OB_UNLIKELY(last_heartbeat_time_ + heartbeat_timeout_us_ <
-                         ObTimeUtil::current_time())) {
+  } else if (!is_detached_ && OB_UNLIKELY(last_heartbeat_time_ + heartbeat_timeout_us_ <
+                                          ObTimeUtil::current_time())) {
     ret = OB_TIMEOUT;
     LOG_WARN("heartbeat is timeout", KR(ret), K(last_heartbeat_time_), K(heartbeat_timeout_us_));
   }

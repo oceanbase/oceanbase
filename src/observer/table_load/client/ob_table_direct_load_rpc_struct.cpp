@@ -74,5 +74,10 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadHeartBeatRes,
                            status_,
                            error_code_);
 
+// detach
+OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadDetachArg,
+                           table_id_,
+                           task_id_);
+
 } // namespace observer
 } // namespace oceanbase
