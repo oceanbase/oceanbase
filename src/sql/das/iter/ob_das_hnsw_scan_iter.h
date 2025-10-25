@@ -403,10 +403,8 @@ private:
   int build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range);
   int64_t get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
   int64_t get_reorder_count_for_brute_force(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
-  // when is parallel, cannot be post filter 
   inline bool is_pre_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE 
-                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER) 
-                      || (is_parallel() && is_iter_filter());}
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
   inline bool is_in_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;}
   inline bool is_post_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER 
                       ||  vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
@@ -416,7 +414,6 @@ private:
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER 
                                                                  || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
-  bool is_parallel();
   int check_iter_filter_need_retry();
   int check_pre_filter_need_retry();
   int reset_filter_path();
