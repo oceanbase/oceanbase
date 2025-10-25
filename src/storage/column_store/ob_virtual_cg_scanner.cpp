@@ -428,6 +428,9 @@ int ObDefaultCGScanner::switch_context(
                         !wrapper.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "unexpected argument", K(ret), K(wrapper), K(iter_param), K(access_ctx));
+  } else if (OB_UNLIKELY(iter_param.enable_pd_aggregate() && nullptr == agg_group_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected state, agg group is null", K(ret), K(iter_param));
   } else if (OB_FAIL(wrapper.get_merge_row_cnt(iter_param, total_row_count_))) {
     STORAGE_LOG(WARN, "fail to get ddl merge row cnt", K(ret), K(iter_param), K(total_row_count_), K(wrapper));
   } else {
@@ -536,6 +539,8 @@ int ObDefaultCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
   }
 
   if (OB_SUCC(ret)) {
+    LOG_DEBUG("[DEFAULT CG SCANNER]", K(ret), K(count), K(capacity), K(query_range_valid_row_count_),
+                                      KP(agg_group_), KPC(iter_param_));
     ret = query_range_valid_row_count_ <= count ? OB_ITER_END : OB_SUCCESS;
     query_range_valid_row_count_ -= count;
   }
