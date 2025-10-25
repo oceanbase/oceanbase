@@ -62,7 +62,7 @@ int ObGetLockExecutor::execute(ObExecContext &ctx,
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx1.destroy(ctx, is_rollback))) {
         LOG_WARN("stack ctx destroy failed", K(tmp_ret));
-        COVER_SUCC(tmp_ret);
+        ret = COVER_SUCC(tmp_ret);
       }
     }
   }
@@ -90,7 +90,7 @@ int ObGetLockExecutor::execute(ObExecContext &ctx,
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx2.destroy(ctx, is_rollback))) {
         LOG_WARN("stack ctx destroy failed", K(tmp_ret));
-        COVER_SUCC(tmp_ret);
+        ret = COVER_SUCC(tmp_ret);
       }
     }
   }
@@ -285,7 +285,7 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx.destroy(ctx, is_rollback))) {
         LOG_WARN("stack ctx destroy failed", K(tmp_ret));
-        COVER_SUCC(tmp_ret);
+        ret = COVER_SUCC(tmp_ret);
       }
     }
   }
