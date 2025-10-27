@@ -76,6 +76,12 @@ void cfifo_alloc_init(cfifo_alloc_t* alloc, chunk_cache_t* chunk_alloc)
 
 void* cfifo_alloc(cfifo_alloc_t* alloc, int sz)
 {
+#ifdef ERRSIM
+  bool bret = OB_SUCCESS != EventTable::EN_4;
+  if (bret) {
+    return NULL;
+  }
+#endif
   void* ret = NULL;
   int64_t req_sz = upalign8(sz) + sizeof(void*);
   while(NULL == ret) {
