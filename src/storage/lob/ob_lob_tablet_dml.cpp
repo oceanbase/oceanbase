@@ -712,9 +712,10 @@ int ObLobTabletDmlHelper::is_disable_version_(bool &is_disable)
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else {
-    // is disable（, 4.2.5.0) [4.3.0.0, 4.4.0.0]
+    // is disable（, 4.2.5.0), [4.3.0.0, 4.3.5.5), [4.4.0.0, 4.4.1.0)
     is_disable = data_version < MOCK_DATA_VERSION_4_2_5_0
-        || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_4_1_0);
+        || (data_version >= DATA_VERSION_4_3_0_0 && data_version < MOCK_DATA_VERSION_4_3_5_5)
+        || (data_version >= DATA_VERSION_4_4_0_0 && data_version < DATA_VERSION_4_4_1_0);
   }
 
   return ret;
