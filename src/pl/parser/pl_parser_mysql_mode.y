@@ -240,7 +240,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sql_keyword xa_keyword
 %type <non_reserved_keyword> unreserved_keyword
 %type <node> stmt_block stmt_list stmt outer_stmt sp_proc_outer_statement sp_proc_inner_statement sp_proc_independent_statement
-%type <node> create_procedure_stmt sp_proc_stmt expr expr_list procedure_body default_expr
+%type <node> create_procedure_stmt sp_proc_stmt expr expr_list procedure_body default_expr return_expr
 %type <node> create_function_stmt function_body
 %type <node> drop_procedure_stmt drop_function_stmt
 %type <node> alter_procedure_stmt alter_function_stmt opt_sp_alter_chistics sp_compile_clause
@@ -1998,6 +1998,12 @@ default_expr:
     }
 ;
 
+return_expr:
+    {
+      do_parse_sql_expr_rule($$, parse_ctx, 1, ';');
+    }
+;
+
 expr_list:
     expr { $$ = $1; }
   | expr_list ',' expr
@@ -2043,7 +2049,7 @@ sp_labeled_control:
 ;
 
 sp_proc_stmt_return:
-    RETURN expr
+    RETURN return_expr
     {
       if (NULL == $2) YYERROR;
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_RETURN, 1, $2);
@@ -3279,6 +3285,7 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
     } else if (*(la_token->la_yychar) == ')' || *(la_token->la_yychar) == ']') {
       --parenlevel;
     }
+
     if (END_P == *(la_token->la_yychar)) {
       is_break = true;
       parse_ctx->scanner_ctx_.sql_end_loc = la_token->la_yylloc->last_column;
