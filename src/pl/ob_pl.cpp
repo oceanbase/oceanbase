@@ -3878,8 +3878,17 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
         CK (OB_NOT_NULL(actual_composite));
         OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, need_cast));
         if (OB_SUCC(ret) && need_cast && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
+          bool can_not_convert_to_assoc_array = (formal_param_type.is_associative_array_type() || formal_param_type.is_varray_type())
+                                                && func_.get_out_args().has_member(param_idx);
           OX (get_params().at(param_idx) = actual_param);
-          OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
+          if (OB_FAIL(ret)) {
+          } else if (!can_not_convert_to_assoc_array) {
+            OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+          }
           OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
           OX (param_converted_.at(param_idx) = true);
         }
@@ -4375,6 +4384,19 @@ do {                                                                  \
         } else {
           // 纯OUT参数, 对于复杂类型需要重新初始化值; 如果传入的复杂类型值为NULL(PS协议), 则初始化一个新的复杂类型
           // 这里先copy入参的值, 由init_complex_obj函数判断是否重新分配内存
+          if (pl_type.is_associative_array_type() || pl_type.is_varray_type()) {
+            uint64_t id = 0;
+            ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
+            if (OB_NOT_NULL(composite)) {
+              id = composite->get_id();
+            }
+            if (is_mocked_anonymous_array_id(id)) {
+              // anonymous array can not convert to out assoc array param
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+            }
+          }
           OX (get_params().at(i) = params->at(i));
           OZ (init_complex_obj(*(get_allocator()),
                                pl_type,
