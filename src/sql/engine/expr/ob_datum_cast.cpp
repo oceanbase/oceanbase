@@ -3149,21 +3149,33 @@ static int common_floating_string(const ObExpr &expr,
     } else {
       const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
       int32_t double_width = buf_length;
+      bool error = false;
       if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) &&
           ob_is_double_tc(expr.args_[0]->datum_meta_.type_) && expr.max_length_ > 0) {
         double_width = min(double_width, expr.max_length_);
       }
-      length = ob_gcvt_opt(in_val, arg_type, double_width, buf, NULL, lib::is_oracle_mode(), TRUE);
+      length = ob_gcvt_opt(in_val, arg_type, double_width, buf, &error, lib::is_oracle_mode(), TRUE);
       if (length == 0 && double_width < buf_length) {
         length = double_width;
         buf[length] = '\0';
+        if (OB_UNLIKELY(error) && CM_IS_COLUMN_CONVERT(expr.extra_)) {
+          if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
+            ObDataTypeCastUtil::log_user_error_warning(ctx.exec_ctx_.get_user_logging_ctx(),
+              OB_ERR_DATA_TRUNCATED, "", "", expr.extra_);
+          } else {
+            ret = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("fail to set truncated double string", K(ret));
+          }
+        }
       }
     }
   }
-  ObString in_str(sizeof(buf), static_cast<int32_t>(length), buf);
-  bool has_set_res = false;
-  if (OB_FAIL(common_check_convert_string(expr, ctx, in_str, res_datum, has_set_res))) {
-    LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
+  if (OB_SUCC(ret)) {
+    ObString in_str(sizeof(buf), static_cast<int32_t>(length), buf);
+    bool has_set_res = false;
+    if (OB_FAIL(common_check_convert_string(expr, ctx, in_str, res_datum, has_set_res))) {
+      LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
+    }
   }
   return ret;
 }
