@@ -496,7 +496,13 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
-  } else {
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (!is_tenant_sslog_ls(MTL_ID(), arg.get_ls_id()) && OB_FAIL(check_sslog_ls_exist())) {
+    LOG_WARN("failed to check sslog ls exist", K(ret), K(arg));
+  }
+#endif
+  else {
     palf::PalfBaseInfo palf_base_info;
     prepare_palf_base_info(arg, palf_base_info);
 
@@ -1784,7 +1790,7 @@ int ObLSService::check_sslog_ls_exist()
 
       if (OB_SUCC(ret) && !is_exist) {
         ret = OB_SSLOG_LS_NOT_EXIST;
-        LOG_WARN("sslog ls do not exist, cannot migrate in", K(ret), K(tenant_id));
+        LOG_WARN("sslog ls do not exist, cannot migrate in", K(ret), K(tenant_id), K(ob_member_list), K(learner_list));
       }
     }
   }
