@@ -1,17 +1,17 @@
 [target-default]
 os=9
 arch=aarch64
-repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/8/aarch64/
+repo=https://mirrors.oceanbase.com/development-kit/el/8/aarch64/
 
 [target-community]
 os=9
 arch=aarch64
-repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/aarch64/
+repo=https://mirrors.oceanbase.com/community/stable/el/8/aarch64/
 
 [target-el9]
 os=9
 arch=aarch64
-repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/9/aarch64/
+repo=https://mirrors.oceanbase.com/development-kit/el/9/aarch64/
 
 
 [deps]
