@@ -350,6 +350,99 @@ static int memcpy_results(WinExprEvalCtx &ctx, VecValueTypeClass res_tc, char *r
   return ret;
 }
 
+void NthValue::destroy()
+{
+  LOG_TRACE("nth value fisrt/last reuse metrics: ", K(reuse_count_), K(store_count_), K(last_result_capacity_));
+}
+
+int NthValue::may_reuse_last_result(
+  WinExprEvalCtx &ctx, const Frame& frame, const WinFuncInfo& wf_info, int nth_val, 
+  bool& /* out */ may_reused, bool& /* out */ may_store)
+{
+  int ret = OB_SUCCESS;
+  may_reused = false;  // can use last result
+  may_store = false;  // can apply optimization
+
+  // 1. check if frame type/function type/data feature can be applied to reuse
+  int start_idx = -1, end_idx = -1;
+  if (!last_result_is_valid_) {
+    may_store = wf_info.is_ignore_null_ && nth_val == 1 && frame.is_valid();
+  } else if (wf_info.is_ignore_null_ && nth_val == 1 &&
+      frame.is_valid() && last_frame_.is_valid()) {
+    if (wf_info.is_from_first_) {
+      // optimize for first() over (current, unbound)
+      if (frame.tail_ == last_frame_.tail_) {
+        start_idx = frame.head_ > last_frame_.head_ ? last_frame_.head_: frame.head_;
+        end_idx = frame.head_ > last_frame_.head_ ? frame.head_: last_frame_.head_;
+        may_store = true;
+      }
+    } else {
+      // optimize for last() over (unbound, current)
+      if (frame.head_ == last_frame_.head_) {
+        start_idx = frame.tail_ > last_frame_.tail_ ? last_frame_.tail_: frame.tail_;
+        end_idx = frame.tail_ > last_frame_.tail_ ? frame.tail_: last_frame_.tail_;
+        may_store = true;
+      }
+    }
+  }
+  // 2. try to peek if (last_frame, current_frame) are all nulls
+  if (!may_store || !last_result_is_valid_) {
+  } else if (end_idx - start_idx > ctx.win_col_.op_.get_spec().max_batch_size_) {
+    ret = OB_UNEXPECT_INTERNAL_ERROR;
+    LOG_WARN("unexpected window", K(ret), K(end_idx), K(start_idx), K(frame), K(last_frame_), K(last_result_is_valid_));
+  } else if (end_idx == start_idx) {
+    // same frame as the last
+    may_reused = true;
+  } else {
+    if (param_index_ < 0) {
+      ObExpr* param = ctx.win_col_.wf_info_.param_exprs_.at(0);
+      ObIArray<ObExpr *>& all_expr = ctx.win_col_.op_.get_all_expr();
+      for (int i = 0; i < all_expr.count(); ++ i) {
+        if (all_expr.at(i) == param) {
+          param_index_ = i;
+          break;
+        }
+      }
+    }
+    if (OB_FAIL(ctx.input_rows_.is_all_null(param_index_, start_idx, end_idx, may_reused))) {
+      LOG_WARN("failed to check if rows all nulls", K(ret));
+    }
+  }
+  return ret;
+}
+
+int NthValue::store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
+                                     int32_t len, const Frame &frame) {
+  int ret = OB_SUCCESS;
+  // 1. alloc for last_result
+  if (last_result_ == nullptr || last_result_capacity_ < len) {
+    last_result_ = ctx.reserved_buf(len);
+    if (OB_ISNULL(last_result_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      LOG_TRACE("allocated temp memory", K(len));
+      last_result_capacity_ = len;
+    }
+  }
+  // 2. memcpy last result
+  if (OB_SUCC(ret)) {
+    last_result_is_valid_ = true;
+    last_result_is_null_ = false;
+    last_frame_ = frame;
+    last_result_size_ = len;
+    MEMCPY(last_result_, src, len);
+    store_count_ += 1;
+  }
+  return ret;
+}
+
+void NthValue::store_null_for_reuse(const Frame &frame) {
+  last_result_is_valid_ = true;
+  last_result_is_null_ = true;
+  last_frame_ = frame;
+}
+
 int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx, char *res, bool &is_null)
 {
   int ret = OB_SUCCESS;
@@ -392,6 +485,7 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   }
   if (OB_SUCC(ret) && !is_null) {
     ObWindowFunctionVecOp &op = ctx.win_col_.op_;
+    bool may_reused = false, may_store = false;
     if (OB_UNLIKELY(lib::is_oracle_mode() && (is_param_null || nth_val <= 0))) {
       ret = OB_DATA_OUT_OF_RANGE;
       LOG_WARN("invalid argument", K(ret), K(is_param_null), K(nth_val));
@@ -400,6 +494,17 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments to nth_value", K(ret), K(nth_val), K(params.at(1)->obj_meta_));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "nth_value");
+    } else if (OB_FAIL(may_reuse_last_result(ctx, frame, ctx.win_col_.wf_info_, nth_val, may_reused, may_store))) {
+      LOG_WARN("failed to reuse last result", K(ret), K(frame), K(is_param_null), K(nth_val), K(may_reused), K(may_store));
+    } else if (OB_UNLIKELY(may_reused)) {
+      reuse_count_ += 1;
+      // fast path: use last result
+      if (last_result_is_null_) {
+        is_null = true;
+      } else {
+        ret = memcpy_results(ctx, params.at(0)->get_vec_value_tc(), res, last_result_,
+                             last_result_size_);
+      }
     } else {
       bool is_ignore_null = ctx.win_col_.wf_info_.is_ignore_null_;
       bool is_from_first = ctx.win_col_.wf_info_.is_from_first_;
@@ -443,6 +548,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
                 is_null = true;
               } else {
                 ret = memcpy_results(ctx, res_tc, res, data->get_payload(idx), data->get_length(idx));
+                if (OB_SUCC(ret) && may_store) {
+                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), frame);
+                }
               }
             }
           }
@@ -456,6 +564,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
                 is_null = true;
               } else {
                 ret = memcpy_results(ctx, res_tc, res, data->get_payload(idx), data->get_length(idx));
+                if (OB_SUCC(ret) && may_store) {
+                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), frame);
+                }
               }
             }
           }
@@ -469,6 +580,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
                 is_null = true;
               } else {
                 ret = memcpy_results(ctx, res_tc, res, data->get_payload(idx), data->get_length(idx));
+                if (OB_SUCC(ret) && may_store) {
+                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), frame);
+                }
               }
             }
           }
@@ -482,6 +596,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       } // end while
       if (!is_calc_nth) {
         is_null = true;
+        if (OB_SUCC(ret) && may_store) {
+          store_null_for_reuse(frame);
+        }
       }
     }
   }
@@ -502,6 +619,9 @@ int NthValue::generate_extra(ObIAllocator &allocator, void *&extra)
       extra = buf;
     }
   }
+  last_result_is_valid_ = false;
+  last_result_ = nullptr;
+  last_result_capacity_ = 0;
   return ret;
 }
 
@@ -2262,7 +2382,6 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
     } else if (OB_UNLIKELY(skip.accumulate_bit_cnt(row_end - row_start) == row_end - row_start)) {
       // do nothing
     } else {
-      const ObCompactRow *prev_row = nullptr, *cur_row = nullptr;
       Frame prev_frame, cur_frame;
       bool whole_frame = true, valid_frame = true;
       ObEvalCtx::BatchInfoScopeGuard guard(ctx.win_col_.op_.get_eval_ctx());

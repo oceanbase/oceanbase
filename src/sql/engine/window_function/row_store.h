@@ -86,6 +86,8 @@ public:
     return ra_reader_.get_row(row_idx, sr);
   }
 
+  int is_all_null(const int64_t col_idx, const int64_t start_idx, const int64_t end_idx, bool& /* out */ all_null);
+
   int add_batch_rows(const ObIArray<ObExpr *> &exprs, const RowMeta &row_meta, ObEvalCtx &eval_ctx,
                      const EvalBound &bound, const ObBitVector &skip, bool add_row_cnt,
                      ObCompactRow **stored_rows = nullptr, bool is_input = false);
