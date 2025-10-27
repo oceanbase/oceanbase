@@ -1903,6 +1903,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprTimestamp::calc_timestamp1_vector,                      /* 265 */
   NULL, // ObExprWeekDay::calc_weekday_vector,                           /* 266 */
   NULL, // ObExprTimeDiff::calc_timediff_vector,                         /* 267 */
+  NULL, // ObExprIsIpv4::calc_is_ipv4_vector,                            /* 268 */
+  NULL, // ObExprIsIpv6::calc_is_ipv6_vector,                            /* 269 */
+  NULL, // ObExprIsIpv4Mapped::calc_is_ipv4_mapped_vector,               /* 270 */
+  NULL, // ObExprIsIpv4Compat::calc_is_ipv4_compat_vector,               /* 271 */
+  NULL, // ObExprInet6Ntoa::calc_inet6_ntoa_vector,                      /* 272 */
+  NULL, // ObExprInet6Aton::calc_inet6_aton_vector,                      /* 273 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
