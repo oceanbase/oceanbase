@@ -2100,11 +2100,6 @@ struct MergeKeyInfoHelper
                                    const common::ObIArray<ObRawExpr *>& keys,
                                    bool &match);
 
-    int extract_filter_column_ids(const ObIArray<ObRawExpr*> &quals,
-                                  const bool is_data_table,
-                                  const share::schema::ObTableSchema &index_schema,
-                                  ObIArray<uint64_t> &filter_column_ids);
-
     int check_expr_overlap_index(const ObRawExpr* qual,
                                  const common::ObIArray<ObRawExpr*>& keys,
                                  bool &overlap);
@@ -2157,10 +2152,6 @@ struct MergeKeyInfoHelper
                                        const int64_t &max_prefix_count,
                                        ObIArray<uint64_t> &interest_column_ids,
                                        ObIArray<bool> &const_column_info);
-
-
-    int check_and_extract_filter_column_ids(const ObIArray<ObRawExpr *> &index_keys,
-                                            ObIArray<uint64_t> &restrict_ids);
 
     /*
      * 看能否在索引前缀上抽取query range

@@ -857,10 +857,7 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     case ObSkylineDim::INTERESTING_ORDER: {
       const ObInterestOrderDim &order_dim = static_cast<const ObInterestOrderDim &>(dim);
       append("[intersting order dim] is interesting order:", order_dim.is_interesting_order_);
-      append(", need index back:", order_dim.need_index_back_);
-      append(", can extract range:", order_dim.can_extract_range_);
       append(", column ids:", common::ObArrayWrap<uint64_t>(order_dim.column_ids_,  order_dim.column_cnt_));
-      append(", filter columns:", common::ObArrayWrap<uint64_t>(order_dim.filter_column_ids_, order_dim.filter_column_cnt_));
       break;
     }
     case ObSkylineDim::QUERY_RANGE: {
