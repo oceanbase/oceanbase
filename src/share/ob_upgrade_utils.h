@@ -193,7 +193,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 39;
+  static const int64_t DATA_VERSION_NUM = 40;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -396,6 +396,8 @@ private:
   int post_upgrade_for_scheduled_trigger_dump_data_dict();
   int post_upgrade_for_upload_cluster_info_();
 };
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 0)
 
 /* =========== special upgrade processor end   ============= */
 

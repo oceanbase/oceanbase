@@ -3,5 +3,5 @@ code_path=src/logservice/libobcdc/
 output_path=src/logservice/libobcdc/
 so_name=libobcdc.so
 so_name_V=libobcdc.so.4
-so_name_v=libobcdc.so.4.4.1.0
+so_name_v=libobcdc.so.4.4.2.0
 tailf_name=obcdc_tailf
