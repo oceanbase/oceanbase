@@ -3224,6 +3224,20 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
   return ret;
 }
 
+int ObCollectionType::convert_anonymous_array(ObPLResolveCtx &ctx,
+                                              ObObj *&src,
+                                              ObObj *&dest) const
+{
+  int ret = OB_SUCCESS;
+  ObPLCollection *dest_collection = NULL;
+  ObPLCollection *src_collection = NULL;
+  CK (src->is_ext() && dest->is_ext());
+  CK (OB_NOT_NULL(src_collection = reinterpret_cast<ObPLCollection *>(src->get_ext())));
+  CK (OB_NOT_NULL(dest_collection = reinterpret_cast<ObPLCollection *>(dest->get_ext())));
+  OZ (ObCollectionType::convert(ctx, src, dest));
+  return ret;
+}
+
 int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
                                   ObIAllocator &allocator,
                                   sql::ObSQLSessionInfo *session,
@@ -3385,6 +3399,9 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
   ObPLAllocator1 *collection_allocator = NULL;
   char *table_data = NULL;
   int64_t processed_count = 0;
+  bool is_assoc_array = PL_ASSOCIATIVE_ARRAY_TYPE == this->get_type();
+  ObArray<int64_t> valid_index_array;
+  int64_t valid_element_count = 0;
 
   CK (OB_NOT_NULL(src));
   CK (OB_NOT_NULL(dst));
@@ -3407,11 +3424,23 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     OZ (element_type_.get_size(PL_TYPE_INIT_SIZE, element_init_size));
     OX (collection_allocator = dynamic_cast<ObPLAllocator1 *>(dst_table->get_allocator()));
     CK (OB_NOT_NULL(collection_allocator));
+    OX (valid_element_count = src_table->get_count());
+
+    if (is_assoc_array) {
+      OX (valid_index_array.reserve(src_table->get_count()));
+      for (int64_t i = 0; i < src_table->get_count(); i++) {
+        ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
+        if (!src_table_pos->is_invalid_type()) {
+          valid_index_array.push_back(i);
+        }
+      }
+      OX (valid_element_count = valid_index_array.count());
+    }
 
     if (OB_SUCC(ret) && src_table->get_count() > 0
       && OB_ISNULL(table_data
         = static_cast<char *>(
-            collection_allocator->alloc(element_init_size * src_table->get_count())))) {
+            collection_allocator->alloc(element_init_size * valid_element_count)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc table data", K(ret));
     }
@@ -3422,30 +3451,41 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
                                   ctx.package_guard_,
                                   ctx.sql_proxy_,
                                   false);
-      for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
-        ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
-        ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
-        if (src_table_pos->is_invalid_type()) {
-          OX (dst_table_pos->set_type(ObMaxType));
-        } else {
+      if (is_assoc_array) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_array.count(); i++) {
+          int64_t index = valid_index_array.at(i);
+          ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + index;
+          ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
           OX (new (dst_table_pos)ObObj());
           OZ (element_type_.convert(resolve_ctx, src_table_pos, dst_table_pos));
+          OX (processed_count++);
         }
-        OX (processed_count++);
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
+          ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
+          ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
+          if (src_table_pos->is_invalid_type()) {
+            OX (dst_table_pos->set_type(ObMaxType));
+          } else {
+            OX (new (dst_table_pos)ObObj());
+            OZ (element_type_.convert(resolve_ctx, src_table_pos, dst_table_pos));
+          }
+          OX (processed_count++);
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      dst_table->set_type(src_table->get_type());
+      dst_table->set_type(this->get_type());
       dst_table->set_allocator(collection_allocator);
-      dst_table->set_count(src_table->get_count());
-      if (src_table->get_count() > 0) {
+      dst_table->set_count(valid_element_count);
+      if (valid_element_count > 0) {
         dst_table->set_first(1);
-        dst_table->set_last(src_table->get_count());
+        dst_table->set_last(valid_element_count);
       } else {
         dst_table->set_first(OB_INVALID_INDEX);
         dst_table->set_last(OB_INVALID_INDEX);
       }
-      dst_table->set_data(reinterpret_cast<ObObj*>(table_data), src_table->get_count());
+      dst_table->set_data(reinterpret_cast<ObObj*>(table_data), valid_element_count);
 
       ObElemDesc elem_desc;
       elem_desc.set_pl_type(element_type_.get_type());
@@ -3696,6 +3736,16 @@ int ObVArrayType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
     if (OB_FAIL(ret)) {
     } else if (src_composite->get_id() == get_user_type_id()) {
       OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else if (is_mocked_anonymous_array_id(src_composite->get_id())) {
+      ObPLNestedTable *src_table = NULL;
+      CK (OB_NOT_NULL(src_table = reinterpret_cast<ObPLNestedTable *>(src->get_ext())));
+      if (OB_SUCC(ret) && src_table->get_count() <= this->get_capacity()) {
+        OZ (convert_anonymous_array(ctx, src, dst));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
@@ -3858,11 +3908,16 @@ int ObAssocArrayType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     dst->set_null();
   } else {
     ObPLComposite *src_composite = NULL;
+    const ObPLDataType &index_type = get_index_type();
     CK (src->is_ext());
     OX (src_composite = reinterpret_cast<ObPLComposite *>(src->get_ext()));
     if (OB_FAIL(ret)) {
     } else if (src_composite->get_id() == get_user_type_id()) {
       OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else if (is_mocked_anonymous_array_id(src_composite->get_id())
+               && OB_NOT_NULL(index_type.get_meta_type())
+               && !index_type.get_meta_type()->is_character_type()) {
+      OZ (convert_anonymous_array(ctx, src, dst));
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
