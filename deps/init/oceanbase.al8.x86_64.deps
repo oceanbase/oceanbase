@@ -1,13 +1,13 @@
 [target-default]
 os=8
 arch=x86_64
-repo=https://mirrors.aliyun.com/oceanbase/development-kit/al/8/x86_64/
+repo=https://mirrors.oceanbase.com/development-kit/al/8/x86_64/
 
 
 [target-community]
 os=8
 arch=x86_64
-repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/x86_64/
+repo=https://mirrors.oceanbase.com/community/stable/al/8/x86_64/
 
 [deps]
 obdal-0.2.2-302025082510.al8.x86_64.rpm target=community

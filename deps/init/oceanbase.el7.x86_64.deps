@@ -1,13 +1,13 @@
 [target-default]
 os=7
 arch=x86_64
-repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/7/x86_64/
+repo=https://mirrors.oceanbase.com/development-kit/el/7/x86_64/
 
 
 [target-community]
 os=7
 arch=x86_64
-repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/
+repo=https://mirrors.oceanbase.com/community/stable/el/7/x86_64/
 
 
 [deps]
