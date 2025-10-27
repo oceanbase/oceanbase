@@ -36,7 +36,7 @@ int ObLSLogStatReplica::init(
     const int64_t proposal_id,
     const ObLSReplica::MemberList &member_list,
     const int64_t paxos_replica_num,
-    const int64_t end_scn)
+    const bool in_sync)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid_with_tenant(tenant_id)
@@ -44,14 +44,14 @@ int ObLSLogStatReplica::init(
       || INVALID_ROLE == role)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(ls_id), K(server),
-        K(role), K(proposal_id), K(member_list), K(paxos_replica_num), K(end_scn));
+        K(role), K(proposal_id), K(member_list), K(paxos_replica_num), K(in_sync));
   } else if (LEADER == role
       && (INVALID_PROPOSAL_ID == proposal_id
       || paxos_replica_num <= 0
       || member_list.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid leader replica", KR(ret), K(tenant_id), K(ls_id), K(server),
-        K(role), K(proposal_id), K(member_list), K(paxos_replica_num), K(end_scn));
+        K(role), K(proposal_id), K(member_list), K(paxos_replica_num), K(in_sync));
   } else if (OB_FAIL(member_list_.assign(member_list))) {
     LOG_WARN("fail to assign", KR(ret), K(member_list), K(tenant_id), K(ls_id));
   } else {
@@ -61,7 +61,7 @@ int ObLSLogStatReplica::init(
     role_ = role;
     proposal_id_ = proposal_id;
     paxos_replica_num_ = paxos_replica_num;
-    end_scn_ = end_scn;
+    in_sync_ = in_sync;
   }
   return ret;
 }
@@ -82,7 +82,7 @@ void ObLSLogStatReplica::reset()
   proposal_id_ = INVALID_PROPOSAL_ID;
   member_list_.reset();
   paxos_replica_num_ = OB_INVALID_COUNT;
-  end_scn_ = OB_INVALID_SCN_VAL;
+  in_sync_ = false;
 }
 
 int ObLSLogStatReplica::assign(const ObLSLogStatReplica &other)
@@ -97,7 +97,7 @@ int ObLSLogStatReplica::assign(const ObLSLogStatReplica &other)
     role_ = other.role_;
     proposal_id_ = other.proposal_id_;
     paxos_replica_num_ = other.paxos_replica_num_;
-    end_scn_ = other.end_scn_;
+    in_sync_ = other.in_sync_;
   }
   return ret;
 }
@@ -265,26 +265,30 @@ int ObLSLogStatInfo::check_log_sync(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid leader index", KR(ret), K(leader_idx), KPC(this));
   } else {
-    const int64_t leader_end_scn_ts = replicas_.at(leader_idx).get_end_scn();
     int64_t in_sync_count = 0;
     ARRAY_FOREACH_N(replicas_, idx, cnt) {
       const ObAddr &server = replicas_.at(idx).get_server();
-      const int64_t replica_end_scn_ts = replicas_.at(idx).get_end_scn();
       if (common::has_exist_in_array(valid_servers, server)) {
-        const int64_t diff = leader_end_scn_ts - replica_end_scn_ts;
-        //the diff may less than 0, follower may replay fast then leadr
-        if (diff <= LOG_IN_SYNC_INTERVAL_NS) {
+        if (replicas_.at(idx).get_in_sync()) {
           ++in_sync_count;
         } else {
-          LOG_INFO("replica is not in sync", K(leader_end_scn_ts), K(replica_end_scn_ts), K(diff),
-              "leader_replica", replicas_.at(leader_idx), "current_replica", replicas_.at(idx));
+          LOG_INFO("replica is not in sync", "current_replica", replicas_.at(idx));
         }
       }
     } // end foreach replicas_
-    int64_t paxos_replica_num = replicas_.at(leader_idx).get_paxos_replica_num();
-    is_log_sync = (in_sync_count + arb_replica_num >= rootserver::majority(paxos_replica_num));
-    LOG_INFO("check log sync finished", KR(ret), K(is_log_sync), K(in_sync_count), K(arb_replica_num),
-        K(paxos_replica_num), K(valid_servers), "leader_replica", replicas_.at(leader_idx), KPC(this));
+    if (GCTX.is_shared_storage_mode()) {
+      if (in_sync_count >= 1) {
+        is_log_sync = true;
+      } else {
+        is_log_sync = false;
+      }
+      LOG_INFO("check log sync finished in ss mode", K(in_sync_count), K(is_log_sync), K(valid_servers));
+    } else {
+      int64_t paxos_replica_num = replicas_.at(leader_idx).get_paxos_replica_num();
+      is_log_sync = (in_sync_count + arb_replica_num >= rootserver::majority(paxos_replica_num));
+      LOG_INFO("check log sync finished", KR(ret), K(is_log_sync), K(in_sync_count), K(arb_replica_num),
+          K(paxos_replica_num), K(valid_servers), "leader_replica", replicas_.at(leader_idx), KPC(this));
+    }
   }
   return ret;
 }

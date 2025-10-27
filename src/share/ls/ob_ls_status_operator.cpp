@@ -1203,7 +1203,7 @@ int ObLSStatusOperator::construct_ls_log_stat_info_sql_(common::ObSqlString &sql
   const char *excluded_status = ls_status_to_str(OB_LS_CREATE_ABORT);
   if (OB_FAIL(sql.assign_fmt(
       "SELECT a.tenant_id, a.ls_id, b.svr_ip, b.svr_port, b.role, b.proposal_id, "
-      "b.paxos_member_list, b.paxos_replica_num, b.end_scn "
+      "b.paxos_member_list, b.paxos_replica_num, b.in_sync "
       "FROM %s AS a LEFT JOIN %s AS b ON a.tenant_id = b.tenant_id AND a.ls_id = b.ls_id "
       "WHERE a.status != '%s' "
       "ORDER BY a.tenant_id, a.ls_id, b.role",
@@ -1348,10 +1348,10 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
   ObString svr_ip;
   int64_t svr_port = OB_INVALID_INDEX;
   int64_t proposal_id = INVALID_PROPOSAL_ID;
-  int64_t end_scn = OB_INVALID_SCN_VAL;
   int64_t paxos_replica_num = OB_INVALID_COUNT;
   ObString paxos_member_list_str;
   ObLSReplica::MemberList member_list;
+  bool in_sync = false;
 
   EXTRACT_INT_FIELD_MYSQL(result, "tenant_id", tenant_id, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
@@ -1364,7 +1364,7 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
   //replica in migrate, member list maybe null
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "paxos_member_list", paxos_member_list_str);
   EXTRACT_INT_FIELD_MYSQL(result, "paxos_replica_num", paxos_replica_num, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, "end_scn", end_scn, int64_t);
+  EXTRACT_BOOL_FIELD_MYSQL(result, "in_sync", in_sync);
 
   ObCStringHelper helper;
   const char *paxos_member_list_ptr = nullptr;
@@ -1387,13 +1387,13 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
       proposal_id,
       member_list,
       paxos_replica_num,
-      end_scn))) {
+      in_sync))) {
     LOG_WARN("fail to init replica", KR(ret), K(tenant_id), K(ls_id), K(server), K(role),
-        K(proposal_id), K(member_list), K(paxos_replica_num), K(end_scn));
+        K(proposal_id), K(member_list), K(paxos_replica_num), K(in_sync));
   }
   LOG_INFO("construct ls log stat replica finished", KR(ret), K(tenant_id), K(ls_id),
       K(svr_ip), K(svr_port), K(role_str), K(proposal_id), K(paxos_member_list_str),
-      K(paxos_replica_num), K(end_scn), K(replica));
+      K(paxos_replica_num), K(in_sync), K(replica));
   return ret;
 }
 
@@ -1466,6 +1466,16 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
       valid_servers))) {
     LOG_WARN("fail to generate valid member_list", KR(ret),
         K(to_stop_servers), K(leader), K(ls_log_stat_info));
+  } else if (GCTX.is_shared_storage_mode()) {
+    if (valid_servers.count() >= 1) {
+      LOG_INFO("do not check majority in ss mode", K(valid_servers));
+    } else {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("no available server in ss mode", KR(ret), K(valid_servers));
+      (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no available server in ss mode, %s",
+          ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str);
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+    }
   } else if (2 == paxos_replica_num
              && OB_FAIL(ObShareUtil::generate_arb_replica_num(
                           ls_log_stat_info.get_tenant_id(),
@@ -1493,6 +1503,8 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
     (void)snprintf(err_msg, sizeof(err_msg), "Tenant(%lu) LS(%ld) has no enough valid paxos member after %s, %s",
         ls_log_stat_info.get_tenant_id(), ls_log_stat_info.get_ls_id().id(), print_str, print_str);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+  }
+  if (OB_FAIL(ret)) {
   } else if (skip_log_sync_check) {
     // skip check_log_in_sync
   } else if (OB_FAIL(ls_log_stat_info.check_log_sync(valid_servers, arb_replica_num, is_passed))) {
