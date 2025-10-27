@@ -178,20 +178,16 @@ private:
                                     ObDASScanCtDef *&spiv_scan_ctdef,
                                     ObDASScanCtDef *&rowkey_docid_ctdef,
                                     ObDASScanCtDef *&aux_data_ctdef,
-                                    ObDASScanCtDef *&block_max_scan_ctdef,
-                                    ObStoragePushdownFlag& pushdown_flag);
+                                    ObDASScanCtDef *&block_max_scan_ctdef);
   int generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
                                     ObDASScanCtDef *&first_aux_ctdef,
                                     ObDASScanCtDef *&second_aux_ctdef,
                                     ObDASScanCtDef *&third_aux_ctdef,
-                                    ObDASScanCtDef *&forth_aux_ctdef,
-                                    ObStoragePushdownFlag& pushdown_flag);
+                                    ObDASScanCtDef *&forth_aux_ctdef);
   int generate_vec_aux_table_ctdef(const ObLogTableScan &op,
                                   ObTSCIRScanType ir_scan_type,
                                   uint64_t table_id,
-                                  ObDASScanCtDef *&aux_ctdef,
-                                  ObStoragePushdownFlag& pushdown_flag,
-                                  bool need_set_flag = false);
+                                  ObDASScanCtDef *&aux_ctdef);
   int extract_text_ir_access_columns(const ObLogTableScan &op,
                                      const ObTextRetrievalInfo &tr_info,
                                      const ObDASScanCtDef &scan_ctdef,

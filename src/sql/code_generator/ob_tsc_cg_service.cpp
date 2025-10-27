@@ -2220,9 +2220,7 @@ int ObTscCgService::generate_gis_ir_ctdef(const ObLogTableScan &op,
 int ObTscCgService::generate_vec_aux_table_ctdef(const ObLogTableScan &op,
                                                   ObTSCIRScanType ir_scan_type,
                                                   uint64_t table_id,
-                                                  ObDASScanCtDef *&aux_ctdef,
-                                                  ObStoragePushdownFlag& pushdown_flag,
-                                                  bool need_set_flag)
+                                                  ObDASScanCtDef *&aux_ctdef)
 {
   int ret = OB_SUCCESS;
   ObIAllocator &ctdef_alloc = cg_.phy_plan_->get_allocator();
@@ -2236,11 +2234,16 @@ int ObTscCgService::generate_vec_aux_table_ctdef(const ObLogTableScan &op,
   } else {
     aux_ctdef->ref_table_id_ = table_id;
     aux_ctdef->ir_scan_type_ = ir_scan_type;
-    if (need_set_flag) {
-      aux_ctdef->pd_expr_spec_.pd_storage_flag_ = pushdown_flag;
-    }
     if (OB_FAIL(generate_das_scan_ctdef(op, cg_ctx, *aux_ctdef, has_rowscn))) {
       LOG_WARN("failed to generate das scan ctdef", K(ret));
+    } else if (OB_FAIL(generate_pd_storage_flag(op,
+                                                aux_ctdef->ref_table_id_,
+                                                op.get_access_exprs(),
+                                                op.get_type(),
+                                                false,
+                                                op.use_column_store(),
+                                                *aux_ctdef))) {
+      LOG_WARN("failed to generate pd storage flag for scan ctdef",K(ret), K(aux_ctdef->ref_table_id_));
     }
   }
   return ret;
@@ -2250,14 +2253,12 @@ int ObTscCgService::generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
                                                   ObDASScanCtDef *&first_aux_ctdef,
                                                   ObDASScanCtDef *&second_aux_ctdef,
                                                   ObDASScanCtDef *&third_aux_ctdef,
-                                                  ObDASScanCtDef *&forth_aux_ctdef,
-                                                  ObStoragePushdownFlag& pushdown_flag)
+                                                  ObDASScanCtDef *&forth_aux_ctdef)
 {
   int ret = OB_SUCCESS;
   const ObVecIndexInfo &vc_info = op.get_vector_index_info();
   if (vc_info.is_spiv_scan()) {
-    if (OB_FAIL(generate_vec_spiv_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef,
-                                        third_aux_ctdef, forth_aux_ctdef, pushdown_flag))) {
+    if (OB_FAIL(generate_vec_spiv_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef, third_aux_ctdef, forth_aux_ctdef))) {
       LOG_WARN("failed to generate spiv aux ctdef", K(ret));
     }
   } else {
@@ -2265,19 +2266,15 @@ int ObTscCgService::generate_vec_aux_idx_tbl_ctdef(const ObLogTableScan &op,
     ObTSCIRScanType second_ir_scan_type = vc_info.is_hnsw_vec_scan() ? OB_VEC_IDX_ID_SCAN : OB_VEC_IVF_CID_VEC_SCAN;
     ObTSCIRScanType third_ir_scan_type = vc_info.is_hnsw_vec_scan() ? OB_VEC_SNAPSHOT_SCAN : OB_VEC_IVF_ROWKEY_CID_SCAN;
     ObTSCIRScanType forth_ir_scan_type = vc_info.is_hnsw_vec_scan() ? OB_VEC_ROWKEY_VID_SCAN : OB_VEC_IVF_SPECIAL_AUX_SCAN;
-    if (OB_FAIL(generate_vec_aux_table_ctdef(op, first_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), first_aux_ctdef,
-                                            pushdown_flag, true))) {
+    if (OB_FAIL(generate_vec_aux_table_ctdef(op, first_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), first_aux_ctdef))) {
       LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(first_ir_scan_type));
-    } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, second_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), second_aux_ctdef,
-                                                    pushdown_flag, true))) {
+    } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, second_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), second_aux_ctdef))) {
       LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(second_ir_scan_type));
-    } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, third_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), third_aux_ctdef,
-                                                    pushdown_flag, true))) {
+    } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, third_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), third_aux_ctdef))) {
       LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(third_ir_scan_type));
     } else if (!vc_info.is_ivf_flat_scan() &&
                !op.need_skip_rowkey_vid() &&
-               OB_FAIL(generate_vec_aux_table_ctdef(op, forth_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), forth_aux_ctdef,
-                                                                                  pushdown_flag, vc_info.is_hnsw_vec_scan()))) {
+               OB_FAIL(generate_vec_aux_table_ctdef(op, forth_ir_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), forth_aux_ctdef))) {
       LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(forth_ir_scan_type));
     }
   }
@@ -2289,8 +2286,7 @@ int ObTscCgService::generate_vec_spiv_aux_idx_tbl_ctdef(const ObLogTableScan &op
                                                   ObDASScanCtDef *&spiv_scan_ctdef,
                                                   ObDASScanCtDef *&rowkey_docid_ctdef,
                                                   ObDASScanCtDef *&aux_data_ctdef,
-                                                  ObDASScanCtDef *&block_max_scan_ctdef,
-                                                  ObStoragePushdownFlag& pushdown_flag)
+                                                  ObDASScanCtDef *&block_max_scan_ctdef)
 {
   int ret = OB_SUCCESS;
   const ObVecIndexInfo &vc_info = op.get_vector_index_info();
@@ -2298,19 +2294,16 @@ int ObTscCgService::generate_vec_spiv_aux_idx_tbl_ctdef(const ObLogTableScan &op
   ObTSCIRScanType rowkey_docid_type = OB_VEC_ROWKEY_VID_SCAN;
   ObTSCIRScanType aux_data_type = OB_VEC_COM_AUX_SCAN;
   ObTSCIRScanType block_max_scan_type = OB_VEC_SPIV_BLOCK_MAX_SCAN;
-  if (OB_FAIL(generate_vec_aux_table_ctdef(op, spiv_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), spiv_scan_ctdef,
-                                                  pushdown_flag, true))) {
+  if (OB_FAIL(generate_vec_aux_table_ctdef(op, spiv_scan_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), spiv_scan_ctdef))) {
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(spiv_scan_type));
-  } else if (!op.need_skip_rowkey_doc() && OB_FAIL(generate_vec_aux_table_ctdef(op, rowkey_docid_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), rowkey_docid_ctdef, pushdown_flag, true))) {
+  } else if (!op.need_skip_rowkey_doc() && OB_FAIL(generate_vec_aux_table_ctdef(op, rowkey_docid_type, vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), rowkey_docid_ctdef))) {
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(rowkey_docid_type), K(op.get_rowkey_doc_table_id()));
-  } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, aux_data_type, vc_info.main_table_tid_, aux_data_ctdef, pushdown_flag, true))) {  // main_table_tid
+  } else if (OB_FAIL(generate_vec_aux_table_ctdef(op, aux_data_type, vc_info.main_table_tid_, aux_data_ctdef))) {  // main_table_tid
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(aux_data_type));
   } else if (OB_FAIL(generate_vec_aux_table_ctdef(op,
                  block_max_scan_type,
                  vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX),
-                 block_max_scan_ctdef,
-                 pushdown_flag,
-                 true))) {  // block max
+                 block_max_scan_ctdef))) {  // block max
     LOG_WARN("failed to generate vec aux idx tbl ctdef", K(ret), K(aux_data_type));
   }
   return ret;
@@ -2369,12 +2362,11 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
     ObDASScanCtDef *fourth_aux_ctdef = nullptr; // HNSW_ROWKEY_VID_TABLE    | null or IVF_SQ_META_TABLE or IVF_PQ_ID_TABLE | BLOCK_MAX_SCAN
     ObDASScanCtDef *com_aux_ctdef = nullptr;    // main table
     ObDASBaseCtDef *func_lookup_ctdef = nullptr;// functional lookup
-    ObStoragePushdownFlag pushdown_flag = tsc_ctdef.scan_ctdef_.pd_expr_spec_.pd_storage_flag_;
     bool need_com_aux_ctdef = vc_info.is_hnsw_vec_scan() || vc_info.is_ivf_vec_scan();
-    if (OB_FAIL(generate_vec_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef, third_aux_ctdef, fourth_aux_ctdef, pushdown_flag))) {
+    if (OB_FAIL(generate_vec_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef, third_aux_ctdef, fourth_aux_ctdef))) {
       LOG_WARN("fail to generate_vec_aux_idx_tbl_ctdef", K(ret));
     } else if (OB_FAIL(need_com_aux_ctdef
-    && generate_vec_aux_table_ctdef(op, ObTSCIRScanType::OB_VEC_COM_AUX_SCAN, vc_info.main_table_tid_, com_aux_ctdef, pushdown_flag, need_com_aux_ctdef))) {
+    && generate_vec_aux_table_ctdef(op, ObTSCIRScanType::OB_VEC_COM_AUX_SCAN, vc_info.main_table_tid_, com_aux_ctdef))) {
       LOG_WARN("fail to generate_vec_aux_table_ctdef", K(ret));
     } else if (vc_info.is_hnsw_vec_scan() && has_tr_info && (op.is_vec_idx_scan_post_filter() || op.is_vec_adaptive_scan())) {
       if (OB_FAIL(generate_functional_lookup_ctdef(op, tsc_ctdef, nullptr, nullptr, func_lookup_ctdef, false, true))) {
