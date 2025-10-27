@@ -1631,9 +1631,9 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     if (INDEX_STATUS_AVAILABLE == new_status) {
       // For create index syntax, create_index_arg_ will record the user sql, and generate the ddl_stmt_str when nabling index.
       // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
-      if (index_schema.is_vec_index() && !index_schema.is_vec_delta_buffer_type()) {
+      if (index_schema.is_vec_index() && !index_schema.is_vec_domain_index()) {
         // do nothing
-        // For create fts index, just record one ddl_stmt_str in the delta buf table which the user can see
+        // For create vec index, just record one ddl_stmt_str in the domain buf table which the user can see
       } else if (index_schema.is_fts_index() && !index_schema.is_fts_index_aux()) {
         // do nothing
         // For create fts index, just record one ddl_stmt_str in the fts_index_aux table which the user can see
