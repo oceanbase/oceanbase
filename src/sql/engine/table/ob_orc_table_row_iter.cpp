@@ -132,7 +132,7 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
                                           &colid_default_value_arr_.at(i) : nullptr;
 
     if (OB_SUCC(ret)) {
-      int tmp_ret = is_iceberg_lake_table() && file_contains_attribute_key_ ?
+      int tmp_ret = file_contains_attribute_key_ ?
                     iceberg_id_to_type_.get_refactored(orc_col_id, type) :
                     id_to_type_.get_refactored(orc_col_id, type);
 
@@ -300,18 +300,6 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     }
     const sql::ColumnIndexType index_type =
                                   scan_param_->external_file_format_.orc_format_.column_index_type_;
-    // todo(zhengjin)
-    if (OB_SUCC(ret) && !is_iceberg_lake_table() && index_type == sql::ColumnIndexType::NAME) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-        ObDataAccessPathExtraInfo *data_access_info =
-          static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-        if (data_access_info == nullptr ||
-            data_access_info->data_access_path_.ptr() == nullptr ||
-            data_access_info->data_access_path_.length() == 0) {
-          ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
-        }
-      }
-    }
 
     if (is_lake_table()) {
       OZ(ObExternalTableRowIterator::init_default_batch(file_column_exprs_));
@@ -491,12 +479,23 @@ int ObOrcTableRowIterator::next_stripe()
 int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!reader_)) {
+  ObFileScanTask *scan_task =
+    static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(state_.file_idx_ - 1));
+  if (OB_ISNULL(scan_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null scan task", K(ret), K(state_.file_idx_ - 1));
+  } else if (OB_UNLIKELY(!reader_ && (scan_task->record_count_ <= 0 || !is_count_aggr_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null reader", K(ret));
   } else if (is_count_aggr_) {
     // mark whole file range for count aggregation query
-    int64_t file_rows_count = reader_->getNumberOfRows();
+    int64_t file_rows_count = 0;
+    if (scan_task->record_count_ > 0) {
+      file_rows_count = scan_task->record_count_;
+    } else {
+      file_rows_count = reader_->getNumberOfRows();
+    }
+
     if (is_iceberg_lake_table() && OB_NOT_NULL(delete_bitmap_)) {
       file_rows_count -= delete_bitmap_->get_cardinality();
     }
@@ -681,20 +680,28 @@ int ObOrcTableRowIterator::next_file()
     if (data_access_driver_.is_opened()) {
       data_access_driver_.close();
     }
+    ObFileScanTask *scan_task = nullptr;
 
     do {
-      if ((task_idx = state_.file_idx_++) >= scan_param_->key_ranges_.count()) {
+      if ((task_idx = state_.file_idx_++) >= scan_param_->scan_tasks_.count()) {
         ret = OB_ITER_END;
       } else {
-        state_.cur_file_url_ = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
         file_size = -1;
         int64_t modify_time = 0;
         ObString file_content_digest;
         url_.reuse();
         const char *split_char = "/";
 
+        scan_task = static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(task_idx));
+        if (OB_ISNULL(scan_task)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null scan task", K(ret), K(task_idx));
+        } else {
+          state_.cur_file_url_ = scan_task->file_url_;
+        }
+
         if (OB_FAIL(ret)) {
-        } else if (!is_iceberg_lake_table() && !is_abs_url(state_.cur_file_url_)) {
+        } else if (!is_abs_url(state_.cur_file_url_)) {
           OZ(url_.append_fmt(
               "%.*s%s%.*s",
               location.length(),
@@ -711,18 +718,9 @@ int ObOrcTableRowIterator::next_file()
           // do nothing
         } else {
           if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
-            file_size = scan_param_->key_ranges_.at(task_idx)
-                          .get_start_key()
-                          .get_obj_ptr()[ObExternalTableUtils::FILE_SIZE]
-                          .get_int();
-            modify_time = scan_param_->key_ranges_.at(task_idx)
-                            .get_start_key()
-                            .get_obj_ptr()[ObExternalTableUtils::MODIFY_TIME]
-                            .get_int();
-            file_content_digest = scan_param_->key_ranges_.at(task_idx)
-                                    .get_start_key()
-                                    .get_obj_ptr()[ObExternalTableUtils::CONTENT_DIGEST]
-                                    .get_string();
+            file_size = scan_task->file_size_;
+            modify_time = scan_task->modification_time_;
+            file_content_digest = scan_task->content_digest_;
           }
           if (file_size < 0 || modify_time <= 0) {
             OZ(ObExternalTableUtils::collect_file_basic_info(
@@ -770,7 +768,7 @@ int ObOrcTableRowIterator::next_file()
 
     if (OB_SUCC(ret)) {
       // read orc file footer
-      int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+      int64_t part_id = scan_task->part_id_;
       if (need_partition_info_ && part_id != 0 && state_.part_id_ != part_id) {
         state_.part_id_ = part_id;
         bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
@@ -784,7 +782,7 @@ int ObOrcTableRowIterator::next_file()
         }
       }
 
-      state_.cur_file_id_ = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
+      state_.cur_file_id_ = scan_task->file_id_;
       if (OB_SUCC(ret)) {
         // init or reuse sector reader for current orc file
         sector_reader_ = nullptr;
@@ -792,18 +790,24 @@ int ObOrcTableRowIterator::next_file()
           OZ (init_sector_reader());
           sector_reader_ = inner_sector_reader_;
         } else if (is_iceberg_lake_table()) {
-          const bool has_delete_file = !scan_param_->key_ranges_.at(state_.file_idx_ - 1).get_start_key().get_obj_ptr()[ObExternalTableUtils::DELETE_FILE_URLS].is_null();
-          if (has_delete_file) {
+          ObIcebergScanTask *iceberg_scan_task = static_cast<ObIcebergScanTask *>(scan_task);
+          if (OB_ISNULL(iceberg_scan_task)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null iceberg scan task", K(ret), K(task_idx));
+          } else if (!iceberg_scan_task->delete_files_.empty()) {
             OZ (init_sector_reader());
             sector_reader_ = inner_sector_reader_;
           }
         }
       }
-      OZ(create_file_reader(url_.string(), data_access_driver_, file_prebuffer_, file_size, reader_));
+      // for select count(*) from iceberg table, we don't need to create reader
+      if (scan_task->record_count_ <= 0 || !is_count_aggr_) {
+        OZ(create_file_reader(url_.string(), data_access_driver_, file_prebuffer_, file_size, reader_));
+      }
       try {
         iceberg_id_to_type_.reuse();
         if (OB_FAIL(ret)) {
-        } else if (!reader_) {
+        } else if (!reader_ && (scan_task->record_count_ <= 0 || !is_count_aggr_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("orc create reader failed", K(ret));
           throw std::bad_exception();
@@ -820,7 +824,7 @@ int ObOrcTableRowIterator::next_file()
           id_to_type_.reuse();
           name_to_id_.reuse();
 
-          if (!is_iceberg_lake_table() || !file_contains_attribute_key_) {
+          if (!file_contains_attribute_key_) {
             if (project_reader_.row_reader_) {
               ObArray<ObString> col_names;
               if (OB_FAIL(SMART_CALL(build_type_name_id_map(&project_reader_.row_reader_->getSelectedType(),
@@ -844,8 +848,8 @@ int ObOrcTableRowIterator::next_file()
             LOG_WARN("fail to filter file and stripes", K(ret));
           } else if (OB_UNLIKELY(!state_.has_stripe())) {
             // no stripe after filter
-          } else if (is_iceberg_lake_table() && OB_FAIL(build_delete_bitmap(state_.cur_file_url_,
-                                                                        state_.file_idx_ - 1))) {
+          } else if (is_iceberg_lake_table() &&
+                    OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
             LOG_WARN("fail to build delete bitmap", K(ret));
           }
         }
@@ -906,7 +910,7 @@ int ObOrcTableRowIterator::create_row_readers()
     }
   }
 
-  ColumnIndexType column_index_type = is_iceberg_lake_table() && file_contains_attribute_key_ ?
+  ColumnIndexType column_index_type = file_contains_attribute_key_ ?
       sql::ColumnIndexType::ID : scan_param_->external_file_format_.orc_format_.column_index_type_;
 
   switch (column_index_type) {
@@ -1089,32 +1093,28 @@ int ObOrcTableRowIterator::filter_file(const int64_t task_idx)
   }
   if (OB_SUCC(ret) && !file_skipped) {
     // resolve stripe index by task id
-    int64_t start_lineno;
-    int64_t end_lineno;
-    if (OB_FAIL(ObExternalTableUtils::resolve_line_number_range(
-        scan_param_->key_ranges_.at(task_idx), ObExternalTableUtils::ROW_GROUP_NUMBER,
-        start_lineno, end_lineno))) {
-      LOG_WARN("fail to resolve line number range", K(ret), K(task_idx));
-    } else {
-      const int64_t nstripes = reader_->getNumberOfStripes();
-      LOG_TRACE("read file access: number of stipes", K(nstripes), K(url_));
-      state_.cur_stripe_idx_ = start_lineno - 1;
-      state_.end_stripe_idx_ = std::min(nstripes - 1, end_lineno);
-      if (state_.has_stripe() && OB_UNLIKELY(state_.cur_stripe_idx_ > 0)) {
-        // Since the starting stripe index of the current task does not start from 0,
-        // the previous rows need to be skipped.
-        const int64_t cur_stripe_idx = state_.cur_stripe_idx_;
-        for (int64_t stripe_idx = 0; OB_SUCC(ret) && stripe_idx < cur_stripe_idx; ++stripe_idx) {
-          std::unique_ptr<orc::StripeInformation> stripe = reader_->getStripe(stripe_idx);
-          if (OB_UNLIKELY(!stripe)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("null stripe is unexpected", K(ret), K(stripe_idx));
-          } else {
-            state_.next_stripe_first_row_id_ += stripe->getNumberOfRows();
-          }
+    int64_t start_lineno = scan_param_->scan_tasks_.at(task_idx)->first_lineno_;
+    int64_t end_lineno = scan_param_->scan_tasks_.at(task_idx)->last_lineno_;
+
+    const int64_t nstripes = reader_->getNumberOfStripes();
+    LOG_TRACE("read file access: number of stipes", K(nstripes), K(url_));
+    state_.cur_stripe_idx_ = start_lineno - 1;
+    state_.end_stripe_idx_ = std::min(nstripes - 1, end_lineno);
+    if (state_.has_stripe() && OB_UNLIKELY(state_.cur_stripe_idx_ > 0)) {
+      // Since the starting stripe index of the current task does not start from 0,
+      // the previous rows need to be skipped.
+      const int64_t cur_stripe_idx = state_.cur_stripe_idx_;
+      for (int64_t stripe_idx = 0; OB_SUCC(ret) && stripe_idx < cur_stripe_idx; ++stripe_idx) {
+        std::unique_ptr<orc::StripeInformation> stripe = reader_->getStripe(stripe_idx);
+        if (OB_UNLIKELY(!stripe)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null stripe is unexpected", K(ret), K(stripe_idx));
+        } else {
+          state_.next_stripe_first_row_id_ += stripe->getNumberOfRows();
         }
       }
     }
+
   }
   return ret;
 }
@@ -1262,7 +1262,7 @@ int ObOrcTableRowIterator::OrcMinMaxFilterParamBuilder::build(
     if (!col_stat) {
       // no orc column statistics
     } else {
-      if (orc_row_iter_->is_iceberg_lake_table() && orc_row_iter_->file_contains_attribute_key_) {
+      if (orc_row_iter_->file_contains_attribute_key_) {
         if (OB_FAIL(orc_row_iter_->iceberg_id_to_type_.get_refactored(orc_col_id, orc_type))) {
           LOG_WARN("fail to get orc type", K(ret), K(orc_col_id));
         }
@@ -2062,7 +2062,7 @@ int ObOrcTableRowIterator::get_data_column_batch(
   const orc::StructVectorBatch *cur_batch = root_batch;
   batch = nullptr;
 
-  if (is_iceberg_lake_table() && file_contains_attribute_key_) {
+  if (file_contains_attribute_key_) {
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < cur_type->getSubtypeCount(); i++) {
       const std::string &id_val = cur_type->getSubtype(i)->getAttributeValue(ICEBERG_ID_KEY);
       if (id_val == std::to_string(col_id)) {
@@ -2110,7 +2110,7 @@ ObOrcTableRowIterator::make_external_table_access_options(stmt::StmtType stmt_ty
 int ObOrcTableRowIterator::compute_column_id_by_table_type(int64_t index, int64_t &orc_col_id)
 {
   int ret = OB_SUCCESS;
-  if (!is_iceberg_lake_table() || !file_contains_attribute_key_) {
+  if (!file_contains_attribute_key_) {
     OZ (compute_column_id_by_index_type(index, orc_col_id));
   } else {
     orc_col_id = file_column_exprs_.at(index)->extra_;

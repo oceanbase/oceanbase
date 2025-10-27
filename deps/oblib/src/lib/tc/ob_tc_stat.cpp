@@ -18,21 +18,27 @@ public:
   }
   ~QSchedStat() {}
   void try_report(int n_chan, int64_t cur_us, bool leaf_only) {
-    static char buf[1<<15];
+    static char buf[1<<14];
     int idx[128];
     StrFormat f(buf, sizeof(buf));
     int active_cnt = 0;
     if (cur_us - last_report_us_ > 1000 * 1000) {
-      f.append("|cfg:");
       collect_cfg(f);
+      TC_INFO("QSched cfg: %s", buf);
+      f.clear();
       active_cnt = collect_active_grp_idx(idx, arrlen(idx), leaf_only);
-      f.append("|stat:");
       collect_stat(f, idx, active_cnt);
+      TC_INFO("QSched stat: %s", buf);
+      f.clear();
       for(int i = 0; i < n_chan; i++) {
-        f.append(" |q%d:", i);
+        if (i > 0) {
+          f.append(" | ");
+        }
+        f.append("q%d:", i);
         collect_qcount(f, i, idx, active_cnt);
       }
-      TC_INFO("QSched: %s", buf);
+      TC_INFO("QSched qdisc: %s", buf);
+      f.clear();
       last_report_us_ = cur_us;
     }
   }
@@ -68,14 +74,23 @@ private:
     return active_cnt;
   }
   void collect_stat(StrFormat& f, int* idx, int cnt) {
-    char b[16];
+    char b1[16];
+    char b2[16];
     for(int j = 0; j < cnt; j++) {
+      if (j > 0) {
+        f.append(" | ");
+      }
       int i = idx[j];
       QDesc* desc = (typeof(desc))imap_fetch(i);
       QStat cur_stat;
       desc->get_stat(cur_stat);
       int64_t total_count = cur_stat.count_ - last_stat_[i].count_;
-      f.append(" %s:%s/%ld:%ld", desc->get_name(), format_bytes(b, sizeof(b), cur_stat.bytes_ - last_stat_[i].bytes_), total_count,  total_count > 0? (cur_stat.delay_ - last_stat_[i].delay_)/total_count: 0);
+      f.append("name=%s, bw=%s, io=%ld, avgrt=%ld, canceled=%s",
+          desc->get_name(),
+          format_bytes(b1, sizeof(b1), cur_stat.bytes_ - last_stat_[i].bytes_),
+          total_count,
+          total_count > 0 ? (cur_stat.delay_ - last_stat_[i].delay_)/total_count: 0,
+          format_bytes(b2, sizeof(b2), cur_stat.canceled_ - last_stat_[i].canceled_));
       last_stat_[i] = cur_stat;
     }
   }

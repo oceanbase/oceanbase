@@ -97,6 +97,9 @@ public:
     int ret = OB_SUCCESS;
     ls_id_ = ls_id;
     total_doc_cnt_tablet_id_ = related_tablet_ids.domain_id_idx_tablet_id_;
+    if (inv_idx_tablet_id_.is_valid() && inv_idx_tablet_id_ != related_tablet_ids.inv_idx_tablet_id_) {
+      inv_idx_tablet_switched_ = true;
+    }
     inv_idx_tablet_id_ = related_tablet_ids.inv_idx_tablet_id_;
     fwd_idx_tablet_id_ = related_tablet_ids.fwd_idx_tablet_id_;
     return ret;
@@ -111,9 +114,30 @@ public:
       bool &has_duplicate_boolean_tokens);
   int set_children_iter_rangekey(const common::ObIArray<std::pair<ObDocIdExt, int>> &virtual_rangekeys, const int64_t batch_size);
   bool is_taat_mode() { return taat_mode_; }
-  int get_query_max_score(double &score) {
-    return sparse_retrieval_iter_->get_query_max_score(score);
+  int get_query_max_score(double &score)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(sparse_retrieval_iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else {
+      ret = sparse_retrieval_iter_->get_query_max_score(score);
+    }
+    return ret;
   }
+  int preset_top_k_threshold(const double threshold)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(sparse_retrieval_iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else {
+      ret = sparse_retrieval_iter_->preset_top_k_threshold(threshold);
+    }
+    return ret;
+  }
+  int is_topk_mode() const { return topk_mode_; }
+  void set_topk_limit(const int64_t limit) { topk_limit_ = limit; }
 private:
   int init_das_iter_scan_params();
   static int init_das_iter_scan_param(
@@ -140,6 +164,7 @@ private:
   int gen_fwd_idx_scan_feak_range(ObNewRange &scan_range);
   int init_topk_limit();
   int init_block_max_iter_param();
+  int init_doc_length_est_param();
 private:
   static const int64_t FWD_IDX_ROWKEY_COL_CNT = 2;
   static const int64_t INV_IDX_ROWKEY_COL_CNT = 2;
@@ -165,6 +190,8 @@ private:
   ObFtsEvalNode *boolean_compute_node_;
   ObFixedArray<ObTableScanParam *, ObIAllocator> block_max_scan_params_;
   ObBlockMaxScoreIterParam block_max_iter_param_;
+  ObBlockStatScanParam doc_length_est_param_;
+  ObFixedArray<ObSkipIndexColMeta, ObIAllocator> doc_length_est_stat_cols_;
   int64_t topk_limit_;
   ObLSID ls_id_;
   ObTabletID total_doc_cnt_tablet_id_;
@@ -181,6 +208,7 @@ private:
     uint32_t flags_;
   };
   bool check_rangekey_inited_;
+  bool inv_idx_tablet_switched_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObDASTRMergeIter);
 };

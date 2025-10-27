@@ -40,8 +40,9 @@ public:
   OB_INLINE bool is_empty() const { return EMPTY == status_; }
   OB_INLINE void set_empty() { status_ = EMPTY; }
   OB_INLINE const ObIArray<blocksstable::ObDatumRange> &get_ranges() const { return ranges_; }
-  OB_INLINE const ObIArray<blocksstable::ObDatumRange> &get_suffix_ranges() const { return skip_scan_ranges_; }
   OB_INLINE const ObIArray<blocksstable::ObDatumRowkey> &get_rowkeys() const { return rowkeys_; }
+  OB_INLINE bool has_valid_suffix_ranges() const { return 1 == skip_scan_ranges_.count(); }
+  OB_INLINE const blocksstable::ObDatumRange &get_suffix_range() const { return skip_scan_ranges_.at(0); }
   int get_query_iter_type(ObQRIterType &iter_type) const;
   TO_STRING_KV(K_(rowkeys), K_(ranges), K_(status), K_(is_inited), K_(enable_new_false_range));
 private:

@@ -587,6 +587,12 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_idx_batch_inner(const ObIArray<ObExpr
         if (OB_HASH_NOT_EXIST == ret) {
           if (tablet_ids_[i] <= 0) {
             ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+            // interval partition is not supported to add partition by pdml, so change error code here
+            if (OB_UNLIKELY(table_schema_.is_interval_part())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("add partition by pdml in interval partition table is not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "add partition by pdml in interval partition table is");
+            }
           } else {
             ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
           }
@@ -1737,7 +1743,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
       } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
         const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
         int64_t hash_idx = 0;
-        if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx, part_ch_array.count(), hash_idx))) {
+        if (OB_FAIL(hash_calc_.calc_slice_idx<USE_VEC>(eval_ctx, part_ch_array.count(), hash_idx, skip))) {
           LOG_WARN("fail calc hash value", K(ret));
         } else if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == hash_idx) {
           slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;

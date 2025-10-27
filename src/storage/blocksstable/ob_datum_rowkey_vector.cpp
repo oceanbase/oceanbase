@@ -621,7 +621,8 @@ int ObRowkeyVector::compare_rowkey(
     const int64_t row_idx,
     const ObStorageDatumUtils &datum_utils,
     int &cmp_ret,
-    const bool compare_datum_cnt) const
+    const bool compare_datum_cnt,
+    int64_t *not_eq_ptr) const
 {
   int ret = OB_SUCCESS;
   const int64_t cmp_cnt = MIN(col_cnt_, rowkey.datum_cnt_);
@@ -631,14 +632,15 @@ int ObRowkeyVector::compare_rowkey(
     LOG_WARN("Invalid argument to compare", K(ret), K(row_idx), K(rowkey), K(row_cnt_),
              K(col_cnt_), K(datum_utils));
   } else if (is_datum_vectors_) {
-    if (OB_FAIL(compare_datum_rowkey(rowkey, row_idx, datum_utils, cmp_cnt, cmp_ret, compare_datum_cnt))) {
+    if (OB_FAIL(compare_datum_rowkey(rowkey, row_idx, datum_utils, cmp_cnt, cmp_ret, compare_datum_cnt, not_eq_ptr))) {
       LOG_WARN("Failed to compare datum rowkey", K(ret));
     }
   } else {
     const ObStoreCmpFuncs &cmp_funcs = datum_utils.get_cmp_funcs();
     const bool is_oracle_mode = datum_utils.is_oracle_mode();
     cmp_ret = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt && 0 == cmp_ret; ++i) {
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < cmp_cnt && 0 == cmp_ret; ++i) {
       if (rowkey.datums_[i].is_min()) {
         cmp_ret = 1;
       } else if (rowkey.datums_[i].is_max()) {
@@ -653,6 +655,9 @@ int ObRowkeyVector::compare_rowkey(
     if (OB_SUCC(ret) && 0 == cmp_ret && compare_datum_cnt) {
       cmp_ret = col_cnt_ - rowkey.datum_cnt_;
     }
+    if (OB_SUCC(ret) && OB_UNLIKELY(nullptr != not_eq_ptr)) {
+      *not_eq_ptr = i;
+    }
   }
   return ret;
 }
@@ -663,18 +668,23 @@ int ObRowkeyVector::compare_datum_rowkey(
     const ObStorageDatumUtils &datum_utils,
     const int64_t cmp_cnt,
     int &cmp_ret,
-    const bool compare_datum_cnt) const
+    const bool compare_datum_cnt,
+    int64_t *not_eq_ptr) const
 {
   int ret = OB_SUCCESS;
   const ObStoreCmpFuncs &cmp_funcs = datum_utils.get_cmp_funcs();
   cmp_ret = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < cmp_cnt && 0 == cmp_ret; ++i) {
+  int64_t i = 0;
+  for (; OB_SUCC(ret) && i < cmp_cnt && 0 == cmp_ret; ++i) {
     if (OB_FAIL(cmp_funcs.at(i).compare(columns_[i].datums_[row_idx], rowkey.datums_[i], cmp_ret))) {
       LOG_WARN("Failed to compare key", K(ret), K(i), K(row_idx), K(rowkey));
     }
   }
   if (OB_SUCC(ret) && 0 == cmp_ret && compare_datum_cnt) {
     cmp_ret = col_cnt_ - rowkey.datum_cnt_;
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(nullptr != not_eq_ptr)) {
+    *not_eq_ptr = i;
   }
   return ret;
 }
@@ -1113,6 +1123,34 @@ bool ObRowkeyVector::is_all_integer_cols(const int64_t col_cnt, const storage::O
     }
   }
   return is_all_integer_cols;
+}
+
+int64_t ObRowkeyVector::print_rowkey(const int64_t row_idx, char *buf, int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(row_cnt), K_(col_cnt));
+  J_COMMA();
+  if (row_idx < row_cnt_ && nullptr != columns_) {
+    for (int64_t i = 0; i < col_cnt_; ++i) {
+      J_OBJ_START();
+      ObColumnVector &vector = columns_[i];
+      const ObColumnVectorType type = vector.type_;
+      if (ObColumnVectorType::SIGNED_INTEGER_TYPE == type) {
+        J_KV(K(i), K(type), K(vector.signed_ints_[row_idx]));
+      } else if (ObColumnVectorType::UNSIGNED_INTEGER_TYPE == type) {
+        J_KV(K(i), K(type), K(vector.unsigned_ints_[row_idx]));
+      } else if (ObColumnVectorType::DATUM_TYPE == type) {
+        J_KV(K(i), K(type), K(vector.datums_[row_idx]));
+      }
+      J_OBJ_END();
+      if (i < col_cnt_ - 1) {
+        J_COMMA();
+      }
+    }
+  }
+  J_OBJ_END();
+  return pos;
 }
 
 int64_t ObRowkeyVector::to_string(char *buf, const int64_t buf_len) const

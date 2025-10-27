@@ -272,6 +272,7 @@ constexpr int OB_LICENSE_EXPIRED = -4406;
 constexpr int OB_MIGRATE_TX_DATA_NOT_CONTINUES = -4408;
 constexpr int OB_INVALID_ZERO_DATE = -4409;
 constexpr int OB_LS_NOT_IN_LEARNER_LIST = -4410;
+constexpr int OB_MEMORY_LEAK = -4411;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -1943,6 +1944,10 @@ constexpr int OB_ERR_ALTER_ATTR_DUPLICATE = -9831;
 constexpr int OB_ERR_ALTER_INVALID_UDT = -9832;
 constexpr int OB_ERR_ALTER_ATTR_TYPE_ILLEGAL = -9833;
 constexpr int OB_ERR_ALTER_HAS_DEPENDENT = -9834;
+constexpr int OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD = -9835;
+constexpr int OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE = -9836;
+constexpr int OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE = -9837;
+constexpr int OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX = -9838;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -1988,6 +1993,7 @@ constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_ERR_PS_NO_RECURSION = -11016;
 constexpr int OB_ERR_PARTITION_EXCHANGE_PART_TABLE = -11017;
 constexpr int OB_INVALID_EXTERNAL_FILE = -11018;
+constexpr int OB_HDFS_PATH_NOT_FOUND = -11032;
 constexpr int OB_INVALID_EXTERNAL_FILE_COLUMN_PATH = -11046;
 constexpr int OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH = -11047;
 constexpr int OB_ERR_DDL_RESOURCE_NOT_ENOUGH = -11048;
@@ -1995,6 +2001,8 @@ constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
 constexpr int OB_ODPS_ERROR = -11050;
 constexpr int OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH = -11051;
 constexpr int OB_EXTERNAL_ODPS_UNEXPECTED_ERROR = -11052;
+constexpr int OB_JNI_ENV_ERROR = -11056;
+constexpr int OB_JNI_JAVA_HOME_NOT_FOUND_ERROR = -11058;
 constexpr int OB_ERR_INCORRECT_STRING_VALUE_FOR_INET = -11062;
 constexpr int OB_EXTERNAL_TABLE_FORMAT_ERROR = -11063;
 constexpr int OB_EXTERNAL_ACCESS_PATH_ERROR = -11064;
@@ -2050,6 +2058,7 @@ constexpr int OB_AI_FUNC_PARAM_TYPE_INVALID = -11117;
 constexpr int OB_AI_FUNC_MODEL_NOT_FOUND = -11118;
 constexpr int OB_AI_FUNC_MODEL_EXISTS = -11119;
 constexpr int OB_ERROR_DURING_COMMIT = -11120;
+constexpr int OB_ERR_TABLE_SNAPSHOT_NOT_EXIST = -11121;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2432,6 +2441,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_MIGRATE_TX_DATA_NOT_CONTINUES__USER_ERROR_MSG "migrate tx data not continues"
 #define OB_INVALID_ZERO_DATE__USER_ERROR_MSG "invalid zero date in no_zero_date mode"
 #define OB_LS_NOT_IN_LEARNER_LIST__USER_ERROR_MSG "ls not in learner list"
+#define OB_MEMORY_LEAK__USER_ERROR_MSG "observer has memory leak"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -4406,6 +4416,10 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_ALTER_INVALID_UDT__USER_ERROR_MSG "cannot alter a type that is not valid"
 #define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__USER_ERROR_MSG "type of attribute '%.*s' does not allow modifications to the attribute"
 #define OB_ERR_ALTER_HAS_DEPENDENT__USER_ERROR_MSG "must specify either CASCADE or INVALIDATE option"
+#define OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD__USER_ERROR_MSG "materialized view can not use direct load"
+#define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__USER_ERROR_MSG "FORALL bulk index cannot be used in INTO clause"
+#define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__USER_ERROR_MSG "FORALL bulk IN-bind variables cannot be used here"
+#define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__USER_ERROR_MSG "bulk SQL attributes must use a single index"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4464,7 +4478,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_HDFS_FUNC_UNIMPLEMENTED__USER_ERROR_MSG "HDFS: function is unimplemented"
 #define OB_HDFS_OPERATION_CANCELED__USER_ERROR_MSG "HDFS: operation is already canceled"
 #define OB_HDFS_PERMISSION_DENIED__USER_ERROR_MSG "HDFS: permission denied"
-#define OB_HDFS_PATH_NOT_FOUND__USER_ERROR_MSG "HDFS: path not found"
+#define OB_HDFS_PATH_NOT_FOUND__USER_ERROR_MSG "HDFS path message %s"
 #define OB_HDFS_FILE_ALREADY_EXISTS__USER_ERROR_MSG "HDFS: file already exists"
 #define OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY__USER_ERROR_MSG "HDFS: path is not empty directory"
 #define OB_HDFS_BUSY__USER_ERROR_MSG "HDFS: io or resource is busy"
@@ -4488,9 +4502,9 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_JNI_ERROR__USER_ERROR_MSG "unexpected error for jni"
 #define OB_JNI_CLASS_NOT_FOUND_ERROR__USER_ERROR_MSG "class could not be found during jni operation"
 #define OB_JNI_METHOD_NOT_FOUND_ERROR__USER_ERROR_MSG "method could not be found during jni operation"
-#define OB_JNI_ENV_ERROR__USER_ERROR_MSG "JNI env could not be found"
+#define OB_JNI_ENV_ERROR__USER_ERROR_MSG "jvm.so not found %s"
 #define OB_JNI_DELETE_REF_ERROR__USER_ERROR_MSG "JNI env could not delete ref"
-#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__USER_ERROR_MSG "JAVA_HOME could not be found"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__USER_ERROR_MSG "cur java home path %s"
 #define OB_JNI_ENSURE_CAPACTIY_ERROR__USER_ERROR_MSG "JNI cound not ensure capacity"
 #define OB_JNI_FIELD_NOT_FOUND_ERROR__USER_ERROR_MSG "field could not be found during jni operation"
 #define OB_JNI_OBJECT_NOT_FOUND_ERROR__USER_ERROR_MSG "object could not be found during jni operation"
@@ -4553,6 +4567,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_AI_FUNC_MODEL_NOT_FOUND__USER_ERROR_MSG "This ai model \'%.*s\' not found in the tenant"
 #define OB_AI_FUNC_MODEL_EXISTS__USER_ERROR_MSG "This ai model \'%.*s\' is already exists"
 #define OB_ERROR_DURING_COMMIT__USER_ERROR_MSG "Got error during COMMIT: %s"
+#define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Table snapshot '%.*s' does not exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5306,6 +5321,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_INVALID_ZERO_DATE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
 #define OB_LS_NOT_IN_LEARNER_LIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4410, ls not in learner list"
 #define OB_LS_NOT_IN_LEARNER_LIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4410, ls not in learner list"
+#define OB_MEMORY_LEAK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4411, observer has memory leak"
+#define OB_MEMORY_LEAK__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4411, observer has memory leak"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -9254,6 +9271,14 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_ALTER_ATTR_TYPE_ILLEGAL__OBE_USER_ERROR_MSG "PLS-00718: type of attribute '%.*s' does not allow modifications to the attribute"
 #define OB_ERR_ALTER_HAS_DEPENDENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9834, must specify either CASCADE or INVALIDATE option"
 #define OB_ERR_ALTER_HAS_DEPENDENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9834, must specify either CASCADE or INVALIDATE option"
+#define OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9835, materialized view can not use direct load"
+#define OB_ERR_MVIEW_CAN_NOT_USE_DIRECT_LOAD__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9835, materialized view can not use direct load"
+#define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__ORA_USER_ERROR_MSG "PLS-00437: FORALL bulk index cannot be used in INTO clause"
+#define OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE__OBE_USER_ERROR_MSG "PLS-00437: FORALL bulk index cannot be used in INTO clause"
+#define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__ORA_USER_ERROR_MSG "PLS-00440: FORALL bulk IN-bind variables cannot be used here"
+#define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__OBE_USER_ERROR_MSG "PLS-00440: FORALL bulk IN-bind variables cannot be used here"
+#define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__ORA_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
+#define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__OBE_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9370,8 +9395,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_HDFS_OPERATION_CANCELED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11030, HDFS: operation is already canceled"
 #define OB_HDFS_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11031, HDFS: permission denied"
 #define OB_HDFS_PERMISSION_DENIED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11031, HDFS: permission denied"
-#define OB_HDFS_PATH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11032, HDFS: path not found"
-#define OB_HDFS_PATH_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11032, HDFS: path not found"
+#define OB_HDFS_PATH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11032, HDFS path message %s"
+#define OB_HDFS_PATH_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11032, HDFS path message %s"
 #define OB_HDFS_FILE_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11033, HDFS: file already exists"
 #define OB_HDFS_FILE_ALREADY_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11033, HDFS: file already exists"
 #define OB_HDFS_PATH_IS_NOT_EMPTY_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11034, HDFS: path is not empty directory"
@@ -9418,12 +9443,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_JNI_CLASS_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11054, class could not be found during jni operation"
 #define OB_JNI_METHOD_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11055, method could not be found during jni operation"
 #define OB_JNI_METHOD_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11055, method could not be found during jni operation"
-#define OB_JNI_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11056, JNI env could not be found"
-#define OB_JNI_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11056, JNI env could not be found"
+#define OB_JNI_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11056, jvm.so not found %s"
+#define OB_JNI_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11056, jvm.so not found %s"
 #define OB_JNI_DELETE_REF_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11057, JNI env could not delete ref"
 #define OB_JNI_DELETE_REF_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11057, JNI env could not delete ref"
-#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11058, JAVA_HOME could not be found"
-#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11058, JAVA_HOME could not be found"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11058, cur java home path %s"
+#define OB_JNI_JAVA_HOME_NOT_FOUND_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11058, cur java home path %s"
 #define OB_JNI_ENSURE_CAPACTIY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11059, JNI cound not ensure capacity"
 #define OB_JNI_ENSURE_CAPACTIY_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11059, JNI cound not ensure capacity"
 #define OB_JNI_FIELD_NOT_FOUND_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11060, field could not be found during jni operation"
@@ -9548,6 +9573,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_AI_FUNC_MODEL_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11119, This ai model \'%.*s\' is already exists"
 #define OB_ERROR_DURING_COMMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11120, Got error during COMMIT: %s"
 #define OB_ERROR_DURING_COMMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11120, Got error during COMMIT: %s"
+#define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11121, Table snapshot '%.*s' does not exist"
+#define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11121, Table snapshot '%.*s' does not exist"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9567,7 +9594,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2499];
+extern int g_all_ob_errnos[2505];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

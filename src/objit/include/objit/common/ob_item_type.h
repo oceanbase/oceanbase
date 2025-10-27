@@ -965,7 +965,6 @@ typedef enum ObItemType
   T_FUN_SYS_SPIV_VALUE = 1918,
   T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
   T_FUN_STARTUP_MODE = 1920,
-  T_FUN_SYS_HIDDEN_CLUSTERING_KEY = 1921,
   T_FUN_SYS_TMP_FILE_OPEN = 1922,
   T_FUN_SYS_TMP_FILE_CLOSE = 1923,
   T_FUN_SYS_TMP_FILE_WRITE = 1924,
@@ -975,6 +974,7 @@ typedef enum ObItemType
   T_FUN_SYS_EMBEDDED_VEC = 1928,
   T_FUN_SYS_AI_PROMPT = 1929,
   T_FUN_SYS_VEC_VISIBLE = 1930, // vector index table 5
+  T_FUN_SYS_MAX_PT = 1931,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1055,6 +1055,8 @@ typedef enum ObItemType
   T_FUN_SYS_AI_RERANK = 2084,
   T_FUN_MD5_CNN_WS = 2085,
   T_FUN_SYS_BUCKET = 2086,
+  T_FUN_SYS_SDO_ANYINTERACT = 2087,
+  T_FUN_SYS_SDO_CONTAINS = 2088,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -1076,6 +1078,7 @@ typedef enum ObItemType
   T_PSEUDO_RELEVANCE_SCORE = 3042, // relecance score for sparse retireval
   T_PSEUDO_EXTERNAL_FILE_URL = 3043,
   T_PSEUDO_DDL_SLICE_ID = 3044,
+  T_PSEUDO_HIDDEN_CLUSTERING_KEY = 3045,
   T_WINDOW_FUNCTION = 3151,
   T_WIN_GENERALIZED_WINDOW = 3152,
   T_WIN_NEW_GENERALIZED_WINDOW = 3153,
@@ -2945,6 +2948,11 @@ typedef enum ObItemType
   T_FUN_ES_SCORE = 4913, // fulltext index for ES SQL
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_HYBRID_SEARCH_EXPRESSION = 4915,
+  T_RESCAN = 4916, // rescan_op
+  T_DEFAULT_CATALOG = 4917, // for hive metastore side default catalog
+  T_TABLE_VERSION_QUERY = 4918,
+  T_TABLE_VERSION_QUERY_TIMESTAMP = 4919,
+  T_TABLE_LOCK_MODE_HINT = 4920,  // to lock table before execute dml
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

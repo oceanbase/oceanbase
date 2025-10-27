@@ -26,16 +26,22 @@ public :
   ObQueryReqFromJson()
     : ObReqFromJson(), select_items_(), group_items_(),
       having_items_(), score_items_(), output_all_columns_(true),
-      score_alias_() {}
+      score_alias_(), is_basic_query_(true) {}
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> select_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> group_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> having_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_items_;
   int translate(char *buf, int64_t buf_len, int64_t &res_len);
   int add_score_item(ObIAllocator &alloc, ObReqExpr *score_item);
+  inline bool is_score_item_exist() { return !score_items_.empty(); }
   bool output_all_columns_;
   common::ObString score_alias_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> match_idxs_;
+
+  // used in basic query.
+  bool is_basic_query_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> tmp_outer_filter_items_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> outer_filter_items_;
 };
 
 }  // namespace share

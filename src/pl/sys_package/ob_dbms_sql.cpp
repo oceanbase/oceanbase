@@ -1652,7 +1652,9 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
       // we can't reopen the cursor, so if fill cursor has error. we will report to client.
       bool is_iter_end = false;
       OZ (spi_cursor->init_row_desc(new_cursor->get_field_columns()));
-      OZ (ObSPIService::fill_cursor(*(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0, is_iter_end));
+      OZ (ObSPIService::fill_cursor(
+        cursor->get_cursor_entity(),
+        *(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0, is_iter_end));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {

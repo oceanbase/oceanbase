@@ -143,7 +143,10 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDi
         (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_dropped_debug_log_count() : 0;
     stat_events.get(ObStatEventIds::ASYNC_LOG_FLUSH_SPEED - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
         (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_async_flush_log_speed() : 0;
-
+    stat_events.get(ObStatEventIds::OB_LOGGER_ALLOC_FROM_CACHE_COUNT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_alloc_item_from_cache_count() : 0;
+    stat_events.get(ObStatEventIds::OB_LOGGER_ALLOC_FROM_ALLCATOR_COUNT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_alloc_item_from_allocator_count() : 0;
 
     stat_events.get(ObStatEventIds::ASYNC_GENERIC_LOG_WRITE_COUNT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
         (OB_SYS_TENANT_ID == tenant_id) ? OB_LOGGER.get_generic_log_write_count() : 0;
@@ -263,6 +266,42 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, common::ObDi
     } else {
       // it is ok to not have any records
     }
+
+    int64_t default_group_cpu_time = 0;
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, share::OB_THREAD_GROUP_DEFAULT, default_group_cpu_time))) {
+      stat_events.get(ObStatEventIds::DEFAULT_GROUP_CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+          = default_group_cpu_time;
+    } else {}
+
+    int64_t olap_group_cpu_time = 0;
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, share::OB_THREAD_GROUP_OLAP_ASYNC, olap_group_cpu_time))) {
+      stat_events.get(ObStatEventIds::OLAP_ASYN_JOB_GROUP_CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+          = olap_group_cpu_time;
+    } else {}
+
+    int64_t dbms_sche_group_cpu_time = 0;
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, share::OB_THREAD_GROUP_DBMS_SCHE, dbms_sche_group_cpu_time))) {
+      stat_events.get(ObStatEventIds::DBMS_SCHED_JOB_GROUP_CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+          = dbms_sche_group_cpu_time;
+    } else {}
+
+    int64_t large_query_group_cpu_time = 0;
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, share::OB_THREAD_GROUP_LARGE_QUERY, large_query_group_cpu_time))) {
+      stat_events.get(ObStatEventIds::LARGE_QUERY_GROUP_CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+          = large_query_group_cpu_time;
+    } else {}
+
+    int64_t px_group_cpu_time = 0;
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, share::OB_THREAD_GROUP_PX, px_group_cpu_time))) {
+      stat_events.get(ObStatEventIds::PX_GROUP_CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+          = px_group_cpu_time;
+    } else {}
+
+    int64_t dag_group_cpu_time = 0;
+    if (OB_SUCC(GCTX.omt_->get_tenant_group_cpu_time(tenant_id, share::OB_THREAD_GROUP_DAG, dag_group_cpu_time))) {
+      stat_events.get(ObStatEventIds::DAG_GROUP_CPU_TIME - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+          = dag_group_cpu_time;
+    } else {}
 
     if (!is_virtual_tenant_id(tenant_id)) { // skip virtual tenant
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));

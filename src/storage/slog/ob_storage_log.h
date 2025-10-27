@@ -219,7 +219,7 @@ public:
   ObPendingFreeTabletStatus status_;
   int64_t free_time_;
   GCTabletType gc_type_;
-  int64_t tablet_transfer_seq_;
+  int64_t tablet_transfer_seq_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
   int64_t last_gc_version_;
 };
 
@@ -250,7 +250,7 @@ public:
   int64_t ls_epoch_;
   int64_t tablet_meta_version_;
   ObPendingFreeTabletStatus status_;
-  int64_t tablet_transfer_seq_;
+  int64_t tablet_transfer_seq_; // FARM COMPAT WHITELIST FOR tablet_transfer_seq_: renamed
 };
 
 struct ObUpdateTabletLog : public ObIBaseStorageLogEntry

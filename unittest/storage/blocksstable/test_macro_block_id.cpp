@@ -121,7 +121,7 @@ TEST_F(TestMacroBlockId, test_transfer_seq)
   test_block_id.set_second_id(curr_opt.ss_private_tablet_opt_.ls_id_);
   test_block_id.set_third_id(curr_opt.ss_private_tablet_opt_.tablet_id_);
   test_block_id.set_meta_version_id(curr_opt.ss_private_tablet_opt_.version_);
-  test_block_id.set_meta_transfer_seq(curr_opt.ss_private_tablet_opt_.tablet_transfer_seq_);
+  test_block_id.set_meta_transfer_epoch(curr_opt.ss_private_tablet_opt_.tablet_transfer_seq_);
 
   OB_LOG(INFO, "after set");
   hex_dump(&test_block_id.fourth_id_,
@@ -129,8 +129,8 @@ TEST_F(TestMacroBlockId, test_transfer_seq)
            true,
            OB_LOG_LEVEL_WARN);
 
-  OB_LOG(INFO, "show test_block_id", K(test_block_id), K(test_block_id.meta_transfer_seq()), K(test_block_id.meta_version_id()));
-  int64_t transfer_seq1 = test_block_id.meta_transfer_seq();
+  OB_LOG(INFO, "show test_block_id", K(test_block_id), K(test_block_id.meta_transfer_epoch()), K(test_block_id.meta_version_id()));
+  int64_t transfer_seq1 = test_block_id.meta_transfer_epoch();
   OB_LOG(INFO, "transfer_seq1");
   hex_dump(&transfer_seq1,
            sizeof(int64_t),
@@ -154,7 +154,7 @@ TEST_F(TestMacroBlockId, test_transfer_seq)
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, pos);
 
-  test_block_id.set_meta_transfer_seq(0);
+  test_block_id.set_meta_transfer_epoch(0);
   test_block_id.set_meta_version_id(100002);
 
   ret = test_block_id.serialize(buf, 50, pos);

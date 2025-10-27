@@ -58,7 +58,15 @@ public:
   int64_t file_size_ = 0;
   int64_t modification_time_ = 0;
   iceberg::DataFileFormat file_format_;
-  TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time));
+  int64_t dv_content_offset_ = 0;
+  int64_t dv_content_size_in_bytes_ = 0;
+  TO_STRING_KV(K_(type),
+               K_(file_url),
+               K_(file_size),
+               K_(modification_time),
+               K_(file_format),
+               K_(dv_content_offset),
+               K_(dv_content_size_in_bytes));
 };
 
 enum class LakeFileType{
@@ -92,17 +100,18 @@ public:
   ObOptIcebergFile()
   : ObIOptLakeTableFile(LakeFileType::ICEBERG),
     file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::INVALID), delete_files_()
+    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(), record_count_(0)
   {}
   virtual int assign(const ObIOptLakeTableFile &other) override;
   virtual void reset() override;
-  VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time), K_(delete_files));
+  VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time), K_(delete_files), K_(record_count));
 
   ObString file_url_;
   int64_t file_size_;
   int64_t modification_time_;
   iceberg::DataFileFormat file_format_;
   common::ObSEArray<const ObLakeDeleteFile *, 1, common::ModulePageAllocator, true> delete_files_;
+  int64_t record_count_;
 };
 
 struct ObOptHiveFile : public ObIOptLakeTableFile
@@ -123,73 +132,145 @@ public:
 };
 
 /* structs for execution */
-struct ObILakeTableFile
+struct ObIExtTblScanTask
 {
 public:
   OB_UNIS_VERSION_V(1);
 public:
-
-  explicit ObILakeTableFile(ObIAllocator &allocator, LakeFileType type)
-  : allocator_(allocator),
-    type_(type)
+  explicit ObIExtTblScanTask()
+  : file_url_(), part_id_(OB_INVALID_PARTITION_ID), first_lineno_(1), last_lineno_(INT64_MAX)
   {}
-  virtual LakeFileType get_file_type() const { return type_; }
-  bool is_iceberg_file() const { return LakeFileType::ICEBERG == type_; }
-  bool is_hive_file() const { return LakeFileType::HIVE == type_; }
-  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator, const ObIOptLakeTableFile &opt_table_file) = 0;
-  static int create_lake_table_file_by_type(ObIAllocator &allocator, LakeFileType type, ObILakeTableFile *&file);
-  VIRTUAL_TO_STRING_KV(K_(type));
+
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(part_id), K_(first_lineno), K_(last_lineno));
 
 public:
-  ObIAllocator &allocator_;
-  LakeFileType type_;
+  ObString file_url_; // serialized in ObFileScanTask
+  int64_t part_id_; // serialized in ObHiveScanTask
+  int64_t first_lineno_;
+  int64_t last_lineno_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObILakeTableFile);
-  int assign(const ObILakeTableFile &other);
+  DISALLOW_COPY_AND_ASSIGN(ObIExtTblScanTask);
+  int assign(const ObIExtTblScanTask &other);
 };
 
-struct ObIcebergFile : public ObILakeTableFile
+struct ObFileScanTask : public ObIExtTblScanTask
 {
 public:
   OB_UNIS_VERSION_V(1);
 public:
-  explicit ObIcebergFile(ObIAllocator &allocator)
-  : ObILakeTableFile(allocator, LakeFileType::ICEBERG),
-    file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(allocator)
+  explicit ObFileScanTask(LakeFileType type)
+  : ObIExtTblScanTask(),
+    type_(type),
+    file_size_(0),
+    modification_time_(0),
+    file_id_(0),
+    content_digest_(),
+    record_count_(0)
   {}
-  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator, const ObIOptLakeTableFile &opt_table_file);
-  VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time), K_(delete_files));
 
-  ObString file_url_;
+  virtual LakeFileType get_file_type() const { return type_; }
+  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                           const ObIOptLakeTableFile &opt_table_file) = 0;
+  static int create_lake_table_file_by_type(ObIAllocator &allocator, LakeFileType type, ObFileScanTask *&file);
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
+                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count));
+
+  LakeFileType type_;
   int64_t file_size_;
   int64_t modification_time_;
+  int64_t file_id_;
+  common::ObString content_digest_;
+  int64_t record_count_; // serialized in ObIcebergScanTask
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFileScanTask);
+  int assign(const ObFileScanTask &other);
+};
+
+struct ObIcebergScanTask : public ObFileScanTask
+{
+public:
+  OB_UNIS_VERSION_V(1);
+public:
+  explicit ObIcebergScanTask(ObIAllocator &allocator)
+  : ObFileScanTask(LakeFileType::ICEBERG),
+    allocator_(allocator),
+    file_format_(iceberg::DataFileFormat::INVALID),
+    delete_files_(allocator)
+  {}
+
+  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                           const ObIOptLakeTableFile &opt_table_file) override;
+
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
+                      K_(delete_files), K_(file_id), K_(part_id), K_(content_digest),
+                      K_(record_count));
+
+  ObIAllocator &allocator_;
   iceberg::DataFileFormat file_format_;
   common::ObFixedArray<ObLakeDeleteFile, ObIAllocator> delete_files_;
+
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObIcebergFile);
-  int assign(const ObIcebergFile &other);
+  DISALLOW_COPY_AND_ASSIGN(ObIcebergScanTask);
+  int assign(const ObIcebergScanTask &other);
 };
 
-struct ObHiveFile : public ObILakeTableFile
+struct ObHiveScanTask : public ObFileScanTask
 {
 public:
   OB_UNIS_VERSION_V(1);
 public:
-  explicit ObHiveFile(ObIAllocator &allocator)
-  : ObILakeTableFile(allocator, LakeFileType::HIVE),
-    file_url_(), file_size_(0), modification_time_(0), part_id_(OB_INVALID_PARTITION_ID)
+  explicit ObHiveScanTask()
+  : ObFileScanTask(LakeFileType::HIVE)
   {}
-  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator, const ObIOptLakeTableFile &opt_table_file);
-  VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time), K_(part_id));
 
-  ObString file_url_;
-  int64_t file_size_;
-  int64_t modification_time_;
-  int64_t part_id_;
+  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                           const ObIOptLakeTableFile &opt_table_file) override;
+
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
+                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count));
+
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObHiveFile);
-  int assign(const ObHiveFile &other);
+  DISALLOW_COPY_AND_ASSIGN(ObHiveScanTask);
+  int assign(const ObHiveScanTask &other);
+};
+
+struct ObExtTableScanTask : public ObFileScanTask
+{
+public:
+  explicit ObExtTableScanTask()
+  : ObFileScanTask(LakeFileType::INVALID)
+  {}
+
+  int init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                    const ObIOptLakeTableFile &opt_table_file) override
+  { return OB_NOT_SUPPORTED; }
+
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
+                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExtTableScanTask);
+  int assign(const ObExtTableScanTask &other);
+};
+
+struct ObOdpsScanTask : public ObIExtTblScanTask
+{
+public:
+  explicit ObOdpsScanTask()
+  : ObIExtTblScanTask(),
+    session_id_(), first_split_idx_(0), last_split_idx_(0)
+  {}
+
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(part_id), K_(session_id), K_(first_split_idx),
+                      K_(last_split_idx));
+
+  ObString session_id_;
+  int64_t first_split_idx_;
+  int64_t last_split_idx_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObOdpsScanTask);
+  int assign(const ObOdpsScanTask &other);
 };
 
 }

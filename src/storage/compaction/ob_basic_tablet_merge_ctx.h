@@ -94,7 +94,7 @@ public:
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
   share::ObPreWarmerParam pre_warm_param_;
   storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
-  int64_t tablet_transfer_seq_; // only used in shared_storage mode, used to init statis_desc;
+  int32_t private_transfer_epoch_; // only used in shared_storage mode, used to init statis_desc;
   int64_t co_base_snapshot_version_; // only used for column store replica, and firstly set in convert co merge
   share::SCN rec_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
@@ -247,7 +247,7 @@ public:
   DAG_PARAM_FUNC(const ObLSID &, ls_id);
   DAG_PARAM_FUNC(const ObTabletID &, tablet_id);
   DAG_PARAM_FUNC(int64_t, merge_version);
-  DAG_PARAM_FUNC(int64_t, schedule_transfer_seq);
+  DAG_PARAM_FUNC(int64_t, schedule_transfer_epoch);
   DAG_PARAM_FUNC(ObExecMode, exec_mode);
   STATIC_PARAM_FUNC(bool, is_tenant_major_merge);
   STATIC_PARAM_FUNC(bool, is_full_merge);

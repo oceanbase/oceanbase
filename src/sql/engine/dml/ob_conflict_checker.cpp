@@ -183,6 +183,8 @@ ObConflictChecker::ObConflictChecker(common::ObIAllocator &allocator,
                                      ObEvalCtx &eval_ctx,
                                      const ObConflictCheckerCtdef &checker_ctdef)
   : eval_ctx_(eval_ctx),
+    batch_eval_ctx_(nullptr),
+    das_scan_ctdef_for_lookup_(&checker_ctdef.das_scan_ctdef_),
     checker_ctdef_(checker_ctdef),
     das_scan_rtdef_(),
     attach_rtinfo_(nullptr),
@@ -192,7 +194,8 @@ ObConflictChecker::ObConflictChecker(common::ObIAllocator &allocator,
     table_loc_(nullptr),
     tmp_mem_ctx_(),
     snapshot_maping_(),
-    conflict_range_dist_ctx_(nullptr)
+    conflict_range_dist_ctx_(nullptr),
+    batch_guard_()
 {
 }
 
@@ -712,6 +715,8 @@ int ObConflictChecker::reuse()
   if (conflict_range_dist_ctx_ != nullptr) {
     conflict_range_dist_ctx_->reuse();
   }
+  das_scan_rtdef_.local_dynamic_filter_params_.reuse();
+  batch_guard_.reset();
   return ret;
 }
 
@@ -771,7 +776,7 @@ int ObConflictChecker::add_lookup_range_no_dup(storage::ObTableScanParam &scan_p
 }
 
 // todo @kaizhan.dkz 向主表执行回表操作，返回主表中冲突的行
-int ObConflictChecker::build_primary_table_lookup_das_task()
+int ObConflictChecker::build_primary_table_lookup_das_task(ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   ObDASScanOp *das_scan_op = nullptr;
@@ -779,7 +784,7 @@ int ObConflictChecker::build_primary_table_lookup_das_task()
   ObNewRange lookup_range;
 
   // data_table_rowkey_expr_ 是column_ref expr
-  if (OB_FAIL(calc_lookup_tablet_loc(tablet_loc))) {
+  if (OB_FAIL(calc_lookup_tablet_loc(tablet_loc, eval_ctx))) {
     LOG_WARN("calc lookup pkey fail", K(ret));
   } else if (OB_FAIL(get_das_scan_op(tablet_loc, das_scan_op))) {
     LOG_WARN("get_das_scan_op failed", K(ret), K(tablet_loc));
@@ -789,13 +794,13 @@ int ObConflictChecker::build_primary_table_lookup_das_task()
   } else {
     storage::ObTableScanParam &scan_param = das_scan_op->get_scan_param();
     ObRowkey table_rowkey;
-    if (OB_FAIL(build_data_table_range(lookup_range, table_rowkey))) {
+    if (OB_FAIL(build_data_table_range(eval_ctx, lookup_range, table_rowkey))) {
       LOG_WARN("build data table range failed", K(ret), KPC(tablet_loc));
     } else if (OB_FAIL(add_lookup_range_no_dup(scan_param, lookup_range, tablet_loc->tablet_id_))) {
       LOG_WARN("store lookup key range failed", K(ret), K(table_rowkey), K(scan_param));
     } else {
-      LOG_TRACE("after build conflict rowkey", K(scan_param.tablet_id_),
-                K(scan_param.key_ranges_.count()), K(lookup_range), K(table_rowkey));
+      LOG_TRACE("after build conflict rowkey", KPC(tablet_loc), K(scan_param.key_ranges_.count()),
+                                               K(lookup_range), K(table_rowkey));
     }
   }
   return ret;
@@ -816,7 +821,7 @@ int ObConflictChecker::to_expr(const ObChunkDatumStore::StoredRow *replace_row)
   return ret;
 }
 
-int ObConflictChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc)
+int ObConflictChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   ObExpr *part_id_expr = NULL;
@@ -829,9 +834,9 @@ int ObConflictChecker::calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("calc_part_id_expr_ is null", K(ret));
     } // 清除回表使用的分区计算表达式的eval flag
-      else if (OB_FAIL(ObSQLUtils::clear_evaluated_flag(checker_ctdef_.part_id_dep_exprs_, eval_ctx_))) {
+      else if (OB_FAIL(clear_eval_flags(checker_ctdef_.part_id_dep_exprs_, eval_ctx))) {
       LOG_WARN("fail to clear rowkey flag", K(ret), K(checker_ctdef_.part_id_dep_exprs_));
-    } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(part_id_expr, eval_ctx_, partition_id, tablet_id))) {
+    } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(part_id_expr, eval_ctx, partition_id, tablet_id))) {
       LOG_WARN("fail to calc part id", K(ret), KPC(part_id_expr));
     } else if (OB_FAIL(DAS_CTX(das_ref_.get_exec_ctx()).extended_tablet_loc(*table_loc_, tablet_id, tablet_loc))) {
       LOG_WARN("extended tablet loc failed", K(ret));
@@ -850,7 +855,7 @@ int ObConflictChecker::get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *
     if (OB_FAIL(das_ref_.prepare_das_task(tablet_loc, das_scan_op))) {
       LOG_WARN("prepare das task failed", K(ret));
     } else {
-      das_scan_op->set_scan_ctdef(&checker_ctdef_.das_scan_ctdef_);
+      das_scan_op->set_scan_ctdef(das_scan_ctdef_for_lookup_);
       das_scan_op->set_scan_rtdef(&das_scan_rtdef_);
       table_loc_->is_reading_ = true; //mark the table location with reading action
     }
@@ -868,7 +873,26 @@ int ObConflictChecker::get_das_scan_op(ObDASTabletLoc *tablet_loc, ObDASScanOp *
   return ret;
 }
 
-int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range, ObRowkey &table_rowkey)
+int ObConflictChecker::clear_eval_flags(const ObExprPtrIArray &calc_exprs, ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!eval_ctx.is_vectorized() && OB_FAIL(ObSQLUtils::clear_evaluated_flag(calc_exprs, eval_ctx))) {
+    LOG_WARN("fail to clear rowkey flag", K(ret), K(calc_exprs));
+  } else if (eval_ctx.is_vectorized()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < calc_exprs.count(); ++i) {
+      ObExpr *e = calc_exprs.at(i);
+      if (OB_ISNULL(e)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret), K(i));
+      } else if (e->is_batch_result()) {
+        e->get_evaluated_flags(eval_ctx).unset(eval_ctx.get_batch_idx());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObConflictChecker::build_data_table_range(ObEvalCtx &eval_ctx, ObNewRange &lookup_range, ObRowkey &table_rowkey)
 {
   int ret = OB_SUCCESS;
   ObObj *obj_ptr = nullptr;
@@ -888,7 +912,7 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range, ObRowkey
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr in rowkey is nullptr", K(ret), K(i));
-    } else if (OB_FAIL(expr->eval(eval_ctx_, col_datum))) {
+    } else if (OB_FAIL(expr->eval(eval_ctx, col_datum))) {
       LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));
     } else if (OB_ISNULL(col_datum)) {
       ret = OB_ERR_UNEXPECTED;
@@ -899,11 +923,18 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range, ObRowkey
     // 这里需要做深拷贝
     else if (OB_FAIL(ob_write_obj(das_ref_.get_das_alloc(), tmp_obj, obj_ptr[i]))) {
       LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
+    } else if (das_scan_rtdef_.do_local_dynamic_filter_) {
+      ObDatum datum;
+      if (OB_FAIL(datum.deep_copy(*col_datum, das_ref_.get_das_alloc()))) {
+        LOG_WARN("deep copy datum failed", K(ret), KPC(col_datum));
+      } else if (OB_FAIL(das_scan_rtdef_.local_dynamic_filter_params_.push_back(datum))) {
+        LOG_WARN("push back datum failed", K(ret), KPC(col_datum));
+      }
     }
   }
   if (OB_SUCC(ret)) {
     table_rowkey.assign(obj_ptr, rowkey_cnt);
-    uint64_t ref_table_id = checker_ctdef_.das_scan_ctdef_.ref_table_id_;
+    uint64_t ref_table_id = das_scan_ctdef_for_lookup_->ref_table_id_;
     if (OB_FAIL(lookup_range.build_range(ref_table_id, table_rowkey))) {
       LOG_WARN("build lookup range failed", K(ret), K(ref_table_id), K(table_rowkey));
     } else {
@@ -918,7 +949,7 @@ int ObConflictChecker::do_lookup_and_build_base_map(int64_t replace_row_cnt)
 {
   int ret = OB_SUCCESS;
   NG_TRACE_TIMES(2, start_fetch_conflict_row);
-  const ExprFixedArray &storage_output = checker_ctdef_.das_scan_ctdef_.pd_expr_spec_.access_exprs_;
+  const ExprFixedArray &storage_output = das_scan_ctdef_for_lookup_->pd_expr_spec_.access_exprs_;
   if (OB_FAIL(post_all_das_scan_tasks())) {
     LOG_WARN("execute all delete das task failed", K(ret));
   } else {
@@ -927,7 +958,7 @@ int ObConflictChecker::do_lookup_and_build_base_map(int64_t replace_row_cnt)
       LOG_WARN("create conflict map failed", K(ret));
     }
     ObChunkDatumStore::StoredRow *conflict_row = NULL;
-    while (OB_SUCC(ret) && OB_SUCC(get_next_row_from_data_table(result_iter, conflict_row))) {
+    while (OB_SUCC(ret) && OB_SUCC(get_next_row_from_data_table(result_iter, conflict_row, true))) {
       if (OB_FAIL(build_base_conflict_map(replace_row_cnt, conflict_row))) {
         LOG_WARN("build conflict map failed", K(ret));
       }
@@ -938,11 +969,14 @@ int ObConflictChecker::do_lookup_and_build_base_map(int64_t replace_row_cnt)
 }
 
 int ObConflictChecker::get_next_row_from_data_table(DASOpResultIter &result_iter,
-                                                    ObChunkDatumStore::StoredRow *&conflict_row)
+                                                    ObChunkDatumStore::StoredRow *&conflict_row,
+                                                    bool need_convert_to_stored_row /* = true */)
 {
   int ret = OB_SUCCESS;
   bool got_row = false;
   const ExprFixedArray &storage_output = checker_ctdef_.table_column_exprs_;
+
+  conflict_row = nullptr;
   while (OB_SUCC(ret) && !got_row) {
     das_scan_rtdef_.p_pd_expr_op_->clear_datum_eval_flag();
     if (OB_FAIL(result_iter.get_next_row())) {
@@ -955,15 +989,118 @@ int ObConflictChecker::get_next_row_from_data_table(DASOpResultIter &result_iter
       } else {
         LOG_WARN("get next row from das result failed", K(ret));
       }
-    } else if (OB_FAIL(convert_exprs_to_stored_row(storage_output, conflict_row))) {
+    } else if (need_convert_to_stored_row && OB_FAIL(convert_exprs_to_stored_row(storage_output, conflict_row))) {
       LOG_WARN("convert expr to stored row failed", K(ret),
                "lookup one row", ROWEXPR2STR(eval_ctx_, storage_output));
     } else {
       got_row = true;
       // 这里打印回表拿到的行信息
-      LOG_DEBUG("success to get row from data_table", K(ret), K(storage_output),
-                "lookup one row", ROWEXPR2STR(eval_ctx_, storage_output));
+      LOG_TRACE("success to get row from data_table", K(storage_output),
+                                                      "lookup one row", ROWEXPR2STR(eval_ctx_, storage_output));
     }
+  }
+  return ret;
+}
+
+int ObConflictChecker::get_next_rows_from_data_table(DASOpResultIter &result_iter, ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  bool got_row = false;
+  int64_t count = 0;
+  ObChunkDatumStore::StoredRow *conflict_row = nullptr;
+  const ExprFixedArray &storage_output = checker_ctdef_.table_column_exprs_;
+
+  // Reference ObOperator::get_next_row_vectorizely(), here we fetch batch rows at once,
+  // then shadow copy the already fetched row to the 0th position each time.
+  // Since get_next_row_vectorizely is an operator-level interface and its process is relatively heavy,
+  // such as requiring filter, but here we only need to fetch the old row for update,
+  // so we use a much simpler implementation.
+  if (!batch_guard_.is_iter_end()) {
+    for (int64_t i = 0 ; i < storage_output.count(); ++ i) {
+      ObExpr *expr = storage_output.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (OB_UNLIKELY(!expr->is_batch_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is not batch result", K(ret));
+      } else {
+        ObDatum *datums = expr->locate_batch_datums(eval_ctx);
+        if (OB_ISNULL(datums)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("datums is null", K(ret));
+        } else {
+          datums[0] = datums[batch_guard_.idx_];
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ++ batch_guard_.idx_;
+      got_row = true;
+    }
+  }
+
+  while (OB_SUCC(ret) && !got_row) {
+    das_scan_rtdef_.p_pd_expr_op_->clear_datum_eval_flag();
+
+    batch_guard_.reset();
+    // Because we simulate fetching batch rows and then convert to a single row,
+    // theoretically, the upper layer should clear the flag, and then reset the datum pointer on the next eval.
+    // Keep the reset datum[0] logic as a defense.
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < storage_output.count(); ++ i) {
+      ObExpr *expr = storage_output.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else {
+        // reset datum[0] of expr
+        expr->reset_ptr_in_datum(eval_ctx, 0);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(result_iter.get_next_rows(count, eval_ctx.max_batch_size_))) {
+      if (OB_ITER_END == ret) {
+        if (count > 0) {
+          ret = OB_SUCCESS;
+          got_row = true;
+          // datums[0] is already
+          batch_guard_.size_ = count;
+          batch_guard_.idx_ = 1;
+        } else if (OB_FAIL(result_iter.next_result())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fetch next task failed", K(ret));
+          } else {
+            // no more rows
+          }
+        }
+      } else {
+        LOG_WARN("get next rows from das result failed", K(ret));
+      }
+    } else {
+      batch_guard_.size_ = count;
+      batch_guard_.idx_ = 1;
+      got_row = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && got_row) {
+    // table_column_exprs_ are always ref column, no need to eval
+    // Please refer to ObOperator::get_next_row_vectorizely()
+    FOREACH_CNT(e, storage_output) {
+      (*e)->get_eval_info(eval_ctx_).projected_ = true;
+    }
+
+    // just for print log
+    // because the batch idx has been set, and eval_ctx.set_batch_idx is private function
+    // but we need first row.
+    // In the same way, when get one single row in the outer layer
+    // need to use guard to set the batch size to 1 and the batch idx to 0.
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+    batch_info_guard.set_batch_size(1);
+    batch_info_guard.set_batch_idx(0);
+    LOG_TRACE("success to get row from batch result", K(batch_guard_), K(eval_ctx),
+                                                      "row", ROWEXPR2STR(eval_ctx, storage_output));
   }
   return ret;
 }
@@ -1063,10 +1200,11 @@ int ObConflictChecker::init_das_scan_rtdef()
   das_scan_rtdef_.scan_flag_.flag_ = query_flag.flag_;
   int64_t schema_version = task_exec_ctx.get_query_tenant_begin_schema_version();
   das_scan_rtdef_.tenant_schema_version_ = schema_version;
-  das_scan_rtdef_.eval_ctx_ = &eval_ctx_;
-  das_scan_rtdef_.ctdef_ = &checker_ctdef_.das_scan_ctdef_;
+  das_scan_rtdef_.eval_ctx_ = batch_eval_ctx_ != nullptr ? batch_eval_ctx_ : &eval_ctx_;
+  das_scan_rtdef_.ctdef_ = das_scan_ctdef_for_lookup_;
   das_scan_rtdef_.table_loc_ = table_loc_;
-  if (OB_FAIL(das_scan_rtdef_.init_pd_op(eval_ctx_.exec_ctx_, checker_ctdef_.das_scan_ctdef_))) {
+  das_scan_rtdef_.do_local_dynamic_filter_ = das_scan_ctdef_for_lookup_->has_local_dynamic_filter_;
+  if (OB_FAIL(das_scan_rtdef_.init_pd_op(eval_ctx_.exec_ctx_, *das_scan_ctdef_for_lookup_))) {
     LOG_WARN("init pushdown storage filter failed", K(ret));
   } else if (nullptr != checker_ctdef_.attach_spec_.attach_ctdef_) {
     if (OB_ISNULL(attach_rtinfo_ = OB_NEWx(ObDASAttachRtInfo, &allocator_))) {
@@ -1109,7 +1247,7 @@ int ObConflictChecker::init_attach_scan_rtdef(const ObDASBaseCtDef *attach_ctdef
     }
   } else {
     attach_rtinfo_->related_scan_cnt_++;
-    if (attach_ctdef == &checker_ctdef_.das_scan_ctdef_) {
+    if (attach_ctdef == das_scan_ctdef_for_lookup_) {
       attach_rtdef = &das_scan_rtdef_;
     } else if (attach_ctdef->op_type_ != DAS_OP_TABLE_SCAN) {
       ret = OB_ERR_UNEXPECTED;

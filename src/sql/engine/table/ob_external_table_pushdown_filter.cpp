@@ -164,7 +164,7 @@ int ObExternalTablePushdownFilter::apply_skipping_index_filter(const PushdownLev
           LOG_WARN("failed to init filter", K(ret));
         } else if (!filter_valid) {
         } else if (OB_FAIL(skip_filter_executor_.falsifiable_pushdown_filter(
-            ob_col_id, node.skip_index_type_, row_count, filter_param, *node.filter_, true))) {
+            ob_col_id, file_filter_col_metas_.at(i).cs_type_, node.skip_index_type_, row_count, filter_param, *node.filter_, true))) {
           LOG_WARN("failed to apply skip index", K(ret));
         }
       }
@@ -223,7 +223,7 @@ int ObExternalTablePushdownFilter::apply_skipping_index_filter(const PushdownLev
             LOG_WARN("failed to init filter", K(ret));
           } else if (!filter_valid) {
           } else if (OB_FAIL(skip_filter_executor_.falsifiable_pushdown_filter(
-              ob_col_id, node.skip_index_type_, MOCK_ROW_COUNT,
+              ob_col_id, file_filter_col_metas_.at(i).cs_type_, node.skip_index_type_, MOCK_ROW_COUNT,
               filter_param, *node.filter_, true))) {
             LOG_WARN("failed to apply skip index", K(ret));
           } else if (node.filter_->is_filter_always_false()) {

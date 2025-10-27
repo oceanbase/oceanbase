@@ -64,6 +64,13 @@ public:
 
   int get_distinct_count(int64_t &distinct_count) const { distinct_count = 1; return OB_SUCCESS; }
   bool is_new_column() const { return true; }
+  static int get_default_datum(const ObColumnParam &col_param,
+                               ObIAllocator &allocator,
+                               ObDatum &datum);
+  static int get_default_datum(const ObColumnParam &col_param,
+                               const bool need_padding,
+                               ObIAllocator &allocator,
+                               ObStorageDatum &datum);
 };
 
 // decoder for column not exist in schema

@@ -489,10 +489,7 @@ int ObPartitionSplitQuery::fill_range_filter_param(
             if (expr_datum.is_ext()) {
               LOG_DEBUG("set is ext", K(ret), K(expr_datum));
             }
-          } else if (OB_FAIL(expr_datum.from_storage_datum(
-              lower_datum,
-              expr->obj_datum_map_,
-              need_copy))) {
+          } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, lower_datum))) {
             LOG_WARN("fail to from storage datum", K(ret), K(lower_datum));
           }
         } else if (i <= part_column_cnt * 2) { // 3. upper bound param expr.
@@ -507,10 +504,7 @@ int ObPartitionSplitQuery::fill_range_filter_param(
             if (expr_datum.is_outrow()) {
               LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
             }
-          } else if (OB_FAIL(expr_datum.from_storage_datum(
-              upper_datum,
-              expr->obj_datum_map_,
-              need_copy))) {
+          } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, upper_datum))) {
             LOG_WARN("fail to from storage datum", K(ret), K(upper_datum));
           }
         }

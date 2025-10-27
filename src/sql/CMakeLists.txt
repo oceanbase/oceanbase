@@ -103,6 +103,7 @@ ob_set_subtarget(ob_sql das
   das/iter/ob_das_vec_scan_utils.cpp
   das/iter/sparse_retrieval/ob_das_tr_merge_iter.cpp
   das/iter/sparse_retrieval/ob_das_match_iter.cpp
+  das/iter/ob_das_index_merge_fts_and_iter.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -324,6 +325,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_sys_dispatch_call_executor.cpp
   engine/cmd/ob_flashback_standby_log_executor.cpp
   engine/cmd/ob_ccl_rule_executor.cpp
+  engine/cmd/ob_interval_partition_utils.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -590,6 +592,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_json_utils.cpp
   engine/expr/ob_expr_array.cpp
   engine/expr/ob_expr_vector.cpp
+  engine/expr/ob_expr_vector_similarity.cpp
   engine/expr/ob_array_expr_utils.cpp
   engine/expr/ob_array_cast.cpp
   engine/expr/ob_expr_vec_ivf_center_id.cpp
@@ -917,6 +920,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_local_dynamic_filter.cpp
   engine/expr/ob_expr_format_profile.cpp
   engine/expr/ob_expr_bucket.cpp
+  engine/expr/ob_expr_ai/ob_expr_ai_prompt.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE
@@ -1499,6 +1503,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_ccl_rule_stmt.cpp
   resolver/ddl/ob_drop_ccl_rule_resolver.cpp
   resolver/ddl/ob_drop_ccl_rule_stmt.cpp
+  resolver/ddl/ob_interval_partition_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

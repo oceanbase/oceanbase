@@ -341,6 +341,8 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
                                       "stattype_locked as stattype_locked,"
                                       "stale_stats as stale_stats,"
                                       "last_analyzed,"
+                                      "sstable_row_cnt as sstable_row_cnt,"
+                                      "memtable_row_cnt as memtable_row_cnt,"
                                       "spare1 as sample_size FROM %s ",
                                       share::OB_ALL_TABLE_STAT_TNAME))) {
       LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
@@ -430,6 +432,8 @@ int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t tenant_id,
                                       "stattype_locked as stattype_locked,"
                                       "stale_stats as stale_stats,"
                                       "last_analyzed,"
+                                      "sstable_row_cnt as sstable_row_cnt,"
+                                      "memtable_row_cnt as memtable_row_cnt,"
                                       "spare1 as sample_size FROM %s",
                                       share::OB_ALL_TABLE_STAT_TNAME))) {
       LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
@@ -1346,6 +1350,8 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
         stat.set_stat_expired_time(ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
       }
     }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, sstable_row_cnt, stat, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, memtable_row_cnt, stat, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, sample_size, stat, int64_t);
   }
   return ret;

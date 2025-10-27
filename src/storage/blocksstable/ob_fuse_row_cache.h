@@ -60,7 +60,6 @@ public:
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       const ObDatumRowkey &rowkey,
-      const int64_t tablet_snapshot_version,
       const int64_t schema_column_count,
       const ObStorageDatumUtils &datum_utils);
   virtual ~ObFuseRowCacheKey() = default;
@@ -73,7 +72,6 @@ public:
   TO_STRING_KV(K_(base));
 private:
   ObFuseRowCacheKeyBase base_;
-  int64_t tablet_snapshot_version_;
   DISALLOW_COPY_AND_ASSIGN(ObFuseRowCacheKey);
 };
 

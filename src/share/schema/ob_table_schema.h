@@ -1576,7 +1576,7 @@ public:
   { auto_increment_cache_size_ = auto_increment_cache_size; }
 //get methods
   bool is_valid() const;
-  int check_valid(const bool count_varchar_size_by_byte) const;
+  int check_valid(const bool for_create) const;
 
   int get_generated_column_by_define(const common::ObString &col_def,
                                      const bool only_hidden_column,
@@ -2241,6 +2241,10 @@ public:
   }
   int get_part_key_column_type(const int64_t index, ObObjType &type) const;
   int get_part_key_column_name(const int64_t index, ObString &name) const;
+
+  int check_support_interval_part() const;
+  int check_identity_column_for_interval_part() const;
+
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:

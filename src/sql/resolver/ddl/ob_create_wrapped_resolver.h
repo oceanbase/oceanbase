@@ -29,7 +29,7 @@ namespace sql
 class ObCreateWrappedResolver
 {
 public:
-  explicit ObCreateWrappedResolver(const ObResolverParams &params) : params_(params) {}
+  explicit ObCreateWrappedResolver(const ObResolverParams &params) : wrap_rslv_params_(params) {}
   virtual ~ObCreateWrappedResolver() {}
   DISABLE_COPY_ASSIGN(ObCreateWrappedResolver);
 
@@ -41,11 +41,14 @@ public:
                                    ParseResult &plain_parse_result);
 
 protected:
- int check_object_name_match(const ParseNode *n1, const ParseNode *n2);
- int check_plwrap_version_compatible();
+  static int verify_object_name_match(const ParseNode *n1, const ParseNode *n2);
+  static int verify_cipher_parse_tree(const ParseNode &cipher_parse_tree, const ObItemType &type);
+  static int verify_create_ddl_parse_tree(const ParseNode &plain_parse_tree);
+  int transform_on_condition_compile(const ParseNode *parse_tree, const ParseNode *&new_parse_tree);
+  int verify_plwrap_version_compatible();
 
 private:
-  const ObResolverParams &params_;
+  const ObResolverParams &wrap_rslv_params_;
 };
 
 class ObCreateWrappedPackageResolver : public ObCreatePackageResolver,

@@ -340,7 +340,7 @@ TEST_F(TestFileManager, test_path_convert)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_seq(0);
+  file_id.set_macro_transfer_epoch(0);
   file_id.set_tenant_seq(5);
   char *object_storage_root_dir = nullptr;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_object_storage_root_dir(object_storage_root_dir));
@@ -553,7 +553,218 @@ TEST_F(TestFileManager, test_path_convert)
   inc_file_id.set_second_id(49403); // TX_LOCK
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, false/*is_in_local*/, true/*is_inner_tablet*/, "cluster_1/tenant_1/ls/1001/TX_LOCK/meta/op1seq1.T76");
+}
 
+void check_path_to_macro_id(bool is_local_cache, ObStorageObjectType type, MacroBlockId& macro_id)
+{
+  MacroBlockId convert_macro_id;
+  ObPathContext ctx;
+  int64_t ls_epoch_id = 4;
+  macro_id.set_storage_object_type(static_cast<uint64_t>(type));
+  int ret = ctx.set_file_ctx(macro_id, ls_epoch_id, is_local_cache);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  LOG_INFO("macro id to path", K(macro_id), K(ls_epoch_id), K(is_local_cache), K(ctx.get_path()), K(type));
+  printf("begin to check_path_to_macro_id, is_local_cache: %d, type: %d, path: %s\n", is_local_cache, type, ctx.get_path());
+  if (is_local_cache) {
+    ASSERT_EQ(OB_SUCCESS, SSObjUtil::local_path_to_macro_id(type, ctx.get_path(), convert_macro_id));
+  } else {
+    ASSERT_EQ(OB_SUCCESS, SSObjUtil::remote_path_to_macro_id(type, ctx.get_path(), convert_macro_id));
+  }
+  LOG_INFO("path to macro id", K(convert_macro_id), K(macro_id), K(type), K(ctx.get_path()));
+  ASSERT_EQ(static_cast<uint64_t>(convert_macro_id.storage_object_type()), static_cast<uint64_t>(type));
+  ASSERT_EQ(convert_macro_id.second_id(), macro_id.second_id());
+  ASSERT_EQ(convert_macro_id.third_id(), macro_id.third_id());
+  ASSERT_EQ(convert_macro_id.fourth_id(), macro_id.fourth_id());
+}
+
+TEST_F(TestFileManager, test_remote_path_to_macro_id)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  MacroBlockId file_id;
+  ObPathContext ctx;
+  char expected_path[common::MAX_PATH_SIZE] = {0};
+  bool is_local_cache = false;
+  int64_t ls_epoch_id = 4;
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
+  file_id.set_second_id(3);
+  file_id.set_third_id(2);
+  file_id.set_macro_transfer_epoch(0);
+  file_id.set_tenant_seq(5);
+  char *object_storage_root_dir = nullptr;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_object_storage_root_dir(object_storage_root_dir));
+
+  MacroBlockId inc_file_id;
+  inc_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  inc_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO));
+  inc_file_id.set_second_id(3); // tablet_id
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+
+  // 0.PRIVATE_DATA_MACRO
+  // cluster_id/server_id/tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/data/macro_server_id_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_DATA_MACRO, file_id);
+
+  // 1.PRIVATE_META_MACRO
+  // cluster_id/server_id/tenant_id_epoch_id/tablet_data/tablet_id/transfer_seq/meta/macro_server_id_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_META_MACRO, file_id);
+
+  // 2. SHARED_MINI_DATA_MACRO
+  // inner tablet 49401
+  inc_file_id.set_second_id(49401);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/ls/ls_id/tablet_name/mini/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_DATA_MACRO, inc_file_id);
+  //user tablet 200001
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mini/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_DATA_MACRO, inc_file_id);
+
+  // 3. SHARED_MINI_META_MACRO
+  // inner tablet 49401
+  inc_file_id.set_second_id(49401);
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/ls/ls_id/tablet_name/mini/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_META_MACRO, inc_file_id);
+  //user tablet 200001
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mini/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINI_META_MACRO, inc_file_id);
+
+  // 4. SHARED_MINOR_DATA_MACRO
+  // inner tablet 49403
+  inc_file_id.set_second_id(49403); // TX_LOCK
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/ls/ls_id/tablet_name/minor/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_DATA_MACRO, inc_file_id);
+  //user tablet 200001
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_DATA_MACRO, inc_file_id);
+
+  // 5. SHARED_MINOR_META_MACRO
+  // inner tablet 49402
+  inc_file_id.set_second_id(49402);// TX_DATA
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/tablet_name/minor/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_META_MACRO, inc_file_id);
+  //user tablet 200001
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/minor/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MINOR_META_MACRO, inc_file_id);
+
+  // 6.SHARED_MAJOR_DATA_MACRO
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/cg_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, file_id);
+
+  // 7.SHARED_MAJOR_META_MACRO
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/cg_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MAJOR_META_MACRO, file_id);
+
+  // 8.TMP_FILE
+  // cluster_id/server_id/tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id
+  file_id.set_fourth_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::TMP_FILE, file_id);
+  file_id.set_macro_transfer_epoch(0);
+  file_id.set_tenant_seq(5);
+  // 10.PRIVATE_TABLET_META
+  // tenant_id_epoch_id/ls/ls_id_epoch_id/tablet_meta/tablet_id/tablet_meta_version_transfer_seq
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_TABLET_META, file_id);
+
+  // 11 PRIVATE_SLOG_FILE
+  // cluster_id/server_id/tenant_id_epoch_id/slog/seq%ld or cluster_id/server_id/server_slog/seq%ld
+  file_id.set_second_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_SLOG_FILE, file_id);
+  file_id.set_second_id(OB_SERVER_TENANT_ID);
+  file_id.set_third_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_SLOG_FILE, file_id);
+  file_id.set_second_id(3);
+  file_id.set_third_id(2);
+  // 12 PRIVATE_CKPT_FILE
+  // cluster_id/server_id/tenant_id_epoch_id/ckpt/object_id or cluster_id/server_id/server_ckpt/object_id
+  file_id.set_second_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_CKPT_FILE, file_id);
+  file_id.set_second_id(OB_SERVER_TENANT_ID);
+  file_id.set_third_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::PRIVATE_CKPT_FILE, file_id);
+  file_id.set_second_id(3);
+  file_id.set_third_id(2);
+  // 13. MAJOR_PREWARM_DATA
+  //cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/compaction_scn
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::MAJOR_PREWARM_DATA, file_id);
+
+  // 14. MAJOR_PREWARM_DATA_INDEX
+  //cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/compaction_scn
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::MAJOR_PREWARM_DATA_INDEX, file_id);
+
+  // 15. MAJOR_PREWARM_META
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/scn_id_compaction_scn_prewarm_data
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::MAJOR_PREWARM_META, file_id);
+
+  // 16. MAJOR_PREWARM_META_INDEX
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/scn_id_compaction_scn_prewarm_data
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::MAJOR_PREWARM_META_INDEX, file_id);
+
+  // 18. IS_SHARED_TENANT_DELETED
+  // cluster_id/tenant_id/is_shared_tenant_deleted
+  file_id.set_third_id(0);
+  file_id.set_fourth_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::IS_SHARED_TENANT_DELETED, file_id);
+  file_id.set_third_id(2);
+  file_id.set_macro_transfer_epoch(0);
+  file_id.set_tenant_seq(5);
+
+  // 21. UNSEALED_REMOTE_SEG_FILE
+  // cluster_id/server_id/tenant_id_epoch_id/tmp_data/tmp_file_id/segment_id_valid_length
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::UNSEALED_REMOTE_SEG_FILE, file_id);
+
+  // MDS: 22-25
+  // -- MDS mini and MDS minor -- //
+  inc_file_id.set_second_id(3);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/mini/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO, inc_file_id);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/mini/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MDS_MINI_META_MACRO, inc_file_id);
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/minor/sstable/op_id/data/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO, inc_file_id);
+
+  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/mds/minor/sstable/op_id/meta/macro_seq_id
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO, inc_file_id);
+  // --- Atomic protocol files -- //
+  inc_file_id.set_third_id(1); // set op_id = 1
+
+  // 76. SHARED_TABLET_SUB_META
+  // user_tablet : cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/tablet_meta/data/op_id_data_seq
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+  // inner_tablet : cluster_id/tenant_id/ls/ls_id/tablet_name/tablet_meta/data/op_id_data_seq
+  inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
+  inc_file_id.set_second_id(49401); // TX_CTX
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+  inc_file_id.set_second_id(49402); // TX_DATA
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+  inc_file_id.set_second_id(49403); // TX_LOCK
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+
+  // MACRO_CACHE_CKPT_DATA
+  // cluster_id/server_id/tenant_id_epoch_id/macro_cache_ckpt/data/version_id/seq_id
+  file_id.set_fourth_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::MACRO_CACHE_CKPT_DATA, file_id);
+  // MACRO_CACHE_CKPT_META
+  // cluster_id/server_id/tenant_id_epoch_id/macro_cache_ckpt/meta/version_id
+  file_id.set_third_id(0);
+  check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::MACRO_CACHE_CKPT_META, file_id);
 }
 
 TEST_F(TestFileManager, test_get_file_parent_dir)
@@ -569,7 +780,7 @@ TEST_F(TestFileManager, test_get_file_parent_dir)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);
   file_id.set_third_id(2);
-  file_id.set_macro_transfer_seq(0);
+  file_id.set_macro_transfer_epoch(0);
   file_id.set_tenant_seq(5);
 
   // each object type and print out the parent dir path log
@@ -611,7 +822,9 @@ void check_object_type_stat(const MacroBlockId &macro_id, const uint64_t delete_
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
   ObSSObjectTypeStat type_stat;
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), true, type_stat));
-  ASSERT_EQ(delete_cnt, type_stat.delete_cnt_);
+  ObSSBaseStat stat;
+  type_stat.get_stat(ObSSObjectTypeStatType::DELETE, stat);
+  ASSERT_EQ(delete_cnt, stat.get_cnt());
 }
 TEST_F(TestFileManager, test_private_macro_file_operator)
 {
@@ -623,7 +836,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   file_id.set_second_id(3);  //tablet_id
   file_id.set_third_id(2);   //seq_id
-  file_id.set_macro_transfer_seq(0); // transfer_seq
+  file_id.set_macro_transfer_epoch(0); // transfer_seq
   file_id.set_tenant_seq(5);  //tenant_seq
 
   // step 1: create dir
@@ -862,13 +1075,13 @@ TEST_F(TestFileManager, test_meta_file_operator)
   const int64_t ls_id = 7;
   const int64_t ls_epoch_id = 0;
   const int64_t tablet_id = 8;
-  const int64_t meta_transfer_seq = 0;
+  const int64_t meta_transfer_epoch = 0;
   const int64_t meta_version_id = 9;
   file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
   file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   file_id.set_second_id(ls_id);
   file_id.set_third_id(tablet_id);
-  file_id.set_meta_transfer_seq(meta_transfer_seq);
+  file_id.set_meta_transfer_epoch(meta_transfer_epoch);
   file_id.set_meta_version_id(meta_version_id);
 
   // step 2: test write private_tablet_meta
@@ -929,7 +1142,7 @@ TEST_F(TestFileManager, test_meta_file_operator)
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   ObIODFileStat statbuf;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_meta_tablet_id_transfer_seq_dir(dir_path, sizeof(dir_path),
-            MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_seq));
+            MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_epoch));
   ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
   expected_disk_size += statbuf.size_;
   dir_path[0] = '\0';
@@ -954,7 +1167,7 @@ TEST_F(TestFileManager, test_meta_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(file_id, ls_epoch_id, is_exist));
   ASSERT_FALSE(is_exist);
   // step 10: test delete dir
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_seq));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, meta_transfer_epoch));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_meta_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
   ob_usleep(2000*1000);
   start_calc_size_time_s = ObTimeUtility::current_time_s();
@@ -983,7 +1196,7 @@ TEST_F(TestFileManager, test_list_private_tablet_meta)
   meta_file_1.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   meta_file_1.set_second_id(ls_id);
   meta_file_1.set_third_id(tablet_id);
-  meta_file_1.set_meta_transfer_seq(meta_transfer_seq);
+  meta_file_1.set_meta_transfer_epoch(meta_transfer_seq);
   meta_file_1.set_meta_version_id(meta_version_id_1);
 
   MacroBlockId meta_file_2;
@@ -992,7 +1205,7 @@ TEST_F(TestFileManager, test_list_private_tablet_meta)
   meta_file_2.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   meta_file_2.set_second_id(ls_id);
   meta_file_2.set_third_id(tablet_id);
-  meta_file_2.set_meta_transfer_seq(meta_transfer_seq);
+  meta_file_2.set_meta_transfer_epoch(meta_transfer_seq);
   meta_file_2.set_meta_version_id(meta_version_id_2);
 
   ObStorageObjectHandle write_object_handle_1;
@@ -1250,7 +1463,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_data_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   tablet_data_macro.set_second_id(tablet_id);
   tablet_data_macro.set_third_id(server_id);
-  tablet_data_macro.set_macro_transfer_seq(0); // transfer_seq
+  tablet_data_macro.set_macro_transfer_epoch(0); // transfer_seq
   tablet_data_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_data_macro));
@@ -1265,7 +1478,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   ASSERT_EQ(tablet_data_macro.second_id(), tablet_data_macros.at(0).second_id());
   ASSERT_EQ(tablet_data_macro.third_id(), tablet_data_macros.at(0).third_id());
   ASSERT_EQ(tablet_data_macro.tenant_seq(), tablet_data_macros.at(0).tenant_seq());
-  ASSERT_EQ(tablet_data_macro.macro_transfer_seq(), tablet_data_macros.at(0).macro_transfer_seq());
+  ASSERT_EQ(tablet_data_macro.macro_transfer_epoch(), tablet_data_macros.at(0).macro_transfer_epoch());
 
   // test3: list private meta macro
   MacroBlockId tablet_meta_macro;
@@ -1276,7 +1489,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_meta_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   tablet_meta_macro.set_second_id(tablet_id);
   tablet_meta_macro.set_third_id(server_id);
-  tablet_meta_macro.set_macro_transfer_seq(0); // transfer_seq
+  tablet_meta_macro.set_macro_transfer_epoch(0); // transfer_seq
   tablet_meta_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_macro));
@@ -1291,11 +1504,11 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   ASSERT_EQ(tablet_meta_macro.second_id(), tablet_meta_macros.at(1).second_id());
   ASSERT_EQ(tablet_meta_macro.third_id(), tablet_meta_macros.at(1).third_id());
   ASSERT_EQ(tablet_meta_macro.tenant_seq(), tablet_meta_macros.at(1).tenant_seq());
-  ASSERT_EQ(tablet_meta_macro.macro_transfer_seq(), tablet_meta_macros.at(1).macro_transfer_seq());
+  ASSERT_EQ(tablet_meta_macro.macro_transfer_epoch(), tablet_meta_macros.at(1).macro_transfer_epoch());
   ASSERT_EQ(tablet_data_macro.second_id(), tablet_meta_macros.at(0).second_id());
   ASSERT_EQ(tablet_data_macro.third_id(), tablet_meta_macros.at(0).third_id());
   ASSERT_EQ(tablet_data_macro.tenant_seq(), tablet_meta_macros.at(0).tenant_seq());
-  ASSERT_EQ(tablet_data_macro.macro_transfer_seq(), tablet_meta_macros.at(0).macro_transfer_seq());
+  ASSERT_EQ(tablet_data_macro.macro_transfer_epoch(), tablet_meta_macros.at(0).macro_transfer_epoch());
 
   // test4: list private tablet meta version
   int64_t ls_id = 8;
@@ -1306,7 +1519,7 @@ TEST_F(TestFileManager, test_list_and_delete_dir_operator)
   tablet_meta_version.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META));
   tablet_meta_version.set_second_id(ls_id);
   tablet_meta_version.set_third_id(tablet_id);
-  tablet_data_macro.set_meta_transfer_seq(0); // transfer_seq
+  tablet_data_macro.set_meta_transfer_epoch(0); // transfer_epoch
   tablet_data_macro.set_meta_version_id(meta_version_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_version));
@@ -1419,7 +1632,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   tablet_data_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO));
   tablet_data_macro.set_second_id(tablet_id);
   tablet_data_macro.set_third_id(server_id);
-  tablet_data_macro.set_macro_transfer_seq(0); // transfer_seq
+  tablet_data_macro.set_macro_transfer_epoch(0); // transfer_seq
   tablet_data_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_data_macro));
@@ -1432,7 +1645,7 @@ TEST_F(TestFileManager, test_list_local_files_rec)
   tablet_meta_macro.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO));
   tablet_meta_macro.set_second_id(tablet_id);
   tablet_meta_macro.set_third_id(server_id);
-  tablet_meta_macro.set_macro_transfer_seq(0); // transfer_seq
+  tablet_meta_macro.set_macro_transfer_epoch(0); // transfer_seq
   tablet_meta_macro.set_tenant_seq(seq_id);  //tenant_seq
   write_object_handle.reset();
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(tablet_meta_macro));
@@ -1603,10 +1816,13 @@ void check_object_type_stat(const MacroBlockId &macro_id,
   object_handle.get_io_handle().get_io_flag(flag);
   bool is_remote = flag.is_sync();
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
-  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
-  ASSERT_EQ(read_size, type_stat.read_size_);
-  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
-  ASSERT_EQ(write_size, type_stat.write_size_);
+  ObSSBaseStat stat;
+  type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+  ASSERT_EQ(read_cnt, stat.get_cnt());
+  ASSERT_EQ(read_size, stat.get_size());
+  type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+  ASSERT_EQ(write_cnt, stat.get_cnt());
+  ASSERT_EQ(write_size, stat.get_size());
 }
 TEST_F(TestFileManager, test_user_tenant_slog_io_operator)
 {
@@ -2108,6 +2324,108 @@ TEST_F(TestFileManager, test_server_tenant_ckpt_io_operator)
   ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.delete_file(ckpt_file, 0/*ls_epoch_id*/));
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_file(ckpt_file,0/*ls_epoch_id*/, is_exist));
   ASSERT_FALSE(is_exist);
+}
+
+void exhaust_macro_file_disk_size(int64_t &avail_size)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
+  avail_size = disk_space_manager->get_macro_cache_free_size();
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
+            ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+}
+void release_macro_file_disk_size(const int64_t avail_size)
+{
+  static int64_t call_times = 0;
+  call_times++;
+  ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE)) << "call_times: " << call_times;
+}
+
+// list cluster_id/tenant_id/tablet/tablet_id/reorganization_scn
+TEST_F(TestFileManager, test_list_remote_macro_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  MacroBlockId file_id;
+  int64_t tablet_id = 13;
+  int64_t seq_id = 14;
+  int64_t reorganization_scn = 0;
+  ObArray<blocksstable::MacroBlockId> macro_ids;
+  // test0:empty macro_ids
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(tablet_id, reorganization_scn, macro_ids));
+  ASSERT_EQ(0, macro_ids.count());
+
+  file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO));
+  file_id.set_second_id(tablet_id);
+  file_id.set_third_id(seq_id);
+  file_id.set_reorganization_scn(reorganization_scn);
+  ObStorageObjectHandle write_object_handle;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+  const int64_t write_io_size = 8 * 1024; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+  int64_t avail_size = 0;
+  exhaust_macro_file_disk_size(avail_size);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+
+  // test1:write one macro file and list it
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(tablet_id, reorganization_scn, macro_ids));
+  ASSERT_EQ(1, macro_ids.count());
+  ASSERT_EQ(file_id, macro_ids.at(0));
+
+  // test2: write two macro files and list them
+  file_id.set_third_id(seq_id + 1);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(tablet_id, reorganization_scn, macro_ids));
+  ASSERT_EQ(2, macro_ids.count());
+
+  // test3: write no macro file and expect list old two macro files
+  release_macro_file_disk_size(avail_size);
+  file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::MAJOR_PREWARM_DATA));
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(tablet_id, reorganization_scn, macro_ids));
+  ASSERT_EQ(2, macro_ids.count());
+
+  // test4: delete two macro files and list them
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_files(macro_ids));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_remote_macro_files(tablet_id, reorganization_scn, macro_ids));
+  ASSERT_EQ(0, macro_ids.count());
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_file(file_id, 0/*ls_epoch_id*/));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_shared_tablet_data_dir(tablet_id, reorganization_scn));
 }
 
 TEST_F(TestFileManager, test_delete_tenant)

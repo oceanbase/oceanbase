@@ -248,6 +248,9 @@ int ObParquetTableRowIterator::next_file()
   int64_t task_idx = 0;
   int64_t file_size = -1;
   arrow::Status status = arrow::Status::OK();
+  bool is_count_aggr = file_column_exprs_.count() == 0;
+  ObFileScanTask *scan_task = nullptr;
+  bool skip_create_file_reader = false;
 
   do {
     ret = OB_SUCCESS;
@@ -256,18 +259,26 @@ int ObParquetTableRowIterator::next_file()
     file_reader_.reset();
     eager_file_reader_.reset();
     status = arrow::Status::OK();
-    if ((task_idx = state_.file_idx_++) >= scan_param_->key_ranges_.count()) {
+    if ((task_idx = state_.file_idx_++) >= scan_param_->scan_tasks_.count()) {
       ret = OB_ITER_END;
     } else {
-      state_.cur_file_url_ = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
       state_.is_delete_file_loaded_ = false;
       state_.cur_row_group_begin_row_id_ = 0;
       file_size = -1;
       int64_t modify_time = 0;
       ObString file_content_digest;
       url_.reuse();
+
+      scan_task = static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(task_idx));
+      if (OB_ISNULL(scan_task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null scan task", K(ret), K(task_idx));
+      } else {
+        state_.cur_file_url_ = scan_task->file_url_;
+      }
+
       if (OB_FAIL(ret)) {
-      } else if (!is_iceberg_lake_table() && !is_abs_url(state_.cur_file_url_)) {
+      } else if (!is_abs_url(state_.cur_file_url_)) {
         const char *split_char = "/";
         OZ(url_.append_fmt(
             "%.*s%s%.*s",
@@ -285,18 +296,9 @@ int ObParquetTableRowIterator::next_file()
         // do nothing
       } else {
         if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
-          file_size = scan_param_->key_ranges_.at(task_idx)
-                        .get_start_key()
-                        .get_obj_ptr()[ObExternalTableUtils::FILE_SIZE]
-                        .get_int();
-          modify_time = scan_param_->key_ranges_.at(task_idx)
-                          .get_start_key()
-                          .get_obj_ptr()[ObExternalTableUtils::MODIFY_TIME]
-                          .get_int();
-          file_content_digest = scan_param_->key_ranges_.at(task_idx)
-                                  .get_start_key()
-                                  .get_obj_ptr()[ObExternalTableUtils::CONTENT_DIGEST]
-                                  .get_string();
+          file_size = scan_task->file_size_;
+          modify_time = scan_task->modification_time_;
+          file_content_digest = scan_task->content_digest_;
         }
         if (file_size < 0 || modify_time <= 0) {
           OZ(ObExternalTableUtils::collect_file_basic_info(
@@ -305,9 +307,13 @@ int ObParquetTableRowIterator::next_file()
         }
         if (OB_FAIL(ret)) {
         } else if (file_size > 0) {
-          OZ(create_file_reader(url_.string(), file_content_digest, file_size, modify_time,
-                                data_access_driver_, file_prebuffer_, file_reader_, eager_file_reader_));
-          OX(file_meta_ = file_reader_->metadata());
+          skip_create_file_reader = scan_task->record_count_ > 0 && is_count_aggr;
+          if (!skip_create_file_reader) {
+            OZ(create_file_reader(url_.string(), file_content_digest, file_size, modify_time,
+                                  data_access_driver_, file_prebuffer_, file_reader_, eager_file_reader_));
+            OX(file_meta_ = file_reader_->metadata());
+          }
+
           if (OB_SUCC(ret)) {
             ObString expr_file_url;
             if (data_access_driver_.get_storage_type() == OB_STORAGE_FILE) {
@@ -336,7 +342,7 @@ int ObParquetTableRowIterator::next_file()
 
   if (OB_SUCC(ret)) {
     ++reader_metrics_.selected_file_count_;
-    int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+    int64_t part_id = scan_task->part_id_;
     if (need_partition_info_ && part_id != 0 && state_.part_id_ != part_id) {
       state_.part_id_ = part_id;
       bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
@@ -350,20 +356,22 @@ int ObParquetTableRowIterator::next_file()
       }
     }
 
-    state_.cur_file_id_ = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
-    OZ (ObExternalTableUtils::resolve_line_number_range(scan_param_->key_ranges_.at(task_idx),
-                                                        ObExternalTableUtils::ROW_GROUP_NUMBER,
-                                                        state_.cur_row_group_idx_,
-                                                        state_.end_row_group_idx_));
-    OX (state_.end_row_group_idx_ = std::min((int64_t)(file_meta_->num_row_groups()), state_.end_row_group_idx_));
+    state_.cur_file_id_ = scan_task->file_id_;
+    state_.cur_row_group_idx_ = scan_task->first_lineno_;
+    state_.end_row_group_idx_ = scan_task->last_lineno_;
+    if (scan_task->record_count_ > 0 && is_count_aggr) {
+      state_.end_row_group_idx_ = scan_task->first_lineno_;
+    } else {
+      OX (state_.end_row_group_idx_ = std::min((int64_t)(file_meta_->num_row_groups()), state_.end_row_group_idx_));
+    }
 
     BEGIN_CATCH_EXCEPTIONS
-      bool contains_field_id = is_contain_field_id(file_meta_);
+      bool contains_field_id = !skip_create_file_reader ? is_contain_field_id(file_meta_) : false;
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
         ObDataAccessPathExtraInfo *data_access_info =
             static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
         int column_index = -1;
-        if (is_iceberg_lake_table() && contains_field_id) {
+        if (contains_field_id) {
           int64_t target_field_id = file_column_exprs_.at(i)->extra_;
           bool is_found = false;
           for (int j = 0;
@@ -507,35 +515,58 @@ int ObParquetTableRowIterator::next_row_group()
       if (cur_row_group > 0) {
         state_.cur_row_group_begin_row_id_ += file_meta_->RowGroup(cur_row_group - 1)->num_rows();
       }
-      bool can_skip = false;
-      std::shared_ptr<parquet::RowGroupReader> rg_reader = file_reader_->RowGroup(cur_row_group);
-      std::shared_ptr<parquet::RowGroupReader> eager_rg_reader = eager_file_reader_->RowGroup(cur_row_group);
-      ObEvalCtx::TempAllocGuard alloc_guard(scan_param_->op_->get_eval_ctx());
-      ParquetMinMaxFilterParamBuilder param_builder(this, rg_reader, file_meta_, alloc_guard.get_allocator());
-      if (OB_FAIL(ObExternalTablePushdownFilter::apply_skipping_index_filter(PushdownLevel::ROW_GROUP, param_builder, can_skip))) {
-        LOG_WARN("failed to apply skip index", K(ret));
-      } else if (0 == rg_reader->metadata()->num_rows() || can_skip) {
-        ++reader_metrics_.skipped_row_group_count_;
-        LOG_TRACE("print skip rg", K(state_.cur_row_group_idx_), K(state_.end_row_group_idx_));
-        continue;
-      } /*else if (options_.enable_prebuffer_ && OB_FAIL(pre_buffer(rg_reader))) {
-        LOG_WARN("failed to pre buffer", K(ret));
-      }*/ else {
-        ++reader_metrics_.selected_row_group_count_;
-        sector_iter_.reset();
-        find_row_group = true;
-        if (is_iceberg_lake_table() && !state_.is_delete_file_loaded_) {
-          if (OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
-            LOG_WARN("failed to read position delete", K(ret));
-          } else {
-            state_.is_delete_file_loaded_ = true;
-          }
+      bool is_count_aggr = file_column_exprs_.count() == 0;
+      if (is_iceberg_lake_table() && is_count_aggr) {
+        int64_t task_idx = state_.file_idx_ - 1;
+        ObIcebergScanTask *iceberg_scan_task =
+          static_cast<ObIcebergScanTask *>(scan_param_->scan_tasks_.at(task_idx));
+        if (OB_ISNULL(iceberg_scan_task)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null scan task", K(ret), K(task_idx));
+        } else if (OB_FAIL(iceberg_scan_task->delete_files_.count() > 0 &&
+                  !state_.is_delete_file_loaded_ &&
+                  build_delete_bitmap(state_.cur_file_url_, task_idx))) {
+          LOG_WARN("failed to read position delete", K(ret));
+        } else {
+          state_.cur_row_group_row_count_ = iceberg_scan_task->record_count_;
+          state_.cur_row_group_row_count_ -=
+            iceberg_scan_task->delete_files_.count() > 0 ? delete_bitmap_->get_cardinality() : 0;
+          state_.is_delete_file_loaded_ = true;
+          state_.logical_read_row_count_ = 0;
+          state_.logical_eager_read_row_count_ = 0;
+          find_row_group = true;
         }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(prepare_rg_bitmap(rg_reader))) {
-          LOG_WARN("failed to prepare bitmap", K(ret));
-        } else if (OB_FAIL(prepare_page_index(cur_row_group, rg_reader, eager_rg_reader))) {
-          LOG_WARN("failed to prepare page index", K(ret));
+      } else {
+        bool can_skip = false;
+        std::shared_ptr<parquet::RowGroupReader> rg_reader = file_reader_->RowGroup(cur_row_group);
+        std::shared_ptr<parquet::RowGroupReader> eager_rg_reader = eager_file_reader_->RowGroup(cur_row_group);
+        ObEvalCtx::TempAllocGuard alloc_guard(scan_param_->op_->get_eval_ctx());
+        ParquetMinMaxFilterParamBuilder param_builder(this, rg_reader, file_meta_, alloc_guard.get_allocator());
+        if (OB_FAIL(ObExternalTablePushdownFilter::apply_skipping_index_filter(PushdownLevel::ROW_GROUP, param_builder, can_skip))) {
+          LOG_WARN("failed to apply skip index", K(ret));
+        } else if (0 == rg_reader->metadata()->num_rows() || can_skip) {
+          ++reader_metrics_.skipped_row_group_count_;
+          LOG_TRACE("print skip rg", K(state_.cur_row_group_idx_), K(state_.end_row_group_idx_));
+          continue;
+        } /*else if (options_.enable_prebuffer_ && OB_FAIL(pre_buffer(rg_reader))) {
+          LOG_WARN("failed to pre buffer", K(ret));
+        }*/ else {
+          ++reader_metrics_.selected_row_group_count_;
+          sector_iter_.reset();
+          find_row_group = true;
+          if (is_iceberg_lake_table() && !state_.is_delete_file_loaded_) {
+            if (OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
+              LOG_WARN("failed to read position delete", K(ret));
+            } else {
+              state_.is_delete_file_loaded_ = true;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(prepare_rg_bitmap(rg_reader))) {
+            LOG_WARN("failed to prepare bitmap", K(ret));
+          } else if (OB_FAIL(prepare_page_index(cur_row_group, rg_reader, eager_rg_reader))) {
+            LOG_WARN("failed to prepare page index", K(ret));
+          }
         }
       }
     }
@@ -3532,13 +3563,6 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
                                        sizeof(int64_t) * state_.eager_read_row_counts_.count());
         }
         state_.cur_row_group_row_count_ = file_meta_->RowGroup(cur_row_group)->num_rows();
-        if (is_iceberg_lake_table() && OB_NOT_NULL(delete_bitmap_) && !file_column_exprs_.count()) {
-          uint64_t cur_row_group_deleted_row_cnt_ = delete_bitmap_->get_range_cardinality(
-                                                                state_.cur_row_group_begin_row_id_,
-                                                                state_.cur_row_group_begin_row_id_ +
-                                                                state_.cur_row_group_row_count_);
-          state_.cur_row_group_row_count_ -= cur_row_group_deleted_row_cnt_;
-        }
         state_.logical_read_row_count_ = 0;
         state_.logical_eager_read_row_count_ = 0;
         //LOG_INFO("got rg", K(state_.cur_row_group_idx_), K(state_.cur_row_group_row_count_));
@@ -3555,13 +3579,15 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
             eager_page_reader->set_data_page_filter(r2);
             column_readers_.at(i) = parquet::ColumnReader::Make(
                                     rg_reader->metadata()->schema()->Column(column_indexs_.at(i)),
-                                    std::move(page_reader));
+                                    std::move(page_reader),
+                                    &arrow_alloc_);
             record_readers_.at(i) = rg_reader->RecordReader(column_indexs_.at(i));
             if (has_eager_columns() && eager_column_cnt < get_eager_count()
                                     && eager_columns_.at(eager_column_cnt) == i) {
               eager_column_readers_.at(eager_column_cnt) = parquet::ColumnReader::Make(
                                     eager_rg_reader->metadata()->schema()->Column(column_indexs_.at(i)),
-                                    std::move(eager_page_reader));
+                                    std::move(eager_page_reader),
+                                    &arrow_alloc_);
               eager_record_readers_.at(eager_column_cnt) = eager_rg_reader->RecordReader(column_indexs_.at(i));
               eager_column_cnt++;
             }
@@ -3697,30 +3723,47 @@ int ObParquetTableRowIterator::next_sector(const int64_t capacity, ObEvalCtx &ev
 {
   int ret = OB_SUCCESS;
   read_count = 0;
-  while (OB_SUCC(ret) && 0 == read_count) {
-    if (state_.logical_read_row_count_ >= state_.cur_row_group_row_count_) {
-      if (OB_FAIL(next_row_group())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to next row group", K(ret));
+  try {
+    while (OB_SUCC(ret) && 0 == read_count) {
+      if (state_.logical_read_row_count_ >= state_.cur_row_group_row_count_) {
+        if (OB_FAIL(next_row_group())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to next row group", K(ret));
+          }
+        }
+      }
+      if (!file_column_exprs_.count()) {
+        read_count = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
+        state_.logical_read_row_count_ += read_count;
+        state_.logical_eager_read_row_count_ += read_count;
+      } else {
+        if (OB_FAIL(ret)) {
+        } else if (sector_iter_.is_end() && FALSE_IT(move_next())) {
+        } else if (OB_FAIL(sector_iter_.prepare_next(state_.cur_row_group_row_count_ - (has_eager_columns()
+                                  ? state_.logical_eager_read_row_count_ : state_.logical_read_row_count_),
+                                      capacity, scan_param_->pd_storage_filters_, eval_ctx))) {
+          LOG_WARN("failed to prepare next", K(ret));
+        } else if (sector_iter_.is_empty()) {
+        } else if (FALSE_IT(scan_param_->op_->clear_evaluated_flag())) {
+        } else if (OB_FAIL(project_lazy_columns(read_count, capacity))) {
+          LOG_WARN("failed to project lazy columns", K(ret));
         }
       }
     }
-    if (!file_column_exprs_.count()) {
-      read_count = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
-      state_.logical_read_row_count_ += read_count;
-      state_.logical_eager_read_row_count_ += read_count;
-    } else {
-      if (OB_FAIL(ret)) {
-      } else if (sector_iter_.is_end() && FALSE_IT(move_next())) {
-      } else if (OB_FAIL(sector_iter_.prepare_next(state_.cur_row_group_row_count_ - (has_eager_columns()
-                                ? state_.logical_eager_read_row_count_ : state_.logical_read_row_count_),
-                                    capacity, scan_param_->pd_storage_filters_, eval_ctx))) {
-        LOG_WARN("failed to prepare next", K(ret));
-      } else if (sector_iter_.is_empty()) {
-      } else if (FALSE_IT(scan_param_->op_->clear_evaluated_flag())) {
-      } else if (OB_FAIL(project_lazy_columns(read_count, capacity))) {
-        LOG_WARN("failed to project lazy columns", K(ret));
-      }
+  } catch (const ObErrorCodeException &ob_error) {
+    if (OB_SUCC(ret)) {
+      ret = ob_error.get_error_code();
+      LOG_WARN("fail to read file", K(ret));
+    }
+  } catch(const std::exception& e) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), "Info", e.what());
+    }
+  } catch(...) {
+    if (OB_SUCC(ret)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
     }
   }
   return ret;

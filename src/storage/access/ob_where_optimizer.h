@@ -45,15 +45,15 @@ private:
     uint64_t idx_;
     uint64_t filter_cost_time_;
     uint64_t filtered_row_cnt_;
-    uint64_t skip_index_skip_mb_cnt_;
+    uint64_t skip_index_skip_block_cnt_;
     sql::ObPushdownFilterExecutor *filter_;
     ObICGIterator *filter_iter_;
     sql::ObPushdownFilterExecutor *filter_node_;
 
     bool operator< (const ObFilterCondition &filter_condition) const {
       bool ret = false;
-      if (skip_index_skip_mb_cnt_ != filter_condition.skip_index_skip_mb_cnt_) {
-        ret = skip_index_skip_mb_cnt_ > filter_condition.skip_index_skip_mb_cnt_;
+      if (skip_index_skip_block_cnt_ != filter_condition.skip_index_skip_block_cnt_) {
+        ret = skip_index_skip_block_cnt_ > filter_condition.skip_index_skip_block_cnt_;
       } else if (filter_cost_time_ == 0 || filter_condition.filter_cost_time_ == 0) {
         ret = !(filter_cost_time_ == 0);
       } else {
@@ -64,7 +64,7 @@ private:
       return ret;
     }
 
-    TO_STRING_KV(K_(idx), K_(filter_cost_time), K_(filtered_row_cnt), K_(skip_index_skip_mb_cnt));
+    TO_STRING_KV(K_(idx), K_(filter_cost_time), K_(filtered_row_cnt), K_(skip_index_skip_block_cnt));
   };
 
   int analyze(bool &reordered);

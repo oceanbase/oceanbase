@@ -194,7 +194,9 @@ public:
         inv_idx_scan_iter_(nullptr),
         vec_aux_ctdef_(nullptr),
         vec_aux_rtdef_(nullptr),
-        saved_rowkeys_itr_(nullptr)
+        saved_rowkeys_itr_(nullptr),
+        search_param_(),
+        distance_threshold_(FLT_MAX)
   {
     dis_type_ = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
     saved_rowkeys_.set_attr(ObMemAttr(MTL_ID(), "VecIdxKeyRanges"));
@@ -375,6 +377,8 @@ protected:
   ObVectorQueryRowkeyIterator *saved_rowkeys_itr_;
   common::ObSEArray<common::ObRowkey, 16> saved_rowkeys_;
   common::ObSEArray<common::ObRowkey, 16> pre_fileter_rowkeys_;
+  ObVectorIndexParam search_param_;
+  float distance_threshold_;
 };
 
 class ObDASIvfScanIter : public ObDASIvfBaseScanIter

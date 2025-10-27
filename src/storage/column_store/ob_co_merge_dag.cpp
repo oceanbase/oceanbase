@@ -33,6 +33,7 @@ ERRSIM_POINT_DEF(EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED);
 ERRSIM_POINT_DEF(EN_COMPACTION_DELAY_FOLLOWER_ROWKEY_CG_MERGE);
 ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_RECYCLED);
 ERRSIM_POINT_DEF(EN_COMPACTION_BATCH_EXE_ALLOC_MEM_FAILED);
+ERRSIM_POINT_DEF(EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG);
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     start_cg_idx_(0),
@@ -242,15 +243,16 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
    * Current Dag Path: prepare_dag -> minor_dag -> schedule_dag
    * Optimization: use ObMinorMergeTask instead of the MinorDags && ScheduleDags?
    */
-
+  const int32_t private_transfer_epoch = ctx.static_param_.private_transfer_epoch_;
   ObCOMergeScheduleDag *schedule_dag = nullptr;
   ObTabletMergeExecuteDag *minor_exe_dag = nullptr;
   result.version_range_.multi_version_start_ = ctx.get_tablet()->get_multi_version_start();
   result.version_range_.base_version_ = 0;
   result.version_range_.snapshot_version_ = ctx.get_tablet()->get_snapshot_version();
-  result.transfer_seq_ = ctx.get_tablet()->get_transfer_seq();
+  result.private_transfer_epoch_ = private_transfer_epoch;
+
   ObTabletMergeDagParam dag_param(MINOR_MERGE, ctx.get_ls_id(),
-                                  ctx.get_tablet_id(), ctx.get_schedule_transfer_seq());
+                                  ctx.get_tablet_id(), private_transfer_epoch);
   if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->alloc_dag(minor_exe_dag))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(ctx.get_tablet()->get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
@@ -1203,15 +1205,27 @@ int ObCOMergeDagNet::schedule_rest_dag()
     LOG_WARN("dag net is not inited", K(ret), K_(is_inited));
   } else if (COMergeStatus::CTX_PREPARED > get_merge_status()) {
     // do nothing, the prepare dag has not been scheduled.
-  } else if (!is_cancel() && COMergeStatus::PREPARE_FINISHED <= get_merge_status()) {
+  } else if (COMergeStatus::PREPARE_FINISHED <= get_merge_status()) {
+    // if merge_status >= COMergeStatus::PREPARE_FINISHED,
+    // inner_create_and_schedule_dags will not be called anywhere else except here.
+    // So there will be no concurrent processing of finish dag
+    if (is_cancel()) {
+      if (!ATOMIC_LOAD(&finish_added_)) {
+        if (OB_NOT_NULL(finish_dag_)) {
+          (void)MTL(share::ObTenantDagScheduler*)->free_dag(*finish_dag_);
+          finish_dag_ = nullptr;
+        }
+      }
+    } else {
 #ifdef ERRSIM
-    ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
-    if (OB_FAIL(ret)) {
-      LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST SCHEDULE FAILED", K(ret));
-    }
+      ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
+      if (OB_FAIL(ret)) {
+        LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST SCHEDULE FAILED", K(ret));
+      }
 #endif
-    if (FAILEDx(inner_create_and_schedule_dags())) {
-      LOG_WARN("failed to create and schedule rest dags", K(ret));
+      if (FAILEDx(inner_create_and_schedule_dags())) {
+        LOG_WARN("failed to create and schedule rest dags", K(ret));
+      }
     }
   }
   return ret;
@@ -1433,6 +1447,13 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
     }
   } // ctx_lock_ unlock // avoid lock ctx_lock_ before prio_lock_
 
+#ifdef ERRSIM
+  if (OB_UNLIKELY(EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG)) {
+    LOG_INFO("ERRSIM EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG scheduler exe dag failed");
+    ret = EN_COMPACTION_CANCEL_WITH_SINGLE_FINISH_DAG;
+    SERVER_EVENT_SYNC_ADD("merge_errsim", "scheduler_exe_dag_failed", "ret_code", ret);
+  }
+#endif
   int64_t unscheduled_dag_idx = 0;
   // schedule all created exe dag
   if (FAILEDx(inner_add_exe_dags_into_scheduler(exe_dag_array, unscheduled_dag_idx))) {
@@ -1705,10 +1726,10 @@ int ObCOMergeDagNet::get_compat_mode()
           0/*timeout_us*/,
           storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_transfer_seq_))) {
-    LOG_WARN("tmp tablet transfer seq not eq with old transfer seq", K(ret),
+  } else if (OB_FAIL(ObTablet::check_transfer_epoch_equal(*tmp_tablet_handle.get_obj(), basic_param_.schedule_transfer_epoch_))) {
+    LOG_WARN("tmp tablet transfer epoch not eq with old transfer epoch", K(ret),
         "tmp_tablet_meta", tmp_tablet_handle.get_obj()->get_tablet_meta(),
-        "old_transfer_seq", basic_param_.schedule_transfer_seq_);
+        "old_transfer_epoch", basic_param_.schedule_transfer_epoch_);
   } else {
     basic_param_.dag_net_id_ = get_dag_id();
     basic_param_.skip_get_tablet_ = true;

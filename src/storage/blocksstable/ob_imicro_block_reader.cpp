@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_imicro_block_reader.h"
 #include "index_block/ob_index_block_row_struct.h"
+#include "storage/access/ob_table_access_context.h"
 
 namespace oceanbase
 {
@@ -230,5 +231,31 @@ int ObIMicroBlockReader::filter_white_filter(
   }
   return ret;
 }
+
+int ObIMicroBlockReader::get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
+      const int32_t col_offset,
+      const int64_t row_index,
+      ObStorageDatum &datum)
+{
+  INIT_SUCC(ret);
+  if (OB_FAIL(get_raw_column_datum(col_offset, row_index, datum))) {
+    LOG_WARN("Failed to get raw column datum", K(col_offset), K(row_index));
+  } else if (col_param.get_meta_type().is_lob_storage() && !datum.is_null() &&
+             !datum.get_lob_data().in_row_) {
+    if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(
+            datum, col_param, iter_param, context))) {
+      LOG_WARN("Failed to fill lob loactor",
+               K(ret),
+               K(datum),
+               K(context),
+               K(iter_param));
+    }
+  }
+  return ret;
+}
+
 }
 }

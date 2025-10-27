@@ -40,6 +40,21 @@ public:
   int32_t doc_length_idx_;
 };
 
+struct ObTextAvgDocLenEstSpec
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTextAvgDocLenEstSpec(common::ObIAllocator &alloc);
+  virtual ~ObTextAvgDocLenEstSpec() {}
+
+  bool is_valid() const;
+  TO_STRING_KV(K_(col_types), K_(col_store_idxes), K_(scan_col_proj));
+  ObFixedArray<ObSkipIndexColType, ObIAllocator> col_types_;
+  ObFixedArray<uint32_t, ObIAllocator> col_store_idxes_;
+  ObFixedArray<uint32_t, ObIAllocator> scan_col_proj_;
+  bool can_est_by_sum_skip_index_;
+};
+
 struct ObDASIRScanCtDef : ObDASAttachCtDef
 {
   OB_UNIS_VERSION(1);
@@ -52,11 +67,13 @@ public:
       match_filter_(nullptr),
       relevance_expr_(nullptr),
       relevance_proj_col_(nullptr),
+      avg_doc_token_cnt_expr_(nullptr),
       estimated_total_doc_cnt_(0),
       topk_limit_expr_(nullptr),
       topk_offset_expr_(nullptr),
       token_col_(nullptr),
       block_max_spec_(alloc),
+      avg_doc_len_est_spec_(alloc),
       mode_flag_(NATURAL_LANGUAGE_MODE),
       flags_(0),
       field_boost_expr_(nullptr) {}
@@ -65,6 +82,7 @@ public:
   bool need_fwd_idx_agg() const { return has_fwd_agg_ && need_calc_relevance(); }
   bool need_inv_idx_agg() const { return has_inv_agg_ && need_calc_relevance(); }
   bool need_block_max_scan() const { return has_block_max_scan_; }
+  bool need_avg_doc_len_est() const { return has_avg_doc_len_est_ && nullptr != avg_doc_token_cnt_expr_; }
   bool has_pushdown_topk() const { return nullptr != topk_limit_expr_; }
   bool is_block_scan_valid() const
   {
@@ -147,6 +165,7 @@ public:
                        KPC_(match_filter),
                        KPC_(relevance_expr),
                        KPC_(relevance_proj_col),
+                       KPC_(avg_doc_token_cnt_expr),
                        K_(estimated_total_doc_cnt),
                        KPC_(topk_limit_expr),
                        KPC_(topk_offset_expr),
@@ -161,11 +180,13 @@ public:
   ObExpr *match_filter_;
   ObExpr *relevance_expr_;
   ObExpr *relevance_proj_col_;
+  ObExpr *avg_doc_token_cnt_expr_;
   int64_t estimated_total_doc_cnt_;
   ObExpr *topk_limit_expr_;
   ObExpr *topk_offset_expr_;
   ObExpr *token_col_;
   ObTextBlockMaxSpec block_max_spec_;
+  ObTextAvgDocLenEstSpec avg_doc_len_est_spec_;
   ObMatchAgainstMode mode_flag_; // for MySQL search mode flag
   union
   {
@@ -176,7 +197,8 @@ public:
       uint8_t has_doc_id_agg_:1;
       uint8_t has_fwd_agg_:1;
       uint8_t has_block_max_scan_:1;
-      uint8_t reserved_:4;
+      uint8_t has_avg_doc_len_est_:1;
+      uint8_t reserved_:3;
     };
   };
   ObExpr *field_boost_expr_;

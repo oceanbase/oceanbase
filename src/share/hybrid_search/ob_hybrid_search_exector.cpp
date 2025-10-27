@@ -10,11 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "src/share/hybrid_search/ob_hybrid_search_exector.h"
-#include "lib/oblog/ob_log_module.h"
-#include "pl/ob_pl.h"
-#include "share/ob_define.h"
-#include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
+#include "ob_hybrid_search_exector.h"
 
 #define USING_LOG_PREFIX SHARE
 
@@ -22,7 +18,7 @@ namespace oceanbase {
 namespace share {
 
 ObHybridSearchExecutor::ObHybridSearchExecutor()
-    : pl_ctx_(NULL), ctx_(NULL), allocator_("HybridSearch") {}
+    : ctx_(NULL), allocator_("HybridSearch") {}
 
 ObHybridSearchExecutor::~ObHybridSearchExecutor() {}
 
@@ -46,15 +42,22 @@ int ObHybridSearchExecutor::init(const pl::ObPLExecCtx &ctx, const ObHybridSearc
   if (OB_ISNULL(ctx.exec_ctx_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("exec context is not initialized", K(ret));
-  } else if (OB_ISNULL(ctx.exec_ctx_->get_my_session())) {
+  } else if (OB_FAIL(init(ctx.exec_ctx_, arg))) {
+    LOG_WARN("fail to init", KR(ret));
+  }
+  return ret;
+}
+
+int ObHybridSearchExecutor::init(sql::ObExecContext *ctx, const ObHybridSearchArg &arg) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx->get_my_session())) {
     ret = OB_NOT_INIT;
     LOG_WARN("session is not initialized", K(ret));
   } else if (init_search_arg(arg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
   } else {
-    pl_ctx_ = &ctx;
-    ctx_ = ctx.exec_ctx_;
+    ctx_ = ctx;
     session_info_ = ctx_->get_my_session();
     tenant_id_ = session_info_->get_effective_tenant_id();
   }

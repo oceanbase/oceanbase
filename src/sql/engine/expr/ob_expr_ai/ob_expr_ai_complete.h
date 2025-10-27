@@ -43,6 +43,14 @@ public:
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
 private:
+  static int get_prompt_object_from_str(ObIAllocator &allocator,
+                                          const ObDatumMeta &meta,
+                                          ObArray<ObString> &prompts,
+                                          ObArray<ObJsonObject *> &prompt_objects,
+                                          bool& is_all_str);
+  static int transform_prompt_object_to_str(ObIAllocator &allocator,
+                                            ObArray<ObJsonObject *> &prompt_objects,
+                                            ObArray<ObString> &prompts);
   static int get_prompt_and_contents_contact_str(ObIAllocator &allocator,
                                       ObString &prompt,
                                       ObArray<ObString> &contents,
@@ -62,6 +70,7 @@ private:
                                       ObArray<ObJsonObject *> &responses,
                                       const ObBitVector &skip,
                                       const EvalBound &bound,
+                                      const ObAiModelEndpointInfo &endpoint_info,
                                       ObIVector *res_vec);
   static int pack_json_string_to_res_vector(const ObExpr &expr,
                                             ObEvalCtx &ctx,

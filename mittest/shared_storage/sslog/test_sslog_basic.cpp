@@ -252,7 +252,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   // ========== Test 2: read the row =========
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key1,
@@ -274,7 +274,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   // ========== Test 4: read the prefix =========
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key_prefix,
@@ -289,7 +289,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   }
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                       meta_type1,
                                                       meta_key_prefix,
@@ -322,7 +322,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key1,
@@ -341,7 +341,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                         meta_type1,
                                                         meta_key_prefix,
@@ -355,7 +355,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
   // ========== Test 7: read the snapshot =========
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/, snapshot_version1);
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/, snapshot_version1);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key1,
@@ -368,7 +368,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_row*/, snapshot_version1);
+    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_prefix*/, snapshot_version1);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key_prefix,
@@ -497,7 +497,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key1,
@@ -522,7 +522,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key1,
@@ -553,7 +553,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                       meta_type3,
                                                       meta_key3,
@@ -577,7 +577,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-      sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+      sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                       meta_type3,
                                                       meta_key3,
@@ -601,7 +601,7 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
 
   {
     SSLOG_TABLE_READ_INIT
-      sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+      sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                       meta_type3,
                                                       meta_key3,
@@ -705,7 +705,7 @@ TEST_F(ObSSLogAfterRestartTest, test_sslog_schema)
   // ============================== restart successfully ==============================
   {
     SSLOG_TABLE_READ_INIT
-    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_row*/);
+    sslog::ObSSLogReadParam param(false/*read_local*/, true/*read_prefix*/);
     ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
                                                      meta_type1,
                                                      meta_key_prefix,
@@ -786,6 +786,168 @@ TEST_F(ObTestSSLogBasic, test_sslog_guard)
   }
 
   TRANS_LOG(INFO, "test_sslog_guard end");
+}
+
+TEST_F(ObTestSSLogBasic, test_sslog_segment_query)
+{
+  TRANS_LOG(INFO, "test_sslog_segment_query start");
+
+  uint64_t tenant_id = 0;
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
+  TRANS_LOG(INFO, "get_tenant end", K(tenant_id));
+
+  share::ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(tenant_id));
+
+  ObSSLogProxyGuard guard;
+  ASSERT_EQ(OB_SUCCESS, sslog::get_sslog_table_guard(ObSSLogTableType::SSLOG_TABLE,
+                                                     tenant_id,
+                                                     guard));
+  sslog::ObISSLogProxy *sslog_table_proxy = guard.get_sslog_proxy();
+
+  // ========== 准备测试数据 ==========
+  int64_t affected_rows = 0;
+  const sslog::ObSSLogMetaType meta_type = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
+  const common::ObString meta_key_prefix = "1002;1009;";
+
+  // 插入多条测试数据
+  for (int i = 1; i <= 10; i++) {
+    char key_buf[100];
+    char value_buf[100];
+    char extra_buf[100];
+    snprintf(key_buf, sizeof(key_buf), "1002;1009;%d", i);
+    snprintf(value_buf, sizeof(value_buf), "qc_segment_test_value_%d", i);
+    snprintf(extra_buf, sizeof(extra_buf), "qc_segment_test_extra_%d", i);
+
+    const common::ObString meta_key(key_buf);
+    const common::ObString meta_value(value_buf);
+    const common::ObString extra_info(extra_buf);
+
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->insert_row(meta_type,
+                                                       meta_key,
+                                                       meta_value,
+                                                       extra_info,
+                                                       affected_rows));
+    ASSERT_EQ(1, affected_rows);
+  }
+
+  // ========== Test 1: 自动分段查询测试 ==========
+  {
+    TRANS_LOG(INFO, "test auto segment query");
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/,
+                                 true/*read_prefix*/,
+                                 share::SCN::invalid_scn(),
+                                 true/*enable_segment_query*/,
+                                 3/*segment_size*/);
+
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type,
+                                                     meta_key_prefix,
+                                                     iter));
+
+    // 验证自动分段查询返回所有数据
+    common::ObString meta_key_ret;
+    common::ObString meta_value_ret;
+    common::ObString extra_info_ret;
+    SCN row_scn_ret;
+    sslog::ObSSLogMetaType meta_type_ret;
+    int count = 0;
+
+    while (OB_SUCCESS == iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret)) {
+      count++;
+      TRANS_LOG(INFO, "auto segment query result", K(count), K(meta_key_ret), K(extra_info_ret));
+
+      // 验证列值
+      ASSERT_EQ(meta_type, meta_type_ret);
+      ASSERT_TRUE(meta_key_ret.prefix_match("1002;1009;"));
+      ASSERT_TRUE(meta_value_ret.prefix_match("qc_segment_test_value_"));
+      ASSERT_TRUE(extra_info_ret.prefix_match("qc_segment_test_extra_"));
+      ASSERT_TRUE(row_scn_ret.is_valid());
+    }
+
+    // 自动分段查询应该返回所有10条记录
+    ASSERT_EQ(10, count);
+  }
+
+  // ========== Test 2.1: 自动分段查询边界测试 ==========
+  {
+    TRANS_LOG(INFO, "test auto segment query boundary");
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/,
+                                 true/*read_prefix*/,
+                                 share::SCN::invalid_scn(),
+                                 true/*enable_segment_query*/,
+                                 10/*segment_size*/);
+
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type,
+                                                     meta_key_prefix,
+                                                     iter));
+
+    // 验证自动分段查询能够遍历所有数据
+    common::ObString meta_key_ret;
+    common::ObString meta_value_ret;
+    common::ObString extra_info_ret;
+    SCN row_scn_ret;
+    sslog::ObSSLogMetaType meta_type_ret;
+    int total_count = 0;
+
+    while (OB_SUCCESS == iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret)) {
+      total_count++;
+      TRANS_LOG(INFO, "auto segment query full traversal", K(total_count), K(meta_key_ret));
+
+      // 验证列值
+      ASSERT_EQ(meta_type, meta_type_ret);
+      ASSERT_TRUE(meta_key_ret.prefix_match("1002;1009;"));
+      ASSERT_TRUE(meta_value_ret.prefix_match("qc_segment_test_value_"));
+      ASSERT_TRUE(extra_info_ret.prefix_match("qc_segment_test_extra_"));
+      ASSERT_TRUE(row_scn_ret.is_valid());
+    }
+
+    // 验证自动分段查询返回了所有10条记录
+    ASSERT_EQ(10, total_count);
+  }
+
+  // ========== Test 2.2: 自动分段查询边界测试 ==========
+  {
+    TRANS_LOG(INFO, "test auto segment query boundary");
+
+    // 测试segment_size为1的情况
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/,
+                                 true/*read_prefix*/,
+                                 share::SCN::invalid_scn(),
+                                 true/*enable_segment_query*/,
+                                 1/*segment_size*/);
+
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                     meta_type,
+                                                     meta_key_prefix,
+                                                     iter));
+
+    common::ObString meta_key_ret;
+    common::ObString meta_value_ret;
+    common::ObString extra_info_ret;
+    SCN row_scn_ret;
+    sslog::ObSSLogMetaType meta_type_ret;
+    int count = 0;
+
+    while (OB_SUCCESS == iter.get_next_row_v2(row_scn_ret, meta_type_ret, meta_key_ret, meta_value_ret, extra_info_ret)) {
+      count++;
+
+      // 验证列值
+      ASSERT_EQ(meta_type, meta_type_ret);
+      ASSERT_TRUE(meta_key_ret.prefix_match("1002;1009;"));
+      ASSERT_TRUE(meta_value_ret.prefix_match("qc_segment_test_value_"));
+      ASSERT_TRUE(extra_info_ret.prefix_match("qc_segment_test_extra_"));
+      ASSERT_TRUE(row_scn_ret.is_valid());
+    }
+
+    // 自动分段查询应该返回所有10条记录，即使segment_size为1
+    ASSERT_EQ(10, count);
+  }
+  TRANS_LOG(INFO, "test_sslog_segment_query end");
 }
 
 } // unittest

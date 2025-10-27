@@ -989,7 +989,7 @@ TEST_F(TestSSMicroCache, test_private_macro_cache_miss_cnt)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(100); // seq_id
-  macro_id.set_macro_transfer_seq(0); // tablet_transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // tablet_transfer_seq
   macro_id.set_tenant_seq(server_id); // macro_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;

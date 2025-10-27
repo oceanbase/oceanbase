@@ -317,6 +317,7 @@ public:
   virtual bool is_empty() const = 0;
   virtual bool no_data_to_read() const { return is_empty(); }
   virtual bool is_ddl_merge_empty_sstable() const { return is_empty() && is_ddl_merge_sstable(); }
+  virtual bool is_all_cg_base() const { return false; }
   DECLARE_VIRTUAL_TO_STRING;
 
   static bool is_sstable(const TableType table_type)

@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_trans_utils.h"
 #include "storage/tx/ob_trans_service.h"
-#include "src/share/table/ob_table_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -246,7 +245,7 @@ int ObTableTransUtils::sync_end_trans(ObTableTransParam &trans_param)
     ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
     if (OB_FAIL(txs->commit_tx(*trans_param.trans_desc_,
                                stmt_timeout_ts,
-                               &ObTableUtils::get_kv_normal_trace_info()))) {
+                               trans_param.trace_info_))) {
       LOG_WARN("fail commit trans when session terminate", K(ret), KPC_(trans_param.trans_desc), K(stmt_timeout_ts));
     }
   }
@@ -297,7 +296,7 @@ int ObTableTransUtils::async_commit_trans(ObTableTransParam &trans_param)
       if (OB_FAIL(txs->submit_commit_tx(*trans_param.trans_desc_,
                                         stmt_timeout_ts,
                                         *callback,
-                                        &ObTableUtils::get_kv_normal_trace_info()))) {
+                                        trans_param.trace_info_))) {
         LOG_WARN("fail end trans when session terminate", K(ret), K(trans_param));
         callback->callback(ret);
       }

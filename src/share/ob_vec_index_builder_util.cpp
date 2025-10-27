@@ -3850,7 +3850,7 @@ int ObVecIndexBuilderUtil::del_extra_info_columns(const ObTableSchema &data_sche
       if (OB_ISNULL(col_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
-      } else if (!col_schema->is_rowkey_column()) {
+      } else if (!col_schema->is_rowkey_column() || col_schema->is_hidden_pk_column_id(col_schema->get_column_id())) {
       } else if (col_schema->is_tbl_part_key_column()) { // partition key column is not extra info
       } else if (!is_column_exist(index_schema, *col_schema)) {
         LOG_INFO("extra info column is not exist", K(ret), KPC(col_schema));

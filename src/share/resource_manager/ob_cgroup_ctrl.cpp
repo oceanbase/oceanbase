@@ -166,6 +166,9 @@ bool ObCgroupCtrl::check_cgroup_status()
     if (OB_TMP_FAIL(check_cgroup_root_dir())) {
       LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
       valid_ = false;
+    } else if (OB_TMP_FAIL(check_pid_in_procs())) { // In case pid is moved out of other/procs
+      LOG_WARN_RET(tmp_ret, "check pid in other/procs failed", K(tmp_ret));
+      valid_ = false;
     }
   } else if (GCONF.enable_cgroup == false && is_valid() == true) {
     valid_ = false;
@@ -217,6 +220,26 @@ int ObCgroupCtrl::check_cgroup_root_dir()
     // access denied
     ret = OB_ERR_SYS;
     LOG_WARN("no permission to access", K(OBSERVER_ROOT_CGROUP_DIR), K(ret));
+  }
+  return ret;
+}
+
+int ObCgroupCtrl::check_pid_in_procs()
+{
+  int ret = OB_SUCCESS;
+  int64_t pid = getpid();
+  int64_t pid_value = 0;
+  char pid_value_str[VALUE_BUFSIZE + 1];
+
+  if (OB_FAIL(get_cgroup_config_(OTHER_CGROUP_DIR, CGROUP_PROCS_FILE, pid_value_str))) {
+    LOG_WARN("get pid from procs failed", K(ret), K(OTHER_CGROUP_DIR));
+  } else {
+    pid_value_str[VALUE_BUFSIZE] = '\0';
+    pid_value = atoi(pid_value_str);
+    if (pid_value != pid) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("pid not exist in other/procs", K(pid), K(pid_value), K(ret));
+    }
   }
   return ret;
 }
@@ -563,6 +586,7 @@ int ObCgroupCtrl::set_cgroup_config_(const char *group_path, const char *config_
 {
   int ret = OB_SUCCESS;
   char config_path[PATH_BUFSIZE];
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
   snprintf(config_path, PATH_BUFSIZE, "%s/%s", group_path, config_name);
   bool exist_cgroup = false;
   if (OB_FAIL(check_cgroup_root_dir())) {
@@ -573,6 +597,11 @@ int ObCgroupCtrl::set_cgroup_config_(const char *group_path, const char *config_
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path));
   } else if (OB_FAIL(write_string_to_file_(config_path, config_value))) {
     LOG_WARN("set cgroup config failed", K(ret), K(config_path), K(config_value));
+  }
+  const int64_t used_ts = ObTimeUtility::fast_current_time() - start_ts;
+  if (used_ts > 100 * 1000) {
+    LOG_WARN("set cgroup config cost too much time", K(ret),
+        K(used_ts), KP(group_path), KP(config_name), KP(config_value));
   }
   return ret;
 }

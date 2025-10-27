@@ -629,7 +629,12 @@ private:
         topn_const_(NULL),
         is_fetch_with_ties_(false),
         origin_sort_card_(0.0),
-        ambient_card_(ambient_card)
+        ambient_card_(ambient_card),
+        is_set_(false),
+        need_normal_sort_(false),
+        use_topn_(false),
+        need_hash_sort_(false),
+        use_part_topn_(false)
     {
     }
     virtual ~WinFuncOpHelper() {}
@@ -668,7 +673,34 @@ private:
     bool is_fetch_with_ties_;
     double origin_sort_card_;
     const ObIArray<double> &ambient_card_;
-
+    bool is_set_;
+    bool need_normal_sort_;
+    bool use_topn_;
+    bool need_hash_sort_;
+    bool use_part_topn_;
+    void reset_plan_options()
+    {
+      is_set_ = false;
+    }
+    int set_plan_options(const bool need_normal_sort,
+                          const bool use_topn,
+                          const bool need_hash_sort,
+                          const bool use_part_topn)
+    {
+      int ret = OB_SUCCESS;
+      if (is_set_) {
+        // unexpected
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("win plan options already set", K(ret));
+      } else {
+        need_normal_sort_ = need_normal_sort;
+        use_topn_ = use_topn;
+        need_hash_sort_ = need_hash_sort;
+        use_part_topn_ = use_part_topn;
+        is_set_ = true;
+      }
+      return ret;
+    }
     TO_STRING_KV(K_(win_dist_method),
                  K_(win_op_idx),
                  K_(force_normal_sort),
@@ -684,7 +716,11 @@ private:
                  K_(enable_topn),
                  K_(topn_const),
                  K_(is_fetch_with_ties),
-                 K_(qualify_filters));
+                 K_(qualify_filters),
+                 K_(need_normal_sort),
+                 K_(use_topn),
+                 K_(need_hash_sort),
+                 K_(use_part_topn));
   };
 
 private:
@@ -704,7 +740,7 @@ private:
                                      const ObIArray<ObRawExpr*> &qualify_filters,
                                      ObIArray<CandidatePlan> &total_plans);
   int create_one_window_function(CandidatePlan &candidate_plan,
-                                 const WinFuncOpHelper &win_func_helper,
+                                 WinFuncOpHelper &win_func_helper,
                                  ObIArray<CandidatePlan> &all_plans);
   int get_distribute_window_method(ObLogicalOperator *top,
                                   const WinFuncOpHelper &win_func_helper,
@@ -712,6 +748,32 @@ private:
                                   bool &single_part_parallel,
                                   bool &is_partition_wise);
   bool supported_wf_dist_list_func(ObWinFunRawExpr &win_expr);
+  int create_dist_win_func(ObLogicalOperator *&top,
+                           const WinFuncOpHelper &win_func_helper,
+                           const ObExchangeInfo &exch_info,
+                           const bool need_sort,
+                           const int64_t prefix_pos,
+                           const bool is_local_order,
+                           ObRawExpr *topn_expr,
+                           bool is_fetch_with_ties,
+                           const OrderItem *hash_sortkey,
+                           const WinDistAlgo dist_algo,
+                           const bool match_parallel,
+                           const bool is_partition_wise,
+                           const bool use_hash_sort,
+                           const bool use_topn_sort,
+                           double origin_sort_card,
+                           ObLogicalOperator *&new_top);
+  int create_dist_win_func_no_pushdown(WinDistAlgo win_dist_algo,
+                                       ObLogicalOperator *top,
+                                       const WinFuncOpHelper &win_func_helper,
+                                       const bool need_sort,
+                                       const bool single_part_parallel,
+                                       const bool is_partition_wise,
+                                       const int64_t prefix_pos,
+                                       const bool is_local_order,
+                                       ObExchangeInfo * exch_info,
+                                       ObIArray<CandidatePlan> &all_plans);
   int create_none_dist_win_func(ObLogicalOperator *top,
                                 const WinFuncOpHelper &win_func_helper,
                                 const bool need_sort,

@@ -630,6 +630,33 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     }
   }
 
+
+  // clean ivf build helper(if it is an IVF vector index task)
+  if (OB_SUCC(ret) && handle.is_valid() && handle.get_obj() != nullptr) {
+    ObTabletDirectLoadMgr *mgr = handle.get_obj();
+    bool is_ivf = false;
+    if (mgr->is_schema_item_ready() && OB_SUCC(mgr->is_ivf_vector_index(is_ivf)) && is_ivf) {
+      LOG_INFO("Detected IVF vector index task from schema_item, cleaning up IVF helper",
+               K(tablet_id), K(context_id));
+      ObIvfHelperKey key(tablet_id, context_id);
+      if (OB_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key))) {
+        if (ret != OB_HASH_NOT_EXIST) {
+          LOG_WARN("failed to cleanup ivf build helper, potential memory leak",
+                    K(ret), K(ls_id), K(tablet_id), K(context_id));
+        } else {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("ivf build helper not exist, already cleaned", K(ls_id), K(tablet_id), K(context_id));
+        }
+      } else {
+        LOG_WARN("Successfully cleaned up ivf build helper after ddl task finish",
+                 K(ls_id), K(tablet_id), K(context_id));
+      }
+    } else {
+      LOG_DEBUG("not an IVF vector index task, skip cleanup ivf build helper", K(tablet_id), K(context_id), K(is_ivf));
+    }
+  }
+
+
   ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
   if (OB_TMP_FAIL(tablet_exec_context_map_.erase_refactored(exec_id))) {
     LOG_WARN("erase refactored failed", K(ret), K(tmp_ret), K(exec_id));
@@ -1157,7 +1184,7 @@ ObTabletDirectLoadMgr::ObTabletDirectLoadMgr()
     lock_(), ref_cnt_(0), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
     need_process_cs_replica_(false), need_fill_column_group_(false), sqc_build_ctx_(),
     column_items_(), lob_column_idxs_(), lob_col_types_(), schema_item_(), dir_id_(0), task_cnt_(0), cg_cnt_(0),
-    micro_index_clustered_(false), tablet_transfer_seq_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ), is_no_logging_(false), reorganization_scn_()
+    micro_index_clustered_(false), private_transfer_epoch_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ), is_no_logging_(false), reorganization_scn_()
 {
   column_items_.set_attr(ObMemAttr(MTL_ID(), "DL_schema"));
   lob_column_idxs_.set_attr(ObMemAttr(MTL_ID(), "DL_schema"));
@@ -1183,7 +1210,7 @@ ObTabletDirectLoadMgr::~ObTabletDirectLoadMgr()
   schema_item_.reset();
   is_schema_item_ready_ = false;
   micro_index_clustered_ = false;
-  tablet_transfer_seq_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
+  private_transfer_epoch_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   is_no_logging_ = false;
   reorganization_scn_.reset();
 }
@@ -1192,6 +1219,25 @@ bool ObTabletDirectLoadMgr::is_valid()
 {
   return is_inited_ == true && ls_id_.is_valid() && tablet_id_.is_valid()
       && is_valid_direct_load(direct_load_type_);
+}
+
+int ObTabletDirectLoadMgr::is_ivf_vector_index(bool &is_ivf) const
+{
+  int ret = OB_SUCCESS;
+  is_ivf = false;
+  const ObString &param_str = schema_item_.vec_idx_param_;
+  if (schema_item_.vec_dim_ > 0 || !param_str.empty()) {
+    ObVectorIndexParam param;
+    if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+          param_str, ObVectorIndexType::VIT_IVF_INDEX, param, false))) {
+      LOG_WARN("failed to parse vector index params", K(ret), K(param_str));
+    } else {
+      is_ivf = (param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
+                param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
+                param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ);
+    }
+  }
+  return ret;
 }
 
 int ObTabletDirectLoadMgr::update(
@@ -1284,6 +1330,8 @@ int ObTabletDirectLoadMgr::update(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(sqc_build_ctx_.build_param_.assign(build_param))) {
       LOG_WARN("assign build param failed", K(ret));
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch_))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else {
       ls_id_ = build_param.common_param_.ls_id_;
       tablet_id_ = build_param.common_param_.tablet_id_;
@@ -1291,7 +1339,6 @@ int ObTabletDirectLoadMgr::update(
       is_rescan_data_compl_dag_ = build_param.common_param_.is_rescan_data_compl_dag_;
       data_format_version_ = build_param.common_param_.data_format_version_;
       micro_index_clustered_ = tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_;
-      tablet_transfer_seq_ = tablet_handle.get_obj()->get_transfer_seq();
       reorganization_scn_ = tablet_handle.get_obj()->get_reorganization_scn();
       is_inited_ = true;
     }
@@ -2415,7 +2462,7 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
   } else if (OB_FAIL(index_block_desc.init(true/*is ddl*/, table_schema, ls_id_, tablet_id_,
           is_full_direct_load(direct_load_type_) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
           is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : 1L,
-          data_format_version_, get_micro_index_clustered(), get_tablet_transfer_seq(), reorganization_scn_,
+          data_format_version_, get_micro_index_clustered(), get_private_transfer_epoch(), reorganization_scn_,
           is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn()))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else if (FALSE_IT(index_block_desc.get_static_desc().schema_version_ = sqc_build_ctx_.build_param_.runtime_only_param_.schema_version_)) {
@@ -2439,7 +2486,7 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
     } else if (OB_FAIL(sqc_build_ctx_.data_block_desc_.init(true/*is ddl*/, table_schema, ls_id_, tablet_id_,
             is_full_direct_load(direct_load_type_) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
             is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : 1L,
-            data_format_version_, get_micro_index_clustered(), get_tablet_transfer_seq(), reorganization_scn_,
+            data_format_version_, get_micro_index_clustered(), get_private_transfer_epoch(), reorganization_scn_,
             is_full_direct_load(direct_load_type_) ? SCN::invalid_scn() : table_key_.get_end_scn()))) {
       LOG_WARN("fail to init data block desc", K(ret));
     } else {

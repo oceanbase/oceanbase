@@ -513,6 +513,7 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
   ObLSService *ls_service = nullptr;
   ObStorageRpcProxy *svr_rpc_proxy = nullptr;
   ObStorageHADag *ha_dag = nullptr;
+  const uint64_t tenant_id = MTL_ID();
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -566,6 +567,16 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
       LOG_INFO("succeed init ObSSTableCopyFinishTask", K(init_param), K(sstable_macro_range_info_));
     }
   }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+      ret = PHYSICAL_COPY_TASK_GET_TABLET_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake PHYSICAL_COPY_TASK_GET_TABLET_FAILED", K(ret));
+      }
+    }
+#endif
+
   return ret;
 }
 
@@ -813,7 +824,6 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   const ObMigrationTabletParam *src_tablet_param = nullptr;
   const ObStorageSchema *storage_schema = nullptr;
   ObTabletHandle tablet_handle;
-  const uint64_t tenant_id = MTL_ID();
 
   if (OB_UNLIKELY(!tablet_id.is_valid()
                   || cluster_version < 0
@@ -832,17 +842,6 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
     LOG_WARN("failed to get merge type", K(ret), KPC(sstable_param));
   } else if (OB_FAIL(ls_->ha_get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_id));
-  }
-
-#ifdef ERRSIM
-    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
-      ret = PHYSICAL_COPY_TASK_GET_TABLET_FAILED ? : OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake PHYSICAL_COPY_TASK_GET_TABLET_FAILED", K(ret));
-      }
-    }
-#endif
-  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
@@ -859,7 +858,10 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         LOG_WARN("fail to get cg schema", K(ret), KPC(storage_schema), K(cg_idx));
       }
     }
-    if (FAILEDx(desc.init(
+    int32_t transfer_epoch = -1;
+    if (FAILEDx(tablet->get_private_transfer_epoch(transfer_epoch))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
+    } else if (OB_FAIL(desc.init(
         false/*is ddl*/,
         *storage_schema,
         ls_id,
@@ -868,7 +870,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         tablet->get_snapshot_version(),
         0/*cluster_version*/,
         tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
-        tablet->get_transfer_seq(),
+        transfer_epoch,
         tablet->get_reorganization_scn(),
         sstable_param->table_key_.get_end_scn(),
         cg_schema,

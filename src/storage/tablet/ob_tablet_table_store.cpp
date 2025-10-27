@@ -1249,6 +1249,7 @@ int ObTabletTableStore::get_read_tables(
   }
 
   common::SpinRLockGuard guard(memtables_lock_);
+  AggregatedIOGuard io_guard(iterator);
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot_version));
@@ -1513,6 +1514,30 @@ int ObTabletTableStore::load_sstable(
                                            ? ObStorageMetaValue::MetaType::CO_SSTABLE
                                            : ObStorageMetaValue::MetaType::SSTABLE;
     if (OB_FAIL(meta_cache.get_meta(meta_type, meta_key, handle, nullptr))) {
+      LOG_WARN("fail to retrieve sstable meta from meta cache", K(ret), K(addr));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::load_sstable_from_cache(
+    const ObMetaDiskAddr &addr,
+    const bool load_co_sstable,
+    ObStorageMetaHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  handle.reset();
+  if (OB_UNLIKELY(!addr.is_valid() || addr.is_none() || addr.is_memory())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(addr));
+  } else {
+    ObStorageMetaCache &meta_cache = OB_STORE_CACHE.get_storage_meta_cache();
+    const ObStorageMetaKey meta_key(MTL_ID(), addr);
+    const ObStorageMetaValue::MetaType meta_type = load_co_sstable
+                                           ? ObStorageMetaValue::MetaType::CO_SSTABLE
+                                           : ObStorageMetaValue::MetaType::SSTABLE;
+    ret = meta_cache.get_meta_without_prefetch(meta_type, meta_key, handle, nullptr);
+    if (OB_SUCCESS != ret && OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to retrieve sstable meta from meta cache", K(ret), K(addr));
     }
   }

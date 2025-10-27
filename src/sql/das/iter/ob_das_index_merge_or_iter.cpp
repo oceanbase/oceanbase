@@ -59,6 +59,12 @@ int ObDASIndexMergeOrIter::inner_init(ObDASIterParam &param)
   return ret;
 }
 
+bool ObDASIndexMergeOrIter::can_limit_pushdown(const ObDASPushDownTopN &push_down_topn)
+{
+  return push_down_topn.limit_expr_ != nullptr &&
+         push_down_topn.sort_key_ == nullptr;
+}
+
 int ObDASIndexMergeOrIter::inner_release()
 {
   int ret = OB_SUCCESS;
@@ -97,43 +103,8 @@ int ObDASIndexMergeOrIter::inner_get_next_rows(int64_t &count, int64_t capacity)
       LOG_WARN("fill child stores failed", K(ret), K(child_empty_count_));
     } else if (child_empty_count_ >= child_cnt) {
       ret = OB_ITER_END;
-    } else {
-      bool use_bitmap = false;
-      bool is_intersected = true;
-      uint64_t range_dense = 0;
-      if (!rowkey_is_uint64_) {
-        // do nothing, just get next rows by sort
-      } else if (OB_UNLIKELY(force_merge_mode_ != 0)) {
-        use_bitmap = disable_bitmap_ ? false : force_merge_mode_ == 2;
-      } else {
-        if (OB_FAIL(rowkey_range_is_all_intersected(is_intersected))) {
-          LOG_WARN("index merge iter failed to check rowkey range is intersected", K(ret));
-        } else if (!is_intersected) {
-          use_bitmap = disable_bitmap_ ? false : true;
-        } else if (!disable_bitmap_) {
-          if (OB_FAIL(rowkey_range_dense(range_dense))) {
-            LOG_WARN("index merge iter failed to get rowkey range dense", K(ret));
-          } else if (range_dense > 10) {
-            use_bitmap = true;
-          }
-        }
-      }
-
-      LOG_TRACE("select the merge mode", K(use_bitmap), K(disable_bitmap_), K(is_intersected), K(range_dense), K(force_merge_mode_));
-      if (OB_FAIL(ret)) {
-      } else if (!use_bitmap) {
-        if (OB_FAIL(sort_get_next_rows(count, capacity))){
-          LOG_WARN("index merge iter failed to get next row by sort", K(ret), K(count), K(capacity));
-        } else {
-          LOG_TRACE("[DAS ITER] index merge iter get next rows by sort", K(count), K(capacity), K(ret));
-        }
-      } else {
-        if (OB_FAIL(bitmap_get_next_rows(count, capacity))){
-          LOG_WARN("index merge iter failed to get next row by bitmap", K(ret), K(count), K(capacity));
-        } else {
-          LOG_TRACE("[DAS ITER] index merge iter get next rows by bitmap", K(count), K(capacity), K(ret));
-        }
-      }
+    } else if (OB_FAIL(sort_get_next_rows(count, capacity))){
+      LOG_WARN("index merge iter failed to get next row by sort", K(ret), K(count), K(capacity));
     }
   }
 
@@ -195,54 +166,6 @@ int ObDASIndexMergeOrIter::fill_default_values(const common::ObIArray<ObExpr*> &
     }
   }
   return ret;
-}
-
-int ObDASIndexMergeOrIter::check_direct(bool &can_derect, int64_t &output_idx) const
-{
-  int ret = OB_SUCCESS;
-  can_derect = true;
-  output_idx = OB_INVALID_INDEX;
-  uint64_t cur_min_rowkey = 0;
-  uint64_t cur_max_rowkey = UINT64_MAX;
-  uint64_t min_rowkey = 0;
-  uint64_t max_rowkey = UINT64_MAX;
-  // find output_idx of the smallest or largest(if reverse) max row
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
-    const IndexMergeRowStore &child_store = child_stores_.at(i);
-    if (child_store.is_empty()){
-    } else if (OB_FAIL(child_store.get_min_max_rowkey(min_rowkey, max_rowkey))) {
-      LOG_WARN("index merge iter failed to get min max rowkey", K(ret), K(i));
-    } else if (output_idx == OB_INVALID_INDEX) {
-      output_idx = i;
-      cur_min_rowkey = min_rowkey;
-      cur_max_rowkey = max_rowkey;
-    } else if (OB_LIKELY(!is_reverse_) && cur_max_rowkey > max_rowkey) {
-      output_idx = i;
-      cur_min_rowkey = min_rowkey;
-      cur_max_rowkey = max_rowkey;
-    } else if (OB_UNLIKELY(is_reverse_) && cur_max_rowkey < max_rowkey) {
-      output_idx = i;
-      cur_min_rowkey = min_rowkey;
-      cur_max_rowkey = max_rowkey;
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_LIKELY(output_idx != OB_INVALID_INDEX)) {
-    // check output_idx does not intersect other iter
-    for (int64_t i = 0; OB_SUCC(ret) && !can_derect && i < child_stores_.count(); i++) {
-      const IndexMergeRowStore &child_store = child_stores_.at(i);
-      if (output_idx == i) {
-        // skip
-      } else if (OB_FAIL(child_store.get_min_max_rowkey(min_rowkey, max_rowkey))) {
-        LOG_WARN("index merge iter failed to get min max rowkey", K(ret), K(i));
-      } else if (min_rowkey <= cur_max_rowkey && max_rowkey >= cur_min_rowkey) {
-        can_derect = false;
-      }
-    }
-  } else {
-    can_derect = false;
-  }
-	return ret;
 }
 
 int ObDASIndexMergeOrIter::sort_get_next_row()
@@ -313,7 +236,7 @@ int ObDASIndexMergeOrIter::sort_get_next_row()
         if (OB_FAIL(compare(child_store, last_child_store, cmp_ret))) {
           LOG_WARN("index merge failed to compare row", K(i), K(last_child_store_idx), K(ret));
         } else if (cmp_ret == 0) {
-          if (OB_FAIL(child_store.to_expr(false, 1))) {
+          if (OB_FAIL(child_store.to_expr(1))) {
             LOG_WARN("failed to convert store row to expr", K(ret));
           }
         } else {
@@ -331,7 +254,7 @@ int ObDASIndexMergeOrIter::sort_get_next_row()
       }
     } // end for
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(child_stores_.at(last_child_store_idx).to_expr(false, 1))) {
+      if (OB_FAIL(child_stores_.at(last_child_store_idx).to_expr(1))) {
         LOG_WARN("failed to convert store row to expr", K(ret));
       }
     }
@@ -392,7 +315,7 @@ int ObDASIndexMergeOrIter::sort_get_next_rows(int64_t &count, int64_t capacity)
           if (OB_FAIL(compare(child_store, last_child_store, cmp_ret))) {
             LOG_WARN("index merge failed to compare row", K(ret), K(i), K(last_child_store_idx));
           } else if (cmp_ret == 0) {
-            if (OB_FAIL(child_store.to_expr(true, 1))) {
+            if (OB_FAIL(child_store.to_expr(1))) {
               LOG_WARN("failed to convert store row to expr", K(ret));
             }
           } else {
@@ -411,7 +334,8 @@ int ObDASIndexMergeOrIter::sort_get_next_rows(int64_t &count, int64_t capacity)
       } // end for
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(child_stores_.at(last_child_store_idx).to_expr(true, 1))) {
+        IndexMergeRowStore &child_store = child_stores_.at(last_child_store_idx);
+        if (OB_FAIL(child_store.to_expr(1))) {
           LOG_WARN("failed to convert store row to expr", K(ret));
         } else {
           // now we get a available result row, save it to result buffer
@@ -431,134 +355,6 @@ int ObDASIndexMergeOrIter::sort_get_next_rows(int64_t &count, int64_t capacity)
   return ret;
 }
 
-int ObDASIndexMergeOrIter::bitmap_get_next_row()
-{
-  return OB_NOT_IMPLEMENT;
-}
-
-int ObDASIndexMergeOrIter::bitmap_get_next_rows(int64_t &count, int64_t capacity)
-{
-  int ret = OB_SUCCESS;
-  int64_t child_cnt = child_stores_.count();
-  if (OB_UNLIKELY(disable_bitmap_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("bitmap is disabled", K(ret), K(disable_bitmap_));
-  } else if (OB_UNLIKELY(!rowkey_is_uint64_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rowkey is not uint64", K(ret), K(rowkey_is_uint64_));
-  } else if (OB_UNLIKELY(child_empty_count_ >= child_cnt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected child empty count", K(ret), K(child_empty_count_), K(child_cnt));
-  } else if (OB_FAIL(fill_child_bitmaps())) {
-    LOG_WARN("failed to fill child bitmaps", K(ret));
-  } else if (OB_ISNULL(result_bitmap_iter_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), K(result_bitmap_iter_));
-  } else if (OB_UNLIKELY(child_bitmaps_.count() != child_cnt ||
-                          child_bitmaps_.count() < 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected child bitmap count", K(ret), K(child_cnt), K(child_bitmaps_.count()));
-  } else if (OB_ISNULL(child_bitmaps_.at(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected nullptr", K(ret), K(child_bitmaps_.at(0)));
-  } else {
-    bool got_first_row = false;
-    uint64_t rowkey = 0;
-    ObRoaringBitmap *result_bitmap = child_bitmaps_.at(0);
-    for (int64_t i = 1; OB_SUCC(ret) && i < child_cnt; i++) {
-      ObRoaringBitmap *child_bitmap = child_bitmaps_.at(i);
-      if (OB_ISNULL(child_bitmap)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr", K(ret), K(child_bitmap));
-      } else if (OB_FAIL(result_bitmap->value_or(child_bitmap))) {
-        LOG_WARN("failed to init result bitmap", K(ret), K(child_bitmaps_.count()), KPC(result_bitmap));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(result_bitmap_iter_->init(is_reverse_))) {
-      if (ret != OB_ITER_END) {
-        LOG_WARN("failed to init bitmap iter", K(ret), K(result_bitmap_iter_));
-      }
-    }
-    while (OB_SUCC(ret) && count < capacity) {
-      if (!got_first_row) {
-        got_first_row = true;
-        rowkey = result_bitmap_iter_->get_curr_value();
-      } else if (OB_FAIL(result_bitmap_iter_->get_next())) {
-        if (OB_UNLIKELY(ret != OB_ITER_END)) {
-          LOG_WARN("failed to get next from bitmap iter", K(ret));
-        }
-      } else {
-        rowkey = result_bitmap_iter_->get_curr_value();
-      }
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; i++) {
-        bool finded = false;
-        IndexMergeRowStore &child_store = child_stores_.at(i);
-        if (OB_FAIL(child_store.locate_rowkey(rowkey, finded))) {
-          LOG_WARN("failed to locate rowkey", K(ret), K(i), K(rowkey), K(child_store));
-        } else if (!finded && OB_FAIL(fill_default_values(child_match_against_exprs_.at(i)))) {
-          LOG_WARN("failed to fill default values for union", K(ret), K(i));
-        } else if (finded && OB_FAIL(child_store.to_expr(true, 1))) {
-          LOG_WARN("failed to expr", K(ret), K(i));
-        }
-      } // end for
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(save_row_to_result_buffer(1))) {
-          LOG_WARN("failed to save row to result buffer", K(ret), K(child_cnt));
-        } else {
-          count ++;
-        }
-      }
-    } // end while
-
-    if (OB_LIKELY(ret == OB_ITER_END)) {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret)) {
-      result_bitmap_iter_->deinit();
-    }
-  }
-  return ret;
-}
-
-int ObDASIndexMergeOrIter::direct_get_next_row(int64_t output_idx)
-{
-  return OB_NOT_IMPLEMENT;
-}
-
-int ObDASIndexMergeOrIter::direct_get_next_rows(int64_t &count, int64_t capacity, int64_t output_idx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(output_idx < 0 ||
-      output_idx >= child_stores_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("no available child", K(ret), K(output_idx));
-  } else {
-    IndexMergeRowStore &output_store = child_stores_.at(output_idx);
-    while(OB_SUCC(ret) && !output_store.is_empty() && count < capacity) {
-      if (OB_FAIL(output_store.to_expr(true, 1))) {
-        LOG_WARN("failed to convert store row to expr", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < child_stores_.count(); i++) {
-          if (i != output_idx && OB_FAIL(fill_default_values(child_match_against_exprs_.at(i)))) {
-            LOG_WARN("failed to fill default values for union", K(ret), K(i));
-          }
-        }
-
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(save_row_to_result_buffer(1))) {
-          LOG_WARN("failed to save row to result buffer", K(ret));
-        } else {
-          count ++;
-        }
-      }
-    }
-  }
-  return ret;
-}
 
 }  // namespace sql
 }  // namespace oceanbase

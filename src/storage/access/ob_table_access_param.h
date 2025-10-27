@@ -13,6 +13,7 @@
 #ifndef OB_STORAGE_TABLE_ACCESS_PARAM_H
 #define OB_STORAGE_TABLE_ACCESS_PARAM_H
 
+#include "ob_common_types.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_datum_range.h"
 #include "ob_sstable_index_filter.h"
@@ -33,6 +34,7 @@ class ObTableSchemaParam;
 }
 namespace blocksstable {
 class ObSSTable;
+class ObDatumRange;
 }
 namespace storage
 {
@@ -56,7 +58,7 @@ public:
         && (nullptr == rowkey_read_info_ || rowkey_read_info_->is_valid());
   }
   int refresh_lob_column_out_status();
-  bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type) const;
+  bool enable_fuse_row_cache(const ObQueryFlag &query_flag, const StorageScanType scan_type = StorageScanType::NORMAL) const;
   //temp solution
   int get_cg_column_param(const share::schema::ObColumnParam *&column_param) const;
   int build_index_filter_for_row_store(common::ObIAllocator *allocator);
@@ -137,6 +139,12 @@ public:
     }
     return can_reuse;
   }
+  OB_INLINE void set_skip_scan_range(const blocksstable::ObDatumRange &ss_range)
+  {
+    ss_datum_range_ = &ss_range;
+  }
+  OB_INLINE const blocksstable::ObDatumRange *get_ss_datum_range() const
+  { return ss_datum_range_; }
   OB_INLINE bool need_fill_group_idx() const
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
   OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
@@ -223,6 +231,7 @@ public:
   const sql::ObExprPtrIArray *output_exprs_;
   const sql::ObExprPtrIArray *aggregate_exprs_;
   const common::ObIArray<bool> *output_sel_mask_;
+  const blocksstable::ObDatumRange *ss_datum_range_;
   // only used in ObMemTable
   bool is_multi_version_minor_merge_;
   bool need_scn_;
@@ -294,7 +303,7 @@ public:
   OB_INLINE bool is_use_global_iter_pool() const { return iter_param_.is_use_global_iter_pool(); }
 private:
   int check_valid_before_query_init(const ObTableParam &table_param, const ObTabletHandle &tablet_handle);
-  int get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
+  int check_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
 public:
   DECLARE_TO_STRING;
 public:

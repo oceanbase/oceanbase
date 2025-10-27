@@ -1923,7 +1923,8 @@ int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
       LOG_WARN("failed to check in can tras as exists", K(ret));
     } else if (!is_valid) {
       // do nothing
-    } else if (OB_FAIL(ObTransformUtils::do_trans_any_all_as_exists(ctx_,
+    } else if (OB_FAIL(ObTransformUtils::do_trans_any_all_as_exists(stmt,
+                                                                    ctx_,
                                                                     expr,
                                                                     not_null_ctx,
                                                                     is_happened))) {

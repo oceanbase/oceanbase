@@ -21,6 +21,25 @@ namespace share
 namespace schema
 {
 
+void ObExternalTableColumnSchemaHelper::set_column_accuracy(
+    ObCompatibilityMode mode, ObObjType accuracy_type, ObColumnSchemaV2 &column_schema)
+{
+  if (ob_is_accuracy_length_valid_tc(accuracy_type)) {
+    // logic is different: length set by external table settings, precision and scale -1
+    if (mode == ORACLE_MODE) {
+      column_schema.set_length_semantics(LS_CHAR);
+      column_schema.set_data_scale(-1);
+    } else {
+      column_schema.set_data_precision(-1);
+      column_schema.set_data_scale(-1);
+    }
+  } else {
+    column_schema.set_data_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[mode][accuracy_type].get_precision());
+    column_schema.set_data_scale(ObAccuracy::DDL_DEFAULT_ACCURACY2[mode][accuracy_type].get_scale());
+    column_schema.set_data_length(-1);
+  }
+}
+
 int ObExternalTableColumnSchemaHelper::setup_bool(const bool &is_oracle_mode,
                                                   ObColumnSchemaV2 &column_schema)
 {
@@ -30,7 +49,10 @@ int ObExternalTableColumnSchemaHelper::setup_bool(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_type(ObTinyIntType);
   }
-  column_schema.set_accuracy(ObAccuracy(1, 0));
+  ObAccuracy accuracy;
+  accuracy.set_precision(1);
+  accuracy.set_scale(0);
+  column_schema.set_accuracy(accuracy);
   return ret;
 }
 
@@ -40,10 +62,10 @@ int ObExternalTableColumnSchemaHelper::setup_tinyint(const bool &is_oracle_mode,
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
+    set_column_accuracy(ORACLE_MODE, ObTinyIntType, column_schema);
   } else {
     column_schema.set_data_type(ObTinyIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObTinyIntType]);
+    set_column_accuracy(MYSQL_MODE, ObTinyIntType, column_schema);
   }
   return ret;
 }
@@ -54,10 +76,10 @@ int ObExternalTableColumnSchemaHelper::setup_smallint(const bool &is_oracle_mode
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
+    set_column_accuracy(ORACLE_MODE, ObSmallIntType, column_schema);
   } else {
     column_schema.set_data_type(ObSmallIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObSmallIntType]);
+    set_column_accuracy(MYSQL_MODE, ObSmallIntType, column_schema);
   }
   return ret;
 }
@@ -68,10 +90,10 @@ int ObExternalTableColumnSchemaHelper::setup_int(const bool &is_oracle_mode,
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
+    set_column_accuracy(ORACLE_MODE, ObInt32Type, column_schema);
   } else {
     column_schema.set_data_type(ObInt32Type);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObInt32Type]);
+    set_column_accuracy(MYSQL_MODE, ObInt32Type, column_schema);
   }
   return ret;
 }
@@ -82,10 +104,10 @@ int ObExternalTableColumnSchemaHelper::setup_uint(const bool &is_oracle_mode,
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObUInt32Type]);
+    set_column_accuracy(ORACLE_MODE, ObUInt32Type, column_schema);
   } else {
     column_schema.set_data_type(ObUInt32Type);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObUInt32Type]);
+    set_column_accuracy(MYSQL_MODE, ObUInt32Type, column_schema);
   }
   return ret;
 }
@@ -96,10 +118,10 @@ int ObExternalTableColumnSchemaHelper::setup_bigint(const bool &is_oracle_mode,
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
+    set_column_accuracy(ORACLE_MODE, ObIntType, column_schema);
   } else {
     column_schema.set_data_type(ObIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObIntType]);
+    set_column_accuracy(MYSQL_MODE, ObIntType, column_schema);
   }
   return ret;
 }
@@ -110,10 +132,10 @@ int ObExternalTableColumnSchemaHelper::setup_ubigint(const bool &is_oracle_mode,
   int ret = OB_SUCCESS;
   if (is_oracle_mode) {
     column_schema.set_data_type(ObDecimalIntType);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObUInt64Type]);
+    set_column_accuracy(ORACLE_MODE, ObUInt64Type, column_schema);
   } else {
     column_schema.set_data_type(ObUInt64Type);
-    column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObUInt64Type]);
+    set_column_accuracy(MYSQL_MODE, ObUInt64Type, column_schema);
   }
   return ret;
 }
@@ -181,9 +203,10 @@ int ObExternalTableColumnSchemaHelper::setup_varchar(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_length(length);
   }
-  column_schema.set_length_semantics(LS_CHAR);
   column_schema.set_charset_type(cs_type);
   column_schema.set_collation_type(collation);
+  // Later, we need to choose nvarchar2 based on the external column semantics.
+  set_column_accuracy(is_oracle_mode ? ORACLE_MODE : MYSQL_MODE, ObVarcharType, column_schema);
   return ret;
 }
 
@@ -196,9 +219,10 @@ int ObExternalTableColumnSchemaHelper::setup_string(const bool &is_oracle_mode,
   UNUSED(is_oracle_mode);
   column_schema.set_data_type(ObMediumTextType);
   column_schema.set_is_string_lob(); // 默认为ob的string类型
-  column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
+  column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH - 1);
   column_schema.set_collation_type(collation);
   column_schema.set_charset_type(cs_type);
+  set_column_accuracy(is_oracle_mode ? ORACLE_MODE : MYSQL_MODE, ObMediumTextType, column_schema);
   return ret;
 }
 
@@ -216,9 +240,10 @@ int ObExternalTableColumnSchemaHelper::setup_char(const bool &is_oracle_mode,
   } else {
     column_schema.set_data_length(length);
   }
-  column_schema.set_length_semantics(LS_CHAR);
   column_schema.set_charset_type(cs_type);
   column_schema.set_collation_type(collation);
+  // must put here, stmt before will set data_precision and data_scale
+  set_column_accuracy(is_oracle_mode ? ORACLE_MODE : MYSQL_MODE, ObCharType, column_schema);
   return ret;
 }
 

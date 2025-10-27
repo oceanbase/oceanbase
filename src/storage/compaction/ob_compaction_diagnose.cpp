@@ -604,6 +604,7 @@ ObCompactionDiagnoseMgr::ObCompactionDiagnoseMgr()
     MEMSET(suspect_tablet_count_, 0, sizeof(suspect_tablet_count_));
     MEMSET(suspect_merge_type_, -1, sizeof(suspect_merge_type_));
     MEMSET(diagnose_tablet_count_, 0, sizeof(diagnose_tablet_count_));
+    MEMSET(multi_version_diagnose_tablet_count_, 0, sizeof(multi_version_diagnose_tablet_count_));
   }
 
 void ObCompactionDiagnoseMgr::reset()
@@ -616,6 +617,7 @@ void ObCompactionDiagnoseMgr::reset()
   MEMSET(suspect_tablet_count_, 0, sizeof(suspect_tablet_count_));
   MEMSET(suspect_merge_type_, -1, sizeof(suspect_merge_type_));
   MEMSET(diagnose_tablet_count_, 0, sizeof(diagnose_tablet_count_));
+  MEMSET(multi_version_diagnose_tablet_count_, 0, sizeof(multi_version_diagnose_tablet_count_));
 }
 
 int ObCompactionDiagnoseMgr::init(
@@ -974,6 +976,19 @@ void ObCompactionDiagnoseMgr::diagnose_count_info()
       }
     }
   }
+  for (int64_t i = 0; i < ObStorageSnapshotInfo::SNAPSHOT_MAX; ++i) {
+    if (multi_version_diagnose_tablet_count_[i] > DIAGNOSE_TABELT_MAX_COUNT) {
+      if (OB_TMP_FAIL(ADD_COMMON_DIAGNOSE_INFO(
+            MAJOR_MERGE,
+            ObCompactionDiagnoseInfo::DIA_STATUS_SPECIAL,
+            ObTimeUtility::fast_current_time(),
+            "diagnose info type", OB_SUSPECT_INFO_TYPES[ObSuspectInfoType::SUSPECT_MULTI_VERSION_START_NOT_ADVANCE].info_str,
+            "tablet snapshot type", ObStorageSnapshotInfo::ObSnapShotTypeStr[i],
+            "count of tablets with the same problem", multi_version_diagnose_tablet_count_[i]))) {
+        LOG_WARN_RET(tmp_ret, "failed to add diagnose info", K(tmp_ret));
+      }
+    }
+  }
 }
 
 struct ObDiagnoseTabletComparator final {
@@ -1306,20 +1321,23 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_multi_version_start(storage::ObLS &
     if (ObTablet::is_snapshot_not_advance(snapshot_info, snapshot_version)) {
       LOG_INFO("tablet multi version start not advance for a long time", K(ret),
               "ls_id", ls_id, K(tablet_id), K(current_time), K(snapshot_info));
-      const int64_t major_sstable_snapshot = tablet.get_last_major_snapshot_version();
-      if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
-        MAJOR_MERGE,
-        ObCompactionDiagnoseInfo::DIA_STATUS_WARN,
-        ObTimeUtility::fast_current_time(),
-        "tablet_id", tablet_id.id(),
-        K(snapshot_info),
-        K(old_snapshot_info),
-        K(snapshot_version),
-        K(major_sstable_snapshot),
-        "status", "table multi version start not advance for a long time"
-        ))) {
-        LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
+      if (multi_version_diagnose_tablet_count_[snapshot_info.snapshot_type_] < DIAGNOSE_TABELT_MAX_COUNT) {
+        const int64_t major_sstable_snapshot = tablet.get_last_major_snapshot_version();
+        if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
+          MAJOR_MERGE,
+          ObCompactionDiagnoseInfo::DIA_STATUS_WARN,
+          ObTimeUtility::fast_current_time(),
+          "tablet_id", tablet_id.id(),
+          K(snapshot_info),
+          K(old_snapshot_info),
+          K(snapshot_version),
+          K(major_sstable_snapshot),
+          "status", "table multi version start not advance for a long time"
+          ))) {
+          LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
+        }
       }
+      multi_version_diagnose_tablet_count_[snapshot_info.snapshot_type_]++;
     }
   }
   LOG_TRACE("tablet multi version start diagnose", K(ret),

@@ -37,7 +37,7 @@ public:
   common::ObTabletID tablet_id_;
 };
 
-typedef ObFixedArray<sql::ObILakeTableFile*, common::ObIAllocator> ObLakeTableFileArray;
+typedef ObFixedArray<sql::ObFileScanTask*, common::ObIAllocator> ObLakeTableFileArray;
 typedef common::hash::ObHashMap<ObLakeTableFileMapKey, ObLakeTableFileArray*, common::hash::NoPthreadDefendMode> ObLakeTableFileMap;
 static const int64_t LAKE_TABLE_FILE_MAP_BUCKET_NUM = 128;
 
@@ -50,12 +50,12 @@ public:
   void reset();
   int assign(const ObLakeTableFileDesc &other);
   bool is_empty() const { return keys_.empty(); }
-  int add_lake_table_file_desc(const ObLakeTableFileMapKey &key, const ObIArray<sql::ObILakeTableFile *> *files);
+  int add_lake_table_file_desc(const ObLakeTableFileMapKey &key, const ObIArray<sql::ObFileScanTask *> *files);
   TO_STRING_KV(K_(keys), K_(offsets));
   ObIAllocator &allocator_;
   ObSEArray<ObLakeTableFileMapKey, 8> keys_;
   ObSEArray<int64_t, 8> offsets_;
-  ObSEArray<sql::ObILakeTableFile*, 8> values_;
+  ObSEArray<sql::ObFileScanTask*, 8> values_;
 };
 
 struct ObOdpsPartitionKey

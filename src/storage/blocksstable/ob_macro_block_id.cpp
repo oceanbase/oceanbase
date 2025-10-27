@@ -97,7 +97,7 @@ bool MacroBlockId::is_valid() const
   } else if (is_valid && id_mode_ == (uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE) {
     is_valid &= MACRO_BLOCK_ID_VERSION_V2 == version_ && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX;
     if (is_private_data_or_meta()) {
-      is_valid &= meta_transfer_seq() != -1 &&  meta_version_id() != ObStorageObjectOpt::INVALID_TABLET_VERSION;
+      is_valid &= meta_transfer_epoch() != -1 &&  meta_version_id() != ObStorageObjectOpt::INVALID_TABLET_VERSION;
             //                   -1                       : INVLAID_TABLET_TRANSFER_SEQ;
             // ObStorageObjectOpt::INVALID_TABLET_VERSION : macro_seq / tablet_meta_version
     } else if (is_shared_data_or_meta()) {
@@ -125,10 +125,10 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
       databuff_printf(buf, buf_len, pos,
         "[2nd=%lu]"
         "[3rd=%lu]"
-        "[4th=(trans_seq=%lu,sec_id=%lu)]}",
+        "[4th=(trans_epoch=%lu,sec_id=%lu)]}",
         (uint64_t) second_id_,
         (uint64_t) third_id_,
-        (int64_t) macro_transfer_seq_,
+        (int64_t) macro_transfer_epoch_,
         (uint64_t) tenant_seq_);
     } else if (is_shared_data_or_meta()) {
       databuff_printf(buf, buf_len, pos,
@@ -353,6 +353,11 @@ bool MacroBlockId::is_tablet_local_cache_object() const
 bool MacroBlockId::is_private_macro() const
 {
   return is_id_mode_share() && SSObjUtil::is_macro(storage_object_type()) && SSObjUtil::is_private(storage_object_type());
+}
+// all private objects in ss mode, including private tablet meta, private data/meta macro...
+bool MacroBlockId::is_private() const
+{
+  return is_id_mode_share() && SSObjUtil::is_private(storage_object_type());
 }
 /*
   PRIVATE_DATA_MACRO

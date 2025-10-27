@@ -222,6 +222,14 @@ inline void ob_usleep(const useconds_t v, const int64_t p1, int64_t p2, const in
   ::usleep(v);
 }
 
+inline void ob_usleep(const useconds_t v, const int64_t event_no, const int64_t p1, const int64_t p2, const int64_t p3)
+{
+  oceanbase::common::ObSleepEventGuard<oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP> wait_guard(
+      event_no, (int64_t)v, p1, p2, p3);
+  ::usleep(v);
+}
+
+
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v, const int64_t p1, int64_t p2, const int64_t p3, const bool is_idle_sleep)

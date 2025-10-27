@@ -447,7 +447,7 @@ int ObTableLSExecuteP::HTableLSExecuteIter::find_real_table_id(const ObString &f
   int ret = OB_SUCCESS;
   real_table_id = OB_INVALID_ID;
   for (int i = 0; i < hbase_infos_.count(); ++i) {
-    if (family_name.case_compare(hbase_infos_.at(i)->real_table_name_.after('$'))) {
+    if (family_name.case_compare(hbase_infos_.at(i)->real_table_name_.after('$')) == 0) {
       real_table_id = hbase_infos_.at(i)->table_id_;
       break;
     }
@@ -2136,6 +2136,6 @@ int ObTableLSExecuteP::before_response(int error_code)
 bool ObTableLSExecuteP::is_new_try_process()
 {
   return arg_.entity_type_ == ObTableEntityType::ET_HKV &&
-         !arg_.ls_op_->get_ls_id().is_valid() &&
+         (!arg_.ls_op_->get_ls_id().is_valid() && arg_.ls_op_->server_can_retry()) && // old client and odp cannot fully support distibuted execution, server_can_retry flag will block non-partitioned tables with the old version
          TABLEAPI_OBJECT_POOL_MGR->is_support_distributed_execute();
 }

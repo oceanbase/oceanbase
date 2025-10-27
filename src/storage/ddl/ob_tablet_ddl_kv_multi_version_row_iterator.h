@@ -75,7 +75,7 @@ public:
       if (OB_UNLIKELY(rowkey->get_datum_cnt() > column_count)) {
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "invalid rowkey cnt", K(ret), KPC(rowkey), K(column_count));
-      } else if (OB_FAIL(not_exist_row_.init(*context.get_range_allocator(), column_count))) {
+      } else if (OB_FAIL(not_exist_row_.init(*context.allocator_, column_count))) {
         STORAGE_LOG(WARN, "fail to init datum row", K(ret));
       } else {
         not_exist_row_.row_flag_.reset();
@@ -147,7 +147,7 @@ public:
     } else {
       base_rowkeys_ = reinterpret_cast<const ObIArray<ObDatumRowkey> *>(query_range);
       const int64_t column_count = param.get_out_col_cnt();
-      if (OB_FAIL(not_exist_row_.init(*context.get_range_allocator(), column_count))) {
+      if (OB_FAIL(not_exist_row_.init(*context.allocator_, column_count))) {
         STORAGE_LOG(WARN, "fail to init datum row", K(ret));
       } else {
         not_exist_row_.row_flag_.reset();

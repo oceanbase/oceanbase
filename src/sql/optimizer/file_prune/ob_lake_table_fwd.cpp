@@ -89,11 +89,20 @@ int ObLakeDeleteFile::assign(const ObLakeDeleteFile &other)
     file_size_ = other.file_size_;
     modification_time_ = other.modification_time_;
     file_format_ = other.file_format_;
+    dv_content_offset_ = other.dv_content_offset_;
+    dv_content_size_in_bytes_ = other.dv_content_size_in_bytes_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObLakeDeleteFile, type_, file_url_, file_size_, modification_time_, file_format_);
+OB_SERIALIZE_MEMBER(ObLakeDeleteFile,
+                    type_,
+                    file_url_,
+                    file_size_,
+                    modification_time_,
+                    file_format_,
+                    dv_content_offset_,
+                    dv_content_size_in_bytes_);
 
 int ObIOptLakeTableFile::assign(const ObIOptLakeTableFile &other)
 {
@@ -135,6 +144,7 @@ int ObOptIcebergFile::assign(const ObIOptLakeTableFile &other)
       file_size_ = iceberg_file.file_size_;
       modification_time_ = iceberg_file.modification_time_;
       file_format_ = iceberg_file.file_format_;
+      record_count_ = iceberg_file.record_count_;
       if (OB_FAIL(delete_files_.assign(iceberg_file.delete_files_))) {
         LOG_WARN("failed to assign delete files");
       }
@@ -151,6 +161,7 @@ void ObOptIcebergFile::reset()
   modification_time_ = 0;
   file_format_ = iceberg::DataFileFormat::INVALID;
   delete_files_.reset();
+  record_count_ = 0;
 }
 
 int ObOptHiveFile::assign(const ObIOptLakeTableFile &other)
@@ -179,20 +190,20 @@ void ObOptHiveFile::reset()
   part_id_ = OB_INVALID_PARTITION_ID;
 }
 
-// type_不需要序列化。由于反序列化时要先知道ObILakeTableFile的具体类型才能创建对应的子类，
-// 因此在序列化、反序列化ObILakeTableFile之前一定要先单独序列化type_，这里不需要再重复序列化了。
-OB_SERIALIZE_MEMBER(ObILakeTableFile);
+OB_SERIALIZE_MEMBER(ObIExtTblScanTask);
 
-int ObILakeTableFile::create_lake_table_file_by_type(ObIAllocator &allocator,
-                                                     LakeFileType type,
-                                                     ObILakeTableFile *&file)
+OB_SERIALIZE_MEMBER((ObFileScanTask, ObIExtTblScanTask), file_url_, file_size_, modification_time_);
+
+int ObFileScanTask::create_lake_table_file_by_type(ObIAllocator &allocator,
+                                                  LakeFileType type,
+                                                  ObFileScanTask *&file)
 {
   int ret = OB_SUCCESS;
   file = nullptr;
   if (type == LakeFileType::ICEBERG) {
-    file = OB_NEWx(ObIcebergFile, &allocator, allocator);
+    file = OB_NEWx(ObIcebergScanTask, &allocator, allocator);
   } else if (type == LakeFileType::HIVE) {
-    file = OB_NEWx(ObHiveFile, &allocator, allocator);
+    file = OB_NEWx(ObHiveScanTask, &allocator);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected file type", K(type));
@@ -200,15 +211,13 @@ int ObILakeTableFile::create_lake_table_file_by_type(ObIAllocator &allocator,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObIcebergFile, ObILakeTableFile),
-                    file_url_,
-                    file_size_,
-                    modification_time_,
+OB_SERIALIZE_MEMBER((ObIcebergScanTask, ObFileScanTask),
                     file_format_,
-                    delete_files_);
+                    delete_files_,
+                    record_count_);
 
-int ObIcebergFile::init_with_opt_lake_table_file(ObIAllocator &allocator,
-                                                 const ObIOptLakeTableFile &opt_table_file)
+int ObIcebergScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                                    const ObIOptLakeTableFile &opt_table_file)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!opt_table_file.is_iceberg_file())) {
@@ -224,6 +233,7 @@ int ObIcebergFile::init_with_opt_lake_table_file(ObIAllocator &allocator,
       file_size_ = opt_iceberg_file.file_size_;
       modification_time_ = opt_iceberg_file.modification_time_;
       file_format_ = opt_iceberg_file.file_format_;
+      record_count_ = opt_iceberg_file.record_count_;
       for (int64_t i = 0; OB_SUCC(ret) && i < opt_iceberg_file.delete_files_.count(); i++) {
         const ObLakeDeleteFile *other_delete_file = opt_iceberg_file.delete_files_.at(i);
         if (OB_ISNULL(other_delete_file)) {
@@ -241,14 +251,11 @@ int ObIcebergFile::init_with_opt_lake_table_file(ObIAllocator &allocator,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObHiveFile, ObILakeTableFile),
-                    file_url_,
-                    file_size_,
-                    modification_time_,
+OB_SERIALIZE_MEMBER((ObHiveScanTask, ObFileScanTask),
                     part_id_);
 
-int ObHiveFile::init_with_opt_lake_table_file(ObIAllocator &allocator,
-                                              const ObIOptLakeTableFile &opt_table_file)
+int ObHiveScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                                  const ObIOptLakeTableFile &opt_table_file)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!opt_table_file.is_hive_file())) {

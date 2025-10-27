@@ -84,6 +84,7 @@ public:
       const ObPushdownRowIdCtx &pd_row_id_ctx);
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
+  int set_ignore_eval_index_info(const bool ignore_eval_index_info);
   int collect_result();
   int reset_agg_row_id();
   OB_INLINE int set_agg_type_flag(const ObPDAggType agg_type);
@@ -169,6 +170,8 @@ public:
       const int64_t bound_row_id = OB_INVALID_CS_ROW_ID);
   int reset_agg_row_id();
   int prepare_batch_scan();
+  int reuse_for_refresh_table() override;
+  int set_ignore_eval_index_info(const bool ignore_eval_index_info) override;
   OB_INLINE bool has_aggr_with_expr() const { return has_aggr_with_expr_; }
   INHERIT_TO_STRING_KV("ObVectorStore", ObVectorStore, K_(pd_agg_ctx), K_(agg_groups),
       K_(need_access_data), K_(need_get_row_ids), K_(has_aggr_with_expr));

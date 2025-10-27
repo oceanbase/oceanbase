@@ -210,6 +210,8 @@ struct ObQueryFlag
     is_mds_query_ = is_mds_query & OBSF_MASK_IS_MDS_QUERY;
   }
   void reset() { flag_ = 0; }
+  inline ScanOrder get_scan_order() const { return (ScanOrder)scan_order_; }
+  inline bool is_keep_order() const { return ScanOrder::KeepOrder == get_scan_order(); }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
   inline bool is_ordered_scan() const { return scan_order_ == ObQueryFlag::Forward || scan_order_ == ObQueryFlag::Reverse; }
   inline bool is_support_sort_scan() const { return scan_order_ == Forward || scan_order_ == NoOrder || scan_order_ == Reverse; }

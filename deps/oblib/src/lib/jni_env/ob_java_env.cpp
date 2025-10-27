@@ -45,23 +45,18 @@ bool ObJavaEnv::is_env_inited()
     is_inited_ = true;
     if (!is_inited_java_home_) {
       is_inited_ = false;
-      LOG_WARN("java home is not inited success", K(ret));
     }
     if (!is_inited_java_opts_) {
       is_inited_ = false;
-      LOG_WARN("java opts is not inited success", K(ret));
     }
     if (!is_inited_hdfs_opts_) {
       is_inited_ = false;
-      LOG_WARN("hdfs opts is not inited success", K(ret));
     }
     if (!is_inited_conn_path_) {
       is_inited_ = false;
-      LOG_WARN("connector path is not inited success", K(ret));
     }
     if (!is_inited_cls_path_) {
       is_inited_ = false;
-      LOG_WARN("class path is not inited success", K(ret));
     }
   }
   return is_inited_;
@@ -106,12 +101,14 @@ int ObJavaEnv::setup_java_home()
     LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
   } else if (!found) {
     ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
-    LOG_WARN("unable to find out java home path", K(ret), K(temp_java_home));
+    LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
+    LOG_USER_ERROR(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, temp_java_home.ptr());
   } else {
     java_home_ = temp_java_home.ptr();
     if (OB_ISNULL(java_home_)) {
       ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to setup JAVA_HOME with null vairables", K(ret));
+      LOG_WARN("failed to setup JAVA_HOME with null vairables", K(ret), K(GCONF.ob_java_home.get_value_string()));
+      LOG_USER_WARN(OB_JNI_PARAMS_ERROR, "failed to setup JAVA_HOME with null vairables", K(ret));
     } else if (0 != setenv(JAVA_HOME, java_home_, 1)) {
       ret = OB_JNI_PARAMS_ERROR;
       LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
@@ -284,7 +281,55 @@ int ObJavaEnv::setup_useful_path()
   return ret;
 }
 
-int ObJavaEnv::setup_java_env() {
+int ObJavaEnv::setup_extra_runtime_lib_path()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCONF._ob_additional_lib_path)) {
+    ret = OB_JNI_PARAMS_ERROR;
+    LOG_WARN("extra java runtime lib path is null", K(ret));
+  } else {
+    const char *extra_lib_path = GCONF._ob_additional_lib_path.get_value();
+    if (OB_ISNULL(extra_lib_path)) {
+      ret = OB_JNI_PARAMS_ERROR;
+      LOG_WARN("extra java runtime lib path is null", K(ret));
+    } else {
+      const char *original_ld_lib_path = std::getenv(LD_LIBRARY_PATH);
+      ObSqlString final_ld_lib_path;
+      ObString tmp_ld_library_path;
+      if (OB_FAIL(OB_NOT_NULL(original_ld_lib_path)
+                  && final_ld_lib_path.append_fmt("%s:", original_ld_lib_path))) {
+        LOG_WARN("failed to append original ld library path", K(ret), K(original_ld_lib_path));
+      } else if (OB_FAIL(final_ld_lib_path.append_fmt("%s:", extra_lib_path))) {
+        LOG_WARN("failed to append extra java runtime lib path",
+                 K(ret),
+                 K(extra_lib_path),
+                 K(original_ld_lib_path));
+      } else if (OB_FAIL(ob_write_string(arena_alloc_,
+                                         final_ld_lib_path.string(),
+                                         tmp_ld_library_path,
+                                         true /*c_style*/))) {
+        LOG_WARN("failed to write final ld library path", K(ret));
+      } else {
+        ld_library_path_ = tmp_ld_library_path.ptr();
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (0 != setenv(LD_LIBRARY_PATH, ld_library_path_, 1)) {
+      ret = OB_JNI_PARAMS_ERROR;
+      LOG_WARN("failed to setup LD_LIBRARY_PATH", K(ret), K_(ld_library_path));
+    } else if (STRCMP(ld_library_path_, std::getenv(LD_LIBRARY_PATH))) {
+      ret = OB_JNI_PARAMS_ERROR;
+      LOG_WARN("failed to set LD_LIBRARY_PATH from variables", K(ret), K_(ld_library_path));
+    } else {
+      LOG_INFO("succ to setup LD_LIBRARY_PATH", K(ret), K_(ld_library_path));
+    }
+  }
+  return ret;
+}
+
+int ObJavaEnv::setup_java_env()
+{
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard<> wg(setup_env_lock_);
   if (!GCONF.ob_enable_java_env) {
@@ -297,32 +342,37 @@ int ObJavaEnv::setup_java_env() {
       LOG_WARN("failed to setup java options", K(ret));
     } else if (OB_FAIL(setup_useful_path())) {
       LOG_WARN("failed to setup useful path", K(ret));
-    } else {
-      /* do nothing */
+    } else if (OB_FAIL(setup_extra_runtime_lib_path())) {
+      LOG_WARN("failed to setup extra runtime lib path", K(ret));
     }
   }
 
-  const char *jh = std::getenv(JAVA_HOME);
-  const char *jo = std::getenv(JAVA_OPTS);
-  const char *ljo = std::getenv(LIBHDFS_OPTS);
-  const char *ch = std::getenv(CONNECTOR_PATH);
-  const char *cp = std::getenv(CLASSPATH);
-  LOG_INFO("setup env variables", K(ret), K(jh), K(jo), K(ljo), K(ch), K(cp));
+  jh_ = std::getenv(JAVA_HOME);
+  jo_ = std::getenv(JAVA_OPTS);
+  ljo_ = std::getenv(LIBHDFS_OPTS);
+  ch_ = std::getenv(CONNECTOR_PATH);
+  cp_ = std::getenv(CLASSPATH);
+  ld_ = std::getenv(LD_LIBRARY_PATH);
+  LOG_INFO("setup env variables", K(ret), K(jh_), K(jo_), K(ljo_), K(ch_), K(cp_), K(ld_));
   return ret;
 }
 
 int ObJavaEnv::check_version_valid()
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(version_valid_)) {
-  } else {
+  if (OB_LIKELY(version_valid_ == VALID)) {
+    ret = OB_SUCCESS;
+    LOG_INFO("java env version is valid", K(ret));
+  } else if (OB_UNLIKELY(version_valid_ == NOT_INITED)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(version_valid_ == NOT_VALID)) {
     ret = OB_VERSION_NOT_MATCH;
-    LOG_WARN("java env version is not valid", K(ret));
+    LOG_INFO("java env version is not valid check version and try again", K(ret));
   }
   return ret;
 }
 
-int ObJavaEnv::set_version_valid(bool valid)
+int ObJavaEnv::set_version_valid(VersionValid valid)
 {
   int ret = OB_SUCCESS;
   version_valid_ = valid;

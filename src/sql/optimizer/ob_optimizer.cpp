@@ -1681,7 +1681,7 @@ int ObOptimizer::check_extend_sql_plan_monitor_metrics()
       config_enable = tenant_config->_extend_sql_plan_monitor_metrics;
     }
     if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_bool_opt_param(
-            ObOptParamHint::ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, hint_enable, hint_exist))) {
+            ObOptParamHint::EXTENDED_SQL_PLAN_MONITOR_METRICS, hint_enable, hint_exist))) {
       LOG_WARN("fail to get hint", K(ret));
     } else if (hint_exist) {
       extend_sql_plan_monitor_metrics = hint_enable;

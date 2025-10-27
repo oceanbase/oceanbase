@@ -99,7 +99,7 @@ void ObMetaMacroExpirationTest::write_data_meta_macro(ObMacroType macro_type, Ma
   }
   macro_id.set_second_id(TABLET_ID); // tablet_id
   macro_id.set_third_id(SERVER_ID); // server_id
-  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(0); // tenant_seq
   write_info_.set_effective_tablet_id(TABLET_ID); // effective_tablet_id
   ASSERT_TRUE(macro_id.is_valid());

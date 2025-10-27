@@ -620,7 +620,7 @@ public:
   SendMsgResponse();
   virtual ~SendMsgResponse();
 
-  int init();
+  int init(bool is_transmit);
   bool is_init() { return inited_; }
 
   bool is_in_process() const { return in_process_; }
@@ -628,7 +628,7 @@ public:
   int on_start_fail();
   int on_finish(const bool is_block, const int return_code);
   // wait async rpc finish and return ret_
-  int wait();
+  int wait(ObDtlChannel::DtlChannelType channel_type);
   int is_block() { return is_block_; }
   void reset_block() { is_block_ = false; }
   void set_id(uint64_t id) { ch_id_ = id; }
@@ -673,7 +673,7 @@ public:
     int64_t *chan_idx_;
   };
 
-  int init() override;
+  int init(ObDtlFlowControl *dfc = nullptr) override;
   void destroy();
 
   virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
@@ -729,7 +729,7 @@ public:
 
   int switch_writer(const ObDtlMsg &msg);
 
-  int mock_eof_buffer(int64_t timeout_ts);
+  int mock_eof_buffer(int64_t timeout_ts, uint64_t dfo_id);
   ObDtlLinkedBuffer *alloc_buf(const int64_t payload_size);
   
   void set_bc_service(ObDtlBcastService *bc_service) { bc_service_ = bc_service; }

@@ -59,6 +59,7 @@ class ObLogTableScan;
 class ObLogDelUpd;
 class AllocExchContext;
 class ObJoinOrder;
+class ObIndexMergeNode;
 class AccessPath;
 class Path;
 class JoinPath;
@@ -262,7 +263,7 @@ struct DistinctPushdownContext {
   inline bool get_is_pushed_down_through_shuffle() const { return pushed_down_through_shuffle_; }
   inline void set_pushed_down_through_shuffle(bool pushed_down_through_shuffle)
   { pushed_down_through_shuffle_ = pushed_down_through_shuffle; }
-  int merge_with(const common::ObIArray<ObRawExpr *> &distinct_expr, bool & merged);
+  int merge_with(const common::ObIArray<ObRawExpr *> &distinct_expr, bool & update, bool & pushded);
   int normalize();
   int map(const common::ObIArray<ObRawExpr *> &from_exprs,
           const common::ObIArray<ObRawExpr *> &to_exprs,
@@ -933,6 +934,8 @@ public:
                                      ObIArray<ObDistinctAggrBatch> &distinct_aggr_batch,
                                      ObIArray<ObRawExpr *> &distinct_params);
 
+  bool enable_two_phase_fts_index_merge();
+
   bool disable_hash_groupby_in_second_stage();
   int create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
                                     const ObIArray<ObRawExpr*> &having_exprs,
@@ -1036,6 +1039,7 @@ public:
                                      bool &can_push);
 
   int check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
+                                       const ObIArray<ObRawExpr *> &group_exprs,
                                        bool &can_pushdown);
 
   int check_table_columns_can_storage_pushdown(const uint64_t tenant_id,
@@ -1844,6 +1848,14 @@ public:
                                              bool need_exchange,
                                              const ObIArray<OrderItem> &sort_keys,
                                              bool &need_further_sort);
+  int try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
+                                          ObRawExpr *topn_expr,
+                                          ObRawExpr *limit_expr,
+                                          ObRawExpr *offset_expr,
+                                          bool is_fetch_with_ties,
+                                          bool need_exchange,
+                                          const ObIArray<OrderItem> &sort_keys,
+                                          bool &need_further_sort);
   static int adjust_dup_table_replica_by_cons(
     const ObIArray<ObDupTabConstraint> &dup_table_replica_cons,
     common::ObIArray<ObCandiTableLoc> &phy_tbl_info_list);
@@ -2196,6 +2208,11 @@ public:
   int get_enable_rich_vector_format(omt::ObTenantConfigGuard &tenant_config, bool &enable) const;
   bool get_need_accurate_cardinality() const { return need_accurate_cardinality_; }
   void set_need_accurate_cardinality(bool need) { need_accurate_cardinality_ = need; }
+
+  // Helper function to check if access path contains multivalue index
+  static bool is_multivalue_index_in_path(const AccessPath *ap);
+  // Helper function to recursively check multivalue index in index merge node
+  static bool check_multivalue_index_in_node(const ObIndexMergeNode *node);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

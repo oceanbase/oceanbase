@@ -544,12 +544,23 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors()
 {
   int ret = OB_SUCCESS;
   uint64_t task_trace_base_num = 0;
+  bool schema_changed = false;
   if (OB_FAIL(async_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(ret));
   } else if (OB_FAIL(async_task_exec_.clear_old_task_ctx_if_need())) {
     LOG_WARN("fail to clear old task ctx", K(ret));
   } else if (OB_FAIL(async_task_exec_.load_task(task_trace_base_num))) {
     LOG_WARN("fail to load tenant sync task", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.check_schema_version_changed(schema_changed))) {
+    //only when schema changed, load ivf task
+    LOG_WARN("fail to check schema version changed", K(ret));
+  } else if (!schema_changed) {
+    // schema not changed, only do cleanup if needed, skip thread pool check and task loading
+    if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
+      LOG_WARN("fail to clear old ivf task ctx", K(ret));
+    } else {
+      LOG_TRACE("schema not changed, skip ivf task loading", K(ret));
+    }
   } else if (OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(ret));
   } else if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
@@ -1425,8 +1436,16 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 
   int64_t async_task_ref = 0;
   if (OB_NOT_NULL(vector_index_service_)) {
-    vector_index_service_->get_vec_async_task_handle().set_stop();
-    async_task_ref = vector_index_service_->get_vec_async_task_handle().get_async_task_ref();
+    ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+    if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      }
+    } else if (OB_NOT_NULL(index_ls_mgr)) {
+      async_task_ref = index_ls_mgr->get_async_task_opt().get_ls_processing_task_cnt();
+    }
   }
 
   int64_t dag_ref = get_dag_ref();
@@ -1441,10 +1460,17 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 
 void ObPluginVectorIndexLoadScheduler::stop()
 {
+  int ret = OB_SUCCESS;
   is_stopped_= true;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   if (OB_NOT_NULL(vector_index_service_)) {
-    vector_index_service_->get_vec_async_task_handle().stop();
+    if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    } else if (OB_NOT_NULL(index_ls_mgr)) {
+      index_ls_mgr->get_async_task_opt().set_stop();
+    }
   }
+  FLOG_INFO("vector index task scheduler stop", K(ls_->get_ls_id()), KP(index_ls_mgr));
 };
 
 void ObPluginVectorIndexLoadScheduler::destroy()

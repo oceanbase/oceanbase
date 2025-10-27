@@ -477,8 +477,10 @@ int ObDupTableLSLeaseMgr::follower_try_acquire_lease(const share::SCN &lease_log
         < tmp_leader_lease_info.confirmed_lease_info_.lease_interval_us_
               + tmp_leader_lease_info.confirmed_lease_info_.request_ts_) {
       follower_lease_info_.last_lease_scn_ = lease_log_scn;
-      const bool acquire_new_lease = tmp_leader_lease_info.confirmed_lease_info_.request_ts_
-                                     > follower_lease_info_.lease_expired_ts_;
+      const bool acquire_new_lease =
+          tmp_leader_lease_info.confirmed_lease_info_.request_ts_
+              > follower_lease_info_.lease_expired_ts_
+          || tmp_leader_lease_info.confirmed_lease_info_.flag_.flag_bit_.is_new_lease_;
       if (acquire_new_lease) {
         follower_lease_info_.lease_acquire_scn_ = lease_log_scn;
       }
@@ -768,6 +770,11 @@ bool ObDupTableLSLeaseMgr::LeaseReqCacheHandler::operator()(
   }
 
   if (!will_remove) {
+    if (hash_pair.second.lease_expired_ts_ <= loop_start_time_
+        || hash_pair.second.lease_expired_ts_ < 0
+        || !hash_pair.second.confirmed_lease_info_.is_valid()) {
+      item.durable_lease_.flag_.flag_bit_.is_new_lease_ = true;
+    }
     DupTableDurableLeaseLogBody durable_log_body(item.durable_lease_);
     max_ser_size_ += item.log_header_.get_serialize_size() + durable_log_body.get_serialize_size();
     if (OB_FAIL(lease_item_array_.push_back(item))) {

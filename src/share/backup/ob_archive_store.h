@@ -342,7 +342,7 @@ public:
   INHERIT_TO_STRING_KV("ObExternArchiveDesc", ObExternArchiveDesc, K_(dest_id), K_(round_id), K_(piece_id), K_(filelist));
 };
 
-
+typedef common::hash::ObHashSet<int64_t> ObPieceFlag;
 // Define archive store
 class ObArchiveStore : public ObBackupStore
 {
@@ -472,14 +472,17 @@ private:
     int init(ObArchiveStore *store, const int64_t dest_id, const int64_t round_id);
     int func(const dirent *entry) override;
 
-    ObArray<int64_t> &result() { return pieces_; }
-
+    ObArray<int64_t> &result();
+  private:
+    static constexpr int64_t BUCKET_NUM = 1024;
   private:
     bool is_inited_;
     ObArchiveStore *store_;
     int64_t dest_id_;
     int64_t round_id_;
-
+    // pieces_set_: record pieces that only have start file or end file
+    ObPieceFlag pieces_set_;
+    // pieces_: record pieces that have both start file and end file
     ObArray<int64_t> pieces_;
 
   private:

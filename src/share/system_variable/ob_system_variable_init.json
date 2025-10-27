@@ -1381,7 +1381,7 @@
     "base_value": "8000000",
     "data_type": "int",
     "info": "The maximum available memory in bytes for the internal stack used for regular expression matching operations",
-    "flags": "GLOBAL",
+    "flags": "GLOBAL | NEED_SERIALIZE",
     "min_val": "0",
     "max_val": "2147483647",
     "publish_version": "410",
@@ -1396,7 +1396,7 @@
     "base_value": "32",
     "data_type": "int",
     "info": "The time limit for regular expression matching operations, default unit is milliseconds",
-    "flags": "GLOBAL",
+    "flags": "GLOBAL | NEED_SERIALIZE",
     "min_val": "0",
     "max_val": "2147483647",
     "publish_version": "410",
@@ -3350,7 +3350,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.4.1.0",
+    "default_value": "4.5.0.0",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -11834,8 +11834,8 @@
   "plsql_can_transform_sql_to_assign": {
     "id": 10755,
     "name": "plsql_can_transform_sql_to_assign",
-    "default_value": "0",
-    "base_value": "0",
+    "default_value": "1",
+    "base_value": "1",
     "data_type": "bool",
     "info": "Whether can transform the PL/SQL select into from dual statement to an assignment statement",
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
@@ -11843,5 +11843,44 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_join_order_enum_threshold" : {
+    "id": 10756,
+    "name": "_join_order_enum_threshold",
+    "default_value": 10,
+    "base_value": 10,
+    "data_type": "uint",
+    "info": "Control the algorithm selection for join order enumeration in query optimization",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.5.1",
+    "info_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "_optimizer_max_permutations" : {
+    "id": 10757,
+    "name": "_optimizer_max_permutations",
+    "default_value": 2000,
+    "base_value": 2000,
+    "data_type": "uint",
+    "info": "Optimizer maximum join permutations per enumeration",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.5.1",
+    "info_cn": "",
+    "ref_url": "",
+    "placeholder": true
+  },
+  "_idp_step_reduction_threshold" : {
+    "id": 10758,
+    "name": "_idp_step_reduction_threshold",
+    "default_value": 5000,
+    "base_value": 5000,
+    "data_type": "uint",
+    "info": "When the total number of enumerated join paths exceeds this threshold, the IDP algorithm will automatically reduce its step size to limit the enumeration space and improve optimization efficiency.",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.5.1",
+    "info_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }

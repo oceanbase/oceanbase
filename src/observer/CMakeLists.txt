@@ -44,6 +44,7 @@ ob_set_subtarget(ob_server common_mixed
   report/ob_tablet_table_updater.cpp
   report/ob_tenant_meta_checker.cpp
   report/ob_server_meta_table_checker.cpp
+  report/ob_tenant_offline_tablet_cleanup_service.cpp
 )
 
 ob_set_subtarget(ob_server dbms_job
@@ -594,6 +595,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_logservice_cluster_info.cpp
   virtual_table/ob_all_virtual_ss_gc_status.cpp
   virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
+  virtual_table/ob_all_virtual_ss_diagnose_info.cpp
   virtual_table/ob_all_virtual_dba_source.cpp
   virtual_table/ob_all_virtual_tenant_vector_mem_info.cpp
   virtual_table/ob_all_virtual_ccl_status.cpp

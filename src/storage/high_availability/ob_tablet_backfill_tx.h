@@ -79,7 +79,6 @@ public:
       ObTabletBackfillTXDag *dag,
       const SCN &backfill_scn,
       const int64_t ls_rebuild_seq,
-      const int64_t dest_transfer_seq,
       ObTabletHandle &tablet_handle,
       storage::ObTableHandleV2 &backfill_table_handle);
   virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const override;
@@ -204,7 +203,7 @@ private:
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
   ObBackfillTabletsTableMgr *tablets_table_mgr_;
@@ -239,7 +238,7 @@ private:
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;
@@ -272,7 +271,7 @@ private:
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;
@@ -325,7 +324,7 @@ public:
 
 private:
   bool is_inited_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObFinishBackfillTXTask);
 };
 
@@ -372,7 +371,7 @@ private:
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
-  ObIHADagNetCtx *ha_dag_net_ctx_;
+  ObTransferBackfillTXBaseCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;

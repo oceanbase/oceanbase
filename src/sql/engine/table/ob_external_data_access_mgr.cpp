@@ -800,9 +800,7 @@ int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
   int ret = OB_SUCCESS;
   char *buffer_head = static_cast<char *>(src_rd_info.buffer_);
   uint64_t tenant_id = MTL_ID();
-  ObExCachedReadPageIOCallback *callback = nullptr;
-  void *callback_buf = nullptr;
-  void *page_cache_buf_ = nullptr;
+
   if (OB_FAIL(rd_info_arr.reserve(seg_arr.count()))) {
     LOG_WARN("failed to reserve", K(ret));
   } else if (!enable_page_cache) {
@@ -821,9 +819,6 @@ int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < seg_arr.count(); i++) {
       const ObExtCacheMissSegment cur_seg = seg_arr.at(i);
-      page_cache_buf_ = nullptr;
-      callback_buf = nullptr;
-      callback = nullptr;
 
       // init cur_read_info basic_info
       const int64_t cur_buf_pos = cur_seg.get_rd_offset() - src_rd_info.offset_; // buffer_head + cur_buf_pos
@@ -832,42 +827,28 @@ int ObExternalDataAccessMgr::get_rd_info_arr_by_cache_miss_seg_arr_(
         MIN(cur_seg.get_page_count(page_size) * page_size, file_size - cur_cache_key_offset);
 
       // alloc, create callback and record on read_info;
-      if (OB_ISNULL(page_cache_buf_ = callback_alloc_.alloc(cur_cache_buf_len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloca mem", K(ret), K(cur_cache_buf_len), KP(page_cache_buf_));
-      } else {
-        ObExternalReadInfo cur_rd_info(cur_cache_key_offset, page_cache_buf_, cur_cache_buf_len, src_rd_info.io_timeout_ms_, src_rd_info.io_desc_);
-        // TODO mem of callback_buf should be free by @shifangdan.sfd's callback
-        if (OB_ISNULL(callback_buf = callback_alloc_.alloc(sizeof(ObExCachedReadPageIOCallback)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloca mem", K(ret), K(sizeof(ObExCachedReadPageIOCallback)), KP(callback_buf));
-        } else {
-          ObExternalDataPageCacheKey key(url.ptr(), url.length(), content_digest.ptr(),
-                                         content_digest.length(), modify_time, page_size,
-                                         cur_cache_key_offset, tenant_id);
-          callback = new (callback_buf) ObExCachedReadPageIOCallback(
-                key, buffer_head + cur_buf_pos, page_cache_buf_, cur_seg.get_rd_offset() % page_size,
-                cur_seg.get_rd_len(), &kv_cache_, &callback_alloc_);
-          cur_rd_info.io_callback_ = callback;
-        }
-
-        if (OB_FAIL(ret)) {
-          if (OB_NOT_NULL(callback)) {
-            callback->~ObExCachedReadPageIOCallback();
-            // in callback deconstruct, page_cache_buf_ will be free;
-            page_cache_buf_ = nullptr;
-          }
-          if (OB_NOT_NULL(page_cache_buf_)) {
-            callback_alloc_.free(page_cache_buf_);
-          }
-          if (OB_NOT_NULL(callback_buf)) {
-            callback_alloc_.free(callback_buf);
-          }
-          cur_rd_info.io_callback_ = nullptr;
-          cur_rd_info.buffer_ = nullptr;
-        } else if (OB_FAIL(rd_info_arr.push_back(cur_rd_info))) {
-          LOG_WARN("failed to push back cur_rd_info", K(ret), K(i), K(cur_seg), K(rd_info_arr), K(cur_rd_info));
-        }
+      ObExternalReadInfo cur_rd_info(cur_cache_key_offset, nullptr, cur_cache_buf_len, src_rd_info.io_timeout_ms_, src_rd_info.io_desc_);
+      ObExternalDataPageCacheKey key(url.ptr(),
+                                     url.length(),
+                                     content_digest.ptr(),
+                                     content_digest.length(),
+                                     modify_time,
+                                     page_size,
+                                     cur_cache_key_offset,
+                                     tenant_id);
+      if (OB_FAIL(ObExCachedReadPageIOCallback::safe_construct(key,
+                                                               buffer_head + cur_buf_pos,
+                                                               cur_seg.get_rd_offset() % page_size,
+                                                               cur_seg.get_rd_len(),
+                                                               cur_cache_buf_len,
+                                                               kv_cache_,
+                                                               callback_alloc_,
+                                                               /*output*/cur_rd_info.buffer_,
+                                                               /*output*/cur_rd_info.io_callback_))) {
+        LOG_WARN("failed to safe construct io callback", K(ret), K(cur_seg), K(cur_buf_pos), K(page_size),
+          K(cur_cache_buf_len), K(cur_rd_info), K(key));
+      } else if (OB_FAIL(rd_info_arr.push_back(cur_rd_info))) {
+        LOG_WARN("failed to push back cur_rd_info", K(ret), K(i), K(cur_seg), K(rd_info_arr), K(cur_rd_info));
       }
     }
   }

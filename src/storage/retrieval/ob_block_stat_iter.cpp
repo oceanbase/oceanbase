@@ -183,7 +183,7 @@ int ObBlockStatIterator::init(const ObTabletHandle &tablet_handle, ObBlockStatSc
       scan_level,
       table_scan_param->scan_flag_))) {
     LOG_WARN("failed to init sstable index scan param", K(ret));
-  } else if (OB_FAIL(stat_collector_.init(
+  } else if (!scan_param_->is_scan_single_major_only() && OB_FAIL(stat_collector_.init(
       *scan_param.get_stat_cols(),
       *scan_param.get_stat_projectors(),
       table_scan_param->table_param_->get_read_info().get_columns_desc(),
@@ -219,7 +219,7 @@ int ObBlockStatIterator::get_next(const ObDatumRow *&agg_row, const ObDatumRowke
     iter_end_ = true;
     ret = OB_ITER_END;
   } else if (scan_param_->is_scan_single_major_only()) {
-    endkey = curr_endkey_;
+    endkey = get_baseline_block_iter().get_curr_index_row()->endkey_;
     agg_row = &(get_baseline_block_iter().get_curr_index_row()->skip_index_row_);
   } else if (OB_FAIL(collect_sstable_idx_rows(beyond_baseline_range))) {
     LOG_WARN("failed to collect sstable idx rows", K(ret));
@@ -308,12 +308,12 @@ int ObBlockStatIterator::refresh_scan_table_on_demand()
   int ret = OB_SUCCESS;
   const bool need_refresh = get_table_param_.tablet_iter_.table_iter()->check_store_expire();
   if (OB_UNLIKELY(need_refresh)) {
-    reset_iters();
     scan_tables_.reuse();
-    if (OB_FAIL(refresh_tablet_iter())) {
-      LOG_WARN("failed to refresh tablet iter", K(ret));
-    } else if (nullptr != curr_endkey_ && OB_FAIL(shrink_scan_range(*curr_endkey_))) {
+    if (nullptr != curr_endkey_ && OB_FAIL(shrink_scan_range(*curr_endkey_))) {
       LOG_WARN("failed to shrink scan range", K(ret));
+    } else if (FALSE_IT(reset_iters())) {
+    } else if (OB_FAIL(refresh_tablet_iter())) {
+      LOG_WARN("failed to refresh tablet iter", K(ret));
     } else if (OB_FAIL(prepare_scan_tables())) {
       LOG_WARN("failed to prepare scan tables", K(ret));
     } else if (OB_FAIL(construct_iters())) {
@@ -382,7 +382,7 @@ int ObBlockStatIterator::prepare_scan_tables()
     const int64_t query_version = query_with_frozen_version
         ? get_table_param_.frozen_version_
         : main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
-    const bool major_sstable_only = scan_param_->is_scan_single_major_only() || query_with_frozen_version;
+    const bool major_sstable_only = query_with_frozen_version;
     if (OB_FAIL(get_table_param_.tablet_iter_.refresh_read_tables_from_tablet(
         query_version,
         false/*allow_not_ready*/,
@@ -512,7 +512,7 @@ int ObBlockStatIterator::next_baseline_range(bool &beyond_range)
   beyond_range = false;
   if (OB_FAIL(iter.next())) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("failed to get next row from baseline block iter", K(ret));
+      LOG_WARN("failed to get next row from baseline block iter", K(ret), K_(sstable_iters));
     } else {
       ret = OB_SUCCESS;
     }
@@ -522,6 +522,8 @@ int ObBlockStatIterator::next_baseline_range(bool &beyond_range)
   } else if (iter.is_iter_end()) {
     curr_endkey_ = &scan_range_.get_ranges().at(0).get_end_key();
     beyond_range = true;
+  } else if (scan_param_->is_scan_single_major_only()) {
+    // skip
   } else if (OB_FAIL(stat_collector_.collect_agg_row(iter.get_curr_index_row()->skip_index_row_))) {
     LOG_WARN("failed to collect agg row", K(ret), K(iter));
   } else {

@@ -14,12 +14,15 @@
 
 #include "sql/table_format/iceberg/spec/manifest_list.h"
 
+#include <avro/DataFile.hh>
+#include <avro/Generic.hh>
+#include <avro/GenericDatum.hh>
+
 #include "share/ob_define.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/partition.h"
 #include "sql/table_format/iceberg/spec/schema.h"
 
-#include <avro/DataFile.hh>
 
 namespace oceanbase
 {
@@ -74,8 +77,8 @@ int PartitionFieldSummary::init_from_avro(const avro::GenericRecord &avro_partit
 
 ManifestFile::ManifestFile(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      partitions(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      cached_manifest_entries_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_))
+      partitions(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+      cached_manifest_entries_(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_))
 {
 }
 

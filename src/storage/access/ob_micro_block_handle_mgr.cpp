@@ -171,6 +171,7 @@ int ObMicroBlockDataHandle::get_micro_block_data(
         LOG_INFO("get data block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
       } else {
         //try sync io
+        int64_t start_time_us = rdtsc();
         ObMicroBlockId micro_block_id;
         micro_block_id.macro_id_ = macro_block_id_;
         micro_block_id.offset_ = micro_info_.offset_;
@@ -188,6 +189,10 @@ int ObMicroBlockDataHandle::get_micro_block_data(
           LOG_WARN("Fail to load micro block", K(ret), K_(tenant_id), K_(macro_block_id), K_(micro_info));
           try_release_loaded_block();
         } else {
+          if (OB_NOT_NULL(handle_mgr_)) {
+            int64_t finish_time_us = rdtsc();
+            handle_mgr_->add_block_io_wait_time_us(get_io_interval(finish_time_us, start_time_us));
+          }
           io_handle_.reset();
           block_state_ = ObSSTableMicroBlockState::NEED_SYNC_IO;
           block_data = loaded_block_data_;
@@ -242,11 +247,11 @@ int ObMicroBlockDataHandle::get_loaded_block_data(ObMicroBlockData &block_data)
       block_data = *pblock;
     }
   } else if (ObSSTableMicroBlockState::IN_BLOCK_IO == block_state_) {
-    int64_t start_time_us = ObTimeUtility::current_time_us();
+    int64_t start_time_us = rdtsc();
     if (OB_FAIL(io_handle_.wait())) {
       LOG_WARN("Fail to wait micro block io", K(ret));
     } else if (OB_NOT_NULL(handle_mgr_)) {
-      int64_t finish_time_us = ObTimeUtility::current_time_us();
+      int64_t finish_time_us = rdtsc();
       handle_mgr_->add_block_io_wait_time_us(get_io_interval(finish_time_us, start_time_us));
     }
     if (OB_FAIL(ret)) {

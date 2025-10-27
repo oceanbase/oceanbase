@@ -1041,7 +1041,9 @@ int ObPluginVectorIndexService::switch_to_leader()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPluginVectorIndexService is not inited", K(ret), K(tenant_id_));
+#ifndef OB_BUILD_SYS_VEC_IDX
   } else if (!is_user_tenant(tenant_id_)) { // skip not user tenant
+#endif
   } else if (is_oracle_mode()) { // skip oracle mode
   } else {
     if (OB_ISNULL(tenant_vec_async_task_sched_)) {
@@ -1149,6 +1151,7 @@ void ObPluginVectorIndexService::stop()
     if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
       tenant_vec_async_task_sched_->stop();
     }
+    get_vec_async_task_handle().stop();
     kmeans_build_task_handler_.stop();
   }
 }

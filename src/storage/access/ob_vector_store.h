@@ -57,10 +57,15 @@ public:
       eval_ctx_.set_batch_idx(0);
     }
   }
+  OB_INLINE bool can_refresh() const override
+  {
+    return !is_aggregated_in_prefetch_ && (nullptr == group_by_cell_ || group_by_cell_->can_refresh());
+  }
   OB_INLINE int64_t get_row_count() { return count_; }
   OB_INLINE ObGroupByCellBase *get_group_by_cell() { return group_by_cell_; }
   virtual int reuse_capacity(const int64_t capacity) override;
   virtual bool is_empty() const override final { return 0 == count_; }
+  int reuse_for_refresh_table() override;
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   int fill_group_idx(const int64_t group_idx);

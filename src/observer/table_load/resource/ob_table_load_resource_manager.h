@@ -80,20 +80,29 @@ private:
 		ObDirectLoadResourceApplyArg apply_arg_;
 		uint64_t miss_counts_;
 	};
+	class ObInitResourceTask : public common::ObTimerTask
+	{
+	public:
+		ObInitResourceTask(ObTableLoadResourceManager &manager)
+			: manager_(manager)
+		{
+		}
+		virtual ~ObInitResourceTask() = default;
+		void runTimerTask() override;
+	public:
+		ObTableLoadResourceManager &manager_;
+	};
 	class ObRefreshAndCheckTask : public common::ObTimerTask
 	{
   public:
     ObRefreshAndCheckTask(ObTableLoadResourceManager &manager)
-			: manager_(manager), tenant_id_(common::OB_INVALID_ID), is_inited_(false)
+			: manager_(manager)
 		{
 		}
     virtual ~ObRefreshAndCheckTask() = default;
-		int init(uint64_t tenant_id);
     void runTimerTask() override;
   public:
 		ObTableLoadResourceManager &manager_;
-		uint64_t tenant_id_;
-	bool is_inited_;
   };
 	int gen_update_arg(ObDirectLoadResourceUpdateArg &update_arg);
 	int gen_check_res(bool first_check,
@@ -104,8 +113,10 @@ private:
 private:
   typedef common::hash::ObHashMap<ObAddr, ObResourceCtx, common::hash::NoPthreadDefendMode> ResourceCtxMap;
   typedef common::hash::ObHashMap<ObTableLoadUniqueKey, ObResourceAssigned, common::hash::NoPthreadDefendMode> ResourceAssignedMap;
+  ObInitResourceTask init_resource_task_;
   ObRefreshAndCheckTask refresh_and_check_task_;
 	static const int64_t MAX_MISS_COUNT = 3;
+	static const int64_t REFRESH_AND_CHECK_TASK_FIRST_TIME_INTERVAL = 1LL * 1000LL * 1000LL; // 1s
 	static const int64_t REFRESH_AND_CHECK_TASK_INTERVAL = 30LL * 1000LL * 1000LL; // 30s
 	ResourceCtxMap resource_pool_;
 	ResourceAssignedMap assigned_tasks_;

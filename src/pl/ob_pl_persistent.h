@@ -102,7 +102,8 @@ public:
     arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
     allocator_(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), GET_PL_MOD_STRING(OB_PL_JIT))),
-    tenant_id_belongs_(OB_INVALID_ID)
+    tenant_id_belongs_(OB_INVALID_ID),
+    special_compile_mode_(0)
   {}
   ObRoutinePersistentInfo(uint64_t tenant_id,
                       uint64_t database_id,
@@ -119,7 +120,8 @@ public:
     arch_type_(ARCH_TYPE_DEF[ObPLArchType::OB_X86_ARCH_TYPE]),
 #endif
     allocator_(ObMemAttr(tenant_id_, GET_PL_MOD_STRING(OB_PL_JIT))),
-    tenant_id_belongs_(tenant_id_belongs)
+    tenant_id_belongs_(tenant_id_belongs),
+    special_compile_mode_(0)
   {}
 
   int64_t get_head_size() { return 1 + 1 + 2 + 2;/* 8bit flags + 8bit level + 8bit id + 8bit nums*/ }
@@ -177,6 +179,8 @@ public:
                             ObPLCompileUnit &unit,
                             const ObRoutinePersistentInfo::ObPLOperation op);
 
+  int mask_special_compile_mode(ObSQLSessionInfo &session_info);
+
   static int has_same_name_dependency_with_public_synonym(
                             schema::ObSchemaGetterGuard &schema_guard,
                             const ObPLDependencyTable &dep_schema_objs,
@@ -220,6 +224,7 @@ private:
 
   ObArenaAllocator allocator_;
   uint64_t tenant_id_belongs_;
+  uint64_t special_compile_mode_;
 };
 
 }

@@ -39,8 +39,11 @@ bool BlockNumStatComparer::operator()(const int64_t &l, const int64_t &r)
   return false;
 }
 
-ObBasicStatsEstimator::ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator)
+ObBasicStatsEstimator::ObBasicStatsEstimator(ObExecContext &ctx,
+                                             ObIAllocator &allocator,
+                                             bool can_re_estimate)
   : ObStatsEstimator(ctx, allocator)
+  , can_re_estimate_(can_re_estimate)
 {}
 
 int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
@@ -356,6 +359,8 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
         DAS_CTX(ctx).get_location_router().refresh_location_cache_by_errno(true, ret);
         ++ retry_cnt;
         ob_usleep(1000L * 1000L); // retry interval 1s
+      } else if (ret == OB_SNAPSHOT_DISCARDED) {
+        ++ retry_cnt;
       } else {
         retry_cnt = MAX_RETRY_CNT;
       }
@@ -1374,11 +1379,14 @@ int ObBasicStatsEstimator::refine_basic_stats(const ObOptStatGatherParam &param,
       bool need_re_estimate = false;
       ObOptStatGatherParam new_param;
       ObSEArray<ObOptStat, 1> tmp_opt_stats;
-      ObBasicStatsEstimator basic_re_est(ctx_, *param.allocator_);
+      ObBasicStatsEstimator basic_re_est(ctx_, *param.allocator_, false);
       if (OB_FAIL(check_stat_need_re_estimate(param, dst_opt_stats.at(i), need_re_estimate, new_param))) {
         LOG_WARN("failed to check stat need re-estimate", K(ret));
       } else if (!need_re_estimate) {
         //do nothing
+      } else if (!can_re_estimate_) {
+        LOG_INFO("can re-estimate only once", K(sample_value_), K(param.sample_info_.sample_value_),
+                 K(new_param.sample_info_.sample_value_));
       } else if (OB_FAIL(tmp_opt_stats.push_back(dst_opt_stats.at(i)))) {
         LOG_WARN("failed to push back", K(ret));
       } else if (OB_FAIL(basic_re_est.estimate(new_param, tmp_opt_stats))) {

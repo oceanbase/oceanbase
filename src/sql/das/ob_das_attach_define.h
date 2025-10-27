@@ -212,7 +212,9 @@ public:
       merge_type_(INDEX_MERGE_INVALID),
       is_reverse_(false),
       merge_node_types_(alloc),
-      rowkey_exprs_(alloc)
+      rowkey_exprs_(alloc),
+      has_dynamic_id_filter_(false),
+      main_scan_ctdef_(nullptr)
   {}
 
   virtual ~ObDASIndexMergeCtDef() {}
@@ -222,6 +224,9 @@ public:
   /* child node types, include NODE_MERGE, NODE_SCAN, NDOE_FTS now */
   ObFixedArray<ObIndexMergeType, common::ObIAllocator> merge_node_types_;
   sql::ExprFixedArray rowkey_exprs_;  // merge by rowkey
+  bool has_dynamic_id_filter_;
+  // used for bypass non-ROR branch
+  ObDASScanCtDef *main_scan_ctdef_;
 };
 
 struct ObDASIndexMergeRtDef : ObDASAttachRtDef
@@ -229,9 +234,13 @@ struct ObDASIndexMergeRtDef : ObDASAttachRtDef
   OB_UNIS_VERSION(1);
 public:
   ObDASIndexMergeRtDef()
-    : ObDASAttachRtDef(DAS_OP_INDEX_MERGE) {}
+    : ObDASAttachRtDef(DAS_OP_INDEX_MERGE),
+      main_scan_rtdef_(nullptr)
+  {}
 
   virtual ~ObDASIndexMergeRtDef() {}
+public:
+  ObDASScanRtDef *main_scan_rtdef_;
 };
 
 struct ObDASDomainIdMergeCtDef final : ObDASAttachCtDef

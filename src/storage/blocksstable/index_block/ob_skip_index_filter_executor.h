@@ -16,6 +16,7 @@
 #include "share/schema/ob_table_param.h"
 #include "sql/engine/ob_bit_vector.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
+//#include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "storage/blocksstable/index_block/ob_agg_row_struct.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
@@ -53,16 +54,32 @@ struct ObMinMaxFilterParam {
   }
   OB_INLINE bool is_uncertain() const
   {
-    const bool no_agg_data = null_count_.is_null() && min_datum_.is_null() && max_datum_.is_null();
-    const bool has_prefix = is_min_prefix_ || is_max_prefix_; // enable filter with min/max prefix in subsequent versions
-    return no_agg_data || has_prefix;
+    return null_count_.is_null() && min_datum_.is_null() && max_datum_.is_null();
   }
+  TO_STRING_KV(K_(null_count), K_(min_datum), K_(max_datum), K_(is_min_prefix), K_(is_max_prefix));
   blocksstable::ObStorageDatum null_count_;
   blocksstable::ObStorageDatum min_datum_;
   blocksstable::ObStorageDatum max_datum_;
   bool is_min_prefix_;
   bool is_max_prefix_;
 };
+
+struct ObSkipIndexCmpRes {
+public:
+  ObSkipIndexCmpRes() : cmp_res_(0), is_certain_(false) {}
+  void reset() { is_certain_ = false; cmp_res_ = 0; }
+  OB_INLINE void set_certain() { is_certain_ = true; }
+  OB_INLINE void set_uncertain() { is_certain_ = false; }
+  OB_INLINE bool is_gt() const { return is_certain_ && cmp_res_ > 0; }
+  OB_INLINE bool is_lt() const { return is_certain_ && cmp_res_ < 0; }
+  OB_INLINE bool is_le() const { return is_certain_ && cmp_res_ <= 0; }
+  OB_INLINE bool is_ge() const { return is_certain_ && cmp_res_ >= 0; }
+  OB_INLINE bool is_eq() const { return is_certain_ && cmp_res_ == 0; }
+  TO_STRING_KV(K_(is_certain), K_(cmp_res));
+  int cmp_res_;
+  bool is_certain_;
+};
+
 class ObAggRowReader;
 class ObSkipIndexFilterExecutor final
 {
@@ -91,6 +108,7 @@ public:
                                   common::ObIAllocator &allocator,
                                   const bool use_vectorize);
   int falsifiable_pushdown_filter(const uint32_t col_idx,
+                                  const ObCollationType &cs_type,
                                   const ObSkipIndexType index_type,
                                   const int64_t row_count,
                                   ObMinMaxFilterParam &param,
@@ -109,6 +127,30 @@ private:
                    const ObObjMeta &obj_meta,
                    const bool is_padding_mode,
                    ObMinMaxFilterParam &param);
+
+  int compare_with_prefix(const sql::ObWhiteFilterExecutor &filter,
+                          const common::ObDatum &datum,
+                          const common::ObDatum &filter_datum,
+                          ObSkipIndexCmpRes &res);
+
+  int compare_for_pad_charset(const sql::ObWhiteFilterExecutor &filter,
+                              const common::ObDatum &skip_datum,
+                              const bool is_prefix,
+                              const common::ObDatum &filter_datum,
+                              ObSkipIndexCmpRes &res);
+
+  int compare_for_non_pad_charset(const sql::ObWhiteFilterExecutor &filter,
+                                  const common::ObDatum &skip_datum,
+                                  const bool is_prefix,
+                                  const common::ObDatum &filter_datum,
+                                  ObSkipIndexCmpRes &res);
+
+  int compare(const sql::ObWhiteFilterExecutor &filter,
+              const common::ObDatum &skip_datum,
+              const bool is_prefix,
+              const common::ObDatum &filter_datum,
+              ObSkipIndexCmpRes &res);
+
   int pad_column(const ObObjMeta &obj_meta,
                  const share::schema::ObColumnParam *col_param,
                  const bool is_padding_mode,
@@ -175,7 +217,8 @@ private:
                               const uint64_t row_count,
                               ObMinMaxFilterParam &param,
                               sql::ObBlackFilterExecutor &filter,
-                              const bool use_vectorize);
+                              const bool use_vectorize,
+                              const ObCollationType &cs_type);
 private:
   ObAggRowReader agg_row_reader_;
   ObSkipIndexColMeta meta_;

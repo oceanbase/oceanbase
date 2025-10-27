@@ -25,7 +25,7 @@ namespace blocksstable
 struct ObDatumRange
 {
 public:
-  ObDatumRange() : start_key_(), end_key_(), group_idx_(0), border_flag_() { }
+  ObDatumRange() : start_key_(), end_key_(), group_idx_(0), border_flag_(), is_skip_prefetch_(nullptr) { }
   ~ObDatumRange() = default;
   OB_INLINE void reset();
   OB_INLINE bool is_valid() const;
@@ -69,13 +69,14 @@ public:
   OB_INLINE int compare(const ObDatumRange &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret) const;
   // maybe we will need serialize
   // NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(start_key), K_(end_key), K_(group_idx), K_(border_flag));
+  TO_STRING_KV(K_(start_key), K_(end_key), K_(group_idx), K_(border_flag), K_(is_skip_prefetch));
 public:
   ObDatumRowkey start_key_;
   ObDatumRowkey end_key_;
   int64_t group_idx_;
   //TODO maybe we should use a new border flag
   common::ObBorderFlag border_flag_;
+  const bool *is_skip_prefetch_;
 };
 
 template<typename T>
@@ -168,6 +169,7 @@ OB_INLINE void ObDatumRange::reset()
   end_key_.reset();
   group_idx_ = 0;
   border_flag_.set_data(0);
+  is_skip_prefetch_ = nullptr;
 }
 
 //TODO without rowkey type, we cannot judge empty

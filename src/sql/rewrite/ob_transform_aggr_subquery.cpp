@@ -975,6 +975,7 @@ int ObTransformAggrSubquery::transform_child_stmt(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   ObIArray<ObRawExpr *> &nested_conditions = param.nested_conditions_;
   ObIArray<ObRawExpr *> &upper_filters = param.upper_filters_;
+  // old_group_exprs might be empty
   ObSEArray<ObRawExpr *, 4> old_group_exprs;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(param.ja_query_ref_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -983,6 +984,22 @@ int ObTransformAggrSubquery::transform_child_stmt(ObDMLStmt *stmt,
     LOG_WARN("failed to assign group exprs", K(ret));
   } else {
     subquery.get_group_exprs().reset();
+  }
+
+  // tuliwei.tlw: useless remove_const expr may cause issue, so we need to remove them
+  for (int64_t i = 0; OB_SUCC(ret) && i < subquery.get_select_item_size(); ++i) {
+    ObRawExpr *&expr = subquery.get_select_item(i).expr_;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select expr is null", K(ret), K(expr));
+    } else if (expr->get_expr_type() == T_FUN_SYS_REMOVE_CONST) {
+      if (OB_ISNULL(expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else {
+        expr = expr->get_param_expr(0);
+      }
+    }
   }
 
   for  (int64_t i = 0; OB_SUCC(ret) && i < upper_filters.count(); ++i) {
@@ -1046,6 +1063,8 @@ int ObTransformAggrSubquery::transform_child_stmt(ObDMLStmt *stmt,
       /// select * from t1 where c1 > (select count(d1) from t2 group by 1.0);
       /// => select * from t1, (select count(d1) as aggr from t2 group by 1.0) V where c1 > V.aggr
       LOG_WARN("failed to assign group exprs", K(ret));
+    } else if (param.not_null_expr_ == NULL) {
+      param.not_null_expr_ = const_one;
     }
   }
   if (OB_SUCC(ret)) {
@@ -1098,8 +1117,10 @@ int ObTransformAggrSubquery::transform_upper_stmt(ObDMLStmt &stmt, TransformPara
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (ObOptimizerUtil::find_item(select_exprs, param.not_null_expr_, &idx)) {
     param.not_null_expr_ = view_columns.at(idx);
+  } else if (param.not_null_expr_ == NULL) {
+    // todo inline this view again
+    // add select 1 to select list of outer view
   }
-
   if (OB_SUCC(ret)) {
     ObSEArray<ObRawExpr*, 2> from_exprs;
     ObSEArray<ObRawExpr*, 2> to_exprs;
@@ -2998,7 +3019,8 @@ int ObTransformAggrSubquery::convert_any_all_as_scalar_subquery(ObDMLStmt *stmt,
   } else if (OB_ISNULL(parent_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::do_trans_any_all_as_exists(ctx_,
+  } else if (OB_FAIL(ObTransformUtils::do_trans_any_all_as_exists(stmt,
+                                                                  ctx_,
                                                                   parent_expr,
                                                                   NULL,
                                                                   trans_happened))) {
@@ -3052,7 +3074,7 @@ int ObTransformAggrSubquery::deduce_query_values_for_exists(ObTransformerCtx &ct
       OB_ISNULL(right_side = parent_expr_of_query_ref->get_param_expr(1)) ||
       !left_side->is_query_ref_expr() || !right_side->is_static_const_expr()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected param", K(ret));
+    LOG_WARN("unexpected param", K(ret), K(not_null_expr));
   } else if (OB_FALSE_IT(cmp_type = parent_expr_of_query_ref->get_expr_type())) {
   } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx.expr_factory_,
                                                             not_null_expr,
@@ -3072,11 +3094,19 @@ int ObTransformAggrSubquery::deduce_query_values_for_exists(ObTransformerCtx &ct
 // select v.c1 is not null from t1 left join (select count(*), c1 from t2 group by c1) v on t1.c1 = v.c1;
 // ==>
 // select v.c1 is not null from t1 left join (select distinct c1 from t2) v on t1.c1 = v.c1;
+//
+// when old group by is empty
+// select v1.cnt is not null from t1 left join (select count(*) cnt from t2) v;
+// ==>
+// select v.c1 is not null from t1 left join (select true as c1 from t2 limit 1) v;
 int ObTransformAggrSubquery::eliminate_redundant_aggregation_if_need(ObSelectStmt &stmt,
                                                                      TransformParam &trans_param)
 {
   int ret = OB_SUCCESS;
-  if (!trans_param.any_all_to_aggr_ && !trans_param.exists_to_aggr_) {
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret), K(ctx_));
+  } else if (!trans_param.any_all_to_aggr_ && !trans_param.exists_to_aggr_) {
     // do nothing
   } else {
     stmt.get_group_exprs().reset();
@@ -3096,6 +3126,32 @@ int ObTransformAggrSubquery::eliminate_redundant_aggregation_if_need(ObSelectStm
     }
     if (OB_SUCC(ret) && OB_FAIL(stmt.get_select_items().assign(new_select_items))) {
       LOG_WARN("failed to assign select items", K(ret));
+    } else if (new_select_items.empty()) {
+      ObConstRawExpr *const_one = NULL;
+      if (is_oracle_mode()) {
+        if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx_->expr_factory_,
+                                                            ObNumberType,
+                                                            number::ObNumber::get_positive_one(),
+                                                            const_one))) {
+          LOG_WARN("failed to build const one", K(ret));
+        }
+      } else {
+        if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_, ObIntType, 1 ,const_one))) {
+          LOG_WARN("failed to build const int expr", K(ret));
+        }
+      }
+      ObRawExpr *select_one = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(const_one->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed formalize expr", K(ret));
+      } else if (OB_FALSE_IT(select_one = const_one)) {
+      } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+                                                              select_one,
+                                                              &stmt))) {
+        LOG_WARN("failed to create select item", K(ret));
+      } else if (trans_param.not_null_expr_ == NULL) {
+        trans_param.not_null_expr_ = const_one;
+      }
     }
   }
   return ret;

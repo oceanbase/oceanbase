@@ -112,7 +112,8 @@ public:
 ObExecParamExtractor();
   ObExecParamExtractor(ObRawExprFactory &expr_factory)
                      : expr_factory_(expr_factory),
-                       current_exec_params_(NULL) {}
+                       current_exec_params_(NULL),
+                       fixed_exprs_() {}
   virtual ~ObExecParamExtractor() {}
 
   int extract(ObRawExpr *outer_val_expr);
@@ -120,13 +121,16 @@ ObExecParamExtractor();
   inline void set_current_exec_params(ObQueryRefRawExpr * query_ref)
   { current_exec_params_ = query_ref; }
 
+  int init(const ObDMLStmt *stmt);
   int is_existed(const ObRawExpr *target, bool &found);
 
+  int is_fixed_expr(const ObRawExpr *target, bool &is_fixed_expr);
   int create_new_exec_param(ObRawExpr *target);
   DISALLOW_COPY_AND_ASSIGN(ObExecParamExtractor);
 private:
   ObRawExprFactory &expr_factory_;
   ObQueryRefRawExpr *current_exec_params_;
+  ObSEArray<ObRawExpr *, 4> fixed_exprs_;
 };
 
 
@@ -665,7 +669,8 @@ public:
                                  ObQueryRefRawExpr *query_ref,
                                  ObRawExpr *correlated_expr,
                                  ObRawExpr *&exec_param);
-  static int extract_exec_param_exprs(ObRawExprFactory &expr_factory,
+  static int extract_exec_param_exprs(const ObDMLStmt *stmt,
+                                      ObRawExprFactory &expr_factory,
                                       ObQueryRefRawExpr *query_ref,
                                       ObRawExpr *correlated_expr,
                                       ObRawExpr *&param_expr);
@@ -791,7 +796,7 @@ public:
                                            int n,
                                            ObRawExpr *&expr_out);
   static int build_interval_ym_diff_exprs(ObRawExprFactory &raw_expr_factory,
-                                          ObObj &const_val,
+                                          const ObObj &const_val,
                                           const ObObj &transition_val,
                                           const ObObj &interval_val,
                                           ObRawExpr *&diff_1_out,
@@ -799,7 +804,7 @@ public:
                                           ObConstRawExpr *&transition_expr,
                                           ObConstRawExpr *&interval_expr);
   static int build_interval_ds_diff_exprs(ObRawExprFactory &raw_expr_factory,
-                                          ObObj &const_val,
+                                          const ObObj &const_val,
                                           const ObObj &transition_val,
                                           const ObObj &interval_val,
                                           ObRawExpr *&diff_1_out,
@@ -811,16 +816,24 @@ public:
                                        ObObj &const_val,
                                        const ObObj &transition_val,
                                        const ObObj &interval_val,
+                                       const ColumnType &col_dt,
                                        ObRawExpr *&result_expr_out,
                                        ObRawExpr *&n_part_expr);
   static int build_common_diff_exprs(ObRawExprFactory &raw_expr_factory,
-                                     ObObj &const_val,
+                                     const ObObj &const_val,
                                      const ObObj &transition_val,
                                      const ObObj &interval_val,
                                      ObRawExpr *&diff_1_out,
                                      ObRawExpr *&diff_2_out,
                                      ObConstRawExpr *&transition_expr,
                                      ObConstRawExpr *&interval_expr);
+  static int build_val_interval_pos_expr(ObRawExprFactory &raw_expr_factory,
+                                           const ObObj &val,
+                                           const ObObj &transition_point_val,
+                                           const ObObj &interval_range_val,
+                                           ObRawExpr *&val_interval_pos_expr,
+                                           ObConstRawExpr *&transition_point_expr,
+                                           ObConstRawExpr *&interval_range_expr);
   static int build_sign_expr(ObRawExprFactory &expr_factory,
                              ObRawExpr *param,
                              ObRawExpr *&sign_expr);
@@ -828,6 +841,10 @@ public:
                                   ObRawExpr *left,
                                   ObRawExpr *right,
                                   ObOpRawExpr *&less_than_expr);
+  static int build_less_than_or_equal_expr(ObRawExprFactory &expr_factory,
+                                           ObRawExpr *left,
+                                           ObRawExpr *right,
+                                           ObOpRawExpr *&less_than_or_equal_expr);
   static int build_op_pseudo_column_expr(ObRawExprFactory &expr_factory,
                                          const ObItemType expr_type,
                                          const char *expr_name,
@@ -1344,7 +1361,9 @@ public:
                              ObRawExpr *related_token_cnt,
                              ObRawExpr *total_doc_cnt,
                              ObRawExpr *doc_token_cnt,
+                             ObRawExpr *avg_doc_token_cnt,
                              ObOpRawExpr *&bm25,
+                             const bool use_avg_doc_token_cnt_pseudo_column,
                              const ObSQLSessionInfo *session);
   static int extract_match_against_filters(const ObIArray<ObRawExpr *> &filters,
                                            ObIArray<ObRawExpr *> &other_filters,
@@ -1363,6 +1382,9 @@ public:
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
                                            const ObSQLSessionInfo *session,
                                            ObColumnSchemaV2 &gen_col);
+  static int extract_local_vars_for_prefix_gen_col(ObColumnSchemaV2 &origin_col,
+                                                  const ObSQLSessionInfo &session,
+                                                  ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
   /*
     in mysql mode: ret left_expr <=> right_expr
@@ -1421,6 +1443,7 @@ public:
       const char* const param_name,
       common::ObIArray<sql::ObQualifiedName> &q_name,
       bool nullable);
+  static bool is_invalid_type_for_compare(const ObRawExprResType &type);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

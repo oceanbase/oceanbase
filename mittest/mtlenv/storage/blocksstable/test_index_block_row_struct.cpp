@@ -67,7 +67,7 @@ void TestIndexBlockRowStruct::SetUp()
   static_desc.ls_id_.id_ = 1;
   static_desc.tablet_id_.id_ = 1;
   static_desc.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-  static_desc.tablet_transfer_seq_ = 0;
+  static_desc.private_transfer_epoch_ = 0;
   data_desc.micro_block_size_ = 8 * 1024;
   static_desc.micro_block_size_limit_ = 8 * 1024;
   col_desc.row_column_count_ = rowkey_column_count + 1;

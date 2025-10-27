@@ -53,7 +53,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(TestAiService);
 };
 
-void check_ai_model_endpoint(ObAiModelEndpointInfo &endpoint_info,
+void check_ai_model_endpoint(const ObAiModelEndpointInfo &endpoint_info,
                              ObArenaAllocator &allocator,
                              ObString &endpoint_name,
                              ObString &ai_model_name,
@@ -85,7 +85,7 @@ TEST_F(TestAiService, test_ai_model_endpoint)
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(OB_SYS_TENANT_ID));
   ObTenantAiService *ai_service = MTL(ObTenantAiService*);
   ObAiServiceGuard ai_service_guard;
-  ObAiModelEndpointInfo *endpoint_info = nullptr;
+  const ObAiModelEndpointInfo *endpoint_info = nullptr;
 
   ObString endpoint_name = "test_endpoint";
   ObString ai_model_name = "test_ai_model";

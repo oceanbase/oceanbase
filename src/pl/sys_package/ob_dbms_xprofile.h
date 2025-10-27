@@ -37,8 +37,9 @@ namespace pl
 {
 enum class ProfileDisplayType
 {
-  AGGREGATED = 0,
-  ORIGINAL,
+  AGGREGATED = 0,    // Display aggregated profile with detail info, with raw json format
+  ORIGINAL,          // Display original profile without aggregation, with raw json format
+  AGGREGATED_PRETTY, // Display aggregated profile with pretty format
 };
 
 struct ProfileText
@@ -66,12 +67,12 @@ private:
   static int flatten_op_profile(const ObIArray<ObProfileItem> &profile_items,
                                 ProfileText &profile_text);
 
-  static int aggregate_op_profile(sql::ObExecContext &ctx, const ObIArray<ObProfileItem> &profile_items,
-                                  const ObString &sql_id, const ObString &trace_id,
-                                  ProfileText &profile_text);
+  static int aggregate_op_profile(sql::ObExecContext &ctx,
+                                  const ObIArray<ObProfileItem> &profile_items,
+                                  const ObString &trace_id, ProfileText &profile_text);
 
   static int format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
-                                 const ObString &sql_id, const ObString &trace_id,
+                                 int64_t execution_count,
                                  ProfileText &profile_text);
 
   static int format_agg_profiles(const ObIArray<ObMergedProfileItem> &merged_items,
@@ -89,6 +90,43 @@ private:
   static int set_display_result_for_mysql(sql::ObExecContext &ctx, ProfileText &profile_text,
                                           common::ObObj &result);
 };
+
+// for pretry print
+class ProfilePrefixHelper
+{
+public:
+  struct PrefixInfo
+  {
+    TO_STRING_KV(K(op_id_));
+    int64_t plan_depth_;
+    int64_t op_id_{-1};
+    int64_t parent_op_id_{-1};
+    int64_t last_child_op_id_{-1};
+    ObString profile_prefix_;
+    ObString metric_prefix_;
+  };
+
+  struct Ancestor
+  {
+    TO_STRING_KV(K(op_id_));
+    int64_t op_id_{-1};
+    bool last_child_processed_{false};
+  };
+
+  ProfilePrefixHelper(ObIAllocator &allocator)
+      : allocator_(allocator), prefix_infos_(), ancestors_stack_() {}
+  int prepare_pretty_prefix(const ObIArray<ObMergedProfileItem> &merged_items);
+  const ObIArray<PrefixInfo> &get_prefixs() const { return prefix_infos_; }
+private:
+  int append_profile_prefix(PrefixInfo &current_profile, int64_t current_depth);
+  int append_metric_prefix(PrefixInfo &current_profile, int64_t current_depth);
+private:
+  ObIAllocator &allocator_;
+  ObSEArray<PrefixInfo, 4> prefix_infos_;
+  // each element reference to an ancestor of current operator
+  ObSEArray<Ancestor, 4> ancestors_stack_;
+};
+
 
 } // namespace pl
 } // namespace oceanbase

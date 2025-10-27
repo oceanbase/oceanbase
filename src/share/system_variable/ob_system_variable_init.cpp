@@ -1406,7 +1406,7 @@ static struct VarsInit{
       ObSysVars[95].data_type_ = ObIntType ;
       ObSysVars[95].min_val_ = "0" ;
       ObSysVars[95].max_val_ = "2147483647" ;
-      ObSysVars[95].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[95].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[95].id_ = SYS_VAR_REGEXP_STACK_LIMIT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REGEXP_STACK_LIMIT)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_REGEXP_STACK_LIMIT] = 95 ;
@@ -1421,7 +1421,7 @@ static struct VarsInit{
       ObSysVars[96].data_type_ = ObIntType ;
       ObSysVars[96].min_val_ = "0" ;
       ObSysVars[96].max_val_ = "2147483647" ;
-      ObSysVars[96].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[96].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[96].id_ = SYS_VAR_REGEXP_TIME_LIMIT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REGEXP_TIME_LIMIT)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_REGEXP_TIME_LIMIT] = 96 ;
@@ -3306,7 +3306,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.4.1.0" ;
+      ObSysVars[234].default_value_ = "4.5.0.0" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;
@@ -11480,7 +11480,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[838].default_value_ = "0" ;
+      ObSysVars[838].default_value_ = "1" ;
       ObSysVars[838].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
       ObSysVars[838].name_ = "plsql_can_transform_sql_to_assign" ;
       ObSysVars[838].data_type_ = ObIntType ;
@@ -11488,7 +11488,7 @@ static struct VarsInit{
       ObSysVars[838].id_ = SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN] = 838 ;
-      ObSysVars[838].base_value_ = "0" ;
+      ObSysVars[838].base_value_ = "1" ;
     ObSysVars[838].alias_ = "OB_SV_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN" ;
     }();
 

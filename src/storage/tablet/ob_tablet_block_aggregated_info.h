@@ -36,6 +36,7 @@ enum class ObTabletMacroType : int16_t
   SHARED_META_BLOCK = 3,
   SHARED_DATA_BLOCK = 4,
   LINKED_BLOCK = 5,
+  SSLOG_ROW = 6,
   MAX
 
 };

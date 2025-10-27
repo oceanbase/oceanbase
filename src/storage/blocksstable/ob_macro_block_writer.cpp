@@ -627,9 +627,8 @@ int ObMacroBlockWriter::inner_init(
         STORAGE_LOG(WARN, "unexpected null builder", K(ret), KPC(sstable_index_builder));
       } else if (OB_FAIL(builder_->set_parallel_task_idx(parallel_idx))) {
         STORAGE_LOG(WARN, "fail to set_parallel_task_idx", K(ret), K(parallel_idx));
-      }
-      // Init micro block bloom filter.
-      if (data_store_desc_->enable_macro_block_bloom_filter()) {
+      } else if (data_store_desc_->enable_macro_block_bloom_filter()) {
+        // Init micro block bloom filter.
         if (OB_UNLIKELY(data_store_desc_->get_tablet_id().is_ls_inner_tablet())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument, cannot create micro block bloom filter for ls inner tablet", K(ret), KPC(data_store_desc_));
@@ -2017,10 +2016,10 @@ int ObMacroBlockWriter::alloc_block()
   } else {
     if (data_store_desc_->is_for_index_or_meta()) {
       storage_opt.set_private_meta_macro_object_opt(data_store_desc_->get_tablet_id().id(),
-                                                    data_store_desc_->get_tablet_transfer_seq());
+                                                    data_store_desc_->get_private_transfer_epoch());
     } else {
       storage_opt.set_private_object_opt(data_store_desc_->get_tablet_id().id(),
-                                         data_store_desc_->get_tablet_transfer_seq());
+                                         data_store_desc_->get_private_transfer_epoch());
     }
   }
   if (OB_FAIL(ret)) {

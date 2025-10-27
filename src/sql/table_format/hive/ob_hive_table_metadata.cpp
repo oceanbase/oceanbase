@@ -442,7 +442,7 @@ int ObHiveTableMetadata::setup_external_location(const Apache::Hadoop::Hive::Tab
     ObString final_location = real_location.empty() ? location : real_location;
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get storage info str", K(ret));
-    } else if (OB_FAIL(table_schema.set_external_file_location(real_location))) {
+    } else if (OB_FAIL(table_schema.set_external_file_location(final_location))) {
       LOG_WARN("failed to set external file location", K(ret));
     } else if (OB_FAIL(table_schema.set_external_file_location_access_info(access_info))) {
       LOG_WARN("failed to set external file location access info", K(ret));
@@ -697,6 +697,7 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
     ObString original_field_type(cols[i].type.c_str());
     // for bool type (csv format only), it will be stored as tinyint(1) in hive.
     bool is_bool_tinyint = false;
+    bool is_binary_collation = false;
 
     if (OB_FAIL(ret)) {
     } else if (original_field_type.prefix_match(MAP) || original_field_type.prefix_match(STRUCT)
@@ -759,13 +760,14 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
       }
     } else if (original_field_type.prefix_match(STRING)
                || original_field_type.prefix_match(BINARY)) {
+      is_binary_collation
+          = is_csv_format && !is_open_csv && original_field_type.prefix_match(BINARY);
       if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(is_oracle_mode,
                                                                   CHARSET_UTF8MB4,
-                                                                  ObCharset::get_system_collation(),
+                                                                  CS_TYPE_UTF8MB4_BIN,
                                                                   column_schema))) {
         LOG_WARN("failed to setup string", K(ret));
-      } else if (OB_LIKELY(is_csv_format) && OB_LIKELY(!is_open_csv)
-          && original_field_type.prefix_match(BINARY)) {
+      } else if (OB_LIKELY(is_binary_collation)) {
         // When hive table is csv format, binary type will be stored as base64 string.
         // And when hive table is open csv format, binary type will be stored as normal string.
         column_schema.set_collation_type(CS_TYPE_BINARY);
@@ -811,6 +813,7 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
     } else if (OB_FAIL(handle_column_properties(is_part_cols,
                                                 format,
                                                 is_bool_tinyint,
+                                                is_binary_collation,
                                                 allocator,
                                                 column_schema,
                                                 part_index))) {
@@ -828,6 +831,7 @@ int ObHiveTableMetadata::handle_column_types(const FieldSchemas &cols,
 int ObHiveTableMetadata::handle_column_properties(const bool &is_part_cols,
                                                   ObExternalFileFormat &format,
                                                   const bool &is_bool_tinyint,
+                                                  const bool &is_binary_collation,
                                                   ObIAllocator &allocator,
                                                   ObColumnSchemaV2 &column_schema,
                                                   int64_t &part_index)
@@ -859,6 +863,12 @@ int ObHiveTableMetadata::handle_column_properties(const bool &is_part_cols,
     } else if (OB_LIKELY(is_oracle_mode)
                && OB_FAIL(ObDMLResolver::set_upper_column_name(column_schema))) {
       LOG_WARN("fail to set upper column name in oracle mode", K(ret));
+    } else if (is_binary_collation){
+      // reset properties from ObDMLResolver::set_basic_column_properties()
+      column_schema.set_collation_type(ObCollationType::CS_TYPE_BINARY);
+    } else {
+      // reset properties from ObDMLResolver::set_basic_column_properties()
+      column_schema.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN);
     }
   }
   return ret;

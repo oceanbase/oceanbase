@@ -211,6 +211,15 @@ OB_INLINE ObDtlChannelLoop &ObDtlChannelLoop::register_channel(ObDtlChannel &cha
   chan.set_loop_index(chans_.count() - 1);
   chan.set_msg_watcher(*this);
   chan.set_channel_loop(*this);
+  if (chan.is_data_channel()) {
+    if (chan.get_dfc()->is_transmit()) {
+      cond_.set_event_no(common::ObWaitEventIds::WAIT_DTL_TRANSMIT_RESPONSE);
+    } else if (chan.get_dfc()->is_receive()) {
+      cond_.set_event_no(common::ObWaitEventIds::WAIT_DTL_RECEIVE_RESPONSE);
+    }
+  } else {
+    // do nothing
+  }
   return *this;
 }
 

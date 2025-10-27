@@ -14,6 +14,7 @@
 #define OCEABASE_STORAGE_OB_LS_
 
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_iarray.h"
 #include "common/ob_member_list.h"
 #include "share/ob_delegate.h"
 #include "share/ob_tenant_info_proxy.h"
@@ -264,15 +265,16 @@ public:
   int prepare_for_safe_destroy();
   bool safe_to_destroy();
   void destroy();
-  int offline();
+  int offline(const bool remove_from_disk=false);
   int online();
   int online_without_lock();
-  int offline_without_lock();
   int enable_for_restore();
   bool is_offline() const
   { return running_state_.is_offline(); }
   bool is_stopped() const
   { return running_state_.is_stopped(); }
+  bool is_running() const
+  { return running_state_.is_running(); }
   int64_t get_state_seq() const
   { return ATOMIC_LOAD(&state_seq_); }
   int64_t get_switch_epoch() const { return ATOMIC_LOAD(&switch_epoch_); }
@@ -326,7 +328,7 @@ public:
 #endif
 
   // get ls info
-  int get_ls_info(ObLSVTInfo &ls_info);
+  int get_ls_info(const ObIArray<uint64_t> &output_column_ids, ObLSVTInfo &ls_info);
   int get_ls_role(ObRole &role);
   // report the ls replica info to RS.
   int report_replica_info();
@@ -442,7 +444,7 @@ private:
   int stop_();
   void wait_();
   int prepare_for_safe_destroy_();
-  int offline_(const int64_t start_ts);
+  int offline_(const int64_t start_ts, const bool remove_from_disk=false);
   int offline_compaction_();
   int online_compaction_();
   int offline_tx_(const int64_t start_ts);

@@ -163,6 +163,12 @@ enum ObGranularityType
   GRANULARITY_APPROX_GLOBAL_AND_PARTITION
 };
 
+enum ObNdvScaleAlgo {
+  NDV_SCALE_ALGO_DEFAULT = 0,
+  NDV_SCALE_ALGO_LINEAR = 1,
+  NDV_SCALE_ALGO_UNIQUE = 2,
+};
+
 struct BlockNumStat
 {
   BlockNumStat() :
@@ -487,6 +493,7 @@ struct ObColumnStatParam {
   int64_t gather_flag_;
   ObString index_name_;
   ObObjType column_type_;
+  ObNdvScaleAlgo ndv_scale_algo_;
 
   static bool is_valid_opt_col_type(const ObObjType type, bool is_online_stat = false);
   static bool is_valid_avglen_type(const ObObjType type);
@@ -501,7 +508,8 @@ struct ObColumnStatParam {
                K_(column_attribute),
                K_(column_usage_flag),
                K_(gather_flag),
-               K_(index_name));
+               K_(index_name),
+               K_(ndv_scale_algo));
 };
 
 struct ObColumnGroupStatParam {

@@ -121,6 +121,7 @@ int ObAllVirtualSSObjectTypeIoStat::process_curr_tenant(common::ObNewRow *&row)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
       const uint64_t col_id = output_column_ids_.at(i);
+      ObSSBaseStat stat;
       switch (col_id) {
       case SVR_IP: {
         if (addr.ip_to_string(ip_buf_, sizeof(ip_buf_))) {
@@ -150,47 +151,55 @@ int ObAllVirtualSSObjectTypeIoStat::process_curr_tenant(common::ObNewRow *&row)
         break;
       }
       case READ_CNT: {
-        cells[i].set_int(ss_object_type_stat.read_cnt_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+        cells[i].set_int(stat.get_cnt());
         break;
       }
       case READ_SIZE: {
-        cells[i].set_int(ss_object_type_stat.read_size_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+        cells[i].set_int(stat.get_size());
         break;
       }
       case READ_FAIL_CNT: {
-        cells[i].set_int(ss_object_type_stat.read_fail_cnt_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+        cells[i].set_int(stat.get_fail_cnt());
         break;
       }
       case READ_IOPS: {
-        cells[i].set_int(ss_object_type_cached_stat.get_read_iops());
+        cells[i].set_int(ss_object_type_cached_stat.get_iops(ObSSObjectTypeStatType::READ));
         break;
       }
       case WRITE_CNT: {
-        cells[i].set_int(ss_object_type_stat.write_cnt_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+        cells[i].set_int(stat.get_cnt());
         break;
       }
       case WRITE_SIZE: {
-        cells[i].set_int(ss_object_type_stat.write_size_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+        cells[i].set_int(stat.get_size());
         break;
       }
       case WRITE_FAIL_CNT: {
-        cells[i].set_int(ss_object_type_stat.write_fail_cnt_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+        cells[i].set_int(stat.get_fail_cnt());
         break;
       }
       case WRITE_IOPS: {
-        cells[i].set_int(ss_object_type_cached_stat.get_write_iops());
+        cells[i].set_int(ss_object_type_cached_stat.get_iops(ObSSObjectTypeStatType::WRITE));
         break;
       }
       case DELETE_CNT: {
-        cells[i].set_int(ss_object_type_stat.delete_cnt_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::DELETE, stat);
+        cells[i].set_int(stat.get_cnt());
         break;
       }
       case DELETE_FAIL_CNT: {
-        cells[i].set_int(ss_object_type_stat.delete_fail_cnt_);
+        ss_object_type_stat.get_stat(ObSSObjectTypeStatType::DELETE, stat);
+        cells[i].set_int(stat.get_fail_cnt());
         break;
       }
       case DELETE_IOPS: {
-        cells[i].set_int(ss_object_type_cached_stat.get_delete_iops());
+        cells[i].set_int(ss_object_type_cached_stat.get_iops(ObSSObjectTypeStatType::DELETE));
         break;
       }
       } // end switch

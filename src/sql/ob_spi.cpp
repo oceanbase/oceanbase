@@ -1685,6 +1685,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       ObString sqlstr(sql);
       OZ (ObSPIResultSet::check_nested_stmt_legal(*(ctx->exec_ctx_), sqlstr, stmt::T_END_TRANS));
       int64_t saved_query_start_time = my_session->get_query_start_time();
+      int64_t saved_try_cnt = audit_record.try_cnt_;
       my_session->set_query_start_time(ObTimeUtility::current_time());
       if (OB_SUCC(ret)) {
         if (my_session->is_in_transaction() &&
@@ -1795,6 +1796,8 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
                                   *my_session, ctx->exec_ctx_->get_sql_ctx()->is_sensitive_);
       // restore query_start_time
       my_session->set_query_start_time(saved_query_start_time);
+      // restore try_cnt
+      audit_record.try_cnt_ = saved_try_cnt;
     }
   }
   if (OB_SUCC(ret)
@@ -1944,7 +1947,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             if (OB_SUCC(ret) && !ObStmt::is_diagnostic_stmt(stmt_type) && lib::is_mysql_mode()) {
               ob_reset_tsi_warning_buffer();
             }
-
             OZ (inner_open(ctx,
                            allocator,
                            sql,
@@ -4088,7 +4090,8 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           ObPLSqlAuditGuard audit_guard(
             *(ctx->exec_ctx_), session_info, spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
           ObSPIRetryCtrlGuard retry_guard(retry_ctrl, spi_result, session_info, ret);
-          if (cursor.is_ps_cursor()) {
+          bool is_iter_end = false;
+	  if (cursor.is_ps_cursor()) {
             spi_result.get_sql_ctx().can_reroute_sql_ = ctx->exec_ctx_->get_sql_ctx()->can_reroute_sql_;
           }
           CK (OB_NOT_NULL(spi_result.get_memory_ctx()));
@@ -4113,10 +4116,11 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                                         (for_update && !is_server_cursor && !is_dbms_cursor),
                                         &session_info), K(size));
           CK (OB_NOT_NULL(spi_result.get_result_set()));
-          bool is_iter_end = false;
           CK (OB_NOT_NULL(spi_result.get_result_set()->get_field_columns()));
           OZ (spi_cursor->init_row_desc(*spi_result.get_result_set()->get_field_columns()));
-          OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
+          OZ (fill_cursor(
+            spi_result.get_memory_ctx(),
+            *spi_result.get_result_set(), spi_cursor, ObTimeUtility::current_time(), is_iter_end, orc_max_ret_rows));
           OZ (spi_cursor->row_store_.finish_add_row());
           if (OB_FAIL(ret)) {
           } else if (is_dbms_cursor) {
@@ -8966,6 +8970,27 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
   return ret;
 }
 
+int ObSPIService::fill_cursor(lib::MemoryContext entity,
+                              ObResultSet &result_set,
+                              ObSPICursor *cursor,
+                              int64_t new_query_start_time,
+                              bool &is_iter_end,
+                              int64_t orc_max_ret_rows)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entity)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    WITH_CONTEXT(entity) {
+      if (OB_FAIL(fill_cursor(result_set, cursor, new_query_start_time, is_iter_end, orc_max_ret_rows))) {
+        LOG_WARN("failed to fill cursor", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::fill_cursor(ObResultSet &result_set,
                               ObSPICursor *cursor,
                               int64_t new_query_start_time,
@@ -8978,13 +9003,19 @@ int ObSPIService::fill_cursor(ObResultSet &result_set,
     LOG_WARN("Argument passed in is NULL", K(cursor), K(ret));
   } else {
     const common::ObNewRow *row = NULL;
-    if (OB_NOT_NULL(result_set.get_physical_plan()) && new_query_start_time > 0) {
+    if (OB_NOT_NULL(result_set.get_physical_plan())) {
       // fill_dbms_cursor do not need check hint , so only new_query_start_time > 0 will check hint timeout
       ObPhysicalPlan *plan = result_set.get_physical_plan();
-      if (plan->get_phy_plan_hint().query_timeout_ > 0) {
-        old_time_out_ts = THIS_WORKER.get_timeout_ts();
-        THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
+      if (new_query_start_time > 0) {
+        if (plan->get_phy_plan_hint().query_timeout_ > 0) {
+          old_time_out_ts = THIS_WORKER.get_timeout_ts();
+          THIS_WORKER.set_timeout_ts(new_query_start_time + plan->get_phy_plan_hint().query_timeout_);
+        }
       }
+      cursor->plan_type_ = plan->get_plan_type();
+      cursor->plan_id_ = plan->get_plan_id();
+      cursor->plan_hash_ = plan->get_plan_hash_value();
+      MEMCPY(cursor->sql_id_, plan->get_sql_id(), OB_MAX_SQL_ID_LENGTH);
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < orc_max_ret_rows; i++) {
 #ifdef ERRSIM

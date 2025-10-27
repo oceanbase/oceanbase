@@ -79,6 +79,9 @@ public:
       group_id_expr_(nullptr),
       children_(nullptr),
       children_cnt_(0),
+      push_down_topn_(),
+      limit_param_(),
+      output_row_cnt_(0),
       inited_(false)
   {}
   virtual ~ObDASIter() { release(); }
@@ -126,12 +129,15 @@ public:
                               ObIAllocator *alloc,
                               int64_t group_id) { return OB_NOT_IMPLEMENT; }
   int get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge_iter);
+
+  int prepare_limit_pushdown_param(const ObDASPushDownTopN &push_down_topn, const ObLimitParam &limit_param);
 protected:
   virtual int inner_init(ObDASIterParam &param) = 0;
   virtual int inner_reuse() = 0;
   virtual int inner_release() = 0;
   virtual int inner_get_next_row() = 0;
   virtual int inner_get_next_rows(int64_t &count, int64_t capacity) = 0;
+  virtual bool can_limit_pushdown(const ObDASPushDownTopN &push_down_topn) { return false; }
 
   ObDASIterType type_;
   int64_t max_size_;
@@ -141,6 +147,9 @@ protected:
   const ObExpr *group_id_expr_;
   ObDASIter **children_;
   uint32_t children_cnt_;
+  ObDASPushDownTopN push_down_topn_;
+  ObLimitParam limit_param_;
+  int64_t output_row_cnt_;
 
 private:
   bool inited_;

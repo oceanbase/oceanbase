@@ -42,6 +42,7 @@ ObTableIterParam::ObTableIterParam()
       output_exprs_(nullptr),
       aggregate_exprs_(nullptr),
       output_sel_mask_(nullptr),
+      ss_datum_range_(nullptr),
       is_multi_version_minor_merge_(false),
       need_scn_(false),
       need_trans_info_(false),
@@ -109,6 +110,7 @@ void ObTableIterParam::reset()
   output_exprs_ = nullptr;
   aggregate_exprs_ = nullptr;
   output_sel_mask_ = nullptr;
+  ss_datum_range_ = nullptr;
   vectorized_enabled_ = false;
   has_virtual_columns_ = false;
   has_lob_column_out_ = false;
@@ -213,6 +215,7 @@ DEF_TO_STRING(ObTableIterParam)
        KPC_(output_exprs),
        KPC_(aggregate_exprs),
        KPC_(output_sel_mask),
+       KPC_(ss_datum_range),
        K_(is_multi_version_minor_merge),
        K_(need_scn),
        K_(is_same_schema_column),
@@ -271,6 +274,8 @@ void ObTableAccessParam::reset()
   output_sel_mask_ = NULL;
   is_inited_ = false;
 }
+
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_KEEP_ORDER_BLOCKSCAN)
 
 int ObTableAccessParam::init(
     const ObTableScanParam &scan_param,
@@ -347,11 +352,11 @@ int ObTableAccessParam::init(
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
     iter_param_.ls_id_ = scan_param.ls_id_;
     iter_param_.is_column_replica_table_ = table_param.is_column_replica_table();
-     // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
-     // disable blockscan if use index skip scan as no large range to scan
-    if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_ ||
-                    scan_param.use_index_skip_scan() ||
-                    !scan_param.scan_flag_.is_use_block_cache())) {
+    // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
+    // disable blockscan if use index skip scan as no large range to scan
+    if (OB_UNLIKELY(!scan_param.scan_flag_.is_use_block_cache() ||
+                    (scan_param.scan_flag_.is_keep_order() &&
+                     OB_SUCCESS == ERRSIM_ENABLE_KEEP_ORDER_BLOCKSCAN))) {
       iter_param_.disable_blockscan();
     }
     iter_param_.auto_split_filter_type_ = scan_param.auto_split_filter_type_;
@@ -380,7 +385,7 @@ int ObTableAccessParam::init(
     if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
       STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else if (scan_param.use_index_skip_scan() &&
-               OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
+               OB_FAIL(check_skip_scan(scan_param, iter_param_))) {
       STORAGE_LOG(WARN, "Failed to get prefix for skip scan", K(ret));
     } else {
       iter_param_.need_update_tablet_param_ = &scan_param.need_update_tablet_param_;
@@ -416,23 +421,28 @@ int ObTableAccessParam::check_valid_before_query_init(
   return ret;
 }
 
-int ObTableAccessParam::get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param)
+int ObTableAccessParam::check_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param)
 {
   int ret = OB_SUCCESS;
-  const int64_t key_range_count = scan_param.key_ranges_.count();
-  const int64_t skip_range_count = scan_param.ss_key_ranges_.count();
-  if (OB_UNLIKELY(key_range_count != skip_range_count)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key_range_count), K(skip_range_count));
+  if (iter_param.is_use_column_store()) {
+    STORAGE_LOG(DEBUG, "do not use skip scan in column store");
   } else {
-    const int64_t prefix = iter_param.get_schema_rowkey_count() - scan_param.ss_key_ranges_.at(0).start_key_.length();
-    if (OB_UNLIKELY(prefix <= 0)) {
+    const int64_t key_range_count = scan_param.key_ranges_.count();
+    const int64_t skip_range_count = scan_param.ss_key_ranges_.count();
+    if (OB_UNLIKELY(key_range_count != skip_range_count)) {
       ret = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "invalid argument", K(ret), K(prefix), K(scan_param.key_ranges_), K(scan_param.ss_key_ranges_));
+      STORAGE_LOG(WARN, "invalid argument", K(ret), K(key_range_count), K(skip_range_count));
     } else {
-      iter_param.ss_rowkey_prefix_cnt_ = prefix;
+      const int64_t prefix = iter_param.get_schema_rowkey_count() - scan_param.ss_key_ranges_.at(0).start_key_.length();
+      if (OB_UNLIKELY(prefix <= 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN, "invalid argument", K(ret), K(prefix), K(scan_param.key_ranges_), K(scan_param.ss_key_ranges_));
+      } else {
+        iter_param.ss_rowkey_prefix_cnt_ = prefix;
+      }
     }
   }
+
   return ret;
 }
 

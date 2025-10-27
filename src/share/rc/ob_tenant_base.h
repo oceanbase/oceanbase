@@ -29,6 +29,7 @@
 #endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "share/resource_manager/ob_tenant_thread_group_statistic.h"
 namespace oceanbase
 {
 namespace common {
@@ -123,6 +124,7 @@ class ObTenantMdsService;
   class ObSSMetaService;
   class ObSSGarbageCollectorService;
   class ObStorageCachePolicyService;
+  class ObSSDiagnoseInfoMgr;
 #else
 #endif
   class ObGlobalIteratorPool;
@@ -238,6 +240,7 @@ namespace observer
   class ObTenantQueryRespTimeCollector;
   class ObTableQueryASyncMgr;
   class ObTableSessIDService;
+  class ObTenantTabletCleanupService;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -287,6 +290,7 @@ class ObBackupDestIOPermissionMgr;
 namespace schema
 {
   class ObTenantSchemaService;
+  class ObAddIntervalPartitionController;
 }
 namespace detector
 {
@@ -328,6 +332,7 @@ namespace detector
 #define SSLogGTSService transaction::ObSSLogGTSService*,
 #define SSLogUIDService transaction::ObSSLogUIDService*,
 #define TabletSplitTaskCache share::ObTabletSplitTaskCache*,
+#define SSDiagnoseInfoMgr storage::ObSSDiagnoseInfoMgr*,
 #else
 #define TenantDiskSpaceManager
 #define TenantFileManager
@@ -350,6 +355,7 @@ namespace detector
 #define SSLogGTSService
 #define SSLogUIDService
 #define TabletSplitTaskCache
+#define SSDiagnoseInfoMgr
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -498,6 +504,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       SSLogGTSService                               \
       SSLogUIDService                               \
       TabletSplitTaskCache                          \
+      SSDiagnoseInfoMgr                             \
       share::ObStorageIOUsageRepoter*,              \
       share::ObResourceLimitCalculator*,            \
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \
@@ -526,7 +533,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*,           \
-      share::ObHMSClientPoolMgr*                     \
+      share::ObHMSClientPoolMgr*,                     \
+      share::schema::ObAddIntervalPartitionController*, \
+      observer::ObTenantTabletCleanupService*        \
   )
 
 
@@ -800,7 +809,7 @@ public:
     return get<ObTimerService *>();
   }
 
-
+  int64_t group_cpu_time_us_[share::OB_TENANT_THREAD_GROUP_MAXNUM] CACHE_ALIGNED;
 private:
   int create_mtl_module();
   int init_mtl_module();
@@ -888,6 +897,7 @@ private:
   using ThreadListNode = common::ObDLinkNode<lib::Thread *>;
   using ThreadList = common::ObDList<ThreadListNode>;
   ThreadList thread_list_;
+  ThreadList group_thread_list_array_[OB_TENANT_THREAD_GROUP_MAXNUM];
   lib::ObMutex thread_list_lock_;
   int64_t marked_prepare_gc_ts_;
 };

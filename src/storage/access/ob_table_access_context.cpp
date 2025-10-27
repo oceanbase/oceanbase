@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_access_context.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/access/ob_index_skip_scanner.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,6 @@ ObTableAccessContext::ObTableAccessContext()
     limit_param_(NULL),
     stmt_allocator_(NULL),
     allocator_(NULL),
-    range_allocator_(nullptr),
     scan_mem_(nullptr),
     table_scan_stat_(NULL),
     table_store_stat_(),
@@ -82,7 +82,8 @@ ObTableAccessContext::ObTableAccessContext()
     mview_scan_info_(nullptr),
     truncate_part_filter_(nullptr),
     mds_collector_(nullptr),
-    row_scan_cnt_(nullptr)
+    row_scan_cnt_(nullptr),
+    skip_scan_factory_(nullptr)
 {
   merge_scn_.set_max();
 }
@@ -118,6 +119,13 @@ ObTableAccessContext::~ObTableAccessContext()
     ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
   } else {
     truncate_part_filter_ = nullptr;
+  }
+  if (OB_UNLIKELY(nullptr != skip_scan_factory_)) {
+    skip_scan_factory_->~ObIndexSkipScanFactory();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(skip_scan_factory_);
+    }
+    skip_scan_factory_ = nullptr;
   }
 }
 
@@ -201,7 +209,6 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
   } else {
     stmt_allocator_ = scan_param.allocator_;
     cached_iter_node_ = cached_iter_node;
-    range_allocator_ = nullptr;
     ls_id_ = scan_param.ls_id_;
     tablet_id_ = scan_param.tablet_id_;
     query_flag_ = scan_param.scan_flag_;
@@ -211,6 +218,8 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     table_scan_stat_ = &scan_param.main_table_scan_stat_;
     limit_param_ = scan_param.limit_param_.is_valid() ? &scan_param.limit_param_ : NULL;
     table_scan_stat_->reset();
+    table_store_stat_.in_bf_cache_threshold_ = scan_param.in_bf_cache_threshold_;
+    table_store_stat_.in_fuse_row_cache_threshold_ = scan_param.in_fuse_row_cache_threshold_;
     table_store_stat_.in_row_cache_threshold_ = scan_param.in_row_cache_threshold_;
     trans_version_range_ = trans_version_range;
     need_scn_ = scan_param.need_scn_ ||
@@ -246,6 +255,8 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
           query_flag_.is_reverse_scan(),
           scan_param.allocator_))) {
       LOG_WARN("Failed to build sample filter", K(ret), K(scan_param));
+    } else if (scan_param.use_index_skip_scan() && OB_FAIL(alloc_skip_scan_factory())) {
+      LOG_WARN("Failed to alloc skip scan factory", K(ret));
     } else {
       is_inited_ = true;
     }
@@ -273,7 +284,6 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     timeout_ = ctx.timeout_;
     allocator_ = &allocator;
     stmt_allocator_ = &stmt_allocator;
-    range_allocator_ = nullptr;
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
@@ -329,7 +339,6 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     timeout_ = ctx.timeout_;
     allocator_ = &allocator;
     stmt_allocator_ = &allocator;
-    range_allocator_ = nullptr;
     trans_version_range_ = trans_version_range;
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
@@ -369,7 +378,6 @@ int ObTableAccessContext::init_for_mview(common::ObIAllocator *allocator, const 
     stmt_allocator_ = access_ctx.stmt_allocator_;
     allocator_ = allocator;
     cached_iter_node_ = nullptr;
-    range_allocator_ = nullptr;
     ls_id_ = access_ctx.ls_id_;
     tablet_id_ = access_ctx.tablet_id_;
     query_flag_ = access_ctx.query_flag_;
@@ -477,6 +485,13 @@ void ObTableAccessContext::reset()
     }
     cg_iter_pool_ = nullptr;
   }
+  if (OB_UNLIKELY(nullptr != skip_scan_factory_)) {
+    skip_scan_factory_->~ObIndexSkipScanFactory();
+    if (OB_NOT_NULL(stmt_allocator_)) {
+      stmt_allocator_->free(skip_scan_factory_);
+    }
+    skip_scan_factory_ = nullptr;
+  }
   is_inited_ = false;
   timeout_ = 0;
   ls_id_.reset();
@@ -495,7 +510,6 @@ void ObTableAccessContext::reset()
     scan_mem_ = NULL;
   }
   allocator_ = NULL;
-  range_allocator_ = nullptr;
   table_scan_stat_ = NULL;
   table_store_stat_.reset();
   out_cnt_ = 0;
@@ -543,7 +557,6 @@ void ObTableAccessContext::reuse()
   if (NULL != scan_mem_) {
     scan_mem_->reuse_arena();
   }
-  range_allocator_ = nullptr;
   table_scan_stat_ = NULL;
   out_cnt_ = 0;
   trans_version_range_.reset();
@@ -554,6 +567,7 @@ void ObTableAccessContext::reuse()
   if (nullptr != sample_filter_) {
     sample_filter_->reuse();
   }
+  reuse_skip_scan_factory();
   row_scan_cnt_ = nullptr;
 }
 
@@ -596,6 +610,24 @@ int ObTableAccessContext::check_filtered_by_base_version(ObDatumRow &row)
       row.row_flag_.reset();
       row.row_flag_.set_flag(DF_NOT_EXIST);
     }
+  }
+  return ret;
+}
+
+int ObTableAccessContext::alloc_skip_scan_factory()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (nullptr != skip_scan_factory_) {
+    skip_scan_factory_->reuse();
+  } else if (OB_ISNULL(stmt_allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt allocator is null", K(ret));
+  } else if (OB_ISNULL(buf = stmt_allocator_->alloc(sizeof(ObIndexSkipScanFactory)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to alloc memory for ObIndexSkipScanFactory", K(ret));
+  } else {
+    skip_scan_factory_ = new (buf) ObIndexSkipScanFactory();
   }
   return ret;
 }

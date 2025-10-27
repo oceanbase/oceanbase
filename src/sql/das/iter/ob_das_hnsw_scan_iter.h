@@ -295,7 +295,8 @@ public:
       can_retry_(false),
       idx_iter_first_scan_(true),
       rel_map_(),
-      use_vid_(false) {
+      use_vid_(false),
+      distance_threshold_(FLT_MAX) {
         extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
 
@@ -559,6 +560,7 @@ private:
   bool idx_iter_first_scan_;
   common::hash::ObHashMap<int64_t, double*> rel_map_;
   bool use_vid_;
+  float distance_threshold_;
 
 private:
 

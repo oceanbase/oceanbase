@@ -155,7 +155,7 @@ int ObCGGroupByScanner::decide_can_group_by(const int32_t group_by_col, bool &ca
         int64_t row_cnt = 0;
         int64_t read_cnt = 0;
         int64_t distinct_cnt = 0;
-        if (OB_FAIL(open_cur_data_block())) {
+        if (OB_FAIL(open_cur_data_block(true))) {
           LOG_WARN("Failed to open data block", K(ret));
         } else if (OB_FAIL(micro_scanner_->check_can_group_by(group_by_col, row_cnt, read_cnt, distinct_cnt, can_group_by))) {
           LOG_WARN("Failed to check group by", K(ret));

@@ -61,7 +61,7 @@ void TestSSMicroCacheAbnormalCase::SetUp()
   micro_cache->stop();
   micro_cache->wait();
   micro_cache->destroy();
-  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), 1717986918));
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), 1717986918, 1/*micro_split_cnt*/));
   micro_cache->start();
 }
 
@@ -296,6 +296,238 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
   ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_MICRO_DATA_BLK));
 
   LOG_INFO("TEST_CASE: finish test_phy_ckpt_timeout");
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_assign_super_blk_error)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_assign_super_blk_error");
+  const uint64_t tenant_id = MTL_ID();
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ASSERT_EQ(0, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+  const int64_t block_size = phy_blk_mgr.get_block_size();
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+  const int64_t blk_ckpt_block_cnt = blk_cnt_info.phy_ckpt_blk_cnt_;
+  blk_ckpt_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
+
+  // 1. first execute phy_blk checkpoint task
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+
+  // 2. try to update super_block
+  ObSSMicroCacheSuperBlk new_super_blk;
+  ASSERT_EQ(OB_SUCCESS, new_super_blk.init_non_basic_info(tenant_id, micro_cache->micro_ckpt_split_cnt_));
+  ASSERT_EQ(false, new_super_blk.is_valid());
+  ASSERT_EQ(0, new_super_blk.blk_ckpt_used_blk_list().count());
+  const int64_t start_us = ObTimeUtility::current_time_us();
+  ASSERT_EQ(OB_SUCCESS, new_super_blk.assign(phy_blk_mgr.super_blk_));
+  const int64_t cost_us = ObTimeUtility::current_time_us() - start_us;
+  ASSERT_EQ(true, new_super_blk.is_valid());
+  new_super_blk.micro_ckpt_time_us_ += 10013;
+  const int64_t exp_micro_ckpt_time_us = new_super_blk.micro_ckpt_time_us_;
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_ASSIGN_SUPER_BLK_ERR, OB_ALLOCATE_MEMORY_FAILED, 0, 1);
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(new_super_blk));
+  ASSERT_EQ(false, phy_blk_mgr.super_blk_.is_valid());
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_ASSIGN_SUPER_BLK_ERR, OB_ALLOCATE_MEMORY_FAILED, 0, 0);
+
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.inner_check_ss_super_block());
+  ASSERT_EQ(true, phy_blk_mgr.super_blk_.is_valid());
+  ASSERT_EQ(exp_micro_ckpt_time_us, phy_blk_mgr.super_blk_.micro_ckpt_time_us_);
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_restart_read_super_blk_error)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_restart_read_super_blk_error");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+
+  persist_meta_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  blk_ckpt_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
+
+  const uint64_t tenant_id = MTL_ID();
+  const int64_t write_blk_cnt = blk_cnt_info.data_blk_.free_blk_cnt() / 2;
+  const int64_t micro_size = 15 * 1024;
+  const int64_t per_micro_cnt = 128;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+  ObSSPhyBlockCommonHeader common_header;
+  ObSSMicroDataBlockHeader data_blk_header;
+  const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+
+  // 1. write some micro_blocks
+  for (int64_t i = 0; i < write_blk_cnt; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+    for (int32_t j = 0; j < per_micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+                                         macro_id.second_id()/*effective_tablet_id*/,
+                                         ObSSMicroCacheAccessType::COMMON_IO_TYPE);
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+
+  // 2. execute blk_ckpt and micro_ckpt
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+
+  ASSERT_LT(0, blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.ckpt_item_cnt_);
+  ASSERT_LT(0, phy_blk_mgr.super_blk_.blk_ckpt_info_.blk_ckpt_used_blks_.count());
+  ASSERT_LT(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.micro_ckpt_entries_.count());
+  ASSERT_NE(0, phy_blk_mgr.super_blk_.micro_ckpt_time_us_);
+
+  // 3. restart micro_cache, mock read super_block failed.
+  micro_cache->stop();
+  micro_cache->wait();
+  micro_cache->destroy();
+  MTL(ObTenantFileManager*)->is_cache_file_exist_ = true;
+  ASSERT_EQ(OB_SUCCESS, micro_cache->init(MTL_ID(), 1717986918, 1/*micro_split_cnt*/));
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_ASSIGN_SUPER_BLK_ERR, OB_ALLOCATE_MEMORY_FAILED, 0, 1);
+  ASSERT_EQ(OB_SUCCESS, micro_cache->start());
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_ASSIGN_SUPER_BLK_ERR, OB_ALLOCATE_MEMORY_FAILED, 0, 0);
+
+  ObSSMicroCacheSuperBlk new_super_blk;
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.read_ss_super_block(new_super_blk));
+  ASSERT_EQ(true, phy_blk_mgr.super_blk_.is_valid());
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.blk_ckpt_info_.blk_ckpt_used_blks_.count());
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_time_us_);
+}
+
+TEST_F(TestSSMicroCacheAbnormalCase, test_meta_ckpt_update_super_blk_err)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_meta_ckpt_update_super_blk_err");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache*);
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  const int64_t block_size = micro_cache->phy_blk_size_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+  ObSSARCInfo &arc_info = micro_meta_mgr.arc_info_;
+
+  persist_meta_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  blk_ckpt_task.cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
+
+  const int64_t WRITE_BLK_CNT = 50;
+  ASSERT_LE(WRITE_BLK_CNT * 2, phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt());
+  ObSSPhyBlockCommonHeader common_header;
+  ObSSMicroDataBlockHeader data_blk_header;
+  const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+  const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
+  const int32_t micro_cnt = 100;
+  const int32_t micro_size = (block_size - payload_offset) / micro_cnt - micro_index_size;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char*>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  // 1. write 50 fulfilled phy_block
+  for (int64_t i = 0; i < WRITE_BLK_CNT; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
+    for (int32_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+                            macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+  {
+    // to sealed the last mem_block
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(WRITE_BLK_CNT + 1);
+    const int32_t offset = payload_offset;
+    ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+                          macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+  }
+  int64_t total_range_micro_cnt = 0;
+  ASSERT_EQ(OB_SUCCESS, micro_cache->micro_range_mgr_.get_total_range_micro_cnt(total_range_micro_cnt));
+  ASSERT_EQ(WRITE_BLK_CNT * micro_cnt + 1, total_range_micro_cnt);
+
+  // 2. first execute meta_ckpt and blk_ckpt
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+  ASSERT_EQ(OB_SUCCESS, micro_cache->micro_range_mgr_.get_total_range_micro_cnt(total_range_micro_cnt));
+  ASSERT_EQ(WRITE_BLK_CNT * micro_cnt + 1, total_range_micro_cnt);
+  ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
+  ASSERT_EQ(0, cache_stat.task_stat().erase_persisted_cnt_);
+
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
+
+  // 3. evict some micro_meta
+  {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(1);
+    for (int32_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ObSSMicroBlockMetaHandle micro_meta_handle;
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.micro_meta_map_.get(&micro_key, micro_meta_handle));
+      ObSSMicroBlockMeta *micro_meta = micro_meta_handle.get_ptr();
+      ASSERT_NE(nullptr, micro_meta);
+      ASSERT_EQ(true, micro_meta->is_data_persisted_);
+
+      ObSSMicroBlockMetaInfo evict_micro_info;
+      micro_meta_handle()->get_micro_meta_info(evict_micro_info);
+
+      ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(evict_micro_info));
+      ASSERT_EQ(true, micro_meta->is_in_ghost_);
+      int64_t phy_blk_idx = -1;
+      ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_block_valid_length(evict_micro_info.data_loc_,
+        evict_micro_info.reuse_version_, evict_micro_info.size_ * -1, phy_blk_idx));
+    }
+  }
+
+  // 4. second execute meta_ckpt and blk_ckpt
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.gen_checkpoint());
+  ASSERT_EQ(2, cache_stat.task_stat().micro_ckpt_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().erase_persisted_cnt_);
+
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
+  ASSERT_EQ(2, cache_stat.task_stat().blk_ckpt_cnt_);
+
+  // 5. third execute meta_ckpt, but mock update_super_block failed
+  LOG_INFO("TEST: check stat", K(cache_stat), K(arc_info));
+  ASSERT_LT(0, arc_info.get_ghost_count());
+  ASSERT_EQ(0, cache_stat.task_stat().dropped_persisted_cnt_);
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_SUPER_BLK_ERR, OB_TIMEOUT, 1, 1);
+  persist_meta_task.persist_meta_op_.retry_duration_us_ = 5 * 1000 * 1000L;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task.persist_meta_op_.start_op());
+  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_TIMEOUT, persist_meta_task.persist_meta_op_.gen_checkpoint());
+  ASSERT_LT(0, cache_stat.task_stat().dropped_persisted_cnt_);
+  TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_MICRO_CACHE_WRITE_SUPER_BLK_ERR, OB_TIMEOUT, 0, 0);
+  ASSERT_EQ(0, arc_info.get_ghost_count());
+  LOG_INFO("TEST_CASE: finish test_meta_ckpt_update_super_blk_err", K(cache_stat), K(arc_info));
 }
 
 }  // namespace storage

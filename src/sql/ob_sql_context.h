@@ -850,7 +850,8 @@ public:
       injected_random_status_(false),
       ori_question_marks_count_(0),
       type_demotion_flag_(0),
-      initial_type_ctx_()
+      initial_type_ctx_(),
+      has_hybrid_search_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -898,6 +899,7 @@ public:
     filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
     // initial_type_ctx_.reset();
+    has_hybrid_search_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -946,7 +948,7 @@ public:
   void init_type_ctx(const ObSQLSessionInfo *session);
   bool is_type_ctx_inited() const { return NULL != initial_type_ctx_.get_session(); }
   const ObExprTypeCtx& get_initial_type_ctx() const { return initial_type_ctx_; };
-
+  bool has_hybrid_search() const { return has_hybrid_search_; }
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
   typedef common::ObSEArray<ObHiddenColumnItem, CALCULABLE_EXPR_NUM, common::ModulePageAllocator, true> CalculableItems;
@@ -1027,6 +1029,7 @@ public:
   // A type context master copy that requires duplication during usage.
   // For scenarios involving numerous and deeply nested expressions, frequent type context initialization is costy.
   ObExprTypeCtx initial_type_ctx_;
+  bool has_hybrid_search_;
 };
 
 template<typename... Args>

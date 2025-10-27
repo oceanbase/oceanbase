@@ -2051,8 +2051,6 @@ int ObMPStmtExecute::process()
       retry_ctrl_.set_sys_global_schema_version(sys_version);
       session.partition_hit().reset();
       session.set_pl_can_retry(true);
-      session.set_enable_mysql_compatible_dates(
-        session.get_enable_mysql_compatible_dates_from_config());
 
       need_response_error = false;
       need_disconnect = false;
@@ -2587,7 +2585,9 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               // copy lob header
               dst.assign_ptr(dst.ptr() - extra_len, dst.length() + extra_len);
               MEMCPY(dst.ptr(), str.ptr(), extra_len);
-              if (is_lob_v1) reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
+              if (OB_FAIL(ObLobLocatorV2::update_payload_size(dst, extra_len, is_lob_v1))) {
+                LOG_WARN("fail to update payload size", K(ret), K(dst), K(extra_len));
+              }
             } else {
               if (OB_FAIL(ob_write_string(allocator, str, dst))) {
                 LOG_WARN("Failed to write str", K(ret));

@@ -89,7 +89,15 @@ public:
 
   int generate_scan_ctdef(ObLogInsert &op,
                           const IndexDMLInfo &index_dml_info,
-                          ObDASScanCtDef &scan_ctdef);
+                          ObDASScanCtDef &scan_ctdef,
+                          bool do_in_filter_opt = false);
+
+  int generate_index_scan_ctdef(ObLogDelUpd &op,
+                                const IndexDMLInfo &ins_index_dml_info,
+                                const IndexDMLInfo &upd_index_dml_info,
+                                ExprFixedArray &unique_key_conv_exprs,
+                                ExprFixedArray &unique_index_rowkey_exprs,
+                                ObDASScanCtDef *&scan_ctdef);
 
   int generate_err_log_ctdef(const ObErrLogDefine &err_log_define,
                              ObErrLogCtDef &err_log_ins_ctdef);
@@ -443,6 +451,10 @@ private:
                             const ObSQLSessionInfo &session,
                             ObIAllocator &allocator,
                             bool &need_fire);
+  int get_first_unique_index_tid(ObLogicalOperator &op,
+                                  const IndexDMLInfo &primary_index_dml_info,
+                                  uint64_t &unique_index_tid);
+
 #ifdef OB_BUILD_TDE_SECURITY
   int init_encrypt_metas_(const share::schema::ObTableSchema *table_schema,
                           share::schema::ObSchemaGetterGuard *guard,
@@ -452,6 +464,7 @@ private:
                                ObIArray<transaction::ObEncryptMetaCache>&meta_array);
 #endif
   int generate_table_loc_meta(const IndexDMLInfo &index_dml_info, ObDASTableLocMeta &loc_meta);
+
 private:
   ObStaticEngineCG &cg_;
 };

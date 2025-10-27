@@ -48,7 +48,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(snapshot_);
   }
-  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
+  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_)) {
     OB_UNIS_ENCODE(session->get_effective_tenant_id());
     OB_UNIS_ENCODE(*session);
   }
@@ -137,7 +137,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(snapshot_);
   }
-  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
+  if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_)) {
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObDesExecContext *des_exec_ctx = static_cast<ObDesExecContext*>(exec_ctx_);
     OB_UNIS_DECODE(tenant_id);
@@ -265,7 +265,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
     OB_UNIS_ADD_LEN(*trans_desc_);
   }
   OB_UNIS_ADD_LEN(snapshot_);
-  if (need_calc_expr_ || need_calc_udf_) {
+  if (need_calc_expr_ || need_calc_udf_ || has_attach_ctdef_) {
     OB_UNIS_ADD_LEN(session->get_effective_tenant_id());
     OB_UNIS_ADD_LEN(*session);
   }
@@ -741,8 +741,8 @@ OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     enable_rich_format_, vec_row_store_,
                     io_read_bytes_,
                     ssstore_read_bytes_,
-                    ssstore_read_row_cnt_,  // FARM COMPAT WHITELIST
-                    memstore_read_row_cnt_, // FARM COMPAT WHITELIST
+                    base_read_row_cnt_,  // FARM COMPAT WHITELIST
+                    delta_read_row_cnt_, // FARM COMPAT WHITELIST
                     das_execute_remote_info_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
@@ -754,8 +754,8 @@ ObDASDataFetchRes::ObDASDataFetchRes()
           vec_row_store_(),
           io_read_bytes_(0),
           ssstore_read_bytes_(0),
-          ssstore_read_row_cnt_(0),
-          memstore_read_row_cnt_(0),
+          base_read_row_cnt_(0),
+          delta_read_row_cnt_(0),
           das_execute_remote_info_()
 {
 }

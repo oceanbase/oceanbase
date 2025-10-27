@@ -90,9 +90,12 @@ int fill_exprs_lob_locator(const ObTableIterParam &iter_param,
 
 int check_skip_by_monotonicity(sql::ObBlackFilterExecutor &filter,
                                blocksstable::ObStorageDatum &min_datum,
+                               const bool is_min_prefix,
                                blocksstable::ObStorageDatum &max_datum,
+                               const bool is_max_prefix,
                                const sql::ObBitVector &skip_bit,
                                const bool has_null,
+                               const bool is_pad_coll,
                                ObBitmap *result_bitmap,
                                sql::ObBoolMask &bool_mask);
 

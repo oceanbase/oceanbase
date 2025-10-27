@@ -445,6 +445,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11127	__all_virtual_ss_ls_tablet_reorganization_info	2	201001	1
 11128	__all_virtual_ss_existing_tablet_meta	2	201001	1
 11129	__all_virtual_ss_existing_sstable_mgr	2	201001	1
+11130	__all_virtual_ss_diagnose_info	2	201001	1
 12001	SESSION_VARIABLES	2	201002	1
 12006	GLOBAL_STATUS	2	201002	1
 12008	SESSION_STATUS	2	201002	1

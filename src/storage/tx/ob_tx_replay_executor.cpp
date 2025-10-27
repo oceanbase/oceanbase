@@ -127,20 +127,35 @@ int ObTxReplayExecutor::do_replay_(const char *buf, const int64_t size, const in
   return ret;
 }
 
-#ifdef ERRSIM
-ERRSIM_POINT_DEF(EN_TX_REPLAY)
-#endif
+ERRSIM_POINT_DEF(EN_TX_REPLAY_TASK_DELAY_TENANT_ID)
+ERRSIM_POINT_DEF(EN_TX_REPLAY_TASK_DELAY_LS_ID)
+ERRSIM_POINT_DEF(EN_TX_REPLAY_TASK_DELAY_TIME)
+ERRSIM_POINT_DEF(EN_TX_REPLAY_TASK_DELAY_RETRY)
 
 OB_NOINLINE int ObTxReplayExecutor::errsim_tx_replay_()
 {
   int ret = OB_SUCCESS;
 
-#ifdef ERRSIM
-  ret = EN_TX_REPLAY;
-#endif
+  int errsim_tenant_id = abs(EN_TX_REPLAY_TASK_DELAY_TENANT_ID);
+  int errsim_ls_id = abs(EN_TX_REPLAY_TASK_DELAY_LS_ID);
+  int sleep_time = abs(EN_TX_REPLAY_TASK_DELAY_TIME);
+  int retry_delay = abs(EN_TX_REPLAY_TASK_DELAY_RETRY);
+  bool sleep_succ = false;
 
-  if (OB_FAIL(ret)) {
-    TRANS_LOG(INFO, "errsim tx replay in observer", K(ret));
+  if (errsim_tenant_id <= 0 || errsim_tenant_id == tenant_id_) {
+    if (errsim_ls_id <= 0 || errsim_ls_id == ls_id_.id()) {
+      usleep(sleep_time);
+      sleep_succ = true;
+    }
+  }
+
+  if (retry_delay > 0) {
+    ret = OB_EAGAIN;
+  }
+
+  if (sleep_succ || retry_delay > 0) {
+    TRANS_LOG(INFO, "errsim tx replay in observer", K(ret), K(sleep_time), K(errsim_tenant_id),
+              K(errsim_ls_id), K(sleep_time), K(retry_delay), K(sleep_succ));
   }
   return ret;
 }

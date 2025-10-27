@@ -74,6 +74,7 @@ public:
   static int get_macro_cache_type(const ObStorageObjectType type, const uint64_t effective_tablet_id,
                           const bool use_effective_tablet_id, storage::ObSSMacroCacheType &macro_cache_type);
   static int local_path_to_macro_id(const ObStorageObjectType type,const char *path, MacroBlockId &macro_id);
+  static int remote_path_to_macro_id(const ObStorageObjectType type, const char *path, MacroBlockId &macro_id);
   static int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id);
   static int get_open_flag_for_read(const MacroBlockId &macro_id);
   static void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &block_type);

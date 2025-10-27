@@ -56,6 +56,7 @@
 #include "share/wr/ob_wr_service.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "observer/virtual_table/ob_all_virtual_ls_info.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
@@ -69,6 +70,8 @@ using namespace share;
 using namespace logservice;
 using namespace transaction;
 using namespace rootserver;
+using namespace observer;
+using namespace oceanbase::observer;
 
 namespace storage
 {
@@ -546,6 +549,9 @@ int ObLS::check_has_cs_replica(bool &has_cs_replica) const
 int ObLS::start()
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(tx_table_.start())) {
+    LOG_WARN("start tx table failed", KR(ret), K(ls_meta_));
+  }
   return ret;
 }
 
@@ -854,7 +860,7 @@ int ObLS::offline_compaction_()
   return ret;
 }
 
-int ObLS::offline_(const int64_t start_ts)
+int ObLS::offline_(const int64_t start_ts, const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   // only follower can do this.
@@ -915,7 +921,8 @@ int ObLS::offline_(const int64_t start_ts)
   } else if (OB_FAIL(reorg_info_table_.offline())) {
     LOG_WARN("failed to offline reorg info table", K(ret), K(ls_meta_));
   // force release memtables created by tablet_freeze_with_rewrite_meta called during major
-  } else if (OB_FAIL(ls_tablet_svr_.offline())) {
+  } else if (!remove_from_disk
+             && OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_empty_shell_handler_.offline())) {
     LOG_WARN("tablet_empty_shell_handler  failed", K(ret), K(ls_meta_));
@@ -938,7 +945,7 @@ int ObLS::offline_(const int64_t start_ts)
   return ret;
 }
 
-int ObLS::offline()
+int ObLS::offline(const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = 0;
@@ -951,7 +958,7 @@ int ObLS::offline()
     {
       ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
       // only follower can do this.
-      if (OB_FAIL(offline_(start_ts))) {
+      if (OB_FAIL(offline_(start_ts, remove_from_disk))) {
         LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
       }
     }
@@ -962,31 +969,7 @@ int ObLS::offline()
       }
     }
   } while (OB_EAGAIN == ret);
-  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id());
-  return ret;
-}
-
-int ObLS::offline_without_lock()
-{
-  int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
-  int64_t retry_times = 0;
-
-  do {
-    retry_times++;
-    {
-      if (OB_FAIL(offline_(start_ts))) {
-        LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
-      }
-    }
-    if (OB_EAGAIN == ret) {
-      ob_usleep(100 * 1000); // 100 ms
-      if (retry_times % 100 == 0) { // every 10 s
-        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "ls offline use too much time.", K(ls_meta_), K(start_ts));
-      }
-    }
-  } while (OB_EAGAIN == ret);
-  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id());
+  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id(), K(remove_from_disk));
   return ret;
 }
 
@@ -1144,7 +1127,7 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler *));
       REGISTER_TO_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher *));
 #ifdef OB_BUILD_SYS_VEC_IDX
-      REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+      REGISTER_TO_LOGSERVICE(VEC_INDEX_SERVICE_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
 
       if (OB_SUCC(ret)) {
         if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
@@ -1186,7 +1169,7 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
-    REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+    REGISTER_TO_LOGSERVICE(VEC_INDEX_SERVICE_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
 
   if (ls_id.is_user_ls()) {
@@ -1339,7 +1322,7 @@ void ObLS::unregister_sys_service_()
       UNREGISTER_FROM_LOGSERVICE(SYS_DDL_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDDLScheduler*));
       UNREGISTER_FROM_LOGSERVICE(DDL_SERVICE_LAUNCHER_LOG_BASE_TYPE, MTL(rootserver::ObDDLServiceLauncher*));
 #ifdef OB_BUILD_SYS_VEC_IDX
-      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+      UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_SERVICE_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
 
       UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
       UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
@@ -1379,7 +1362,7 @@ void ObLS::unregister_user_service_()
     UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
-    UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
+    UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_SERVICE_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
@@ -1663,7 +1646,7 @@ int ObLS::try_sync_reserved_snapshot(
   return ret;
 }
 
-int ObLS::get_ls_info(ObLSVTInfo &ls_info)
+int ObLS::get_ls_info(const ObIArray<uint64_t> &output_column_ids, ObLSVTInfo &ls_info)
 {
   int ret = OB_SUCCESS;
   ObRole role;
@@ -1673,50 +1656,137 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   ObMigrationStatus migrate_status;
   bool tx_blocked = false;
   int64_t required_data_disk_size = 0;
+  const int64_t col_count = output_column_ids.count();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
-    LOG_WARN("get ls role failed", K(ret), KPC(this));
-  } else if (OB_FAIL(log_handler_.is_in_sync(is_log_sync,
-                                             is_need_rebuild))) {
-    LOG_WARN("get ls need rebuild info failed", K(ret), KPC(this));
-  } else if (OB_FAIL(ls_meta_.get_migration_status(migrate_status))) {
-    LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
-  } else if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
-    LOG_WARN("check tx ls state error", K(ret),KPC(this));
-  } else if (OB_ISNULL(get_tablet_svr())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(get_tablet_svr()->get_ls_migration_required_size(required_data_disk_size))) {
-    LOG_WARN("fail to get required data disk size for migration", KR(ret));
+  } else if (col_count <= 0) {
+    // do nothing
   } else {
-    // The readable point of the primary tenant is weak read ts,
-    // and the readable point of the standby tenant is readable scn
-    if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-      ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
-    } else if (OB_FAIL(get_ls_replica_readable_scn(ls_info.weak_read_scn_))) {
-      TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), KPC(this));
-    }
-    if (OB_SUCC(ret)) {
-      ls_info.ls_id_ = ls_meta_.ls_id_;
-      ls_info.replica_type_ = ls_meta_.get_replica_type();
-      ls_info.ls_state_ = role;
-      ls_info.migrate_status_ = migrate_status;
-      ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
-      ls_info.need_rebuild_ = is_need_rebuild;
-      ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
-      ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
-      ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
-      ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
-      ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
-      ls_info.tx_blocked_ = tx_blocked;
-      ls_info.mv_major_merge_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_;
-      ls_info.mv_publish_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_publish_;
-      ls_info.mv_safe_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_safe_calc_;
-      ls_info.required_data_disk_size_ = required_data_disk_size;
-      if (tx_blocked) {
-        TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
+    ls_info.ls_id_ = ls_meta_.ls_id_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
+      uint64_t col_id = output_column_ids.at(i);
+      switch (col_id) {
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::SVR_IP):
+          // svr_ip
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::SVR_PORT):
+          // svr_port
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TENANT_ID):
+          // tenant_id
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::LS_ID):
+          // ls_id
+          break;
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REPLICA_TYPE): {
+          // replica_type
+          ls_info.replica_type_ = ls_meta_.get_replica_type();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::LS_STATE): {
+          // ls_state
+          if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+            LOG_WARN("get ls role failed", K(ret), KPC(this));
+          } else {
+            ls_info.ls_state_ = role;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TABLET_COUNT): {
+          // tablet_count
+          ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::WEAK_READ_TIMESTAMP): {
+          // weak_read_timestamp
+          if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+            ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
+          } else if (OB_FAIL(get_ls_replica_readable_scn(ls_info.weak_read_scn_))) {
+            TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), KPC(this));
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::NEED_REBUILD): {
+          // need_rebuild
+          if (OB_FAIL(log_handler_.is_in_sync(is_log_sync, is_need_rebuild))) {
+            LOG_WARN("get ls need rebuild info failed", K(ret), KPC(this));
+          } else {
+            ls_info.need_rebuild_ = is_need_rebuild;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::CLOG_CHECKPOINT_TS): {
+          // clog_checkpoint_ts
+          ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::CLOG_CHECKPOINT_LSN): {
+          // clog_checkpoint_lsn
+          ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MIGRATE_STATUS): {
+          // migrate_status
+          if (OB_FAIL(ls_meta_.get_migration_status(migrate_status))) {
+            LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
+          } else {
+            ls_info.migrate_status_ = migrate_status;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REBUILD_SEQ): {
+          // rebuild_seq
+          ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TABLET_CHANGE_CHECKPOINT_SCN): {
+          // tablet_change_checkpoint_scn
+          ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TRANSFER_SCN): {
+          // transfer_scn
+          ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::TX_BLOCKED): {
+          // tx blocked
+          if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
+            LOG_WARN("check tx ls state error", K(ret),KPC(this));
+          } else {
+            ls_info.tx_blocked_ = tx_blocked;
+            if (tx_blocked) {
+              TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
+            }
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::REQUIRED_DATA_DISK_SIZE): {
+          // required_data_disk_size
+          if (OB_FAIL(ls_tablet_svr_.get_ls_migration_required_size(required_data_disk_size))) {
+            LOG_WARN("fail to get required data disk size for migration", KR(ret));
+          } else {
+            ls_info.required_data_disk_size_ = required_data_disk_size;
+          }
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MV_MAJOR_MERGE_SCN): {
+          // mv_major_merge_scn
+          ls_info.mv_major_merge_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_;
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MV_PUBLISH_SCN): {
+          // mv_publish_scn
+          ls_info.mv_publish_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_publish_;
+          break;
+        }
+        case static_cast<uint64_t>(ObAllVirtualLSInfoColumnId::MV_SAFE_SCN): {
+          // mv_safe_scn
+          ls_info.mv_safe_scn_ = ls_meta_.get_major_mv_merge_info().major_mv_merge_scn_safe_calc_;
+          break;
+        }
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));
+          break;
       }
     }
   }

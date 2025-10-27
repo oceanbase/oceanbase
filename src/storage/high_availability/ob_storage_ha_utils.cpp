@@ -1748,7 +1748,9 @@ int ObStorageHAUtils::is_errsim_transfer_server(bool &is_errsim_server)
   common::ObAddr errsim_addr;
   const common::ObAddr &self_addr = GCONF.self_addr_;
 
-  if (!errsim_addr_str.empty() && OB_FAIL(errsim_addr.parse_from_string(errsim_addr_str))) {
+  if (errsim_addr_str.empty()) {
+    is_errsim_server = true;
+  } else if (OB_FAIL(errsim_addr.parse_from_string(errsim_addr_str))) {
     LOG_WARN("failed to parse errsim addr", K(errsim_addr_str));
   } else if (self_addr == errsim_addr) {
     is_errsim_server = true;

@@ -22,11 +22,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "_io_read_redundant_limit_percentage",
           "value": 50,
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
@@ -48,7 +43,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -77,11 +72,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
@@ -103,7 +93,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -137,11 +127,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "_io_read_redundant_limit_percentage",
           "value": 50,
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
@@ -158,8 +143,13 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
+        },
+        {
+          "name": "ha_high_thread_score",
+          "value": 20,
+          "comment":"ha high thread number"
         }
       ]
     }
@@ -187,11 +177,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
@@ -213,7 +198,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -242,11 +227,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
@@ -268,7 +248,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]
@@ -297,11 +277,6 @@
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
         },
         {
-          "name": "_enable_active_txn_transfer",
-          "value": false,
-          "comment": "Temporarily disable transfer to avoid killing transactions. Reopen it after testing for stability"
-        },
-        {
           "name": "_io_read_redundant_limit_percentage",
           "value": 50,
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
@@ -323,7 +298,7 @@
         },
         {
           "name": "_object_storage_io_timeout",
-          "value": "120s",
+          "value": "300s",
           "comment": "default value of object storage io timeout"
         }
       ]

@@ -519,6 +519,7 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObIArray<ObParentDMLStmt>
          .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
     CREATE_WITH_TEMP_CONTEXT(param) {
       ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+      eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
       HEAP_VAR(ObOptimizerContext,
                optctx,
                ctx_->session_info_,
@@ -705,6 +706,8 @@ int ObTransformLateMaterialization::generate_late_materialization_stmt(
     LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
   } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(select_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(select_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt expr reference", K(ret));
@@ -1390,5 +1393,13 @@ int ObTransformLateMaterialization::check_is_allow_column_store(const ObSelectSt
   return ret;
 }
 
+int ObTransformLateMaterialization::adjust_transform_types(uint64_t &transform_types)
+{
+  int ret = OB_SUCCESS;
+  if (cost_based_trans_tried_) {
+    transform_types &= (~(1ULL << transformer_type_));
+  }
+  return ret;
+}
 }
 }

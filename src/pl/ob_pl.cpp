@@ -1512,8 +1512,7 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
 
   // in mysql mode, only system packages with invoker's right do not need set db
   // in oracle mode, set db id to definer if the routine is not invoker's right
-  if (lib::is_oracle_mode()
-      || get_tenant_id_by_object_id(routine.get_package_id()) == OB_SYS_TENANT_ID) {
+  if (lib::is_oracle_mode() || is_inner_pl_object_id(routine.get_package_id())) {
     need_set_db = !routine.is_invoker_right();
   }
 
@@ -2194,8 +2193,6 @@ struct ObPLExecTraceIdGuard {
 bool ObPL::forbid_anony_parameter(ObSQLSessionInfo &session, bool is_ps_mode, bool forbid)
 {
   bool ret = forbid || session.is_pl_debug_on()
-                    || session.get_pl_profiler() != nullptr
-                    || session.get_pl_code_coverage() != nullptr
                     || lib::is_mysql_mode();
   if (!is_ps_mode) {
     ret |= !session.get_local_ob_enable_parameter_anonymous_block();
@@ -2835,6 +2832,9 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     if (ctx.get_my_session()->get_pl_code_coverage() != nullptr) {
       pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
     }
+    if (ctx.get_my_session()->is_pl_debug_on()) {
+      pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+    }
 
     // use sql as key
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
@@ -2983,7 +2983,9 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     if (ctx.get_my_session()->get_pl_code_coverage() != nullptr) {
       pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
     }
-
+    if (ctx.get_my_session()->is_pl_debug_on()) {
+      pc_ctx.key_.mode_ = pc_ctx.key_.mode_ | static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+    }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
       LOG_INFO("get pl function from plan cache failed",
@@ -4951,11 +4953,8 @@ int ObPLExecState::check_pl_priv(
 
 void ObPLExecState::try_clear_complex_obj()
 {
-  int ret = OB_SUCCESS;
   if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx())) {
     ctx_.exec_ctx_->get_pl_ctx()->reset_obj_range_to_end(cur_complex_obj_count_);
-  } else {
-    LOG_ERROR("pl ctx is null, unexpected error");
   }
 }
 

@@ -320,7 +320,14 @@ int ObTabletReorgInfoTableService::check_transfer_in_tablet_finish_(
     } else if (meta.transfer_info_.transfer_seq_ == data_value.transfer_seq_
         && meta.transfer_info_.transfer_start_scn_ == data.key_.reorganization_scn_
         && !meta.transfer_info_.has_transfer_table()) {
-      is_finish = true;
+      ObTabletCreateDeleteMdsUserData user_data;
+      if (OB_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
+        LOG_WARN("failed to get committed tablet status", K(ret), KPC(tablet), K(user_data));
+      } else if (ObTabletStatus::NORMAL == user_data.tablet_status_) {
+        is_finish = true;
+      } else {
+        is_finish = false;
+      }
     } else {
       is_finish = false;
     }

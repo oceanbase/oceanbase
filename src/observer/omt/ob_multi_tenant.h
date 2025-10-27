@@ -155,6 +155,7 @@ public:
   int get_tenant_cpu_usage(const uint64_t tenant_id, double &usage) const;
   int get_tenant_worker_time(const uint64_t tenant_id, int64_t &worker_time) const;
   int get_tenant_cpu_time(const uint64_t tenant_id, int64_t &rusage_time) const;
+  int get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t group_id, int64_t &cpu_time);
   int get_tenant_cpu(
       const uint64_t tenant_id,
       double &min_cpu, double &max_cpu) const;

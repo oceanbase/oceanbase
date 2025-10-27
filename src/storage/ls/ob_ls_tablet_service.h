@@ -614,6 +614,10 @@ private:
       ObTabletHandle &new_handle,
       ObTimeGuard &time_guard,
       const share::SCN &ss_change_version = share::SCN::invalid_scn());
+  static int pick_private_transfer_epoch_by_mig_param(
+      const ObMigrationTabletParam &mig_param,
+      const ObLS &dest_ls,
+      int32_t &private_transfer_epoch);
   int safe_update_cas_empty_shell(
       const uint64_t data_version,
       const ObTabletMapKey &key,

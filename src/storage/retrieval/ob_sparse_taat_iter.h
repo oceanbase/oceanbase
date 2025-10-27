@@ -33,7 +33,7 @@ public:
       ObSparseRetrievalMergeParam &iter_param,
       ObISparseRetrievalDimIter &dim_iter,
       ObIAllocator &iter_allocator);
-  virtual void reuse() override;
+  virtual void reuse(const bool switch_tablet = false) override;
   virtual void reset() override;
   INHERIT_TO_STRING_KV("ObISparseRetrievalMergeIter", ObISparseRetrievalMergeIter,
       K_(partition_cnt), K_(cur_map_idx), K_(next_clear_map_idx));

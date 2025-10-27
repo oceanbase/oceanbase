@@ -97,7 +97,8 @@ public:
   static int clear_micro_cache(ObSSMicroMetaManager *micro_meta_mgr, ObSSPhysicalBlockManager *phy_blk_mgr,
                                ObSSMicroRangeManager *micro_range_mgr, int64_t &micro_data_blk_cnt,
                                int64_t &range_micro_sum);
-  static int restart_micro_cache(ObSSMicroCache *micro_cache, const uint64_t tenant_id, const int64_t cache_file_size, const uint32_t ckpt_split_cnt);
+  static int restart_micro_cache(ObSSMicroCache *micro_cache, const uint64_t tenant_id, const int64_t cache_file_size,
+                                 const uint32_t ckpt_split_cnt, const bool ignore_prev_super_blk = false);
   static void stop_all_bg_task(ObSSMicroCache *micro_cache);
   static void resume_all_bg_task(ObSSMicroCache *micro_cache);
   static int64_t get_prev_micro_ckpt_time_us() { return ObTimeUtility::current_time_us() - SS_PERSIST_META_INTERVAL_US + DIFF_CKPT_TIME_US; }
@@ -519,7 +520,8 @@ int TestSSCommonUtil::restart_micro_cache(
     ObSSMicroCache *micro_cache,
     const uint64_t tenant_id,
     const int64_t cache_file_size,
-    const uint32_t ckpt_split_cnt)
+    const uint32_t ckpt_split_cnt,
+    const bool ignore_prev_super_blk)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(micro_cache) || OB_UNLIKELY(cache_file_size <= 0 || ckpt_split_cnt <= 0 ||
@@ -536,7 +538,7 @@ int TestSSCommonUtil::restart_micro_cache(
     if (OB_FAIL(micro_cache->init(tenant_id, cache_file_size, ckpt_split_cnt))) {
       LOG_WARN("fail to init", KR(ret), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));
     } else {
-      MTL(ObTenantFileManager *)->is_cache_file_exist_ = true;
+      MTL(ObTenantFileManager *)->is_cache_file_exist_ = (!ignore_prev_super_blk);
 
       if (OB_FAIL(micro_cache->start())) {
         LOG_WARN("fail to start", KR(ret), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));

@@ -243,6 +243,7 @@ int ObPxTransmitOp::inner_open()
 int ObPxTransmitOp::transmit()
 {
   begin_cpu_time_counting();
+  ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   int ret = do_transmit();
   end_cpu_time_counting();
   return ret;

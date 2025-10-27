@@ -1557,7 +1557,7 @@ TEST_F(TestTmpFile, test_multiple_small_files)
   int ret = OB_SUCCESS;
   const int64_t read_thread_cnt = 2;
   const int64_t file_cnt = 1024;
-  const int64_t batch_size = 54 * 1024 + 1023; // 1MB + 54KB + 1023B
+  const int64_t batch_size = 54 * 1024 + 1023; // 54KB + 1023B
   const int64_t batch_num = 4;
   TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
@@ -1742,7 +1742,7 @@ int mock_flush_wait(const int64_t succ_page_num, ObSSTmpFileAsyncFlushWaitTask& 
   bool flush_breakdown = has_flushed_unfinished_tail_page && succ_page_num != task.expected_flushed_page_num_ &&
                          is_tail_page_failed;
   if (flush_breakdown) {
-    if (OB_FAIL(task.flush_mgr_->notify_flush_breakdown(task.fd_))) {
+    if (OB_FAIL(task.flush_mgr_->notify_flush_breakdown(task.fd_, OB_IO_TIMEOUT))) {
       LOG_WARN("fail to notify flush breakdown", KR(ret), K(task));
     }
   } else if (OB_FAIL(task.flush_mgr_->update_meta_after_flush(task))){
@@ -1935,7 +1935,7 @@ TEST_F(TestTmpFile, DISABLED_test_flush_with_write_tail_page_and_truncate)
   STORAGE_LOG(INFO, "=======================test_flush_with_write_tail_page_and_truncate end=======================");
 }
 
-TEST_F(TestTmpFile, DISABLED_test_flush_with_io_error)
+TEST_F(TestTmpFile, test_flush_with_io_error)
 {
   STORAGE_LOG(INFO, "=======================test_flush_with_io_error begin=======================");
   int ret = OB_SUCCESS;
@@ -1980,7 +1980,7 @@ TEST_F(TestTmpFile, DISABLED_test_flush_with_io_error)
     delete [] write_buff;
 
     ASSERT_EQ(OB_SUCCESS, mock_flush_wait(4, wait_task, true));
-    ASSERT_EQ(ss_tmp_file.is_deleting_, true);
+    ASSERT_EQ(ss_tmp_file.get_discard_reason_(), OB_IO_TIMEOUT);
     write_size = ObTmpFileGlobal::PAGE_SIZE / 2;
     write_buff = new char [write_size];
     io_info.size_ = write_size;
@@ -2038,8 +2038,6 @@ TEST_F(TestTmpFile, DISABLED_test_flush_with_io_error)
     // 2.3 write 0.5 pages(totally 2.5 pages in file) and flush 2.5 pages;
     //     then write 1.5 pages;
     //     then exec wait and the first page is failed
-    //     (we assume the tail page has been waited successful, thus we don't need to discard the file;
-    //      this case is used to test whether the tail page is changed state to dirty twice)
     write_size = ObTmpFileGlobal::PAGE_SIZE / 2;
     write_buff = new char [write_size];
     io_info.size_ = write_size;
@@ -2056,7 +2054,7 @@ TEST_F(TestTmpFile, DISABLED_test_flush_with_io_error)
     delete [] write_buff;
 
     ASSERT_EQ(OB_SUCCESS, mock_flush_wait(0, wait_task, false));
-    ASSERT_EQ(ss_tmp_file.is_deleting_, false);
+    ASSERT_EQ(ss_tmp_file.get_discard_reason_(), OB_SUCCESS);
     ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
     ASSERT_EQ(ss_tmp_file.cached_page_nums_, 4);
 
@@ -2070,163 +2068,14 @@ TEST_F(TestTmpFile, DISABLED_test_flush_with_io_error)
     delete [] write_buff;
 
     ASSERT_EQ(OB_SUCCESS, mock_flush_file(5, ss_tmp_file, wait_task));
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(4, wait_task, true));
-    ASSERT_EQ(ss_tmp_file.is_deleting_, true);
+    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(4, wait_task, true/*flush_breakdown*/));
+    ASSERT_EQ(ss_tmp_file.get_discard_reason_(), OB_IO_TIMEOUT);
     write_size = ObTmpFileGlobal::PAGE_SIZE / 2;
     write_buff = new char [write_size];
     io_info.size_ = write_size;
     io_info.buf_ = write_buff;
     ASSERT_NE(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    ASSERT_NE(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->pread(MTL_ID(), io_info, 0, io_handle));
     delete [] write_buff;
-
-    tmp_file_handle.reset();
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->remove(fd));
-  }
-
-  // 3. some cases with truncate and flush timeout
-  {
-    int64_t dir = -1;
-    int64_t fd = -1;
-    ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
-    std::cout << "open temporary file: " << fd << std::endl;
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ObSSTmpFileHandle tmp_file_handle;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().get_tmp_file(fd, tmp_file_handle));
-    ObSharedStorageTmpFile &ss_tmp_file = *static_cast<ObSharedStorageTmpFile *>(tmp_file_handle.get());
-    ASSERT_EQ(fd, ss_tmp_file.get_fd());
-
-    ObTmpFileIOInfo io_info;
-    io_info.fd_ = fd;
-    io_info.io_desc_.set_wait_event(2);
-    io_info.io_timeout_ms_ = IO_WAIT_TIME_MS;
-    int64_t write_size = 0;
-    char * write_buff = nullptr;
-    ObSSTmpFileAsyncFlushWaitTask wait_task;
-    int64_t truncate_offset = 0;
-
-    // 3.1. write and flush 10 pages; then, truncate 5 pages;
-    //      exec wait and five pages are successful
-    write_size = 10 * ObTmpFileGlobal::PAGE_SIZE;
-    write_buff = new char [write_size];
-    io_info.size_ = write_size;
-    io_info.buf_ = write_buff;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    delete [] write_buff;
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_file(10, ss_tmp_file, wait_task));
-
-    truncate_offset = (ss_tmp_file.begin_page_virtual_id_ + 5) * ObTmpFileGlobal::PAGE_SIZE;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->truncate(MTL_ID(), fd, truncate_offset));
-    ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, 5);
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(5, wait_task));
-    ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
-
-    // 3.2. append write file to 10 pages and flush 10 pages; then, truncate 4 pages;
-    //      exec wait and 3 pages are successful
-    write_size = 5 * ObTmpFileGlobal::PAGE_SIZE;
-    write_buff = new char [write_size];
-    io_info.size_ = write_size;
-    io_info.buf_ = write_buff;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    delete [] write_buff;
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_file(10, ss_tmp_file, wait_task));
-
-    truncate_offset = (ss_tmp_file.begin_page_virtual_id_ + 4) * ObTmpFileGlobal::PAGE_SIZE;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->truncate(MTL_ID(), fd, truncate_offset));
-    ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, 6);
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 6);
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(3, wait_task));
-    ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 6);
-
-    // 3.3. append write file to 10 pages and flush 10 pages; then, truncate 4 pages;
-    //      exec wait and 5 pages are successful
-    write_size = 4 * ObTmpFileGlobal::PAGE_SIZE;
-    write_buff = new char [write_size];
-    io_info.size_ = write_size;
-    io_info.buf_ = write_buff;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    delete [] write_buff;
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_file(10, ss_tmp_file, wait_task));
-
-    truncate_offset = (ss_tmp_file.begin_page_virtual_id_ + 4) * ObTmpFileGlobal::PAGE_SIZE;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->truncate(MTL_ID(), fd, truncate_offset));
-    ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, 6);
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 6);
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(5, wait_task));
-    ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
-
-    // 3.4. append write file to 10 pages and flush 10 pages; then, truncate 10 pages;
-    //      exec wait and 0 pages are successful
-    write_size = 5 * ObTmpFileGlobal::PAGE_SIZE;
-    write_buff = new char [write_size];
-    io_info.size_ = write_size;
-    io_info.buf_ = write_buff;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    delete [] write_buff;
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_file(10, ss_tmp_file, wait_task));
-
-    truncate_offset = (ss_tmp_file.begin_page_virtual_id_ + 10) * ObTmpFileGlobal::PAGE_SIZE;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->truncate(MTL_ID(), fd, truncate_offset));
-    ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, 0);
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 0);
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(0, wait_task));
-    ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 0);
-
-    // 3.5. append write file to 10 pages and flush 10 pages; then, truncate 5 pages;
-    //      exec wait and 0 pages are successful
-    write_size = 10 * ObTmpFileGlobal::PAGE_SIZE;
-    write_buff = new char [write_size];
-    io_info.size_ = write_size;
-    io_info.buf_ = write_buff;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    delete [] write_buff;
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_file(10, ss_tmp_file, wait_task));
-
-    truncate_offset = (ss_tmp_file.begin_page_virtual_id_ + 5) * ObTmpFileGlobal::PAGE_SIZE;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->truncate(MTL_ID(), fd, truncate_offset));
-    ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, 5);
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(0, wait_task));
-    ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
-
-    // 3.6. append write file to 10 pages and flush 10 pages; then, truncate 5.5 pages;
-    //      exec wait and 0 pages are successful
-    write_size = 5 * ObTmpFileGlobal::PAGE_SIZE;
-    write_buff = new char [write_size];
-    io_info.size_ = write_size;
-    io_info.buf_ = write_buff;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info));
-    delete [] write_buff;
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_file(10, ss_tmp_file, wait_task));
-
-    truncate_offset = (ss_tmp_file.begin_page_virtual_id_ + 5) * ObTmpFileGlobal::PAGE_SIZE +
-                      ObTmpFileGlobal::PAGE_SIZE / 2;
-    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->truncate(MTL_ID(), fd, truncate_offset));
-    ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, 5);
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
-
-    ASSERT_EQ(OB_SUCCESS, mock_flush_wait(0, wait_task));
-    ASSERT_EQ(OB_SUCCESS, check_flush_over(ss_tmp_file));
-    ASSERT_EQ(ss_tmp_file.cached_page_nums_, 5);
 
     tmp_file_handle.reset();
     ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->remove(fd));

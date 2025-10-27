@@ -257,14 +257,6 @@ int ObAllVirtualTabletStoreStat::fill_cells(const ObTableStoreStat &stat)
         // index block cache miss count
         cells[i].set_int(stat.index_block_cache_miss_cnt_);
         break;
-      case OB_APP_MIN_COLUMN_ID + 42:
-        // logical read count
-        cells[i].set_int(stat.logical_read_cnt_);
-        break;
-      case OB_APP_MIN_COLUMN_ID + 43:
-        // physical read count
-        cells[i].set_int(stat.physical_read_cnt_);
-        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id, ", K(ret), K(col_id));

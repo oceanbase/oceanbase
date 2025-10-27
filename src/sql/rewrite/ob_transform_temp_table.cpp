@@ -593,6 +593,9 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
       } else if (OB_FAIL(compare_infos.push_back(new_helper))) {
         LOG_WARN("failed to push back compare info", K(ret));
       }
+      if (OB_FAIL(ret) && OB_NOT_NULL(new_helper)) {
+        new_helper->~StmtCompareHelper();
+      }
     }
   }
   //对每组相似stmt创建temp table
@@ -617,6 +620,9 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
         trans_happened |= is_happened;
       }
     }
+  }
+  // always destruct StmtCompareHelper regardless of ret code to avoid memory leak
+  for (int64_t i = 0; i < compare_infos.count(); ++i) {
     if (NULL != compare_infos.at(i)) {
       compare_infos.at(i)->~StmtCompareHelper();
       compare_infos.at(i) = NULL;
@@ -2606,6 +2612,7 @@ int ObTransformTempTable::evaluate_cte_cost(ObDMLStmt &root_stmt,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -2823,6 +2830,7 @@ int ObTransformTempTable::evaluate_cte_cost_partially(ObDMLStmt *root_stmt,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -2908,6 +2916,7 @@ int ObTransformTempTable::evaluate_cte_cost_globally(ObDMLStmt *origin_root,
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -3510,6 +3519,8 @@ int ObTransformTempTable::prepare_eval_cte_cost_stmt(ObDMLStmt &root_stmt,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
@@ -3585,6 +3596,8 @@ int ObTransformTempTable::copy_and_replace_trans_root(ObDMLStmt &root_stmt,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));

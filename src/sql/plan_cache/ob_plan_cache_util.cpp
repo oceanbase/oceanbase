@@ -385,9 +385,10 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
   return ret;
 }
 
-int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
-                                           const ObPlanCacheCtx &pc_ctx,
-                                           ObIArray<ObCandiTableLoc> &candi_table_locs)
+int ObPhyLocationGetter::get_phy_locations_and_add_to_das_ctx(
+  const ObIArray<ObTableLocation> &table_locations,
+  const ObPlanCacheCtx &pc_ctx,
+  ObIArray<ObCandiTableLoc> &candi_table_locs)
 {
   int ret = OB_SUCCESS;
   bool has_duplicate_tbl_not_in_dml = false;
@@ -416,6 +417,10 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
       bool need_same_server = true;
       if (OB_FAIL(get_phy_locations(table_locations, pc_ctx, candi_table_locs, need_same_server))) {
         LOG_WARN("failed to get phy locations", K(ret), K(table_locations), K(pc_ctx));
+      } else if (candi_table_locs.empty()) {
+        // do nothing.
+      } else if (OB_FAIL(build_table_locs(exec_ctx.get_das_ctx(), table_locations, candi_table_locs))) {
+        LOG_WARN("failed to build table locations", K(ret), K(table_locations), K(candi_table_locs));
       }
     }
   }
@@ -540,6 +545,8 @@ int ObConfigInfoInPC::load_influence_plan_config()
     min_const_integer_precision_ = static_cast<int8_t>(tenant_config->_min_const_integer_precision);
     enable_runtime_filter_adaptive_apply_ = tenant_config->_enable_runtime_filter_adaptive_apply;
     extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
+    enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
+    enable_insertup_column_store_opt_ = tenant_config->_enable_insertup_column_store_opt;
   }
 
   return ret;

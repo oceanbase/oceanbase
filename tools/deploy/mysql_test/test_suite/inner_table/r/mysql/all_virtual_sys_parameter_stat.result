@@ -91,6 +91,7 @@ default_load_mode
 default_micro_block_format_version
 default_progressive_merge_num
 default_row_format
+default_skip_index_level
 default_storage_cache_policy
 default_table_merge_engine
 default_table_organization
@@ -467,6 +468,7 @@ _enable_runtime_filter_adaptive_apply
 _enable_seq_wrap_around_flush_cache
 _enable_skip_index
 _enable_spf_batch_rescan
+_enable_sql_audit_filter_pushdown
 _enable_sql_audit_query_sql
 _enable_sql_ccl_rule
 _enable_ss_garbage_collector_defensive_check
@@ -479,6 +481,7 @@ _enable_trace_session_leak
 _enable_trace_tablet_leak
 _enable_transaction_internal_routing
 _enable_tree_based_io_scheduler
+_enable_two_phase_fts_index_merge
 _enable_unit_gc_wait
 _enable_values_table_folding
 _enable_var_assign_use_das
@@ -497,6 +500,7 @@ _force_hash_join_spill
 _force_malloc_for_absent_tenant
 _force_skip_encoding_partition_id
 _force_subquery_unnest
+_fuse_row_cache_activate_threshold
 _global_enable_rich_vector_format
 _hash_area_size
 _hash_join_enabled
@@ -546,6 +550,7 @@ _object_storage_condition_put_mode
 _object_storage_io_timeout
 _obkv_enable_distributed_execution
 _obkv_feature_mode
+_ob_additional_lib_path
 _ob_ash_disk_write_enable
 _ob_ash_enable
 _ob_ash_size
@@ -623,6 +628,7 @@ _rowsets_target_maxsize
 _rpc_checksum
 _schema_memory_recycle_interval
 _send_bloom_filter_size
+_server_full_schema_refresh_parallelism
 _server_standby_fetch_log_bandwidth_limit
 _session_context_size
 _session_temp_table_clean_interval
@@ -641,6 +647,7 @@ _ss_garbage_collect_interval
 _ss_hidden_sys_tenant_data_disk_size
 _ss_local_cache_control
 _ss_local_cache_expiration_time
+_ss_macro_block_check_interval
 _ss_macro_cache_miss_threshold_for_prefetch
 _ss_major_compaction_prewarm_level
 _ss_mem_macro_cache_memory_limit_percentage

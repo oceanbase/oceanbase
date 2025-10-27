@@ -84,6 +84,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/allocator/ob_allocator.h"
+#include "lib/allocator/ob_vslice_alloc.h"
 
 namespace oceanbase
 {
@@ -118,15 +119,20 @@ struct DebugRecorder {
 #endif
 
 struct DefaultFunctionAllocator : public ObIAllocator {
+public:
+  DefaultFunctionAllocator()
+  {
+    lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "ObFunction");
+    SET_USE_500(attr);
+    vslice_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, default_blk_alloc, attr);
+  }
   void *alloc(const int64_t size) override {
 #ifdef UNITTEST_DEBUG
     total_alive_num++;
 #endif
-    static lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "ObFunction");
-    SET_USE_500(attr);
-    return ob_malloc(size, attr);
+    return vslice_allocator_.alloc(size);
   }
-  void* alloc(const int64_t size, const ObMemAttr &attr) override {
+  void *alloc(const int64_t size, const ObMemAttr &attr) override {
     UNUSED(attr);
     return alloc(size);
   }
@@ -134,7 +140,7 @@ struct DefaultFunctionAllocator : public ObIAllocator {
 #ifdef UNITTEST_DEBUG
     total_alive_num--;
 #endif
-    ob_free(ptr);
+    vslice_allocator_.free(ptr);
   }
 #ifdef UNITTEST_DEBUG
   int total_alive_num = 0;
@@ -143,6 +149,9 @@ struct DefaultFunctionAllocator : public ObIAllocator {
     static DefaultFunctionAllocator default_allocator;
     return default_allocator;
   }
+
+public:
+  common::ObVSliceAlloc vslice_allocator_;
 };
 
 // sizeof(ObFunction<*>) will be ~128 bytes, and inner buffer will be 112 bytes.

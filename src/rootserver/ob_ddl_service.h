@@ -698,7 +698,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
       ObMockFKParentTableSchema &mock_fk_parent_table_schema);
 
   int check_can_drop_primary_key(
-      const share::schema::ObTableSchema &orgin_table_schema);
+      const share::schema::ObTableSchema &orgin_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard);
   int drop_primary_key(ObTableSchema &new_table_schema);
   int add_primary_key(
       const common::ObIArray<common::ObString> &pk_column_names,
@@ -1961,7 +1962,8 @@ int check_will_be_having_domain_index_operation(
     const AlterColumnSchema *alter_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
-    common::ObMySQLTransaction &trans);
+    common::ObMySQLTransaction &trans,
+    ObIArray<ObTableSchema> *globla_idx_schema_array);
 
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
@@ -1975,14 +1977,14 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
-      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_table_update_aux_column(
       const share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableType table_type,
-      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_sequence_in_alter_column(const share::schema::ObTableSchema &table_schema,
                                      share::schema::ObColumnSchemaV2 &column_schema,
                                      common::ObMySQLTransaction &trans,
@@ -2416,8 +2418,6 @@ private:
                                    obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_add_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                  obrpc::ObAlterTableArg &alter_table_arg);
-  int filter_out_duplicate_interval_part(const share::schema::ObTableSchema &orig_table_schema,
-                                         share::schema::ObTableSchema &alter_table_schema);
   int check_alter_add_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
                                  const obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_set_interval(const share::schema::ObTableSchema &orig_table_schema,
@@ -2469,6 +2469,15 @@ private:
   int gen_inc_table_schema_for_drop_subpart(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int calc_interval_part_pos(const share::schema::ObTableSchema &orig_table_schema,
+                             const share::schema::ObPartition &inc_part,
+                             int64_t &pos);
+  int calc_interval_part_pos_with_context(const share::schema::ObTableSchema &orig_table_schema,
+                                          const share::schema::ObPartition &inc_part,
+                                          int64_t &pos,
+                                          sql::ObRawExprFactory &expr_factory,
+                                          sql::ObExecContext &exec_ctx,
+                                          common::ObIAllocator &allocator);
   int drop_index_to_scheduler_(ObMySQLTransaction &trans,
                                ObSchemaGetterGuard &schema_guard,
                                ObIAllocator &allocator,

@@ -267,6 +267,13 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
         LOG_WARN("build search param fail", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_));
       } else {
         LOG_TRACE("search param", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_), K(search_param_));
+
+        if (search_param_.similarity_threshold_ != 0) {
+          if (OB_FAIL(ObDasVecScanUtils::get_distance_threshold_hnsw(
+              *sort_ctdef_->sort_exprs_[0], search_param_.similarity_threshold_, distance_threshold_))) {
+            LOG_WARN("get distance threshold fail", K(ret));
+          }
+        }
       }
     }
   }
@@ -840,6 +847,19 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
     } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, ls_leader))) {
       LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id_));
     } else if (OB_FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
+    } else if (!ls_leader) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (!tenant_config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail get tenant_config", KR(ret), K(MTL_ID()));
+      } else if (!tenant_config->load_vector_index_on_follower) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "when load_vector_index_on_follower is false, weak read using vector index on follower is");
+        LOG_WARN("when load_vector_index_on_follower is false, weak read using vector index on follower is not supported", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else {
       RWLock::RLockGuard lock_guard(adaptor->get_query_lock());
       if (is_pre_filter() || is_in_filter()) {
@@ -997,7 +1017,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
     for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
       double distance = distances_inc == nullptr ? distances_snap[i] : distances_inc[i];
       // if distances == -1, means vid not exist
-      if (distance != -1) {
+      if (distance != -1 && distance <= distance_threshold_) {
         max_heap.push(brute_vids[i], distance, is_snap);
       } else {
         need_complete_data = check_need_complete_data ? true : false;
@@ -1008,7 +1028,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
       bool is_snap = distances_inc[i] == -1;
       double distance = distances_inc[i] == -1 ? distances_snap[i] : distances_inc[i];
       // if distances == -1, means vid not exist
-      if (distance != -1) {
+      if (distance != -1 && distance <= distance_threshold_) {
         max_heap.push(brute_vids[i], distance, is_snap);
       } else {
         need_complete_data = check_need_complete_data ? true : false;
@@ -1184,11 +1204,15 @@ int ObDASHNSWScanIter::merge_and_sort_brute_force_results_bq(const DistanceResul
         if (!has_incr && !has_snap) {
           need_complete_data = check_need_complete_data ? true : false;
         } else if (has_incr && has_snap) {
+          if (dist_result.distances_inc[i] <= distance_threshold_) {
+            incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
+          }
+          if (dist_result.distances_snap[i] <= distance_threshold_) {
+            snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
+          }
+        } else if (has_incr && dist_result.distances_inc[i] <= distance_threshold_) {
           incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
-          snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
-        } else if (has_incr) {
-          incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
-        } else if (has_snap) {
+        } else if (has_snap && dist_result.distances_snap[i] <= distance_threshold_) {
           snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
         }
       }
@@ -2236,6 +2260,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   int ret = OB_SUCCESS;
   bool end_search = false;
   bool first_search = true;
+  int64_t iter_scan_total_num = 0;
   adaptive_ctx_.iter_times_ = 0;
   if (is_iter_filter()) {
     query_cond_.query_limit_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(std::ceil(query_cond_.query_limit_ * FIXED_MAGNIFICATION_RATIO)));
@@ -2260,7 +2285,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
     } else if (OB_ISNULL(tmp_adaptor_vid_iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("shouldn't be null.", K(ret), K(tmp_adaptor_vid_iter_));
-    } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, hnsw_max_iter_scan_nums, adaptive_ctx_.iter_times_, is_vectorized))) {
+    } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, hnsw_max_iter_scan_nums, iter_scan_total_num, is_vectorized))) {
       LOG_WARN("failed to query vid with filter.", K(ret), K(extra_column_count_), K(adaptive_ctx_.iter_times_));
     } else if (query_cond_.query_limit_ == 0) {
       end_search = true;
@@ -3023,6 +3048,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     query_cond.rel_count_ = vec_aux_ctdef_->relevance_col_cnt_;
     query_cond.rel_map_ptr_ = &rel_map_;
     query_cond.is_post_with_filter_ = is_iter_filter();
+    query_cond.distance_threshold_ = distance_threshold_;
 
     uint64_t ob_hnsw_ef_search = 0;
     if (OB_FAIL(get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {

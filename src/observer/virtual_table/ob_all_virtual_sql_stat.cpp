@@ -391,6 +391,38 @@ int ObAllVirtualSqlStat::fill_row(
         cells[cell_idx].set_int(sql_stat_record->get_plan_cache_hit_delta());
         break;
       }
+      case MUTI_QUERY_TOTAL: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case MUTI_QUERY_DELTA: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case MUTI_QUERY_BATCH_TOTAL: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case MUTI_QUERY_BATCH_DELTA: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case FULL_TABLE_SCAN_TOTAL: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case FULL_TABLE_SCAN_DELTA: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case ERROR_COUNT_TOTAL: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
+      case ERROR_COUNT_DELTA: {
+        cells[cell_idx].set_int(0);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected column id", K(col_id));

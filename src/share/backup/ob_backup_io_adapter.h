@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace common
 {
+static const char *OVERWRITE_PATH = "file://log/tmp_overwrite_file";
 int switch_s3_compatible_to_s3(ObIAllocator &allocator, const common::ObString &src_uri, common::ObString &dest_uri);
 
 class ObBackupIoAdapter
@@ -279,6 +280,11 @@ private:
       ObIOHandle &io_handle,
       const bool is_complete_mode,
       const uint64_t sys_module_id=OB_INVALID_ID);
+
+  static int handle_overwrite_file(const common::ObString &uri,
+                                   const char *buf,
+                                   const int64_t size,
+                                   const common::ObStorageIdMod &storage_id_mod);
   
   DISALLOW_COPY_AND_ASSIGN(ObBackupIoAdapter);
 };

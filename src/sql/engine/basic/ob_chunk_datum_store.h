@@ -504,6 +504,7 @@ public:
     int swizzling(int64_t *col_cnt);
     inline bool magic_check() { return MAGIC == magic_; }
     int get_store_row(int64_t &cur_pos, const StoredRow *&sr);
+    int get_cur_row(int64_t cur_pos, const StoredRow *&sr);
     inline Block* get_next() const { return next_; }
     inline bool is_empty() { return get_buffer()->is_empty(); }
     inline void set_block_size(uint32 blk_size) { blk_size_ = blk_size; }
@@ -659,6 +660,7 @@ public:
 
     /* from StoredRow to NewRow */
     int get_next_row(const StoredRow *&sr);
+    int get_cur_row(const StoredRow *&sr);
     int get_next_batch(const StoredRow **rows, const int64_t max_rows, int64_t &read_rows);
     int get_next_batch(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
                        const int64_t max_rows, int64_t &read_rows, const StoredRow **rows);
@@ -771,6 +773,7 @@ public:
                      const StoredRow **sr = nullptr);
     int get_next_row(common::ObDatum **datums);
     int get_next_row(const StoredRow *&sr);
+    int get_cur_row(const StoredRow *&sr);
     template <bool fill_invariable_res_buf = false>
     int get_next_row(ObEvalCtx &ctx, const common::ObIArray<ObExpr*> &exprs);
 
@@ -1151,6 +1154,8 @@ private:
   static void set_io(int64_t size, char *buf, tmp_file::ObTmpFileIOInfo &io) { io.size_ = size; io.buf_ = buf; }
   bool find_block_can_hold(const int64_t size, bool &need_shrink);
   int get_store_row(RowIterator &it, const StoredRow *&sr);
+  int get_cur_row(RowIterator &it, const StoredRow *&sr);
+
   inline void callback_alloc(int64_t size) { if (callback_ != nullptr) callback_->alloc(size); }
   inline void callback_free(int64_t size) { if (callback_ != nullptr) callback_->free(size); }
 
@@ -1360,7 +1365,7 @@ int ObChunkDatumStore::Iterator::get_next_batch(
     const int64_t max_rows, int64_t &read_rows, const StoredRow **rows)
 {
   int ret = OB_SUCCESS;
-  int64_t max_batch_size = ctx.max_batch_size_;
+  int64_t max_batch_size = MAX(ctx.max_batch_size_, 1);
   const StoredRow **srows = rows;
   if (NULL == rows) {
     if (!is_valid()) {

@@ -67,7 +67,9 @@ int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema, const O
     LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
   } else {
     is_explicit_db_name_ = table_version.is_db_explicit_;
-    database_id_ = table_version.is_db_explicit_ ? table_version.invoker_db_id_ : schema->get_database_id();
+    database_id_ = (table_version.is_db_explicit_ && schema->get_database_id() == OB_PUBLIC_SCHEMA_ID)
+                      ? table_version.invoker_db_id_
+                      : schema->get_database_id();
     // copy table name
     char *buf = nullptr;
     const ObString &tname = schema->get_synonym_name_str();

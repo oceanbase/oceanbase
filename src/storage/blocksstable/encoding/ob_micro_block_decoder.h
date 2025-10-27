@@ -307,10 +307,7 @@ public:
     OB_ASSERT(nullptr != header_);
     return header_->column_count_;
   }
-  virtual int get_column_datum(
-      const ObTableIterParam &iter_param,
-      const ObTableAccessContext &context,
-      const share::schema::ObColumnParam &col_param,
+  virtual int get_raw_column_datum(
       const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum) override;

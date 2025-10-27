@@ -2205,6 +2205,12 @@ int ObTimeConverter::merge_date_interval(/*const*/ ObTime &base_time, const ObSt
     // so unit must be year / quarter / month / year_month.
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit type is invalid", K(ret), K(unit_type));
+  } else if (interval_time.parts_[DT_YEAR] > std::numeric_limits<int32_t>::max()
+             || interval_time.parts_[DT_YEAR] < std::numeric_limits<int32_t>::min()
+             || interval_time.parts_[DT_MON] > std::numeric_limits<int32_t>::max()
+             || interval_time.parts_[DT_MON] < std::numeric_limits<int32_t>::min()) {
+    ret = OB_INVALID_DATE_VALUE;
+    LOG_WARN("invalid date", K(ret), K(interval_time.parts_[DT_YEAR]), K(interval_time.parts_[DT_MON]));
   } else {
     int64_t year = 0;
     int64_t month = 0;
@@ -2219,36 +2225,43 @@ int ObTimeConverter::merge_date_interval(/*const*/ ObTime &base_time, const ObSt
       if (month <= 0) {
         // 0 => 12, -1 => 11 ... -11 => 1, -12 => 12, -13 => 11 ... -23 => 1.
         // | borrow = 1                  | borrow = 2                       |
-        int32_t borrow = static_cast<int32_t>(-month / MONS_PER_YEAR) + 1;
+        int64_t borrow = -month / MONS_PER_YEAR + 1;
         year -= borrow;
-        month += (MONS_PER_YEAR * borrow);
+        // euqal to: month = month + , use mod to avoid overflow
+        month += borrow * MONS_PER_YEAR;
       } else if (month > MONS_PER_YEAR) {
         // 13 => 1, 14 => 2 ... 24 => 12, 25 => 1, 26 => 2 ... 36 => 12.
         // | carry = 1                  | carry = 2                    |
-        int32_t carry = static_cast<int32_t>((month - 1) / MONS_PER_YEAR);
+        int64_t carry = (month - 1) / MONS_PER_YEAR;
         year += carry;
         month -= (MONS_PER_YEAR * carry);
       }
     }
-    ObTime res_time;
-    res_time.parts_[DT_YEAR] = static_cast<int32_t>(year);
-    res_time.parts_[DT_MON] = static_cast<int32_t>(month);
-    res_time.parts_[DT_MDAY] = base_time.parts_[DT_MDAY];
-    res_time.parts_[DT_HOUR] = base_time.parts_[DT_HOUR];
-    res_time.parts_[DT_MIN] = base_time.parts_[DT_MIN];
-    res_time.parts_[DT_SEC] = base_time.parts_[DT_SEC];
-    res_time.parts_[DT_USEC] = base_time.parts_[DT_USEC];
-    // date_add('2000-2-29', interval '1' year) => 2001-02-28.
-    int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(year)][month];
-    if (res_time.parts_[DT_MDAY] > days) {
-      res_time.parts_[DT_MDAY] = days;
-    }
-    res_time.parts_[DT_DATE] = ob_time_to_date(res_time);
-    ObTimeConvertCtx cvrt_ctx(NULL, false);
-    if (OB_FAIL(validate_datetime(res_time, date_sql_mode))) {
-      LOG_WARN("invalid datetime", K(ret));
-    } else if (OB_FAIL(ob_time_to_datetime(res_time, cvrt_ctx, value))) {
-      LOG_WARN("failed to convert ob time to datetime", K(ret));
+    if (year > std::numeric_limits<int32_t>::max()
+        || year < std::numeric_limits<int32_t>::min() ) {
+        ret = OB_INVALID_DATE_VALUE;
+        LOG_WARN("invalid date", K(ret), K(year));
+    } else {
+      ObTime res_time;
+      res_time.parts_[DT_YEAR] = static_cast<int32_t>(year);
+      res_time.parts_[DT_MON] = static_cast<int32_t>(month);
+      res_time.parts_[DT_MDAY] = base_time.parts_[DT_MDAY];
+      res_time.parts_[DT_HOUR] = base_time.parts_[DT_HOUR];
+      res_time.parts_[DT_MIN] = base_time.parts_[DT_MIN];
+      res_time.parts_[DT_SEC] = base_time.parts_[DT_SEC];
+      res_time.parts_[DT_USEC] = base_time.parts_[DT_USEC];
+      // date_add('2000-2-29', interval '1' year) => 2001-02-28.
+      int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(year)][month];
+      if (res_time.parts_[DT_MDAY] > days) {
+        res_time.parts_[DT_MDAY] = days;
+      }
+      res_time.parts_[DT_DATE] = ob_time_to_date(res_time);
+      ObTimeConvertCtx cvrt_ctx(NULL, false);
+      if (OB_FAIL(validate_datetime(res_time, date_sql_mode))) {
+        LOG_WARN("invalid datetime", K(ret));
+      } else if (OB_FAIL(ob_time_to_datetime(res_time, cvrt_ctx, value))) {
+        LOG_WARN("failed to convert ob time to datetime", K(ret));
+      }
     }
   }
   return ret;
@@ -6975,7 +6988,6 @@ int ObTimeConverter::decode_otimestamp(const ObObjType obj_type,
       }
     } else {
       ob_time.parts_[DT_OFFSET_MIN] = static_cast<int32_t>(offset_hour >= 0 ? (offset_hour * MINS_PER_HOUR + offset_min) : (0 - (0 - offset_hour * MINS_PER_HOUR + offset_min)));
-      ob_time.is_tz_name_valid_ = true;
     }
   }
 

@@ -257,8 +257,12 @@ int ObTextRetrievalTokenIter::do_token_cnt_agg(const ObDocIdExt &doc_id)
   } else if (OB_FAIL(fwd_idx_agg_iter_->get_next_row())) {
     LOG_WARN("failed to get next row from forward index iterator", K(ret));
   } else {
-    const ObDatum &word_cnt_datum = fwd_idx_agg_expr_->locate_expr_datum(*eval_ctx_);
-    token_count = word_cnt_datum.get_int();
+    if (fwd_idx_agg_expr_->enable_rich_format()
+        && is_valid_format(fwd_idx_agg_expr_->get_format(*eval_ctx_))) {
+      token_count = fwd_idx_agg_expr_->get_vector(*eval_ctx_)->get_int(0);
+    } else {
+      token_count = fwd_idx_agg_expr_->locate_expr_datum(*eval_ctx_).get_int();
+    }
     LOG_DEBUG("retrieval iterator get token cnt for doc", K(ret), K(doc_id), K(token_count));
   }
   return ret;
@@ -616,7 +620,13 @@ int ObTextRetrievalTokenIter::estimate_token_doc_cnt()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null total doc cnt expr", K(ret));
     } else {
-      const int64_t total_doc_cnt = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0).get_int();
+      int64_t total_doc_cnt = 0;
+      if (total_doc_cnt_param_expr->enable_rich_format()
+          && is_valid_format(total_doc_cnt_param_expr->get_format(*eval_ctx_))) {
+        total_doc_cnt = total_doc_cnt_param_expr->get_vector(*eval_ctx_)->get_int(0);
+      } else {
+        total_doc_cnt = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0).get_int();
+      }
       max_token_relevance_ = sql::ObExprBM25::query_token_weight(token_doc_cnt_, total_doc_cnt);
     }
   }
@@ -636,7 +646,8 @@ ObTextRetrievalDaaTTokenIter::ObTextRetrievalDaaTTokenIter()
     relevance_(),
     doc_id_(),
     cmp_func_(nullptr),
-    is_inited_(false)
+    is_inited_(false),
+    iter_end_(false)
 {
 }
 
@@ -677,6 +688,7 @@ int ObTextRetrievalDaaTTokenIter::init(const ObTextRetrievalScanIterParam &iter_
         LOG_WARN("failed to prepare allocate next batch iter idxes array", K(ret));
       } else {
         is_inited_ = true;
+        iter_end_ = false;
       }
     }
   }
@@ -688,6 +700,7 @@ void ObTextRetrievalDaaTTokenIter::reuse()
   cur_idx_ = -1;
   count_ = 0;
   token_iter_->reuse();
+  iter_end_ = false;
 }
 
 void ObTextRetrievalDaaTTokenIter::reset()
@@ -697,16 +710,21 @@ void ObTextRetrievalDaaTTokenIter::reset()
   token_iter_->reset();
   cur_idx_ = -1;
   count_ = 0;
+  iter_end_ = false;
 }
 
 // Sparse Retrieval Dimension Iter Interfaces
 int ObTextRetrievalDaaTTokenIter::get_next_row() {
   int ret = OB_SUCCESS;
   bool need_load = false;
-  if (OB_LIKELY((++cur_idx_) < count_)) {
+  if (iter_end_) {
+    ret = OB_ITER_END;
+  } else if (OB_LIKELY((++cur_idx_) < count_)) {
   } else if (!eval_ctx_->is_vectorized() && (OB_FAIL(token_iter_->get_next_row()))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get row from inverted index", K(ret));
+    } else {
+      iter_end_ = true;
     }
   } else if (!eval_ctx_->is_vectorized() && FALSE_IT(count_ = 1)) {
   } else if (eval_ctx_->is_vectorized() && OB_FAIL(token_iter_->get_next_batch(max_batch_size_, count_))) {
@@ -715,6 +733,8 @@ int ObTextRetrievalDaaTTokenIter::get_next_row() {
     } else if (count_ != 0) {
       ret = OB_SUCCESS;
       need_load = true;
+    } else {
+      iter_end_ = true;
     }
   } else {
     need_load = true;
@@ -857,6 +877,7 @@ ObTextRetrievalBlockMaxIter::ObTextRetrievalBlockMaxIter()
     max_score_tuple_(nullptr),
     dim_max_score_(0),
     block_max_inited_(false),
+    block_max_iter_end_(false),
     in_shallow_status_(false),
     is_inited_(false)
 {
@@ -883,6 +904,7 @@ int ObTextRetrievalBlockMaxIter::init(
     max_score_tuple_ = nullptr;
     dim_max_score_ = 0;
     in_shallow_status_ = false;
+    block_max_iter_end_ = false;
     ranking_param_.token_freq_col_idx_ = block_max_iter_param.token_freq_col_idx_;
     ranking_param_.doc_length_col_idx_ = block_max_iter_param.doc_length_col_idx_;
     is_inited_ = true;
@@ -901,6 +923,7 @@ void ObTextRetrievalBlockMaxIter::reset()
   dim_max_score_ = 0;
   in_shallow_status_ = false;
   block_max_inited_ = false;
+  block_max_iter_end_ = false;
   is_inited_ = false;
 }
 
@@ -912,6 +935,7 @@ void ObTextRetrievalBlockMaxIter::reuse()
   max_score_tuple_ = nullptr;
   in_shallow_status_ = false;
   block_max_inited_ = false;
+  block_max_iter_end_ = false;
   dim_max_score_ = 0;
 }
 
@@ -921,6 +945,8 @@ int ObTextRetrievalBlockMaxIter::get_next_row()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
+  } else if (iter_end()) {
+    ret = OB_ITER_END;
   } else if (OB_UNLIKELY(in_shallow_status_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected iter status, can not get next row after shallow advance",
@@ -946,6 +972,8 @@ int ObTextRetrievalBlockMaxIter::advance_to(const ObDatum &id_datum)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
+  } else if (iter_end()) {
+    ret = OB_ITER_END;
   } else if (OB_FAIL(token_iter_.advance_to(id_datum))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to advance to id datum", K(ret));
@@ -965,12 +993,16 @@ int ObTextRetrievalBlockMaxIter::advance_shallow(const ObDatum &id_datum, const 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not initialized", K(ret));
+  } else if (iter_end()) {
+    ret = OB_ITER_END;
   } else if (OB_UNLIKELY(!block_max_inited_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected block max iter not calculated", K(ret), K_(block_max_inited));
   } else if (OB_FAIL(block_max_iter_.advance_to(id_datum, inclusive))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to advance to id datum", K(ret));
+    } else {
+      block_max_iter_end_ = true;
     }
   } else if (OB_FAIL(block_max_iter_.get_curr_max_score_tuple(max_score_tuple_))) {
     LOG_WARN("failed to get next max score tuple", K(ret));
@@ -1087,7 +1119,7 @@ int ObTextRetrievalBlockMaxIter::calc_dim_max_score(
   return ret;
 }
 
-int ObTextRetrievalBlockMaxIter::init_block_max_iter()
+int ObTextRetrievalBlockMaxIter::init_block_max_iter(const int64_t total_doc_cnt, const double avg_doc_token_cnt)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1096,6 +1128,8 @@ int ObTextRetrievalBlockMaxIter::init_block_max_iter()
   } else if (OB_UNLIKELY(block_max_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("block max iter already initalized", K(ret));
+  } else if (FALSE_IT(ranking_param_.total_doc_cnt_ = total_doc_cnt)) {
+  } else if (FALSE_IT(ranking_param_.avg_doc_token_cnt_ = avg_doc_token_cnt)) {
   } else if (OB_FAIL(token_iter_.get_token_doc_cnt(ranking_param_.doc_freq_))) {
     LOG_WARN("failed to get token doc cnt", K(ret));
   } else if (OB_FAIL(calc_dim_max_score(*block_max_iter_param_, ranking_param_, *block_max_scan_param_))) {

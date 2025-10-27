@@ -251,25 +251,11 @@ int ObAggCell::prepare_def_datum()
   if (def_datum_.is_nop()) {
     def_datum_.reuse();
     const ObObj &def_cell = basic_info_.col_param_->get_orig_default_value();
-    if (!def_cell.is_nop_value()) {
-      if (OB_FAIL(def_datum_.from_obj_enhance(def_cell))) {
-        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      } else if (OB_FAIL(pad_column_if_need(def_datum_, allocator_, false))) {
-        LOG_WARN("Failed to pad default datum", K(ret), K_(basic_info), K_(def_datum));
-      } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
-        // lob def value must have no lob header when not null, should add lob header for default value
-        ObString data = def_datum_.get_string();
-        ObString out;
-        if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
-          LOG_WARN("failed to fill lob header for column.", K(ret), K(def_cell), K(data));
-        } else {
-          def_datum_.set_string(out);
-        }
-      }
-    } else {
+    if (def_cell.is_nop_value()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected, virtual column is not supported", K(ret), K(basic_info_.col_offset_));
     }
+    OZ(ObNewColumnCommonDecoder::get_default_datum(*basic_info_.col_param_, basic_info_.need_padding(), allocator_, def_datum_));
   }
   return ret;
 }
@@ -331,7 +317,7 @@ int ObAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_in
     const bool is_cg, bool &can_agg)
 {
   int ret = OB_SUCCESS;
-  if (index_info.has_agg_data() && can_use_index_info()) {
+  if (!ignore_eval_index_info_ && index_info.has_agg_data() && can_use_index_info()) {
     if (OB_FAIL(read_agg_datum(index_info, is_cg))) {
       LOG_WARN("fail to read agg datum", K(ret), K(is_cg), K(index_info));
     } else {
@@ -2774,7 +2760,7 @@ int ObFirstRowAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &
     const bool is_cg, bool &can_agg)
 {
   int ret = OB_SUCCESS;
-  can_agg = can_use_index_info();
+  can_agg = !ignore_eval_index_info_ && can_use_index_info();
   return ret;
 }
 
@@ -3396,7 +3382,7 @@ int ObGroupByCell::assign_agg_cells(const sql::ObExpr *col_expr, common::ObIArra
       if (OB_FAIL(agg_idxs.push_back(i))) {
         LOG_WARN("Failed to push back", K(ret));
       } else {
-        agg_cell->set_assigned_to_group_by_processor();
+        agg_cell->set_assigned_to_group_by_processor(true);
       }
     }
   }
@@ -3422,6 +3408,21 @@ int ObGroupByCell::init_agg_cells(const ObTableAccessParam &param, const ObTable
                                   batch_size_, is_pad_char_to_full_length(context.sql_mode_));
     if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_, exclude_null, !is_for_single_row, &eval_ctx))) {
       LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObGroupByCell::clear_agg_cell_assign_status()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
+    ObAggCell *agg_cell = agg_cells_.at(i);
+    if (OB_ISNULL(agg_cell)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null agg cell", K(ret), K(i), K_(agg_cells));
+    } else {
+      agg_cell->set_assigned_to_group_by_processor(false);
     }
   }
   return ret;

@@ -42,8 +42,8 @@ const char *VALID_PROVIDERS[] = {
 #define EXTRACT_JSON_ELEM_STR_WITH_PROCESS(json_key, member, post_process) \
       if (elem.first.case_compare(json_key) == 0) { \
         if (elem.second->json_type() != ObJsonNodeType::J_STRING) { \
-          ret = OB_INVALID_ARGUMENT; \
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, elem.first.ptr()); \
+          ret = OB_AI_FUNC_PARAM_VALUE_INVALID; \
+          LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, elem.first.length(), elem.first.ptr()); \
           LOG_WARN("invalid json type", K(ret), K(elem.first), K(elem.second->json_type())); \
         } else { \
           member = ObString(elem.second->get_data_length(), elem.second->get_data()); \
@@ -53,8 +53,8 @@ const char *VALID_PROVIDERS[] = {
 
 #define EXTRACT_JSON_ELEM_END() \
   { \
-    ret = OB_INVALID_ARGUMENT; \
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, elem.first.ptr()); \
+    ret = OB_AI_FUNC_PARAM_INVALID; \
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, elem.first.length(), elem.first.ptr()); \
     LOG_WARN("unknown json key param", K(ret), K(elem.first)); \
   }
 
@@ -82,8 +82,8 @@ int ObAiModelEndpointInfo::check_valid() const
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("scope"), "scope");
     LOG_WARN("scope is empty", K(ret), K(*this));
   } else if (scope_.case_compare(DEFAULT_SCOPE) != 0) {
-    ret = OB_AI_FUNC_PARAM_INVALID;
-    LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, strlen("scope"), "scope");
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("scope"), "scope");
     LOG_WARN("scope value is invalid", K(ret), K(*this));
   } else if (ai_model_name_.empty()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;

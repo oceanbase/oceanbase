@@ -9,6 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #define USING_LOG_PREFIX SERVER
 #include "ob_query_request.h"
 #include "ob_query_translator.h"
@@ -49,23 +50,14 @@ int ObQueryReqFromJson::add_score_item(ObIAllocator &alloc, ObReqExpr *score_ite
       }
     } else {
       ObReqOpExpr *add_expr = NULL;
-      ObReqExpr *expr = NULL;
       ObString empty_str;
-      if (OB_ISNULL(add_expr = OB_NEWx(ObReqOpExpr, &alloc, T_OP_ADD))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (OB_FAIL(ObReqOpExpr::construct_binary_op_expr(add_expr, alloc, T_OP_ADD, score_items_.at(count - 1), score_item, "_score"))) {
         LOG_WARN("fail to create op expr", K(ret));
-      } else if (OB_FAIL(add_expr->params.push_back(score_items_.at(count - 1)))) {
-        LOG_WARN("fail to append param", K(ret));
-      } else if (OB_FAIL(add_expr->params.push_back(score_item))) {
-        LOG_WARN("fail to append param", K(ret));
       } else if (score_items_.at(count - 1)->alias_name.compare("_score") == 0 &&
                  FALSE_IT(score_items_.at(count - 1)->set_alias(empty_str))) {
-      } else if (FALSE_IT(expr = static_cast<ObReqExpr *>(add_expr))) {
       } else if (FALSE_IT(score_items_.pop_back())) {
       } else if (OB_FAIL(score_items_.push_back(add_expr))) {
         LOG_WARN("fail to append expr", K(ret));
-      } else {
-        add_expr->set_alias("_score");
       }
     }
   }

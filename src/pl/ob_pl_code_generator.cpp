@@ -2677,6 +2677,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     OZ (generator_.get_helper().set_insert_point(generator_.get_current()));
     OZ (generator_.set_debug_location(s));
     OZ (generator_.generate_goto_label(s));
+    OZ (generator_.generate_spi_pl_profiler_before_record(s));
 
     ObLLVMBasicBlock normal;
     ObLLVMType unwind_exception_type, unwind_exception_pointer_type;
@@ -2809,6 +2810,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       OZ (generator_.set_current(normal));
     }
     OZ (generator_.register_dispatch_map(s.get_stmt_id(), generator_.get_current()), s);
+
+    OZ (generator_.generate_spi_pl_profiler_after_record(s));
   }
   return ret;
 }
@@ -3514,6 +3517,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLInterfaceStmt &s)
   ObLLVMValue interface_name_length;
   ObLLVMValue ret_err;
   const ObString interface_name = s.get_entry();
+  bool raise_warnings = (0 == interface_name.compare("DBMS_MVIEW_MYSQL_REFRESH"));
   CK (!interface_name.empty());
   OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
   OZ (generator_.generate_global_string(interface_name, entry, interface_name_length));
@@ -3524,8 +3528,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLInterfaceStmt &s)
       ret_err));
   OZ (generator_.check_success(ret_err,
       s.get_stmt_id(),
-      s.get_block()->in_notfound(),
-      s.get_block()->in_warning()));
+      raise_warnings ? raise_warnings : s.get_block()->in_notfound(),
+      raise_warnings ? raise_warnings : s.get_block()->in_warning()));
   OZ (generator_.register_dispatch_map(s.get_stmt_id(), generator_.get_current()), s);
   return ret;
 }
@@ -9162,6 +9166,10 @@ int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
   code_coverage_mode_ = code_coverage_mode_ && (pl_func.get_tenant_id() != OB_SYS_TENANT_ID)
                         && (pl_func.get_proc_type() != STANDALONE_ANONYMOUS);
   OZ (reset_code_coverage_mode(pl_func));
+  // Anonymous block parameters will lose line number information when they cross lines
+  bool forbid_profile = session_info_.get_local_ob_enable_parameter_anonymous_block()
+                        && pl_func.get_proc_type() == STANDALONE_ANONYMOUS;
+  profile_mode_ = profile_mode_ && !forbid_profile;
   if (debug_mode_
       || profile_mode_
       || code_coverage_mode_

@@ -2194,7 +2194,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             bool &get_all,
                                             bool &is_range_get,
                                             const bool is_in_range_optimization_enabled,
-                                            const bool use_new_query_range)
+                                            const bool use_new_query_range,
+                                            const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ColumnItem, 5> part_columns;
@@ -2227,7 +2228,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             exec_ctx,
                                             query_ctx,
                                             is_in_range_optimization_enabled,
-                                            use_new_query_range))) {
+                                            use_new_query_range,
+                                            table_schema))) {
     LOG_WARN("Failed to get location calc node", K(ret));
   } else if (gen_cols.count() > 0) {
     //analyze information with dependented column of generated column
@@ -2237,7 +2239,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                                                 filter_exprs,
                                                                 always_true,
                                                                 gen_col_node,
-                                                                exec_ctx))) {
+                                                                exec_ctx,
+                                                                table_schema))) {
       LOG_WARN("Get query range node error", K(ret));
     } else if (!use_new_query_range && OB_FAIL(get_query_range_node(part_level,
                                                                     gen_cols,
@@ -2543,7 +2546,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                      part_get_all_,
                                      is_part_range_precise_get_,
                                      is_in_range_optimization_enabled,
-                                     use_new_query_range))) {
+                                     use_new_query_range,
+                                     table_schema))) {
     LOG_WARN("failed to set location calc node for first-level partition", K(ret));
   } else if (PARTITION_LEVEL_TWO == part_level_
              && OB_FAIL(set_location_calc_node(stmt,
@@ -2559,7 +2563,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                                subpart_get_all_,
                                                is_subpart_range_precise_get_,
                                                is_in_range_optimization_enabled,
-                                               use_new_query_range))) {
+                                               use_new_query_range,
+                                               table_schema))) {
     LOG_WARN("failed to set location calc node for second-level partition", K(ret));
   }
 
@@ -2649,7 +2654,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             ObExecContext *exec_ctx,
                                             ObQueryCtx *query_ctx,
                                             const bool is_in_range_optimization_enabled,
-                                            const bool use_new_query_range)
+                                            const bool use_new_query_range,
+                                            const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
@@ -2678,7 +2684,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                            filter_exprs,
                                            always_true,
                                            calc_node,
-                                           exec_ctx))) {
+                                           exec_ctx,
+                                           table_schema))) {
         LOG_WARN("Get query range node error", K(ret));
       } else if (always_true) {
         get_all = true;
@@ -2746,7 +2753,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
         column_always_true = false;
         if (use_new_query_range) {
           if (OB_FAIL(get_pre_range_graph_node(part_level, partition_columns, normal_filters,
-                                               column_always_true, column_node, exec_ctx))) {
+                                               column_always_true, column_node, exec_ctx, table_schema))) {
             LOG_WARN("Failed to get query range node", K(ret));
           } else if (OB_NOT_NULL(column_node)) {
             is_column_precise_get = static_cast<ObPLPreRangeGraphNode*>(column_node)->pre_range_graph_.is_precise_get();
@@ -2844,7 +2851,8 @@ int ObTableLocation::get_pre_range_graph_node(const ObPartitionLevel part_level,
                                               const ObIArray<ObRawExpr*> &filter_exprs,
                                               bool &always_true,
                                               ObPartLocCalcNode *&calc_node,
-                                              ObExecContext *exec_ctx)
+                                              ObExecContext *exec_ctx,
+                                              const ObTableSchema* table_schema)
 {
   int ret = OB_SUCCESS;
   bool phy_rowid_for_table_loc = (part_level == part_level_);
@@ -2862,7 +2870,9 @@ int ObTableLocation::get_pre_range_graph_node(const ObPartitionLevel part_level,
                                                                        NULL,
                                                                        NULL,
                                                                        phy_rowid_for_table_loc,
-                                                                       false))) {
+                                                                       false,
+                                                                       -1,
+                                                                       table_schema))) {
       LOG_WARN("Failed to pre extract query range", K(ret));
     } else if (node->pre_range_graph_.is_precise_whole_range()) {
       //pre query range is whole range, indicate that there are no partition condition in filters,
@@ -4128,8 +4138,7 @@ int calc_high_bound_obj_new_engine(
   ObSQLSessionInfo *session,
   ObObj &const_val,
   uint64_t exist_parts,
-  const ObObj &transition_val,
-  const ObObj &interval_val,
+  const ObTableSchema &table_schema,
   ObObj &out_val)
 {
   int ret = OB_SUCCESS;
@@ -4139,9 +4148,26 @@ int calc_high_bound_obj_new_engine(
   ParamStore dummy_params;
   ObRawExprFactory expr_factory(allocator);
   ObConstRawExpr *max_parts = NULL;
-  ObOpRawExpr *less_than_expr = NULL;
-  ObObj cmp_res;
+  ObConstRawExpr *val_expr = NULL;
+  ObConstRawExpr *out_val_expr = NULL;
+  ObOpRawExpr *max_cmp_expr = NULL;
+  ObOpRawExpr *high_bound_val_cmp_expr = NULL;
+  ObObj max_cmp_res;
+  ObObj high_bound_val_cmp_res;
   ObObj max_interval;
+  const ObColumnSchemaV2 *col_schema = NULL;
+  uint64_t col_id = OB_INVALID_ID;
+  ColumnType col_dt = ObNullType;
+  CK (table_schema.get_transition_point().is_valid());
+  CK (table_schema.get_interval_range().is_valid());
+  CK (1 == table_schema.get_transition_point().get_obj_cnt());
+  CK (1 == table_schema.get_interval_range().get_obj_cnt());
+  const ObObj &transition_val = table_schema.get_transition_point().get_obj_ptr()[0];
+  const ObObj &interval_val = table_schema.get_interval_range().get_obj_ptr()[0];
+  const ObPartitionKeyInfo &part_key_info = table_schema.get_partition_key_info();
+  OZ (part_key_info.get_column_id(0, col_id));
+  CK (OB_NOT_NULL(col_schema = table_schema.get_column_schema(col_id)));
+  OX (col_dt = col_schema->get_data_type());
 
   CK (OB_NOT_NULL(session));
 
@@ -4150,6 +4176,7 @@ int calc_high_bound_obj_new_engine(
                                                 const_val,
                                                 transition_val,
                                                 interval_val,
+                                                col_dt,
                                                 result_expr,
                                                 n_part_expr));
   CK (OB_NOT_NULL(result_expr));
@@ -4158,13 +4185,24 @@ int calc_high_bound_obj_new_engine(
 
   OX (max_interval.set_uint64(OB_MAX_INTERVAL_PARTITIONS - exist_parts));
   OZ (ObRawExprUtils::build_const_obj_expr(expr_factory, max_interval, max_parts));
-  OZ (ObRawExprUtils::build_less_than_expr(expr_factory, n_part_expr, max_parts, less_than_expr));
-  OZ (less_than_expr->formalize(session));
+  OZ (ObRawExprUtils::build_less_than_or_equal_expr(expr_factory, n_part_expr, max_parts, max_cmp_expr));
+  OZ (max_cmp_expr->formalize(session));
   OZ (ObSQLUtils::calc_simple_expr_without_row(session,
-                                   less_than_expr, cmp_res, &dummy_params, allocator));
-  if (OB_SUCC(ret) && !cmp_res.get_bool()) {
+                                   max_cmp_expr, max_cmp_res, &dummy_params, allocator));
+  if (OB_SUCC(ret) && !max_cmp_res.get_bool()) {
     ret = OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS;
     LOG_WARN("exceed max partition", K(ret), K(const_val), K(exist_parts));
+  }
+
+  // because of precision issue, we need to check if the given value is less than the calculated high bound value
+  OZ (ObRawExprUtils::build_const_obj_expr(expr_factory, const_val, val_expr));
+  OZ (ObRawExprUtils::build_const_obj_expr(expr_factory, out_val, out_val_expr));
+  OZ (ObRawExprUtils::build_less_than_expr(expr_factory, val_expr, out_val_expr, high_bound_val_cmp_expr));
+  OZ (high_bound_val_cmp_expr->formalize(session));
+  OZ (ObSQLUtils::calc_simple_expr_without_row(session, high_bound_val_cmp_expr, high_bound_val_cmp_res, &dummy_params, allocator));
+  if (OB_SUCC(ret) && !high_bound_val_cmp_res.get_bool()) {
+    ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+    LOG_WARN("no partition for value", K(ret), K(const_val), K(exist_parts));
   }
   return ret;
 }
@@ -4236,12 +4274,11 @@ int ObTableLocation::send_add_interval_partition_rpc(
   OZ (table_schema->get_interval_parted_range_part_num(range_part_num));
 
   OZ (calc_high_bound_obj_new_engine(exec_ctx.get_allocator(),
-                          exec_ctx.get_my_session(),
-                          row.get_cell(0),
-                          range_part_num,
-                          table_schema->get_transition_point().get_obj_ptr()[0],
-                          table_schema->get_interval_range().get_obj_ptr()[0],
-                          result_obj));
+                                     exec_ctx.get_my_session(),
+                                     row.get_cell(0),
+                                     range_part_num,
+                                     *table_schema,
+                                     result_obj));
 
   /* alter table table_name add partition ppp values less than (); */
   if (OB_SUCC(ret)) {
@@ -4320,8 +4357,7 @@ int ObTableLocation::send_add_interval_partition_rpc_new_engine(
                                      session,
                                      row.get_cell(0),
                                      range_part_num,
-                                     table_schema->get_transition_point().get_obj_ptr()[0],
-                                     table_schema->get_interval_range().get_obj_ptr()[0],
+                                     *table_schema,
                                      result_obj));
 
   /* alter table table_name add partition ppp values less than (); */
@@ -4333,9 +4369,15 @@ int ObTableLocation::send_add_interval_partition_rpc_new_engine(
     tz_info.set_offset(0);
     OZ (OTTZ_MGR.get_tenant_tz(table_schema->get_tenant_id(), tz_info.get_tz_map_wrap()));
 
-    SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], high_bound_buf) {
+    SMART_VARS_3((char[OB_MAX_DEFAULT_VALUE_LENGTH], high_bound_buf),
+                 (char[OB_MAX_DEFAULT_VALUE_LENGTH], interval_buf),
+                 (char[OB_MAX_DEFAULT_VALUE_LENGTH], transition_buf)) {
       MEMSET(high_bound_buf, 0, OB_MAX_DEFAULT_VALUE_LENGTH);
+      MEMSET(interval_buf, 0, OB_MAX_DEFAULT_VALUE_LENGTH);
+      MEMSET(transition_buf, 0, OB_MAX_DEFAULT_VALUE_LENGTH);
       int64_t high_bound_buf_pos = 0;
+      int64_t interval_buf_pos = 0;
+      int64_t transition_buf_pos = 0;
 
       bool is_oracle_mode = false;
       int64_t max_part_id = OB_INVALID_ID;
@@ -4346,16 +4388,40 @@ int ObTableLocation::send_add_interval_partition_rpc_new_engine(
                                                           high_bound_buf_pos,
                                                           false,
                                                           &tz_info));
+      OZ (ObPartitionUtils::convert_rowkey_to_sql_literal(is_oracle_mode,
+                                                          table_schema->get_interval_range(),
+                                                          interval_buf,
+                                                          OB_MAX_DEFAULT_VALUE_LENGTH,
+                                                          interval_buf_pos,
+                                                          false,
+                                                          &tz_info));
+      OZ (ObPartitionUtils::convert_rowkey_to_sql_literal(is_oracle_mode,
+                                                          table_schema->get_transition_point(),
+                                                          transition_buf,
+                                                          OB_MAX_DEFAULT_VALUE_LENGTH,
+                                                          transition_buf_pos,
+                                                          false,
+                                                          &tz_info));
 
       OZ (table_schema->get_max_part_id(max_part_id));
-      OZ (sql.assign_fmt("ALTER TABLE \"%.*s\".\"%.*s\" ADD PARTITION P_SYS_%d "
-                        "VALUES LESS THAN (%.*s);",
+      DEBUG_SYNC(BEFORE_ADD_INTERVAL_PARTITION);
+      int64_t timeout = THIS_WORKER.is_timeout_ts_valid() ?
+                         THIS_WORKER.get_timeout_remain() : GCONF.internal_sql_execute_timeout;
+      if (OB_SUCC(ret) && timeout <= 0) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("add interval partition rpc timeout", KR(ret));
+      }
+      OZ (sql.assign_fmt("ALTER /*+ query_timeout(%ld) */ TABLE \"%.*s\".\"%.*s\" ADD PARTITION SYS_P%d "
+                         "VALUES LESS THAN (%.*s) INTERVAL(%.*s) TRANSITION(%.*s);",
+                              timeout,
                               db_schema->get_database_name_str().length(),
                               db_schema->get_database_name_str().ptr(),
                               table_schema->get_table_name_str().length(),
                               table_schema->get_table_name_str().ptr(),
                               static_cast<int>(max_part_id + 1),
-                              static_cast<int>(high_bound_buf_pos), high_bound_buf
+                              static_cast<int>(high_bound_buf_pos), high_bound_buf,
+                              static_cast<int>(interval_buf_pos), interval_buf,
+                              static_cast<int>(transition_buf_pos), transition_buf
                               ));
       OX (sql_proxy = GCTX.sql_proxy_);
       CK (OB_NOT_NULL(sql_proxy));

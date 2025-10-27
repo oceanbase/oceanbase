@@ -125,6 +125,7 @@ public:
   virtual int64_t get_group_idx_col_index() const = 0;
   virtual int64_t get_mview_old_new_col_index() const = 0;
   virtual int64_t get_trans_col_index() const = 0;
+  virtual int64_t get_extra_rowkey_count() const = 0;
   virtual const common::ObIArray<ObColDesc> &get_columns_desc() const = 0;
   virtual const ObColumnIndexArray &get_columns_index() const = 0;
   virtual const ObColumnIndexArray &get_memtable_columns_index() const = 0;
@@ -200,6 +201,7 @@ public:
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise trans col index");
     return OB_INVALID_INDEX;
   }
+  OB_INLINE virtual int64_t get_extra_rowkey_count() const override { return 0; }
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   {
     OB_ASSERT_MSG(false, "ObReadInfoStruct dose not promise seq read column count");
@@ -340,6 +342,10 @@ public:
   }
   OB_INLINE virtual int64_t get_trans_col_index() const override
   { return trans_col_index_; }
+  OB_INLINE virtual int64_t get_extra_rowkey_count() const override
+  {
+    return trans_col_index_ == OB_INVALID_INDEX ? 0 : 1;  // currently, read_info_ only support trans_version column in extra rowkey column
+  }
   OB_INLINE int64_t get_group_idx_col_index() const
   { return group_idx_col_index_; }
   OB_INLINE int64_t get_mview_old_new_col_index() const
@@ -437,6 +443,8 @@ public:
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
   { return schema_rowkey_cnt_; }
+  OB_INLINE virtual int64_t get_extra_rowkey_count() const override
+  { return rowkey_cnt_ - schema_rowkey_cnt_; }
   virtual int64_t get_request_count() const override;
   OB_INLINE bool is_access_rowkey_only() const override
   { return false; }
@@ -523,6 +531,7 @@ public:
     OB_ASSERT_MSG(false, "ObCGReadInfo dose not promise trans col index");
     return OB_INVALID_INDEX;
   }
+  OB_INLINE virtual int64_t get_extra_rowkey_count() const override { return 0; }
   virtual int64_t get_seq_read_column_count() const
   {
     return CG_COL_CNT;
@@ -582,6 +591,7 @@ public:
     return OB_INVALID_INDEX;
   }
   virtual int64_t get_trans_col_index() const override { return rowkey_read_info_.get_trans_col_index(); }
+  OB_INLINE virtual int64_t get_extra_rowkey_count() const override { return rowkey_read_info_.get_extra_rowkey_count(); }
   virtual const common::ObIArray<ObColDesc> &get_columns_desc() const override
   {
     return rowkey_read_info_.get_columns_desc();

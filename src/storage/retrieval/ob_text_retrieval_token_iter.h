@@ -146,6 +146,7 @@ public:
   virtual int advance_to(const ObDatum &id_datum) override;
   virtual int get_curr_score(double &score) const override;
   virtual int get_curr_id(const ObDatum *&id_datum) const override;
+  virtual bool iter_end() const override { return iter_end_; }
 public:
   int get_token_doc_cnt(int64_t &token_doc_cnt) const { return token_iter_->get_token_doc_cnt(token_doc_cnt); }
   virtual int get_dim_max_score(double &score) override {
@@ -172,6 +173,7 @@ private:
   ObFixedArray<ObDocIdExt, ObIAllocator> doc_id_;
   common::ObDatumCmpFuncType cmp_func_;
   bool is_inited_;
+  bool iter_end_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalDaaTTokenIter);
 };
 
@@ -197,9 +199,9 @@ public:
   virtual int advance_shallow(const ObDatum &id_datum, const bool inclusive) override;
   virtual int get_curr_block_max_info(const ObMaxScoreTuple *&max_score_tuple) override;
   virtual bool in_shallow_status() const override;
+  virtual bool iter_end() const override { return block_max_iter_end_ || token_iter_.iter_end(); }
   // currently, for text retrieval, total_doc_cnt and token_doc_cnt is required before block max calculation
-  int init_block_max_iter();
-  void set_total_doc_cnt(const int64_t total_doc_cnt) { ranking_param_.total_doc_cnt_ = total_doc_cnt; }
+  int init_block_max_iter(const int64_t total_doc_cnt, const double avg_doc_token_cnt);
 private:
   int calc_dim_max_score(
       const ObBlockMaxScoreIterParam &block_max_iter_param,
@@ -215,6 +217,7 @@ private:
   const ObMaxScoreTuple *max_score_tuple_;
   double dim_max_score_;
   bool block_max_inited_;
+  bool block_max_iter_end_;
   bool in_shallow_status_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTextRetrievalBlockMaxIter);

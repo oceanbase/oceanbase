@@ -118,6 +118,7 @@ bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
+int get_storage_checksum_type(const char *checksum_type_str, ObStorageChecksumType &checksum_type);
 bool is_use_obdal();
 // [Extensions]
 //   load_data_* : sql/engine/cmd/ob_load_data_storage_info.h
@@ -176,7 +177,7 @@ struct ObObjectStorageCredential
 class ObClusterStateBaseMgr
 {
 public:
-  ObClusterStateBaseMgr() {}
+  ObClusterStateBaseMgr() : is_write_with_if_match_(false) {}
   virtual ~ObClusterStateBaseMgr() {}
   virtual int is_supported_assume_version() const
   {
@@ -194,12 +195,15 @@ public:
   {
     return false;
   }
-  virtual bool is_write_with_if_match() const { return false; }
+  virtual bool is_write_with_if_match() const { return is_write_with_if_match_; }
   static ObClusterStateBaseMgr &get_instance()
   {
     static ObClusterStateBaseMgr mgr;
     return mgr;
   }
+private:
+  void set_is_write_with_if_match_(const bool is_write_with_if_match) { is_write_with_if_match_ = is_write_with_if_match; }
+  bool is_write_with_if_match_;
 };
 
 enum ObStorageDeleteMode: uint8_t

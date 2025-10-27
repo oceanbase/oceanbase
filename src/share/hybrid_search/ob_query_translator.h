@@ -10,14 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
-
 #ifndef OCEANBASE_SHARE_OB_QUERY_TRANSLATOR_H_
 #define OCEANBASE_SHARE_OB_QUERY_TRANSLATOR_H_
 
-#include "share/ob_define.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/string/ob_string.h"
-#include "common/object/ob_object.h"
 #include "ob_query_request.h"
 
 namespace oceanbase

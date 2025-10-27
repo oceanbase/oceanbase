@@ -103,11 +103,14 @@ struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
     row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_(),
-    session_info_(session_info)
+    session_info_(session_info),
+    plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED), plan_id_(OB_INVALID_ID), plan_hash_(OB_INVALID_ID)
   {
     row_desc_.set_tenant_id(MTL_ID());
     complex_objs_.reset();
     complex_objs_.set_tenant_id(MTL_ID());
+    sql_id_[0]='\0';
+    sql_id_[OB_MAX_SQL_ID_LENGTH]='\0';
   }
 
   ~ObSPICursor()
@@ -127,6 +130,11 @@ struct ObSPICursor
   common::ColumnsFieldArray fields_;
   ObArray<ObObj> complex_objs_;
   sql::ObSQLSessionInfo* session_info_;
+
+  ObPhyPlanType plan_type_;
+  uint64_t plan_id_;
+  uint64_t plan_hash_;
+  char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
 };
 
 struct ObSPIOutParams
@@ -940,6 +948,12 @@ public:
                         bool is_dynamic_sql = false);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
+  static int fill_cursor(lib::MemoryContext entity,
+                         ObResultSet &result_set,
+                         ObSPICursor *cursor,
+                         int64_t new_query_start_time,
+                         bool &is_iter_end,
+                         int64_t orc_max_ret_rows = INT64_MAX);
   static int fill_cursor(ObResultSet &result_set,
                          ObSPICursor *cursor,
                          int64_t new_query_start_time,

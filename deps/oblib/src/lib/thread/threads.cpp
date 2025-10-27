@@ -257,7 +257,7 @@ int Threads::create_thread(Thread *&thread, int64_t idx, int32_t numa_node)
   if (buf == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    thread = new (buf) Thread(this, idx, stack_size_, numa_node);
+    thread = new (buf) Thread(this, idx, stack_size_, numa_node, thread_group_id_);
     if (OB_FAIL(thread->start())) {
       thread->~Thread();
       ob_free(thread);

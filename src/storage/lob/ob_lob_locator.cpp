@@ -28,6 +28,7 @@ ObLobLocatorHelper::ObLobLocatorHelper()
     tablet_id_(OB_INVALID_ID),
     ls_id_(OB_INVALID_ID),
     tx_read_snapshot_(),
+    fb_snapshot_(),
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_project_(nullptr),
     rowid_objs_(),
@@ -51,6 +52,7 @@ void ObLobLocatorHelper::reset()
   tablet_id_ = OB_INVALID_ID;
   ls_id_ = OB_INVALID_ID;
   tx_read_snapshot_.reset();
+  fb_snapshot_.reset();
   rowid_version_ = ObURowIDData::INVALID_ROWID_VERSION;
   rowid_project_ = nullptr;
   rowid_objs_.reset();
@@ -100,6 +102,7 @@ int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
       scan_flag_ = scan_param.scan_flag_;
       tx_seq_base_ = scan_param.tx_seq_base_;
       is_access_index_ = table_param.is_vec_index();
+      fb_snapshot_ = scan_param.fb_snapshot_;
       if (OB_FAIL(tx_read_snapshot_.assign(scan_param.snapshot_))) {
         LOG_WARN("assign snapshot fail", K(ret), K(scan_param.snapshot_));
       } else if (snapshot_version != ctx.mvcc_acc_ctx_.snapshot_.version().get_val_for_tx()) {
@@ -344,7 +347,7 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
       int64_t read_snapshot_size = 0;
       ObString read_snapshot_data;
       if (extern_flags.has_read_snapshot_) {
-        read_snapshot_size = tx_read_snapshot_.get_serialize_size_for_lob(share::ObLSID(ls_id_));
+        read_snapshot_size = tx_read_snapshot_.get_serialize_size_for_lob(share::ObLSID(ls_id_), fb_snapshot_);
       }
 
       int64_t full_loc_size = ObLobLocatorV2::calc_locator_full_len(extern_flags,
@@ -385,7 +388,8 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
             int64_t pos = 0;
             if (OB_FAIL(locator.get_read_snapshot_data(read_snapshot_data))) {
               STORAGE_LOG(WARN, "Lob: get_read_snapshot_data failed", K(ret), K(locator));
-            } else if (OB_FAIL(tx_read_snapshot_.serialize_for_lob(share::ObLSID(ls_id_), read_snapshot_data.ptr(), read_snapshot_data.length(), pos))) {
+            } else if (OB_FAIL(tx_read_snapshot_.serialize_for_lob(share::ObLSID(ls_id_), fb_snapshot_,
+                read_snapshot_data.ptr(), read_snapshot_data.length(), pos))) {
               STORAGE_LOG(WARN, "Lob: serialize_for_lob failed", K(ret), K(locator));
             }
           }
@@ -573,7 +577,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
     }
 
     if (OB_SUCC(ret) && extern_flags.has_read_snapshot_) {
-      read_snapshot_size = tx_read_snapshot_.get_serialize_size_for_lob(share::ObLSID(ls_id_));
+      read_snapshot_size = tx_read_snapshot_.get_serialize_size_for_lob(share::ObLSID(ls_id_), fb_snapshot_);
     }
 
     int64_t full_loc_size = 0;
@@ -657,7 +661,8 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
           int64_t pos = 0;
           if (OB_FAIL(locator.get_read_snapshot_data(read_snapshot_data))) {
             STORAGE_LOG(WARN, "Lob: get_read_snapshot_data failed", K(ret), K(locator));
-          } else if (OB_FAIL(tx_read_snapshot_.serialize_for_lob(share::ObLSID(ls_id_), read_snapshot_data.ptr(), read_snapshot_data.length(), pos))) {
+          } else if (OB_FAIL(tx_read_snapshot_.serialize_for_lob(share::ObLSID(ls_id_), fb_snapshot_,
+              read_snapshot_data.ptr(), read_snapshot_data.length(), pos))) {
             STORAGE_LOG(WARN, "Lob: serialize_for_lob failed", K(ret), K(locator));
           }
         }
@@ -718,6 +723,7 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             param.offset_ = 0;
             param.len_ = param.byte_size_;
             param.no_need_retry_ = true;
+            param.fb_snapshot_ = fb_snapshot_;
             ObString output_data;
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL( param.snapshot_.assign(tx_read_snapshot_))) {

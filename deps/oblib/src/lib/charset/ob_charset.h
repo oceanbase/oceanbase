@@ -632,6 +632,7 @@ public:
       || CHARSET_GB18030 == charset_type
       || CHARSET_GB18030_2022 == charset_type;
   }
+  static int is_pad_charset(ObCollationType coll_type, bool &is_pad);
   static ObCharsetType charset_type_by_coll(ObCollationType coll_type);
   static int check_valid_implicit_convert(ObCollationType src_type, ObCollationType dst_type);
   static int charset_name_by_coll(const ObString &coll_name, common::ObString &cs_name);

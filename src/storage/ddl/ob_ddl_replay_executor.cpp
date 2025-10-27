@@ -401,16 +401,18 @@ int ObDDLRedoReplayExecutor::do_inc_replay_(
 {
   int ret = OB_SUCCESS;
   bool need_replay = true;
+  int32_t transfer_epoch = -1;
   if (OB_FAIL(check_need_replay_ddl_inc_log_(ls_, tablet_handle, scn_, need_replay))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("fail to check need replay ddl log", K(ret), K(scn_), K(log_));
     }
   } else if (!need_replay) {
     // do nothing
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch)))  {
+    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
-                               tablet_handle.get_obj()->get_transfer_seq());
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(), transfer_epoch);
     ObStorageObjectWriteInfo object_write_info;
     object_write_info.buffer_ = write_info.buffer_;
     object_write_info.size_= write_info.size_;
@@ -458,6 +460,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   ObMacroBlockHandle macro_handle;
   ObTabletID tablet_id = log_->get_redo_info().table_key_.get_tablet_id();
   bool need_replay = true;
+  int32_t transfer_epoch = -1;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   if (OB_FAIL(check_need_replay_ddl_log_(ls_, tablet_handle, log_->get_redo_info().start_scn_, scn_, log_->get_redo_info().data_format_version_, need_replay))) {
     if (OB_EAGAIN != ret) {
@@ -473,11 +476,12 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
     if (REACH_TIME_INTERVAL(1000L * 1000L)) {
       LOG_INFO("no need to replay ddl log, because the major sstable already exist", K_(tablet_id));
     }
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_private_transfer_epoch(transfer_epoch))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
     const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
     ObStorageObjectOpt opt;
-    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(),
-                               tablet_handle.get_obj()->get_transfer_seq());
+    opt.set_private_object_opt(tablet_handle.get_obj()->get_tablet_id().id(), transfer_epoch);
     ObStorageObjectHandle macro_handle;
     ObStorageObjectWriteInfo write_info;
     write_info.buffer_ = redo_info.data_buffer_.ptr();

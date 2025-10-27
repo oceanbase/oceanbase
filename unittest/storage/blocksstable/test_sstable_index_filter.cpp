@@ -272,6 +272,8 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_lt_white_filter(uint64_
   datum.from_obj(ref_obj);
   filter->datum_params_.push_back(datum);
   filter->cmp_func_ = get_datum_cmp_func(obj_meta, obj_meta);
+  filter->col_obj_meta_ = obj_meta;
+  filter->param_obj_meta_ = obj_meta;
   return filter;
 }
 

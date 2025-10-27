@@ -47,7 +47,7 @@ public:
   virtual int count() const = 0;
   virtual bool empty() const = 0;
   virtual bool is_unique_champion() const = 0;
-  TO_STRING_KV("name", "ObRowsMerger")
+  DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
 template <typename T, typename CompareFunctor>
@@ -73,6 +73,13 @@ public:
   virtual OB_INLINE int count() const { return player_cnt_ - cur_free_cnt_; }
   virtual OB_INLINE bool empty() const { return player_cnt_ == cur_free_cnt_; }
   virtual OB_INLINE bool is_unique_champion() const { return is_unique_champion_; }
+
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(player_cnt), K_(match_cnt),
+                       K_(leaf_offset), "matches",
+                       ObArrayWrap<MatchResult>(matches_, get_match_cnt(player_cnt_)),
+                       "free_players", ObArrayWrap<int64_t>(free_players_, player_cnt_),
+                       K_(cur_free_cnt), K_(need_rebuild),
+                       K_(is_unique_champion));
 
 protected:
   enum class ReplayType
@@ -231,6 +238,10 @@ int ObLoserTree<T, CompareFunctor>::alloc_max_space(const int64_t player_cnt)
   } else if (nullptr == (free_players_ = static_cast<int64_t*>(allocator_->alloc(sizeof(int64_t) * player_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LIB_LOG(WARN, "allocate free players failed", K(ret), K(player_cnt), K(match_cnt));
+  } else {
+    new (players_) T[player_cnt];
+    new (matches_) MatchResult[match_cnt];
+    memset(free_players_, 0, sizeof(int64_t) * player_cnt);
   }
   return ret;
 }

@@ -1242,6 +1242,27 @@ int ObOraSysChecker::build_related_sys_priv_array(
       OZ (sys_priv_array.push_back(PRIV_ID_FLASHBACK_ANY_TABLE));
       break;
     }
+    case static_cast<uint64_t>(ObObjectType::SEQUENCE): {
+      OZ(sys_priv_array.push_back(PRIV_ID_SELECT_ANY_SEQ));
+      break;
+    }
+    case static_cast<uint64_t>(ObObjectType::FUNCTION):
+    case static_cast<uint64_t>(ObObjectType::PROCEDURE):
+    case static_cast<uint64_t>(ObObjectType::PACKAGE):
+    case static_cast<uint64_t>(ObObjectType::SYS_PACKAGE): {
+      OZ(sys_priv_array.push_back(PRIV_ID_EXEC_ANY_PROC));
+      OZ(sys_priv_array.push_back(PRIV_ID_CREATE_ANY_PROC));
+      OZ(sys_priv_array.push_back(PRIV_ID_ALTER_ANY_PROC));
+      OZ(sys_priv_array.push_back(PRIV_ID_DROP_ANY_PROC));
+      break;
+    }
+    case static_cast<uint64_t>(ObObjectType::TYPE): {
+      OZ(sys_priv_array.push_back(PRIV_ID_EXEC_ANY_TYPE));
+      OZ(sys_priv_array.push_back(PRIV_ID_CREATE_ANY_TYPE));
+      OZ(sys_priv_array.push_back(PRIV_ID_ALTER_ANY_TYPE));
+      OZ(sys_priv_array.push_back(PRIV_ID_DROP_ANY_TYPE));
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted sys_priv type", K(ret), K(obj_type));
@@ -1269,6 +1290,18 @@ int ObOraSysChecker::build_related_obj_priv_array(
       OZ (obj_priv_array.push_back(OBJ_PRIV_ID_REFERENCES));
       OZ (obj_priv_array.push_back(OBJ_PRIV_ID_SELECT));
       OZ (obj_priv_array.push_back(OBJ_PRIV_ID_UPDATE));
+      break;
+    }
+    case static_cast<uint64_t>(ObObjectType::SEQUENCE): {
+      OZ(obj_priv_array.push_back(OBJ_PRIV_ID_SELECT));
+      break;
+    }
+    case static_cast<uint64_t>(ObObjectType::FUNCTION):
+    case static_cast<uint64_t>(ObObjectType::PROCEDURE):
+    case static_cast<uint64_t>(ObObjectType::PACKAGE):
+    case static_cast<uint64_t>(ObObjectType::SYS_PACKAGE):
+    case static_cast<uint64_t>(ObObjectType::TYPE): {
+      OZ(obj_priv_array.push_back(OBJ_PRIV_ID_EXECUTE));
       break;
     }
     default: {
@@ -1670,81 +1703,67 @@ int ObOraSysChecker::check_ora_obj_priv_for_create_view(
   bool is_owner = is_owner_user(user_id, obj_owner_id);
 
   if (OB_SUCC(ret)) {
-    if (obj_type == static_cast<uint64_t>(ObObjectType::TABLE)) {
-      /* 1. check owner*/
+    if (obj_type == static_cast<uint64_t>(ObObjectType::TABLE)
+        || obj_type == static_cast<uint64_t>(ObObjectType::SEQUENCE)
+        || obj_type == static_cast<uint64_t>(ObObjectType::FUNCTION)
+        || obj_type == static_cast<uint64_t>(ObObjectType::PROCEDURE)
+        || obj_type == static_cast<uint64_t>(ObObjectType::PACKAGE)
+        || obj_type == static_cast<uint64_t>(ObObjectType::SYS_PACKAGE)
+        || obj_type == static_cast<uint64_t>(ObObjectType::TYPE)) {
+      /* 1. check owner */
       if (!is_owner) {
-      /* 2. check sys priv */
+        /* 2. check sys priv */
         ObRawPrivArray priv_list;
         ObRawObjPrivArray obj_p_list;
-        if (!is_ora_sys_view_table(obj_id)) {
-          OZ (priv_list.push_back(PRIV_ID_SELECT_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_INSERT_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_UPDATE_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_DELETE_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_CREATE_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_DROP_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_ALTER_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_LOCK_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_COMMENT_ANY_TABLE));
-          OZ (priv_list.push_back(PRIV_ID_FLASHBACK_ANY_TABLE));
+        if (obj_type == static_cast<uint64_t>(ObObjectType::TABLE) && is_ora_sys_view_table(obj_id)) {
+          OZ(priv_list.push_back(PRIV_ID_SELECT_ANY_DICTIONARY));
         } else {
-          OZ (priv_list.push_back(PRIV_ID_SELECT_ANY_DICTIONARY));
+          OZ(build_related_sys_priv_array(obj_type, priv_list));
         }
-        
-        OZX1 (check_plist_or_in_single(guard, tenant_id, user_id, priv_list), OB_ERR_NO_PRIVILEGE);
+        OZX1(check_plist_or_in_single(guard, tenant_id, user_id, priv_list), OB_ERR_NO_PRIVILEGE);
+        /* 3. check obj priv */
         if (ret == OB_ERR_NO_PRIVILEGE) {
-          /* 3. check obj priv */
           ret = OB_SUCCESS;
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_SELECT));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_INSERT));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_UPDATE));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_DELETE));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_CREATE));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_ALTER));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_DEBUG));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_INDEX));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_READ));
-          OZ (obj_p_list.push_back(OBJ_PRIV_ID_REFERENCES));
-          OZ (check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type, 
-                                           obj_id, col_id, obj_p_list),
-                tenant_id, user_id, obj_type, obj_id, col_id, obj_p_list);  
+          OZ(build_related_obj_priv_array(obj_type, obj_p_list));
+          OZ(check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type, obj_id, col_id, obj_p_list),
+             tenant_id,
+             user_id,
+             obj_type,
+             obj_id,
+             col_id,
+             obj_p_list);
         }
         /* 4. check role priv for a proper error code */
         /* if user can access object via a role, return OB_ERR_NO_PRIVILEGE, else OB_TABLE_NOT_EXIST */
         if (ret == OB_ERR_EMPTY_QUERY) {
           ret = OB_SUCCESS;
-          OZX1 (check_plist_or_in_roles(guard, tenant_id, user_id, priv_list, role_id_array),
-                OB_ERR_NO_PRIVILEGE);
+          OZX1(check_plist_or_in_roles(guard, tenant_id, user_id, priv_list, role_id_array), OB_ERR_NO_PRIVILEGE);
           if (OB_SUCC(ret)) {
             ret = OB_ERR_NO_PRIVILEGE;
           } else if (ret == OB_ERR_NO_PRIVILEGE) {
             ret = OB_SUCCESS;
-            OZX1 (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type, obj_id, col_id,
-                                              obj_p_list, role_id_array), OB_ERR_NO_PRIVILEGE);
+            OZX1(check_obj_plist_or_in_roles(guard,
+                                             tenant_id,
+                                             user_id,
+                                             obj_type,
+                                             obj_id,
+                                             col_id,
+                                             obj_p_list,
+                                             role_id_array),
+                 OB_ERR_NO_PRIVILEGE);
             if (OB_SUCC(ret)) {
               ret = OB_ERR_NO_PRIVILEGE;
             } else if (ret == OB_ERR_NO_PRIVILEGE) {
-              /* 调整错误码 to table or view not exists */
+              /* adjust error code to table or view not exists */
               ret = OB_TABLE_NOT_EXIST;
             }
           } else {
           }
         }
       }
-    } else if (obj_type == static_cast<uint64_t>(ObObjectType::SEQUENCE)) {
-      if (!is_owner) {
-        ObRawPrivArray priv_list;
-        OZ (priv_list.push_back(PRIV_ID_SELECT_ANY_SEQ));
-        OZX1 (check_plist_or_in_single(guard, tenant_id, user_id, priv_list), OB_ERR_NO_PRIVILEGE);
-        if (ret == OB_ERR_NO_PRIVILEGE) {
-          /* 3. check obj priv */
-          ret = OB_SUCCESS;
-          OZ (check_obj_p1_in_single(guard, tenant_id, user_id, obj_type,
-                                     obj_id, col_id, OBJ_PRIV_ID_SELECT, NO_OPTION),
-              tenant_id, user_id, obj_type, obj_id, col_id, OBJ_PRIV_ID_SELECT, NO_OPTION);
-        }
-      }
-    } /* xinqi to do: else if */
+    } else {
+      // bypass priv check by default for object types that are not handled
+    }
   }
 
   return ret;
@@ -2077,7 +2096,7 @@ int ObOraSysChecker::check_ora_obj_priv(
               OZ (map_obj_priv_to_sys_priv(raw_obj_priv, obj_id, org_obj_type, sys_priv), 
                   raw_obj_priv, sys_priv);
               OZ (build_related_plist(org_obj_type, sys_priv, plist));
-              
+
               OX (option = (check_flag != CHECK_FLAG_WITH_GRANT_OPTION) ? NO_OPTION : GRANT_OPTION);
               if (!plist.empty()) {
                 OZX1 (check_p1_with_plist_info(guard, tenant_id, user_id, sys_priv,
@@ -2120,23 +2139,27 @@ int ObOraSysChecker::check_ora_obj_priv(
                     ret = OB_ERR_NO_PRIVILEGE;
                   }
                 }
-              } else if (ret == OB_ERR_EMPTY_QUERY || OB_ERR_NO_PRIVILEGE) {
+              } else if (ret == OB_ERR_EMPTY_QUERY || ret == OB_ERR_NO_PRIVILEGE) {
                 /* b. check grantable: with grant option 
                       调整错误码 ORA-01720: grant option does not exist for */
                 const ObSimpleTableSchemaV2 *view_schema = NULL;
-                if (OB_FAIL(guard.get_simple_table_schema(
-                            tenant_id, obj_id, view_schema))) {
-                  LOG_WARN("failed to get table schema", K(ret));
-                } else if (OB_ISNULL(view_schema)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("null table schema", K(ret));
+                if (obj_type == static_cast<uint64_t>(ObObjectType::TABLE)
+                    || obj_type == static_cast<uint64_t>(ObObjectType::INDEX)) {
+                  if (OB_FAIL(guard.get_simple_table_schema(tenant_id, obj_id, view_schema))) {
+                    LOG_WARN("failed to get table schema", K(ret));
+                  } else if (OB_ISNULL(view_schema)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("null table schema", K(ret));
+                  } else {
+                    ret = OB_ERR_NO_GRANT_OPTION;
+                    LOG_USER_ERROR(OB_ERR_NO_GRANT_OPTION,
+                                   database_name.length(),
+                                   database_name.ptr(),
+                                   view_schema->get_table_name_str().length(),
+                                   view_schema->get_table_name_str().ptr());
+                  }
                 } else {
                   ret = OB_ERR_NO_GRANT_OPTION;
-                  LOG_USER_ERROR(OB_ERR_NO_GRANT_OPTION, 
-                                database_name.length(), 
-                                database_name.ptr(),
-                                view_schema->get_table_name_str().length(), 
-                                view_schema->get_table_name_str().ptr());
                 }
               }
             }

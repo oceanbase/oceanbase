@@ -97,6 +97,7 @@ public:
   virtual ~ObAggregatedStore();
   virtual void reset() override;
   virtual void reuse() override;
+  int reuse_for_refresh_table() override;
   int reuse_capacity(const int64_t capacity) override;
   virtual int init(const ObTableAccessParam &param, common::hash::ObHashSet<int32_t> *agg_col_mask = nullptr) override;
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg) override;
@@ -132,6 +133,7 @@ public:
   // OB_INLINE void set_end() override { iter_end_flag_ = IterEndState::ITER_END; }
   int check_agg_in_row_mode(const ObTableIterParam &iter_param);
   bool has_data();
+  int set_ignore_eval_index_info(const bool ignore_eval_index_info) override;
   INHERIT_TO_STRING_KV("ObBlockBatchedRowStore", ObBlockBatchedRowStore, K_(agg_row), K_(agg_flat_row_mode));
 
 private:

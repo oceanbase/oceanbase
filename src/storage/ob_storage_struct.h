@@ -315,7 +315,7 @@ struct ObGetMergeTablesResult
   //for backfill
   bool is_backfill_;
   share::SCN backfill_scn_;
-  int64_t transfer_seq_; // is_used for write_macro_block in ss, used for all compaction.
+  int32_t private_transfer_epoch_; // is_used for write_macro_block in ss, used for all compaction.
 
   // for sstorage
   share::SCN rec_scn_;
@@ -329,7 +329,7 @@ struct ObGetMergeTablesResult
   int copy_basic_info(const ObGetMergeTablesResult &src);
   share::SCN get_merge_scn() const;
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn), K_(transfer_seq));
+      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn), K_(private_transfer_epoch));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -383,6 +383,10 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(transfer_seq), K_(need_check_sstable), K_(need_check_transfer_seq), K_(need_replace_remote_sstable), K_(is_only_replace_major));
 public:
+  /// NOTE: transfer_seq_ here to be used for
+  /// validation only and doesn't affect the private data's storage path.
+  /// DON'T USE IT to generate private data's storage path in SS mode.
+  /// For more detail please see:
   int64_t transfer_seq_;
   bool need_check_sstable_;
   bool need_check_transfer_seq_;

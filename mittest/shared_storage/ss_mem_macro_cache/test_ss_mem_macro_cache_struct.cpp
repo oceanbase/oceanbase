@@ -136,10 +136,12 @@ TEST_F(TestSSMemMacroCacheStruct, test_mem_block)
     ObSSMacroCacheMemBlock *mem_blk = mem_blks.at(0);
     ASSERT_EQ(0, mem_blk->macro_blk_cnt_);
     ASSERT_EQ(0, mem_blk->heat_val_);
-    mem_blk->update_state_after_add_macro(2);
-    mem_blk->update_state_after_add_macro(8);
-    mem_blk->update_state_after_add_macro(20);
-    ASSERT_EQ(3, mem_blk->macro_blk_cnt_);
+    mem_blk->inc_macro_blk_cnt();
+    mem_blk->update_heat(2);
+    mem_blk->inc_macro_blk_cnt();
+    mem_blk->update_heat(8);
+    mem_blk->inc_macro_blk_cnt();
+    mem_blk->update_heat(20);
     ASSERT_EQ(10, mem_blk->heat_val_);
     mem_blk->macro_blk_cnt_ = 0;
     mem_blk->heat_val_ = 0;
@@ -148,10 +150,10 @@ TEST_F(TestSSMemMacroCacheStruct, test_mem_block)
   {
     const int64_t exp_cold_cnt = 3;
     for (int64_t i = 0; i < exp_cold_cnt; ++i) {
-      mem_blks.at(i)->update_state_after_add_macro(i + 1);
+      mem_blks.at(i)->update_heat(i + 1);
     }
     for (int64_t i = exp_cold_cnt; i < mem_blks.count(); ++i) {
-      mem_blks.at(i)->update_state_after_add_macro(i + 10000);
+      mem_blks.at(i)->update_heat(i + 10000);
     }
     ObArray<ObSSMacroCacheMemBlkHandle> cold_blk_handles;
     for (int64_t i = 0; i < bucket_cnt - 1; ++i) {

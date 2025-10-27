@@ -251,6 +251,7 @@
 #include "observer/virtual_table/ob_list_file.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_detect_info.h"
+#include "observer/virtual_table/ob_all_virtual_ss_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_dba_source.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
 #include "observer/virtual_table/ob_all_virtual_ccl_status.h"
@@ -3221,6 +3222,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualLogServiceClusterInfo construct failed", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(logservice_cluster_info_table);
+            }
+          } break;
+          case OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_TID:
+          {
+            ObAllVirtualSSDiagnoseInfo *diagnose_info_table = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSSDiagnoseInfo, diagnose_info_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualSSDiagnozeInfo construct failed", K(ret));
+            } else if (OB_FAIL(diagnose_info_table->init())) {
+              SERVER_LOG(WARN, "failed to init diagnose info table", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(diagnose_info_table);
             }
           } break;
           case OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID:

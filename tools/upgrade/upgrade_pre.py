@@ -27,8 +27,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.4.1.0"
-#current_data_version = "4.4.1.0"
+#current_cluster_version = "4.5.0.0"
+#current_data_version = "4.5.0.0"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -985,7 +985,7 @@
 #  if upgrade_session_timeout_set:
 #    raise MyError('error in upgrade script, set_session_timeout_for_upgrade should only be called once')
 #  upgrade_session_timeout_set = True
-#  sql = "set @@session.ob_query_timeout = {0}".format(time)
+#  sql = "set @@session.ob_query_timeout = {0}".format(time * 1000 * 1000)
 #  logging.info(sql)
 #  cur.execute(sql)
 #
@@ -1479,13 +1479,20 @@
 #  return [_[0] for _ in query(cur, 'select tenant_id from oceanbase.__all_tenant')]
 #
 #def run_root_inspection(cur, timeout):
-#
-#  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
-#
-#  with SetSessionTimeout(cur, query_timeout):
-#    sql = "alter system run job 'root_inspection'"
-#    logging.info(sql)
-#    cur.execute(sql)
+#  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
+#  results = query(cur, sql)
+#  if len(results) != 1 or len(results[0]) != 1:
+#    warn_text = 'result not match, sql:"{}", results:{}'.format(sql, results)
+#    logging.warn(warn_text)
+#    raise MyError(warn_text)
+#  elif results[0][0] != 0:
+#    query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
+#    with SetSessionTimeout(cur, query_timeout):
+#      sql = "alter system run job 'root_inspection'"
+#      logging.info(sql)
+#      cur.execute(sql)
+#  else:
+#    logging.info("skip run 'root_inspection', results:{}".format(results))
 #
 #def upgrade_across_version(cur):
 #  current_data_version = actions.get_current_data_version()

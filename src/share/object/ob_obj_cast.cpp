@@ -2979,14 +2979,26 @@ static int double_string(const ObObjType expect_type, ObObjCastParams &params,
       } else {
         const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
         int32_t double_width = buf_length;
+        bool error = false;
         if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && params.dest_max_length_ > 0) {
           double_width = min(double_width, params.dest_max_length_);
         }
         length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE,
-                             double_width, buf, NULL, lib::is_oracle_mode(), TRUE);
+                             double_width, buf, &error, lib::is_oracle_mode(), TRUE);
         if (length == 0 && double_width < buf_length) {
           length = double_width;
           buf[length] = '\0';
+          if (OB_UNLIKELY(error) && CM_IS_COLUMN_CONVERT(cast_mode)) {
+            if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+              if (OB_NOT_NULL(params.exec_ctx_)) {
+                ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+                  OB_ERR_DATA_TRUNCATED, "", "", cast_mode);
+              }
+            } else {
+              ret = OB_ERR_DATA_TOO_LONG;
+              LOG_WARN("fail to set truncated double string", K(ret));
+            }
+          }
         }
       }
     }
@@ -2994,8 +3006,9 @@ static int double_string(const ObObjType expect_type, ObObjCastParams &params,
     LOG_DEBUG("finish double_string", K(ret), K(in), K(expect_type), K(str));
     ObObj tmp_out;
     ObString tmp_str;
-    if (OB_FAIL(convert_string_collation(str, ObCharset::get_system_collation(),
-                                         tmp_str, params.dest_collation_, params))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(convert_string_collation(str, ObCharset::get_system_collation(),
+                                                tmp_str, params.dest_collation_, params))) {
       LOG_WARN("fail to convert string collation", K(ret));
     } else if (OB_FAIL(check_convert_string(expect_type, params, tmp_str, tmp_out))) {
       LOG_WARN("fail to check_convert_string", K(ret), K(in), K(expect_type));
@@ -6333,17 +6346,18 @@ static int string_number(const ObObjType expect_type, ObObjCastParams &params,
         if (OB_SUCCESS != (tmp_ret = value.from(*bound_num, *params.allocator_v2_))) {
           LOG_WARN("copy min number failed", K(ret), K(tmp_ret), KPC(bound_num));
         }
-      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret
-          && OB_NOT_NULL(params.exec_ctx_)) {
+      } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+        const ObUserLoggingCtx *user_logging_ctx =
+          (params.exec_ctx_ == NULL) ? NULL : params.exec_ctx_->get_user_logging_ctx();
         if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
           ObString decimal_type_str("decimal");
-          ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+          ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
                                                      ret, decimal_type_str, in.get_string(),
                                                      params.cast_mode_);
         } else {
           ret = OB_ERR_TRUNCATED_WRONG_VALUE;
           ObString decimal_type_str("DECIMAL");
-          ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
+          ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
                                                      ret, decimal_type_str, in.get_string(),
                                                      params.cast_mode_);
         }
@@ -12407,18 +12421,20 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
       } else {
         MEMCPY(decint, limit_decint, int_bytes);
       }
-    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret && OB_NOT_NULL(params.exec_ctx_)) {
+    } else if (lib::is_mysql_mode() && OB_INVALID_NUMERIC == ret) {
+      const ObUserLoggingCtx *user_logging_ctx =
+        (params.exec_ctx_ == NULL) ? NULL : params.exec_ctx_->get_user_logging_ctx();
       if (CM_IS_COLUMN_CONVERT(params.cast_mode_)) {
         ObString decimal_type_str("decimal");
-        ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
-                                                    ret, decimal_type_str, in.get_string(),
-                                                    params.cast_mode_);
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
+                                                   ret, decimal_type_str, in.get_string(),
+                                                   params.cast_mode_);
       } else {
         ret = OB_ERR_TRUNCATED_WRONG_VALUE;
         ObString decimal_type_str("DECIMAL");
-        ObDataTypeCastUtil::log_user_error_warning(params.exec_ctx_->get_user_logging_ctx(),
-                                                    ret, decimal_type_str, in.get_string(),
-                                                    params.cast_mode_);
+        ObDataTypeCastUtil::log_user_error_warning(user_logging_ctx,
+                                                   ret, decimal_type_str, in.get_string(),
+                                                   params.cast_mode_);
       }
     }
   }

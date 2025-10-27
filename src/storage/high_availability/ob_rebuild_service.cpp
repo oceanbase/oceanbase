@@ -743,6 +743,7 @@ int ObRebuildService::check_can_rebuild_(
   int64_t paxos_replica_num = 0;
   const ObAddr &self_addr = GCONF.self_addr_;
   bool is_primary_tenant = false;
+  common::GlobalLearnerList learner_list;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -754,8 +755,11 @@ int ObRebuildService::check_can_rebuild_(
     can_rebuild = true;
   } else if (OB_FAIL(ObStorageHAUtils::check_is_primary_tenant(tenant_id, is_primary_tenant))) {
     LOG_WARN("failed to check is primary tenant", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ls->get_log_handler()->get_paxos_member_list(member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(ls->get_log_handler()->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
     LOG_WARN("failed to get paxos member list and learner list", K(ret), KPC(ls));
+  } else if (!member_list.contains(self_addr) && !learner_list.contains(self_addr))  {
+    can_rebuild = false;
+    LOG_INFO("replica do not in member list or learn list, cannot rebuild", K(ret), K(member_list), K(learner_list), K(self_addr));
   } else if (ObLSRebuildType::TRANSFER == rebuild_ctx.type_
       && is_primary_tenant
       && member_list.contains(self_addr)) {

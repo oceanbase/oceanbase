@@ -24,6 +24,10 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
     IN     method                 VARCHAR(65535) DEFAULT NULL,
     IN     refresh_parallel       INT            DEFAULT 0)
   BEGIN
+    DECLARE EXIT HANDLER for SQLWARNING
+    BEGIN
+      SIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT = 'mview refresh failed with sql warning exception';
+    END;
     COMMIT;
     CALL do_refresh(mv_name, method, refresh_parallel);
   END;

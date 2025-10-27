@@ -330,6 +330,7 @@ all_table_def = dict(
       ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'),
       ('semistruct_properties', 'longtext', 'false', ''),
+      ('mview_expand_definition', 'longtext', 'false', ''), #placeholder for mview in 4353
     ],
 )
 
@@ -7194,6 +7195,14 @@ def_table_schema(
         ('first_load_time', 'timestamp', 'true'),
         ('plan_cache_hit_total', 'bigint', 'false', '0'),
         ('plan_cache_hit_delta', 'bigint', 'false', '0'),
+        ('muti_query_total', 'bigint', 'false', '0'),
+        ('muti_query_delta', 'bigint', 'false', '0'),
+        ('muti_query_batch_total', 'bigint', 'false', '0'),
+        ('muti_query_batch_delta', 'bigint', 'false', '0'),
+        ('full_table_scan_total', 'bigint', 'false', '0'),
+        ('full_table_scan_delta', 'bigint', 'false', '0'),
+        ('error_count_total', 'bigint', 'false', '0'),
+        ('error_count_delta', 'bigint', 'false', '0'),
     ],
 )
 
@@ -8426,6 +8435,7 @@ def_table_schema(**all_ai_model_endpoint_def)
 # 574: __all_tenant_macro_block_copy_task
 # 575: __all_tenant_macro_block_copy_task_progress
 # 576: __all_tenant_macro_block_copy_task_history
+# 577: __all_tablet_to_global_temporary_table
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -11392,7 +11402,27 @@ def_table_schema(
   vtable_route_policy = 'local',
 )
 
-# 11130: __all_virtual_ss_diagnose_info
+def_table_schema(
+  owner = 'cxf262476',
+  table_name    = '__all_virtual_ss_diagnose_info',
+  table_id      = '11130',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('type', 'varchar:OB_MERGE_TYPE_STR_LENGTH'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+    ('create_time', 'timestamp'),
+    ('diagnose_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 ################################################################
 # INFORMATION SCHEMA
@@ -15751,6 +15781,14 @@ def_table_schema(
     ('FIRST_LOAD_TIME', 'timestamp', 'true'),
     ('PLAN_CACHE_HIT_TOTAL', 'bigint', 'false', '0'),
     ('PLAN_CACHE_HIT_DELTA', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_TOTAL', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_DELTA', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_BATCH_TOTAL', 'bigint', 'false', '0'),
+    ('MUTI_QUERY_BATCH_DELTA', 'bigint', 'false', '0'),
+    ('FULL_TABLE_SCAN_TOTAL', 'bigint', 'false', '0'),
+    ('FULL_TABLE_SCAN_DELTA', 'bigint', 'false', '0'),
+    ('ERROR_COUNT_TOTAL', 'bigint', 'false', '0'),
+    ('ERROR_COUNT_DELTA', 'bigint', 'false', '0'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -17745,11 +17783,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15528: __all_virtual_backup_validate_job_history
 # 15529: __all_virtual_backup_validate_task
 # 15530: __all_virtual_backup_validate_task_history
-
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531', all_def_keywords['__all_virtual_tenant_ss_storage_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
-# 15534: __all_virtual_ss_diagnose_info
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keywords['__all_virtual_ss_diagnose_info']))
 # 15535: __all_virtual_wr_active_session_history_v2
 
 # 余留位置（此行之前占位）
@@ -19352,7 +19389,9 @@ def_table_schema(
                          user_client_port as USER_CLIENT_PORT,
                          trans_status as TRANS_STATUS,
                          ccl_rule_id as CCL_RULE_ID,
-                         ccl_match_time as CCL_MATCH_TIME
+                         ccl_match_time as CCL_MATCH_TIME,
+                         tx_table_read_cnt as TX_TABLE_READ_CNT,
+                         outrow_lob_cnt as OUTROW_LOB_CNT
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -19772,7 +19811,9 @@ def_table_schema(
     USER_CLIENT_PORT,
     TRANS_STATUS,
     CCL_RULE_ID,
-    CCL_MATCH_TIME
+    CCL_MATCH_TIME,
+    TX_TABLE_READ_CNT,
+    OUTROW_LOB_CNT
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -21085,6 +21126,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.TENANT_ID,
@@ -24838,7 +24882,7 @@ def_table_schema(
       CAST(NULL AS CHAR(128)) PARENT_TABLE_PARTITION,
 
       CAST (CASE WHEN PART.PARTITION_POSITION >
-            MAX (CASE WHEN PART.HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
+            MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
                  THEN PART.PARTITION_POSITION ELSE NULL END)
             OVER(PARTITION BY DB_TB.TABLE_ID)
             THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
@@ -24906,6 +24950,7 @@ def_table_schema(
                    PART_NAME,
                    SUB_PART_NUM,
                    HIGH_BOUND_VAL,
+                   B_HIGH_BOUND_VAL,
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
@@ -25524,7 +25569,11 @@ def_table_schema(
     CAST(NULL AS CHAR(3)) AS GLOBAL_STATS,
     CAST(NULL AS CHAR(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS CHAR(1000)) AS PARAMETERS,
-    CAST('NO' AS CHAR(3)) AS "INTERVAL",
+    CAST (CASE WHEN PART.PARTITION_POSITION >
+          MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = I.B_TRANSITION_POINT
+                THEN PART.PARTITION_POSITION ELSE NULL END)
+          OVER(PARTITION BY I.TABLE_ID)
+          THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
     CAST(NULL AS CHAR(3)) AS SEGMENT_CREATED,
     CAST(NULL AS CHAR(3)) AS ORPHANED_ENTRIES
     FROM
@@ -25543,6 +25592,7 @@ def_table_schema(
                  PART_NAME,
                  SUB_PART_NUM,
                  HIGH_BOUND_VAL,
+                 B_HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
                  PARTITION_TYPE,
@@ -26413,7 +26463,7 @@ def_table_schema(
       CAST(NULL AS CHAR(128)) PARENT_TABLE_PARTITION,
 
       CAST (CASE WHEN PART.PARTITION_POSITION >
-            MAX (CASE WHEN PART.HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
+            MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
                  THEN PART.PARTITION_POSITION ELSE NULL END)
             OVER(PARTITION BY DB_TB.TABLE_ID)
             THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
@@ -26480,6 +26530,7 @@ def_table_schema(
                    PART_NAME,
                    SUB_PART_NUM,
                    HIGH_BOUND_VAL,
+                   B_HIGH_BOUND_VAL,
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
@@ -26972,7 +27023,11 @@ def_table_schema(
     CAST(NULL AS CHAR(3)) AS GLOBAL_STATS,
     CAST(NULL AS CHAR(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS CHAR(1000)) AS PARAMETERS,
-    CAST('NO' AS CHAR(3)) AS "INTERVAL",
+    CAST (CASE WHEN PART.PARTITION_POSITION >
+          MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = I.B_TRANSITION_POINT
+                THEN PART.PARTITION_POSITION ELSE NULL END)
+          OVER(PARTITION BY I.TABLE_ID)
+          THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
     CAST(NULL AS CHAR(3)) AS SEGMENT_CREATED,
     CAST(NULL AS CHAR(3)) AS ORPHANED_ENTRIES
     FROM
@@ -26989,6 +27044,7 @@ def_table_schema(
                  PART_NAME,
                  SUB_PART_NUM,
                  HIGH_BOUND_VAL,
+                 B_HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
                  PARTITION_TYPE,
@@ -37662,7 +37718,15 @@ def_table_schema(
       ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
   FROM oceanbase.__all_virtual_sqlstat
 """.replace("\n", " "),
   normal_columns  = [],
@@ -37736,7 +37800,16 @@ ROUTE_MISS_TOTAL,
 ROUTE_MISS_DELTA,
 FIRST_LOAD_TIME,
 PLAN_CACHE_HIT_TOTAL,
-PLAN_CACHE_HIT_DELTA FROM oceanbase.gv$ob_sqlstat WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLAN_CACHE_HIT_DELTA,
+MUTI_QUERY_TOTAL,
+MUTI_QUERY_DELTA,
+MUTI_QUERY_BATCH_TOTAL,
+MUTI_QUERY_BATCH_DELTA,
+FULL_TABLE_SCAN_TOTAL,
+FULL_TABLE_SCAN_DELTA,
+ERROR_COUNT_TOTAL,
+ERROR_COUNT_DELTA
+FROM oceanbase.gv$ob_sqlstat WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
 )
@@ -37809,7 +37882,15 @@ def_table_schema(
       STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       STAT.FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       STAT.PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      STAT.MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      STAT.MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      STAT.MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      STAT.MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
@@ -37894,7 +37975,15 @@ def_table_schema(
       STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       STAT.FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       STAT.PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      STAT.MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      STAT.MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      STAT.MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      STAT.MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
     FROM
     (
       oceanbase.__all_virtual_wr_sqlstat STAT
@@ -43686,6 +43775,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.CG_IDX,
@@ -52943,7 +53035,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) PARENT_TABLE_PARTITION,
 
       CAST (CASE WHEN PART.PARTITION_POSITION >
-            MAX (CASE WHEN PART.HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
+            MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
                  THEN PART.PARTITION_POSITION ELSE NULL END)
             OVER(PARTITION BY DB_TB.TABLE_ID)
             THEN 'YES' ELSE 'NO' END AS VARCHAR2(3)) "INTERVAL",
@@ -52984,6 +53076,7 @@ def_table_schema(
                    PART_NAME,
                    SUB_PART_NUM,
                    HIGH_BOUND_VAL,
+                   B_HIGH_BOUND_VAL,
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
@@ -53643,7 +53736,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) PARENT_TABLE_PARTITION,
 
       CAST (CASE WHEN PART.PARTITION_POSITION >
-            MAX (CASE WHEN PART.HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
+            MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
                  THEN PART.PARTITION_POSITION ELSE NULL END)
             OVER(PARTITION BY DB_TB.TABLE_ID)
             THEN 'YES' ELSE 'NO' END AS VARCHAR2(3)) "INTERVAL",
@@ -53712,6 +53805,7 @@ def_table_schema(
                    PART_NAME,
                    SUB_PART_NUM,
                    HIGH_BOUND_VAL,
+                   B_HIGH_BOUND_VAL,
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
@@ -53800,7 +53894,7 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) PARENT_TABLE_PARTITION,
 
       CAST (CASE WHEN PART.PARTITION_POSITION >
-            MAX (CASE WHEN PART.HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
+            MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = DB_TB.B_TRANSITION_POINT
                  THEN PART.PARTITION_POSITION ELSE NULL END)
             OVER(PARTITION BY DB_TB.TABLE_ID)
             THEN 'YES' ELSE 'NO' END AS VARCHAR2(3)) "INTERVAL",
@@ -53840,6 +53934,7 @@ def_table_schema(
                    PART_NAME,
                    SUB_PART_NUM,
                    HIGH_BOUND_VAL,
+                   B_HIGH_BOUND_VAL,
                    LIST_VAL,
                    COMPRESS_FUNC_NAME,
                    TABLESPACE_ID,
@@ -56370,7 +56465,11 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(3)) AS GLOBAL_STATS,
     CAST(NULL AS VARCHAR2(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS VARCHAR2(1000)) AS PARAMETERS,
-    CAST('NO' AS VARCHAR2(3)) AS "INTERVAL",
+    CAST (CASE WHEN PART.PARTITION_POSITION >
+          MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = I.B_TRANSITION_POINT
+                THEN PART.PARTITION_POSITION ELSE NULL END)
+          OVER(PARTITION BY I.TABLE_ID)
+          THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
     CAST(NULL AS VARCHAR2(3)) AS SEGMENT_CREATED,
     CAST(NULL AS VARCHAR2(3)) AS ORPHANED_ENTRIES
     FROM
@@ -56389,6 +56488,7 @@ def_table_schema(
                  PART_NAME,
                  SUB_PART_NUM,
                  HIGH_BOUND_VAL,
+                 B_HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
                  PARTITION_TYPE,
@@ -56470,7 +56570,11 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(3)) AS GLOBAL_STATS,
     CAST(NULL AS VARCHAR2(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS VARCHAR2(1000)) AS PARAMETERS,
-    CAST('NO' AS VARCHAR2(3)) AS "INTERVAL",
+    CAST (CASE WHEN PART.PARTITION_POSITION >
+          MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = I.B_TRANSITION_POINT
+                THEN PART.PARTITION_POSITION ELSE NULL END)
+          OVER(PARTITION BY I.TABLE_ID)
+          THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
     CAST(NULL AS VARCHAR2(3)) AS SEGMENT_CREATED,
     CAST(NULL AS VARCHAR2(3)) AS ORPHANED_ENTRIES
     FROM
@@ -56488,6 +56592,7 @@ def_table_schema(
                  PART_NAME,
                  SUB_PART_NUM,
                  HIGH_BOUND_VAL,
+                 B_HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
                  PARTITION_TYPE,
@@ -56571,7 +56676,11 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(3)) AS GLOBAL_STATS,
     CAST(NULL AS VARCHAR2(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS VARCHAR2(1000)) AS PARAMETERS,
-    CAST('NO' AS VARCHAR2(3)) AS "INTERVAL",
+    CAST (CASE WHEN PART.PARTITION_POSITION >
+          MAX (CASE WHEN PART.B_HIGH_BOUND_VAL = I.B_TRANSITION_POINT
+                THEN PART.PARTITION_POSITION ELSE NULL END)
+          OVER(PARTITION BY I.TABLE_ID)
+          THEN 'YES' ELSE 'NO' END AS CHAR(3)) "INTERVAL",
     CAST(NULL AS VARCHAR2(3)) AS SEGMENT_CREATED,
     CAST(NULL AS VARCHAR2(3)) AS ORPHANED_ENTRIES
     FROM
@@ -56588,6 +56697,7 @@ def_table_schema(
                  PART_NAME,
                  SUB_PART_NUM,
                  HIGH_BOUND_VAL,
+                 B_HIGH_BOUND_VAL,
                  LIST_VAL,
                  COMPRESS_FUNC_NAME,
                  PARTITION_TYPE,
@@ -64668,7 +64778,15 @@ def_table_schema(
       STAT.ROUTE_MISS_DELTA AS ROUTE_MISS_DELTA,
       STAT.FIRST_LOAD_TIME AS FIRST_LOAD_TIME,
       STAT.PLAN_CACHE_HIT_TOTAL AS PLAN_CACHE_HIT_TOTAL,
-      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA
+      STAT.PLAN_CACHE_HIT_DELTA AS PLAN_CACHE_HIT_DELTA,
+      STAT.MUTI_QUERY_TOTAL AS MUTI_QUERY_TOTAL,
+      STAT.MUTI_QUERY_DELTA AS MUTI_QUERY_DELTA,
+      STAT.MUTI_QUERY_BATCH_TOTAL AS MUTI_QUERY_BATCH_TOTAL,
+      STAT.MUTI_QUERY_BATCH_DELTA AS MUTI_QUERY_BATCH_DELTA,
+      STAT.FULL_TABLE_SCAN_TOTAL AS FULL_TABLE_SCAN_TOTAL,
+      STAT.FULL_TABLE_SCAN_DELTA AS FULL_TABLE_SCAN_DELTA,
+      STAT.ERROR_COUNT_TOTAL AS ERROR_COUNT_TOTAL,
+      STAT.ERROR_COUNT_DELTA AS ERROR_COUNT_DELTA
   FROM
     SYS.ALL_VIRTUAL_WR_SQLSTAT STAT,
     SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
@@ -66758,7 +66876,9 @@ def_table_schema(
                          user_client_port as USER_CLIENT_PORT,
                          trans_status as TRANS_STATUS,
                          ccl_rule_id as CCL_RULE_ID,
-                         ccl_match_time as CCL_MATCH_TIME
+                         ccl_match_time as CCL_MATCH_TIME,
+                         tx_table_read_cnt as TX_TABLE_READ_CNT,
+                         outrow_lob_cnt as OUTROW_LOB_CNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -66881,7 +67001,9 @@ INSERT_DUPLICATE_ROW_COUNT,
 USER_CLIENT_PORT,
 TRANS_STATUS,
 CCL_RULE_ID,
-CCL_MATCH_TIME
+CCL_MATCH_TIME,
+TX_TABLE_READ_CNT,
+OUTROW_LOB_CNT
 FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -68339,6 +68461,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.LS_ID,
@@ -71236,7 +71361,12 @@ def_table_schema(
            DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
-           CREATE_TIME
+           CREATE_TIME,
+           CASE replica_type
+               WHEN 0 THEN 'FULL'
+               WHEN 5 THEN 'LOGONLY'
+               ELSE NULL
+           END AS REPLICA_TYPE
     FROM SYS.ALL_VIRTUAL_UNIT
 """.replace("\n", " ")
 )
@@ -71273,7 +71403,8 @@ def_table_schema(
            DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
-           CREATE_TIME
+           CREATE_TIME,
+           REPLICA_TYPE
     FROM SYS.GV$OB_UNITS
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
@@ -74199,7 +74330,15 @@ def_table_schema(
       CAST(ROUTE_MISS_DELTA AS NUMBER) AS ROUTE_MISS_DELTA,
       CAST(FIRST_LOAD_TIME AS TIMESTAMP(6)) AS FIRST_LOAD_TIME,
       CAST(PLAN_CACHE_HIT_TOTAL AS NUMBER) AS PLAN_CACHE_HIT_TOTAL,
-      CAST(PLAN_CACHE_HIT_DELTA AS NUMBER) AS PLAN_CACHE_HIT_DELTA
+      CAST(PLAN_CACHE_HIT_DELTA AS NUMBER) AS PLAN_CACHE_HIT_DELTA,
+      CAST(MUTI_QUERY_TOTAL AS NUMBER) AS MUTI_QUERY_TOTAL,
+      CAST(MUTI_QUERY_DELTA AS NUMBER) AS MUTI_QUERY_DELTA,
+      CAST(MUTI_QUERY_BATCH_TOTAL AS NUMBER) AS MUTI_QUERY_BATCH_TOTAL,
+      CAST(MUTI_QUERY_BATCH_DELTA AS NUMBER) AS MUTI_QUERY_BATCH_DELTA,
+      CAST(FULL_TABLE_SCAN_TOTAL AS NUMBER) AS FULL_TABLE_SCAN_TOTAL,
+      CAST(FULL_TABLE_SCAN_DELTA AS NUMBER) AS FULL_TABLE_SCAN_DELTA,
+      CAST(ERROR_COUNT_TOTAL AS NUMBER) AS ERROR_COUNT_TOTAL,
+      CAST(ERROR_COUNT_DELTA AS NUMBER) AS ERROR_COUNT_DELTA
     FROM SYS.ALL_VIRTUAL_SQLSTAT
 """.replace("\n", " "),
 )
@@ -74274,7 +74413,16 @@ ROUTE_MISS_TOTAL,
 ROUTE_MISS_DELTA,
 FIRST_LOAD_TIME,
 PLAN_CACHE_HIT_TOTAL,
-PLAN_CACHE_HIT_DELTA FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+PLAN_CACHE_HIT_DELTA,
+MUTI_QUERY_TOTAL,
+MUTI_QUERY_DELTA,
+MUTI_QUERY_BATCH_TOTAL,
+MUTI_QUERY_BATCH_DELTA,
+FULL_TABLE_SCAN_TOTAL,
+FULL_TABLE_SCAN_DELTA,
+ERROR_COUNT_TOTAL,
+ERROR_COUNT_DELTA
+FROM SYS.GV$OB_SQLSTAT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
@@ -78182,6 +78330,9 @@ SELECT
     when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
     when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
     when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
+    when 29 then 'INC_MAJOR' when 30 then 'INC_CO_MAJOR' when 31 then 'INC_NORMAL_CG' when 32 then 'INC_ROWKEY_CG'
+    when 33 then 'INC_DDL_DUMP' when 34 then 'INC_DDL_MERGE_CO' when 35 then 'INC_DDL_MERGE_CG'
+    when 36 then 'INC_DDL_MEM_CO' when 37 then 'INC_DDL_MEM_CG' when 38 then 'INC_DDL_MEM'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.CG_IDX,
@@ -78224,7 +78375,7 @@ def_table_schema(
       ELSE
         CASE
           WHEN COMPILE_DB_ID IS NULL THEN 'NOT IN DISK CACHE'
-          ELSE DBMS_UTILITY.CHECK_DISK_CACHE_OBJ_EXPIRED(OBJECT_ID, MERGE_VERSION)
+          ELSE DBMS_UTILITY.CHECK_DISK_CACHE_OBJ_EXPIRED(OBJECT_ID, MERGE_VERSION, EXTRA_INFO)
         END
     END AS DISK_CACHE_STATUS,
     PL_CACHE_STATUS
@@ -78238,9 +78389,11 @@ def_table_schema(
     ALLT.COMPILE_DB_ID AS COMPILE_DB_ID,
     ALLT.IS_INVOKER_RIGHT AS IS_INVOKER_RIGHT,
     ALLT.MERGE_VERSION AS MERGE_VERSION,
+    ALLT.EXTRA_INFO AS EXTRA_INFO,
     DECODE(ALLT.COMPILE_DB_ID,
             NULL, 'NOT IN PL CACHE',
-            DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE, ALLT.COMPILE_DB_ID)) AS PL_CACHE_STATUS
+            DBMS_UTILITY.CHECK_PL_CACHE_OBJ_EXPIRED(ALLT.OBJECT_ID, ALLT.OBJECT_TYPE,
+              ALLT.COMPILE_DB_ID, ALLT.ARCH_TYPE)) AS PL_CACHE_STATUS
     FROM
     (
       SELECT
@@ -78251,7 +78404,9 @@ def_table_schema(
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(PS.FLAG, 4) = 4
-              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT
+              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT,
+            D.ARCH_TYPE AS ARCH_TYPE,
+            D.EXTRA_INFO AS EXTRA_INFO
       FROM SYS.ALL_VIRTUAL_PACKAGE_SYS_AGENT PS
       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D
       ON D.KEY_ID = PS.PACKAGE_ID
@@ -78278,7 +78433,9 @@ def_table_schema(
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(P.FLAG, 4) = 4
-              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT
+              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT,
+            D.ARCH_TYPE AS ARCH_TYPE,
+            D.EXTRA_INFO AS EXTRA_INFO
       FROM SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT P
       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D
       ON D.KEY_ID = P.PACKAGE_ID
@@ -78301,7 +78458,9 @@ def_table_schema(
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(R.FLAG, 16) = 16
-              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT
+              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT,
+            D.ARCH_TYPE AS ARCH_TYPE,
+            D.EXTRA_INFO AS EXTRA_INFO
       FROM SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT R
       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D
       ON D.KEY_ID = R.ROUTINE_ID
@@ -78321,7 +78480,9 @@ def_table_schema(
             D.COMPILE_DB_ID AS COMPILE_DB_ID,
             D.MERGE_VERSION AS MERGE_VERSION,
             CASE WHEN BITAND(TY.FLAG, 4) = 4
-              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT
+              THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT,
+            D.ARCH_TYPE AS ARCH_TYPE,
+            D.EXTRA_INFO AS EXTRA_INFO
       FROM SYS.ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT TY
       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D
       ON BITAND(D.KEY_ID, -2305843009213693953) = TY.COLL_TYPE
@@ -78341,7 +78502,9 @@ def_table_schema(
           D.COMPILE_DB_ID AS COMPILE_DB_ID,
           D.MERGE_VERSION AS MERGE_VERSION,
           CASE WHEN BITAND(T.package_flag, 4) = 4
-            THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT
+            THEN 'TRUE' ELSE 'FALSE' END AS IS_INVOKER_RIGHT,
+            D.ARCH_TYPE AS ARCH_TYPE,
+            D.EXTRA_INFO AS EXTRA_INFO
       FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT T
       LEFT OUTER JOIN SYS.ALL_VIRTUAL_NCOMP_DLL_V2_REAL_AGENT D
       ON BITAND(BITAND(D.KEY_ID, -4611686018427387905), 9223372036854775807) = T.TRIGGER_ID
@@ -79467,6 +79630,9 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_ai_model_endpoint'])
+
+# 101122: __all_tablet_to_global_temporary_table
+# 101123: __all_tablet_to_global_temporary_table
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名

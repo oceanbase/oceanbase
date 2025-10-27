@@ -25,13 +25,12 @@ namespace pl
  *ob_compatibility_version
  *_enable_old_charset_aggregation
 */
-static constexpr int64_t PL_CACHE_SYS_VAR_COUNT = 5;
+static constexpr int64_t PL_CACHE_SYS_VAR_COUNT = 4;
 static constexpr share::ObSysVarClassType InfluencePLMap[PL_CACHE_SYS_VAR_COUNT + 1] = {
   share::SYS_VAR_DIV_PRECISION_INCREMENT,
   share::SYS_VAR_NLS_LENGTH_SEMANTICS,
   share::SYS_VAR_OB_COMPATIBILITY_VERSION,
   share::SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
-  share::SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
   share::SYS_VAR_INVALID
 };
 
@@ -299,17 +298,20 @@ int ObPLCacheMgr::flush_pl_cache_by_sql(
   } else {
     tenant_name = tenant->get_tenant_name_str();
   }
-  //get db name
-  const ObSimpleDatabaseSchema *database_schema = NULL;
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(tenant_schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
-    LOG_WARN("failed get db schema", K(ret));
-  } else if (OB_ISNULL(database_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant is null", K(ret));
-  } else {
-     db_name = database_schema->get_database_name();
+
+  if (OB_INVALID_ID != db_id) {
+    //get db name
+    const ObSimpleDatabaseSchema *database_schema = NULL;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(tenant_schema_guard.get_database_schema(tenant_id, db_id, database_schema))) {
+      LOG_WARN("failed get db schema", K(ret));
+    } else if (OB_ISNULL(database_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tenant is null", K(ret));
+    } else {
+      db_name = database_schema->get_database_name();
+    }
   }
 
   share::ObTenantRole tenant_role;
@@ -318,22 +320,18 @@ int ObPLCacheMgr::flush_pl_cache_by_sql(
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(OB_SYS_TENANT_ID);
   ObSqlString sql;
   int64_t affected_rows = 0;
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected sql proxy", K(ret));
-  } else if (OB_FAIL(sql.assign_fmt("alter system flush pl cache schema_id = %lu databases = \"%.*s\" TENANT = \"%.*s\" global", key_id,
-                                      db_name.length(), db_name.ptr(), tenant_name.length(), tenant_name.ptr()))) {
-    LOG_WARN("alter system flush pl cache failed.", K(ret), K(key_id));
-  } else {
-    if (OB_FAIL(sql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute query failed", K(ret), K(sql));
+  CK (OB_NOT_NULL(sql_proxy = GCTX.sql_proxy_));
+  CK (!tenant_name.empty());
+  if (OB_SUCC(ret)) {
+    if (!db_name.empty()) {
+      OZ (sql.assign_fmt("alter system flush pl cache schema_id = %lu databases = \"%.*s\" TENANT = \"%.*s\" global", key_id,
+        db_name.length(), db_name.ptr(), tenant_name.length(), tenant_name.ptr()));
     } else {
-      // do nothing
-      LOG_INFO("succ to flush pl cache", K(key_id), K(tenant_id), K(affected_rows));
+      OZ (sql.assign_fmt("alter system flush pl cache schema_id = %lu TENANT = \"%.*s\" global", key_id,
+        tenant_name.length(), tenant_name.ptr()));
     }
   }
+  OZ (sql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows));
   return ret;
 }
 

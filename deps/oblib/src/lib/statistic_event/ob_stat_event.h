@@ -344,6 +344,7 @@ STAT_EVENT_ADD_DEF(BANDWIDTH_OUT_THROTTLE, "bandwidth out throttle size", ObStat
 STAT_EVENT_ADD_DEF(MEMSTORE_READ_ROW_COUNT, "memstore read row count", ObStatClassIds::STORAGE, 60056, true, true, true, "Number of rows read from the MemTable before filtering. This metric will be renamed to DELTA_READ_ROW_CNT in V4.4.1 by the feature branch fuse_row_cache_opt. Each time a row is read from the MemTable, this count is incremented by 1.")
 STAT_EVENT_ADD_DEF(SSSTORE_READ_ROW_COUNT, "ssstore read row count", ObStatClassIds::STORAGE, 60057, true, true, true, "Number of major MemTable, minor MemTable, and mini MemTable rows read under the pushdown/non-pushdown path during queries. There is an issue with the collection method, which will be fixed in V4.4.1. Under the pushdown path: Includes filtered rows, representing the total number of sstable rows within the range processed by the pushdown path. Rowstore includes rows skipped by the skip index. Columnstore does not include rows skipped by the skip index. Under the non-pushdown path: Includes filtered rows, but excludes uncommitted rows, rolled-back rows, and multi-version rows within micro blocks.")
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_BYTES, "memstore write bytes", ObStatClassIds::STORAGE, 60058, true, true, true, "Total amount of data (in bytes) successfully written to the MemTable. After a successful write to the MemTable, the size of the primary key and the amount of data will be counted and added to this value.")
+STAT_EVENT_ADD_DEF(MEMSTORE_DUMP_UNCOMMITTED_SSTABLE_CNT, "memstore dump uncommitted sstable cnt", ObStatClassIds::STORAGE, 60059, false, true, true, "When the MemTables are dumped to an SSTable, if the SSTable contains uncommitted rows, this count is incremented by 1.")
 
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT, "memstore write lock wakenup count in lock_wait_mgr", ObStatClassIds::STORAGE, 60068, false, true, true, "Number of times a request was awakened after a write lock conflict. During the writing process to the MemTable, if a lock conflict occurs, the request will be placed in the lock conflict queue. If the request is awakened, this value will be incremented by 1.")
 
@@ -947,6 +948,12 @@ STAT_EVENT_SET_DEF(KV_CACHE_HOLD, "kvcache hold", ObStatClassIds::RESOURCE, 1400
 STAT_EVENT_SET_DEF(UNMANAGED_MEMORY_SIZE, "unmanaged memory size", ObStatClassIds::RESOURCE, 140019, false, true, true, "Memory (in bytes) allocated by library functions using mmap. This is a global memory value that records in real time the memory allocated and released via mmap/unmap calls from library functions. It refers to memory allocated using mmap by third-party library functions called by observer.") // FARM COMPAT WHITELIST
 STAT_EVENT_SET_DEF(HIDDEN_SYS_DATA_DISK_SIZE, "hidden sys data disk size", ObStatClassIds::RESOURCE, 140020, false, true, true, "Disk size (in bytes) of the hidden sys tenant configuration in shared storage mode. For non-sys tenants, this value is displayed as 0. For sys tenants, there are two scenarios: 1. If the value of the hidden parameter _ss_hidden_sys_tenant_data_disk_size is 0, then HIDDEN_SYS_DATA_DISK_SIZE is set to twice the value of the hidden parameter _hidden_sys_tenant_memory at observer startup. 2. If _ss_hidden_sys_tenant_data_disk_size is non-zero, then HIDDEN_SYS_DATA_DISK_SIZE is set to the value of this hidden parameter.")
 
+STAT_EVENT_SET_DEF(DEFAULT_GROUP_CPU_TIME, "default group cpu time", ObStatClassIds::RESOURCE, 140021, false, true, true, "default group cpu time for RPC, SQL and inner tasks.")
+STAT_EVENT_SET_DEF(OLAP_ASYN_JOB_GROUP_CPU_TIME, "olap async job group cpu time", ObStatClassIds::RESOURCE, 140022, false, true, true, "olap async job group cpu time.")
+STAT_EVENT_SET_DEF(DBMS_SCHED_JOB_GROUP_CPU_TIME, "dbms sched job group cpu time", ObStatClassIds::RESOURCE, 140023, false, true, true, "dbms sched job group cpu time.")
+STAT_EVENT_SET_DEF(LARGE_QUERY_GROUP_CPU_TIME, "large query group cpu time", ObStatClassIds::RESOURCE, 140024, false, true, true, "large query group cpu time.")
+STAT_EVENT_SET_DEF(PX_GROUP_CPU_TIME, "PX group cpu time", ObStatClassIds::RESOURCE, 140025, false, true, true, "PX group cpu time.")
+STAT_EVENT_SET_DEF(DAG_GROUP_CPU_TIME, "DAG group cpu time", ObStatClassIds::RESOURCE, 140026, false, true, true, "DAG group cpu time.")
 //CLOG
 
 // DEBUG
@@ -974,7 +981,8 @@ STAT_EVENT_SET_DEF(ASYNC_DATA_MAINTAIN_LOG_DROPPED_COUNT, "async data maintain l
 STAT_EVENT_SET_DEF(ASYNC_ROOT_SERVICE_LOG_DROPPED_COUNT, "async root service log dropped count", ObStatClassIds::DEBUG, 160034, false, true, true, "Number of failed RS log prints (due to throttling or other reasons). This metric represents the output process of system logs such as observer.log.")
 STAT_EVENT_SET_DEF(ASYNC_SCHEMA_LOG_DROPPED_COUNT, "async schema log dropped count", ObStatClassIds::DEBUG, 160035, false, true, true, "Number of failed schema log prints (due to throttling or other reasons). This metric represents the output process of system logs such as observer.log.")
 STAT_EVENT_SET_DEF(ASYNC_FORCE_ALLOW_LOG_DROPPED_COUNT, "async force allow log dropped count", ObStatClassIds::DEBUG, 160036, false, true, true, "Number of failed forced log prints (due to throttling or other reasons). This metric represents the output process of system logs such as observer.log.")
-
+STAT_EVENT_SET_DEF(OB_LOGGER_ALLOC_FROM_CACHE_COUNT, "logger allocate log item from cache count", ObStatClassIds::DEBUG, 160037, false, true, true, "Number of log items allcate from cache.")
+STAT_EVENT_SET_DEF(OB_LOGGER_ALLOC_FROM_ALLCATOR_COUNT, "logger allocate log item from allocator count", ObStatClassIds::DEBUG, 160038, false, true, true, "Number of log items allcate from allocator.")
 
 //OBSERVER
 STAT_EVENT_SET_DEF(OBSERVER_PARTITION_TABLE_UPATER_USER_QUEUE_SIZE, "observer partition table updater user table queue size", ObStatClassIds::OBSERVER, 170001, false, true, true, "")

@@ -265,6 +265,7 @@ struct ObQueryRangeCtx
       can_range_get_(true),
       contail_geo_filters_(false),
       force_no_link_(false),
+      is_global_index_(false),
       unique_index_column_num_(-1),
       constraints_expr_factory_(nullptr) {}
   ~ObQueryRangeCtx() {}
@@ -311,6 +312,7 @@ struct ObQueryRangeCtx
   bool can_range_get_;
   bool contail_geo_filters_;
   bool force_no_link_;
+  bool is_global_index_;
   int64_t unique_index_column_num_;
   ObRawExprFactory *constraints_expr_factory_;
 };
@@ -419,6 +421,7 @@ public:
   virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }
   virtual int get_prefix_info(int64_t &equal_prefix_count,
                               int64_t &range_prefix_count,
+                              int64_t &ss_range_prefix_count,
                               bool &contain_always_false) const;
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
 
@@ -428,6 +431,7 @@ public:
   int get_prefix_info(const ObRangeNode *range_node,
                       bool* equals,
                       bool* extract_ranges,
+                      const int64_t start_offset,
                       int64_t &equal_prefix_count,
                       int64_t &range_prefix_count) const;
   int get_new_equal_idx(const ObRangeNode *range_node,

@@ -308,17 +308,20 @@ void ObTabletPersister::print_time_stats(
       ret = OB_ERR_UNDEFINED;
       LOG_ERROR("unexpected call", K(ret));
     } else if (persist_param.is_inc_shared_object()) {
+    } else if (OB_UNLIKELY(!ObTabletTransferInfo::is_private_transfer_epoch_valid(persist_param.private_transfer_epoch_))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid private transfer epoch for private tablet persistence", K(ret), K(persist_param));
     } else { // private
       const ObLSID &ls_id = persist_param.ls_id_;
       const ObTabletID &tablet_id = persist_param.tablet_id_;
       ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
       ObTabletMapKey tablet_key(ls_id, tablet_id);
       // persist a tmp tablet or full mds tablet
-      opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), persist_param.meta_version_, persist_param.tablet_transfer_seq_);
+      opt.set_ss_private_tablet_meta_object_opt(ls_id.id(), tablet_id.id(), persist_param.meta_version_, persist_param.private_transfer_epoch_);
     }
 #endif
   } else {
-    opt.set_private_meta_macro_object_opt(persist_param.tablet_id_.id(), persist_param.tablet_transfer_seq_);
+    opt.set_private_meta_macro_object_opt(persist_param.tablet_id_.id(), persist_param.private_transfer_epoch_);
   }
   return ret;
 }
@@ -1495,7 +1498,9 @@ void ObTabletPersister::build_async_write_start_opt_(blocksstable::ObStorageObje
       param_.tablet_id_.is_ls_inner_tablet(), param_.reorganization_scn_);
     #endif
   } else { // private
-    start_opt.set_private_meta_macro_object_opt(param_.tablet_id_.id(), param_.tablet_transfer_seq_);
+    // TODO(fanyin): build_async_write_start_opt_ is only used for sstablet upload,
+    // private tablet should not call this method, report err here later.
+    start_opt.set_private_meta_macro_object_opt(param_.tablet_id_.id(), param_.private_transfer_epoch_);
   }
 }
 void ObTabletPersister::sync_cur_macro_seq_from_opt_(const blocksstable::ObStorageObjectOpt &curr_opt)

@@ -219,7 +219,7 @@ int ObDDLCtrlSpeedItem::do_sleep(
         share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
         if (OB_TMP_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, unused_data_format_version,
             unused_snapshot_version, task_status))) {
-          if (OB_ITER_END == tmp_ret) {
+          if (OB_ENTRY_NOT_EXIST == tmp_ret) {
             is_need_stop_write = false;
             LOG_INFO("exit due to ddl task exit", K(tenant_id), K(task_id));
           } else if (loop_cnt >= 100 * 1000) { // wait_time = 100 * 1000 * SLEEP_INTERVAL = 100s.

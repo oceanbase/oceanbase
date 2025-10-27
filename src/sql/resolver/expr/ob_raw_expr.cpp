@@ -593,6 +593,23 @@ const ObRawExpr *ObRawExpr::get_same_identify(const ObRawExpr *e,
                && T_FUN_SYS_CAST == e->get_expr_type()
                && e->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
       e = e->get_param_expr(0);
+    } else if (NULL != check_ctx && check_ctx->ignore_char_padding_
+      && e->has_flag(IS_INNER_ADDED_EXPR)) {
+      if (T_FUN_PAD == e->get_expr_type()) {
+        e = e->get_param_expr(0);
+      } else if (T_FUN_INNER_TRIM == e->get_expr_type()) {
+        e = e->get_param_expr(2);
+      } else if (T_FUN_SYS_CAST == e->get_expr_type() && e->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+        const ObRawExpr *real_expr = e->get_param_expr(0);
+        if (OB_NOT_NULL(real_expr) && (ObCharType == real_expr->get_data_type() || ObNCharType == real_expr->get_data_type())
+                                   && ObVarcharType == e->get_data_type()) {
+          e = real_expr;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
     } else {
       break;
     }
@@ -3306,6 +3323,8 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   // the white pushdown filter with type WHITE_OP_IN is not available now
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
     bool_ret = false;
+  } else if (T_OP_LOCAL_DYNAMIC_FILTER == type_) {
+    // local dynamic filter always as white filter
   } else if (with_null_equal_cond()) {
     // <=> join is not allowed to pushdown as white filter
     bool_ret = false;
@@ -3335,6 +3354,7 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   } else {
     bool_ret = false;
   }
+  LOG_TRACE("check is white runtime filter", K(bool_ret), KPC(this));
   return bool_ret;
 }
 
@@ -4564,6 +4584,8 @@ bool ObSysFunRawExpr::inner_same_as(
     }
   } else if (T_FUN_SYS_RAND == get_expr_type() ||
              T_FUN_SYS_RANDOM == get_expr_type() ||
+             T_FUN_SYS_UUID == get_expr_type() ||
+             T_FUN_SYS_UUID_SHORT == get_expr_type() ||
              T_FUN_SYS_GUID == get_expr_type() ||
              T_OP_GET_USER_VAR == get_expr_type() ||
              T_OP_GET_SYS_VAR == get_expr_type() ||
@@ -4862,10 +4884,24 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
         OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {
       LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%.*s", get_func_name().length(), get_func_name().ptr()))) {
-      LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
-      if (is_valid_id(get_dblink_id())) {
+      if (T_FUN_COLUMN_CONV == get_expr_type()) {
+        if ((EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type)
+            && (get_cast_mode() & CM_FAST_COLUMN_CONV)) {
+          // only use in direct load
+          if (OB_FAIL(BUF_PRINTF("fast_"))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF("%.*s", get_func_name().length(), get_func_name().ptr()))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (is_valid_id(get_dblink_id())) {
         if (get_dblink_name().empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dblink name is empty", K(ret), KPC(this));

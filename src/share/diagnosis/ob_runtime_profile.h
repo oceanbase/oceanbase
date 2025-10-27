@@ -125,6 +125,9 @@ public:
   int64_t get_format_size();
   int to_format_json(ObIAllocator *alloc, const char *&result, bool with_outside_label = true,
                      metric::Level display_level = metric::Level::STANDARD);
+  int pretty_print(ObIAllocator *alloc, const char *&result, const ObString &prefix,
+                   const ObString &child_prefix,
+                   metric::Level display_level = metric::Level::STANDARD) const;
   ObProfileId get_id() const { return id_; }
   bool enable_rich_format() { return enable_rich_format_; }
   inline const char *get_name_str() const
@@ -193,7 +196,10 @@ public:
                                          const int64_t max_head_count, ObProfileHead *profile_head,
                                          int32_t &id, int32_t parent_idx);
 private:
-  int to_format_json_(char *buf, const int64_t buf_len, int64_t &pos, metric::Level display_level);
+  int to_format_json_(char *buf, const int64_t buf_len, int64_t &pos,
+                      metric::Level display_level) const;
+  int pretty_print_(char *buf, const int64_t buf_len, int64_t &pos, const ObString &prefix,
+                    const ObString &child_prefix, metric::Level display_level) const;
   int64_t get_persist_profile_size(int64_t metric_count, int64_t child_cnt);
 
   int register_metric(ObMetricId metric_id, MetricType *&metric);

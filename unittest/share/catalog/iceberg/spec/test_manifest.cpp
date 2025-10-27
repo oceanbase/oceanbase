@@ -18,6 +18,8 @@
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 
 #include <avro/DataFile.hh>
+#include <avro/Generic.hh>
+#include <avro/GenericDatum.hh>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 

@@ -167,6 +167,14 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
             if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
               ret = OB_WRONG_USER_NAME_LENGTH;
               LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr());
+            } else if (password.length() > OB_MAX_PASSWORD_LENGTH) {
+              if (lib::is_oracle_mode()) {
+                ret = OB_ERR_MISSING_OR_INVALID_PASSWORD;
+                LOG_USER_ERROR(OB_ERR_MISSING_OR_INVALID_PASSWORD);
+              } else {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create a user with an excessively long password");
+              }
             } else if (OB_FAIL(create_user_stmt->add_user(user_name, host_name, password, need_enc_str))) {
               LOG_WARN("Failed to add user to ObCreateUserStmt", K(user_name), K(host_name), K(password), K(ret));
             } else {

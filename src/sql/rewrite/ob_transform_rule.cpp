@@ -429,6 +429,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
       LOG_DEBUG("get transformed heuristic rule stmt when evaluate_cost", K(*root_stmt));
       CREATE_WITH_TEMP_CONTEXT(param) {
         ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
+        eval_cost_helper.tmp_expr_factory_ = &tmp_expr_factory;
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -609,6 +610,8 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(copied_stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                                 ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
@@ -838,9 +841,13 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     // do nothing
   } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(stmt->formalize_special_domain_index_fields())) {
+    LOG_WARN("failed to formalize special domain index fields", K(ret));
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
                                                          ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
+  } else if (OB_FAIL(stmt->pull_all_expr_relation_id())) {
+    LOG_WARN("failed to pull all expr relation id", K(ret));
   } else if (OB_FAIL(stmt->formalize_implicit_distinct())) {
     LOG_WARN("failed to update implicit distinct", K(ret));
   } else if (OB_FAIL(update_max_table_num(stmt))) {
@@ -1059,7 +1066,8 @@ int ObEvalCostHelper::recover_context(ObPhysicalPlanCtx &phy_plan_ctx,
                                       ObTransformerCtx &trans_ctx)
 {
   int ret = OB_SUCCESS;
-  
+  common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> &cache = query_ctx.calculable_expr_results_;
+
   // query context
   query_ctx.question_marks_count_ = phy_plan_ctx.get_param_store().count();
   if (OB_FAIL(try_trans_helper_.recover(&query_ctx))) {
@@ -1076,6 +1084,26 @@ int ObEvalCostHelper::recover_context(ObPhysicalPlanCtx &phy_plan_ctx,
     ObOptimizerUtil::revert_items(trans_ctx.equal_param_constraints_, equal_param_constraints_count_);
     ObOptimizerUtil::revert_items(trans_ctx.outline_trans_hints_, outline_trans_hints_count_);
     ObOptimizerUtil::revert_items(trans_ctx.used_trans_hints_, used_trans_hints_count_);
+  }
+
+  // clear pre-calc result cache for exprs created by temp expr factory
+  if (OB_NOT_NULL(tmp_expr_factory_) && cache.created()) {
+    ObDList<ObObjNode<ObRawExpr*>>  &expr_list = tmp_expr_factory_->get_expr_store().get_obj_list();
+    DLIST_FOREACH_NORET(node, expr_list) {
+      if (node != NULL && node->get_obj() != NULL) {
+        ObRawExpr *raw_expr = node->get_obj();
+        uint64_t key = reinterpret_cast<uint64_t>(raw_expr);
+        if (!raw_expr->has_flag(IS_CONST_EXPR)) {
+          // do nothing
+        } else if (OB_FAIL(cache.erase_refactored(key))) {
+          if (OB_HASH_NOT_EXIST != ret) {
+            LOG_WARN("failed to erase refactored", K(ret));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
   }
   return ret;
 }

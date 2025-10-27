@@ -195,7 +195,8 @@ return ret;
 
 int knn_search(obvsag::VectorIndexPtr index_handler, float* query_vector,int dim, int64_t topk,
                const float*& result_dist, const int64_t*& result_ids, const char *&extra_info, int64_t &result_size, int ef_search,
-               void* invalid, bool reverse_filter, bool is_extra_info_filter, float valid_ratio, void *allocator, bool need_extra_info)
+               void* invalid, bool reverse_filter, bool is_extra_info_filter, float valid_ratio, void *allocator, bool need_extra_info,
+               float distance_threshold)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -205,7 +206,7 @@ int knn_search(obvsag::VectorIndexPtr index_handler, float* query_vector,int dim
                                   result_dist, result_ids, result_size,
                                   ef_search, need_extra_info, extra_info,
                                   invalid, reverse_filter, is_extra_info_filter,
-                                  allocator, valid_ratio);
+                                  allocator, valid_ratio, distance_threshold);
 #endif
 }
 

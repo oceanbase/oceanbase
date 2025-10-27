@@ -2149,11 +2149,9 @@ int ObSQLSessionInfo::kill_query()
   update_last_active_time();
   set_session_state(QUERY_KILLED);
   {
-    int ret = OB_SUCCESS;
     memtable::ObLockWaitMgr *mgr = nullptr;
     if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can't get lock wait mgr", K(get_server_sid()));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "can't get lock wait mgr", K(get_server_sid()));
     } else {
       LOG_INFO("notify lockwaitmgr killed session", K(get_server_sid()));
       mgr->notify_killed_session(get_server_sid());
@@ -3647,6 +3645,12 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
     }
   }
   return ret;
+}
+
+inline int64_t ObSQLSessionInfo::get_truncated_sql_len(const ObString &stmt)
+{
+  return enable_audit_log() ? static_cast<int64_t>(stmt.length()) :
+                              std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
 }
 
 void ObSQLSessionInfo::destory_mem_context()

@@ -418,6 +418,29 @@ int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_gua
   return ret;
 }
 
+int ObIvfAsyncTaskExector::check_schema_version_changed(bool &schema_changed)
+{
+  int ret = OB_SUCCESS;
+  schema_changed = false;
+  int64_t schema_version = 0;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+          tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_, schema_version))) {
+    LOG_WARN("fail to get tenant schema version", K(ret), K_(tenant_id));
+  } else if (!ObSchemaService::is_formal_version(schema_version)) {
+    ret = OB_EAGAIN;
+    LOG_INFO("is not a formal_schema_version", KR(ret), K(schema_version));
+  } else if (local_schema_version_ == OB_INVALID_VERSION || local_schema_version_ < schema_version) {
+    LOG_INFO("schema changed", KR(ret), K_(local_schema_version), K(schema_version));
+    local_schema_version_ = schema_version;
+    schema_changed = true;
+  }
+  return ret;
+}
+
 int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObSchemaGetterGuard &schema_guard,
                                                        const int64_t table_id,
                                                        ObIvfAuxTableInfoMap &aux_table_info_map)

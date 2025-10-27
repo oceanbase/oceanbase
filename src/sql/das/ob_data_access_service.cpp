@@ -890,6 +890,7 @@ int ObDataAccessService::collect_das_task_attach_info(ObDASRemoteInfo &remote_in
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(attach_rtdef)) {
     if (attach_rtdef->ctdef_ != nullptr) {
+      remote_info.has_attach_ctdef_ = true;
       remote_info.has_expr_ |= attach_rtdef->ctdef_->has_expr();
       remote_info.need_calc_expr_ |= attach_rtdef->ctdef_->has_pdfilter_or_calc_expr();
       remote_info.need_calc_udf_ |= attach_rtdef->ctdef_->has_pl_udf();

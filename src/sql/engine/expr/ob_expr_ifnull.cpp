@@ -17,6 +17,7 @@
 
 #include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 
 
 namespace oceanbase
@@ -103,6 +104,21 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
       }
     }
     type.set_length(MAX(type1.get_length(), type2.get_length()));
+    if (ob_is_collection_sql_type(type.get_type())) {
+      ObSQLSessionInfo *sess = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+      ObExecContext *exec_ctx = sess->get_cur_exec_ctx();
+      uint16_t subschema_id = type1.get_subschema_id();
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec ctx is null", K(ret));
+      } else if (type1.get_subschema_id() != type2.get_subschema_id() &&
+                 OB_FAIL(ObArrayExprUtils::deduce_array_type(exec_ctx, type1, type2, subschema_id))) {
+        LOG_WARN("failed to get result array type subschema id", K(ret));
+      } else {
+        type.set_collection(subschema_id);
+        type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType]).get_length());
+      }
+    }
     type1.set_calc_meta(type.get_obj_meta());
     type1.set_calc_accuracy(type.get_accuracy());
     type2.set_calc_meta(type.get_obj_meta());

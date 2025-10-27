@@ -975,24 +975,17 @@ int ObCreateTableHelper::generate_table_schema_()
     int64_t part_num = new_table.get_part_option().get_part_num();
     ObPartition **part_array = new_table.get_part_array();
     const ObRowkey *transition_point = NULL;
-    if (OB_UNLIKELY(PARTITION_LEVEL_TWO == new_table.get_part_level()
-        && !new_table.has_sub_part_template_def())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("interval part of composited-partitioned table not support", KR(ret), K(new_table));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval part of composited-partitioned table without template");
-    } else if (OB_UNLIKELY(1 != new_table.get_partition_key_column_num())) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("more than one partition key not support", KR(ret), K(new_table));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "more than one partition key");
+    if (OB_FAIL(new_table.check_support_interval_part())) {
+      LOG_WARN("fail to check support interval part", KR(ret), K(new_table));
     } else if (OB_ISNULL(part_array)
                || OB_UNLIKELY(0 == part_num)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("range part array is null or part_num is 0", KR(ret), K(new_table));
+      LOG_WARN("range part array is null or part_num is 0", KR(ret));
     } else if (OB_ISNULL(transition_point = &part_array[part_num - 1]->get_high_bound_val())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("transition_point is null", KR(ret), KP(transition_point));
+      LOG_WARN("transition_point is null", KR(ret), KPC(transition_point));
     } else if (OB_FAIL(ObPartitionUtils::check_interval_partition_table(
-                       *transition_point, new_table.get_interval_range()))) {
+                       tenant_id_, *transition_point, new_table.get_interval_range()))) {
       LOG_WARN("fail to check_interval_partition_table", KR(ret), K(new_table));
     } else if (OB_FAIL(new_table.set_transition_point(*transition_point))) {
       LOG_WARN("fail to set transition point", KR(ret), K(new_table));

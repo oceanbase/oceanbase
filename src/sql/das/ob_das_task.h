@@ -132,7 +132,8 @@ public:
       uint64_t need_calc_udf_                   : 1;
       uint64_t need_tx_                         : 1;
       uint64_t need_subschema_ctx_              : 1;
-      uint64_t reserved_                        : 59;
+      uint64_t has_attach_ctdef_                : 1;
+      uint64_t reserved_                        : 58;
     };
   };
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
@@ -643,7 +644,7 @@ public:
   int64_t get_task_id() const { return task_id_; }
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store),
                K_(io_read_bytes), K_(ssstore_read_bytes),
-               K_(ssstore_read_row_cnt), K_(memstore_read_row_cnt));
+               K_(base_read_row_cnt), K_(delta_read_row_cnt));
 private:
   ObChunkDatumStore datum_store_;
   uint64_t tenant_id_;
@@ -654,8 +655,8 @@ private:
 public:
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
-  int64_t ssstore_read_row_cnt_;
-  int64_t memstore_read_row_cnt_;
+  int64_t base_read_row_cnt_;
+  int64_t delta_read_row_cnt_;
   ObDasExecuteRemoteInfo das_execute_remote_info_;
 };
 

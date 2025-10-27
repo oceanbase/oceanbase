@@ -800,6 +800,37 @@ int ObTenantServersCacheMap::get_alive_tenant_servers(
 {
   int ret = OB_SUCCESS;
   alive_servers.reset();
+  common::ObArray<common::ObAddr> all_servers;
+
+  // Use get_all_tenant_servers to get all servers
+  if (OB_FAIL(get_all_tenant_servers(tenant_id, all_servers, renew_time))) {
+    LOG_WARN("failed to get all tenant servers", KR(ret), K(tenant_id));
+  } else {
+    // Filter out alive servers
+    bool is_alive = false;
+    ARRAY_FOREACH(all_servers, idx) {
+      if (OB_FAIL(SVR_TRACER.check_server_alive(all_servers.at(idx), is_alive))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // skip this server and continue judging
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to check_server_alive", KR(ret), "server", all_servers.at(idx));
+        }
+      } else if (is_alive) {
+        if (OB_FAIL(alive_servers.push_back(all_servers.at(idx)))) {
+          LOG_WARN("push back failed", KR(ret), "server", all_servers.at(idx));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantServersCacheMap::get_all_tenant_servers(const uint64_t tenant_id,
+                                                    common::ObIArray<common::ObAddr> &all_servers,
+                                                    int64_t &renew_time) const
+{
+  int ret = OB_SUCCESS;
   renew_time = 0;
   ObTenantServers tenant_servers;
   uint64_t valid_tnt_id = is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id;
@@ -818,23 +849,8 @@ int ObTenantServersCacheMap::get_alive_tenant_servers(
       LOG_WARN("failed to get from tenant_map_", KR(ret), K(valid_tnt_id));
     }
   } else if (OB_FALSE_IT(renew_time = tenant_servers.get_renew_time())) {
-  } else {
-    bool is_alive = false;
-    const ObArray<ObAddr> &all_servers = tenant_servers.get_servers();
-    ARRAY_FOREACH(all_servers, idx) {
-      if (OB_FAIL(SVR_TRACER.check_server_alive(all_servers.at(idx), is_alive))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          // skip this server and continue judging
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to check_server_alive", KR(ret), "server", all_servers.at(idx));
-        }
-      } else if (is_alive) {
-        if (OB_FAIL(alive_servers.push_back(all_servers.at(idx)))) {
-          LOG_WARN("push back failed", KR(ret), "server", all_servers.at(idx));
-        }
-      }
-    }
+  } else if (OB_FAIL(all_servers.assign(tenant_servers.get_servers()))) {
+    LOG_WARN("failed to assign all_servers", KR(ret));
   }
   return ret;
 }
@@ -1235,6 +1251,14 @@ int ObAllServerTracer::get_alive_tenant_servers(
     int64_t &renew_time) const
 {
   return tenant_servers_cache_map_.get_alive_tenant_servers(tenant_id, servers, renew_time);
+}
+
+int ObAllServerTracer::get_all_tenant_servers(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObAddr> &servers,
+    int64_t &renew_time) const
+{
+  return tenant_servers_cache_map_.get_all_tenant_servers(tenant_id, servers, renew_time);
 }
 
 int ObAllServerTracer::renew_tenant_servers_cache_map()

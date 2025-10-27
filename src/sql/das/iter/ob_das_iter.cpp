@@ -70,6 +70,8 @@ int ObDASIter::reuse()
     LOG_WARN("reuse das iter before init", K(ret));
   } else if (OB_FAIL(inner_reuse())) {
     LOG_WARN("failed to inner reuse das iter", K(ret), KPC(this));
+  } else {
+    output_row_cnt_ = 0;
   }
   return ret;
 }
@@ -112,7 +114,18 @@ int ObDASIter::get_next_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das iter get next row before init", K(ret));
   } else {
-    ret = inner_get_next_row();
+    if (limit_param_.is_valid()) {
+      const int64_t offset = limit_param_.offset_;
+      const int64_t limit = limit_param_.limit_;
+      if (limit == 0 || output_row_cnt_ >= offset + limit) {
+        ret = OB_ITER_END;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ret = inner_get_next_row();
+       ++ output_row_cnt_;
+    }
   }
   return ret;
 }
@@ -125,7 +138,25 @@ int ObDASIter::get_next_rows(int64_t &count, int64_t capacity)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das iter get next rows before init", K(ret));
   } else {
-    ret = inner_get_next_rows(count, capacity);
+    if (limit_param_.is_valid()) {
+      const int64_t offset = limit_param_.offset_;
+      const int64_t limit = limit_param_.limit_;
+      if (limit == 0 || output_row_cnt_ >= offset + limit) {
+        ret = OB_ITER_END;
+      } else if (output_row_cnt_ < offset) {
+        const int64_t remaining_offset = offset - output_row_cnt_;
+        capacity = capacity > remaining_offset ?
+                   std::min(capacity - remaining_offset, limit) + remaining_offset :
+                   capacity;
+      } else {
+        capacity = std::min(capacity, limit + offset - output_row_cnt_ );
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ret = inner_get_next_rows(count, capacity);
+      output_row_cnt_ += count;
+    }
   }
   return ret;
 }
@@ -147,6 +178,24 @@ int ObDASIter::get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge
         LOG_WARN("das iter is nullptr", K(ret), KPC(iter));
       } else if (OB_FAIL(iter->get_domain_id_merge_iter(domain_id_merge_iter))) {
         LOG_WARN("fail to get doc id merge iter", K(ret), KPC(iter));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASIter::prepare_limit_pushdown_param(const ObDASPushDownTopN &push_down_topn, const ObLimitParam &limit_param)
+{
+  int ret = OB_SUCCESS;
+  push_down_topn_ = push_down_topn;
+  limit_param_ = limit_param;
+  if (can_limit_pushdown(push_down_topn)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt_; ++ i) {
+      if (OB_UNLIKELY(nullptr == children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("das iter is nullptr", K(ret), KPC(children_[i]));
+      } else if (OB_FAIL(children_[i]->prepare_limit_pushdown_param(push_down_topn, limit_param))) {
+        LOG_WARN("fail to prepare limit pushdown param", K(ret), KPC(children_[i]));
       }
     }
   }

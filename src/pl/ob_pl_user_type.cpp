@@ -3085,7 +3085,8 @@ int ObCollectionType::init_obj(ObSchemaGetterGuard &schema_guard,
   } else {
     MEMSET(data, 0, init_size);
     if (is_varray_type()) {
-      new (data) ObPLVArray(get_user_type_id());
+      ObPLVArray *varray = new (data) ObPLVArray(get_user_type_id());
+      OX (varray->set_capacity(static_cast<const ObVArrayType *>(this)->get_capacity()));
     } else if (is_associative_array_type()) {
       new (data) ObPLAssocArray(get_user_type_id());
     } else {

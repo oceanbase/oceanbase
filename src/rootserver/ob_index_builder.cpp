@@ -1288,6 +1288,8 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
       }
       if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
         LOG_WARN("fail to create drop fts index task", K(ret), K(param));
+      } else if (data_schema.is_user_hidden_table()) {
+        // not lock hidden data table
       } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                      task_record.task_id_))) {
         LOG_WARN("fail to get owner id", K(ret), K(task_record.task_id_));

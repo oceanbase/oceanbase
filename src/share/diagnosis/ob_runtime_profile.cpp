@@ -110,9 +110,9 @@ int ObOpProfile<MetricType>::to_format_json(ObIAllocator *alloc, const char *&re
   return ret;
 }
 
-template<typename MetricType>
+template <typename MetricType>
 int ObOpProfile<MetricType>::to_format_json_(char *buf, const int64_t buf_len, int64_t &pos,
-                                 metric::Level display_level)
+                                             metric::Level display_level) const
 {
   /*
     format example:
@@ -172,6 +172,81 @@ int ObOpProfile<MetricType>::to_format_json_(char *buf, const int64_t buf_len, i
     }
   }
   OZ(J_OBJ_END());              //   }
+  return ret;
+}
+
+template <typename MetricType>
+int ObOpProfile<MetricType>::pretty_print(ObIAllocator *alloc, const char *&result,
+                                          const ObString &prefix,
+                                          const ObString &child_prefix,
+                                          metric::Level display_level) const
+
+{
+  int ret = OB_SUCCESS;
+  int64_t buf_len = 8 * 1024;
+  int64_t pos = 0;
+  char *buf = static_cast<char *>(alloc->alloc(buf_len));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc buf");
+  } else if (OB_FAIL(pretty_print_(buf, buf_len, pos, prefix, child_prefix, display_level))) {
+    LOG_WARN("failed to pretty print");
+  } else {
+    result = buf;
+  }
+  return ret;
+}
+
+template <typename MetricType>
+int ObOpProfile<MetricType>::pretty_print_(char *buf, const int64_t buf_len, int64_t &pos,
+                                           const ObString &prefix,
+                                           const ObString &child_prefix,
+                                           metric::Level display_level) const
+
+{
+  int ret = OB_SUCCESS;
+  MetricWrap *cur_metric = ATOMIC_LOAD(&metric_head_);
+  ProfileWrap *cur_child = ATOMIC_LOAD(&child_head_);
+  bool has_metric = false;
+  bool has_child = (cur_child != nullptr);
+  if (prefix.length() > 0) {
+    OZ(BUF_PRINTF("%s", prefix.ptr()));
+  }
+  OZ(BUF_PRINTF("%s \n", get_name_str()));
+  if (OB_SUCC(ret) && pos < buf_len) {
+    while (nullptr != cur_metric && OB_SUCC(ret)) {
+      if (get_metric_level(cur_metric->elem_.id_) > display_level) {
+        // skip metric whose level > display level
+        cur_metric = ATOMIC_LOAD(&cur_metric->next_);
+        continue;
+      }
+      if (has_metric && OB_FAIL(BUF_PRINTF("\n"))) {
+        LOG_WARN("failed to buf print");
+      } else if (OB_FAIL(cur_metric->elem_.pretty_print(buf, buf_len, pos, child_prefix))) {
+        LOG_WARN("failed to print metric", K(pos), K(buf_len), K(cur_metric->elem_.id_));
+      } else {
+        has_metric = true;
+        cur_metric = ATOMIC_LOAD(&cur_metric->next_);
+      }
+    }
+  }
+  if (has_metric && has_child) {
+    OB_FAIL(BUF_PRINTF("\n"));
+  }
+  if (OB_SUCC(ret) && pos < buf_len) {
+    char temp_buf[1024] = "\0";
+    MEMCPY(temp_buf, child_prefix.ptr(), child_prefix.length());
+    MEMCPY(temp_buf + child_prefix.length(), "  \0", 3);
+    ObString sub_child_prefix(child_prefix.length() + 3, temp_buf);
+    while (nullptr != cur_child && OB_SUCC(ret)) {
+      if (OB_FAIL(cur_child->elem_->pretty_print_(
+              buf, buf_len, pos, child_prefix, sub_child_prefix, display_level))) {
+        LOG_WARN("failed to print child profile", K(pos), K(buf_len));
+      } else {
+        cur_child = ATOMIC_LOAD(&cur_child->next_);
+      }
+    }
+  }
   return ret;
 }
 

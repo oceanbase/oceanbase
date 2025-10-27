@@ -504,6 +504,19 @@ int ObChunkDatumStore::Block::get_store_row(int64_t &cur_pos, const StoredRow *&
   return ret;
 }
 
+int ObChunkDatumStore::Block::get_cur_row(int64_t cur_pos, const StoredRow *&sr)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos >= blk_size_) {
+    ret = OB_INDEX_OUT_OF_RANGE;
+    LOG_WARN("invalid index", K(ret), K(cur_pos), K_(rows));
+  } else {
+    StoredRow *row = reinterpret_cast<StoredRow *>(&payload_[cur_pos]);
+    sr = row;
+  }
+  return ret;
+}
+
 int ObChunkDatumStore::Block::gen_unswizzling_payload(char *unswizzling_payload, uint32_t size)
 {
   int ret = OB_SUCCESS;
@@ -1770,6 +1783,18 @@ void ObChunkDatumStore::remove_added_blocks()
   row_cnt_ = 0;
 }
 
+int ObChunkDatumStore::get_cur_row(RowIterator &it, const StoredRow *&sr)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited() || NULL == it.cur_iter_blk_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K_(it.cur_iter_blk));
+  } else if (OB_FAIL(it.cur_iter_blk_->get_cur_row(it.cur_pos_in_blk_, sr))) {
+    LOG_WARN("get row from block failed", K(ret), K_(it.cur_row_in_blk), K(*it.cur_iter_blk_));
+  }
+  return ret;
+}
+
 int ObChunkDatumStore::get_store_row(RowIterator &it, const StoredRow *&sr)
 {
   int ret = OB_SUCCESS;
@@ -1947,6 +1972,32 @@ int ObChunkDatumStore::Iterator::get_next_row(const StoredRow *&sr)
   return ret;
 }
 
+int ObChunkDatumStore::Iterator::get_cur_row(const StoredRow *&sr)
+{
+  int ret = OB_SUCCESS;
+  if (!start_iter_) {
+    if (OB_FAIL(load_next_block(row_it_))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("Iterator load chunk failed", K(ret));
+      }
+    } else {
+      start_iter_ = true;
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(row_it_.get_cur_row(sr))) {
+    if (OB_ITER_END == ret) {
+      if (OB_FAIL(load_next_block(row_it_))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("Iterator load chunk failed", K(ret));
+        }
+      } else if (OB_FAIL(row_it_.get_cur_row(sr))) {
+        LOG_WARN("get next row failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObChunkDatumStore::Iterator::get_next_batch(const StoredRow **rows,
                                                 const int64_t max_rows,
                                                 int64_t &read_rows)
@@ -2016,6 +2067,18 @@ int ObChunkDatumStore::RowIterator::get_next_row(const StoredRow *&sr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(store_->get_store_row(*this, sr))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get store row failed", K(ret), K_(cur_nth_block), K_(cur_pos_in_blk),
+          K_(cur_row_in_blk));
+    }
+  }
+  return ret;
+}
+
+int ObChunkDatumStore::RowIterator::get_cur_row(const StoredRow *&sr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(store_->get_cur_row(*this, sr))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get store row failed", K(ret), K_(cur_nth_block), K_(cur_pos_in_blk),
           K_(cur_row_in_blk));

@@ -160,64 +160,6 @@ private:
   ObStorageUtil &util_;
 };
 
-// ObTopNMinimumDirEntryWithMarkerOperator is used to get the minimum N element, therefore, we need make
-// a Max-Heap(i.e. always push dirent when the count of Max-Heap is smaller than or equal to N, replace
-// top of Max-Hap when it is greater than new dirent and the count of Max-Heap is greater than N).
-class ObTopNMinimumDirEntryWithMarkerOperator : public ObBaseDirEntryOperator
-{
-public:
-  ObTopNMinimumDirEntryWithMarkerOperator(
-    const int64_t num,
-    const char *marker,
-    const bool need_size);
-  virtual ~ObTopNMinimumDirEntryWithMarkerOperator();
-
-  int func(const dirent *entry) final;
-  int handle_each_dir_entry(common::ObBaseDirEntryOperator &op);
-  virtual bool need_get_file_meta() const override;
-
-  struct Entry
-  {
-    Entry() : obj_name_(nullptr), obj_size_(-1) {}
-    char *obj_name_;
-    int64_t obj_size_;
-
-    TO_STRING_KV(K_(obj_name), K_(obj_size));
-  };
-
-  // get top N minimum, we need make a Max-Heap,
-  // TopNCompElement should like this:
-  // bool operator(const T &lhs, const T &rhs)
-  // {
-  //    return lsh < rhs;
-  // }
-  //
-  // get top N maximum, TopNCompElement like this
-  // bool operator(const T &lhs, const T &rhs)
-  // {
-  //    return lsh > rhs;
-  // }
-  //
-  struct TopNCompElement
-  {
-    bool operator()(const Entry &lhs, const Entry &rhs);
-    int get_error_code();
-  };
-
-private:
-  int alloc_and_init_(const char *d_name, Entry &out_entry);
-  void free_memory_(Entry &out_entry);
-  int try_replace_top_(const char *d_name);
-  DISALLOW_COPY_AND_ASSIGN(ObTopNMinimumDirEntryWithMarkerOperator);
-private:
-  int64_t n_;
-  const char *marker_;
-  const bool need_size_;
-  TopNCompElement less_than_;
-  ObBinaryHeap<Entry, TopNCompElement> heap_;
-  DefaultPageAllocator allocator_;
-};
-
 class ObStorageUtil
 {
 public:
@@ -240,7 +182,6 @@ public:
   int write_single_file(const common::ObString &uri, const char *buf, const int64_t size);
   int del_dir(const common::ObString &uri);
   int is_tagging(const common::ObString &uri, bool &is_tagging);
-  int list_files_with_marker(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   // This func is to check the object/file/dir exists or not.
   // If the uri is a common directory(not a 'SIMULATE_APPEND' object), please set @is_adaptive as FALSE
   // If the uri is a normal object, please set @is_adaptive as FALSE
@@ -336,13 +277,7 @@ private:
   //         If there exists some children objects not have this prefix, these objects will also be listed.
   //         Cuz we think these objects are just some common objects.
   //
-  // If op.is_marker_scan() is True:
-  // list objects under the directory 'uri' that are lexicographically greater than 'marker',
-  // and the number of objects returned does not exceed op.get_scan_count()
-  // If 'marker' is "", it means the listing starts from the lexicographically smallest object in the 'dir_name' directory
   // If op.get_scan_count() is <= 0, it indicates there is no upper limit on the number of objects listed
-  // If op.is_marker_scan() is False:
-  // 'marker' is unsed
   int list_adaptive_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   // ObjectStorage and Filesystem need to handle seperately.
   int handle_listed_objs(ObStorageListCtxBase *ctx_base, const common::ObString &uri,

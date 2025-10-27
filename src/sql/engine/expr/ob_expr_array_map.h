@@ -74,7 +74,8 @@ protected:
                              ObExprArrayMapInfo *info,
                              ObIArrayType **arr_obj,
                              uint32_t arr_obj_size,
-                             uint32_t idx);
+                             uint32_t idx,
+                             bool &is_set);
 
   int get_array_map_lambda_params(const ObRawExpr *raw_expr, ObArray<uint32_t> &param_idx, int depth, ObArray<ObExpr *> &param_exprs) const;
   int get_lambda_subschema_id(ObExecContext *exec_ctx,

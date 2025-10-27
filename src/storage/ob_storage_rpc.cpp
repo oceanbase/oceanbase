@@ -4767,7 +4767,7 @@ int ObFetchReplicaPrewarmMicroBlockP::process()
     STORAGE_LOG(WARN, "invalid argument", KR(ret), K_(arg));
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
-      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_SS_PREWARM);
+      CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_SS_LOCAL_CACHE_LOW);
       blocksstable::ObBufferReader data;
       char *buf = nullptr;
       last_send_time_ = this->get_receive_timestamp();

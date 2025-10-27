@@ -587,6 +587,11 @@ int ObOptimizerTraceImpl::append(const Path *path)
       append("prefix filters:", ap.est_cost_info_.prefix_filters_, ",selectivity:", ap.est_cost_info_.prefix_filter_sel_);
       new_line();
       append("pushdown prefix filters:", ap.est_cost_info_.pushdown_prefix_filters_, ",selectivity:", ap.est_cost_info_.pushdown_prefix_filter_sel_);
+      if (ap.use_skip_scan_ != OptSkipScanState::SS_DISABLE) {
+        new_line();
+        append("ss range filters:", ap.est_cost_info_.ss_postfix_range_filters_, ",selectivity:", ap.est_cost_info_.ss_postfix_range_filters_sel_);
+        append(",ss prefix ndv:", ap.est_cost_info_.ss_prefix_ndv_);
+      }
       new_line();
       append("postfix filters:", ap.est_cost_info_.postfix_filters_, ",selectivity:", ap.est_cost_info_.postfix_filter_sel_);
       new_line();
@@ -774,6 +779,9 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   } else if (OB_DS_INDEX_SCAN_STAT == ds_result.type_ &&
              OB_FAIL(append(", tpye:index scan"))) {
     LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_DS_INDEX_SKIP_SCAN_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:index skip scan"))) {
+    LOG_WARN("failed to append msg", K(ret));
   } else if (OB_DS_INDEX_BACK_STAT == ds_result.type_ &&
              OB_FAIL(append(", tpye:index back"))) {
     LOG_WARN("failed to append msg", K(ret));
@@ -857,16 +865,17 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     case ObSkylineDim::INTERESTING_ORDER: {
       const ObInterestOrderDim &order_dim = static_cast<const ObInterestOrderDim &>(dim);
       append("[intersting order dim] is interesting order:", order_dim.is_interesting_order_);
-      append(", need index back:", order_dim.need_index_back_);
-      append(", can extract range:", order_dim.can_extract_range_);
-      append(", column ids:", common::ObArrayWrap<uint64_t>(order_dim.column_ids_,  order_dim.column_cnt_));
-      append(", filter columns:", common::ObArrayWrap<uint64_t>(order_dim.filter_column_ids_, order_dim.filter_column_cnt_));
+      append(", column ids:", order_dim.column_ids_);
       break;
     }
     case ObSkylineDim::QUERY_RANGE: {
       const ObQueryRangeDim &range_dim = static_cast<const ObQueryRangeDim &>(dim);
       append("[query range dim] contain false range:", range_dim.contain_always_false_);
-      append(", rowkey ids:", common::ObArrayWrap<uint64_t>(range_dim.column_ids_, range_dim.column_cnt_));
+      append(", rowkey ids:", range_dim.range_column_ids_);
+      if (!range_dim.ss_range_column_ids_.empty()) {
+        append(", skip scan range ids:", range_dim.ss_range_column_ids_);
+        append(", skip scan offset ids:", range_dim.ss_offset_column_ids_);
+      }
       break;
     }
     case ObSkylineDim::UNIQUE_RANGE: {

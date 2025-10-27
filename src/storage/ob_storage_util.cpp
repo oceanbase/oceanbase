@@ -476,9 +476,12 @@ int fill_exprs_lob_locator(
 int check_skip_by_monotonicity(
     sql::ObBlackFilterExecutor &filter,
     blocksstable::ObStorageDatum &min_datum,
+    const bool is_min_prefix,
     blocksstable::ObStorageDatum &max_datum,
+    const bool is_max_prefix,
     const sql::ObBitVector &skip_bit,
     const bool has_null,
+    const bool is_pad_coll,
     ObBitmap *result_bitmap,
     sql::ObBoolMask &bool_mask)
 {
@@ -497,11 +500,18 @@ int check_skip_by_monotonicity(
         bool filtered = false;
         ObStorageDatum &false_datum = is_asc ? max_datum : min_datum;
         ObStorageDatum &true_datum = is_asc ? min_datum : max_datum;
-        if (OB_FAIL(filter.filter(false_datum, skip_bit, filtered))) {
-          STORAGE_LOG(WARN, "Failed to compare with false_datum", K(ret), K(false_datum), K(is_asc));
-        } else if (filtered) {
-          bool_mask.set_always_false();
-        } else if (!has_null) {
+        const bool is_false_prefix = is_asc ? is_max_prefix : is_min_prefix;
+        const bool is_true_prefix = is_asc ? is_min_prefix : is_max_prefix;
+        // prefix less is not true less.
+        if (!is_false_prefix) {
+          if (OB_FAIL(filter.filter(false_datum, skip_bit, filtered))) {
+            STORAGE_LOG(WARN, "Failed to compare with false_datum", K(ret), K(false_datum), K(is_asc));
+          } else if (filtered) {
+            bool_mask.set_always_false();
+          }
+        }
+        // prefix greater is true greater.
+        if (OB_SUCC(ret) && bool_mask.is_uncertain() && !has_null && (!is_true_prefix || !is_pad_coll)) {
           if (OB_FAIL(filter.filter(true_datum, skip_bit, filtered))) {
             STORAGE_LOG(WARN, "Failed to compare with true_datum", K(ret), K(true_datum), K(is_asc));
           } else if (!filtered) {
@@ -516,15 +526,23 @@ int check_skip_by_monotonicity(
       case sql::PushdownFilterMonotonicity::MON_EQ_DESC: {
         bool min_cmp_res = false;
         bool max_cmp_res = false;
-        if (OB_FAIL(filter.judge_greater_or_less(min_datum, skip_bit, is_asc, min_cmp_res))) {
-          STORAGE_LOG(WARN, "Failed to judge min_datum", K(ret), K(min_datum));
-        } else if (min_cmp_res) {
-          bool_mask.set_always_false();
-        } else if (OB_FAIL(filter.judge_greater_or_less(max_datum, skip_bit, !is_asc, max_cmp_res))) {
-          STORAGE_LOG(WARN, "Failed to judge max_datum", K(ret), K(max_datum));
-        } else if (max_cmp_res) {
-          bool_mask.set_always_false();
-        } else if (!has_null) {
+        // prefix less is not true less, prefix greater is true greater.
+        if (!is_max_prefix || (!is_asc && !is_pad_coll)) {
+          if (OB_FAIL(filter.judge_greater_or_less(max_datum, skip_bit, !is_asc, max_cmp_res))) {
+            STORAGE_LOG(WARN, "Failed to judge max_datum", K(ret), K(max_datum));
+          } else if (max_cmp_res) {
+            bool_mask.set_always_false();
+          }
+        }
+        if (OB_SUCC(ret) && bool_mask.is_uncertain() && (!is_min_prefix || (is_asc && !is_pad_coll))) {
+          if (OB_FAIL(filter.judge_greater_or_less(min_datum, skip_bit, is_asc, min_cmp_res))) {
+            STORAGE_LOG(WARN, "Failed to judge min_datum", K(ret), K(min_datum));
+          } else if (min_cmp_res) {
+            bool_mask.set_always_false();
+          }
+        }
+        // prefix equal is not true equal.
+        if (OB_SUCC(ret) && bool_mask.is_uncertain() && !has_null && !is_min_prefix && !is_max_prefix) {
           if (OB_FAIL(filter.filter(min_datum, skip_bit, min_cmp_res))) {
             STORAGE_LOG(WARN, "Failed to compare with min_datum", K(ret), K(min_datum));
           } else if (min_cmp_res) {

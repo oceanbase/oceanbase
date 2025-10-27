@@ -36,32 +36,6 @@ class ObTenantConfig : public ObCommonConfig
   friend class ObTenantConfigMgr;
 public:
   static const int64_t INITIAL_TENANT_CONF_VERSION = 1;
-public:
-  class TenantConfigUpdateTask : public common::ObTimerTask
-  {
-  public:
-    TenantConfigUpdateTask() : config_mgr_(nullptr), tenant_config_(nullptr),
-                               version_(0), scheduled_time_(0),
-                               update_local_(false),
-                               running_task_count_(0) {}
-    int init(ObTenantConfigMgr *config_mgr, ObTenantConfig *config)
-    {
-      config_mgr_ = config_mgr;
-      tenant_config_ = config;
-      return common::OB_SUCCESS;
-    }
-    virtual ~TenantConfigUpdateTask() {}
-    TenantConfigUpdateTask(const TenantConfigUpdateTask &) = delete;
-    TenantConfigUpdateTask &operator=(const TenantConfigUpdateTask &) = delete;
-    void runTimerTask(void) override;
-    ObTenantConfigMgr *config_mgr_;
-    ObTenantConfig *tenant_config_;
-    volatile int64_t version_;
-    volatile int64_t scheduled_time_;
-    bool update_local_;
-    volatile int64_t running_task_count_;
-  };
-  friend class TenantConfigUpdateTask;
   static const int64_t LOCK_TIMEOUT = 1 * 1000 * 1000;
 public:
   ObTenantConfig();
@@ -85,12 +59,18 @@ public:
   int publish_special_config_after_dump();
   virtual uint64_t get_tenant_id() const override { return tenant_id_; }
   int64_t get_current_version() const { return current_version_; }
-  const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
   int64_t get_create_timestamp() const { return create_timestamp_; }
-  int got_version(int64_t version, const bool remove_repeat);
-  int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
-                   bool save2file = true, bool publish_special_config = true);
-
+  int got_version(int64_t version, const bool remove_repeat, bool &need_update);
+  int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result);
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    common::databuff_printf(buf, buf_len, pos, "tenant_id=%ld ", get_tenant_id());
+    common::databuff_printf(buf, buf_len, pos, "current_version=%ld ", current_version_);
+    common::databuff_printf(buf, buf_len, pos, "version_=%ld ", version_);
+    common::databuff_printf(buf, buf_len, pos, "last_version_=%ld ", last_version_);
+    return pos;
+  }
   OB_UNIS_VERSION(1);
 #ifdef ERRSIM
 public:
@@ -103,9 +83,13 @@ private:
                        bool check_config = true);
 private:
   uint64_t tenant_id_;
+public:
   int64_t current_version_; // 当前 tenant config 正在被 task 更新中的版本
+  int64_t version_;
+  int64_t last_version_;
+  bool update_local_;
+private:
   obutil::Mutex mutex_;
-  TenantConfigUpdateTask update_task_;
   common::ObSystemConfig system_config_;
   ObTenantConfigMgr *config_mgr_;
   int64_t ref_;

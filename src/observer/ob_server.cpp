@@ -269,7 +269,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (is_arbitration_mode()) {
 #ifdef OB_BUILD_ARBITRATION
     FLOG_INFO("begin init observer in arbitration mode", KR(ret));
-    if (FAILEDx(OB_LOGGER.init(log_cfg, true))) {
+    if (FAILEDx(OB_LOGGER.init(log_cfg, true, GMEMCONF.get_server_memory_limit()))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
@@ -291,7 +291,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     FLOG_INFO("end init observer in arbitration mode", KR(ret));
 #endif
   } else {
-    if (FAILEDx(OB_LOGGER.init(log_cfg, false))) {
+    if (FAILEDx(OB_LOGGER.init(log_cfg, false, GMEMCONF.get_server_memory_limit()))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
@@ -3463,10 +3463,12 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
       LOG_WARN("schema service is NULL", KR(ret));
     } else {
       bool is_dropped = false;
+      bool is_restore = false;
       bool tenant_schema_refreshed = false;
       while (!tenant_schema_refreshed
           && !stop_
           && !is_dropped
+          && !is_restore
           && ObTimeUtility::current_time() < expire_time) {
 
         tenant_schema_refreshed = is_user_tenant(tenant_id) ?
@@ -3474,6 +3476,10 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
         if (OB_FAIL(gctx_.schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
           LOG_WARN("fail to check tenant has been dropped at observer startup", KR(ret), K(tenant_id));
         } else if (is_dropped) {
+          // ignore
+        } else if (OB_FAIL(gctx_.schema_service_->check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+          LOG_WARN("fail to check tenant is restore at observer startup", KR(ret), K(tenant_id));
+        } else if (is_restore) {
           // ignore
         } else if (!tenant_schema_refreshed) {
           // check wait and retry

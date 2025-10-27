@@ -103,12 +103,12 @@ int ObMemtableSingleRowReader::init_a_new_range(const ObDatumRange &new_range_to
   } else if (OB_FAIL(ObMemtableKey::build(start_key,
                                           *out_cols,
                                           &real_range.get_start_key().get_store_rowkey(),
-                                          *context_->get_range_allocator()))) {
+                                          *context_->allocator_))) {
     TRANS_LOG(WARN, "start key build fail", K(param_->table_id_), K(real_range));
   } else if (OB_FAIL(ObMemtableKey::build(end_key,
                                           *out_cols,
                                           &real_range.get_end_key().get_store_rowkey(),
-                                          *context_->get_range_allocator()))) {
+                                          *context_->allocator_))) {
     TRANS_LOG(WARN, "end key build fail", K(param_->table_id_), K(real_range));
   } else {
     ObMvccEngine& mvcc_engine = memtable_->get_mvcc_engine();
@@ -123,7 +123,7 @@ int ObMemtableSingleRowReader::init_a_new_range(const ObDatumRange &new_range_to
                                  memtable_->get_ls_id(),
                                  row_iter_))) {
       TRANS_LOG(WARN, "mvcc engine scan fail", K(ret), K(mvcc_scan_range));
-    } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_schema_rowkey_count()))) {
+    } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_schema_rowkey_count() + read_info_->get_extra_rowkey_count()))) {
       TRANS_LOG(WARN, "Failed to init bitmap ", K(ret));
     } else {
       TRANS_LOG(DEBUG, "mvcc engine scan success",

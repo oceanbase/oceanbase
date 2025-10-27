@@ -81,7 +81,12 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
   ObAggFunRawExpr *related_doc_cnt = nullptr;
   ObAggFunRawExpr *total_doc_cnt = nullptr;
   ObAggFunRawExpr *doc_token_cnt = nullptr;
+  ObOpPseudoColumnRawExpr *avg_doc_token_cnt_expr = nullptr;
   ObOpRawExpr *relevance_expr = nullptr;
+  ObRawExprResType avg_doc_token_cnt_res_type;
+  avg_doc_token_cnt_res_type.set_type(ObDoubleType);
+  avg_doc_token_cnt_res_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObDoubleType]);
+  const bool need_est_avg_doc_token_cnt = false; // obkv fulltext index can not support avg doc token count estimation yet
   ObMatchFunRawExpr *match_expr = nullptr;
   ObRawExpr *pushdown_match_filter = nullptr;
   if (OB_ISNULL(schema_guard) || OB_ISNULL(table_schema) || OB_ISNULL(fts_ctx)) {
@@ -165,9 +170,19 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
       LOG_WARN("failed to set agg param", K(ret));
     } else if (OB_FAIL(doc_token_cnt->formalize(&session_info))) {
       LOG_WARN("failed to formalize document token count expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_op_pseudo_column_expr(
+        expr_factory,
+        T_PSEUDO_COLUMN,
+        "avg_doc_token_cnt_expr",
+        avg_doc_token_cnt_res_type,
+        avg_doc_token_cnt_expr))) {
+      LOG_WARN("failed to build avg doc token count pseudo column expr", K(ret));
+    } else if (OB_FAIL(avg_doc_token_cnt_expr->formalize(&session_info))) {
+      LOG_WARN("failed to formalize avg doc token count expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_bm25_expr(expr_factory, related_doc_cnt,
                                                       token_cnt_column, total_doc_cnt,
-                                                      doc_token_cnt, relevance_expr,
+                                                      doc_token_cnt, avg_doc_token_cnt_expr,
+                                                      relevance_expr, need_est_avg_doc_token_cnt,
                                                       &session_info))) {
       LOG_WARN("failed to build bm25 expr", K(ret));
     } else if (OB_FAIL(relevance_expr->formalize(&session_info))) {
@@ -190,6 +205,7 @@ int ObTableFtsExprCgService::generate_text_retrieval_dep_exprs(ObTableCtx &ctx, 
       tr_info->related_doc_cnt_ = related_doc_cnt;
       tr_info->doc_token_cnt_ = doc_token_cnt;
       tr_info->total_doc_cnt_ = total_doc_cnt;
+      tr_info->avg_doc_token_cnt_ = avg_doc_token_cnt_expr;
       tr_info->relevance_expr_ = relevance_expr;
     }
   }

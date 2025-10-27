@@ -1060,6 +1060,10 @@ public:
                                                  ObIArray<ObRawExpr *> &unique_keys,
                                                  int64_t *rowkey_count = NULL);
 
+  static int generate_unique_key_from_group_exprs(ObTransformerCtx *ctx,
+                                                  ObSelectStmt *select_stmt,
+                                                  ObIArray<ObRawExpr *> &unique_keys);
+
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
                                  TableItem *source_table,
@@ -2032,7 +2036,8 @@ public:
                                                bool used_as_condition,
                                                bool need_match_index,
                                                bool& is_valid);
-  static int do_trans_any_all_as_exists(ObTransformerCtx *ctx,
+  static int do_trans_any_all_as_exists(ObDMLStmt *stmt,
+                                        ObTransformerCtx *ctx,
                                         ObRawExpr *&expr,
                                         ObNotNullContext *not_null_ctx,
                                         bool &trans_happened);

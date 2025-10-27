@@ -115,6 +115,7 @@
 #include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_gts_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_uid_service.h"
+#include "close_modules/shared_storage/storage/incremental/share/ob_ss_diagnose_mgr.h"
 #else
 #endif
 #include "observer/ob_server_event_history_table_operator.h"
@@ -148,11 +149,13 @@
 #include "storage/ob_inner_tablet_access_service.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_service.h"
 #include "observer/table/common/ob_table_query_session_id_service.h"
+#include "share/schema/ob_add_interval_part_controller.h"
 
 #include "observer/omt/ob_tenant_ai_service.h"
 #include "observer/table/ob_table_query_async_processor.h"
 #include "observer/table/ob_htable_rowkey_mgr.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
+#include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -607,6 +610,7 @@ int ObMultiTenant::init(ObAddr myaddr,
       MTL_BIND2(mtl_new_default, ObSSLogUIDService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, sslog::ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObSSDiagnoseInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     }
 #endif
     MTL_BIND2(mtl_new_default, ObResourceLimitCalculator::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
@@ -638,6 +642,8 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantAiService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObHMSClientPoolMgr::mtl_init, nullptr, ObHMSClientPoolMgr::mtl_stop, ObHMSClientPoolMgr::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {
@@ -1568,14 +1574,12 @@ int ObMultiTenant::update_ss_garbage_collection_service_config()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant config is invalid", KR(ret));
   } else {
-    const int64_t exec_interval = tenant_config->_ss_garbage_collect_interval;
-    if (exec_interval != ss_gc_service->exec_interval) {
-      if (exec_interval < 10_s || exec_interval > 12_hour) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("the execution interval of gabage colletion service on shared-stroage is invalid", KR(ret));
-      } else {
-        ss_gc_service->update_exec_interval(exec_interval);
-      }
+    const int64_t ss_gc_task_exec_interval = tenant_config->_ss_garbage_collect_interval;
+    const int64_t block_check_interval = tenant_config->_ss_macro_block_check_interval;
+    if (OB_FAIL(ss_gc_service->update_ss_gc_task_exec_interval(ss_gc_task_exec_interval))) {
+      LOG_WARN("update_ss_gc_task_exec_interval failed", KR(ret));
+    } else if (OB_FAIL(ss_gc_service->update_block_check_interval(block_check_interval))) {
+      LOG_WARN("update_block_check_interval failed", KR(ret));
     }
   }
 
@@ -2669,6 +2673,40 @@ int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_ti
       }
       lock_.unlock();
     }
+  }
+  return ret;
+}
+
+int ObMultiTenant::get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t group_id, int64_t &cpu_time)
+{
+  int ret = OB_SUCCESS;
+  ObTenant *tenant = nullptr;
+  cpu_time = 0;
+  uint64_t cg_group_id = OB_INVALID_GROUP_ID;
+  cg_group_id = ObTenantThreadGroupSet::instance().get_group_cg_id(group_id);
+  /*
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_INVALID_GROUP_ID != cg_group_id) {
+    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time, cg_group_id);
+  } else {
+    if (!lock_.try_rdlock()) {
+      ret = OB_EAGAIN;
+    } else {
+      if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+      } else {
+        cpu_time = tenant->get_group_cpu_time(group_id);
+      }
+      lock_.unlock();
+    }
+  }
+  */
+  if (!lock_.try_rdlock()) {
+    ret = OB_EAGAIN;
+  } else {
+    if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+    } else {
+      cpu_time = tenant->get_group_cpu_time(group_id);
+    }
+    lock_.unlock();
   }
   return ret;
 }

@@ -46,7 +46,6 @@ public:
                           ObIArray<ObSSMicroBlockCacheKey> &micro_keys);
   void generate_micro_keys_not_in_cache(const int64_t micro_num,
                                         ObIArray<ObSSMicroBlockCacheKey> &micro_keys);
-
 public:
   ObLS *ls_;
 };
@@ -191,7 +190,7 @@ TEST_F(TestSSHAPrewarmStruct, test_producer)
   int ret = OB_SUCCESS;
   ObArray<ObSSMicroBlockCacheKey> micro_keys;
 
-  const ObLSID ls_id(100);
+  const ObLSID ls_id(1001);
   create_ls(ls_id);
 
   // generate phy_block of @ls_id into micro_cache_file

@@ -10856,7 +10856,8 @@ int ObOptimizerUtil::flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<Ob
 
 int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
                                                        const ObIArray<ObRawExpr*> &range_exprs,
-                                                       ObIArray<ObRawExpr*> &out_range_exprs)
+                                                       ObIArray<ObRawExpr*> &out_range_exprs,
+                                                       const bool is_index_merge_path)
 {
   int ret = OB_SUCCESS;
 
@@ -10878,6 +10879,12 @@ int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
   } else if (flatten_exprs.count() == 1) {
     if (OB_FAIL(out_range_exprs.assign(range_exprs))) {
       LOG_WARN("failed to assign range exprs", K(ret));
+    }
+  } else if (is_index_merge_path) {
+    // For index merge path, don't use OR to reorganize expressions
+    // Keep the original range expressions to maintain index merge structure
+    if (OB_FAIL(out_range_exprs.assign(flatten_exprs))) {
+      LOG_WARN("failed to assign range exprs for index merge path", K(ret));
     }
   } else {
     ObOpRawExpr *or_expr = nullptr;

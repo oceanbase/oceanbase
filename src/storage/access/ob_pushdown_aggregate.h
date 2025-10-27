@@ -611,6 +611,7 @@ public:
   int add_distinct_null_value() override;
   // for micro with bitmap, should extract distinct values according bitmap
   int extract_distinct() override;
+  int clear_agg_cell_assign_status() override;
   int output_extra_group_by_result(int64_t &count, const ObTableIterParam &iter_param) override;
   // for column store, assign aggregate cells to column group scanner(ObCGGroupByScanner)
   int assign_agg_cells(const sql::ObExpr *col_expr, common::ObIArray<int32_t> &agg_idxs) override;

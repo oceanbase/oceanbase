@@ -9,12 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "objit/common/ob_item_type.h"
+
 #define USING_LOG_PREFIX SERVER
 #include "ob_query_translator.h"
-#include "sql/printer/ob_raw_expr_printer.h"
-#include "sql/ob_sql_utils.h"
-
 
 namespace oceanbase
 {
@@ -31,6 +28,8 @@ int ObQueryTranslator::translate()
     LOG_WARN("fail to translate from items", K(ret));
   } else if (OB_FAIL(translate_where())) {
     LOG_WARN("fail to translate where items", K(ret));
+  } else if (OB_FAIL(translate_group_by())) {
+    LOG_WARN("fail to translate group by items", K(ret));
   } else if (OB_FAIL(translate_order_by())) {
     LOG_WARN("fail to translate order by items", K(ret));
   } else if (req_->has_vec_approx()) {
@@ -77,6 +76,12 @@ int ObQueryTranslator::translate_select()
 {
   int ret = OB_SUCCESS;
   const ObQueryReqFromJson *query_req = static_cast<const ObQueryReqFromJson*>(req_);
+  for (int i = 0; i < query_req->score_items_.count(); i++) {
+    ObReqOpExpr *op_expr = dynamic_cast<ObReqOpExpr*>(query_req->score_items_.at(i));
+    if (OB_NOT_NULL(op_expr)) {
+      op_expr->simplify_recursive();
+    }
+  }
   int item_count = query_req->select_items_.count();
   int score_count = query_req->score_items_.count();
   DATA_PRINTF("SELECT ");
@@ -103,8 +108,14 @@ int ObQueryTranslator::translate_select()
     ObReqExpr *expr = query_req->score_items_.at(i);
     if (i == 0 && score_count > 1) {
        DATA_PRINTF("(");
+    } else if (score_count == 1) {
+      ObReqOpExpr *op_expr = dynamic_cast<ObReqOpExpr*>(expr);
+      if (OB_NOT_NULL(op_expr) && op_expr->has_multi_params_recursive()) {
+        op_expr->need_parentheses_ = true;
+      }
     }
-    if (OB_FAIL(expr->translate_expr(print_params_, buf_, buf_len_, pos_, FIELD_LIST_SCOPE, false))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(expr->translate_expr(print_params_, buf_, buf_len_, pos_, FIELD_LIST_SCOPE, false))) {
       LOG_WARN("fail to translate expr", K(ret));
     } else if (i + 1 < score_count) {
       DATA_PRINTF(" + ");
@@ -112,7 +123,11 @@ int ObQueryTranslator::translate_select()
       if (score_count > 1) {
         DATA_PRINTF(")");
       }
-      if (query_req->score_alias_.empty()) {
+      if (OB_FAIL(ret)) {
+      } else if (score_count == 1 && expr->expr_name == "_score" &&
+                 query_req->score_alias_.empty()) {
+        // do nothing
+      } else if (query_req->score_alias_.empty()) {
         DATA_PRINTF(" as _score");
       } else {
         DATA_PRINTF(" as ");
@@ -148,8 +163,28 @@ int ObQueryTranslator::translate_order_by()
   }
   for (int i = 0; i < req_->order_items_.count() && OB_SUCC(ret); i++) {
     OrderInfo *order_info = req_->order_items_.at(i);
-    if (OB_FAIL(translate_order(order_info))) {
+    if (OB_FAIL(order_info->translate(print_params_, buf_, buf_len_, pos_, ORDER_SCOPE))) {
       LOG_WARN("fail to translate expr", K(ret));
+    } else if (i + 1 < req_->order_items_.count()) {
+      DATA_PRINTF(", ");
+    }
+  }
+  return ret;
+}
+
+int ObQueryTranslator::translate_group_by()
+{
+  int ret = OB_SUCCESS;
+  const ObQueryReqFromJson *query_req = static_cast<const ObQueryReqFromJson*>(req_);
+  if (query_req->group_items_.count() > 0) {
+    DATA_PRINTF(" GROUP BY ");
+  }
+  for (int i = 0; i < query_req->group_items_.count() && OB_SUCC(ret); i++) {
+    ObReqExpr *item_expr = query_req->group_items_.at(i);
+    if (OB_FAIL(item_expr->translate_expr(print_params_, buf_, buf_len_, pos_, FIELD_LIST_SCOPE))) {
+      LOG_WARN("fail to translate expr", K(ret));
+    } else if (i + 1 < query_req->group_items_.count()) {
+      DATA_PRINTF(", ");
     }
   }
   return ret;
@@ -175,6 +210,24 @@ int ObRequestTranslator::translate_table(const ObReqTable *table)
       DATA_PRINTF(") ");
       PRINT_IDENT(table->alias_name_);
     }
+  } else if (table->table_type_ == ReqTableType::MULTI_SET) {
+    const ObMultiSetTable *mul_tab = static_cast<const ObMultiSetTable *>(table);
+    DATA_PRINTF("(");
+    for (uint64_t i = 0; i < mul_tab->sub_queries_.count() && OB_SUCC(ret); i++) {
+      if (i > 0) {
+        if (mul_tab->joined_type_ == ObReqJoinType::UNION_ALL) {
+          DATA_PRINTF(" UNION ALL ");
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected join type", K(ret), K(mul_tab->joined_type_));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(translate_table(mul_tab->sub_queries_.at(i)))) {
+        LOG_WARN("left_table translate failed", K(ret));
+      }
+    }
+    DATA_PRINTF(")");
   } else if (table->table_type_ == ReqTableType::JOINED_TABLE) {
     const ObReqJoinedTable *jt = static_cast<const ObReqJoinedTable *>(table);
     DATA_PRINTF("(");
@@ -241,6 +294,12 @@ int ObRequestTranslator::translate_from()
 int ObRequestTranslator::translate_where()
 {
   int ret = OB_SUCCESS;
+  for (int i = 0; i < req_->condition_items_.count(); i++) {
+    ObReqOpExpr *op_expr = dynamic_cast<ObReqOpExpr*>(req_->condition_items_.at(i));
+    if (OB_NOT_NULL(op_expr)) {
+      op_expr->simplify_recursive();
+    }
+  }
   if (req_->condition_items_.count() > 0) {
     DATA_PRINTF(" WHERE ");
   }
@@ -267,7 +326,7 @@ int ObRequestTranslator::translate_limit()
       if (OB_FAIL(req_->offset_item_->translate_expr(print_params_, buf_, buf_len_, pos_, LIMIT_SCOPE)) ) {
         LOG_WARN("fail to translate expr", K(ret));
       } else {
-        DATA_PRINTF(",");
+        DATA_PRINTF(", ");
       }
     }
     if (OB_FAIL(ret)) {

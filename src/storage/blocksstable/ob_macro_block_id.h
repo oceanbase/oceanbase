@@ -101,6 +101,7 @@ public:
   bool is_meta() const; // shared meta or private meta
   bool is_tablet_local_cache_object() const; // shared data or private data or shared meta or private meta, which has tablet info
   bool is_private_macro() const; // private data/meta macro block in ss mode
+  bool is_private() const; // private objects in ss mode, including private tablet meta, private data/meta macro...
   bool is_macro_write_cache_ctrl_obj_type() const; // macro write cache controlled by _ss_local_cache_control in ss mode
   void set_id_mode(const uint64_t id_mode) { id_mode_ = id_mode; }
   // Local mode
@@ -110,8 +111,6 @@ public:
   void set_write_seq(const uint64_t write_seq) { write_seq_ = write_seq; }
 
   // Share mode
-  void set_ss_version(const uint64_t ss_version) { ss_version_ = ss_version; }
-  void set_ss_id_mode(const uint64_t ss_mode_id) { ss_id_mode_ = ss_mode_id; }
   ObStorageObjectType storage_object_type() const { return static_cast<ObStorageObjectType>(storage_object_type_); }
   const ObStorageObjectTypeBase &get_type_instance() const;
   void set_storage_object_type(const uint64_t storage_object_type) { storage_object_type_ = storage_object_type; }
@@ -119,12 +118,12 @@ public:
   void set_incarnation_id(const uint64_t incarnation_id) { incarnation_id_ = incarnation_id; }
   int64_t column_group_id() const { return column_group_id_; }
   void set_column_group_id(const uint64_t column_group_id) { column_group_id_ = column_group_id; }
-  int64_t macro_transfer_seq() const { return macro_transfer_seq_; }
-  void set_macro_transfer_seq(const int64_t macro_transfer_seq) { macro_transfer_seq_ = macro_transfer_seq; }
+  int64_t macro_transfer_epoch() const { return macro_transfer_epoch_; }
+  void set_macro_transfer_epoch(const int64_t macro_transfer_epoch) { macro_transfer_epoch_ = macro_transfer_epoch; }
   uint64_t tenant_seq() const { return tenant_seq_; }
   void set_tenant_seq(const uint64_t tenant_seq) { tenant_seq_ = tenant_seq; }
-  int64_t meta_transfer_seq() const { return meta_transfer_seq_; }
-  void set_meta_transfer_seq(const int64_t meta_transfer_seq) { meta_transfer_seq_ = meta_transfer_seq; }
+  int64_t meta_transfer_epoch() const { return meta_transfer_epoch_; }
+  void set_meta_transfer_epoch(const int64_t meta_transfer_epoch) { meta_transfer_epoch_ = meta_transfer_epoch; }
   uint64_t meta_version_id() const { return meta_version_id_; }
   void set_meta_version_id(const uint64_t meta_version_id) { meta_version_id_ = meta_version_id; }
   bool meta_is_inner_tablet() const;
@@ -198,13 +197,13 @@ private:
 private:
   union {
     int64_t first_id_;
-    // for share nothing mode
+    // common used
     struct {
       uint64_t write_seq_ : SF_BIT_WRITE_SEQ;
       uint64_t id_mode_   : SF_BIT_ID_MODE;
       uint64_t version_   : SF_BIT_VERSION;
     };
-    // for share storage mode
+    // only used for ss mode, but hide 'ss_id_mode_ & ss_version_'
     struct {
       uint64_t storage_object_type_ : SF_BIT_STORAGE_OBJECT_TYPE;
       uint64_t incarnation_id_  : SF_BIT_INCARNATION_ID;
@@ -229,12 +228,12 @@ private:
     int64_t fourth_id_;
     // for PRIVATE_DATA_MACRO and PRIVATE_META_MACRO
     struct {
-      int64_t macro_transfer_seq_  : SF_BIT_TRANSFER_SEQ;
+      int64_t macro_transfer_epoch_  : SF_BIT_TRANSFER_SEQ; // FARM COMPAT WHITELIST FOR macro_transfer_seq_: renamed
       uint64_t tenant_seq_          : SF_BIT_TENANT_SEQ;
     };
     // for PRIVATE_TABLET_META and PRIVATE_TABLET_CURRENT_VERSION
     struct {
-      int64_t meta_transfer_seq_   : SF_BIT_TRANSFER_SEQ;
+      int64_t meta_transfer_epoch_   : SF_BIT_TRANSFER_SEQ; // FARM COMPAT WHITELIST FOR meta_transfer_seq_: renamed
       uint64_t meta_version_id_     : SF_BIT_META_VERSION_ID;
     };
     // for SHARED object

@@ -282,6 +282,8 @@ public:
       scan_rows_size_(common::OB_INVALID_ID),
       row_width_(common::OB_INVALID_ID),
       das_tasks_key_(),
+      in_bf_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+      in_fuse_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
       in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
       row_scan_cnt_(0),
       task_type_(ObDASScanTaskType::SCAN),
@@ -348,6 +350,8 @@ public:
   int64_t scan_rows_size_;
   int64_t row_width_;   // no use
   ObDASTCBMemProfileKey das_tasks_key_;
+  int64_t in_bf_cache_threshold_;
+  int64_t in_fuse_row_cache_threshold_;
   int64_t in_row_cache_threshold_;
   // row_scan_cnt_ indicates the total rows scanned during a table scan, for multi-partition tables, it sums rows
   // from all local partitions and retains its value even after rescan.
@@ -356,7 +360,7 @@ public:
   ObDasExecuteLocalInfo *das_execute_local_info_;
   ObDasExecuteRemoteInfo *das_execute_remote_info_;
   bool do_local_dynamic_filter_;
-  common::ObSEArray<common::ObDatum, 1> local_dynamic_filter_params_;
+  common::ObSEArray<common::ObDatum, 4> local_dynamic_filter_params_;
   common::ObLimitParam topn_param_;
 
 private:
@@ -422,6 +426,8 @@ public:
   int get_fts_tablet_ids(common::ObIArray<ObDASFTSTabletID> &fts_tablet_ids, ObDASBaseRtDef *rtdef);
   int get_rowkey_domain_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const;
   int init_scan_param();
+  int check_merge_range_opt();
+  int prepare_local_dynamic_filter_context();
   int rescan();
   int reuse_iter();
   void reset_access_datums_ptr(int64_t capacity = 0);
@@ -513,10 +519,10 @@ public:
   int64_t get_io_read_bytes() { return io_read_bytes_; }
   void add_ssstore_read_bytes(int64_t ssstore_read_bytes) { ssstore_read_bytes_ += ssstore_read_bytes; }
   int64_t get_ssstore_read_bytes() { return ssstore_read_bytes_; }
-  void add_ssstore_read_row_cnt(int64_t ssstore_read_row_cnt) { ssstore_read_row_cnt_ += ssstore_read_row_cnt; }
-  int64_t get_ssstore_read_row_cnt() { return ssstore_read_row_cnt_; }
-  void add_memstore_read_row_cnt(int64_t memstore_read_row_cnt) { memstore_read_row_cnt_ += memstore_read_row_cnt; }
-  int64_t get_memstore_read_row_cnt() { return memstore_read_row_cnt_; }
+  void add_base_read_row_cnt(int64_t base_read_row_cnt) { base_read_row_cnt_ += base_read_row_cnt; }
+  int64_t get_base_read_row_cnt() { return base_read_row_cnt_; }
+  void add_delta_read_row_cnt(int64_t delta_read_row_cnt) { delta_read_row_cnt_ += delta_read_row_cnt; }
+  int64_t get_delta_read_row_cnt() { return delta_read_row_cnt_; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
                        K_(datum_store),
                        KPC_(output_exprs),
@@ -524,8 +530,8 @@ public:
                        K_(vec_row_store),
                        K_(io_read_bytes),
                        K_(ssstore_read_bytes),
-                       K_(ssstore_read_row_cnt),
-                       K_(memstore_read_row_cnt),
+                       K_(base_read_row_cnt),
+                       K_(delta_read_row_cnt),
                        K_(das_execute_remote_info));
 private:
   ObChunkDatumStore datum_store_;
@@ -539,8 +545,8 @@ private:
   bool enable_rich_format_;
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
-  int64_t ssstore_read_row_cnt_;
-  int64_t memstore_read_row_cnt_;
+  int64_t base_read_row_cnt_;
+  int64_t delta_read_row_cnt_;
   ObDasExecuteRemoteInfo das_execute_remote_info_;
 };
 

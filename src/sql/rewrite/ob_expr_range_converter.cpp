@@ -1503,6 +1503,8 @@ int ObExprRangeConverter::get_single_rowid_in_range_node(const ObRawExpr &rowid_
   if (OB_FAIL(get_extract_rowid_range_infos(rowid_expr, pk_column_items,
                                             is_physical_rowid, part_column_id))) {
     LOG_WARN("failed to get extract rowid range infos");
+  } else if (ctx_.is_global_index_ && is_physical_rowid) {
+    // do nothing
   } else if (!is_physical_rowid) {
     ObSEArray<int64_t, 4> key_idxs;
     ObSEArray<int64_t, 4> pk_offsets;
@@ -2277,6 +2279,8 @@ int ObExprRangeConverter::get_rowid_node(const ObRawExpr &l_expr,
   if (OB_FAIL(get_extract_rowid_range_infos(*rowid_expr, pk_column_items,
                                             is_physical_rowid, part_column_id))) {
     LOG_WARN("failed to get extract rowid range infos");
+  } else if (ctx_.is_global_index_ && is_physical_rowid) {
+    // do nothing
   } else if (OB_FAIL(check_calculable_expr_valid(const_expr, is_valid))) {
     LOG_WARN("failed to get calculable expr val");
   } else if (!is_valid) {
@@ -2449,7 +2453,6 @@ int ObExprRangeConverter::get_extract_rowid_range_infos(const ObRawExpr &calc_ur
   }
   LOG_TRACE("get extract rowid range infos", K(is_physical_rowid), K(part_column_id),
                                              K(pk_columns), K(calc_urowid_expr));
-
   return ret;
 }
 

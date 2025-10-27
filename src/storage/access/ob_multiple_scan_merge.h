@@ -44,6 +44,11 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
+
+  INHERIT_TO_STRING_KV("ObMultipleMerge", ObMultipleMerge, K_(consumer_cnt),
+                       K_(filt_del_count), K_(consumers), KPC_(simple_merge),
+                       KPC_(rows_merger));
+
 protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;

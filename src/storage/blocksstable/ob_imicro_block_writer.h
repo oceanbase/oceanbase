@@ -55,6 +55,7 @@ struct ObMicroBlockDesc
   bool has_string_out_row_;
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
+  bool is_first_row_first_flag_;
 
   ObMicroBlockDesc() { reset(); }
   bool is_valid() const;
@@ -86,6 +87,7 @@ struct ObMicroBlockDesc
       K_(has_string_out_row),
       K_(has_lob_out_row),
       K_(is_last_row_last_flag),
+      K_(is_first_row_first_flag),
       K_(original_size));
 
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockDesc);
@@ -127,6 +129,7 @@ public:
     has_lob_out_row_(false),
     need_check_lob_(false),
     is_last_row_last_flag_(false),
+    is_first_row_first_flag_(false),
     checksum_helper_()
   {
   }
@@ -173,6 +176,7 @@ public:
     has_string_out_row_ = false;
     has_lob_out_row_ = false;
     is_last_row_last_flag_ = false;
+    is_first_row_first_flag_ = false;
   }
   virtual bool micro_block_row_data_buffered() const
   {
@@ -210,6 +214,7 @@ public:
   inline bool has_string_out_row() const { return has_string_out_row_; }
   inline bool has_lob_out_row() const { return has_lob_out_row_; }
   inline bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
+  inline bool is_first_row_first_flag() const { return is_first_row_first_flag_; }
   void set_contain_uncommitted_row()
   {
     contain_uncommitted_row_ = true;
@@ -237,6 +242,9 @@ protected:
       ++last_rows_count_;
     }
     is_last_row_last_flag_ = row.is_last_multi_version_row();
+    if (1 == get_row_count()) {
+      is_first_row_first_flag_ = row.is_first_multi_version_row();
+    }
     STORAGE_LOG(DEBUG, "cal row stat", K(row), K(row.mvcc_row_flag_), K_(row_count_delta), K_(last_rows_count));
   }
 
@@ -277,6 +285,7 @@ protected:
   bool has_lob_out_row_;
   bool need_check_lob_;
   bool is_last_row_last_flag_;
+  bool is_first_row_first_flag_;
   ObMicroBlockChecksumHelper checksum_helper_;
 };
 

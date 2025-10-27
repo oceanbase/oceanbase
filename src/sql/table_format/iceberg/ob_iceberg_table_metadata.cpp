@@ -171,6 +171,7 @@ int ObIcebergTableMetadata::do_build_table_schema(share::schema::ObTableSchema *
                  table_metadata_.get_schema(table_metadata_.current_schema_id, current_schema))) {
     LOG_WARN("get current schema failed", K(ret));
   } else {
+    // 这些 id 必须要设置，不然后面的 add column 操作会失败
     iceberg_table_schema->set_tenant_id(tenant_id_);
     iceberg_table_schema->set_database_id(database_id_);
     iceberg_table_schema->set_table_id(table_id_);

@@ -76,7 +76,7 @@ TEST_F(TestBlockIdList, test_id_list)
   ObLinkedMacroInfoWriteParam write_param;
   write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
   write_param.tablet_id_ = ObTabletID(1001);
-  write_param.tablet_transfer_seq_ = 1;
+  write_param.tablet_transfer_epoch_ = 1;
   write_param.start_macro_seq_ = 1;
   // empty set
   ASSERT_EQ(OB_SUCCESS, info_set.init());
@@ -131,7 +131,7 @@ TEST_F(TestBlockIdList, test_serialize_deep_copy)
   ObLinkedMacroInfoWriteParam write_param;
   write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
   write_param.tablet_id_ = ObTabletID(1001);
-  write_param.tablet_transfer_seq_ = 1;
+  write_param.tablet_transfer_epoch_ = 1;
   write_param.start_macro_seq_ = 1;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
   ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
@@ -234,8 +234,10 @@ TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
 
   // persist 4k tablet
   const uint64_t data_version = DATA_CURRENT_VERSION;
+  int32_t transfer_epoch = -1;
+  ASSERT_EQ(OB_SUCCESS, tablet->get_private_transfer_epoch(transfer_epoch));
   const int64_t tablet_meta_version = 0;
-  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
+  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, transfer_epoch, tablet_meta_version);
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   ASSERT_EQ(OB_SUCCESS, meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt));
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
@@ -274,7 +276,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObLinkedMacroInfoWriteParam write_param;
   write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
   write_param.tablet_id_ = ObTabletID(1001);
-  write_param.tablet_transfer_seq_ = 1;
+  write_param.tablet_transfer_epoch_ = 1;
   write_param.start_macro_seq_ = 1;
 
   // linked macro info
@@ -434,8 +436,10 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObBlockManager::BlockInfo block_info;
   int64_t ref_cnt = 0;
   ObTabletHandle new_tablet_handle;
+  int32_t transfer_epoch = -1;
+  ASSERT_EQ(OB_SUCCESS, tablet->get_private_transfer_epoch(transfer_epoch));
   const int64_t tablet_meta_version = 0;
-  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
+  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, transfer_epoch, tablet_meta_version);
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_EQ(OB_SUCCESS, new_tablet->tablet_addr_.get_block_addr(macro_id, offset, size));

@@ -73,6 +73,7 @@ public:
   {
     return OB_NOT_SUPPORTED;
   }
+  virtual bool iter_end() const = 0;
   TO_STRING_EMPTY();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObISRDaaTDimIter);
@@ -131,11 +132,16 @@ public:
   ObISparseRetrievalMergeIter() : input_row_cnt_(0), output_row_cnt_(0), is_inited_(false) {}
   virtual ~ObISparseRetrievalMergeIter() {}
 
-  virtual void reuse() = 0;
+  virtual void reuse(const bool switch_tablet = false) = 0;
   virtual void reset() = 0;
   virtual int get_next_row() = 0;
   virtual int get_next_rows(const int64_t capacity, int64_t &count) = 0;
-  virtual int get_query_max_score(double &score) {
+  virtual int get_query_max_score(double &score)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int preset_top_k_threshold(const double threshold)
+  {
     return OB_NOT_SUPPORTED;
   }
   VIRTUAL_TO_STRING_KV(K_(input_row_cnt), K_(output_row_cnt));

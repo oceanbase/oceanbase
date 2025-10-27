@@ -1235,8 +1235,6 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       LOG_INFO("fail to generate system config in pc str");
     } else {
       global_vars_version_ = 0;
-      set_enable_mysql_compatible_dates(
-        static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
     }
   }
   return ret;
@@ -1965,6 +1963,7 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
       } else {
         (void)config_in_pc_str_.assign(buf, int32_t(pos));
         inf_pc_configs_.update_version(cluster_config_version, cached_tenant_config_version_);
+        set_enable_mysql_compatible_dates(inf_pc_configs_.enable_mysql_compatible_dates_);
       }
       OX (eval_sys_var_config_hash_val());
     }
@@ -3597,7 +3596,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
     case SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_base_ob_enable_ps_parameter_anonymous_block(int_val != 0));
+      OX (sys_vars_cache.set_base_plsql_can_transform_sql_to_assign(int_val != 0));
       break;
     }
     default: {
@@ -5543,8 +5542,6 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
     OZ (gen_configs_in_pc_str());
-    set_enable_mysql_compatible_dates(
-      static_cast<ObSQLSessionInfo *>(this)->get_enable_mysql_compatible_dates_from_config());
   }
   return ret;
 }
@@ -6378,8 +6375,7 @@ void ObBasicSessionInfo::reset_pl_spi_query_info(int64_t time) {
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query,  volatile int64_t& query_len)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
-                                   static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = get_truncated_sql_len(stmt);
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
@@ -6411,8 +6407,7 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_l
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
-                                   static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = get_truncated_sql_len(stmt);
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
@@ -7679,6 +7674,11 @@ bool ObBasicSessionInfo::get_enable_hyperscan_regexp_engine() const
 int8_t ObBasicSessionInfo::get_min_const_integer_precision() const
 {
   return inf_pc_configs_.min_const_integer_precision_;
+}
+
+bool ObBasicSessionInfo::get_extend_sql_plan_monitor_metrics() const
+{
+  return inf_pc_configs_.extend_sql_plan_monitor_metrics_;
 }
 
 }//end of namespace sql

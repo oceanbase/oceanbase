@@ -436,8 +436,8 @@ do {                                                                            
 
 #define FREE_TABLE_STORE_ROW_IETRATOR(ctx, ptr)                                                \
 do {                                                                                           \
-  if (NULL != ptr) {                                                                           \
-    ctx.get_long_life_allocator()->free(ptr);                                                  \
+  if (NULL != (ptr)) {                                                                           \
+    (ctx).get_long_life_allocator()->free(ptr);                                                  \
   }                                                                                            \
  } while(0)
 

@@ -1858,8 +1858,6 @@ private:
                                      int64_t &filter_id);
   int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                   int64_t &filter_id);
-  int calc_rf_max_wait_time(const ObLogicalOperator *node, uint64_t table_id,
-                            int64_t &max_wait_time_ms);
   int create_runtime_filter_info(
       ObLogicalOperator *op,
       ObLogicalOperator *join_filter_create_op,

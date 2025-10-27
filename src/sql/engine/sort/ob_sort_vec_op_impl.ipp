@@ -1207,7 +1207,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::update_max_available_mem_siz
           &mem_context_->get_malloc_allocator(),
           [&](int64_t cur_cnt) { return topn_heap_->count() > cur_cnt; }, updated))) {
       SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
       SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
     }
   }
@@ -1283,7 +1283,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
                                                                 UNUSED(max_memory_size);
                                                                 return need_dump();
                                                               },
-                                                              dumped, mem_context_->used()))) {
+                                                              dumped, get_total_used_size()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
       } else if (profile_.get_cache_size() < profile_.get_global_bound_size()) {
@@ -1297,8 +1297,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
                                                               dumped, get_total_used_size()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
-        LOG_TRACE("trace sort need dump", K(dumped), K(get_total_used_size()), K(get_memory_limit()),
-                  K(profile_.get_cache_size()), K(profile_.get_expect_size()));
+        LOG_TRACE("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_ht_bucket_size()),
+                                          K(profile_.get_global_bound_size()), K(get_memory_limit()),
+                                          K(profile_.get_cache_size()), K(profile_.get_expect_size()));
       } else {
         // one-pass
         if (profile_.get_cache_size() <= sk_store_.get_mem_hold() + sk_store_.get_file_size()
@@ -1317,7 +1318,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
         } else {
         }
       }
-      SQL_ENG_LOG(INFO, "trace sort need dump", K(dumped), K(mem_context_->used()),
+      SQL_ENG_LOG(INFO, "trace sort need dump", K(dumped), K(mem_context_->used()), K(get_ht_bucket_size()),
                   K(get_memory_limit()), K(profile_.get_cache_size()),
                   K(profile_.get_expect_size()), K(sql_mem_processor_.get_data_size()),
                   K(sql_mem_processor_.is_auto_mgr()));
@@ -1868,7 +1869,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::before_add_row()
           &mem_context_->get_malloc_allocator(),
           [&](int64_t cur_cnt) { return rows_->count() > cur_cnt; }, updated))) {
       SQL_ENG_LOG(WARN, "failed to update max available mem size periodically", K(ret));
-    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
+    } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(get_total_used_size()))) {
       SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
     } else if (GCONF.is_sql_operator_dump_enabled()) {
       if (rows_->count() >= MAX_ROW_CNT) {
@@ -1952,7 +1953,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
         if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
               &mem_context_->get_malloc_allocator(),
               [&](int64_t max_memory_size) { return max_memory_size < need_size; }, dumped,
-              mem_context_->used()))) {
+              get_total_used_size()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
         merge_ways = std::max(merge_ways, get_memory_limit() / tempstore_block_size);

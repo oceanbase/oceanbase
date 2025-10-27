@@ -357,6 +357,8 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
+      foreign_key_database_name_(),
+      foreign_key_name_(),
       columns_(),
       is_self_ref_(false),
       table_id_(0),
@@ -368,6 +370,8 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
+      foreign_key_database_name_(),
+      foreign_key_name_(),
       columns_(alloc),
       is_self_ref_(false),
       table_id_(0),
@@ -379,14 +383,18 @@ public:
     ref_action_ = share::schema::ACTION_INVALID;
     database_name_.reset();
     table_name_.reset();
+    foreign_key_database_name_.reset();
+    foreign_key_name_.reset();
     table_id_ = OB_INVALID_ID;
     columns_.reset();
   }
-  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref), K_(table_id));
+  TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(foreign_key_database_name), K_(foreign_key_name), K_(columns), K_(is_self_ref), K_(table_id));
 public:
   share::schema::ObReferenceAction ref_action_;
   common::ObString database_name_;
   common::ObString table_name_;
+  common::ObString foreign_key_database_name_;
+  common::ObString foreign_key_name_;
   common::ObFixedArray<ObForeignKeyColumn, common::ObIAllocator> columns_;
   bool is_self_ref_;
   // the index table id of unique index for parent key, used to build das task to scan index table
@@ -984,7 +992,10 @@ public:
   { }
   TO_STRING_KV(KPC_(ins_ctdef),
                KPC_(upd_ctdef),
-               K_(is_upd_rowkey))
+               K_(das_index_scan_ctdef),
+               K_(lookup_ctdef_for_batch),
+               K_(is_upd_rowkey),
+               K_(do_opt_path))
   ObInsCtDef *ins_ctdef_;
   ObUpdCtDef *upd_ctdef_;
   bool is_upd_rowkey_;

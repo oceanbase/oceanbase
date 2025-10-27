@@ -886,7 +886,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Geometry*/
     ObMaxType, /*UDT*/
     ObMaxType, /*DecimalInt*/
-    ObMaxType, /*Collection Sql Type*/
+    ObCollectionSQLType, /*Collection Sql Type*/
     ObMaxType, /*mysql date*/
     ObMaxType, /*mysql datetime*/
     ObMaxType, /*RoaringBitmap*/

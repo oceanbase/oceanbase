@@ -98,9 +98,12 @@ private:
       const ObSSTableArray &sstable_array,
       const bool is_loaded_co_table,
       const blocksstable::ObSSTableMetaHandle &co_meta_handle);
+  int get_unloaded_sstable(common::ObIArray<TablePtr*> &table_ptr_aggregate);
+  int load_sstable_meta_with_aggregate_io();
 private:
   friend class ObTablet; // TODO: remove this friend class when possible
   friend class ObTabletTableStore;
+  friend class AggregatedIOGuard;
   bool need_load_sstable_;
   ObStorageMetaHandle table_store_handle_;
   SSTableHandleArray sstable_handle_array_;
@@ -110,9 +113,31 @@ private:
   bool * memstore_retired_;
   ObStorageMetaHandle *transfer_src_table_store_handle_;
   ObSEArray<ObStorageMetaHandle, 1> split_extra_table_store_handles_;
+  bool aggregated_guard_created_;
   DISALLOW_COPY_AND_ASSIGN(ObTableStoreIterator);
 };
 
+// Aggregated I/O Guard for batching sstable meta loading
+// If AggregatedIOGuard is created, the IO will be blocked until the AggregatedIOGuard is destroyed.
+// The IO will be triggered when the iterator is valid and the sstable needs to be loaded.
+class AggregatedIOGuard final
+{
+public:
+  explicit AggregatedIOGuard(ObTableStoreIterator &iterator) : iterator_(&iterator) {
+    iterator_->aggregated_guard_created_ = true;
+  }
+  ~AggregatedIOGuard() {
+    if (nullptr != iterator_ && iterator_->is_valid()) {
+      iterator_->load_sstable_meta_with_aggregate_io();
+      iterator_->set_retire_check();
+      iterator_->aggregated_guard_created_ = false;
+    }
+  }
+
+private:
+  ObTableStoreIterator *iterator_;
+  DISALLOW_COPY_AND_ASSIGN(AggregatedIOGuard);
+};
 
 } // namespace storage
 } // namespace oceanbase

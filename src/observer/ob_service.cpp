@@ -461,9 +461,11 @@ int ObService::submit_ls_update_task(
   return ret;
 }
 
+// Only when schema refresh is triggered by DDL, schema_info needs to be specified
 int ObService::submit_async_refresh_schema_task(
     const uint64_t tenant_id,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const share::schema::ObRefreshSchemaInfo *schema_info)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -473,7 +475,7 @@ int ObService::submit_async_refresh_schema_task(
              || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version));
-  } else if (OB_FAIL(schema_updater_.async_refresh_schema(tenant_id, schema_version))) {
+  } else if (OB_FAIL(schema_updater_.async_refresh_schema(tenant_id, schema_version, schema_info))) {
     LOG_WARN("fail to async refresh schema", KR(ret), K(tenant_id), K(schema_version));
   }
   return ret;
@@ -1495,7 +1497,7 @@ int ObService::switch_schema(
           && origin_timeout_ts >= ObTimeUtility::current_time() + LEFT_TIME) {
         THIS_WORKER.set_timeout_ts(origin_timeout_ts - LEFT_TIME);
       }
-      if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+      if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version, &schema_info))) {
         LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
       }
       THIS_WORKER.set_timeout_ts(origin_timeout_ts);
@@ -1509,7 +1511,7 @@ int ObService::switch_schema(
           && OB_TIMEOUT == ret) {
         // To set set_tenant_received_broadcast_version in advance, we reduce the abs_time,
         // if not timeout after first async_refresh_schema, we should execute async_refresh_schema again and overwrite the ret code
-        if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version))) {
+        if (OB_FAIL(schema_service->async_refresh_schema(tenant_id, schema_version, &schema_info))) {
           LOG_WARN("fail to async schema version", KR(ret), K(tenant_id), K(schema_version));
         }
       }
@@ -2258,13 +2260,23 @@ int ObService::trigger_tenant_config(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(ret));
   } else {
+    common::ObSEArray<std::pair<uint64_t, int64_t>, 10> versions;
+    std::pair<uint64_t, int64_t> pair;
     // ignore ret in for condition
     for (int64_t i = 0; i < wms_in_sync_arg.tenant_config_version_.count(); ++i) {
       const uint64_t tenant_id = wms_in_sync_arg.tenant_config_version_.at(i).first;
       const int64_t version = wms_in_sync_arg.tenant_config_version_.at(i).second;
       OTC_MGR.add_tenant_config(tenant_id); // ignore ret
-      OTC_MGR.got_version(tenant_id, version); // ignore ret
+      pair.first = tenant_id;
+      pair.second = version;
+      if (OB_FAIL(versions.push_back(pair))) {
+        LOG_WARN("push back tenant config fail",
+                "tenant_id", pair.first, "version", pair.second, K(ret));
+        OTC_MGR.got_version(tenant_id, version); // ignore ret
+        ret = OB_SUCCESS;
+      }
     }
+    OTC_MGR.got_versions(versions); // ignore ret
   }
   return ret;
 }

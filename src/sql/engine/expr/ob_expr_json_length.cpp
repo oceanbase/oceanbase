@@ -58,7 +58,7 @@ int ObExprJsonLength::calc_result_typeN(ObExprResType& type,
 int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta meta1, bool has_lob_header1,
                            const ObDatum *data2, ObDatumMeta meta2, bool has_lob_header2,
                            MultimodeAlloctor *allocator, ObDatum &res,
-                           ObJsonPathCache* path_cache)
+                           ObJsonPathCache* path_cache, bool is_const)
 {
   INIT_SUCC(ret);
   bool is_null = false;
@@ -104,7 +104,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
         ObJsonPath *j_path = NULL;
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, *data2, meta2, has_lob_header2, j_path_text))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
-        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, true))) {
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(*allocator, path_cache, j_path, j_path_text, 1, true, is_const))) {
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
           LOG_WARN("fail to parse json path", K(ret), K(type2), K(j_path_text));
         } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, false, hit))) {
@@ -144,12 +144,13 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-
+  bool is_const = false;
   if (OB_FAIL(tmp_allocator.eval_arg(arg0, ctx, datum0))) { // json doc
     LOG_WARN("fail to eval json arg", K(ret), K(arg0->datum_meta_));
   } else {
     if (expr.arg_cnt_ > 1) { // json path
       ObExpr *arg1 = expr.args_[1];
+      is_const = arg1->is_const_expr();
       meta1 = arg1->datum_meta_;
       has_lob_header1 = arg1->obj_meta_.has_lob_header();
       if (OB_FAIL(tmp_allocator.eval_arg(arg1, ctx, datum1))) {
@@ -164,7 +165,7 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
     if (OB_FAIL(calc(ctx, *datum0, arg0->datum_meta_, arg0->obj_meta_.has_lob_header(),
-                     datum1, meta1, has_lob_header1, &tmp_allocator, res, path_cache))) {
+                     datum1, meta1, has_lob_header1, &tmp_allocator, res, path_cache, is_const))) {
       LOG_WARN("fail to calc json length result", K(ret), K(datum0), K(expr.arg_cnt_));
     }
   }

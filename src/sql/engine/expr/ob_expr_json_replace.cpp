@@ -94,10 +94,11 @@ int ObExprJsonReplace::eval_json_replace(const ObExpr &expr, ObEvalCtx &ctx, ObD
     } else {
       ObString path_val = path_data->get_string();
       ObJsonPath *json_path;
+      bool is_const = expr.args_[i]->is_const_expr();
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *path_data,
                   expr.args_[i]->datum_meta_, expr.args_[i]->obj_meta_.has_lob_header(), path_val))) {
         LOG_WARN("fail to get real data.", K(ret), K(path_val));
-      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, json_path, path_val, i, false, is_const))) {
         ret = OB_ERR_INVALID_JSON_PATH;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
       } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(),

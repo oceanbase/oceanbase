@@ -3,7 +3,7 @@ name: Farm
 on:
   pull_request:
     branches: [ master,develop ]
-    types: [opened, reopened, synchronize, ready_for_review] 
+    types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
       - 'docs/**'
       - '.github/ISSUE_TEMPLATE/**'

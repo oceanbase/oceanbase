@@ -49,6 +49,7 @@ struct ObTextRetrievalInfo
     related_doc_cnt_(NULL),
     total_doc_cnt_(NULL),
     doc_token_cnt_(NULL),
+    avg_doc_token_cnt_(NULL),
     relevance_expr_(NULL),
     column_boost_idx_(-1)
   { }
@@ -80,6 +81,7 @@ struct ObTextRetrievalInfo
   ObAggFunRawExpr *related_doc_cnt_;  // count(token_cnt_column)
   ObAggFunRawExpr *total_doc_cnt_;  // count(doc_id_column) or count(data_table_rows)
   ObAggFunRawExpr *doc_token_cnt_;  // sum(token_cnt_column) or the number of doc_length_column_
+  ObRawExpr *avg_doc_token_cnt_; // avg(token_cnt_column) group by doc_id, average doc length
   ObRawExpr *relevance_expr_; // BM25
   int column_boost_idx_;
 };
@@ -328,6 +330,26 @@ struct ObVecIndexInfo
   bool all_filters_can_be_picked_out_;
 };
 
+struct ObPushDownTopNInfo
+{
+  ObPushDownTopNInfo()
+  : is_push_into_index_(false),
+    limit_count_expr_(NULL),
+    limit_offset_expr_(NULL),
+    sort_key_(),
+    with_ties_(false)
+    {}
+  ~ObPushDownTopNInfo() {}
+
+  TO_STRING_KV(K_(is_push_into_index), KPC_(limit_count_expr), KPC_(limit_offset_expr), K_(sort_key), K_(with_ties));
+
+  bool is_push_into_index_;
+  ObRawExpr *limit_count_expr_;
+  ObRawExpr *limit_offset_expr_;
+  OrderItem sort_key_;
+  bool with_ties_;
+};
+
 class ObLogTableScan : public ObLogicalOperator
 {
 public:
@@ -358,8 +380,7 @@ public:
         ranges_(),
         ss_ranges_(),
         is_skip_scan_(),
-        limit_count_expr_(NULL),
-        limit_offset_expr_(NULL),
+        push_down_top_n_info_(),
         sample_info_(),
         est_cost_info_(NULL),
         table_opt_info_(NULL),
@@ -728,9 +749,14 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   inline common::ObIArray<bool> &get_filter_before_index_flags() { return filter_before_index_back_; }
   inline const common::ObIArray<bool> &get_filter_before_index_flags() const { return filter_before_index_back_; }
-  inline const ObRawExpr *get_limit_expr() const { return limit_count_expr_; }
-  inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
-  inline ObRawExpr *get_offset_expr() { return limit_offset_expr_; }
+  inline ObRawExpr *&get_limit_expr() { return push_down_top_n_info_.limit_count_expr_; }
+  inline ObRawExpr *&get_offset_expr() { return push_down_top_n_info_.limit_offset_expr_; }
+  inline const ObRawExpr *get_limit_expr() const { return push_down_top_n_info_.limit_count_expr_; }
+  inline const ObRawExpr *get_offset_expr() const { return push_down_top_n_info_.limit_offset_expr_; }
+  inline bool need_sort() const { return push_down_top_n_info_.sort_key_.expr_ != nullptr; }
+  inline ObPushDownTopNInfo &get_push_down_top_n_info() { return push_down_top_n_info_; }
+  inline const ObPushDownTopNInfo &get_push_down_top_n_info() const { return push_down_top_n_info_; }
+  inline bool is_push_down_limit_into_index() const { return push_down_top_n_info_.is_push_into_index_; }
   int set_limit_offset(ObRawExpr *limit, ObRawExpr *offset);
   inline int64_t get_table_row_count() const
   { return est_cost_info_ == NULL || est_cost_info_->table_meta_info_ == NULL ? 0.0 : est_cost_info_->table_meta_info_->table_row_count_; }
@@ -792,7 +818,8 @@ public:
   int set_table_scan_filters(const common::ObIArray<ObRawExpr *> &filters);
   // for index merge, we need to set range conds and filters for each index scan
   int set_index_merge_scan_filters(const AccessPath *path);
-  int set_index_table_scan_filters(ObIndexMergeNode *node);
+  int set_index_table_scan_filters(ObIndexMergeNode *node, bool is_intersect_child);
+  int generate_dynamic_id_filter(ObIndexMergeNode *node, ObIArray<ObRawExpr*> &scan_pushdown_filters);
   inline common::ObIArray<ObRawExpr*> &get_range_conditions() { return range_conds_; }
   const common::ObIArray<ObRawExpr*> &get_range_conditions() const { return range_conds_; }
   inline void set_diverse_path_count(int64_t count) { diverse_path_count_ = count; }
@@ -1232,6 +1259,7 @@ protected: // memeber variables
   common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_range_conds_;
   common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_filters_;
   ExprSEArray full_filters_;
+  ExprSEArray dynamic_id_filter_exprs_;
 
   // index primary key columns.
   // indicates use which columns to extract query range
@@ -1270,8 +1298,7 @@ protected: // memeber variables
   bool is_skip_scan_;
 
   // limit params from upper limit op
-  ObRawExpr *limit_count_expr_;
-  ObRawExpr *limit_offset_expr_;
+  ObPushDownTopNInfo push_down_top_n_info_;
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
   ObCostTableScanInfo *est_cost_info_;

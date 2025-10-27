@@ -74,7 +74,7 @@ void ObSRTaaTIterImpl::reset()
   is_inited_ = false;
 }
 
-void ObSRTaaTIterImpl::reuse()
+void ObSRTaaTIterImpl::reuse(const bool switch_tablet)
 {
   if (nullptr != hash_maps_) {
     for (int64_t i = 0; i < partition_cnt_; ++i) {

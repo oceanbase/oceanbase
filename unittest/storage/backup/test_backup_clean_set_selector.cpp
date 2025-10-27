@@ -198,13 +198,13 @@ TEST_F(TestBackupCleanSelector_BasicCases, SuccessToDeleteSingleSet) {
 
 // Test: Skip already DELETED backup set (id=5) - should fail
 TEST_F(TestBackupCleanSelector_BasicCases, FailToDeleteAlreadyDeletedSet) {
-  run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "already_deleted", test_sets_, test_current_path_, false);
+  run_delete_test({5}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "already deleted", test_sets_, test_current_path_, false);
 }
 
 // TEST : Fail to delete a newer full backup set than the latest full backup set on the current path
 TEST_F(TestBackupCleanSelector_BasicCases, FailToDeleteNewerFullBackupSet) {
   run_delete_test({6}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-      "cannot_delete_backup_set_in_current_path_when_delete_policy_is_set", test_sets_, test_current_path_, true);
+      "cannot delete backup set in current path when delete policy is set", test_sets_, test_current_path_, true);
 }
 
 // Test: Delete a DELETING backup set (id=6) - should succeed
@@ -214,12 +214,12 @@ TEST_F(TestBackupCleanSelector_BasicCases, SuccessToDeleteDeletingSet) {
 
 // Test: Mixed delete (including already deleted set id=5) - only valid sets are deleted
 TEST_F(TestBackupCleanSelector_BasicCases, SuccessToDeleteMixedListWithDeletedSet) {
-  run_delete_test({1, 4, 5}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "already_deleted", test_sets_, test_current_path_, false);
+  run_delete_test({1, 4, 5}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "already deleted", test_sets_, test_current_path_, false);
 }
 
 // Test: Destination connectivity check failed - should fail
 TEST_F(TestBackupCleanSelector_BasicCases, FailOnConnectivityCheck) {
-  run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dest_connectivity_check_failed", test_sets_, test_current_path_, false, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED);
+  run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dest connectivity check failed", test_sets_, test_current_path_, false, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED);
 }
 
 // =================================================================================
@@ -249,12 +249,12 @@ protected:
 
 // Test: Delete backup set 2 (middle of dependency chain) - should fail due to dependency
 TEST_F(TestBackupCleanSelector_DependencyCases, FailToDeleteMiddleOfChain) {
-  run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dependent_by", test_sets_, test_current_path_, false);
+  run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dependent by", test_sets_, test_current_path_, false);
 }
 
 // Test: Delete backup set 1 (head of dependency chain) - should fail due to dependency
 TEST_F(TestBackupCleanSelector_DependencyCases, FailToDeleteHeadOfChain) {
-  run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dependent_by", test_sets_, test_current_path_, false);
+  run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dependent by", test_sets_, test_current_path_, false);
 }
 
 // Test: Delete backup set 4 (tail of dependency chain) - should succeed
@@ -265,7 +265,7 @@ TEST_F(TestBackupCleanSelector_DependencyCases, SuccessToDeleteTailOfChain) {
 // Test: Delete backup set 4 (tail of dependency chain) - should fail
 TEST_F(TestBackupCleanSelector_DependencyCases, FailToDeleteTailOfChain) {
   run_delete_test({4}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-      "cannot_delete_backup_set_in_current_path_when_delete_policy_is_set", test_sets_, test_current_path_, true);
+      "cannot delete backup set in current path when delete policy is set", test_sets_, test_current_path_, true);
 }
 
 
@@ -375,7 +375,7 @@ protected:
 TEST_F(TestBackupCleanSelector_MegaScenario,
        InterleavedDeleteOnMainChain_Fail) {
   run_delete_test({2, 4}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-                  "dependent_by_backup_set", test_sets_, test_current_path_, false);
+                  "dependent by backup set", test_sets_, test_current_path_, false);
 }
 
 // Test: Delete backup sets 10,11,12 (complete sub-chain) - should succeed
@@ -387,7 +387,7 @@ TEST_F(TestBackupCleanSelector_MegaScenario, DeleteCompleteSubChain_Success) {
 // Test: Delete backup set 30 (non-existent) - should fail
 TEST_F(TestBackupCleanSelector_MegaScenario, DeleteNotValid_Fail) {
   run_delete_test({30}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-                  "get_set_failed", test_sets_, test_current_path_, false);
+                  "get set failed", test_sets_, test_current_path_, false);
 }
 
 // =================================================================================
@@ -432,7 +432,7 @@ TEST_F(TestBackupCleanSelector_AdvancedPathCases,
   ObBackupPathString new_current_path;
   new_current_path.assign("file:///obbackup/adv_path_A");
   run_delete_test({1}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-                  "dependent_by_backup_set", test_sets_, new_current_path, false);
+                  "dependent by backup set", test_sets_, new_current_path, false);
 }
 
 // Test: Delete backup set 1 on reused path with dependency - should fail due to dependency
@@ -449,7 +449,7 @@ TEST_F(TestBackupCleanSelector_AdvancedPathCases,
   ObBackupPathString new_current_path;
   new_current_path.assign("file:///obbackup/adv_path_A");
   run_delete_test({2}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-                  "cannot_delete_backup_set_in_current_path_when_delete_policy_is_set", test_sets_, new_current_path, true);
+                  "cannot delete backup set in current path when delete policy is set", test_sets_, new_current_path, true);
 }
 
 TEST_F(TestBackupCleanSelector_AdvancedPathCases,
@@ -463,7 +463,7 @@ TEST_F(TestBackupCleanSelector_AdvancedPathCases,
        FailToDeleteOnReusedPathWithDependency5) {
   ObBackupPathString new_current_path;
   new_current_path.assign("file:///obbackup/adv_path_A");
-  run_delete_test({3,4}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dependent_by_backup_set", test_sets_, new_current_path, true);
+  run_delete_test({3,4}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {}, "dependent by backup set", test_sets_, new_current_path, true);
 }
 
 
@@ -481,7 +481,7 @@ TEST_F(TestBackupCleanSelector_AdvancedPathCases,
   ObBackupPathString new_current_path;
   new_current_path.assign("file:///obbackup/adv_path_A");
   run_delete_test({6}, OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED, {},
-                  "cannot_delete_backup_set_in_current_path_when_delete_policy_is_set", test_sets_, new_current_path, true);
+                  "cannot delete backup set in current path when delete policy is set", test_sets_, new_current_path, true);
 }
 
 // Test: Delete backup set 6 (latest on old path) - should succeed

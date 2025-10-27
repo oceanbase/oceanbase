@@ -5186,6 +5186,8 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
   } else if (ObPlanCache::is_contains_external_object(
                                             result.get_physical_plan()->get_dependency_table())) {
     need_add_plan = false;
+  } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_hybrid_search()) {
+    need_add_plan = false;
   }
   return ret;
 }

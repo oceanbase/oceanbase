@@ -1661,7 +1661,8 @@ public:
   static int flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs);
   static int preprocess_multivalue_range_exprs(ObIAllocator &allocator,
                                                const ObIArray<ObRawExpr*> &range_exprs,
-                                               ObIArray<ObRawExpr*> &out_range_exprs);
+                                               ObIArray<ObRawExpr*> &out_range_exprs,
+                                               const bool is_index_merge_path = false);
 
   static int can_extract_implicit_cast_range(ObItemType cmp_type,
                                             const ObColumnRefRawExpr &column_expr,

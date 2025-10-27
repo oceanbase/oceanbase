@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_plan.h"
+#include "sql/optimizer/ob_join_order.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join_filter.h"
@@ -2381,9 +2382,9 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
       OPT_TRACE_TITLE("Now", left_tree, "join", right_tree, join_info);
       if (OB_FAIL(ret)) {
         //do nothing
-      } else if (OB_FAIL(join_tree->revise_cardinality(left_tree,
-                                                       right_tree,
-                                                       join_info))) {
+      } else if (OB_FAIL(join_tree->calc_cardinality(left_tree,
+                                                     right_tree,
+                                                     join_info))) {
         LOG_WARN("failed to revise ambient card", K(ret));
       } else if (OB_FAIL(join_tree->generate_join_paths(*left_tree,
                                                         *right_tree,
@@ -3142,6 +3143,50 @@ int ObLogPlan::allocate_cte_table_path(CteTablePath *cte_table_path,
   return ret;
 }
 
+bool ObLogPlan::is_multivalue_index_in_path(const AccessPath *ap)
+{
+  if (OB_ISNULL(ap)) {
+    return false;
+  }
+
+  // Check if the access path itself is a multivalue index
+  bool is_multivalue_index = ap->est_cost_info_.index_meta_info_.is_multivalue_index_;
+
+  // If it's an IndexMergePath, check children for multivalue index
+  if (!is_multivalue_index && ap->is_index_merge_path()) {
+    const IndexMergePath *index_merge_path = static_cast<const IndexMergePath*>(ap);
+    if (OB_NOT_NULL(index_merge_path->root_)) {
+      is_multivalue_index = check_multivalue_index_in_node(index_merge_path->root_);
+    }
+  }
+
+  return is_multivalue_index;
+}
+
+bool ObLogPlan::check_multivalue_index_in_node(const ObIndexMergeNode *node)
+{
+  if (OB_ISNULL(node)) {
+    return false;
+  }
+
+  // Check if current node is multivalue index
+  if (node->node_type_ == INDEX_MERGE_MULTIVALUE_INDEX) {
+    return true;
+  }
+
+  // If it's INDEX_MERGE_UNION, recursively check children
+  if (node->node_type_ == INDEX_MERGE_UNION || node->node_type_ == INDEX_MERGE_INTERSECT) {
+    for (int64_t i = 0; i < node->children_.count(); ++i) {
+      const ObIndexMergeNode *child = node->children_.at(i);
+      if (OB_NOT_NULL(child) && check_multivalue_index_in_node(child)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 int ObLogPlan::allocate_access_path(AccessPath *ap,
                                     ObLogicalOperator *&out_access_path_op)
 {
@@ -3150,6 +3195,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
   const TableItem *table_item = NULL;
+  bool is_multivalue_index = false;
   if (OB_ISNULL(ap) || OB_ISNULL(get_stmt()) || OB_ISNULL(ap->parent_)
       || OB_ISNULL(ap->get_strong_sharding()) || OB_ISNULL(ap->table_partition_info_)
       || OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())
@@ -3179,7 +3225,9 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_is_index_global(ap->is_global_index_);
     scan->set_index_back(ap->est_cost_info_.index_meta_info_.is_index_back_);
     scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
-    scan->set_is_multivalue_index(ap->est_cost_info_.index_meta_info_.is_multivalue_index_);
+    // Check if this access path contains multivalue index
+    is_multivalue_index = is_multivalue_index_in_path(ap);
+    scan->set_is_multivalue_index(is_multivalue_index);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -3255,8 +3303,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
         LOG_WARN("failed to set table scan filters", K(ret));
       } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
         LOG_WARN("failed to append pushdown filters", K(ret));
-      } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ &&
-                 OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
+      } else if (is_multivalue_index && OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
         LOG_WARN("failed to prepare multivalue retrieval scan", K(ret));
       }
     }
@@ -5180,6 +5227,27 @@ int ObLogPlan::generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+bool ObLogPlan::enable_two_phase_fts_index_merge()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  bool enable_two_phase_fts_index_merge = false;
+  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info get unexpected null", K(ret), K(lbt()));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      enable_two_phase_fts_index_merge = tenant_config->_enable_two_phase_fts_index_merge;
+      LOG_TRACE("trace enable two phase fts index merge",K(enable_two_phase_fts_index_merge));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to init tenant config", K(lbt()));
+    }
+  }
+  return enable_two_phase_fts_index_merge;
+}
+
 bool ObLogPlan::disable_hash_groupby_in_second_stage()
 {
   int ret = OB_SUCCESS;
@@ -6784,6 +6852,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
              !stmt->is_single_table_stmt()) {
     /*do nothing*/
   } else if (OB_FAIL(check_can_scala_storage_pushdown(*static_cast<const ObSelectStmt*>(stmt),
+                                                      group_exprs,
                                                       is_scala_push_down))) {
     LOG_WARN("failed to check is statistic gather sql", K(ret));
   } else if (!is_scala_push_down &&
@@ -10309,6 +10378,7 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
       case log_op_def::LOG_TABLE_SCAN: {
         // try push into tablescan
         default_rewrite = false;
+        ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(top);
         bool push_into_scan = false;
         if (OB_ISNULL(current_context)) {
         } else {
@@ -10316,7 +10386,7 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(push_partial_distinct_into_table_scan(top, current_context, push_into_scan))) {
             LOG_WARN("failed to push distinct into scan", K(ret));
-          } else if (!push_into_scan) {
+          } else if (!push_into_scan && table_scan->get_pushdown_groupby_columns().empty()) {
             // add partial
             if (OB_FAIL(check_and_add_partial_distinct(top, current_context, result))) {
               LOG_WARN("failed to add partial distinct for top", K(ret), K(top->get_name()));
@@ -10472,21 +10542,20 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
           default_rewrite = false;
           DistinctPushdownContext *pushdown_context = NULL;
           bool child_result = false;
-          bool do_a_merge = false;
+          bool update_distinct_expr = false;
+          bool pushed = false;
           ObSEArray<ObRawExpr*, 4> reduced_exprs;
           if (OB_FAIL(current_context->assign_to(&get_allocator(), pushdown_context))) {
             LOG_WARN("failed to assign pushdown context", K(ret));
-          } else if (OB_FAIL(pushdown_context->merge_with(distinct_op->get_distinct_exprs(), do_a_merge))) {
+          } else if (OB_FAIL(pushdown_context->merge_with(distinct_op->get_distinct_exprs(), update_distinct_expr, pushed))) {
             LOG_WARN("failed to merge pushdown context", K(ret));
-          } else if (do_a_merge) {
-            // do a merge
-            // and set through exchange to true
-            // if current distinct is partial
-              // ignore whether we have push through an exchange far away up down
-              pushdown_context->set_pushed_down_through_shuffle(distinct_op->is_push_down());
           } else {
-            // update distinct exprs for current distinct_op
-            distinct_op->set_distinct_exprs(current_context->get_distinct_exprs());
+            if (update_distinct_expr) {
+              distinct_op->set_distinct_exprs(pushdown_context->get_distinct_exprs());
+            }
+            if (!pushed && !update_distinct_expr) {
+              pushdown_context->set_pushed_down_through_shuffle(distinct_op->is_push_down());
+            }
           }
           if OB_FAIL(ret) {
             // do nothing
@@ -10502,6 +10571,11 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
           } else {
             top->set_child(0, child);
             result = child_result;
+          }
+          // after all if not pushed down, we should check and add partial here
+          if (pushed) {
+          } else if (OB_FAIL(check_and_add_partial_distinct(top, current_context, result))) {
+            LOG_WARN("failed to check and add partial distinct");
           }
         }
         break;
@@ -10634,26 +10708,15 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
             }
           }
         } else if (set_op->is_set_distinct()) {
-          // if child is not root (unlikely)
-          // we can not get distinct exprs from child itself
-          // so we do a protective check here
           default_rewrite = false;
-          // handle set distinct
-          // similar to what we do for distinct node
-          // and if union has pushed down a distinct already (judge by is distinct pushed down)
-          // extract util (for example the merge logic)
-          // need to do for every child of union distinct
-          // note that when current_context is not null, we need to do a mapping
-          // for each whatever...
-          // however, we do mapping, always remember to check whether the expr is DETERMINISTIC
-          // other wise, push down or not will cause a different result??
           bool any_pushdown = false;
           // if current context is not null
           // do a merge before rewrite children
           ObSEArray<ObRawExpr *, 8> select_exprs;
           ObSEArray<ObRawExpr*, 4> reduced_exprs;
           DistinctPushdownContext *simplified_pushdown_context = NULL;
-          bool do_a_merge = false;
+          bool update_distinct_expr = false;
+          bool pushed = false;
           if (OB_FAIL(set_op->get_set_exprs(select_exprs))) {
             LOG_WARN("failed to get set exprs", K(ret));
           } else if (OB_ISNULL(current_context)) {
@@ -10665,10 +10728,9 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
             }
           } else if (OB_FAIL(current_context->assign_to(&get_allocator(), simplified_pushdown_context))) {
             LOG_WARN("failed to assign pushdown context", K(ret));
-          } else if (OB_FAIL(simplified_pushdown_context->merge_with(select_exprs, do_a_merge))) {
+          } else if (OB_FAIL(simplified_pushdown_context->merge_with(select_exprs, update_distinct_expr, pushed))) {
             LOG_WARN("failed to assign expr array", K(ret));
-          } else if (do_a_merge) {
-            // do a merge
+          } else if (!pushed) {
             simplified_pushdown_context->set_pushed_down_through_shuffle(false);
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < set_op->get_child_list().count(); i++) {
@@ -10714,8 +10776,14 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
                 result  = result || child_result;
               }
             }
+            if (OB_ISNULL(current_context)) {
+            } else if (!pushed) {
+              // add distinct above this node
+              if (OB_FAIL(check_and_add_partial_distinct(top, current_context, result))) {
+                LOG_WARN("failed to add partial distinct for top", K(ret), K(top->get_name()));
+              }
+            }
           }
-          // do nothing
         }
         break;
       }
@@ -10896,6 +10964,7 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
         // do nothing
       }
     }
+
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (default_rewrite) {
@@ -11029,31 +11098,43 @@ int DistinctPushdownContext::append_distinct_exprs(const common::ObIArray<ObRawE
  * merge current context with other distinct exprs
  * current context [t1.c1, t1.c2]
  * when meet a distinct on [t1.c1]
- * context becomes [t1.c1]
+ * context becomes [t1.c1] and merged = true
  * ObOptimizerUtil::subset_exprs
+ *
+ * merged = true means lower distinct is better
+ * so we ignore upper and pushdown lower
+ *for example, distinct context(a), distinct (b) any (a)
+ *  should_update is false, ignore context a and pushdown b.
+ *  should put distinct above this node
+ *for example, distinct context(a), distinct(a, b)
+ *  should_update is true, and pushdown (a), update lower distinct to distinct(a)
+ *  through shuffle set to ??, result is child result
+ *for example, distinct context(a, b), distinct(a)
+ *  should_update is true, and pushdown (a). update to (a)
+ *   pushthrough shuffle is reset whether this node is partial
  */
-int DistinctPushdownContext::merge_with(const common::ObIArray<ObRawExpr*> &other_distinct_exprs, bool & merged)
+int DistinctPushdownContext::merge_with(const common::ObIArray<ObRawExpr*> &other_distinct_exprs, bool & should_update, bool &pushed)
 {
-  // todo use hashset
-  // no one is using obhashset?
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> reduced_exprs;
-  merged = false;
-  if (other_distinct_exprs.count() < distinct_exprs_.count()) {
-    merged = true;
-  } else if (OB_FAIL(reduced_exprs.assign(distinct_exprs_))) {
-    LOG_WARN("failed to assign expr array", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(reduced_exprs, other_distinct_exprs))) {
-    LOG_WARN("failed to append expr array", K(ret));
-  } else if (reduced_exprs.count() <= distinct_exprs_.count()) {
-    merged = true;
-  }
-  if (merged) {
-    if (OB_FALSE_IT(reduced_exprs.reset())) {
-    } else if (OB_FAIL(append_array_no_dup(reduced_exprs, other_distinct_exprs))) {
-      LOG_WARN("failed to append expr array", K(ret));
-    } else if (OB_FAIL(distinct_exprs_.assign(reduced_exprs))) {
-      LOG_WARN("failed to assign expr array", K(ret));
+  //
+  if (ObOptimizerUtil::subset_exprs(other_distinct_exprs, distinct_exprs_) &&
+      other_distinct_exprs.count() < distinct_exprs_.count()) {
+    should_update = false;
+    distinct_exprs_.reset();
+    pushed = false;
+    // we should ignore current context
+    if (OB_FAIL(distinct_exprs_.assign(other_distinct_exprs))) {
+      LOG_WARN("failed to assign context", K(ret));
+    }
+  } else if (ObOptimizerUtil::subset_exprs(distinct_exprs_, other_distinct_exprs)) {
+    should_update = true;
+    pushed = true;
+  } else {
+    should_update = false;
+    pushed = true;
+    distinct_exprs_.reset();
+    if (OB_FAIL(distinct_exprs_.assign(other_distinct_exprs))) {
+      LOG_WARN("failed to assign context", K(ret));
     }
   }
   return ret;
@@ -11847,6 +11928,9 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
           } else {
             // if pushed down, need to update result
             if (OB_FAIL(ret)) {
+            } else if (OB_ISNULL(result)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret));
             } else {
               result->set_is_materialized(true);
               result->assign_aggr_exprs(current_context->get_aggr_exprs());
@@ -11996,12 +12080,16 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(SMART_CALL(partial_group_by_pushdown(right_child, right_result, right_context)))) {
               LOG_WARN("failed to rewrite child", K(ret), K(top->get_name()));
+            } else if (OB_ISNULL(right_result)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret));
             } else {
               pushed_to_right = right_result->is_materialized();
               top->set_child(1, right_child);
             }
             // if pushed to right (should rewrite it first), then do not push to left?
-            if (!pushed_to_right && try_push_to_left) {
+            if (OB_FAIL(ret)) {
+            } else if (!pushed_to_right && try_push_to_left) {
               // check whether aggr items all from left
               if (OB_FAIL(current_context->assign_to(&get_allocator(), left_context))) {
                 LOG_WARN("failed to assign pushdown context", K(ret));
@@ -12016,7 +12104,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
                 // add join key to group by
                 // add const 1 if after all group by is empty
                 // check whether join keys contanis lob type exprs
-                if (OB_FAIL(left_context->append_group_by_exprs(left_join_keys))) {
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(left_context->append_group_by_exprs(left_join_keys))) {
                   LOG_WARN("failed to append group by keys to context");
                 } else if (OB_FAIL(check_and_add_const_to_group_by(left_context))) {
                   LOG_WARN("failed to append group by keys to context");
@@ -12024,20 +12113,28 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
                   left_context->set_is_forced_pushdown(false);
                   do_pushed = true;
                 }
-              } else {
+              } else if (OB_SUCC(ret)) {
                 left_context = dummy_context;
               }
             }
             // rewrite children and update result
-            if (OB_FAIL(SMART_CALL(partial_group_by_pushdown(left_child, left_result, left_context)))) {
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(SMART_CALL(partial_group_by_pushdown(left_child, left_result, left_context)))) {
               LOG_WARN("failed to rewrite child", K(ret), K(top->get_name()));
             } else {
               top->set_child(0, left_child);
-              if (right_result->is_materialized()) {
+              if (OB_FAIL(ret)) {
+              } else if (OB_ISNULL(right_result) || OB_ISNULL(left_result)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected null", K(ret));
+              } else if (right_result->is_materialized()) {
                 // as we have rewrite the result (because of equal derive)
                 // we need to do the mapping
                 if (OB_FAIL(right_result->assign_to(&get_allocator(), result))) {
                   LOG_WARN("failed allocate group by pushdown result");
+                } else if (OB_ISNULL(result)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get unexpected null", K(ret));
                 } else {
                   result->get_original_aggr_exprs().reset();
                   result->assign_aggr_exprs(current_context->get_aggr_exprs());
@@ -12052,6 +12149,9 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
               }
             }
             if (OB_FAIL(ret)) {
+            } else if (OB_ISNULL(right_result) || OB_ISNULL(left_result)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret));
             } else if (!right_result->is_materialized() &&
                        !left_result->is_materialized() &&
                        is_force_pushdown) {
@@ -12107,7 +12207,7 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
             // set op exprs may have different size with children
             if (OB_FAIL(set_op->get_set_exprs(select_exprs))) {
               LOG_WARN("failed to get set exprs", K(ret));
-            } else if(OB_ISNULL(stmt = static_cast<const ObSelectStmt *>(set_op->get_stmt()))){
+            } else if (OB_ISNULL(stmt = static_cast<const ObSelectStmt *>(set_op->get_stmt()))){
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected null", K(stmt), K(ret));
             }
@@ -12152,10 +12252,12 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
               } else {
                 child_pushdown_results.push_back(child_result);
                 top->set_child(i, child_op);
-                if (child_result->is_materialized()) {
+                if (OB_FAIL(ret)) {
+                } else if (child_result->is_materialized()) {
                   if (child_select_exprs.count() >= child_stmt->get_select_item_size()) {
                     ObSEArray<ObRawExpr*, 4> new_select_list;
-                    if (OB_FAIL(append(new_select_list, child_result->get_mapped_aggr_exprs()))) {
+                    if (OB_FAIL(ret)) {
+                    } else if (OB_FAIL(append(new_select_list, child_result->get_mapped_aggr_exprs()))) {
                       LOG_WARN("failed to append mapped expr to select", K(ret));
                     } else if (OB_FAIL(ObTransformUtils::create_select_item(get_allocator(),
                                                                             new_select_list,
@@ -12175,7 +12277,7 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
             }
             // if any child has materilized group by
             // add it two all children
-            if (has_pushed_down) {
+            if (OB_SUCC(ret) && has_pushed_down) {
               for (int64_t i = 0; OB_SUCC(ret) && i < child_pushdown_results.count(); ++i) {
                 if (!child_pushdown_results.at(i)->is_materialized()) {
                   ObLogicalOperator* child_op = top->get_child(i);
@@ -12210,7 +12312,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
                 new_select_item.expr_name_ = child_select_item.expr_name_;
                 new_select_item.is_real_alias_ = child_select_item.is_real_alias_ || child_select_item.expr_->is_column_ref_expr();
                 res_type = child_select_item.expr_->get_result_type();
-                if (OB_FAIL(ObRawExprUtils::make_set_op_expr(get_optimizer_context().get_expr_factory(),
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(ObRawExprUtils::make_set_op_expr(get_optimizer_context().get_expr_factory(),
                                                              index_for_union,
                                                              set_op_type,
                                                              res_type,
@@ -12242,7 +12345,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
               }
             }
             // if no children pushdown and force pushdown
-            if (!has_pushed_down && is_force_pushdown) {
+            if (OB_FAIL(ret)) {
+            } else if (!has_pushed_down && is_force_pushdown) {
               // allocate group by above union all
               if (OB_FAIL(check_and_add_partial_group_by(top, current_context, result))) {
                 LOG_WARN("failed to add partial group by", K(ret), K(top->get_name()));
@@ -12257,6 +12361,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
         ObLogSubPlanScan* subplan_scan = static_cast<ObLogSubPlanScan*>(top);
         // child of subplan scan is root
         ObLogicalOperator* child_op = top->get_child(0);
+        const ObDMLStmt *child_stmt = NULL;
+        const ObSelectStmt *child_select_stmt = NULL;
         if (OB_ISNULL(current_context)) {
         } else if (OB_FAIL(ObOptimizerUtil::contains_virtual_column(child_op, not_valid))) {
           LOG_WARN("failed to check virtual columns", K(ret));
@@ -12264,7 +12370,22 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
         } else if (OB_FAIL(ObOptimizerUtil::contains_group_by(child_op, not_valid))) {
           LOG_WARN("failed to check virtual columns", K(ret));
         } else if (not_valid) {
-        } else {
+        } else if (OB_ISNULL(subplan_scan) ||
+                   OB_ISNULL(child_op) ||
+                   OB_ISNULL(child_op->get_plan()) ||
+                   OB_ISNULL(subplan_scan->get_plan()) ||
+                   OB_ISNULL(child_stmt = child_op->get_plan()->get_stmt())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret), K(child_op), K(child_stmt));
+        } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
+        } else if (OB_ISNULL(child_select_stmt = static_cast<const ObSelectStmt *>(child_stmt))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to cast select stmt", K(ret));
+        } else if (OB_FALSE_IT(not_valid = child_select_stmt->is_unpivot_select())) {
+        } else if (not_valid) {
+        } else if (OB_SUCC(ret)) {
           // current context
           // sum(v1.c1) , count(v1.c2)
           // output -> input
@@ -12282,8 +12403,6 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
           //              sum(v1.c1) -> v1.'sum(t1.c1)'
           //              count(v1.c2) -> v1.'v2.count(t2.c2)'
           default_rewrite = false;
-          const ObDMLStmt *child_stmt = NULL;
-          const ObSelectStmt *child_select_stmt = NULL;
           ObSEArray<ObRawExpr*, 4> output_cols;
           ObSEArray<ObRawExpr*, 4> input_cols;
           ObSEArray<ObRawExpr*, 4> dependent_exprs;
@@ -12321,7 +12440,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
           // now we have child_result
           // we need to build from child result
           // if child result is not empty, add view column. this is the tedious part
-          if (OB_ISNULL(child_result)) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(child_result)) {
             // never expect result to be null
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(top), K(ret));
@@ -12357,15 +12477,6 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
                   result->assign_mapped_exprs(new_columns_list);
                   result->get_original_aggr_exprs().reset();
                   result->assign_aggr_exprs(current_context->get_aggr_exprs());
-                  // we should be able to find it
-                  ObSEArray<ObRawExpr*, 4> test_output;
-                  ObSEArray<ObRawExpr*, 4> test_input;
-                  if (OB_FAIL(ObOptimizerUtil::get_subplan_scan_output_to_input_mapping(*child_select_stmt,
-                                                                                       dependent_exprs,
-                                                                                       test_input,
-                                                                                       test_output))) {
-                    LOG_WARN("failed to convert subplan scan expr", K(ret));
-                  }
                 }
               }
             }
@@ -12421,7 +12532,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
                 }
               }
               // if partial, then delete current node
-              if (groupby_op->is_push_down()) {
+              if (OB_FAIL(ret)) {
+              } else if (groupby_op->is_push_down()) {
                 // check plan root
                 ObLogicalOperator* child = top->get_child(0);
                 if (top->is_plan_root()) {
@@ -12453,7 +12565,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
         default_rewrite = true;
       }
     }
-    if (default_rewrite) {
+    if (OB_FAIL(ret)) {
+    } else if (default_rewrite) {
       // do default rewrite
       // push nothing down to children
       if (OB_FAIL(default_rewrite_for_partial_group_by_pushdown(top, result, current_context))) {
@@ -12461,7 +12574,8 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
       }
     }
     // we never return a null
-    if (OB_ISNULL(result)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(result)) {
       if (OB_FAIL(GroupByPushdownResult::init(&get_allocator(), result))) {
         LOG_WARN("failed to init pushdown context", K(ret));
       }
@@ -14991,6 +15105,7 @@ int ObLogPlan::set_use_batch_for_table_scan(ObLogicalOperator *op, bool check_gi
     scan_op->set_use_batch(in_batch_rescan);
     if (in_batch_rescan) {
       scan_op->get_pushdown_aggr_exprs().reuse();
+      scan_op->get_pushdown_groupby_columns().reuse();
     }
   } else if (check_gi && OB_FAIL(reset_use_batch_due_to_gi_allocated_below(op))) {
     LOG_WARN("failed to reset use batch due to gi allocated below", K(ret));
@@ -17716,6 +17831,8 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ALWAYS_USE_CO_SCAN)
+
 int ObLogPlan::will_use_column_store(const uint64_t table_id,
                                     const uint64_t index_id,
                                     const uint64_t ref_table_id,
@@ -17782,6 +17899,9 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
     use_row_store = true;
     use_column_store = false;
   } else if (ObTableAccessPolicy::COLUMN_STORE == get_optimizer_context().get_table_acces_policy()) {
+    use_row_store = false;
+    use_column_store = true;
+  } else if (has_column_store && OB_SUCCESS != ERRSIM_ALWAYS_USE_CO_SCAN) {
     use_row_store = false;
     use_column_store = true;
   } else {
@@ -18380,7 +18500,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
       ++distinct_count;
     }
   }
-    if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) {
   } else if (distinct_count > 0 && distinct_count < aggrs.count()) {
     can_push = false;
   } else if (can_push && OB_FAIL(append(pushdown_groupby_columns, distinct_exprs))) {
@@ -19314,24 +19434,37 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
   // when fts is pre-filter of vec scan, push limit n into vec scan and order by distance_expr
   } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_ivf_pq_scan() || table_scan->is_hnsw_vec_scan()) {
     if (OB_FAIL(try_push_topn_into_vector_index_scan(top,
+                                                     topn_expr,
+                                                     limit_expr,
+                                                     offset_expr,
+                                                     is_fetch_with_ties,
+                                                     need_exchange,
+                                                     sort_keys,
+                                                     need_further_sort))) {
+      LOG_WARN("failed to push topn into vector index scan", K(ret));
+    }
+  } else if (table_scan->use_index_merge()) {
+    if (!enable_two_phase_fts_index_merge()) {
+      // do nothing
+    } else if (OB_FAIL(try_push_topn_into_index_merge_scan(top,
                                                     topn_expr,
-                                                    get_stmt()->get_limit_expr(),
-                                                    get_stmt()->get_offset_expr(),
+                                                    limit_expr,
+                                                    offset_expr,
                                                     is_fetch_with_ties,
                                                     need_exchange,
                                                     sort_keys,
                                                     need_further_sort))) {
-      LOG_WARN("failed to push topn into vector index scan", K(ret));
+      LOG_WARN("failed to push topn into index merge scan", K(ret));
     }
   } else if (table_scan->is_text_retrieval_scan()) {
     if (OB_FAIL(try_push_topn_into_text_retrieval_scan(top,
-                                                      topn_expr,
-                                                      get_stmt()->get_limit_expr(),
-                                                      get_stmt()->get_offset_expr(),
-                                                      is_fetch_with_ties,
-                                                      need_exchange,
-                                                      sort_keys,
-                                                      need_further_sort))) {
+                                                       topn_expr,
+                                                       limit_expr,
+                                                       offset_expr,
+                                                       is_fetch_with_ties,
+                                                       need_exchange,
+                                                       sort_keys,
+                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
   } // if not full tex or vector index, do noting
@@ -19444,6 +19577,71 @@ int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
   return ret;
 }
 
+int ObLogPlan::try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
+                                                   ObRawExpr *topn_expr,
+                                                   ObRawExpr *limit_expr,
+                                                   ObRawExpr *offset_expr,
+                                                   bool is_fetch_with_ties,
+                                                   bool need_exchange,
+                                                   const ObIArray<OrderItem> &sort_keys,
+                                                   bool &need_further_sort)
+{
+  int ret = OB_SUCCESS;
+  need_further_sort = true;
+  ObLogTableScan *table_scan = NULL;
+  const AccessPath *ap = NULL;
+  bool has_multi_sort_keys = false;
+  ObRawExpr *pushed_limit_expr = NULL;
+  ObRawExpr *pushed_offset_expr = NULL;
+  ObSEArray<ObRawExpr*, 4> merge_match_exprs;
+  ObSEArray<uint64_t, 4> merge_index_ids;
+  if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN != top->get_type()) {
+    // do nothing
+  } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
+  } else if (!table_scan->use_index_merge()) {
+    // do nothing
+  } else if (OB_ISNULL(ap = table_scan->get_access_path())
+             || OB_UNLIKELY(!ap->is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected access path", K(ret), KPC(table_scan->get_access_path()));
+  } else if (table_scan->get_filter_exprs().count() != 0 ||
+             table_scan->get_pushdown_filter_exprs().count() != 0 ||
+             !ObJoinOrder::is_one_layer_intersect_with_fts(static_cast<const IndexMergePath *>(ap)->root_)) {
+    // do nothing, topn pushdown requires that only match filter exists on the base table.
+  } else if (OB_FAIL(static_cast<const IndexMergePath*>(ap)->get_all_match_exprs(merge_match_exprs,
+                                                                                 merge_index_ids))) {
+    LOG_WARN("failed to get all match exprs", K(ret));
+  } else if (sort_keys.count() != 1
+             || OB_ISNULL(sort_keys.at(0).expr_)
+             || !sort_keys.at(0).expr_->has_flag(CNT_MATCH_EXPR)
+             || !sort_keys.at(0).is_descending()
+             || !ObOptimizerUtil::find_item(merge_match_exprs, sort_keys.at(0).expr_)) {
+    // do nothing, sort key is not descending or not exists in the index merge scan node
+  } else {
+    // only accept match expr as prefix sort key.
+    has_multi_sort_keys = sort_keys.count() == 1 ? false : true;
+    need_further_sort = has_multi_sort_keys || table_scan->use_das() || need_exchange;
+    pushed_limit_expr = need_further_sort ? topn_expr : limit_expr;
+    pushed_offset_expr = need_further_sort ? NULL : offset_expr;
+    ObSEArray<OrderItem, 1> tmp_sort_keys;
+    table_scan->get_push_down_top_n_info().is_push_into_index_ = true;
+    table_scan->get_push_down_top_n_info().limit_count_expr_ = pushed_limit_expr;
+    table_scan->get_push_down_top_n_info().limit_offset_expr_ = pushed_offset_expr;
+    table_scan->get_push_down_top_n_info().sort_key_.expr_ = sort_keys.at(0).expr_;
+    table_scan->get_push_down_top_n_info().sort_key_.order_type_ = sort_keys.at(0).order_type_;
+    table_scan->get_push_down_top_n_info().with_ties_ = (has_multi_sort_keys || is_fetch_with_ties);
+    if (OB_FAIL(tmp_sort_keys.push_back(sort_keys.at(0)))) {
+      LOG_WARN("failed to push back order item", K(ret));
+    } else if (OB_FAIL(table_scan->set_op_ordering(tmp_sort_keys))) {
+      LOG_WARN("failed to set op ordering", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items)
 {
   int ret = OB_SUCCESS;
@@ -19531,6 +19729,7 @@ int ObLogPlan::remove_duplicate_constraints()
 }
 
 int ObLogPlan::check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
+                                                const ObIArray<ObRawExpr *> &group_exprs,
                                                 bool &can_pushdown)
 {
   int ret = OB_SUCCESS;
@@ -19546,9 +19745,9 @@ int ObLogPlan::check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
     // do nothing
   } else if (!query_ctx->get_global_hint().has_dbms_stats_hint()) {
     // do nothing
-  } else if (stmt.get_group_exprs().count() != 1) {
+  } else if (group_exprs.count() != 1) {
     // do nothing
-  } else if (OB_ISNULL(group_expr = stmt.get_group_exprs().at(0))) {
+  } else if (OB_ISNULL(group_expr = group_exprs.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (group_expr->get_expr_type() != T_FUN_SYS_CALC_PARTITION_ID) {
@@ -19556,7 +19755,7 @@ int ObLogPlan::check_can_scala_storage_pushdown(const ObSelectStmt &stmt,
   } else {
     can_pushdown = get_optimizer_context().get_rowsets_enabled();
   }
-    return ret;
+  return ret;
 }
 
 int ObLogPlan::extend_rollup_to_groupset(const ObIArray<ObRawExpr *> &gby_exprs,

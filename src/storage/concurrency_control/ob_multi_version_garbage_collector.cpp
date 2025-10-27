@@ -1343,6 +1343,30 @@ int ObMultiVersionGCSnapshotOperator::operator()(const share::SCN snapshot_versi
 
 // Functor to fetch the status of all alived session
 // TODO(handora.qc): using better timestamp instead of cur state start time
+//
+// Snapshot Version Selection Logic (within current tenant):
+// +----------------------------------------------------------------------------------------+
+// |                                                                                        |
+// | Has tx_desc? ──NO──→ Check Session State (QUERY_ACTIVE)                                |
+// |         │ YES                                                                          |
+// |         ▼                                                                              |
+// | tx_desc timeout? ──YES──→ Skip (use max_scn)                                           |
+// |         │ NO                                                                           |
+// |         ▼                                                                              |
+// | Isolation Level:                                                                       |
+// | ┌────────────────────────────────────────────────────────────────────────────────────┐ |
+// | │ RR/SERIAL ──YES──→ Use tx_desc.snapshot_version (if valid)                         │ |
+// | │ RC         ──YES──→ Check Session State (QUERY_ACTIVE)                             │ |
+// | └────────────────────────────────────────────────────────────────────────────────────┘ |
+// |                                                                                        |
+// | Session State Check (QUERY_ACTIVE):                                                    |
+// | ┌────────────────────────────────────────────────────────────────────────────────────┐ |
+// | │ Has reserved_snapshot? ──YES──→ Use session.reserved_snapshot_version              │ |
+// | │                    └──NO──→ Use cur_state_start_time - 5min                        │ |
+// | └────────────────────────────────────────────────────────────────────────────────────┘ |
+// |                                                                                        |
+// | Final: Update min_active_snapshot_version_ if new snapshot < current min               |
+// +----------------------------------------------------------------------------------------+
 bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key key,
                                                     sql::ObSQLSessionInfo *sess_info)
 {
@@ -1360,96 +1384,56 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
   } else if (MTL_ID() == sess_info->get_effective_tenant_id()) {
     sql::ObSQLSessionInfo::LockGuard data_lock_guard(sess_info->get_thread_data_lock());
     share::SCN snapshot_version(share::SCN::max_scn());
+    bool need_check_session_snapshot = true;
 
     if (OB_NOT_NULL(sess_info->get_tx_desc())) {
-      share::SCN desc_snapshot;
-      transaction::ObTxDesc *tx_desc = nullptr;
-      share::SCN sess_snapshot = sess_info->get_reserved_snapshot_version();
-      if (OB_ISNULL(tx_desc = sess_info->get_tx_desc())) {
-        ret = OB_ERR_UNEXPECTED;
-        MVCC_LOG(ERROR, "tx desc is nullptr", K(ret), KPC(sess_info));
-      } else if (FALSE_IT(desc_snapshot = tx_desc->get_tx_snapshot_version())) {
+      transaction::ObTxDesc *tx_desc = sess_info->get_tx_desc();
+      if (tx_desc->is_tx_timeout()) {
+        // tx desc exists and transaction has timed out, this session state can be ignored, snapshot_version maintains default value (max)
+        need_check_session_snapshot = false;
+        MVCC_LOG(TRACE, "Skip timeout tx_desc snapshot", K(MTL_ID()), KPC(sess_info), KPC(tx_desc));
       } else if (tx_desc->is_RR_or_SERIAL_isolevel()) {
-        // Case 1: RR/SI with tx desc exists, it means the snapshot is get from
-        // scheduler and must maintained in the session and tx desc
+        // tx desc exists and transaction has not timed out, and isolation level is RR or SERIAL, directly reference the recorded snapshot_version, no need to check session state
+        need_check_session_snapshot = false;
+        share::SCN desc_snapshot = tx_desc->get_tx_snapshot_version();
         if (desc_snapshot.is_valid()) {
           snapshot_version = desc_snapshot;
+          MVCC_LOG(TRACE,
+                   "RR/SI txn with tx_desc, using snapshot_version",
+                   K(MTL_ID()),
+                   KPC(sess_info),
+                   K(snapshot_version),
+                   K(min_active_snapshot_version_),
+                   K(desc_snapshot));
         }
-        MVCC_LOG(DEBUG, "RR/SI txn with tx_desc", K(MTL_ID()), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot),
-                 K(sess_snapshot), K(desc_snapshot));
-      } else if (tx_desc->is_RC_isolevel()) {
-        // Case 2: RC with tx desc exists, it may exists that snapshot is get from
-        // the executor and not maintained in the session and tx desc. So we need
-        // use session query start time carefully
-        if (sql::ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
-          if (desc_snapshot.is_valid()) {
-            snapshot_version = desc_snapshot;
-          } else if (sess_snapshot.is_valid()) {
-            snapshot_version = sess_snapshot;
-          } else {
-            // We gave a 5 minutes redundancy when get from session query start
-            // time under the case that local snapshot from tx_desc and session
-            // is unusable
-            snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time()
-                                             - 5L * 1000L * 1000L * 60L);
-            MVCC_LOG(INFO, "RC txn with tx_desc while from session start time",
-                     K(MTL_ID()), KPC(sess_info), K(snapshot_version),
-                     K(min_active_snapshot_version_),
-                     K(sess_info->get_cur_state_start_time()));
-          }
-        }
-        MVCC_LOG(DEBUG, "RC txn with tx_desc", K(MTL_ID()), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot),
-                 K(sess_snapshot), K(desc_snapshot));
       } else {
-        MVCC_LOG(INFO, "unknown txn with tx_desc", K(MTL_ID()), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_), K(desc_snapshot));
+        // tx desc exists and transaction isolation level is RC, need to check session snapshot_version
+        need_check_session_snapshot = true;
       }
-    } else {
+    }
+
+    // If need to check session snapshot_version and session state is ACTIVE
+    if (need_check_session_snapshot && sql::ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
       share::SCN sess_snapshot = sess_info->get_reserved_snapshot_version();
-      if (transaction::ObTxIsolationLevel::SERIAL == sess_info->get_tx_isolation() ||
-          transaction::ObTxIsolationLevel::RR == sess_info->get_tx_isolation()) {
-        // Case 3: RR/SI with tx desc does not exist or not in tx, it is not for
-        // the current running scheduler
-        if (sql::ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
-          if (sess_snapshot.is_valid()) {
-            snapshot_version = sess_snapshot;
-          } else {
-            // We gave a 5 minutes redundancy when get from session query start
-            // time under the case that local snapshot from tx_desc and session
-            // is unusable
-            snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time()
-                                             - 5L * 1000L * 1000L * 60L);
-            MVCC_LOG(INFO, "RR/SI txn with non tx_desc while from session start time",
-                     K(MTL_ID()), KPC(sess_info), K(snapshot_version), K(sess_snapshot),
-                     K(min_active_snapshot_version_), K(sess_info->get_cur_state_start_time()));
-          }
-        }
-        MVCC_LOG(DEBUG, "RR/SI txn with non tx_desc", K(MTL_ID()), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_), K(sess_snapshot));
-      } else if (transaction::ObTxIsolationLevel::RC == sess_info->get_tx_isolation()) {
-        // Case 4: RC with tx desc does not exist, and the snapshot version may not
-        // maintained, so we use query start time instead
-        if (sql::ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
-          if (sess_snapshot.is_valid()) {
-            snapshot_version = sess_snapshot;
-          } else {
-            // We gave a 5 minutes redundancy when get from session query start
-            // time under the case that local snapshot from tx_desc and session
-            // is unusable
-            snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time()
-                                             - 5L * 1000L * 1000L * 60L);
-            MVCC_LOG(INFO, "RC txn with non tx_desc while from session start time",
-                     K(MTL_ID()), KPC(sess_info), K(snapshot_version), K(sess_snapshot),
-                     K(min_active_snapshot_version_), K(sess_info->get_cur_state_start_time()));
-          }
-        }
-        MVCC_LOG(DEBUG, "RC txn with non tx_desc", K(MTL_ID()), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_), K(sess_snapshot));
+      if (sess_snapshot.is_valid()) {
+        snapshot_version = sess_snapshot;
+        MVCC_LOG(DEBUG,
+                 "Active session without tx_desc, using session snapshot",
+                 K(MTL_ID()),
+                 KPC(sess_info),
+                 K(snapshot_version),
+                 K(min_active_snapshot_version_),
+                 K(sess_snapshot));
       } else {
-        MVCC_LOG(INFO, "unknown txn with non tx_desc", K(MTL_ID()), KPC(sess_info),
-                 K(snapshot_version), K(min_active_snapshot_version_));
+        // When session reserved snapshot version doesn't exist, use cur_state_start_time minus 5 minutes as fallback
+        snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time() - 5L * 1000L * 1000L * 60L);
+        MVCC_LOG(TRACE,
+                 "Active session without valid reserved snapshot, using cur_state_start_time - 5min",
+                 K(MTL_ID()),
+                 KPC(sess_info),
+                 K(snapshot_version),
+                 K(min_active_snapshot_version_),
+                 K(sess_info->get_cur_state_start_time()));
       }
     }
 

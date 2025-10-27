@@ -125,6 +125,7 @@ int ObCreateTableResolver::add_hidden_tablet_seq_col()
     hidden_pk.set_is_hidden(true);
     hidden_pk.set_charset_type(CHARSET_BINARY);
     hidden_pk.set_collation_type(CS_TYPE_BINARY);
+    hidden_pk.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt64Type]);
     if (OB_FAIL(hidden_pk.set_column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME))) {
       SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
     } else if (OB_FAIL(primary_keys_.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
@@ -3730,6 +3731,9 @@ int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_nod
           } else if (OB_UNLIKELY(0 == part_size)) {
             ret = OB_INVALID_ARGUMENT;
             SQL_RESV_LOG(WARN, "param, the param can't be zero", K(ret), K(buf));
+          } else if (ObPartitionOption::MIN_AUTO_PART_SIZE_BY_USER > part_size) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "auto part size must be greater than or equal to 128MB", K(ret), K(buf));
           }
         }
       } else if (T_AUTO == part_size_node->type_) {

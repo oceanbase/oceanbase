@@ -56,6 +56,16 @@ public:
     ObDatum *datums,
     void *datum_buf);
 
+  void test_prefix_case(ObSkipIndexFilterExecutor &skip_index_filter,
+                        sql::ObWhiteFilterExecutor &filter,
+                        const std::vector<const char*> param_strs,
+                        const common::ObDatum &min_datum,
+                        const bool &is_min_prefix,
+                        const common::ObDatum &max_datum,
+                        const bool &is_max_prefix,
+                        const ObObjMeta &col_obj_meta,
+                        sql::ObBoolMaskType bmt);
+
   int test_filter_pushdown(const uint64_t col_idx,
     sql::ObPushdownWhiteFilterNode &filter_node,
     common::ObFixedArray<ObObj, ObIAllocator> &filter_objs,
@@ -77,10 +87,12 @@ protected:
   int64_t full_column_cnt_;
   uint64_t row_count_;
   ObArenaAllocator allocator_;
+  ObCollationType default_collation_type_;
 };
 
 TestSkipIndexFilter::TestSkipIndexFilter()
-    : allocator_()
+    : allocator_(),
+      default_collation_type_(CS_TYPE_UTF8MB4_GENERAL_CI)
 {
 }
 TestSkipIndexFilter::~TestSkipIndexFilter()
@@ -161,6 +173,7 @@ void TestSkipIndexFilter::SetUp()
       lib::is_oracle_mode(),
       col_descs_,
       nullptr));
+  ASSERT_EQ(OB_SUCCESS, ObCharsetUtils::init(allocator_));
   const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   full_column_cnt_ = COLUMN_CNT + extra_rowkey_cnt;
 }
@@ -226,6 +239,8 @@ void TestSkipIndexFilter::init_filter(
     }
   }
   filter.cmp_func_ = get_datum_cmp_func(filter.filter_.expr_->args_[0]->obj_meta_, filter.filter_.expr_->args_[0]->obj_meta_);
+  filter.col_obj_meta_ = filter.filter_.expr_->args_[0]->obj_meta_;
+  filter.param_obj_meta_ = filter.filter_.expr_->args_[0]->obj_meta_;
 }
 
 void TestSkipIndexFilter::init_in_filter(
@@ -251,6 +266,8 @@ void TestSkipIndexFilter::init_in_filter(
     obj_meta.get_type(), obj_meta.get_collation_type(), obj_meta.get_scale(), false, obj_meta.has_lob_header());
   ObDatumCmpFuncType cmp_func = get_datum_cmp_func(obj_meta, obj_meta);
 
+  filter.col_obj_meta_ = obj_meta;
+  filter.param_obj_meta_ = obj_meta;
   filter.filter_.expr_->args_[0]->type_ = T_REF_COLUMN;
   filter.filter_.expr_->args_[0]->obj_meta_ = obj_meta;
   filter.filter_.expr_->args_[0]->datum_meta_.type_ = obj_meta.get_type();
@@ -1403,6 +1420,886 @@ TEST_F(TestSkipIndexFilter, test_has_null)
   }
 }
 
+void TestSkipIndexFilter::test_prefix_case(ObSkipIndexFilterExecutor &skip_index_filter,
+                                           sql::ObWhiteFilterExecutor &filter,
+                                           const std::vector<const char*> param_strs,
+                                           const common::ObDatum &min_datum,
+                                           const bool &is_min_prefix,
+                                           const common::ObDatum &max_datum,
+                                           const bool &is_max_prefix,
+                                           const ObObjMeta &col_obj_meta,
+                                           sql::ObBoolMaskType bmt)
+{
+  ObBoolMask fal_desc;
+  fal_desc.set_uncertain();
+
+  ObObjMeta param_obj_meta;
+  sql::ObExpr mock_expr;
+  param_obj_meta.set_varchar();
+  param_obj_meta.set_collation_level(CS_LEVEL_IMPLICIT);
+  param_obj_meta.set_collation_type(default_collation_type_);
+  filter.filter_.expr_ = &mock_expr;
+  filter.col_obj_meta_ = col_obj_meta;
+  filter.param_obj_meta_ = param_obj_meta;
+  filter.cmp_func_ = get_datum_cmp_func(col_obj_meta, param_obj_meta);
+  ASSERT_EQ(OB_SUCCESS, filter.init_array_param(filter.datum_params_, param_strs.size()));
+
+  // printf("param_strs.size() = %ld\n", param_strs.size());
+  for (int i = 0; i < param_strs.size(); ++i) {
+    // printf("%s ", param_strs[i]);
+    ObObj filter_param_obj;
+    filter_param_obj.set_varchar(param_strs[i]);
+    filter_param_obj.set_collation_type(default_collation_type_);
+    ObDatum filter_param_datum;
+    filter_param_datum.from_obj(filter_param_obj);
+    ASSERT_EQ(OB_SUCCESS, filter.datum_params_.push_back(filter_param_datum));
+  }
+  // printf("\n");
+
+  const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
+  switch (op_type) {
+    case sql::WHITE_OP_EQ:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.eq_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_NE:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.ne_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_LT:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.lt_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_LE:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.le_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_GT:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.gt_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_GE:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.ge_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_BT:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.bt_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    case sql::WHITE_OP_IN:
+      ASSERT_EQ(OB_SUCCESS, skip_index_filter.in_operator(filter, min_datum, is_min_prefix, max_datum, is_max_prefix, fal_desc));
+      break;
+    default:
+      ASSERT_EQ(0, 1);
+  }
+  ASSERT_EQ(bmt, fal_desc.bmt_);
+}
+
+TEST_F(TestSkipIndexFilter, test_eq_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_EQ;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("cc");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+
+
+  min_obj.set_varchar("cc");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("cc");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+
+
+  min_obj.set_varchar("cc");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+}
+
+TEST_F(TestSkipIndexFilter, test_ne_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_NE;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("cc");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+  min_obj.set_varchar("cc");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  /********************PAD_COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("cc");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+
+  min_obj.set_varchar("cc");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+}
+
+TEST_F(TestSkipIndexFilter, test_gt_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_GT;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  // TODO@wenye: why "cc " > "cc\x1F"
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+}
+
+TEST_F(TestSkipIndexFilter, test_ge_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_GE;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+}
+
+TEST_F(TestSkipIndexFilter, test_lt_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_LT;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+}
+
+TEST_F(TestSkipIndexFilter, test_le_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_LE;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"f"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"ea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+}
+
+TEST_F(TestSkipIndexFilter, test_bt_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_BT;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"cc", "ee"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc", "cc"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee", "ee"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ef", "ff"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ee"}, min_datum, true, max_datum, false, col_meta, ALWAYS_TRUE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "c"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "cd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ef"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ef"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cd", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd", "ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd", "eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff", "gg"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"f", "gg"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc", "ee"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc", "cc"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee", "ee"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ef", "ff"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ee"}, min_datum, true, max_datum, false, col_meta, PROBABILISTIC);
+
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "c"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "cd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ef"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eaf"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cd", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd", "ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd", "eea"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff", "gg"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"f", "gg"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_TRUE);
+
+}
+
+TEST_F(TestSkipIndexFilter, test_in_prefix)
+{
+  sql::ObPushdownWhiteFilterNode white_filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  eval_ctx.batch_size_ = 256;
+  white_filter_node.op_type_ = sql::WHITE_OP_IN;
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  filter.null_param_contained_ = false;
+
+  ObSkipIndexFilterExecutor skip_index_filter;
+  EXPECT_EQ(OB_SUCCESS, skip_index_filter.init(op.get_eval_ctx().get_batch_size(), &allocator_));
+
+  /********************NON_PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_0900_BIN;
+  ObObj min_obj;
+  ObDatum min_datum;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  ObObj max_obj;
+  ObDatum max_datum;
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  const ObObjMeta &col_meta = min_obj.get_meta();
+
+  test_prefix_case(skip_index_filter, filter, {"aa", "cc"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa", "cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa", "eef"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"aa", "eef"}, min_datum, true, max_datum, false, col_meta, ALWAYS_FALSE);
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ef"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb", "cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb", "ccd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc", "cd", "dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ee", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cd", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ccc", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ee", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eea", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ea", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"ee", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ea", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ef", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"eff", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"eef", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F", "ff\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("cc");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F", "ff\x1F"}, min_datum, true, max_datum, true, col_meta, ALWAYS_FALSE);
+
+  /********************PAD COLLATION********************/
+  default_collation_type_ = CS_TYPE_UTF8MB4_BIN;
+  min_obj.set_varchar("cc");
+  min_obj.set_collation_type(default_collation_type_);
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee");
+  max_obj.set_collation_type(default_collation_type_);
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"aa", "cc"}, min_datum, false, max_datum, false, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa", "cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa", "eef"}, min_datum, false, max_datum, false, col_meta, ALWAYS_FALSE);
+  test_prefix_case(skip_index_filter, filter, {"aa", "eef"}, min_datum, true, max_datum, false, col_meta, PROBABILISTIC);
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb", "cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"aa", "bb", "ccd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc", "cd", "dd"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ee", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cd", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ccc", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ee", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "eea", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ea", "ef"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"bb", "ef", "eff"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ee", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ea", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"ef", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eff", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"eef", "ff", "gg"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F", "ff\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("cc");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, false, col_meta, ALWAYS_TRUE);
+  test_prefix_case(skip_index_filter, filter, {"cc"}, min_datum, false, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+  min_obj.set_varchar("cc ");
+  min_datum.from_obj(min_obj);
+  max_obj.set_varchar("ee ");
+  max_datum.from_obj(max_obj);
+
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ee\x1F", "ef\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+  test_prefix_case(skip_index_filter, filter, {"cc\x1F", "ef\x1F", "ff\x1F"}, min_datum, true, max_datum, true, col_meta, PROBABILISTIC);
+
+}
+
 
 }//end namespace unittest
 }//end namespace oceanbase
@@ -1413,6 +2310,7 @@ int main(int argc, char **argv)
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   OB_LOGGER.set_file_name("test_skip_index_filter.log", true);
   srand(time(NULL));
+  ObCharset::init_charset();
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

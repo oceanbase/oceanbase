@@ -58,6 +58,7 @@ ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_ABORT_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_BACKFILL_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSFER_ASYNC_RPC_FAILED);
 ERRSIM_POINT_DEF(EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED);
+ERRSIM_POINT_DEF(EN_TRANSEFR_START_TRANS_TIME);
 ObTransferHandler::ObTransferHandler()
   : is_inited_(false),
     ls_(nullptr),
@@ -556,7 +557,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
     } else if (new_transfer && OB_FAIL(do_trans_transfer_start_prepare_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start prepare", K(ret), K(task_info));
-    } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
+    } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx, trans))) {
       LOG_WARN("failed to reset timeout for trans", K(ret));
     } else if (!new_transfer &&
     OB_FAIL(do_trans_transfer_start_(task_info, config_version, dest_max_desided_scn, timeout_ctx, trans, is_update_transfer_meta))) {
@@ -761,19 +762,26 @@ int ObTransferHandler::lock_src_and_dest_ls_member_list_(
   return ret;
 }
 
-int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx)
+int ObTransferHandler::reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  observer::ObInnerSQLConnection *conn = NULL;
   if (tenant_config.is_valid()) {
     const int64_t left_trans_timeout = timeout_ctx.get_timeout();
     const int64_t transfer_trans_timeout = tenant_config->_transfer_start_trans_timeout;
     if (left_trans_timeout > 0) {
       const int64_t stmt_timeout = std::min(transfer_trans_timeout, left_trans_timeout);
+      const int64_t expire_ts = ObClockGenerator::getClock() + stmt_timeout;
       if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
         LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
       } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
         LOG_WARN("set timeout context failed", K(ret));
+      } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inner connection should not be NULL", K(ret));
+      } else if (OB_FAIL(conn->set_session_timeout(stmt_timeout, stmt_timeout))) {
+        LOG_WARN("failed to set session timeout", K(ret));
       }
     }
   } else {
@@ -1398,7 +1406,19 @@ int ObTransferHandler::get_start_trans_timeout_(
   stmt_timeout = 10_s;
   const uint64_t tenant_id = MTL_ID();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  const int64_t BASELINE_TIMEOUT = 20_s;
+  int64_t BASELINE_TIMEOUT = 20_s;
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_TRANSEFR_START_TRANS_TIME ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_TRANSEFR_START_TRANS_TIME", K(ret));
+        BASELINE_TIMEOUT = 3_s;
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
+
   if (tenant_config.is_valid()) {
     stmt_timeout = tenant_config->_transfer_start_trans_timeout + BASELINE_TIMEOUT;
     if (tenant_config->_enable_balance_kill_transaction) {
@@ -3657,10 +3677,6 @@ int ObTransferHandler::inner_do_with_abort_status_(
       LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
     } else if (OB_FAIL(get_local_ls_member_list_(member_list))) {
       LOG_WARN("failed to get ls member list", K(ret), K(task_info));
-    } else if (OB_FAIL(inner_lock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list, status))) {
-      LOG_WARN("failed to lock ls member list", K(ret), K(task_info));
-    } else if (OB_FAIL(wait_transfer_in_tablet_abort_(task_info, member_list))) {
-      LOG_WARN("failed to wait transfer int tablet abort", K(ret), K(task_info));
     } else if (OB_FAIL(do_trans_transfer_aborted_(task_info, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer aborted", K(ret), K(task_info));
 #ifdef ERRSIM
@@ -3668,9 +3684,6 @@ int ObTransferHandler::inner_do_with_abort_status_(
       ret = EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED;
       STORAGE_LOG(WARN, "fake EN_TRANSEFR_UNLOCK_MEMBER_LIST_FAILED", K(ret));
 #endif
-    } else if (OB_FAIL(inner_unlock_ls_member_list_(task_info, task_info.dest_ls_id_, member_list,
-        status, true/*need_check_palf_leader*/, task_info.dest_ls_id_))) {
-      LOG_WARN("failed to unlock ls member list", K(ret), K(task_info));
     } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
       LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
     } else {

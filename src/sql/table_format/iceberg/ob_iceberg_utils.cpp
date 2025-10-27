@@ -14,6 +14,9 @@
 
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
+#include <avro/Generic.hh>
+#include <avro/GenericDatum.hh>
+
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_define.h"

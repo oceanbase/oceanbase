@@ -577,7 +577,7 @@ ObActiveTabletItem::ObActiveTabletItem(const common::ObTabletID tablet_id, const
 
 bool ObActiveTabletItem::is_valid() const {
   return tablet_id_.is_valid()
-      && get_transfer_seq() != share::OB_INVALID_TRANSFER_SEQ
+      && get_transfer_epoch() != share::OB_INVALID_TRANSFER_SEQ
       && get_tablet_meta_version() != blocksstable::ObStorageObjectOpt::INVALID_TABLET_VERSION;
 }
 
@@ -593,7 +593,14 @@ int ObLSActiveTabletArray::assign(const ObLSActiveTabletArray &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObPendingFreeTabletItem, tablet_id_, tablet_meta_version_, status_, free_time_, gc_type_, tablet_transfer_seq_);
+OB_SERIALIZE_MEMBER(ObPendingFreeTabletItem,
+                    tablet_id_,
+                    tablet_meta_version_,
+                    status_,
+                    free_time_,
+                    gc_type_,
+                    tablet_transfer_seq_ // FARM COMPAT WHITELIST
+                    );
 OB_SERIALIZE_MEMBER(ObLSPendingFreeTabletArray,
                     ls_id_, // FARM COMPAT WHITELIST
                     ls_epoch_, // FARM COMPAT WHITELIST

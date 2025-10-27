@@ -56,6 +56,11 @@ static inline bool is_data_direct_load(const ObDirectLoadType &type)
       || ObDirectLoadType::DIRECT_LOAD_LOAD_DATA_V2 == type;
 }
 
+static inline bool is_incremental_major_direct_load(const ObDirectLoadType &type)
+{
+  return ObDirectLoadType::DIRECT_LOAD_INCREMENTAL_MAJOR == type;
+}
+
 static inline bool is_incremental_direct_load(const ObDirectLoadType &type)
 {
   return ObDirectLoadType::DIRECT_LOAD_INCREMENTAL == type;

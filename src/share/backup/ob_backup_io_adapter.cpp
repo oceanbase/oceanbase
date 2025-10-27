@@ -471,7 +471,8 @@ int ObBackupIoAdapter::mk_parent_dir(const common::ObString &uri, const common::
   return ret;
 }
 
-int ObBackupIoAdapter::write_single_file(const common::ObString &uri, const common::ObObjectStorageInfo *storage_info,
+int ObBackupIoAdapter::write_single_file(const common::ObString &uri,
+                                         const common::ObObjectStorageInfo *storage_info,
                                          const char *buf, const int64_t size,
                                          const common::ObStorageIdMod &storage_id_mod)
 {
@@ -513,6 +514,74 @@ int ObBackupIoAdapter::write_single_file(const common::ObString &uri, const comm
   }
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
+
+  if (OB_UNLIKELY(ret == OB_OBJECT_STORAGE_CONDITION_NOT_MATCH)) {
+    // write file once every 5 minutes
+    if (REACH_TIME_INTERVAL(5 * 60 * 1000 * 1000)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(handle_overwrite_file(uri, buf, size, storage_id_mod))) {
+        STORAGE_LOG(WARN, "failed to handle overwrite file", KR(ret), K(tmp_ret), K(uri), K(size), KPC(storage_info));
+      }
+    }
+  }
+  return ret;
+}
+
+// src_uri like: s3://bucket/path/to/file
+// dst_uri like: OVERWRITE_PATH/bucket@path@to@file
+int construct_overwrite_file_path(const common::ObString &src_uri, char *dst_uri, const int64_t dst_uri_len)
+{
+  int ret = OB_SUCCESS;
+  const char *overwrite_path = OVERWRITE_PATH;
+  const int64_t overwrite_path_len = STRLEN(overwrite_path);
+  const char *prefix_ptr = nullptr;
+  int64_t prefix_end_pos = 0;
+  if (OB_UNLIKELY(src_uri.empty() || OB_ISNULL(dst_uri) || dst_uri_len <= src_uri.length() + overwrite_path_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", KR(ret), K(src_uri), K(dst_uri), K(dst_uri_len));
+  } else if (OB_ISNULL(prefix_ptr = STRSTR(src_uri.ptr(), "://"))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "failed to find :// in src uri", KR(ret), K(src_uri));
+  } else if (FALSE_IT(prefix_end_pos = prefix_ptr - src_uri.ptr() + 3)) {
+  } else if (OB_FAIL(databuff_printf(dst_uri, dst_uri_len, "%s/%.*s", overwrite_path, src_uri.length() - prefix_end_pos, src_uri.ptr() + prefix_end_pos))) {
+    STORAGE_LOG(WARN, "failed to fill dst uri", KR(ret), K(src_uri), K(dst_uri), K(dst_uri_len));
+  } else {
+    const int64_t dst_uri_real_len = STRLEN(dst_uri);
+    for (int64_t i = overwrite_path_len + 1; i < dst_uri_real_len; i++) {
+      if (dst_uri[i] == '/') {
+        dst_uri[i] = '@';
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupIoAdapter::handle_overwrite_file(
+    const common::ObString &uri,
+    const char *buf,
+    const int64_t size,
+    const common::ObStorageIdMod &storage_id_mod)
+{
+  int ret = OB_SUCCESS;
+  const char *overwrite_path = OVERWRITE_PATH;
+  const char *storage_info_str = "";
+  common::ObObjectStorageInfo storage_info;
+  char overwrite_file_path[OB_MAX_URI_LENGTH];
+
+  if (OB_ISNULL(buf) && OB_UNLIKELY(uri.length() == 0 || size < 0 || !storage_id_mod.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid args", KR(ret), K(uri), K(size), K(storage_id_mod));
+  } else if (OB_FAIL(storage_info.set(OB_STORAGE_FILE, storage_info_str))) {
+    STORAGE_LOG(WARN, "failed to set storage info", KR(ret), K(storage_info_str));
+  } else if (OB_FAIL(del_dir(overwrite_path, &storage_info))) {
+    STORAGE_LOG(WARN, "failed to del dir", KR(ret), K(overwrite_path), K(storage_info));
+  } else if (OB_FAIL(mkdir(overwrite_path, &storage_info))) {
+    STORAGE_LOG(WARN, "failed to mkdir", KR(ret), K(overwrite_path), K(storage_info));
+  } else if (OB_FAIL(construct_overwrite_file_path(uri, overwrite_file_path, sizeof(overwrite_file_path)))) {
+    STORAGE_LOG(WARN, "failed to replace overwrite file path", KR(ret), K(uri), K(overwrite_file_path));
+  } else if (OB_FAIL(write_single_file(overwrite_file_path, &storage_info, buf, size, storage_id_mod))) {
+    STORAGE_LOG(WARN, "failed to write single file", KR(ret), K(overwrite_file_path), K(storage_info));
+  }
   return ret;
 }
 

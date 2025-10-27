@@ -469,7 +469,7 @@ void ObSharedStorageTest::check_block_for_private_dir(
   ASSERT_EQ(OB_SUCCESS, handler.get_block_ids_from_dir(block_ids_in_dir));
   ASSERT_EQ(block_ids_in_tablet.count(), block_ids_in_dir.count());
   ASSERT_EQ(OB_SUCCESS, op_for_block_ids_in_tablet_result(block_ids_in_tablet, unuse_block_ids));
-  MacroBlockCheckOP op_for_check(op_for_block_ids_in_tablet_result.result_block_id_set_, 0, UINT64_MAX - 1);
+  PrivateMacroBlockCheckOP op_for_check(op_for_block_ids_in_tablet_result.result_block_id_set_, 0, UINT64_MAX - 1);
   ASSERT_EQ(OB_SUCCESS, op_for_check(block_ids_in_dir, empty_block_ids));
   ASSERT_EQ(0, empty_block_ids.count());
 

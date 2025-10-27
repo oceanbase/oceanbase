@@ -79,7 +79,7 @@ public:
       const ObCGBitmap *parent_bitmap,
       const ObCSRowId micro_start_id,
       int64_t &access_count);
-  int filter_pushdown_filter(
+  virtual int filter_pushdown_filter(
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter,
       sql::PushdownFilterInfo &filter_info,
@@ -95,7 +95,8 @@ public:
       const int64_t datum_offset,
       uint32_t *len_array,
       const bool is_padding_mode,
-      const bool init_vector_header = true);
+      const bool init_vector_header = true,
+      const ObIArray<ObStorageDatum>* default_datums = nullptr);
   int advance_to_border(
       const ObDatumRowkey &rowkey,
       int64_t &start_offset,
@@ -163,8 +164,22 @@ public:
       const ObDatumRowkey &border_rowkey,
       const ObDatumRow &deleted_row,
       ObCSRowId &co_current);
+  int get_next_skip_row(const ObDatumRow *&row);
+  int skip_to_range(
+      const int64_t begin,
+      const int64_t end,
+      const ObDatumRange &range,
+      const bool is_left_border,
+      const bool is_right_border,
+      int64_t &skip_row_idx,
+      bool &has_data,
+      bool &range_finished);
+  int compare_rowkey(const ObDatumRowkey &rowkey, const bool is_cmp_end, int32_t &cmp_ret) const;
+  OB_INLINE void skip_to_end()
+  { current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX; }
   VIRTUAL_TO_STRING_KV(K_(is_left_border), K_(is_right_border), K_(can_ignore_multi_version), K_(use_private_bitmap),
-                       K_(can_blockscan), K_(is_filter_applied), K_(current), K_(start), K_(last), K_(step));
+                       K_(can_blockscan), K_(is_filter_applied), K_(current), K_(start), K_(last), K_(reserved_pos), K_(step),
+                       K_(macro_id));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row);
   int set_reader(const ObRowStoreType store_type);
@@ -188,9 +203,9 @@ protected:
   int init_bitmap(ObCGBitmap *&bitmap, bool is_all_true);
   int inner_get_next_row_blockscan(const ObDatumRow *&row);
 private:
-  int apply_black_filter_batch(
+  int apply_filter_batch(
       sql::ObPushdownFilterExecutor *parent,
-      sql::ObBlackFilterExecutor &filter,
+      sql::ObPhysicalFilterExecutor &filter,
       sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
 protected:
@@ -205,6 +220,7 @@ protected:
   int64_t current_;         // current cursor
   int64_t start_;           // start of scan, inclusive.
   int64_t last_;            // end of scan, inclusive.
+  int64_t reserved_pos_;
   int64_t step_;
   ObDatumRow row_;
   MacroBlockId macro_id_;
@@ -315,7 +331,6 @@ public:
         is_last_multi_version_row_(true),
         read_row_direct_flag_(false),
         cell_allocator_(common::ObModIds::OB_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        reserved_pos_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
         trans_version_col_idx_(-1),
         sql_sequence_col_idx_(-1),
         cell_cnt_(0)
@@ -393,7 +408,6 @@ protected:
 private:
   storage::ObNopPos nop_pos_;
   common::ObArenaAllocator cell_allocator_;
-  int64_t reserved_pos_;
   int64_t trans_version_col_idx_;
   int64_t sql_sequence_col_idx_;
   int64_t cell_cnt_;
@@ -401,7 +415,7 @@ private:
 };
 
 // multi version sstable micro block scanner for mow tables
-class ObMultiVersionDIMicroBlockRowScanner final : public ObMultiVersionMicroBlockRowScanner
+class ObMultiVersionDIMicroBlockRowScanner : public ObMultiVersionMicroBlockRowScanner
 {
 public:
   ObMultiVersionDIMicroBlockRowScanner(common::ObIAllocator &allocator)

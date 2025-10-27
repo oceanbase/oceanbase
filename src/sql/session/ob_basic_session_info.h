@@ -1674,6 +1674,7 @@ private:
   inline int set_session_state_(ObSQLSessionState state);
   //写入系统变量的默认值, deserialized scene need use base_value as baseline.
   int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
+  virtual inline int64_t get_truncated_sql_len(const ObString &stmt) { return std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length())); }
 protected:
   //============注意：下面的成员变量使用时，需要考虑并发控制================================
   struct MultiThreadData
@@ -1878,7 +1879,7 @@ public:
         current_default_catalog_(0),
         security_version_(0),
         ob_enable_ps_parameter_anonymous_block_(false),
-        plsql_can_transform_sql_to_assign_(false)
+        plsql_can_transform_sql_to_assign_(true)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1949,7 +1950,7 @@ public:
       security_version_ = 0;
       ob_enable_ps_parameter_anonymous_block_ = false;
       current_default_catalog_ = 0;
-      plsql_can_transform_sql_to_assign_ = false;
+      plsql_can_transform_sql_to_assign_ = true;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2678,6 +2679,7 @@ private:
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
+  bool get_extend_sql_plan_monitor_metrics() const;
 };
 
 

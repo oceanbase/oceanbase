@@ -38,6 +38,9 @@ public:
 
   virtual int prepare_dml_infos() override;
 
+  bool is_insertup_opt_for_column_store() const
+  { return is_insertup_opt_for_column_store_; }
+
   common::ObIArray<IndexDMLInfo *> &get_replace_del_index_del_infos()
   { return replace_del_index_del_infos_; }
   const common::ObIArray<IndexDMLInfo *> &get_replace_del_index_del_infos() const
@@ -133,11 +136,13 @@ private:
   int get_index_part_ids(const ObInsertTableInfo& table_info, const ObTableSchema *&data_table_schema, const ObTableSchema *&index_schema, ObIArray<uint64_t> &index_part_ids);
   int generate_osg_share_info(OSGShareInfo *&info);
   int check_need_online_stats_gather(bool &need_osg);
+  int check_insertup_opt_for_column_store();
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);
 private:
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> replace_del_index_del_infos_;
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> insert_up_index_upd_infos_;
   common::ObSEArray<ObUniqueConstraintInfo, 8, common::ModulePageAllocator, true> uk_constraint_infos_;
+  bool is_insertup_opt_for_column_store_;
 };
 }
 }

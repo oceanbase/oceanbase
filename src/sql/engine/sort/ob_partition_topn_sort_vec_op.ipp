@@ -36,6 +36,7 @@ void ObPartitionTopNSort<Compare, Store_Row, has_addon>::reuse()
   pt_row_buffer_.reuse();
   row_count_ = 0;
   got_first_row_ = false;
+  pt_row_cnt_ = 0;
 }
 
 template <typename Compare, typename Store_Row, bool has_addon>
@@ -245,6 +246,8 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::add_part_topn_sort_row(
     SQL_ENG_LOG(WARN, "failed to locate topn node", K(ret));
   } else if (OB_FAIL((this->*add_topn_row_func_)(store_row))) {
     SQL_ENG_LOG(WARN, "add topn sort row failed", K(ret));
+  } else if (OB_NOT_NULL(store_row)) {
+    pt_row_cnt_++;
   } else if (OB_UNLIKELY(part_group_cnt_ > ENLARGE_BUCKET_NUM_FACTOR * max_bucket_cnt_)
              && OB_FAIL(resize_buckets())) {
     SQL_ENG_LOG(WARN, "failed to enlarge partition topn buckets");
@@ -343,6 +346,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::do_sort() {
       }
     }
   }
+  comp_.set_cmp_range(0, comp_.get_cnt());
   return ret;
 }
 
@@ -727,7 +731,7 @@ int ObPartitionTopNSort<Compare, Store_Row, has_addon>::finish_in_quick_select(T
     if (OB_FAIL(ret) || rows.count() <= 1) {
       // do nothing
     } else {
-      lib::ob_sort(&rows.at(0), &rows.at(rows.count()), CopyableComparer(comp_));
+      lib::ob_sort(&rows.at(0), &rows.at(0) + rows.count(), CopyableComparer(comp_));
     }
   }
   return ret;

@@ -163,6 +163,10 @@ public:
   void set_preread();
   void set_no_preread();
   bool is_preread() const;
+  void set_ss_private_dir();
+  void set_ss_public_dir();
+  bool is_ss_private_dir() const;
+  bool is_ss_public_dir() const;
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)), K(group_id_), K(func_type_),
       K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(is_detect_), K(is_write_through_), K(is_sealed_),
       K(is_time_detect_), K(need_close_dev_and_fd_), K(is_preread_), K(is_buffered_read_), K(reserved_));
@@ -191,6 +195,7 @@ private:
   static constexpr int64_t IO_CLOSE_DEV_AND_FD_BIT = 1;
   static constexpr int64_t IO_BUFFERED_READ_BIT = 1; // indicate read mode of the io
   static constexpr int64_t IO_PREREAD_FLAG_BIT = 1;
+  static constexpr int64_t IO_SS_DIR_TYPE_BIT = 4; // indicate the type of ss dir, 0: not ss dir, 1: private, 2: public
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
@@ -201,7 +206,8 @@ private:
                                                 - IO_TIME_DETECT_FLAG_BIT
                                                 - IO_CLOSE_DEV_AND_FD_BIT
                                                 - IO_BUFFERED_READ_BIT
-                                                - IO_PREREAD_FLAG_BIT;
+                                                - IO_PREREAD_FLAG_BIT
+                                                - IO_SS_DIR_TYPE_BIT;
 
   union { // FARM COMPAT WHITELIST
     int64_t flag_;
@@ -218,6 +224,7 @@ private:
       bool need_close_dev_and_fd_ : IO_CLOSE_DEV_AND_FD_BIT;
       bool is_buffered_read_ : IO_BUFFERED_READ_BIT;
       bool is_preread_ : IO_PREREAD_FLAG_BIT;
+      uint8_t ss_dir_type_ : IO_SS_DIR_TYPE_BIT;
       int64_t reserved_ : IO_RESERVED_BIT;
     };
   };
@@ -522,6 +529,7 @@ public:
   ObIOGroupKey get_group_key() const;
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
+  bool is_canceled() const { return is_canceled_; }
   int64_t get_data_size() const;
   int64_t get_user_io_size() const;
   uint64_t get_io_usage_index();
@@ -576,7 +584,7 @@ public:
   ObIORetCode ret_code_;
 };
 
-class ObIORequest : public common::ObDLinkBase<ObIORequest>
+class ObIORequest : public common::ObDLinkBase<ObIORequest>, public TCRequestOwner
 {
 public:
   ObIORequest();
@@ -588,7 +596,6 @@ public:
   virtual void reset();
   void free();
   void set_result(ObIOResult &io_result);
-  bool is_canceled();
   int64_t timeout_ts() const;
   int64_t get_data_size() const;
   ObIOGroupKey get_group_key() const;
@@ -616,6 +623,7 @@ public:
   void free_io_buffer();
   void inc_ref(const char *msg = nullptr);
   void dec_ref(const char *msg = nullptr);
+  bool is_canceled() const;
 
   int64_t get_remained_io_timeout_us();
 

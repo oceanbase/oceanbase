@@ -80,7 +80,7 @@ private:
                              const common::ObZone &zone, const bool &wait_type);
   int alter_storage_authorization(const share::ObBackupDest &storage_dest, const bool &wait_type);
   int alter_storage_attribute(const common::ObString &storage_path, const bool &wait_type,
-                              const int64_t max_iops, const int64_t max_bandwidth);
+                              const int64_t max_iops, const int64_t max_bandwidth, const ObStorageChecksumType &checksum_type);
   int check_zone_storage_exist(const common::ObZone &zone, const share::ObBackupDest &storage_dest,
                                const share::ObStorageUsedType::TYPE used_for, int64_t &idx) const;
   int check_zone_storage_exist(const common::ObZone &zone, const ObString &storage_path,
@@ -89,7 +89,7 @@ private:
   int get_zone_storage_list_by_zone(const common::ObZone &zone,
                                     common::ObArray<int64_t> &drop_zone_storage_list) const;
   int update_zone_storage_table_state(const int64_t idx);
-  int parse_attribute_str(const common::ObString &attribute, int64_t &max_iops, int64_t &max_bandwidth);
+  int parse_attribute_str(const common::ObString &attribute, int64_t &max_iops, int64_t &max_bandwidth, ObStorageChecksumType &checksum_type);
   int check_need_fetch_storage_id(const share::ObBackupDest &storage_dest, bool &is_need_fetch, uint64_t &storage_id);
 
 protected:

@@ -424,7 +424,7 @@ int ObDDLServerClient::wait_task_reach_pending(
         share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
         if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, data_format_version,
             snapshot_version, task_status, unused_target_object_id, unused_schema_version, is_no_logging))) {
-          if (OB_LIKELY(OB_ITER_END == ret)) {
+          if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
             ret = OB_ENTRY_NOT_EXIST;
             ObAddr unused_addr;
             int64_t forward_user_msg_len = 0;

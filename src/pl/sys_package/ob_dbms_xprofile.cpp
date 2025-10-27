@@ -103,11 +103,14 @@ int ObDbmsXprofile::set_display_type(const ObString &format, ProfileDisplayType 
   int ret = OB_SUCCESS;
   if (format.case_compare("AGGREGATED") == 0) {
     type = ProfileDisplayType::AGGREGATED;
+  } else if (format.case_compare("AGGREGATED_PRETTY") == 0) {
+    type = ProfileDisplayType::AGGREGATED_PRETTY;
   } else if (format.case_compare("ORIGINAL") == 0) {
     type = ProfileDisplayType::ORIGINAL;
   } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "display format must be AGGREGATED or ORIGINAL");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+                   "display format must be AGGREGATED, ORIGINAL or AGGREGATED_PRETTY ");
     LOG_WARN("Invalid display format", K(format));
   }
   return ret;
@@ -140,11 +143,15 @@ int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
     if (OB_FAIL(flatten_op_profile(profile_items, profile_text))) {
       LOG_WARN("failed to flatten op profile");
     }
-  } else if (ProfileDisplayType::AGGREGATED == profile_text.type_) {
-    if (OB_FAIL(aggregate_op_profile(ctx, profile_items, profile_items.at(0).sql_id_, trace_id,
-                                     profile_text))) {
+  } else if (ProfileDisplayType::AGGREGATED == profile_text.type_
+             || ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_) {
+    if (OB_FAIL(aggregate_op_profile(ctx, profile_items, trace_id, profile_text))) {
       LOG_WARN("failed to aggregate op profile");
     }
+  }
+  if (OB_SIZE_OVERFLOW == ret) {
+    // overwrite error code to display truncated result.
+    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -182,24 +189,53 @@ int ObDbmsXprofile::flatten_op_profile(const ObIArray<ObProfileItem> &profile_it
 
 int ObDbmsXprofile::aggregate_op_profile(ObExecContext &ctx,
                                          const ObIArray<ObProfileItem> &profile_items,
-                                         const ObString &sql_id,
                                          const ObString &trace_id,
                                          ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
   ObTMArray<ObMergedProfileItem> merged_items;
-  if (OB_FAIL(ObProfileUtil::get_merged_profiles(&ctx.get_allocator(), profile_items, merged_items))) {
+  ObTMArray<ExecutionBound> execution_bounds;
+  if (OB_FAIL(ObProfileUtil::get_merged_profiles(&ctx.get_allocator(), profile_items, merged_items,
+                                                 execution_bounds))) {
     LOG_WARN("failed to get merged profiles");
-  } else if (OB_FAIL(format_summary_info(merged_items, sql_id, trace_id, profile_text))) {
-    LOG_WARN("failed to format summary info");
-  } else if (OB_FAIL(format_agg_profiles(merged_items, profile_text))) {
-    LOG_WARN("failed to format agg profile");
+  } else {
+    int64_t buf_len = profile_text.buf_len_;
+    int64_t &pos = profile_text.pos_;
+    char *buf = profile_text.buf_;
+    OZ(BUF_PRINTF("Trace ID: "));
+    if (OB_SUCC(ret)) {
+      pos += trace_id.to_string(buf + pos, buf_len - pos);
+    }
+    OZ(BUF_PRINTF("\n"));
+
+    // for each execution plan, print its summary info and profile info
+    for (int64_t i = 0; i < execution_bounds.count() && OB_SUCC(ret); ++i) {
+      const ExecutionBound &execution_bound = execution_bounds.at(i);
+      int64_t start_idx = execution_bound.start_idx_;
+      int64_t end_idx = execution_bound.end_idx_;
+      int64_t execution_count = execution_bound.execution_count_;
+      ObTMArray<ObMergedProfileItem> profiles_of_one_plan;
+      if (OB_FAIL(profiles_of_one_plan.reserve(end_idx - start_idx + 1))) {
+        LOG_WARN("failed to reserve", K(end_idx - start_idx + 1));
+      }
+      for (int64_t i = start_idx; i <= end_idx && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(profiles_of_one_plan.push_back(merged_items.at(i)))) {
+          LOG_WARN("failed to push back");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(format_summary_info(profiles_of_one_plan, execution_count, profile_text))) {
+        LOG_WARN("failed to format summary info");
+      } else if (OB_FAIL(format_agg_profiles(profiles_of_one_plan, profile_text))) {
+        LOG_WARN("failed to format agg profile");
+      }
+    }
   }
   return ret;
 }
 
 int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &merged_items,
-                                        const ObString &sql_id, const ObString &trace_id,
+                                        int64_t execution_count,
                                         ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
@@ -209,25 +245,19 @@ int ObDbmsXprofile::format_summary_info(const ObIArray<ObMergedProfileItem> &mer
 
   uint64_t total_db_time = 0;
   ObTMArray<ObMergedProfileItem> copied_items;
-  if (OB_FAIL(copied_items.reserve(merged_items.count()))) {
+  if (OB_FAIL(copied_items.assign(merged_items))) {
     LOG_WARN("failed to reserve", K(merged_items.count()));
   }
 
-  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(copied_items.push_back(merged_items.at(i)))) {
-      LOG_WARN("failed to push back");
-    } else {
-      total_db_time += merged_items.at(i).max_db_time_;
-    }
+  for (int64_t i = 0; i < copied_items.count() && OB_SUCC(ret); ++i) {
+    total_db_time += merged_items.at(i).max_db_time_;
   }
 
-  OZ(BUF_PRINTF("Trace ID: "));
-  if (OB_SUCC(ret)) {
-    pos += trace_id.to_string(buf + pos, buf_len - pos);
-  }
   OZ(BUF_PRINTF("\nSQL ID: "));
   if (OB_SUCC(ret)) {
+    const ObString sql_id = copied_items.at(0).sql_id_;
     pos += sql_id.to_string(buf + pos, buf_len - pos);
+    OZ(BUF_PRINTF(", Execution Count: %d", execution_count));
   }
 
   if (OB_SUCC(ret) && total_db_time > 0) {
@@ -256,11 +286,20 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
   int64_t buf_len = profile_text.buf_len_;
   int64_t &pos = profile_text.pos_;
   char *buf = profile_text.buf_;
-  OZ(BUF_PRINTF("\nProfile Details:\n"));
+  OZ(BUF_PRINTF("Profile Details:\n"));
 
   metric::Level display_level = profile_text.display_level_;
-  const char *json = nullptr;
+  const char *text = nullptr;
   ObArenaAllocator arena_alloc;
+
+  ProfilePrefixHelper prefix_helper(arena_alloc);
+  if (OB_FAIL(ret)) {
+  } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_) {
+    if (OB_FAIL(prefix_helper.prepare_pretty_prefix(merged_items))) {
+      LOG_WARN("failed to prepare pretty prefix");
+    }
+  }
+
   for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
     if (i % 32 == 0) {
       arena_alloc.reset_remain_one_page();
@@ -271,14 +310,26 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
       LOG_WARN("too many profile to print", K(merged_items.count()), K(pos), K(format_size),
                K(buf_len));
       break;
-    } else if (OB_FAIL(item.profile_->to_format_json(&arena_alloc, json, true, display_level))) {
-      LOG_WARN("failed to format profile", K(item.profile_->get_name_str()), K(buf_len), K(pos));
-    } else {
-      for (int64_t j = 0; j < item.plan_depth_ && OB_SUCC(ret); ++j) { OZ(BUF_PRINTF(" ")); }
-      OZ(BUF_PRINTF("%ld ", item.op_id_));
-      OZ(BUF_PRINTF("%s\n", json));
+    } else if (ProfileDisplayType::AGGREGATED == profile_text.type_) {
+      if (OB_FAIL(item.profile_->to_format_json(&arena_alloc, text, true, display_level))) {
+        LOG_WARN("failed to format profile", K(item.profile_->get_name_str()), K(buf_len), K(pos));
+      } else if (pos + item.plan_depth_ < buf_len) {
+        MEMSET(buf + pos, ' ', item.plan_depth_);
+        pos += item.plan_depth_;
+        OZ(BUF_PRINTF("%ld ", item.op_id_));
+        OZ(BUF_PRINTF("%s\n", text));
+      }
+    } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_) {
+      if (OB_FAIL(item.profile_->pretty_print(
+              &arena_alloc, text, prefix_helper.get_prefixs().at(i).profile_prefix_,
+              prefix_helper.get_prefixs().at(i).metric_prefix_, display_level))) {
+        LOG_WARN("failed to format profile", K(item.profile_->get_name_str()), K(buf_len), K(pos));
+      } else {
+        OZ(BUF_PRINTF("%s\n", text));
+      }
     }
   }
+  OZ(BUF_PRINTF("\n"));
   return ret;
 }
 
@@ -387,6 +438,198 @@ int ObDbmsXprofile::set_display_result_for_mysql(ObExecContext &ctx, ProfileText
     text_res.get_result_buffer(ret_str);
     result.set_lob_value(ObTextType, ret_str.ptr(), ret_str.length());
     result.set_has_lob_header();
+  }
+  return ret;
+}
+
+int ProfilePrefixHelper::prepare_pretty_prefix(const ObIArray<ObMergedProfileItem> &merged_items)
+{
+  int ret = OB_SUCCESS;
+  // init prefix_infos_
+  if (OB_FAIL(prefix_infos_.reserve(merged_items.count()))) {
+    LOG_WARN("failed to reserve", K(merged_items.count()));
+  }
+  for (int64_t i = 0; i < merged_items.count() && OB_SUCC(ret); ++i) {
+    ProfilePrefixHelper::PrefixInfo prefix;
+    prefix.plan_depth_ = merged_items.at(i).plan_depth_;
+    prefix.op_id_ = merged_items.at(i).op_id_;
+    if (OB_FAIL(prefix_infos_.push_back(prefix))) {
+      LOG_WARN("failed to push back");
+    }
+  }
+
+  // for each child operator, find its parent
+  // for each parent operator, find its last child
+  for (int64_t i = 0; i < prefix_infos_.count() && OB_SUCC(ret); ++i) {
+    PrefixInfo &child = prefix_infos_.at(i);
+    for (int64_t j = i - 1; j >= 0 && OB_SUCC(ret); --j) {
+      PrefixInfo &parent = prefix_infos_.at(j);
+      if (parent.plan_depth_ + 1 == child.plan_depth_) {
+        child.parent_op_id_ = parent.op_id_;
+        parent.last_child_op_id_ = child.op_id_;
+        break;
+      }
+    }
+  }
+
+  int64_t current_depth = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < prefix_infos_.count(); ++i) {
+    PrefixInfo &current_op = prefix_infos_.at(i);
+    if (current_op.plan_depth_ > current_depth) {
+      // child
+      ++current_depth;
+    } else if (current_op.plan_depth_ == current_depth) {
+      // brother
+    } else {
+      // brother of ancestor
+      while (current_op.plan_depth_ <= current_depth) {
+        --current_depth;
+        ancestors_stack_.pop_back();
+      }
+      ++current_depth;
+    }
+
+    bool last_child_processed = true;
+    if (i + 1 < prefix_infos_.count()) {
+      PrefixInfo &next = prefix_infos_.at(i + 1);
+      if (next.plan_depth_ > current_op.plan_depth_) {
+        // has child not processed
+        last_child_processed = false;
+      } else {
+        // no child
+      }
+    } else {
+      // no child
+    }
+
+    if (OB_FAIL(ancestors_stack_.push_back({current_op.op_id_, last_child_processed}))) {
+    } else if (OB_FAIL(append_profile_prefix(current_op, current_depth))) {
+      LOG_WARN("failed to append profile prefix");
+    } else if (OB_FAIL(append_metric_prefix(current_op, current_depth))) {
+      LOG_WARN("failed to append metric prefix");
+    }
+  }
+  return ret;
+}
+
+int ProfilePrefixHelper::append_profile_prefix(PrefixInfo &current_profile,
+                                               int64_t current_depth)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t buf_len = max(current_depth * 25, 32);
+  int64_t pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_len)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocate buffer failed", K(buf_len));
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && j < current_depth; ++j) {
+      if (j >= ancestors_stack_.count()
+          || ancestors_stack_.at(j).op_id_ >= prefix_infos_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect idx", K(j), K(current_depth), K(ancestors_stack_.count()),
+                 K(ancestors_stack_.at(j).op_id_), K(prefix_infos_.count()));
+      } else if (!ancestors_stack_.at(j).last_child_processed_) {
+        // means ancestor has not processed its last child
+        const PrefixInfo &parent_item = prefix_infos_.at(ancestors_stack_.at(j).op_id_);
+        const char *prefix = nullptr;
+        if (current_profile.parent_op_id_ != parent_item.op_id_) {
+          // ancestor but not direct parent, add "│ "
+          prefix = "│ ";
+        } else if (current_profile.parent_op_id_ == parent_item.op_id_) {
+          // this ancestor is direct parent
+          if (parent_item.last_child_op_id_ == current_profile.op_id_) {
+            /* e.g.
+                └─PHY_VEC_GRANULE_ITERATOR
+                  └─PHY_VEC_TABLE_SCAN
+              PHY_VEC_TABLE_SCAN is last child of PHY_VEC_GRANULE_ITERATOR
+              so add "└─" before PHY_VEC_TABLE_SCAN
+            */
+            prefix = "└─";
+            // set last child processed for this ancestor
+            ancestors_stack_.at(j).last_child_processed_ = true;
+          } else {
+            /* e.g.
+              └─PHY_VEC_HASH_JOIN
+                ├─PHY_VEC_TABLE_SCAN(T1)
+                └─PHY_VEC_TABLE_SCAN(T2)
+              PHY_VEC_TABLE_SCAN(T1) is not the last child of PHY_VEC_HASH_JOIN
+              so add "├─" before PHY_VEC_TABLE_SCAN(T1)
+            */
+            prefix = "├─";
+          }
+        }
+        OZ(BUF_PRINTF("%s", prefix));
+      } else {
+        // means ancestor has processed its last child, no need to add "│" as prefix
+        OZ(BUF_PRINTF("  "));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // append op_id for profile prefix
+      OZ(BUF_PRINTF("%d.", current_profile.op_id_));
+      (void)current_profile.profile_prefix_.assign(buf, pos);
+    }
+  }
+  return ret;
+}
+
+int ProfilePrefixHelper::append_metric_prefix(PrefixInfo &current_profile,
+                                              int64_t current_depth)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t buf_len = max(current_depth * 25, 32);
+  int64_t pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_len)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocate buffer failed", K(buf_len));
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && j < current_depth; ++j) {
+      if (j >= prefix_infos_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect idx", K(j), K(current_depth), K(prefix_infos_.count()));
+      } else if (!ancestors_stack_.at(j).last_child_processed_) {
+        /* e.g.
+            └─PHY_VEC_HASH_JOIN
+              ├─PHY_VEV_JOIN_FILTER(CREATE)
+              | |  output rows:1
+              | └─PHY_VEC_TABLE_SCAN(T1)
+              └─PHY_VEV_JOIN_FILTER(USE)
+                |  output rows:9
+                └─PHY_VEC_TABLE_SCAN(T2)
+            PHY_VEV_JOIN_FILTER(CREATE) is not the last child of PHY_VEC_HASH_JOIN
+            add "│ " before metric (the first "| " of "| |  output rows:1")
+        */
+        OZ(BUF_PRINTF("│ "));
+      } else {
+        // means ancestor has processed its last child, no need to add "│" as prefix
+        OZ(BUF_PRINTF("  "));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      /*
+          └─PHY_VEC_GRANULE_ITERATOR
+            │  open time:"2025-09-24 17:12:13.102487"
+            │  close time:"2025-09-24 17:12:13.107760"
+            └─PHY_VEC_TABLE_SCAN
+                 open time:"2025-09-24 17:12:13.102487"
+                 close time:"2025-09-24 17:12:13.107760"
+        PHY_VEC_GRANULE_ITERATOR has child, so add "│  " before its metric
+        PHY_VEC_TABLE_SCAN do not has a child, add "   " before its metric
+      */
+      const char *prefix = nullptr;
+      if (current_profile.last_child_op_id_ != -1) {
+        // has child
+        OZ(BUF_PRINTF("│  ", prefix));
+      } else {
+        // no childs
+        OZ(BUF_PRINTF("  ", prefix));
+      }
+      if (OB_SUCC(ret)) {
+        (void)current_profile.metric_prefix_.assign(buf, pos);
+      }
+    }
   }
   return ret;
 }

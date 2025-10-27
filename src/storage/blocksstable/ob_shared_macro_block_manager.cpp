@@ -773,7 +773,10 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
 {
   int ret = OB_SUCCESS;
   data_desc.reset();
-  if (is_mds_merge(merge_type)) {
+  int32_t transfer_epoch = -1;
+  if (OB_FAIL(tablet.get_private_transfer_epoch(transfer_epoch))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet.get_tablet_meta());
+  } else if (is_mds_merge(merge_type)) {
     const ObStorageSchema *storage_schema = ObMdsSchemaHelper::get_instance().get_storage_schema();
     if (OB_ISNULL(storage_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -781,7 +784,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     } else if (OB_UNLIKELY(!storage_schema->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
-    } else if (OB_FAIL(data_desc.init(
+    }  else if (OB_FAIL(data_desc.init(
           false/*is_ddl*/,
           *storage_schema,
           tablet.get_tablet_meta().ls_id_,
@@ -790,7 +793,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           snapshot_version,
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
-          tablet.get_transfer_seq(),
+          transfer_epoch,
           tablet.get_reorganization_scn(),
           end_scn))) {
       LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
@@ -823,7 +826,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
           snapshot_version,
           cluster_version,
           tablet.get_tablet_meta().micro_index_clustered_,
-          tablet.get_transfer_seq(),
+          transfer_epoch,
           tablet.get_reorganization_scn(),
           end_scn,
           cg_schema,

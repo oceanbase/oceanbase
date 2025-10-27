@@ -93,7 +93,7 @@ public:
                            const int64_t hash_val, DtlChannelType type);
   virtual ~ObDtlRpcChannel();
 
-  virtual int init() override;
+  virtual int init(ObDtlFlowControl *dfc = nullptr) override;
   virtual void destroy();
 
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;

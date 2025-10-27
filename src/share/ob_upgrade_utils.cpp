@@ -84,6 +84,8 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 4UL, 0UL, 0UL),  // 4.4.0.0
   CALC_VERSION(4UL, 4UL, 0UL, 1UL),  // 4.4.0.1
   CALC_VERSION(4UL, 4UL, 1UL, 0UL),  // 4.4.1.0
+  CALC_VERSION(4UL, 4UL, 2UL, 0UL),  // 4.4.2.0
+  CALC_VERSION(4UL, 5UL, 0UL, 0UL),  // 4.5.0.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -136,6 +138,8 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_4_0_0, DATA_VERSION_4_4_0_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_4_0_1, MOCK_DATA_VERSION_4_4_0_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_4_1_0, DATA_VERSION_4_4_1_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_4_2_0, MOCK_DATA_VERSION_4_4_2_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_5_0_0, DATA_VERSION_4_5_0_0)
 
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
@@ -808,6 +812,8 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 4, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 4, 0, 1);
     INIT_PROCESSOR_BY_VERSION(4, 4, 1, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 4, 2, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 5, 0, 0);
 
 #undef INIT_PROCESSOR_BY_NAME_AND_VERSION
 #undef INIT_PROCESSOR_BY_VERSION
@@ -2208,6 +2214,7 @@ int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_dump_data_dict
         *sys_variable_schema,
         tenant_id_,
         true/*is_enabled*/,
+        true/*schedule_at_once*/,
         trans))) { // insert ignore
       LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id_));
     }

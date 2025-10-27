@@ -250,6 +250,19 @@ int ObVectorIndexUtil::parser_params_from_string(
               LOG_WARN("not support vector index nbits value", K(ret), K(int_value), K(new_param_value));
             }
           }
+        } else if (new_param_name == "SIMILARITY") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_param_value.ptr(), new_param_value.length(), &endptr, &err);
+          if (err != 0 || (new_param_value.ptr() + new_param_value.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
+          } else if (out_val < 1.0 || out_val > 1e6) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index refine_k value", K(ret), K(out_val), K(new_param_value));
+          } else {
+            param.similarity_threshold_ = out_val;
+          }
         } else {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid vector index param name", K(ret), K(new_param_name));
@@ -374,6 +387,19 @@ int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param
         search_param.refine_k_ = query_param.refine_k_;
       }
     }
+    if (query_param.is_set_similarity_threshold_) {
+      if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_SPIV) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("similarity is not support parameter for current index", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "similarity parameter for current index is");
+      } else if (index_param.dist_algorithm_ == VIDA_IP) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("similarity is not supported for inner_product distance", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "similarity parameter for inner_product distance is");
+      } else {
+        search_param.similarity_threshold_ = query_param.similarity_threshold_;
+      }
+    }
     LOG_TRACE("vector param", K(index_param), K(query_param), K(search_param));
   }
   return ret;
@@ -426,6 +452,39 @@ int ObVectorIndexUtil::resolve_query_param(
         } else {
           param.refine_k_ = out_val;
           param.is_set_refine_k_ = 1;
+        }
+      } else if (param_name.case_compare("SIMILARITY") == 0) {
+        int err = 0;
+        char *endptr = NULL;
+        ObString value_str(static_cast<int32_t>(value_node->str_len_), value_node->str_value_);
+        double out_val = 0;
+        if (param.is_set_similarity_threshold_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate similarity param", K(ret), K(i));
+        } else if (OB_FALSE_IT(out_val = ObCharset::strntod(value_str.ptr(), value_str.length(), &endptr, &err))) {
+        } else if (err != 0 || (value_str.ptr() + value_str.length()) != endptr) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("fail to cast string to double", K(ret), K(value_str), K(err), KP(endptr));
+        } else if (out_val < 0.0 || out_val > 1.0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid vector index similarity value", K(ret), K(out_val), K(value_str));
+        } else {
+          param.similarity_threshold_ = out_val;
+          param.is_set_similarity_threshold_ = 1;
+        }
+      } else if (param_name.case_compare("IVF_NPROBES") == 0) {
+        if (param.is_set_ivf_nprobes_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate ivf_nprobes param", K(ret), K(i));
+        } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
+        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 65536)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
+        } else {
+          param.ivf_nprobes_ = value_node->value_;
+          param.is_set_ivf_nprobes_ = 1;
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -4146,8 +4205,8 @@ int ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(share::schema::ObSchem
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
-  const uint64_t old_index_id = arg.table_id_;
-  const uint64_t new_index_id = arg.index_table_id_;
+  const uint64_t new_index_id = arg.table_id_;
+  const uint64_t old_index_id = arg.index_table_id_;
   const ObString old_index_name = arg.index_name_;
   const ObTableSchema *old_index_schema = nullptr;
   const ObTableSchema *new_index_schema = nullptr;
@@ -4195,7 +4254,7 @@ int ObVectorIndexUtil::get_rebuild_drop_index_id_and_name(share::schema::ObSchem
         LOG_WARN("fail to get index name", K(ret));
       }
     }
-    LOG_INFO("succ to get rebuild drop index id and name", K(ret),
+    LOG_INFO("succ to get rebuild drop index id and name", K(ret), K(rebuild_succ),
       K(arg.index_table_id_), K(arg.index_name_),
       K(old_index_schema->get_table_name()), K(new_index_schema->get_table_name()));
   }
@@ -4933,42 +4992,78 @@ int ObVectorIndexUtil::split_vector(
 }
 
 bool ObVectorIndexUtil::check_vector_index_memory(
-    ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const uint64_t tenant_id, const int64_t row_count)
+    ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const common::ObAddr &addr, const uint64_t tenant_id, const int64_t row_count)
 {
   int ret = OB_SUCCESS;
   bool is_satisfied = true;
   const static double VEC_MEMORY_HOLD_FACTOR = 1.2;
-  MTL_SWITCH(tenant_id) {
-    ObPluginVectorIndexService *service = MTL(ObPluginVectorIndexService*);
-    ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr*);
-    if (OB_ISNULL(service) || OB_ISNULL(shared_mem_mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("service or manager is nullptr", K(ret), K(service), K(shared_mem_mgr));
-    } else {
-      ObRbMemMgr *mem_mgr = nullptr;
-      int64_t bitmap_mem_used = 0;
-      int64_t mem_limited_size = 0;
-      int64_t estimate_memory = 0;
-      int64_t all_vsag_mem_used = ATOMIC_LOAD(service->get_all_vsag_use_mem());
-      int64_t hold_mem = shared_mem_mgr->vector_allocator().hold();
-      if (OB_ISNULL(mem_mgr = MTL(ObRbMemMgr *))) {
-      } else {
-        bitmap_mem_used = mem_mgr->get_vec_idx_used();
-      }
-      if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id, mem_limited_size))) {
-        LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id));
-      } else if (OB_FAIL(estimate_vector_memory_used(schema_guard, index_schema, tenant_id, row_count, estimate_memory))) {
-        LOG_WARN("failed to estimate vector memory used", K(ret), K(index_schema), K(row_count));
-      } else if (OB_FALSE_IT(estimate_memory = ceil(estimate_memory * VEC_ESTIMATE_MEMORY_FACTOR * VEC_MEMORY_HOLD_FACTOR))) { // multiple 2.0， and need to consider the hold memory.
-      } else if (hold_mem + estimate_memory > mem_limited_size) {
-        is_satisfied = false;
-      }
-      LOG_INFO("finish estimate size", K(ret), K(is_satisfied),
-        K(index_schema.get_table_name_str()), K(row_count), K(mem_limited_size), K(all_vsag_mem_used), K(hold_mem), K(bitmap_mem_used), K(estimate_memory));
-    }
+  int64_t total_memory_limited_size = 0;
+  int64_t estimate_memory = 0;
+  int64_t hold_mem = 0;
+
+  if (OB_FAIL(get_tenant_vector_memory_used_by_inner_sql(tenant_id, addr, hold_mem))) {
+    LOG_WARN("fail to get tenant vector memory used", K(ret));
+  } else if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id, total_memory_limited_size))) {
+    LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id));
+  } else if (OB_FAIL(estimate_vector_memory_used(schema_guard, index_schema, tenant_id, row_count, estimate_memory))) {
+    LOG_WARN("failed to estimate vector memory used", K(ret), K(index_schema), K(row_count));
+  } else if (OB_FALSE_IT(estimate_memory = ceil(estimate_memory * VEC_ESTIMATE_MEMORY_FACTOR * VEC_MEMORY_HOLD_FACTOR))) { // multiple 2.0， and need to consider the hold memory.
+  } else if (hold_mem + estimate_memory > total_memory_limited_size) {
+    is_satisfied = false;
   }
 
+  LOG_INFO("finish estimate size", K(ret), K(is_satisfied),
+        K(index_schema.get_table_name_str()), K(row_count), K(total_memory_limited_size), K(hold_mem), K(estimate_memory));
+
   return is_satisfied;
+}
+
+int ObVectorIndexUtil::get_tenant_vector_memory_used_by_inner_sql(
+    const uint64_t tenant_id, const common::ObAddr &addr, int64_t &memory_used)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  memory_used = 0;
+  if (!addr.is_valid() || OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(addr), K(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString query_string;
+      sqlclient::ObMySQLResult *result = NULL;
+      char ip_buf[common::OB_IP_STR_BUFF];
+      int64_t raw_malloc_size = 0;
+      int64_t index_metadata_size = 0;
+      int64_t vector_mem_hold = 0;
+
+      if (!addr.ip_to_string(ip_buf, sizeof(ip_buf))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to execute ip_to_string", K(ret));
+      } else if (OB_FAIL(query_string.assign_fmt("SELECT raw_malloc_size, index_metadata_size, vector_mem_hold FROM %s WHERE tenant_id = %lu AND svr_ip = '%s' AND svr_port = %d",
+          OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TNAME, tenant_id, ip_buf, addr.get_port()))) {
+        LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TNAME), K(tenant_id), K(addr));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(tenant_id), K(query_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          LOG_WARN("fail to get next row", K(ret));
+        }
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "raw_malloc_size", raw_malloc_size, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "index_metadata_size", index_metadata_size, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "vector_mem_hold", vector_mem_hold, int64_t);
+
+        memory_used = raw_malloc_size + index_metadata_size + vector_mem_hold;
+        LOG_INFO("vector memory hold ", K(ret), K(memory_used), K(raw_malloc_size), K(index_metadata_size), K(vector_mem_hold));
+      }
+    }
+  }
+  return ret;
 }
 
 bool ObVectorIndexUtil::check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const ObTableSchema &index_schema, const int64_t row_count)

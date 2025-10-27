@@ -75,9 +75,13 @@ SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_FINISH_COUNT, metric::Unit::INT, "vec
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, metric::Unit::BYTES, "total io bytes read from disk", "total io bytes read from storage", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, metric::Unit::BYTES, "total bytes processed by ssstore", "total bytes processed by ssstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_ROW_COUNT, metric::Unit::INT, "total rows processed by ssstore", "total rows processed by ssstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
-SQL_MONITOR_STATNAME_DEF(MEMSTORE_READ_ROW_COUNT, metric::Unit::INT, "total rows processed by memstore", "total rows processed by memstore", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(BASE_READ_ROW_CNT, metric::Unit::INT, "total rows processed by major table", "total rows processed by major table", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(DELTA_READ_ROW_CNT, metric::Unit::INT, "total rows processed by delta sstable", "total rows processed by minor sstable, mini sstable, memtable", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(TOTAL_READ_ROW_COUNT, metric::Unit::INT, "total rows processed by storage", "total rows processed by storage", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(BLOCKSCAN_BLOCK_CNT, metric::Unit::INT, "total blocks scanned by block scan", "total blocks scanned by block scan", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(BLOCKSCAN_ROW_CNT, metric::Unit::INT, "total rows scanned by block scan", "total rows scanned by block scan", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(STORAGE_FILTERED_ROW_CNT, metric::Unit::INT, "total rows filtered by storage", "total rows filtered by storage", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(SKIP_INDEX_SKIP_BLOCK_CNT, metric::Unit::INT, "total blocks skipped by skip index", "total blocks skipped by skip index", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 
 // Common Metrics
 SQL_MONITOR_STATNAME_DEF(TOTAL_IO_TIME, metric::Unit::TIME_NS, "total io time", "total io time", M_AVG | E_MIN | E_MAX, metric::Level::CRITICAL)

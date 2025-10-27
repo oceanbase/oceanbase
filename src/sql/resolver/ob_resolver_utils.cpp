@@ -4010,6 +4010,8 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
           break;
         }
       }
+    } else if (is_const_expr && ObMaxType == part_value_expr_type) {
+      is_allow = true;
     } else {
       /* 处理mysql的date，datetime数据类型。
 
@@ -4266,8 +4268,9 @@ int ObResolverUtils::check_partition_value_expr_for_range(const ObString &part_n
       ObObjType value_type = part_value_expr.get_data_type();
       if (lib::is_oracle_mode() && is_valid_oracle_partition_data_type(value_type, true)) {
         // oracle mode support int/numeric/datetime/timestamp/string/raw
-      } else if (lib::is_mysql_mode() && ob_is_integer_type(value_type)) {
+      } else if (lib::is_mysql_mode() && (ob_is_integer_type(value_type) || common::ObMaxType == value_type)) {
         // partition by range(xx) partition p0 values less than (expr) 中expr只允许integer类型
+        // expr can be maxvalue
       } else if (ObNullTC == part_value_expr.get_type_class() && PARTITION_FUNC_TYPE_LIST == part_type) {
         //do nothing
       } else {
@@ -4563,9 +4566,9 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams &params
       && !lib::is_oracle_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part name is invalid", K(ret), K(part_name));
-  } else if (OB_ISNULL(params.expr_factory_) || OB_ISNULL(params.session_info_)) {
+  } else if (OB_ISNULL(params.expr_factory_) || OB_ISNULL(params.session_info_) || OB_ISNULL(params.allocator_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K_(params.session_info));
+    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K_(params.session_info), K_(params.allocator));
   } else if (OB_FAIL(params.session_info_->get_collation_connection(collation_connection))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_FAIL(params.session_info_->get_character_set_connection(character_set_connection))) {
@@ -4597,7 +4600,7 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams &params
       LOG_WARN("resolve expr failed", K(ret));
     } else if (sub_query_info.count() > 0) {
       ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
-    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(part_value_expr, columns))) {
+    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(*params.allocator_, part_type, part_value_expr, columns))) {
       LOG_WARN("resolve columns failed", K(ret));
     } else if (udf_info.count() > 0) {
       ret = OB_NOT_SUPPORTED;
@@ -4681,7 +4684,9 @@ int ObResolverUtils::resolve_partition_list_value_expr(ObResolverParams &params,
 
 //for recursively process columns item in resolve_partition_range_value_expr
 //just wrap columns process logic in resolve_partition_range_value_expr
-int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObRawExpr *&expr,
+int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObIAllocator &allocator,
+                                                                    const ObPartitionFuncType part_type,
+                                                                    ObRawExpr *&expr,
                                                                     ObArray<ObQualifiedName> &columns)
 {
   int ret = OB_SUCCESS;
@@ -4709,6 +4714,20 @@ int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObRawExpr *&
                   std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, real_ref_expr)))) {
         LOG_WARN("failed to push back pari exprs", K(ret));
       }
+    } else if (q_name.tbl_name_.empty() && !q_name.col_name_.empty() && 1 == columns.count()
+               && 0 == q_name.col_name_.case_compare("MAXVALUE")
+               && PARTITION_FUNC_TYPE_LIST != part_type
+               && PARTITION_FUNC_TYPE_LIST_COLUMNS != part_type) {
+      ObConstRawExpr *c_expr = NULL;
+      if (OB_ISNULL(c_expr = (ObConstRawExpr *)allocator.alloc(sizeof(ObConstRawExpr)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocator memory", K(ret));
+      } else {
+        c_expr = new (c_expr) ObConstRawExpr();
+        expr = c_expr;
+        expr->set_data_type(common::ObMaxType);
+        c_expr->set_expr_obj_meta(expr->get_result_meta()); // to keep meta when deduce type
+      }
     } else {
       if (OB_FAIL(log_err_msg_for_partition_value(q_name))) {
         LOG_WARN("log error msg for range value expr faield", K(ret));
@@ -4733,9 +4752,9 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams &params
       && !lib::is_oracle_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part name is invalid", K(ret), K(part_name));
-  } else if (OB_ISNULL(params.expr_factory_) || OB_ISNULL(params.session_info_)) {
+  } else if (OB_ISNULL(params.expr_factory_) || OB_ISNULL(params.session_info_) || OB_ISNULL(params.allocator_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K_(params.session_info));
+    LOG_WARN("resolve status is invalid", K_(params.expr_factory), K_(params.session_info), K_(params.allocator));
   } else if (OB_FAIL(params.session_info_->get_collation_connection(collation_connection))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_FAIL(params.session_info_->get_character_set_connection(character_set_connection))) {
@@ -4779,7 +4798,7 @@ int ObResolverUtils::resolve_partition_range_value_expr(ObResolverParams &params
     } else if (sub_query_info.count() > 0) {
       ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
 
-    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(part_value_expr, columns))) {
+    } else if (OB_FAIL(resolve_columns_for_partition_range_value_expr(*params.allocator_, part_type, part_value_expr, columns))) {
       LOG_WARN("resolve columns failed", K(ret));
     } else if (OB_UNLIKELY(udf_info.count() > 0)) {
       ret = OB_ERR_UNEXPECTED;

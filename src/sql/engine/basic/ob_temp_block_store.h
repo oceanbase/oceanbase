@@ -364,6 +364,7 @@ public:
     bool is_async_;
     int aio_buf_idx_;
     const Block *aio_blk_;
+    bool last_block_on_disk_;
     DISALLOW_COPY_AND_ASSIGN(BlockReader);
   };
 
@@ -666,7 +667,6 @@ private:
   ObIOEventObserver *io_observer_;
   tmp_file::ObTmpFileIOInfo io_;
   int64_t dir_id_;
-  bool last_block_on_disk_;
   int64_t cur_file_offset_;
   int64_t tempstore_read_alignment_size_;
 

@@ -1287,4 +1287,5 @@
 #define N_AI_RERANK                         "ai_rerank"
 #define N_FORMAT_PROFILE                       "format_profile"
 #define N_BUCKET "bucket"
+#define N_AI_PROMPT                         "ai_prompt"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

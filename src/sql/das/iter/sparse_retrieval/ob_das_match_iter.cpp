@@ -516,7 +516,7 @@ int ObDASMatchIter::collect_dims_by_id(const ObDatum *&id_datum, double &relevan
   int64_t iter_idx = 0;
   relevance = 0.0;
   got_valid_id = false;
-
+  relevance_collector_->reuse();
   while (OB_SUCC(ret) && !merge_heap_->empty() && !curr_doc_end) {
     if (merge_heap_->is_unique_champion()) {
       curr_doc_end = true;
@@ -650,7 +650,6 @@ int ObDasBestfieldCollector::get_result(double &relevance, bool &is_valid)
   int ret = OB_SUCCESS;
   is_valid = max_relevance_ > 0.0;
   relevance = max_relevance_;
-  max_relevance_ = 0.0;
   return ret;
 }
 

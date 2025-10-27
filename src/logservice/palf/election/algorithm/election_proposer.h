@@ -195,6 +195,7 @@ private:
   MemberListWithStates memberlist_with_states_;// 记录已知的acceptor的状态
   // for leader
   int64_t prepare_success_ballot_;// 被多数派prepare成功的选举轮次，该值将用于续约以及在lease第一次生效的场景下转化为对外的epoch
+  int64_t last_leader_epoch_; // 上一次被多数派prepare成功并成功上任的选举轮次, 用于检测 lease 中断又续约成功的情况
   LeaderLeaseAndEpoch leader_lease_and_epoch_;// Lease是在本机上的有效截止时间点，epoch是当选leader第一次lease生效时的ballot值
   // for change leader phase
   int64_t switch_source_leader_ballot_;// 旧主的ballot number

@@ -1021,6 +1021,7 @@ external_location_id	bigint(20)	NO		-1
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	NO		1	
 semistruct_properties	longtext	NO			
+mview_expand_definition	longtext	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2227,6 +2228,23 @@ cg_idx	bigint(20)	NO		NULL
 data_checksum	bigint(20)	NO		NULL	
 table_flag	bigint(20)	NO		NULL	
 rec_scn	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_ss_diagnose_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+type	varchar(64)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+diagnose_info	varchar(1024)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_diagnose_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ss_diagnose_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_diagnose_info limit 1;
 desc information_schema.SESSION_VARIABLES;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			
@@ -2973,6 +2991,7 @@ external_location_id	bigint(20)	NO		-1
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	NO		1	
 semistruct_properties	longtext	NO			
+mview_expand_definition	longtext	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3080,6 +3099,7 @@ external_location_id	bigint(20)	YES		-1
 external_sub_path	varbinary(1048576)	YES		NULL	
 micro_block_format_version	bigint(20)	YES		1	
 semistruct_properties	longtext	YES			
+mview_expand_definition	longtext	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10030,6 +10050,14 @@ ROUTE_MISS_DELTA	bigint(20)	NO		0
 FIRST_LOAD_TIME	timestamp(6)	YES		NULL	
 PLAN_CACHE_HIT_TOTAL	bigint(20)	NO		0	
 PLAN_CACHE_HIT_DELTA	bigint(20)	NO		0	
+MUTI_QUERY_TOTAL	bigint(20)	NO		0	
+MUTI_QUERY_DELTA	bigint(20)	NO		0	
+MUTI_QUERY_BATCH_TOTAL	bigint(20)	NO		0	
+MUTI_QUERY_BATCH_DELTA	bigint(20)	NO		0	
+FULL_TABLE_SCAN_TOTAL	bigint(20)	NO		0	
+FULL_TABLE_SCAN_DELTA	bigint(20)	NO		0	
+ERROR_COUNT_TOTAL	bigint(20)	NO		0	
+ERROR_COUNT_DELTA	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sqlstat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10099,6 +10127,14 @@ route_miss_delta	bigint(20)	NO		0
 first_load_time	timestamp(6)	YES		NULL	
 plan_cache_hit_total	bigint(20)	NO		0	
 plan_cache_hit_delta	bigint(20)	NO		0	
+muti_query_total	bigint(20)	NO		0	
+muti_query_delta	bigint(20)	NO		0	
+muti_query_batch_total	bigint(20)	NO		0	
+muti_query_batch_delta	bigint(20)	NO		0	
+full_table_scan_total	bigint(20)	NO		0	
+full_table_scan_delta	bigint(20)	NO		0	
+error_count_total	bigint(20)	NO		0	
+error_count_delta	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_sqlstat;
 IF(count(*) >= 0, 1, 0)
 1

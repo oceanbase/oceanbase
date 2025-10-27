@@ -38,6 +38,7 @@ ObIMicroBlockRowScanner::ObIMicroBlockRowScanner(common::ObIAllocator &allocator
     current_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     start_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     last_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
+    reserved_pos_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     step_(1),
     row_(),
     macro_id_(),
@@ -84,6 +85,7 @@ void ObIMicroBlockRowScanner::reuse()
   current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  reserved_pos_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
 }
 
 int ObIMicroBlockRowScanner::init(
@@ -284,9 +286,11 @@ int ObIMicroBlockRowScanner::get_next_rows()
     if (OB_SUCC(ret)) {
       int64_t scan_cnt = std::abs(current_ - prev_current);
       if (OB_NOT_NULL(context_) && 0 < scan_cnt) {
-        context_->table_store_stat_.logical_read_cnt_ += scan_cnt;
-        context_->table_store_stat_.physical_read_cnt_ += scan_cnt;
-        REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, scan_cnt);
+        if (sstable_->is_minor_sstable()) {
+          context_->table_store_stat_.minor_sstable_read_row_cnt_ += scan_cnt;
+        } else if (sstable_->is_major_sstable()) {
+          context_->table_store_stat_.major_sstable_read_row_cnt_ += scan_cnt;
+        }
       }
     }
   }
@@ -314,9 +318,6 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
       row = &row_;
       current_ += step_;
     }
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
-    ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
   return ret;
@@ -380,11 +381,11 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
     } else {
       can_blockscan_ = can_blockscan;
       is_filter_applied_ = true;
-      ++context_->table_store_stat_.pushdown_micro_access_cnt_;
       if (param_->has_lob_column_out()) {
         context_->reuse_lob_locator_helper();
       }
-      EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, get_access_cnt());
+      ++context_->table_store_stat_.pushdown_micro_access_cnt_;
+      context_->table_store_stat_.blockscan_row_cnt_ += get_access_cnt();
     }
   }
 
@@ -523,9 +524,9 @@ int ObIMicroBlockRowScanner::locate_range_pos(
   }
   return ret;
 }
-int ObIMicroBlockRowScanner::apply_black_filter_batch(
+int ObIMicroBlockRowScanner::apply_filter_batch(
     sql::ObPushdownFilterExecutor *parent,
-    sql::ObBlackFilterExecutor &filter,
+    sql::ObPhysicalFilterExecutor &filter,
     sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap)
 {
@@ -541,15 +542,21 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   if ((ObIMicroBlockReader::Decoder == reader_->get_type() ||
       ObIMicroBlockReader::CSDecoder == reader_->get_type()) &&
       filter.can_pushdown_decoder()) {
-    ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
-    if (decoder->can_apply_black(col_offsets) &&
-        OB_FAIL(decoder->filter_black_filter_batch(
-                parent,
-                filter,
-                pd_filter_info,
-                result_bitmap,
-                filter_applied_directly))) {
-      LOG_WARN("Failed to execute black pushdown filter in decoder", K(ret));
+    if (!filter.is_filter_black_node()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected filter node type", K(ret), K(filter));
+    } else {
+      ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+      sql::ObBlackFilterExecutor *black_filter = static_cast<sql::ObBlackFilterExecutor *>(&filter);
+      if (decoder->can_apply_black(col_offsets) &&
+          OB_FAIL(decoder->filter_black_filter_batch(
+                  parent,
+                  *black_filter,
+                  pd_filter_info,
+                  result_bitmap,
+                  filter_applied_directly))) {
+        LOG_WARN("Failed to execute black pushdown filter in decoder", K(ret));
+      }
     }
   }
 
@@ -571,7 +578,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
                                              0,
                                              pd_filter_info.cell_data_ptrs_,
                                              pd_filter_info.len_array_,
-                                             filter.get_filter_node().column_exprs_,
+                                             *const_cast<sql::ObExprPtrIArray*>(filter.get_cg_col_exprs()),
                                              &filter.get_default_datums(),
                                              filter.is_padding_mode()))) {
           LOG_WARN("Failed to get rows for rich format", K(ret), K(cur_row_index));
@@ -582,7 +589,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
                                                  row_cap,
                                                  0,
                                                  pd_filter_info.cell_data_ptrs_,
-                                                 filter.get_filter_node().column_exprs_,
+                                                 *const_cast<sql::ObExprPtrIArray*>(filter.get_cg_col_exprs()),
                                                  datum_infos,
                                                  &filter.get_default_datums(),
                                                  filter.is_padding_mode()))) {
@@ -598,7 +605,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
       }
     }
   }
-  LOG_TRACE("[PUSHDOWN] apply black filter batch", K(ret), K(filter_applied_directly),
+  LOG_TRACE("[PUSHDOWN] apply filter batch", K(ret), K(reader_->get_type()), K(filter_applied_directly),
             K(pd_filter_info.start_), K(pd_filter_info.count_),
             K(result_bitmap.popcnt()), K(result_bitmap), K(filter));
   return ret;
@@ -763,6 +770,7 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_FILTER_PUSHDOWN_DISABLE_FLAT_VECTORIZE);
 int ObIMicroBlockRowScanner::filter_pushdown_filter(
     sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor *filter,
@@ -817,7 +825,7 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
         } else if (filter->is_filter_black_node()) {
           sql::ObBlackFilterExecutor *black_filter = static_cast<sql::ObBlackFilterExecutor *>(filter);
           if (can_use_vectorize && black_filter->can_vectorized()) {
-            if (OB_FAIL(apply_black_filter_batch(
+            if (OB_FAIL(apply_filter_batch(
                         parent,
                         *black_filter,
                         pd_filter_info,
@@ -853,8 +861,17 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
 
       case ObIMicroBlockReader::Reader:
       case ObIMicroBlockReader::NewFlatReader: {
-        if (OB_FAIL(reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
-          LOG_WARN("Failed to execute black pushdown filter", K(ret));
+        if (can_use_vectorize && filter->can_vectorized() && EN_FILTER_PUSHDOWN_DISABLE_FLAT_VECTORIZE == OB_SUCCESS && !filter->is_filter_dynamic_node()) {
+          sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
+          if (OB_FAIL(apply_filter_batch(
+                      parent,
+                      *physical_filter,
+                      pd_filter_info,
+                      bitmap))) {
+            LOG_WARN("Failed to execute pushdown filter in batch", K(ret));
+          }
+        } else if (OB_FAIL(reader_->filter_pushdown_filter(parent, *filter, pd_filter_info, bitmap))) {
+          LOG_WARN("Failed to execute pushdown filter", K(ret));
         }
         break;
       }
@@ -866,7 +883,6 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
       }
     }
   }
-
 
   return ret;
 }
@@ -934,8 +950,9 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
       }
     }
     if (OB_SUCC(ret)) {
+      const int64_t bitmap_cnt = use_private_bitmap_ ? filter_bitmap_->size() : pd_filter_info.filter_->get_result()->size();
       const int64_t select_cnt = use_private_bitmap_ ? filter_bitmap_->popcnt() : pd_filter_info.filter_->get_result()->popcnt();
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
+      context_->table_store_stat_.storage_filtered_row_cnt_ += (bitmap_cnt - select_cnt);
     }
   }
   return ret;
@@ -1015,7 +1032,8 @@ int ObIMicroBlockRowScanner::get_next_rows(
     const int64_t datum_offset,
     uint32_t *len_array,
     const bool is_padding_mode,
-    const bool need_init_vector)
+    const bool need_init_vector,
+    const ObIArray<ObStorageDatum>* default_datums)
 {
   int ret = OB_SUCCESS;
   sql::ObExprPtrIArray &exprs = *(const_cast<sql::ObExprPtrIArray *>(param_->output_exprs_));
@@ -1032,7 +1050,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                          cell_datas,
                                          len_array,
                                          exprs,
-                                         nullptr,
+                                         default_datums,
                                          is_padding_mode,
                                          need_init_vector))) {
       LOG_WARN("Failed to get rows for rich format", K(ret));
@@ -1046,7 +1064,7 @@ int ObIMicroBlockRowScanner::get_next_rows(
                                              cell_datas,
                                              exprs,
                                              datum_infos,
-                                             nullptr,
+                                             default_datums,
                                              is_padding_mode))) {
     LOG_WARN("Failed to get rows for old format", K(ret));
   }
@@ -1206,9 +1224,7 @@ int ObIMicroBlockRowScanner::get_next_border_rows(const ObDatumRowkey &rowkey)
     if (OB_SUCC(ret)) {
       int64_t scan_cnt = std::abs(current_ - prev_current);
       if (OB_NOT_NULL(context_) && 0 < scan_cnt) {
-        context_->table_store_stat_.logical_read_cnt_ += scan_cnt;
-        context_->table_store_stat_.physical_read_cnt_ += scan_cnt;
-        REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, scan_cnt);
+        context_->table_store_stat_.major_sstable_read_row_cnt_ += scan_cnt;
       }
       if (current_ == scan_end_idx) {
         if (is_equal) {
@@ -1313,6 +1329,109 @@ int ObIMicroBlockRowScanner::init_bitmap(ObCGBitmap *&bitmap, bool is_all_true)
   return ret;
 }
 
+int ObIMicroBlockRowScanner::get_next_skip_row(const ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(end_of_block())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail to judge end of block or not", K(ret));
+    }
+  } else if (OB_FAIL(reader_->get_row(current_, row_))) {
+    LOG_WARN("micro block reader fail to get row.", K(ret), K_(macro_id));
+  } else {
+    row = &row_;
+  }
+  return ret;
+}
+
+int ObIMicroBlockRowScanner::skip_to_range(
+    const int64_t begin,
+    const int64_t end,
+    const ObDatumRange &range,
+    const bool is_left_border,
+    const bool is_right_border,
+    int64_t &skip_row_idx,
+    bool &has_data,
+    bool &range_finished)
+{
+  int ret = OB_SUCCESS;
+  bool equal = false;
+  int64_t begin_row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  int64_t end_row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  const int64_t last = end + 1;
+  has_data = true;
+  range_finished = false;
+  if (OB_UNLIKELY(begin < 0 || begin > end || !range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid range", K(ret), K(begin), K(end), K(range));
+  } else if (range.get_start_key().is_min_rowkey()) {
+    begin_row_idx = begin;
+  } else if (OB_FAIL(reader_->find_bound(range.get_start_key(), true, begin, last, begin_row_idx, equal))) {
+    LOG_WARN("fail to find bound", K(ret), K(range));
+  } else if (begin_row_idx == last) {
+    has_data = false;
+  } else if (!range.get_border_flag().inclusive_start()) {
+    if (equal) {
+      ++begin_row_idx;
+      if (begin_row_idx == last) {
+        has_data = false;
+      }
+    }
+  }
+  LOG_DEBUG("[INDEX SKIP SCAN] micro skip to range, locate start key", K(ret), K(begin), K(end), K(range),
+            K(has_data), K(equal), K(begin_row_idx));
+  if (OB_SUCC(ret) && has_data) {
+    if (range.get_end_key().is_max_rowkey()) {
+      end_row_idx = end;
+    } else if (OB_FAIL(reader_->find_bound(range.get_end_key(), !range.get_border_flag().inclusive_end(), begin_row_idx, last, end_row_idx, equal))) {
+      LOG_WARN("fail to find bound", K(ret), K(range));
+    } else if (end_row_idx == last) {
+      --end_row_idx;
+    } else if (end_row_idx == begin_row_idx) {
+      has_data = false;
+    } else {
+      --end_row_idx;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    skip_row_idx = reverse_scan_ ? end_row_idx : begin_row_idx;
+    range_finished = reverse_scan_ ? begin_row_idx > begin : (begin_row_idx < last && end_row_idx < end);
+    is_left_border_ = begin_row_idx > 0 || (0 == begin_row_idx && is_left_border);
+    is_right_border_ = end_row_idx < reader_->row_count() || (end_row_idx == reader_->row_count() && is_right_border);
+    if (!has_data) {
+      current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+      start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+      last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+      reserved_pos_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+    } else if (reverse_scan_) {
+      current_ = start_ = end_row_idx;
+      last_ = begin_row_idx;
+      reserved_pos_ = current_;
+    } else {
+      current_ = start_ = begin_row_idx;
+      last_ = end_row_idx;
+    }
+  }
+  LOG_DEBUG("[INDEX SKIP SCAN] micro skip to range, locate end key", K(ret), K(begin), K(end), K(range),
+             K(has_data), K(equal), K(begin_row_idx), K(end_row_idx), K_(current), K_(start), K_(last),
+             K_(reserved_pos), K(range_finished), K(skip_row_idx));
+  return ret;
+}
+
+int ObIMicroBlockRowScanner::compare_rowkey(const ObDatumRowkey &rowkey, const bool is_cmp_end, int32_t &cmp_ret) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!rowkey.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rowkey", K(ret), K(rowkey), K(is_cmp_end), KPC(this));
+  } else if (OB_FAIL(reader_->compare_rowkey(rowkey, is_cmp_end ? reader_->row_count() - 1 : 0, cmp_ret))) {
+    LOG_WARN("failed to compare rowkey", K(ret), K(rowkey), K(is_cmp_end), KPC(this));
+  } else {
+    LOG_DEBUG("compare rowkey", K(ret), K(rowkey), K(is_cmp_end), K(cmp_ret), KPC(this));
+  }
+  return ret;
+}
+
 ////////////////////////////////// ObMicroBlockRowScanner ////////////////////////////////////////////
 int ObMicroBlockRowScanner::init(
     const storage::ObTableIterParam &param,
@@ -1402,7 +1521,6 @@ void ObMultiVersionMicroBlockRowScanner::reuse()
   ObIMicroBlockRowScanner::reuse();
   nop_pos_.reset();
   cell_allocator_.reuse();
-  reserved_pos_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   finish_scanning_cur_rowkey_ = true;
   is_last_multi_version_row_ = true;
   read_row_direct_flag_ = false;
@@ -1608,9 +1726,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
         } else if (OB_FAIL(do_compact(multi_version_row, row_, final_result))) {
           LOG_WARN("failed to do compact", K(ret));
         } else {
-          if (OB_NOT_NULL(context_)) {
-            ++context_->table_store_stat_.physical_read_cnt_;
-          }
           if (have_uncommited_row) {
             row_.set_have_uncommited_row();
           }
@@ -1674,7 +1789,8 @@ int ObMultiVersionMicroBlockRowScanner::locate_cursor_to_read(bool &found_first_
   found_first_row = false;
 
   LOG_DEBUG("locate_cursor_to_read", K(finish_scanning_cur_rowkey_),
-            K(is_last_multi_version_row_));
+            K(is_last_multi_version_row_), K(reserved_pos_),
+            K(is_left_border_), K(is_right_border_));
   if (!reverse_scan_) {
     if (OB_FAIL(end_of_block())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -2738,9 +2854,6 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow
       row = &row_;
       current_ += step_;
     }
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
-    ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
   return ret;

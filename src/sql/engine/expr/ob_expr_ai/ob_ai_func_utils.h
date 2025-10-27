@@ -229,6 +229,7 @@ class ObAIFuncJsonUtils
 public:
   ObAIFuncJsonUtils() {}
   virtual ~ObAIFuncJsonUtils() {}
+  static bool ob_is_json_array_all_str(ObJsonArray* json_array);
   static int transform_array_to_json_array(ObIAllocator &allocator, ObArray<ObString> &contents, ObJsonArray *&array);
   static int get_json_object(ObIAllocator &allocator, ObJsonObject *&obj_node);
   static int get_json_array(ObIAllocator &allocator, ObJsonArray *&array_node);
@@ -340,53 +341,59 @@ class ObAIFuncUtils
 public:
   ObAIFuncUtils() {}
   virtual ~ObAIFuncUtils() {}
-  static bool is_completion_type(ObAIFuncExprInfo *info) {return info->type_ == share::EndpointType::COMPLETION;}
-  static bool is_dense_embedding_type(ObAIFuncExprInfo *info) {return info->type_ == share::EndpointType::DENSE_EMBEDDING;}
-  static bool is_rerank_type(ObAIFuncExprInfo *info) {return info->type_ == share::EndpointType::RERANK;}
-  static int check_info_type_completion(ObAIFuncExprInfo *info);
-  static int check_info_type_dense_embedding(ObAIFuncExprInfo *info);
-  static int check_info_type_rerank(ObAIFuncExprInfo *info);
-  static bool ob_provider_check(ObString &provider, const char *str_const) {return ob_check_string_equal_char(provider, str_const);}
-  static bool ob_type_check(ObString &type, const char *type_const) {return ob_check_string_equal_char(type, type_const);}
-  static bool ob_check_string_equal_char(ObString &str, const char *str_const) {return str.case_compare(str_const) == 0;}
-  static int get_complete_provider(ObIAllocator &allocator, ObString &provider, ObAIFuncIComplete *&complete_provider);
-  static int get_embed_provider(ObIAllocator &allocator, ObString &provider, ObAIFuncIEmbed *&embed_provider);
-  static int get_rerank_provider(ObIAllocator &allocator, ObString &provider, ObAIFuncIRerank *&rerank_provider);
+  static bool is_completion_type(const ObAIFuncExprInfo *info) {return info->type_ == share::EndpointType::COMPLETION;}
+  static bool is_dense_embedding_type(const ObAIFuncExprInfo *info) {return info->type_ == share::EndpointType::DENSE_EMBEDDING;}
+  static bool is_rerank_type(const ObAIFuncExprInfo *info) {return info->type_ == share::EndpointType::RERANK;}
+  static int check_info_type_completion(const ObAIFuncExprInfo *info);
+  static int check_info_type_dense_embedding(const ObAIFuncExprInfo *info);
+  static int check_info_type_rerank(const ObAIFuncExprInfo *info);
+  static bool ob_provider_check(const ObString &provider, const char *str_const) {return ob_check_string_equal_char(provider, str_const);}
+  static bool ob_type_check(const ObString &type, const char *type_const) {return ob_check_string_equal_char(type, type_const);}
+  static bool ob_check_string_equal_char(const ObString &str, const char *str_const) {return str.case_compare(str_const) == 0;}
+  static int get_complete_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIComplete *&complete_provider);
+  static int get_embed_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIEmbed *&embed_provider);
+  static int get_rerank_provider(ObIAllocator &allocator, const ObString &provider, ObAIFuncIRerank *&rerank_provider);
   static int get_header(ObIAllocator &allocator,
-                        ObAIFuncExprInfo *info,
+                        const ObAIFuncExprInfo &info,
+                        const ObAiModelEndpointInfo &endpoint_info,
                         ObArray<ObString> &headers);
   static int get_complete_body(ObIAllocator &allocator,
-                               ObAIFuncExprInfo *info,
+                               const ObAIFuncExprInfo &info,
+                               const ObAiModelEndpointInfo &endpoint_info,
                                ObString &prompt,
                                ObString &content,
                                ObJsonObject *config,
                                ObJsonObject *&body);
-  static int set_json_format_config(ObIAllocator &allocator, ObString &provider, ObJsonObject *config);
+  static int set_json_format_config(ObIAllocator &allocator, const ObString &provider, ObJsonObject *config);
   static int get_embed_body(ObIAllocator &allocator,
-                            ObAIFuncExprInfo *info,
+                            const ObAIFuncExprInfo &info,
+                            const ObAiModelEndpointInfo &endpoint_info,
                             ObArray<ObString> &contents,
                             ObJsonObject *config,
                             ObJsonObject *&body);
   static int get_rerank_body(ObIAllocator &allocator,
-                             ObAIFuncExprInfo *info,
+                             const ObAIFuncExprInfo &info,
+                             const ObAiModelEndpointInfo &endpoint_info,
                              ObString &query,
                              ObJsonArray *document_array,
                              ObJsonObject *config,
                              ObJsonObject *&body);
   static int parse_complete_output(ObIAllocator &allocator,
-                                   ObAIFuncExprInfo *info,
+                                   const ObAiModelEndpointInfo &endpoint_info,
                                    ObJsonObject *http_response,
                                    ObIJsonBase *&result);
   static int parse_embed_output(ObIAllocator &allocator,
-                                ObAIFuncExprInfo *info,
+                                const ObAiModelEndpointInfo &endpoint_info,
                                 ObJsonObject *http_response,
                                 ObIJsonBase *&result);
   static int parse_rerank_output(ObIAllocator &allocator,
-                                 ObAIFuncExprInfo *info,
+                                 const ObAiModelEndpointInfo &endpoint_info,
                                  ObJsonObject *http_response,
                                  ObIJsonBase *&result);
   static int set_string_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, ObString &res_str);
-  static int get_ai_func_info(ObIAllocator &allocator, ObString &model_id, ObAIFuncExprInfo *&info);
+  static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id,
+                              share::schema::ObSchemaGetterGuard &guard, ObAIFuncExprInfo *&info);
+  static int get_ai_func_info(ObIAllocator &allocator, const ObString &model_id, ObAIFuncExprInfo *&info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncUtils);
 };
@@ -395,7 +402,11 @@ private:
 class ObAIFuncModel
 {
 public:
-   ObAIFuncModel(ObIAllocator &allocator, ObAIFuncExprInfo &info) : allocator_(&allocator), info_(info) {}
+  ObAIFuncModel(ObIAllocator &allocator, const ObAIFuncExprInfo &info, const ObAiModelEndpointInfo &endpoint_info)
+  : allocator_(&allocator),
+    info_(info),
+    endpoint_info_(endpoint_info)
+  {}
    virtual ~ObAIFuncModel() {}
    // completion
    int call_completion(ObString &prompt, ObJsonObject *config, ObString &result);
@@ -410,9 +421,25 @@ public:
    bool is_completion_type() {return info_.type_ == share::EndpointType::COMPLETION;}
    bool is_dense_embedding_type() {return info_.type_ == share::EndpointType::DENSE_EMBEDDING;}
    bool is_rerank_type() {return info_.type_ == share::EndpointType::RERANK;}
+   const ObString get_request_model_name();
    ObIAllocator *allocator_;
-   ObAIFuncExprInfo &info_;
+   const ObAIFuncExprInfo &info_;
+   const ObAiModelEndpointInfo &endpoint_info_;
    DISALLOW_COPY_AND_ASSIGN(ObAIFuncModel);
+};
+
+class ObAIFuncPromptObjectUtils
+{
+public:
+  ObAIFuncPromptObjectUtils() {}
+  virtual ~ObAIFuncPromptObjectUtils() {}
+  static bool is_valid_prompt_object(ObJsonObject* prompt_object);
+  static int replace_all_str_args_in_template(ObIAllocator &allocator, ObJsonObject* prompt_object, ObString& replaced_prompt_str);
+  static int construct_prompt_object(ObIAllocator &allocator, ObString &template_str, ObJsonArray *args_array, ObJsonObject *&prompt_object);
+  static constexpr char prompt_template_key[20] = "template";
+  static constexpr char prompt_args_key[20] = "args";
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAIFuncPromptObjectUtils);
 };
 
 } // namespace common

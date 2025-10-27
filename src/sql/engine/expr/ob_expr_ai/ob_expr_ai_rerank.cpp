@@ -15,6 +15,7 @@
 #include "ob_expr_ai_rerank.h"
 #include "lib/utility/utility.h"
 #include "lib/json_type/ob_json_common.h"
+#include "observer/omt/ob_tenant_ai_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -112,7 +113,10 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
     MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, N_AI_RERANK));
-    ObAIFuncExprInfo *info = static_cast<ObAIFuncExprInfo *>(expr.extra_info_);
+    ObAIFuncExprInfo *info = nullptr;
+    omt::ObAiServiceGuard ai_service_guard;
+    omt::ObTenantAiService *ai_service = MTL(omt::ObTenantAiService*);
+    const share::ObAiModelEndpointInfo *endpoint_info = nullptr;
     ObString model_id = arg_model_id->get_string();
     ObString query = arg_query->get_string();
     ObArray<ObString> header_array;
@@ -133,58 +137,70 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (OB_ISNULL(document_array = static_cast<ObJsonArray *>(j_base))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("document_array is null", K(ret));
+    } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(temp_allocator, model_id, info))) {
+      LOG_WARN("fail to get ai func info", K(ret));
+    } else if (OB_ISNULL(ai_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ai service is null", K(ret));
+    } else if (OB_FAIL(ai_service->get_ai_service_guard(ai_service_guard))) {
+      LOG_WARN("failed to get ai service guard", K(ret));
+    } else if (OB_FAIL(ai_service_guard.get_ai_endpoint_by_ai_model_name(model_id, endpoint_info))) {
+      LOG_WARN("failed to get endpoint info", K(ret), K(model_id));
+    } else if (OB_ISNULL(endpoint_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("endpoint info is null", K(ret));
     }
 
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(arg_doc_key)) {
       ObString doc_key = arg_doc_key->get_string();
-      return eval_ai_rerank_with_doc_key(expr, ctx, temp_allocator, model_id, query, document_array, doc_key, res);
-    }
-
-    if (OB_SUCC(ret)) {
+      if (OB_FAIL(eval_ai_rerank_with_doc_key(expr, ctx, temp_allocator, model_id,
+                  query, document_array, doc_key, *info, *endpoint_info, res))) {
+        LOG_WARN("fail to eval ai rerank with doc key", K(ret));
+      }
+    } else {
       if (OB_ISNULL(info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("info is null", K(ret));
-      } else if (OB_FAIL(info->init(ctx.exec_ctx_, model_id))) {
-        LOG_WARN("fail to get model info", K(ret));
       } else if (OB_FAIL(ObAIFuncUtils::check_info_type_rerank(info))) {
         LOG_WARN("model type must be rerank", K(ret));
-      } else if (OB_FAIL(ObAIFuncUtils::get_header(temp_allocator, info, header_array))) {
+      } else if (OB_FAIL(ObAIFuncUtils::get_header(temp_allocator, *info, *endpoint_info, header_array))) {
         LOG_WARN("fail to get header", K(ret));
       } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(temp_allocator, result_array))) {
         LOG_WARN("fail to get json array", K(ret));
       }
-    }
-    if (OB_SUCC(ret)) {
-      ObString score_key(SCORE_KEY);
-      int64_t end_idx = 0;
-      ObJsonArray *compact_array = nullptr;
-      ObJsonArray *batch_result_array = nullptr;
-      ObJsonArray *batch_document_array = nullptr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < document_array->element_count(); i += batch_size) {
-        end_idx = i + batch_size;
-        if (end_idx > document_array->element_count()) {
-          end_idx = document_array->element_count();
-        }
-        if (OB_FAIL(construct_batch_document_array(temp_allocator, document_array, i, end_idx, batch_document_array))) {
-          LOG_WARN("fail to construct batch document array", K(ret));
-        } else if (OB_FAIL(inner_eval_ai_rerank(temp_allocator, info, header_array, query, batch_document_array, batch_result_array))) {
-          LOG_WARN("fail to eval ai rerank", K(ret));
-        } else if (OB_FAIL(batch_result_add_base(temp_allocator, batch_result_array, i))) {
-          LOG_WARN("fail to add base", K(ret));
-        } else if (OB_FAIL(compact_json_array_by_key(temp_allocator, result_array, batch_result_array, score_key, compact_array))) {
-          LOG_WARN("fail to compact json array", K(ret));
-        } else {
-          result_array = compact_array;
+
+      if (OB_SUCC(ret)) {
+        ObString score_key(SCORE_KEY);
+        int64_t end_idx = 0;
+        ObJsonArray *compact_array = nullptr;
+        ObJsonArray *batch_result_array = nullptr;
+        ObJsonArray *batch_document_array = nullptr;
+        for (int64_t i = 0; OB_SUCC(ret) && i < document_array->element_count(); i += batch_size) {
+          end_idx = i + batch_size;
+          if (end_idx > document_array->element_count()) {
+            end_idx = document_array->element_count();
+          }
+          if (OB_FAIL(construct_batch_document_array(temp_allocator, document_array, i, end_idx, batch_document_array))) {
+            LOG_WARN("fail to construct batch document array", K(ret));
+          } else if (OB_FAIL(inner_eval_ai_rerank(temp_allocator, *info, *endpoint_info, header_array, query, batch_document_array, batch_result_array))) {
+            LOG_WARN("fail to eval ai rerank", K(ret));
+          } else if (OB_FAIL(batch_result_add_base(temp_allocator, batch_result_array, i))) {
+            LOG_WARN("fail to add base", K(ret));
+          } else if (OB_FAIL(compact_json_array_by_key(temp_allocator, result_array, batch_result_array, score_key, compact_array))) {
+            LOG_WARN("fail to compact json array", K(ret));
+          } else {
+            result_array = compact_array;
+          }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      ObString raw_str;
-      if (OB_FAIL(result_array->get_raw_binary(raw_str, &temp_allocator))) {
-        LOG_WARN("json extarct get result binary failed", K(ret));
-      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
-        LOG_WARN("fail to pack json result", K(ret));
+      if (OB_SUCC(ret)) {
+        ObString raw_str;
+        if (OB_FAIL(result_array->get_raw_binary(raw_str, &temp_allocator))) {
+          LOG_WARN("json extarct get result binary failed", K(ret));
+        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
+          LOG_WARN("fail to pack json result", K(ret));
+        }
       }
     }
   }
@@ -192,23 +208,18 @@ int ObExprAIRerank::eval_ai_rerank(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 }
 
 int ObExprAIRerank::eval_ai_rerank_with_doc_key(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
-                                          ObString& model_id, ObString& query, ObJsonArray *document_array, ObString& doc_key, ObDatum &res)
+                                                ObString& model_id, ObString& query, ObJsonArray *document_array,
+                                                ObString& doc_key, const ObAIFuncExprInfo &info,
+                                                const ObAiModelEndpointInfo &endpoint_info, ObDatum &res)
 {
   INIT_SUCC(ret);
-  ObAIFuncExprInfo *info = static_cast<ObAIFuncExprInfo *>(expr.extra_info_);
   ObJsonArray *doc_array = nullptr;
   ObJsonArray *result_array = nullptr;
   ObJsonArray *sorted_document_array = nullptr;
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("info is null", K(ret));
-  } else if (OB_FAIL(info->init(ctx.exec_ctx_, model_id))) {
-    LOG_WARN("fail to get model info", K(ret));
-  } else if (OB_FAIL(get_doc_array_from_documents_array_with_key(allocator, document_array, doc_key, doc_array))) {
+  if (OB_FAIL(get_doc_array_from_documents_array_with_key(allocator, document_array, doc_key, doc_array))) {
     LOG_WARN("fail to get doc array", K(ret));
   } else {
-    ObAIFuncModel model(allocator, *info);
+    ObAIFuncModel model(allocator, info, endpoint_info);
     if (OB_FAIL(model.call_rerank(query, doc_array, result_array))) {
       LOG_WARN("fail to call rerank", K(ret));
     } else if (OB_FAIL(sort_document_array_by_model_result(allocator, document_array, result_array, sorted_document_array))) {
@@ -342,7 +353,8 @@ int ObExprAIRerank::construct_batch_document_array(ObIAllocator &allocator, ObJs
 }
 
 int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
-                                          ObAIFuncExprInfo *info,
+                                          const ObAIFuncExprInfo &info,
+                                          const ObAiModelEndpointInfo &endpoint_info,
                                           ObArray<ObString> &header_array,
                                           ObString &query,
                                           ObJsonArray *document_array,
@@ -355,11 +367,11 @@ int ObExprAIRerank::inner_eval_ai_rerank(ObIAllocator &allocator,
   ObJsonObject *http_response = nullptr;
   ObIJsonBase *response = nullptr;
   ObAIFuncClient ai_client;
-  if (OB_FAIL(ObAIFuncUtils::get_rerank_body(allocator, info, query, document_array, config_json, body))) {
+  if (OB_FAIL(ObAIFuncUtils::get_rerank_body(allocator, info, endpoint_info, query, document_array, config_json, body))) {
     LOG_WARN("fail to get body", K(ret));
-  } else if (OB_FAIL(ai_client.send_post(allocator, info->url_, header_array, body, http_response))) {
+  } else if (OB_FAIL(ai_client.send_post(allocator, endpoint_info.get_url(), header_array, body, http_response))) {
     LOG_WARN("fail to send post", K(ret));
-  } else if (OB_FAIL(ObAIFuncUtils::parse_rerank_output(allocator, info, http_response, response))) {
+  } else if (OB_FAIL(ObAIFuncUtils::parse_rerank_output(allocator, endpoint_info, http_response, response))) {
     LOG_WARN("fail to parse response", K(ret));
   } else if (response->json_type() != ObJsonNodeType::J_ARRAY) {
     ret = OB_ERR_UNEXPECTED;
@@ -492,17 +504,40 @@ int ObExprAIRerank::cg_expr(ObExprCGCtx &expr_cg_ctx,
                         const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
 {
-  UNUSED(expr_cg_ctx);
-  UNUSED(raw_expr);
   int ret = OB_SUCCESS;
-  ObIAllocator &allocator = *expr_cg_ctx.allocator_;
-  ObAIFuncExprInfo *info = OB_NEWx(ObAIFuncExprInfo, (&allocator), allocator, T_FUN_SYS_AI_RERANK);
-  if (OB_ISNULL(info)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ai rerank info", K(ret));
-  } else {
-    rt_expr.extra_info_ = info;
-  }
+  // TODO: support schema version match in plan cache for ai func
+  // const ObRawExpr *model_key = raw_expr.get_param_expr(0);
+  // if (OB_NOT_NULL(model_key)
+  //     && (model_key->is_static_scalar_const_expr() || model_key->is_const_expr())
+  //     && model_key->get_expr_type() != T_OP_GET_USER_VAR &&
+  //     OB_NOT_NULL(expr_cg_ctx.schema_guard_)) {
+  //   ObIAllocator *allocator = expr_cg_ctx.allocator_;
+  //   ObExecContext *exec_ctx = expr_cg_ctx.session_->get_cur_exec_ctx();
+  //   bool got_data = false;
+  //   ObObj const_data;
+  //   ObAIFuncExprInfo *info = nullptr;
+  //   if (OB_ISNULL(allocator)) {
+  //     ret = OB_ERR_UNEXPECTED;
+  //     LOG_WARN("allocator is null", K(ret));
+  //   } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(exec_ctx,
+  //                                                         model_key,
+  //                                                         const_data,
+  //                                                         got_data,
+  //                                                         *allocator))) {
+  //     LOG_WARN("failed to calc offset expr", K(ret));
+  //   } else if (!got_data || const_data.is_null()) {
+  //   } else {
+  //     ObAIFuncExprInfo *info = OB_NEWx(ObAIFuncExprInfo, allocator, *allocator, T_FUN_SYS_AI_RERANK);
+  //     if (OB_ISNULL(info)) {
+  //       ret = OB_ALLOCATE_MEMORY_FAILED;
+  //       LOG_WARN("failed to allocate memory for ai rerank info", K(ret));
+  //     } else if (OB_FAIL(ObAIFuncUtils::get_ai_func_info(*allocator, const_data.get_string(), *expr_cg_ctx.schema_guard_, info))) {
+  //       LOG_WARN("failed to get ai func info", K(ret), K(const_data.get_string()));
+  //     } else {
+  //       rt_expr.extra_info_ = info;
+  //     }
+  //   }
+  // }
   if (OB_SUCC(ret)) {
     rt_expr.eval_func_ = ObExprAIRerank::eval_ai_rerank;
   }

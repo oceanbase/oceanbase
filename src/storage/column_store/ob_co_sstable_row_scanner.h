@@ -9,15 +9,18 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+
 #ifndef OB_STORAGE_COLUMN_STORE_OB_CO_SSTABLE_ROW_SCANNER_H_
 #define OB_STORAGE_COLUMN_STORE_OB_CO_SSTABLE_ROW_SCANNER_H_
+
+#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/access/ob_sstable_row_scanner.h"
 #include "storage/access/ob_block_batched_row_store.h"
-#include "storage/access/ob_pushdown_aggregate_vec.h"
 #include "ob_column_store_util.h"
 #include "ob_co_sstable_rows_filter.h"
 #include "ob_i_cg_iterator.h"
 #include "ob_cg_iter_param_pool.h"
+#include "storage/column_store/ob_column_oriented_sstable.h"
 
 namespace oceanbase
 {
@@ -179,6 +182,11 @@ protected:
 private:
   int init_group_by_info(ObTableAccessContext &context);
   int push_group_by_processor(ObICGIterator *cg_iterator);
+  bool use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable) const;
+
+  // use row store projector
+  // when projected column count is larger than this
+  static constexpr int64_t ROW_STORE_PROJECTION_THRESHOLD = 32;
 
   bool is_new_group_;
   bool reverse_scan_;

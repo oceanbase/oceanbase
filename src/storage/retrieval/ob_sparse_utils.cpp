@@ -52,8 +52,6 @@ int ObSRDaaTInnerProductRelevanceCollector::get_result(double &relevance, bool &
   int ret = OB_SUCCESS;
   relevance = total_relevance_;
   is_valid = matched_cnt_ >= should_match_;
-  total_relevance_ = 0.0;
-  matched_cnt_ = 0;
   return ret;
 }
 
@@ -109,9 +107,6 @@ int ObSRDaaTBooleanRelevanceCollector::get_result(double &relevance, bool &is_va
     LOG_WARN("failed to evaluate boolean relevance");
   } else {
     is_valid = relevance > 0;
-    for (int64_t i = 0; i < dim_cnt_; ++i) {
-      boolean_relevances_[i] = 0.0;
-    }
   }
   return ret;
 }

@@ -284,6 +284,15 @@ TEST_F(TestSSTableIndexScanner, test_range_with_advance)
 #ifndef OB_BUILD_PACKAGE
   ASSERT_EQ(OB_INVALID_ARGUMENT, index_scanner.advance_to(advance_key, true));
 #endif
+
+  // advance to key beyond sstable range with query range beyond sstable range
+  index_scanner.reset();
+  generate_range(max_row_seed_ + 10, max_row_seed_ + 20, range);
+  scan_param.scan_level_ = ObSSTableIndexScanParam::ScanLevel::LEAF;
+  ASSERT_EQ(OB_SUCCESS, index_scanner.init(range, scan_param, sstable_, tmp_arena));
+  generate_key(max_row_seed_ + 15, advance_key);
+  ASSERT_EQ(OB_SUCCESS, index_scanner.advance_to(advance_key, true));
+  ASSERT_EQ(OB_ITER_END, index_scanner.get_next(index_row));
 }
 
 

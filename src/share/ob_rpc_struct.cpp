@@ -15,6 +15,7 @@
 #include "ob_rpc_struct.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/table/ob_table_ddl_struct.h"
+#include "share/ob_heartbeat_handler.h"
 
 namespace oceanbase
 {
@@ -1299,14 +1300,15 @@ bool ObParallelCreateNormalTenantArg::is_valid() const
   return valid;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaArg, tenant_id_, data_current_version_, rs_addr_);
+OB_SERIALIZE_MEMBER(ObCheckSysTableSchemaArg, tenant_id_, data_current_version_, rs_addr_, rs_epoch_id_);
 
 ObCheckSysTableSchemaArg::ObCheckSysTableSchemaArg() :
   tenant_id_(OB_INVALID_TENANT_ID),
   data_current_version_(OB_INVALID_VERSION),
-  rs_addr_() {}
+  rs_addr_(),
+  rs_epoch_id_(palf::INVALID_PROPOSAL_ID) {}
 
-int ObCheckSysTableSchemaArg::init(uint64_t tenant_id)
+int ObCheckSysTableSchemaArg::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)) {
@@ -1316,6 +1318,7 @@ int ObCheckSysTableSchemaArg::init(uint64_t tenant_id)
     tenant_id_ = tenant_id;
     data_current_version_ = DATA_CURRENT_VERSION;
     rs_addr_ = GCONF.self_addr_;
+    rs_epoch_id_ = ObHeartbeatHandler::get_rs_epoch_id();
   }
   return ret;
 }
@@ -1327,6 +1330,7 @@ int ObCheckSysTableSchemaArg::assign(const ObCheckSysTableSchemaArg &other)
     tenant_id_ = other.tenant_id_;
     data_current_version_ = other.data_current_version_;
     rs_addr_ = other.rs_addr_;
+    rs_epoch_id_ = other.rs_epoch_id_;
   }
   return ret;
 }
@@ -1341,6 +1345,7 @@ bool ObCheckSysTableSchemaArg::is_valid() const
   } else if (!rs_addr_.is_valid()) {
     valid = false;
   }
+  // for compat reason, do not check rs_epoch_id_
   return valid;
 }
 
@@ -11931,7 +11936,7 @@ ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(),
     lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false),
     direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
-    trans_id_(), seq_no_()
+    trans_id_(), seq_no_(), snapshot_version_(0), data_format_version_(0)
 {}
 
 ObRpcRemoteWriteDDLIncCommitLogArg::~ObRpcRemoteWriteDDLIncCommitLogArg()
@@ -11949,7 +11954,9 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
                                              ObTxDesc *tx_desc,
                                              const ObDirectLoadType direct_load_type,
                                              const ObTransID &trans_id,
-                                             const ObTxSEQ &seq_no)
+                                             const ObTxSEQ &seq_no,
+                                             const int64_t snapshot_version,
+                                             const uint64_t data_format_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id_ = OB_INVALID_ID && !ls_id.is_valid() || !tablet_id.is_valid() ||
@@ -11970,6 +11977,8 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
     direct_load_type_ = direct_load_type;
     trans_id_ = trans_id;
     seq_no_ = seq_no;
+    snapshot_version_ = snapshot_version;
+    data_format_version_ = data_format_version;
   }
   return ret;
 }
@@ -12006,7 +12015,7 @@ OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_, trans_id_, seq_no_);
+    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
   }
   return ret;
 }
@@ -12029,7 +12038,7 @@ OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_, trans_id_, seq_no_);
+    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
   }
   return ret;
 }
@@ -12041,11 +12050,11 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
   if (tx_desc_ != nullptr) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, *tx_desc_);
   }
-  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_, trans_id_, seq_no_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_, trans_id_, seq_no_, snapshot_version_, data_format_version_);
   return len;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLIncCommitLogRes, tx_result_);
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLIncCommitLogRes, tx_result_, commit_scn_);
 
 bool ObCheckLSCanOfflineArg::is_valid() const
 {

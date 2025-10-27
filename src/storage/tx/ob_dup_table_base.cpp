@@ -208,7 +208,7 @@ int ObDupTableLSRoleStateHelper::state_change_succ(const ObDupTableLSRoleState &
 /*******************************************************
  *  Dup_Table Lease
  *******************************************************/
-OB_SERIALIZE_MEMBER(DupTableDurableLease, request_ts_, lease_interval_us_);
+OB_SERIALIZE_MEMBER(DupTableDurableLease, request_ts_, lease_interval_us_, flag_.flag_val_);
 OB_SERIALIZE_MEMBER(DupTableLeaseItem, log_header_, durable_lease_);
 OB_SERIALIZE_MEMBER(DupTableDurableLeaseLogBody, durable_lease_);
 OB_SERIALIZE_MEMBER(DupTableLeaseLogHeader, addr_, lease_log_code_);

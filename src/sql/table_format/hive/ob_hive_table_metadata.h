@@ -200,6 +200,7 @@ private:
   static int handle_column_properties(const bool &is_part_cols,
                                       ObExternalFileFormat &format,
                                       const bool &is_bool_tinyint,
+                                      const bool &is_binary_collation,
                                       ObIAllocator &allocator,
                                       share::schema::ObColumnSchemaV2 &column_schema,
                                       int64_t &part_index);

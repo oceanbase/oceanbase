@@ -116,6 +116,12 @@ public:
   ObSharedObjectReaderWriter &get_shared_object_raw_reader_writer() { return shared_object_raw_rwriter_; }
   int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
   int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
+  int pick_private_transfer_epoch(
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const ObTabletID &tablet_id,
+      const int32_t old_private_transfer_epoch,
+      int32_t &final_private_transfer_epoch);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation
@@ -124,7 +130,7 @@ public:
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       const int64_t tablet_version,
-      const int64_t tablet_transfer_seq,
+      const int32_t tablet_transfer_epoch,
       const bool is_shared,
       ObIArray<blocksstable::MacroBlockId> &block_ids);
   int get_shared_blocks_for_tablet(
@@ -300,6 +306,14 @@ private:
       const ObTenantCheckpointSlogHandler::ReplayGCTabletSet &gc_set,
       const ObTenantCheckpointSlogHandler::ReplayWaitGCTabletSet &wait_gc_set,
       common::ObIArray<ObPendingFreeTabletItem> &items);
+
+  /// @brief: collect transfer seqs at wait_gc_tablet_arr_map_
+  /// @param transfer_seqs_set[out]: just pass an empty set.
+  int get_max_transfer_seq_from_wait_gc_map(
+      const ObTabletID &tablet_id,
+      int32_t &max_transfer_seq,
+      ObTimeGuard &time_guard,
+      int64_t &iter_cnt);
 
 private:
 #ifdef OB_BUILD_SHARED_STORAGE

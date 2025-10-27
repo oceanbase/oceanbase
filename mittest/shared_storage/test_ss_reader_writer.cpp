@@ -178,6 +178,18 @@ void TestSSReaderWriter::SetUp()
 
 void TestSSReaderWriter::TearDown()
 {
+  // Ensure disk space is released for next test
+  ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
+  if (OB_NOT_NULL(disk_space_manager)) {
+    // Try to release a large amount of disk space to reset state
+    // This handles cases where tests exhaust disk space but fail before cleanup
+    int64_t large_size = 100 * 1024 * 1024; // 100MB
+    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE);
+    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::META_FILE, ObDiskSpaceType::FILE);
+    disk_space_manager->free_file_size(large_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE);
+    LOG_INFO("TearDown: attempted to release disk space for next test");
+  }
+
   write_buf_[0] = '\0';
   read_buf_[0] = '\0';
 }
@@ -365,12 +377,12 @@ void check_local_cache_tablet_stat(const common::ObTabletID effective_tablet_id,
                                    const int64_t hit_cnt)
 {
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
-  ObSSLocalCacheTabletStatEntry entry;
+  ObStorageCacheHitStat entry;
   local_cache_service->get_local_cache_tablet_stat(effective_tablet_id, entry);
-  ASSERT_EQ(access_cnt, entry.access_cnt_);
-  ASSERT_EQ(access_size, entry.access_size_);
-  ASSERT_EQ(hit_cnt, entry.hit_cnt_);
-  ASSERT_EQ(hit_size, entry.hit_size_);
+  ASSERT_EQ(access_cnt, entry.get_miss_cnt() + entry.get_hit_cnt());
+  ASSERT_EQ(access_size, entry.get_miss_bytes() + entry.get_hit_bytes());
+  ASSERT_EQ(hit_cnt, entry.get_hit_cnt());
+  ASSERT_EQ(hit_size, entry.get_hit_bytes());
 }
 void check_object_type_stat(const MacroBlockId &macro_id,
                           const uint64_t read_cnt,
@@ -385,10 +397,13 @@ void check_object_type_stat(const MacroBlockId &macro_id,
   object_handle.get_io_handle().get_io_flag(flag);
   bool is_remote = flag.is_sync();
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
-  ASSERT_EQ(read_cnt, type_stat.read_cnt_);
-  ASSERT_EQ(read_size, type_stat.read_size_);
-  ASSERT_EQ(write_cnt, type_stat.write_cnt_);
-  ASSERT_EQ(write_size, type_stat.write_size_);
+  ObSSBaseStat stat;
+  type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);
+  ASSERT_EQ(read_cnt, stat.get_cnt());
+  ASSERT_EQ(read_size, stat.get_size());
+  type_stat.get_stat(ObSSObjectTypeStatType::WRITE, stat);
+  ASSERT_EQ(write_cnt, stat.get_cnt());
+  ASSERT_EQ(write_size, stat.get_size());
 }
 
 TEST_F(TestSSReaderWriter, private_macro_reader_writer)
@@ -409,7 +424,7 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(100); // seq_id
-  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(server_id);  //tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;
@@ -573,6 +588,139 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   hit_size += read_info_.size_;
   hit_cnt++;
   check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
+}
+
+// Test parent directory creation failure with three fallback scenarios
+TEST_F(TestSSReaderWriter, test_file_alloc_success_but_parent_dir_fail)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  // to avoid affecting tmp file seg_meta_map and tmp file tmp_file_write_free_disk_size
+  // disable tmp_file_flush_task, preread_task_, calibrate_disk_space_task and gc_unsealed_tmp_file_task
+  // preread_task_ will affect local disk size, so preread_task_ need to disble
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
+
+  const int64_t write_size = 8192;
+
+  // Case 1: Meta does not exist - should use write_through_on_meta_not_exist
+  {
+    LOG_INFO("=== Case 1: test_fallback_meta_not_exist ===");
+    uint64_t tmp_file_id = 601;
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmp_file_id);
+    macro_id.set_third_id(1);  // segment_id
+    ASSERT_TRUE(macro_id.is_valid());
+
+    // Inject error to simulate parent dir creation failure for new segment
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
+
+    // Execute write - should fallback to write_through_on_meta_not_exist
+    write_tmp_file_data(macro_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+    LOG_INFO("async append file completed with meta_not_exist fallback", K(macro_id));
+
+    // Disable error injection
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
+
+    // Verify
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, write_size/*size*/);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+    LOG_INFO("=== Case 1 completed successfully ===");
+  }
+
+  // Case 2: Meta exists + append sealed - should use write_through_with_remote_seg
+  {
+    LOG_INFO("=== Case 2: test_fallback_meta_exist_sealed ===");
+    uint64_t tmp_file_id = 602;
+
+    // 1. First write: create initial segment in object storage (disk exhausted)
+    int64_t avail_size = 0;
+    exhaust_tmp_file_disk_size(avail_size);
+
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmp_file_id);
+    macro_id.set_third_id(2);  // segment_id
+    ASSERT_TRUE(macro_id.is_valid());
+
+    // Write initial segment to object storage (no parent dir created since disk exhausted)
+    write_tmp_file_data(macro_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    // 2. Second write: append sealed segment with parent dir failure
+
+    // Release disk space for allocation but inject parent dir creation failure
+    release_tmp_file_disk_size(avail_size);
+    check_tmp_file_disk_size_enough(write_size * 2);
+
+    // Inject error to simulate parent dir creation failure
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
+
+    // Append sealed segment - should fallback
+    write_tmp_file_data(macro_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, true/*is_sealed*/, write_buf_);
+    LOG_INFO("async append sealed file completed with meta_exist fallback", K(macro_id));
+
+    // Disable error injection
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
+
+    // Verify
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, write_size * 2/*size*/);
+    check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+    LOG_INFO("=== Case 2 completed successfully ===");
+  }
+
+  // Case 3: Meta exists + append unsealed - should use write_through_with_remote_seg
+  {
+    LOG_INFO("=== Case 3: test_fallback_meta_exist_unsealed ===");
+    uint64_t tmp_file_id = 603;
+
+    // 1. First write: create initial segment in object storage (disk exhausted)
+    int64_t avail_size = 0;
+    exhaust_tmp_file_disk_size(avail_size);
+
+    MacroBlockId macro_id;
+    macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    macro_id.set_second_id(tmp_file_id);
+    macro_id.set_third_id(3);  // segment_id
+    ASSERT_TRUE(macro_id.is_valid());
+
+    // Write initial segment to object storage (no parent dir created since disk exhausted)
+    write_tmp_file_data(macro_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    // 2. Second write: append unsealed segment with parent dir failure
+
+    // Release disk space for allocation but inject parent dir creation failure
+    release_tmp_file_disk_size(avail_size);
+    check_tmp_file_disk_size_enough(write_size * 2);
+
+    // Inject error to simulate parent dir creation failure
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SERVER_OUTOF_DISK_SPACE, 0, 1);
+
+    // Append unsealed segment - should fallback
+    write_tmp_file_data(macro_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+    LOG_INFO("async append unsealed file completed with meta_exist fallback", K(macro_id));
+
+    // Disable error injection
+    TP_SET_EVENT(EventTable::EN_SHARED_STORAGE_DIR_DISK_OUTOF_SPACE_ERR, OB_SUCCESS, 0, 0);
+
+    // Verify
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, write_size * 2/*size*/);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size * 2/*valid_length*/);
+    LOG_INFO("=== Case 3 completed successfully ===");
+  }
 }
 
 TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
@@ -835,11 +983,11 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   uint64_t ls_id = 1001;
   uint64_t ls_epoch_id = 1;
   uint64_t tablet_id = 200001;
-  int64_t transfer_seq = 0;
+  int64_t transfer_epoch = 0;
   int64_t version_id = 1;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_ls_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_meta_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id));
-  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, transfer_seq));
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_meta_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), ls_id, ls_epoch_id, tablet_id, transfer_epoch));
 
   // 1. write to local cache
   MacroBlockId macro_id;
@@ -847,7 +995,7 @@ TEST_F(TestSSReaderWriter, private_tablet_meta_reader_writer)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
   macro_id.set_second_id(ls_id);
   macro_id.set_third_id(tablet_id);
-  macro_id.set_meta_transfer_seq(transfer_seq);
+  macro_id.set_meta_transfer_epoch(transfer_epoch);
   macro_id.set_meta_version_id(version_id); // meta_version_id
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;
@@ -932,7 +1080,7 @@ TEST_F(TestSSReaderWriter, private_macro_write_less_read_more)
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
   macro_id.set_second_id(tablet_id); // tablet_id
   macro_id.set_third_id(900); // seq_id
-  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_macro_transfer_epoch(0); // transfer_seq
   macro_id.set_tenant_seq(server_id);  //tenant_seq
   ASSERT_TRUE(macro_id.is_valid());
   ObStorageObjectHandle write_object_handle;
@@ -1162,6 +1310,8 @@ int main(int argc, char **argv)
   system("rm -f ./test_ss_reader_writer.log*");
   OB_LOGGER.set_file_name("test_ss_reader_writer.log", true);
   OB_LOGGER.set_log_level("INFO");
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

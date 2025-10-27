@@ -295,6 +295,7 @@ TEST_F(TestExtFileAccess, test_buffer_split_without_page_cache)
   ASSERT_EQ(OB_SUCCESS, check_correct_for_two_arr(sg_arr, rd_info_arr));
 }
 
+
 TEST_F(TestExtFileAccess, test_file_map_key) {
 #define EXPECT_SUCC(expr) ASSERT_EQ((expr), OB_SUCCESS)
   using FileMapKey = ObExternalDataAccessMgr::FileMapKey;
@@ -435,6 +436,203 @@ TEST_F(TestExtFileAccess, test_ext_page_cache_key) {
   key->~ObIKVCacheKey();
   allocator.free(key);
 }
+
+class MyAllocator : public ObIAllocator
+{
+private:
+  static const uint8_t NIL = 0xFF;
+  static const uint32_t TAIL_MAGIC_NUMBER = 0xFFAB0912;
+public:
+  MyAllocator()
+    : allocated_size_(0)
+  {
+  }
+
+  virtual ~MyAllocator()
+  {
+    for (auto iter : memo_) {
+      delete [](char*)iter.first;
+    }
+    memo_.clear();
+    allocated_size_ = 0;
+  }
+
+  virtual void *alloc(const int64_t size) override
+  {
+    uint8_t *ptr = new uint8_t[size + sizeof(TAIL_MAGIC_NUMBER)];
+    allocated_size_ += size;
+    memo_.insert({ptr, size});
+    memset(ptr, 0, size);
+    *(uint32_t *)(ptr + size) = TAIL_MAGIC_NUMBER;
+    return ptr;
+  }
+
+  virtual void *alloc(const int64_t size, const ObMemAttr &attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+
+  // dummy free
+  void free(void *ptr) override
+  {
+    ASSERT_TRUE(memo_.count(ptr) > 0);
+    std::string err_msg;
+
+    // double free detect
+    ASSERT_FALSE(check_mem_free(ptr, err_msg)) << "double free detected!\n";
+
+    const int64_t size = memo_[ptr];
+    allocated_size_ -= size;
+    memset(ptr, NIL, size);
+  }
+
+  int64_t allocated_size() const { return allocated_size_; }
+
+  bool check_mem_free(const void *ptr, std::string &err_msg) const
+  {
+    err_msg.clear();
+    const auto find = memo_.find(ptr);
+    if (find == memo_.cend()) {
+      err_msg = "ptr not exists";
+      return false;
+    }
+    const int64_t size = find->second;
+    for (int64_t i = 0; i < size; ++i) {
+      if (((uint8_t *)ptr)[i] != NIL) {
+        err_msg = "unexpect memory region";
+        return false;
+      }
+    }
+    return check_mem_region(ptr, size, err_msg);
+  }
+
+  bool check_mem_region(const void *ptr, const int64_t size, std::string &err_msg) const
+  {
+    err_msg.clear();
+    const auto find = memo_.find(ptr);
+    if (find == memo_.cend()) {
+      err_msg = "ptr not exists";
+      return false;
+    }
+    const int64_t original_size = find->second;
+    uint8_t *raw_ptr = (uint8_t *)ptr;
+    if (*(uint32_t *)(raw_ptr + size) != TAIL_MAGIC_NUMBER) {
+      err_msg = "memory tail flag mismatch";
+      return false;
+    }
+    return true;
+  }
+
+  bool check_all_mem_free(std::string &err_msg) const
+  {
+    if (0 != allocated_size_) {
+      err_msg = "allocated size should be 0";
+      return false;
+    }
+    for (const auto iter : memo_) {
+      if (!check_mem_free(iter.first, err_msg)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+private:
+  int64_t allocated_size_;
+  std::map<const void *, int64_t> memo_;
+};
+
+class RandomFailedAllocator final: public MyAllocator
+{
+public:
+  RandomFailedAllocator()
+  {
+    random_.seed(ObTimeUtility::current_time());
+  }
+  ~RandomFailedAllocator() = default;
+  void *alloc(const int64_t size) override
+  {
+    // simulate mem allocate failed with 1/3 probability
+    if (random_.get(0, 3) == 0) {
+      return nullptr;
+    }
+    return MyAllocator::alloc(size);
+  }
+private:
+  ObRandom random_;
+};
+
+TEST_F(TestExtFileAccess, test_io_callback_construction)
+{
+  int ret = OB_SUCCESS;
+  MyAllocator allocator;
+  const std::string dummy_url("it's a url");
+  const std::string dummy_content_digest("it's a content digest");
+  const int64_t static_buf_len = 1024;
+  const int64_t page_size = 512 * 1024;
+  const int64_t self_buf_len = 100;
+  ObExternalDataPageCache &kv_cache = ObExternalDataPageCache::get_instance();
+
+  char *static_buffer = static_cast<char *>(allocator.alloc(static_buf_len));
+  ASSERT_NE(nullptr, static_buffer);
+
+  ObExternalDataPageCacheKey original_key(dummy_url.data(),
+    dummy_url.size(), dummy_content_digest.data(), dummy_content_digest.size(),
+    ObTimeUtility::current_time(), page_size, 0, TENANT_ID);
+  {
+    fprintf(stderr, "======== start basic test ========\n");
+    std::string err_msg;
+    void *self_buffer = nullptr;
+    ObIOCallback *callback = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ObExCachedReadPageIOCallback::safe_construct(original_key,
+      static_buffer, 0, static_buf_len, self_buf_len, kv_cache, allocator, self_buffer,
+      callback));
+    ASSERT_NE(nullptr, callback);
+    ASSERT_NE(nullptr, self_buffer);
+    const ObExCachedReadPageIOCallback *cb = static_cast<ObExCachedReadPageIOCallback *>(callback);
+    ObExternalDataPageCacheKey *cb_key = cb->page_key_;
+    ASSERT_NE(nullptr, cb_key);
+    // original_key and callback's page key should be different object.
+    ASSERT_NE(&original_key, cb_key);
+    // callback's page key should be equal to original_key.
+    ASSERT_TRUE(original_key == *(cb_key));
+    // check memory region of callback's key
+    ASSERT_TRUE(allocator.check_mem_region(cb_key, original_key.size(), err_msg)) << err_msg << std::endl;
+    // check memory region of self_buffer
+    ASSERT_TRUE(allocator.check_mem_region(self_buffer, self_buf_len, err_msg)) << err_msg << std::endl;
+    callback->~ObIOCallback();
+    // page key should be free by callback
+    ASSERT_TRUE(allocator.check_mem_free(cb_key, err_msg)) << err_msg << std::endl;
+    // self_buffer should be free by callback
+    ASSERT_TRUE(allocator.check_mem_free(self_buffer, err_msg)) << err_msg << std::endl;
+    allocator.free(callback);
+    ASSERT_TRUE(allocator.check_mem_free(callback, err_msg)) << err_msg << std::endl;
+  }
+
+  {
+    fprintf(stderr, "======== start random failed test ========\n");
+    const int64_t nloop = 100;
+    for (int64_t loop = 0; loop < nloop; ++loop) {
+      RandomFailedAllocator bad_allocator;
+      std::string err_msg;
+      void *self_buffer = nullptr;
+      ObIOCallback *callback = nullptr;
+
+      if (OB_FAIL(ObExCachedReadPageIOCallback::safe_construct(original_key,
+            static_buffer, 0, static_buf_len, self_buf_len, kv_cache, bad_allocator, self_buffer,
+            callback)))
+      {
+        // fprintf(stderr, "failed to construct io callback(ret:%d)\n", ret);
+        // allocated memory(if any) should be free if failed.
+        ASSERT_TRUE(bad_allocator.check_all_mem_free(err_msg)) << err_msg << std::endl;
+      }
+    }
+  }
+  allocator.free(static_buffer);
+}
+
+
 
 } // end sql
 } // end oceanbase

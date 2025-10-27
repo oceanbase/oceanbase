@@ -497,6 +497,20 @@ int ObShowCreateCatalog::print_hive_catalog_definition(
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (hms.default_catalog_.length() > 0) {
+      if (OB_FAIL(databuff_printf(
+              buf,
+              buf_len,
+              pos,
+              "\n  %s = '%.*s',",
+              ObHMSCatalogProperties::OPTION_NAMES[ObHMSCatalogProperties::DEFAULT_CATALOG],
+              hms.default_catalog_.length(),
+              hms.default_catalog_.ptr()))) {
+        LOG_WARN("failed to print HMS_INFO", K(ret));
+      }
+    }
+  }
 
   if (OB_SUCC(ret)) {
     --pos;

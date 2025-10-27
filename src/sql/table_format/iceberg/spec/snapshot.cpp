@@ -32,9 +32,9 @@ namespace iceberg
 
 Snapshot::Snapshot(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      v1_manifests(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      summary(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      cached_manifest_file_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      v1_manifests(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      summary(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
+      cached_manifest_file_(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {
 }
 

@@ -34,11 +34,6 @@
           "name": "ob_sql_work_area_percentage",
           "value": 50,
           "comment":"larger sql work area can save spill cost"
-        },
-        {
-          "name": "ha_high_thread_score",
-          "value": 20,
-          "comment":"ha high thread number"
         }
       ]
     }

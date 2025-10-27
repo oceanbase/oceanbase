@@ -118,7 +118,6 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
   allocator/ob_tx_data_allocator.cpp
-  allocator/ob_lob_ext_info_log_allocator.cpp
   allocator/ob_tenant_vector_allocator.cpp
 )
 
@@ -515,6 +514,7 @@ ob_set_subtarget(ob_share resource_manager
 )
 
 ob_set_subtarget(ob_share schema
+  schema/ob_add_interval_part_controller.cpp
   schema/ob_column_schema.cpp
   schema/ob_constraint.cpp
   schema/ob_database_sql_service.cpp
@@ -813,6 +813,9 @@ ob_set_subtarget(ob_share vector_type
   vector_type/ob_vector_norm.cpp
   vector_type/ob_vector_common_util.cpp
   vector_type/ob_sparse_vector_ip_distance.cpp
+  vector_type/ob_vector_l2_similarity.cpp
+  vector_type/ob_vector_cosine_similarity.cpp
+  vector_type/ob_vector_ip_similarity.cpp
 )
 
 ob_set_subtarget(ob_share hybrid_search
@@ -831,6 +834,11 @@ ob_set_subtarget(ob_share semistruct
   semistruct/ob_sub_column_path.cpp
   semistruct/ob_semistruct_properties.cpp
 )
+
+ob_set_subtarget(ob_share lob
+  lob/ob_lob_ext_info_log_allocator.cpp
+)
+
 if (NOT OB_BUILD_STANDALONE)
   ob_set_subtarget(ob_share dummy_license_mgr
     ob_dummy_license_utils.cpp

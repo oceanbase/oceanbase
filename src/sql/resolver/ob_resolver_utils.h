@@ -466,7 +466,10 @@ public:
                                                int64_t &expr_num,
                                                common::ObIArray<ObRawExpr *> &part_value_expr_array,
                                                const bool &in_tablegroup = false);
-  static int resolve_columns_for_partition_range_value_expr(ObRawExpr *&expr, ObArray<ObQualifiedName> &columns);
+  static int resolve_columns_for_partition_range_value_expr(ObIAllocator &allocator,
+                                                            const ObPartitionFuncType part_type,
+                                                            ObRawExpr *&expr,
+                                                            ObArray<ObQualifiedName> &columns);
   static int resolve_partition_range_value_expr(ObResolverParams &params,
                                                 const ParseNode &node,
                                                 const common::ObString &part_name,

@@ -651,8 +651,7 @@ ob_set_subtarget(ob_storage access
   access/ob_multiple_merge.cpp
   access/ob_multiple_multi_scan_merge.cpp
   access/ob_multiple_scan_merge.cpp
-  access/ob_multiple_skip_scan_merge.cpp
-  access/ob_multiple_multi_skip_scan_merge.cpp
+  access/ob_index_skip_scanner.cpp
   access/ob_multiple_mview_merge.cpp
   access/ob_table_scan_iterator.cpp
   access/ob_store_row_iterator.cpp
@@ -758,6 +757,7 @@ ob_set_subtarget(ob_storage common_mixed
   checkpoint/ob_checkpoint_executor.cpp
   checkpoint/ob_data_checkpoint.cpp
   checkpoint/ob_freeze_checkpoint.cpp
+  meta_mem/ob_aggregated_storage_meta_io.cpp
   meta_mem/ob_external_tablet_cnt_map.cpp
   meta_mem/ob_flying_tablet_pointer_map.cpp
   meta_mem/ob_meta_obj_struct.cpp
@@ -1091,6 +1091,8 @@ ob_set_subtarget(ob_storage retrieval
   retrieval/ob_block_max_iter.cpp
   retrieval/ob_block_stat_collector.cpp
   retrieval/ob_block_stat_iter.cpp
+  retrieval/ob_sparse_bmm_iter.cpp
+  retrieval/ob_inv_idx_param_estimator.cpp
   retrieval/ob_sparse_bmw_iter.cpp
   retrieval/ob_sparse_daat_iter.cpp
   retrieval/ob_sparse_taat_iter.cpp

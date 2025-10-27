@@ -802,7 +802,8 @@ class Path
     INDEX_MERGE_INTERSECT,
     // SCAN NODE TYPE
     INDEX_MERGE_SCAN,
-    INDEX_MERGE_FTS_INDEX
+    INDEX_MERGE_FTS_INDEX,
+    INDEX_MERGE_MULTIVALUE_INDEX
   };
 
   /**
@@ -816,13 +817,15 @@ class Path
       : node_type_(INDEX_MERGE_INVALID),
         index_tid_(OB_INVALID_ID),
         ap_(NULL),
-        scan_node_idx_(-1)
+        scan_node_idx_(-1),
+        has_dynamic_id_filter_(false),
+        non_ror_filters_()
     {}
 
     static int formalize_index_merge_tree(ObIndexMergeNode *&node);
     int set_scan_direction(const ObOrderDirection &direction);
     inline bool is_merge_node() const {return INDEX_MERGE_UNION == node_type_ || INDEX_MERGE_INTERSECT == node_type_; }
-    inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_; }
+    inline bool is_scan_node() const {return INDEX_MERGE_SCAN == node_type_ || INDEX_MERGE_FTS_INDEX == node_type_ || INDEX_MERGE_MULTIVALUE_INDEX == node_type_; }
 
     TO_STRING_KV(K_(node_type), K_(children), K_(filter), K_(index_tid), KPC_(ap), K_(scan_node_idx));
 
@@ -834,6 +837,8 @@ class Path
     uint64_t index_tid_;
     AccessPath *ap_;
     int64_t scan_node_idx_;
+    bool has_dynamic_id_filter_;
+    common::ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> non_ror_filters_;
   };
 
   struct ObIndexMergeNodeSelPair
@@ -1541,7 +1546,8 @@ struct MergeKeyInfoHelper
       inner_path_infos_(),
       cnt_rownum_(false),
       total_path_num_(0),
-      current_join_output_rows_(-1.0)
+      current_join_output_rows_(-1.0),
+      best_cost_(-1.0)
     {
     }
     virtual ~ObJoinOrder();
@@ -1553,7 +1559,8 @@ struct MergeKeyInfoHelper
                                const common::ObIArray<uint64_t> &valid_index_ids,
                                common::ObIArray<uint64_t> &skyline_index_ids,
                                ObIArray<ObRawExpr *> &restrict_infos,
-                               bool ignore_index_back_dim = false);
+                               bool ignore_index_back_dim = false,
+                               ObIArray<OptSkipScanState> *skip_scan_states = nullptr);
 
     int pruning_unstable_access_path(const uint64_t table_id,
                                      const uint64_t ref_table_id,
@@ -1577,7 +1584,8 @@ struct MergeKeyInfoHelper
                            ObIArray<ObRawExpr *> &restrict_infos,
                            bool use_unique_index,
                            bool ignore_order_dim,
-                           bool ignore_index_back_dim = false);
+                           bool ignore_index_back_dim,
+                           OptSkipScanState skip_scan_states);
     int is_vector_inv_index_tid(const uint64_t index_table_id, bool& is_vec_tid);
 
     int fill_index_info_entry(const uint64_t table_id,
@@ -1620,6 +1628,13 @@ struct MergeKeyInfoHelper
     int get_matched_inv_index_tids(ObMatchFunRawExpr *match_expr,
                                    uint64_t ref_table_id,
                                    ObIArray<uint64_t> &inv_idx_tids);
+    int get_matched_multivalue_index_tid(ObRawExpr *multivalue_expr,
+                                         uint64_t ref_table_id,
+                                         uint64_t &multivalue_idx_tid);
+    int check_multivalue_index_match_column(uint64_t json_column_id,
+                                           const ObTableSchema *table_schema,
+                                           const ObTableSchema *multivalue_idx_schema,
+                                           bool &found_matched_index);
     int get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                       ObRawExpr *vector_expr,
                                       const uint64_t table_id,
@@ -1651,6 +1666,7 @@ struct MergeKeyInfoHelper
      * @return
      */
     int add_path(Path* path);
+    int update_cost_and_cardinality(const Path &path);
     int add_recycled_paths(Path* path);
     int compute_vec_idx_path_relationship(const AccessPath &first_path,
                                           const AccessPath &second_path,
@@ -1861,7 +1877,8 @@ struct MergeKeyInfoHelper
                              const uint64_t ref_table_id,
                              const PathHelper &helper,
                              ObIndexMergeNode *&index_merge_tree,
-                             bool &is_match_hint);
+                             bool &is_match_hint,
+                             bool &prune_happened);
 
     int get_valid_index_merge_indexes(const uint64_t table_id,
                                       const uint64_t ref_table_id,
@@ -1873,14 +1890,16 @@ struct MergeKeyInfoHelper
                                         const ObIArray<ObRawExpr*> &filters,
                                         const ObIArray<uint64_t> &valid_index_ids,
                                         const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-                                        ObIndexMergeNode *&candi_index_tree);
+                                        ObIndexMergeNode *&candi_index_tree,
+                                        bool &prune_happened);
 
     int generate_candi_index_merge_node(const uint64_t ref_table_id,
                                         ObRawExpr *filter,
                                         const ObIArray<uint64_t> &valid_index_ids,
                                         const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
                                         ObIndexMergeNode *&candi_node,
-                                        bool &is_valid_node);
+                                        bool &is_valid_node,
+                                        bool &prune_happened);
 
     int try_merge_intersect_child(ObIndexMergeNode *intersect_node,
                                   ObRawExpr *new_filter,
@@ -1905,8 +1924,9 @@ struct MergeKeyInfoHelper
                                      const PathHelper &helper,
                                      const ObIArray<uint64_t> &valid_index_ids,
                                      const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                     const bool is_match_hint,
                                      ObIndexMergeNode* &candi_index_tree,
-                                     const bool is_match_hint);
+                                     bool &prune_happened);
 
     int prune_one_index_merge_node(const uint64_t table_id,
                                    const uint64_t ref_table_id,
@@ -1917,11 +1937,15 @@ struct MergeKeyInfoHelper
                                    const bool ignore_sel_prune,
                                    bool &is_valid,
                                    bool &force_preserve,
+                                   bool &prune_happened,
                                    double &sum_child_sel);
+
+    static bool is_one_layer_intersect_with_fts(const ObIndexMergeNode *node);
 
     int do_create_index_merge_path(const uint64_t table_id,
                                    const uint64_t ref_table_id,
                                    const PathHelper &helper,
+                                   const bool need_table_filter,
                                    ObIndexMergeNode* root_node,
                                    ObIArray<AccessPath*> &access_paths);
 
@@ -1931,9 +1955,12 @@ struct MergeKeyInfoHelper
                                       ObIArray<ObExprConstraint> &expr_constraints,
                                       int64_t &scan_node_count);
 
+    int collect_non_ror_filters(ObIndexMergeNode* node);
+
     int create_one_index_merge_path(const uint64_t table_id,
                                     const uint64_t ref_table_id,
                                     const PathHelper &helper,
+                                    const bool need_table_filter,
                                     ObIArray<ObPCParamEqualInfo> &equal_param_constraints,
                                     ObIArray<ObPCConstParamInfo> &const_param_constraints,
                                     ObIArray<ObExprConstraint> &expr_constraints,
@@ -1941,6 +1968,8 @@ struct MergeKeyInfoHelper
                                     IndexMergePath* &index_merge_path);
 
     int prune_index_merge_path(ObIArray<AccessPath*> &access_paths);
+    int prune_invalid_fts_merge_path(ObIArray<AccessPath*> &access_paths);
+    int check_invalid_fts_merge_path(ObIndexMergeNode *node, int64_t depth, bool &is_invalid_path);
 
     int check_index_merge_paths_contain_fts(ObIArray<AccessPath*> &access_paths,
                                             bool &contain_fts);
@@ -1998,6 +2027,7 @@ struct MergeKeyInfoHelper
                            const uint64_t ref_id,
                            const uint64_t index_id,
                            const ObIndexInfoCache &index_info_cache,
+                           const bool use_column_store,
                            PathHelper &helper,
                            ObSQLSessionInfo *session_info,
                            OptSkipScanState &use_skip_scan);
@@ -2086,7 +2116,8 @@ struct MergeKeyInfoHelper
 
     int extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                   const ObIArray<ObRawExpr*> &predicates,
-                                                  ObQueryRangeProvider *&query_range);
+                                                  ObQueryRangeProvider *&query_range,
+                                                  const bool is_index_merge_path = false);
 
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,
@@ -2097,11 +2128,6 @@ struct MergeKeyInfoHelper
     int check_expr_match_first_col(const ObRawExpr * qual,
                                    const common::ObIArray<ObRawExpr *>& keys,
                                    bool &match);
-
-    int extract_filter_column_ids(const ObIArray<ObRawExpr*> &quals,
-                                  const bool is_data_table,
-                                  const share::schema::ObTableSchema &index_schema,
-                                  ObIArray<uint64_t> &filter_column_ids);
 
     int check_expr_overlap_index(const ObRawExpr* qual,
                                  const common::ObIArray<ObRawExpr*>& keys,
@@ -2156,10 +2182,6 @@ struct MergeKeyInfoHelper
                                        ObIArray<uint64_t> &interest_column_ids,
                                        ObIArray<bool> &const_column_info);
 
-
-    int check_and_extract_filter_column_ids(const ObIArray<ObRawExpr *> &index_keys,
-                                            ObIArray<uint64_t> &restrict_ids);
-
     /*
      * 看能否在索引前缀上抽取query range
      * @table_id
@@ -2174,6 +2196,8 @@ struct MergeKeyInfoHelper
                                       const ObIndexInfoCache &index_info_cache,
                                       bool &contain_always_false,
                                       common::ObIArray<uint64_t> &prefix_range_ids,
+                                      common::ObIArray<uint64_t> &ss_offset_ids,
+                                      common::ObIArray<uint64_t> &ss_range_ids,
                                       ObIArray<ObRawExpr *> &restrict_infos);
 
     /**
@@ -2731,6 +2755,11 @@ struct MergeKeyInfoHelper
     int get_valid_path_info_from_hint(const ObRelIds &table_set,
                                       bool contain_fake_cte,
                                       ValidPathInfo &path_info);
+    int try_add_nlj_path_for_values_table(const ObJoinOrder& left_tree,
+                                          const ObJoinOrder& right_tree,
+                                          const Path* left_path,
+                                          const bool ignore_hint,
+                                          ValidPathInfo& path_info);
 
     int check_depend_table(const ObJoinOrder &left_tree,
                            const ObJoinOrder &right_tree,
@@ -2918,9 +2947,9 @@ struct MergeKeyInfoHelper
                                        const ObIArray<double> &ambient_card,
                                        double &new_ambient_card,
                                        const ObJoinType assumption_type);
-    int revise_cardinality(const ObJoinOrder *left_tree,
-                           const ObJoinOrder *right_tree,
-                           const JoinInfo &join_info);
+    int calc_cardinality(const ObJoinOrder *left_tree,
+                         const ObJoinOrder *right_tree,
+                         const JoinInfo &join_info);
     inline void set_cnt_rownum(const bool cnt_rownum) { cnt_rownum_ = cnt_rownum; }
     inline bool get_cnt_rownum() const { return cnt_rownum_; }
     inline void increase_total_path_num() { total_path_num_ ++; }
@@ -3235,6 +3264,8 @@ struct MergeKeyInfoHelper
     uint64_t total_path_num_;
     common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
     double current_join_output_rows_; // 记录对当前连接树估计的输出行数
+    ObSEArray<double, 8, common::ModulePageAllocator, true> current_join_ambient_card_;
+    double best_cost_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObJoinOrder);
   };

@@ -139,27 +139,30 @@ public:
   struct ObGITaskInfo
   {
     ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0),
-                     is_false_range_(false) {}
+                     is_false_range_(false),  scan_task_() {}
     ObGITaskInfo(ObDASTabletLoc *tablet_loc,
                  common::ObNewRange range,
                  common::ObNewRange ss_range,
                  int64_t idx,
-                 bool is_false_range) :
+                 bool is_false_range,
+                 sql::ObIExtTblScanTask* scan_task) :
         tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0),
-        is_false_range_(is_false_range) {}
+        is_false_range_(is_false_range), scan_task_(scan_task) {}
     TO_STRING_KV(KPC(tablet_loc_),
                  KP(tablet_loc_),
                  K(range_),
                  K(ss_range_),
                  K(idx_),
                  K(hash_value_),
-                 K(is_false_range_));
+                 K(is_false_range_),
+                 KPC(scan_task_));
     ObDASTabletLoc *tablet_loc_;
     common::ObNewRange range_;
     common::ObNewRange ss_range_;
     int64_t idx_;
     uint64_t hash_value_;
     bool is_false_range_;
+    sql::ObIExtTblScanTask* scan_task_;
   };
 
   enum ObGIRandomType
@@ -183,6 +186,7 @@ public:
                         common::ObIArray<ObNewRange> &taskset_ranges,
                         common::ObIArray<ObNewRange> &ss_ranges,
                         common::ObIArray<int64_t> &taskset_idxs,
+                        common::ObIArray<sql::ObIExtTblScanTask*> &scan_tasks,
                         ObGIRandomType random_type);
 public:
   common::ObArray<ObGITaskInfo> gi_task_set_;

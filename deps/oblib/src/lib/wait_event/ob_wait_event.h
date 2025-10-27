@@ -57,6 +57,14 @@ WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", 
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, true, true)
 WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait in request queue", "pcode", "level", "priority", CONFIGURATION, true, true)
+WAIT_EVENT_DEF(DTL_TRANSMIT_MSG_WAIT, 13005, "wait dtl transmit message response", "address", "channel type", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DTL_RECEIVE_MSG_WAIT, 13006, "wait dtl receive message response", "address", "channel type", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DTL_PROCESS_BUFFER_RECEIVE_WAIT, 13007, "dtl process buffer receive wait", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(DTL_PROCESS_BUFFER_SEND_WAIT, 13008, "wait dtl process receive wait", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(WAIT_DTL_TRANSMIT_RESPONSE, 13009, "wait dtl data transmit response", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(WAIT_DTL_RECEIVE_RESPONSE, 13010, "wait dtl data receive response", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(WAIT_SQC_PROXY, 13011, "wait sqc proxy message", "address", "", "", NETWORK, true, true)
+WAIT_EVENT_DEF(PX_TARGET_WAIT, 13012, "wait to acqurire px worker", "timeout_us", "address", "", NETWORK, true, true)
 
 // APPLICATION 14001-14999
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)
@@ -122,6 +130,7 @@ WAIT_EVENT_DEF(REMOVE_PARTITION_WAIT, 16004, "wait remove partition", "tenant_id
 WAIT_EVENT_DEF(TABLET_LOCK_WAIT, 16016, "tablet lock wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(IND_NAME_CACHE_LOCK_WAIT, 16017, "latch:index name cache lock wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(ASYNC_COMMITTING_WAIT, 16018, "tx commiting wait", "", "", "", COMMIT, false, true)
+WAIT_EVENT_DEF(SYNC_COMMITTING_WAIT, 16019, "sync tx commiting wait", "", "", "", COMMIT, false, true)
 WAIT_EVENT_DEF(OBCDC_PART_MGR_SCHEMA_VERSION_WAIT, 18000, "oblog part mgr schema version wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_TMP_FILE_WAIT, 18001, "backup tmp file wait", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_TMP_FILE_QUEUE_WAIT, 18002, "backup tmp file queue wait", "", "", "", CONCURRENCY, true, true)
@@ -145,6 +154,8 @@ WAIT_EVENT_DEF(MYSQL_CONN_GET_LOCK, 18115, "mysql conn get lock", "", "", "", CO
 WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(BACKUP_VALIDATE_SERVICE_COND_WAIT, 18117, "backup validate service condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(HMS_CLIENT_POOL_COND_WAIT, 18118, "hms client pool condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(HA_CREATE_TABLET_COND_WAIT, 18119, "ha create tablet condition wait", "address", "", "", CONCURRENCY, false, true)
+WAIT_EVENT_DEF(OBJECT_DEVICE_ASYNC_IO_WAIT, 18120, "object device async io wait", "", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)

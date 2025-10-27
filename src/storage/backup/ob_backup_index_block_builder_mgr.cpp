@@ -900,7 +900,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
   data_store_desc.reset();
   compaction::ObMergeType merge_type;
   ObTablet *tablet = NULL;
-
+  int32_t transfer_epoch = -1;
   if (!ls_id.is_valid() || !tablet_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(ls_id), K(tablet_handle));
@@ -909,6 +909,8 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet->get_private_transfer_epoch(transfer_epoch))) {
+    LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
   } else {
     if (is_mds_merge(merge_type)) {
       const ObStorageSchema *storage_schema = ObMdsSchemaHelper::get_instance().get_storage_schema();
@@ -926,7 +928,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                               tablet->get_snapshot_version(),
                                               0/*cluster_version*/,
                                               false/*micro_index_clustered*/,
-                                              tablet->get_transfer_seq(),
+                                              transfer_epoch,
                                               tablet->get_reorganization_scn(),
                                               table_key.get_end_scn()))) {
         LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema));
@@ -958,7 +960,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                         tablet->get_snapshot_version(),
                                         0/*cluster_version*/,
                                         false/*micro_index_clustered*/,
-                                        tablet->get_transfer_seq(),
+                                        transfer_epoch,
                                         tablet->get_reorganization_scn(),
                                         table_key.get_end_scn(),
                                         cg_schema,

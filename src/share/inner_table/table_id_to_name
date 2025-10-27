@@ -511,6 +511,7 @@
 # 11127: __all_virtual_ss_ls_tablet_reorganization_info
 # 11128: __all_virtual_ss_existing_tablet_meta
 # 11129: __all_virtual_ss_existing_sstable_mgr
+# 11130: __all_virtual_ss_diagnose_info
 # 12001: SESSION_VARIABLES
 # 12006: GLOBAL_STATUS
 # 12008: SESSION_STATUS
@@ -2047,6 +2048,8 @@
 # 15532: __all_virtual_hms_client_pool_stat  # BASE_TABLE_NAME
 # 15533: ALL_VIRTUAL_SOURCE
 # 15533: __all_virtual_source  # BASE_TABLE_NAME
+# 15534: ALL_VIRTUAL_SS_DIAGNOSE_INFO
+# 15534: __all_virtual_ss_diagnose_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

@@ -60,6 +60,24 @@ enum class DataFileContent
   EQUALITY_DELETES = 2,
 };
 
+class ObSerializableDataFile
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSerializableDataFile() : content_(DataFileContent::DATA),
+                             file_format_(DataFileFormat::PARQUET),
+                             record_count_(0),
+                             file_size_in_bytes_(0) {}
+  ~ObSerializableDataFile() = default;
+  TO_STRING_KV(K_(content), K_(file_format), K_(record_count), K_(file_size_in_bytes), K_(file_path));
+
+  DataFileContent content_;
+  DataFileFormat file_format_;
+  int64_t record_count_;
+  int64_t file_size_in_bytes_;
+  char file_path_[common::OB_MAX_FILE_NAME_LENGTH] = {0};
+};
+
 class DataFile : public SpecWithAllocator
 {
 public:

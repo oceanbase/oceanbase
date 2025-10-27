@@ -81,15 +81,11 @@ public:
   enum ObDirOpFlag {
     DOF_REG = 0,
     DOF_DIR = 1,
-    // Set marker for object storage request when ObDirOpFlag is DOF_MARKER.
-    // For example, list_files("oss://bucketname/uri"), if DOF_MARKER is specified with marker 'marker',
-    // objects whose names are alphabetically greater than the 'marker' are returned
-    DOF_REG_WITH_MARKER = 2,
     DOF_MAX_FLAG
   };
   ObBaseDirEntryOperator()
       : op_flag_(DOF_REG), size_(0), scan_count_(INT64_MAX),
-        marker_(nullptr), dir_(nullptr), extra_info_()
+        dir_(nullptr), extra_info_()
   {}
   virtual ~ObBaseDirEntryOperator() = default;
   virtual int func(const dirent *entry) = 0;
@@ -98,28 +94,8 @@ public:
   bool is_dir_scan() {return (op_flag_ == DOF_DIR) ? true : false;}
   void set_size(const int64_t size) { size_ = size; }
   int64_t get_size() const { return size_; }
-  int set_marker_flag(const char *marker, const int64_t scan_count)
-  {
-    // List objects under the specified directory that are lexicographically greater than 'marker',
-    // and the number of objects returned does not exceed op.get_scan_count()
-    // If 'marker' is "", it means
-    // the listing starts from the lexicographically smallest object in the specified directory
-    // If op.get_scan_count() is <= 0,
-    // it indicates there is no upper limit on the number of objects listed
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(marker)) {
-      ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "fail to set marker", K(ret), KP(marker));
-    } else {
-      marker_ = marker;
-      op_flag_ = DOF_REG_WITH_MARKER;
-      scan_count_ = scan_count;
-    }
-    return ret;
-  }
-  bool is_marker_scan() { return (op_flag_ == DOF_REG_WITH_MARKER) ? true : false; }
+
   int64_t get_scan_count() { return scan_count_; }
-  const char *get_marker() const { return marker_; }
   int set_dir(const char *dir)
   {
     int ret = OB_SUCCESS;
@@ -141,7 +117,6 @@ private:
   int op_flag_;
   int64_t size_; // Always set 0 for directory.
   int64_t scan_count_; // Default value is INT64_MAX.
-  const char *marker_;        // Default value is nullptr
   const char *dir_;
   ObFileExtraInfo extra_info_;
 };

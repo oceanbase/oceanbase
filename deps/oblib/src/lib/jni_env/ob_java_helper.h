@@ -23,7 +23,6 @@
 
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
-#include "lib/allocator/page_arena.h"
 #include "common/ob_common_utility.h"
 #include "ob_java_native_method.h"
 #include "lib/lock/ob_mutex.h"
@@ -260,11 +259,10 @@ public:
   int init_jni_env();
 
   int get_env(JNIEnv *&env);
-  ObString to_ob_string(jstring str);
-  jmethodID getToStringMethod(jclass clazz);
 
+  int init_result() { return init_result_; }
+  const char* get_error_msg() { return error_msg_; }
 
-  bool is_inited() { return is_inited_; }
 private:
   JVMFunctionHelper();
 
@@ -285,22 +283,11 @@ private:
 
   int load_lib(ObJavaEnvContext &java_env_ctx, ObHdfsEnvContext &hdfs_env_ctx);
 
-
+  // Check whether java runtime can work
+  int detect_java_runtime();
 private:
-  bool is_inited_ = false;
+  int init_result_ = OB_NOT_INIT;
   static thread_local JNIEnv *jni_env_;
-
-  common::ObArenaAllocator allocator_;
-
-  jclass object_class_;
-  jclass object_array_class_;
-  jclass string_class_;
-  jclass jarrays_class_;
-  jclass list_class_;
-  jclass exception_util_class_;
-
-  jmethodID string_construct_with_bytes_;
-  jobject utf8_charsets_;
 
   // Env contexts
   ObJavaEnvContext java_env_ctx_;
@@ -313,6 +300,7 @@ private:
 private:
   lib::ObMutex lock_;
   obsys::ObRWLock<> load_lib_lock_;
+  const char* error_msg_ = nullptr;
 };
 
 // local object reference guard.
@@ -405,8 +393,7 @@ public:
                         jobject &jobj);
 };
 
-// Check whether java runtime can work
-int detect_java_runtime();
+
 
 } // namespace sql
 } // namespace oceanbase

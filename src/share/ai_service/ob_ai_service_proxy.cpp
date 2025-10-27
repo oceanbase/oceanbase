@@ -242,7 +242,6 @@ int ObAiServiceProxy::select_ai_endpoint_by_ai_model_name(
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
           ret = OB_AI_FUNC_ENDPOINT_NOT_FOUND;
-          LOG_USER_ERROR(OB_AI_FUNC_ENDPOINT_NOT_FOUND);
           LOG_WARN("ai model endpoint not found by ai model name", K(ret), K(ai_model_name));
         } else {
           LOG_WARN("failed to get next result", KR(ret));

@@ -1086,6 +1086,7 @@ int ObPxSubCoord::get_participants(ObPxSqcMeta &sqc,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_TABLET_LOC_NOT_FOUND);
 int ObPxSubCoord::rebuild_sqc_access_table_locations()
 {
   int ret = OB_SUCCESS;
@@ -1129,6 +1130,9 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
       } else if (OB_ISNULL(table_loc)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table loc", K(ret));
+      } else if (OB_UNLIKELY(ERRSIM_TABLET_LOC_NOT_FOUND)) {
+        ret = ERRSIM_TABLET_LOC_NOT_FOUND;
+        LOG_INFO("ERRSIM here", KR(ret));
       } else {
         for (DASTabletLocListIter tmp_node = table_loc->tablet_locs_begin();
              tmp_node != table_loc->tablet_locs_end(); ++tmp_node) {

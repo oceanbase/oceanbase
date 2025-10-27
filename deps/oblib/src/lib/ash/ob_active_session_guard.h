@@ -342,6 +342,7 @@ public:
     plan_hash_ = 0;
     plan_id_ = 0;
     stmt_type_ = 0;
+    plan_line_id_ = 0;
   }
 
   static void cal_delta_io_data(ObDiagnosticInfo *di);

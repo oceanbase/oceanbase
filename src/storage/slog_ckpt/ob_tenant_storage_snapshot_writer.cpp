@@ -418,15 +418,18 @@ int ObTenantStorageSnapshotWriter::copy_tablet(
     }
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (tablet->get_tablet_addr().is_file()) {
+    int32_t private_transfer_epoch = -1;
     int64_t tablet_meta_version = 0;
-    if (GCTX.is_shared_storage_mode() && OB_FAIL(ls.get_tablet_svr()->alloc_private_tablet_meta_version_with_lock(tablet_key, tablet_meta_version))) {
+    if (OB_FAIL(tablet->get_private_transfer_epoch(private_transfer_epoch))) {
+      LOG_WARN("failed to get transfer epoch", K(ret), "tablet_meta", tablet->get_tablet_meta());
+    } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ls.get_tablet_svr()->alloc_private_tablet_meta_version_with_lock(tablet_key, tablet_meta_version))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         LOG_INFO("skip writing snapshot for this tablet", K(tablet_key));
       } else {
         LOG_WARN("failed to alloc tablet meta version", K(ret), K(tablet_key));
       }
     }
-    const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq(), tablet_meta_version);
+    const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, private_transfer_epoch, tablet_meta_version);
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(!tablet->is_empty_shell())) {
       ret = OB_ERR_UNEXPECTED;

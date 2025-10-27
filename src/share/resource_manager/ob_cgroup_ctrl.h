@@ -181,6 +181,7 @@ public:
   int regist_observer_to_cgroup(const char * cgroup_dir);
   bool check_cgroup_status();
   static int check_cgroup_root_dir();
+  static int check_pid_in_procs();
   void destroy();
   bool is_valid() { return valid_; }
 

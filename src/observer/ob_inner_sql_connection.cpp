@@ -632,6 +632,8 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   if (OB_NOT_NULL(cursor) && cursor->is_streaming()) {
     int64_t current_exec_time = audit_record.exec_timestamp_.executor_t_;
     cursor->add_cursor_exec_time(current_exec_time);
+    int64_t current_elapsed_time = audit_record.get_elapsed_time();
+    cursor->add_cursor_elapsed_time(current_elapsed_time);
   }
 
   audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
@@ -752,6 +754,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
     if (((OB_SUCC(last_ret) && OB_ISNULL(cursor))|| (OB_NOT_NULL(cursor) && OB_READ_NOTHING == last_ret)) && session.get_local_ob_enable_plan_cache()) {
       int64_t old_total_time = audit_record.exec_timestamp_.executor_t_;
       audit_record.exec_timestamp_.executor_t_ = OB_NOT_NULL(cursor) ? cursor->get_cursor_total_exec_time() : audit_record.exec_timestamp_.executor_t_;
+      audit_record.cursor_elapsed_ = OB_NOT_NULL(cursor) ? cursor->get_cursor_total_elapsed_time() : 0;
       if (NULL != plan) {
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,

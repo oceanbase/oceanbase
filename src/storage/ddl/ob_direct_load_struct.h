@@ -978,6 +978,9 @@ private:
   int64_t ddl_task_id_; // for clog wirte speed limit
   int64_t parallel_task_count_; // for gc flag in shared storage mode
   bool is_micro_index_clustered_;
+  /// COMMENT: make sure if tablet_transfer_seq is unused. If it's still being used
+  /// please replace it with transfer_epoch.
+  /// see:
   int64_t tablet_transfer_seq_;
 
   ObArray<blocksstable::ObMacroDataSeq> start_seqs_;
@@ -1115,6 +1118,9 @@ public:
   int64_t ddl_task_id_; // for clog wirte speed limit
   int64_t parallel_task_count_; // for gc flag in shared storage mode
   bool is_micro_index_clustered_;
+  /// COMMENT: make sure if tablet_transfer_seq is unused. If it's still being used
+  /// please replace it with transfer_epoch.
+  /// see:
   int64_t tablet_transfer_seq_;
   share::SCN start_scn_;
   bool is_cs_replica_;

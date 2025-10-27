@@ -1940,6 +1940,53 @@ int ObGarbageCollector::check_if_tenant_is_creating_(const uint64_t tenant_id, b
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObGarbageCollector::check_tablet_gc_(
+    ObLS &ls,
+    bool &wait_tablet_gc)
+{
+  int ret = OB_SUCCESS;
+  wait_tablet_gc = true;
+  common::ObArray<ObTabletID> tablet_ids;
+  share::ObLSID ls_id = ls.get_ls_id();
+  bool meta_tenant_has_been_dropped = false;
+  if (OB_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(
+                 true /* except_ls_inner_tablet */, tablet_ids))) {
+    CLOG_LOG(WARN, "get_all_tablet_ids failed", KR(ret), K(ls_id));
+  } else if (tablet_ids.count() == 0) {
+    wait_tablet_gc = false;
+    CLOG_LOG(INFO, "tablet has been gc", KR(ret), K(ls_id));
+  } else {
+    ObSSLSMeta unuse_meta;
+    if (OB_FAIL(MTL(ObSSMetaService*)->get_ls_meta(ls_id, unuse_meta, true /* force_refresh */,
+            false /* weak_read */))) {
+      if (OB_OBJECT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        wait_tablet_gc = false;
+        CLOG_LOG(INFO, "ls has been gc, need not wait", K(ls_id), K(tablet_ids.count()), K(tablet_ids));
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        const uint64_t meta_tenant_id = gen_meta_tenant_id(MTL_ID());
+        if (OB_TMP_FAIL(check_if_tenant_has_been_dropped_(meta_tenant_id, meta_tenant_has_been_dropped))) {
+          CLOG_LOG(WARN, "failed to check_if_tenant_has_been_dropped", KR(ret), KR(tmp_ret), K(ls_id), K(tablet_ids.count()),
+              K(meta_tenant_id), K(meta_tenant_has_been_dropped), K(tablet_ids));
+        } else if (meta_tenant_has_been_dropped) {
+          ret = OB_SUCCESS;
+          wait_tablet_gc = false;
+          CLOG_LOG(INFO, "tenant has been dropped, need not wait", K(ls_id), K(tablet_ids.count()), K(tablet_ids));
+        } else {
+          CLOG_LOG(WARN, "failed to get_ls_meta", KR(ret), K(ls_id), K(tablet_ids.count()), K(tablet_ids));
+        }
+      }
+    } else {
+      CLOG_LOG(INFO, "tablets in ls are not mark delete, ls is not allowd to GC", K(ls_id),
+          K(tablet_ids.count()), K(tablet_ids));
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
                                             ObGCCandidateArray &gc_candidates)
 {
@@ -1955,7 +2002,7 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
   candidate.ls_id_ = ls_id;
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
-  common::ObArray<ObTabletID> tablet_id_set;
+  bool wait_tablet_gc = false;
   if (OB_FAIL(get_ls_status_from_table(ls_id, ls_status))) {
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
@@ -1985,12 +2032,10 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
 #ifdef OB_BUILD_SHARED_STORAGE
       } else if (GCTX.is_shared_storage_mode()
-                 && OB_TMP_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(
-                     true /* except_ls_inner_tablet */, tablet_id_set))) {
-        CLOG_LOG(WARN, "get_all_tablet_ids failed", KR(tmp_ret), K(ls_id));
-      } else if (GCTX.is_shared_storage_mode() && tablet_id_set.count() != 0) {
-        CLOG_LOG(INFO, "tablets in ls are not mark delete, ls is not allowd to GC", K(ls_id),
-            K(tablet_id_set.count()), K(tablet_id_set));
+                 && OB_TMP_FAIL(check_tablet_gc_(ls, wait_tablet_gc))) {
+        CLOG_LOG(WARN, "check_tablet_gc_ failed", KR(ret), KR(tmp_ret), K(ls_id));
+      } else if (GCTX.is_shared_storage_mode() && wait_tablet_gc) {
+        CLOG_LOG(INFO, "tablets in ls are not mark delete, ls is not allowd to GC", K(ls_id));
 #endif
       } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_ls_allow_gc(
             ls.get_ls_id(), migration_status, allow_gc))) {

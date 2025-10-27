@@ -24,10 +24,11 @@ namespace share
 class ObIvfAsyncTaskExector final : public ObVecITaskExecutor
 {
 public:
-  ObIvfAsyncTaskExector() : ObVecITaskExecutor() {}
+  ObIvfAsyncTaskExector() : ObVecITaskExecutor(), local_schema_version_(OB_INVALID_VERSION) {}
   virtual ~ObIvfAsyncTaskExector() {}
   int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
+  int check_schema_version_changed(bool &schema_changed);
 
 private:
   static const int64_t DEFAULT_TABLE_ID_ARRAY_SIZE = 128;
@@ -112,6 +113,9 @@ private:
                             ObIvfAuxTableInfo &aux_table_info);
   int get_tablet_ids_by_ls(const ObTableSchema &index_table_schema,
                            common::ObIArray<ObTabletID> &tablet_id_array);
+
+private:
+  int64_t local_schema_version_;
 };
 
 }  // namespace share

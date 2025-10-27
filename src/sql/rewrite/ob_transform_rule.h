@@ -327,6 +327,20 @@ struct ObTryTransHelper
 // param name in this structure is same as the name in origin contexts
 struct ObEvalCostHelper
 {
+  ObEvalCostHelper() :
+    question_marks_count_(0),
+    calculable_items_count_(0),
+    try_trans_helper_(),
+    eval_cost_(false),
+    expr_constraints_count_(0),
+    plan_const_param_constraints_count_(0),
+    equal_param_constraints_count_(0),
+    src_qb_name_(),
+    outline_trans_hints_count_(0),
+    used_trans_hints_count_(0),
+    tmp_expr_factory_(NULL)
+  {}
+
   int fill_helper(const ObPhysicalPlanCtx &phy_plan_ctx,
                   const ObQueryCtx &query_ctx,
                   const ObTransformerCtx &trans_ctx);
@@ -347,6 +361,7 @@ struct ObEvalCostHelper
   ObString src_qb_name_;
   int64_t outline_trans_hints_count_;
   int64_t used_trans_hints_count_;
+  ObRawExprFactory *tmp_expr_factory_;
 };
 
 class ObTransformRule
@@ -619,4 +634,3 @@ private:
 } /* namespace oceanbase */
 
 #endif /* _OCEANBASE_SQL_REWRITE_RULE_H */
-

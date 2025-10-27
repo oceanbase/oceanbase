@@ -163,9 +163,10 @@ int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tm
   }
   // fill the lambda array
   for (uint32_t i = 0; i < arr_dim && OB_SUCC(ret); i++) {
-    ObSQLUtils::clear_expr_eval_flags(*lambda_expr, ctx);
-    if (OB_FAIL(set_lambda_para(tmp_allocator, ctx, info, arr_obj, arr_obj_size, i))) {
+    bool is_set_lambda_para  = false;
+    if (OB_FAIL(set_lambda_para(tmp_allocator, ctx, info, arr_obj, arr_obj_size, i, is_set_lambda_para))) {
       LOG_WARN("failed to set lambda para", K(ret), K(i));
+    } else if (is_set_lambda_para && OB_FALSE_IT(ObSQLUtils::clear_expr_eval_flags(*lambda_expr, ctx))) {
     } else if (OB_FAIL(lambda_expr->eval(ctx, datum))) {
       LOG_WARN("failed to eval args", K(ret));
     } else if (lambda_arr->get_format() == Nested_Array) {
@@ -202,9 +203,11 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
                                           ObExprArrayMapInfo *info,
                                           ObIArrayType **arr_obj,
                                           uint32_t arr_obj_size,
-                                          uint32_t idx)
+                                          uint32_t idx,
+                                          bool &is_set)
 {
   int ret = OB_SUCCESS;
+  is_set = false;
   for (uint32_t j = 0; j < info->param_num_ && OB_SUCC(ret); j++) {
     ObExpr *lambda_para = info->param_exprs_[j];
     uint32_t para_idx = info->param_idx_[j];
@@ -216,6 +219,7 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
     } else if (idx >= arr_obj[para_idx]->size()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid idx", K(ret), K(j), K(idx), K(arr_obj[para_idx]->size()));
+    } else if (OB_FALSE_IT(is_set = true)) {
     } else if (arr_obj[para_idx]->get_format() != ArrayFormat::Vector && arr_obj[para_idx]->is_null(idx)) {
       lambda_para->locate_datum_for_write(ctx).set_null();
     } else {

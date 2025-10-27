@@ -251,8 +251,6 @@ Reserved Keyword: MASTER_SSL_VERIFY_SERVER_CERT
 Test Table Name and Column Name Sql:create table MASTER_SSL_VERIFY_SERVER_CERT(MASTER_SSL_VERIFY_SERVER_CERT int);
 Reserved Keyword: MATCH
 Test Table Name and Column Name Sql:create table MATCH(MATCH int);
-Reserved Keyword: MAXVALUE
-Test Table Name and Column Name Sql:create table MAXVALUE(MAXVALUE int);
 Reserved Keyword: MEDIUMBLOB
 Test Table Name and Column Name Sql:create table MEDIUMBLOB(MEDIUMBLOB int);
 Reserved Keyword: MEDIUMINT
@@ -305,8 +303,6 @@ Reserved Keyword: PROCEDURE
 Test Table Name and Column Name Sql:create table PROCEDURE(PROCEDURE int);
 Reserved Keyword: PURGE
 Test Table Name and Column Name Sql:create table PURGE(PURGE int);
-Reserved Keyword: RANGE
-Test Table Name and Column Name Sql:create table RANGE(RANGE int);
 Reserved Keyword: READ
 Test Table Name and Column Name Sql:create table READ(READ int);
 Reserved Keyword: READS
@@ -381,8 +377,6 @@ Reserved Keyword: SQL_SMALL_RESULT
 Test Table Name and Column Name Sql:create table SQL_SMALL_RESULT(SQL_SMALL_RESULT int);
 Reserved Keyword: SSL
 Test Table Name and Column Name Sql:create table SSL(SSL int);
-Reserved Keyword: SKIP
-Test Table Name and Column Name Sql:create table SKIP(SKIP int);
 Reserved Keyword: STARTING
 Test Table Name and Column Name Sql:create table STARTING(STARTING int);
 Reserved Keyword: STORED
@@ -461,7 +455,7 @@ Reserved Keyword: ZEROFILL
 Test Table Name and Column Name Sql:create table ZEROFILL(ZEROFILL int);
 Reserved Keyword: TABLEGROUP
 Test Table Name and Column Name Sql:create table TABLEGROUP(TABLEGROUP int);
-************** Total Count of Reserved Keyword:231   ***************
+************** Total Count of Reserved Keyword:228   ***************
 **************   End Test Reserved Keyword   ***************
 **************   Begin Test Non-Reserved Keyword  ***************
 **************   End Test Non-Reserved Keyword  ***************

@@ -233,6 +233,7 @@ struct ObCostTableScanInfo
      ss_postfix_range_filters_(),
      postfix_filters_(),
      table_filters_(),
+     functional_lookup_exprs_(),
      table_metas_(NULL),
      sel_ctx_(NULL),
      est_method_(EST_INVALID),
@@ -304,6 +305,8 @@ struct ObCostTableScanInfo
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> real_range_exprs_; // range conditions constructed by query range, only valid when unprecise_range_filters_ not empty
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> precise_range_filters_; // precise range filters in origin filters
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> unprecise_range_filters_; // unprecise range filters in origin filters
+  // domain index query exprs calculated by functional lookup
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> functional_lookup_exprs_;
 
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> access_columns_;
 
@@ -810,6 +813,11 @@ public:
 																double &cost);
 
   int get_sort_cmp_cost(const common::ObIArray<sql::ObRawExprResType> &types, double &cost);
+  int cost_functional_lookup(const ObIArray<ObRawExpr*>& postfix_filters,
+                             const ObIArray<ObRawExpr*>& table_filters,
+                             const ObIArray<ObRawExpr*>& functional_lookup_exprs,
+                             double row_count,
+                             double &cost);
 
   int cost_window_function(double rows, double width, double win_func_cnt, double &cost);
 

@@ -80,8 +80,7 @@ public:
                K_(single_scan_stat), K_(multi_scan_stat),
                K_(exist_row), K_(get_row), K_(scan_row),
                K_(sstable_bf_filter_cnt), K_(sstable_bf_empty_read_cnt),
-               K_(sstable_bf_access_cnt), K_(rowkey_prefix),
-               K_(logical_read_cnt), K_(physical_read_cnt));
+               K_(sstable_bf_access_cnt), K_(rowkey_prefix));
 
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -118,8 +117,6 @@ public:
   int64_t sstable_bf_empty_read_cnt_;
   int64_t sstable_bf_access_cnt_;
   int64_t rowkey_prefix_;
-  int64_t logical_read_cnt_;
-  int64_t physical_read_cnt_;
 };
 
 struct ObTableStoreStatKey
