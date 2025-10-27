@@ -107,6 +107,8 @@
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
 #include "storage/incremental/sslog/ob_sslog_service.h"
+#include "storage/incremental/share/ob_ss_diagnose_mgr.h"
+#include "storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #endif
 #include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "share/object_storage/ob_device_config_mgr.h"
@@ -128,6 +130,7 @@
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
 #include "sql/engine/table/ob_external_data_access_mgr.h"
 #include "observer/omt/ob_tenant_ai_service.h"
+#include "share/scheduler/ob_partition_auto_split_helper.h"
 
 namespace oceanbase
 {
@@ -928,9 +931,12 @@ int MockTenantModuleEnv::init()
         MTL_BIND2(mtl_new_default, ObSSWriterService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSMetaService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSGarbageCollectorService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-        MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSLogNotifyService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogGTSService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSLogUIDService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSDiagnoseInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       }
 #else
 #endif
