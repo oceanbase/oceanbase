@@ -294,6 +294,15 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       inner_table_schema->set_schema_version(latest_schema_version);
       inner_table_schema->set_lake_table_format(share::ObLakeTableFormat::ODPS);
       odps_table_metadata->lake_table_metadata_version_ = latest_schema_version;
+      // ref to ob_create_table_resolver.cpp:create_default_partition_for_table
+      ObPartition partition;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(partition.set_part_name("P_DEFAULT"))) {
+        LOG_WARN("set partition name failed", K(ret));
+      } else if (OB_FAIL(inner_table_schema->add_partition(partition))) {
+        LOG_WARN("add partition failed", K(ret));
+      } else if (OB_FALSE_IT(inner_table_schema->set_part_num(1))) {
+      }
     }
   }
 
@@ -463,14 +472,14 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         // 按照比例计算每个partition的row_count
         if (OB_SUCC(ret)) {
           if (max_partition_file_size == 0) {
-            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("max partition file size is 0", K(ret));
           }
         }
       }
 
       if (OB_SUCC(ret)) {
-        if(!GCONF._use_odps_jni_connector) {
+	if (max_partition_file_size == 0) {
+	} else if(!GCONF._use_odps_jni_connector) {
           #if defined(OB_BUILD_CPP_ODPS)
             // get row count for odps partition
             sql::ObODPSTableRowIterator odps_driver;
@@ -509,8 +518,12 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         }
 
         if (OB_SUCC(ret)) {
-          row_count = max_row_count * (total_data_size * 1.00 / max_partition_file_size);
-          LOG_INFO("ODPS statistics catalog table row count estimate size", K(max_partition_file_size), K(max_row_count), K(total_data_size), K(row_count));
+	  if (0 != max_partition_file_size) {
+            row_count = max_row_count * (total_data_size * 1.00 / max_partition_file_size);
+            LOG_INFO("ODPS statistics catalog table row count estimate size", K(max_partition_file_size), K(max_row_count), K(total_data_size), K(row_count));
+	  } else {
+            row_count = 0;
+	  }
         }
       }
     } else { // Storage api mode 谓词过滤不加入
