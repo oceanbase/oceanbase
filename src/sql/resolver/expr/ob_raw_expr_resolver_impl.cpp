@@ -7911,18 +7911,26 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
               udf_info.udf_param_num_++;
             }
           } else {
-            has_assign_expr = true;
-            ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
-                                param_node->children_[0]->str_value_);
-            if (param_name.empty()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("param node string is empty", K(ret));
-            } else if (OB_FAIL(udf_info.param_names_.push_back(param_name))) {
-              LOG_WARN("failed to push back", K(ret), K(param_name));
-            } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)))) {
-              LOG_WARN("failed to recursive resolve", K(ret));
-            } else if (OB_FAIL(udf_info.param_exprs_.push_back(param_expr))) {
-              LOG_WARN("failed to push back", K(ret));
+            if (OB_SUCC(ret) && has_assign_const && i != 0) {
+              // in case of associative array constructor (1 => 2, a => 4)
+              ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
+              LOG_WARN("can not get parameter after assign", K(ret));
+            }
+            if (OB_FAIL(ret)) {
+            } else {
+              has_assign_expr = true;
+              ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
+                                  param_node->children_[0]->str_value_);
+              if (param_name.empty()) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("param node string is empty", K(ret));
+              } else if (OB_FAIL(udf_info.param_names_.push_back(param_name))) {
+                LOG_WARN("failed to push back", K(ret), K(param_name));
+              } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)))) {
+                LOG_WARN("failed to recursive resolve", K(ret));
+              } else if (OB_FAIL(udf_info.param_exprs_.push_back(param_expr))) {
+                LOG_WARN("failed to push back", K(ret));
+              }
             }
           }
         } else if (has_assign_expr || has_assign_const) { // in case of (1=>2, 3) for associative array constructor
