@@ -394,7 +394,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
                                                     path_array))) {
             LOG_WARN("failed to obtain routine", K(ret), K(package_id), K(proc_id), K(path_array));
           } else if (OB_FAIL(pl.execute(*ctx.exec_ctx_,
-                                 *ctx.get_top_expr_allocator(),
+                                 ctx.tmp_alloc_for_copy_param_,
                                  package_id,
                                  proc_id,
                                  path_array,
