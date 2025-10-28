@@ -80,6 +80,7 @@ ObIndexSkipScanner::ObIndexSkipScanner(const bool is_for_memtable, const ObStora
     prefix_alloc_("SS_PREFIX", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     is_inited_(false),
     is_disabled_(false),
+    is_border_after_disabled_(false),
     is_reverse_scan_(false),
     is_prefix_filled_(false),
     is_scan_range_complete_(false),
@@ -111,6 +112,7 @@ ObIndexSkipScanner::~ObIndexSkipScanner()
 void ObIndexSkipScanner::reuse()
 {
   is_disabled_ = false;
+  is_border_after_disabled_ = false;
   is_reverse_scan_ = false;
   is_prefix_filled_ = false;
   is_scan_range_complete_ = false;
@@ -129,6 +131,7 @@ void ObIndexSkipScanner::reset()
 {
   is_inited_ = false;
   is_disabled_ = false;
+  is_border_after_disabled_ = false;
   is_reverse_scan_ = false;
   is_prefix_filled_ = false;
   is_scan_range_complete_ = false;
@@ -383,8 +386,19 @@ int ObIndexSkipScanner::skip(
 {
   int ret = OB_SUCCESS;
   ObIndexSkipState &state = index_info.skip_state_;
-  if (OB_FAIL(check_and_preprocess(first, micro_scanner, state))) {
+  if (is_disabled() && !is_border_after_disabled_) {
+    LOG_DEBUG("[INDEX SKIP SCAN] skip scanner is disabled and not border", K(first), K(state), K(micro_scanner), KPC(this));
+  } else if (OB_FAIL(check_and_preprocess(first, micro_scanner, state))) {
     LOG_WARN("failed to check and preprocess", KR(ret));
+  } else if (state.is_skipped()) {
+  } else if (is_disabled() && first) {
+    bool has_data = false;
+    if (OB_FAIL(check_after_range_updated(is_reverse_scan_, complete_range_, micro_scanner, is_border_after_disabled_))) {
+      LOG_WARN("failed to check after range updated", KR(ret));
+    } else if (!is_border_after_disabled_) {
+    } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, complete_range_, false, has_data))) {
+      LOG_WARN("failed to skip in micro", KR(ret));
+    }
   } else if (!is_disabled() && !state.is_skipped()) {
     LOG_DEBUG("[INDEX SKIP SCAN] try skip data in block", K(first), K(state), KPC(this));
     bool has_data = false;
@@ -479,8 +493,6 @@ int ObIndexSkipScanner::skip(ObMemtableSkipScanIterator &mem_iter, bool &is_end,
     LOG_WARN("failed to check scan range", KR(ret));
   } else if (OB_FAIL(update_complete_range(store_row, true /* is_for_memtable */, is_start_equal, is_end_equal))) {
     LOG_WARN("failed to update complete range", KR(ret));
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(mem_iter.skip_to_range(complete_range_))) {
     LOG_WARN("failed to skip to range", KR(ret));
   }
@@ -681,6 +693,7 @@ int ObIndexSkipScanner::check_scan_range(const ObDatumRow *row, bool &is_start_e
 }
 
 int ObIndexSkipScanner::check_after_range_updated(
+    const bool is_cmp_end,
     const ObDatumRange &range,
     const blocksstable::ObIMicroBlockRowScanner &micro_scanner,
     bool &skipped)
@@ -691,7 +704,7 @@ int ObIndexSkipScanner::check_after_range_updated(
     int right_cmp_ret = 0;
     const ObDatumRowkey &right_border = range.end_key_;
     const ObBorderFlag &border_flag = range.border_flag_;
-    if (OB_FAIL(micro_scanner.compare_rowkey(right_border, false, right_cmp_ret))) {
+    if (OB_FAIL(micro_scanner.compare_rowkey(right_border, is_cmp_end, right_cmp_ret))) {
       LOG_WARN("failed to compare right border", KR(ret), K(range), KPC(this));
     } else {
       // CASE:1.5 in reverse scan
@@ -702,7 +715,7 @@ int ObIndexSkipScanner::check_after_range_updated(
     int left_cmp_ret = 0;
     const ObDatumRowkey &left_border = range.start_key_;
     const ObBorderFlag &border_flag = range.border_flag_;
-    if (OB_FAIL(micro_scanner.compare_rowkey(left_border, true, left_cmp_ret))) {
+    if (OB_FAIL(micro_scanner.compare_rowkey(left_border, is_cmp_end, left_cmp_ret))) {
       LOG_WARN("failed to compare left border", KR(ret), K(range), KPC(this));
     } else {
       // CASE:2.4 in forward scan
@@ -835,7 +848,7 @@ int ObIndexSkipScanner::skip_in_micro(
   const bool is_left_border = index_info.is_left_border();
   const bool is_right_border = index_info.is_right_border();
   ObIndexSkipState &state = index_info.skip_state_;
-  if (OB_FAIL(check_after_range_updated(range, micro_scanner, skipped_by_new_range))) {
+  if (OB_FAIL(check_after_range_updated(!is_reverse_scan_, range, micro_scanner, skipped_by_new_range))) {
     LOG_WARN("failed to check after range updated", KR(ret));
   } else if (skipped_by_new_range) {
     micro_scanner.skip_to_end();
@@ -927,6 +940,7 @@ int ObIndexSkipScanner::check_disabled()
     } else if ((!is_reverse_scan_ && cmp_ret > 0) || (is_reverse_scan_ && cmp_ret < 0)) {
       // current prefix is behind the max prefix, so we can disable this index skip scanner now
       is_disabled_ = true;
+      is_border_after_disabled_ = true;
       if (is_reverse_scan_) {
         SET_ROWKEY_TO_SCAN_ROWKEY(start, left);
       } else {

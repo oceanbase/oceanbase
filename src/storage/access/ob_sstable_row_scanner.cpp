@@ -340,7 +340,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
         LOG_TRACE("[PUSHDOWN] pushdown for block scan", K(prefetcher_.cur_micro_data_fetch_idx_), K(micro_info), KPC(block_row_store_));
       }
       if (OB_SUCC(ret)) {
-        if (OB_UNLIKELY(has_skip_scanner_and_not_skipped(micro_info) &&
+        if (OB_UNLIKELY(has_skip_scanner() && !micro_info.skip_state_.is_skipped() &&
                         OB_FAIL(skip_scanner_->skip(*micro_scanner_, micro_info, true/*first*/)))) {
           LOG_WARN("Fail to skip rows", K(ret));
         } else {

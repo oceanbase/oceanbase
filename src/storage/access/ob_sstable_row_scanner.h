@@ -96,7 +96,7 @@ private:
       const int64_t end_offset);
   OB_INLINE bool has_skip_scanner() const
   {
-    return nullptr != skip_scanner_ && !skip_scanner_->is_disabled();
+    return nullptr != skip_scanner_ && (!skip_scanner_->is_disabled() || skip_scanner_->is_border_after_disabled());
   }
   OB_INLINE bool has_skip_scanner_and_not_skipped(const ObMicroIndexInfo &index_info, const bool ignore_disabled = false) const
   {

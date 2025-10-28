@@ -199,6 +199,10 @@ public:
   {
     return is_disabled_;
   }
+  OB_INLINE bool is_border_after_disabled() const
+  {
+    return is_border_after_disabled_;
+  }
   OB_INLINE bool is_prefix_filled() const
   {
     return is_prefix_filled_;
@@ -213,6 +217,7 @@ public:
   }
   TO_STRING_KV(K_(is_inited),
                K_(is_disabled),
+               K_(is_border_after_disabled),
                K_(is_reverse_scan),
                K_(is_prefix_filled),
                K_(is_scan_range_complete),
@@ -250,6 +255,7 @@ private:
       ObIAllocator &alloc);
   int check_prefix_changed(const blocksstable::ObDatumRow *row, bool &changed);
   int check_after_range_updated(
+      const bool is_cmp_end,
       const blocksstable::ObDatumRange &range,
       const blocksstable::ObIMicroBlockRowScanner &micro_scanner,
       bool &skipped);
@@ -285,6 +291,7 @@ private:
   common::ObArenaAllocator prefix_alloc_;
   bool is_inited_;
   bool is_disabled_;
+  bool is_border_after_disabled_;
   bool is_reverse_scan_;
   bool is_prefix_filled_;
   bool is_scan_range_complete_;
