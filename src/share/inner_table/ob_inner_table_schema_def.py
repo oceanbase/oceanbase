@@ -17214,6 +17214,7 @@ def_table_schema(
 # 12577: __all_virtual_macro_block_copy_task
 # 12578: __all_virtual_macro_block_copy_task_progress
 # 12579: __all_virtual_macro_block_copy_task_history
+# 12580: __all_virtual_tablet_to_global_temporary_table
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
