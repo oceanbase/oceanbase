@@ -4247,6 +4247,7 @@ private:
   common::ObCollationType collation_connection_;
   uint64_t container_table_id_;
   const ObMVRefreshInfo *mv_refresh_info_; //only for pass write param, don't need serialize and memory is hold by caller
+  common::ObString expand_view_definition_for_mv_;
 };
 
 class ObColumnSchemaHashWrapper
