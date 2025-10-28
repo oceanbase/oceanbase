@@ -119,10 +119,12 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
         type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObCollectionSQLType]).get_length());
       }
     }
-    type1.set_calc_meta(type.get_obj_meta());
-    type1.set_calc_accuracy(type.get_accuracy());
-    type2.set_calc_meta(type.get_obj_meta());
-    type2.set_calc_accuracy(type.get_accuracy());
+    if (OB_SUCC(ret)) {
+      type1.set_calc_meta(type.get_obj_meta());
+      type1.set_calc_accuracy(type.get_accuracy());
+      type2.set_calc_meta(type.get_obj_meta());
+      type2.set_calc_accuracy(type.get_accuracy());
+    }
   }
 
   return ret;

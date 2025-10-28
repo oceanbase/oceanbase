@@ -13,9 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_QUERY_PARSE_H_
 #define OCEANBASE_SHARE_OB_QUERY_PARSE_H_
 
-#include "lib/json_type/ob_json_parse.h"
 #include "ob_query_request.h"
-#include "share/schema/ob_schema_struct.h"
 #include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
@@ -46,13 +44,19 @@ enum ObEsQueryItem : int8_t {
   QUERY_ITEM_TERM,
   QUERY_ITEM_RANK_FEATURE,
   QUERY_ITEM_TERMS,
-  QUERY_ITEM_COUNT
+  QUERY_ITEM_KNN, // FARM COMPAT WHITELIST
 };
 
 enum ObFusionMethod
 {
   WEIGHT_SUM = 0,
   RRF
+};
+
+enum ObMsmApplyType : int8_t {
+  MSM_NOT_APPLY = 0,
+  MSM_APPLY_NOT_SUB,
+  MSM_APPLY_WITH_SUB,
 };
 
 class ObRankFusion {
@@ -78,24 +82,18 @@ public :
   bool positive_impact;
 };
 
-struct BoolQueryMinShouldMatchInfo {
-  BoolQueryMinShouldMatchInfo() : has_msm_(false), has_where_condition_(true), msm_expr_(nullptr), msm_val_(0), or_expr_(nullptr) {}
-  virtual ~BoolQueryMinShouldMatchInfo() {}
-  bool has_msm_;
-  bool has_where_condition_;
+struct MinimumShouldMatchInfo {
+  MinimumShouldMatchInfo() : term_cnt_(0), msm_expr_(nullptr), condition_expr_(nullptr), apply_type_(MSM_NOT_APPLY) {}
+  virtual ~MinimumShouldMatchInfo() {}
+  inline uint64_t get_msm_val() const {
+    return OB_NOT_NULL(msm_expr_) ? static_cast<uint64_t>(msm_expr_->get_numeric_value()) : 0;
+  }
+  uint64_t term_cnt_;
   ObReqConstExpr *msm_expr_;
-  uint64_t msm_val_;
-  ObReqExpr *or_expr_;
-  TO_STRING_KV(K(has_msm_), K(has_where_condition_), K(msm_expr_), K(msm_val_), K(or_expr_));
-};
-
-struct QueryStringMinShouldMatchInfo {
-  QueryStringMinShouldMatchInfo() : msm_expr_(nullptr), msm_val_(0), or_expr_(nullptr) {}
-  virtual ~QueryStringMinShouldMatchInfo() {}
-  ObReqConstExpr *msm_expr_;
-  uint64_t msm_val_;
-  ObReqExpr *or_expr_;
-  TO_STRING_KV(K(msm_expr_), K(msm_val_), K(or_expr_));
+  ObReqExpr *condition_expr_;
+  ObMsmApplyType apply_type_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> msm_items_;
+  TO_STRING_KV(K(term_cnt_), K(msm_expr_), K(condition_expr_), K(apply_type_));
 };
 
 class ObColumnIndexInfo
@@ -112,55 +110,50 @@ typedef common::hash::ObHashMap<common::ObString, ObColumnIndexInfo*> ColumnInde
 typedef common::hash::ObHashSet<common::ObString> RequiredParamsSet;
 class ObEsQueryInfo {
 public:
-  ObEsQueryInfo(ObQueryReqFromJson *query_req, ObEsQueryItem parent_query_item, bool is_basic_query, bool need_cal_score = true)
-    : query_req_(query_req),
-      need_cal_score_(need_cal_score),
-      parent_query_item_(parent_query_item),
-      query_item_(QUERY_ITEM_UNKNOWN),
-      score_type_(SCORE_TYPE_BEST_FIELDS),
-      operator_(T_OP_OR),
-      boost_(1.0),
-      score_expr_(nullptr),
-      condition_expr_(nullptr),
-      basic_query_condition_expr_(nullptr),
-      esql_condition_expr_(nullptr),
-      query_keywords_(ObString()),
-      has_must_not_(false),
-      has_filter_(false),
-      score_is_const_(false),
-      is_basic_query_(is_basic_query),
-      score_items_(),
-      condition_items_(),
-      field_exprs_(),
-      keyword_exprs_(),
-      apply_es_mode_(false) {}
+  ObEsQueryInfo() = delete;
+  static int init_query_info(ObEsQueryInfo *&query_info,
+                             ObIAllocator &alloc,
+                             ObQueryReqFromJson *query_req,
+                             ObEsQueryInfo *parent_query_info,
+                             ObEsQueryItem outer_query_item,
+                             bool need_cal_score = false);
+
+  virtual ~ObEsQueryInfo() {}
 
   ObQueryReqFromJson *query_req_;
   bool need_cal_score_;
-  ObEsQueryItem parent_query_item_;
+  uint64_t total_depth_;
+  ObEsQueryInfo *parent_query_info_;
+  ObEsQueryItem outer_query_item_;
   ObEsQueryItem query_item_;
   ObEsScoreType score_type_;
-  ObItemType operator_;
-  double boost_;
+  ObItemType opr_;
+  MinimumShouldMatchInfo msm_info_;
+  ObReqConstExpr *boost_expr_;
   ObReqExpr *score_expr_;
   ObReqExpr *condition_expr_;
-  ObReqExpr *basic_query_condition_expr_;
+  ObReqExpr *score_alias_expr_;
   ObReqExpr *esql_condition_expr_;
-  QueryStringMinShouldMatchInfo qs_msm_info_;
-  BoolQueryMinShouldMatchInfo bq_msm_info_;
-  ObString query_keywords_;
+  ObReqConstExpr *esql_options_expr_;
+  ObString query_text_;
+  bool has_must_;
   bool has_must_not_;
+  bool has_should_;
   bool has_filter_;
   bool score_is_const_;
-  bool is_basic_query_;
-  bool is_one_keyword_;
+  uint64_t tkn_cnt_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> condition_items_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_alias_items_;
   common::ObSEArray<ObReqColumnExpr *, 4, common::ModulePageAllocator, true> field_exprs_;
   common::ObSEArray<ObReqConstExpr *, 4, common::ModulePageAllocator, true> keyword_exprs_;
-  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> basic_query_score_items_;
-  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> token_exprs_;
+  common::ObSEArray<ObEsQueryInfo *, 4, common::ModulePageAllocator, true> sub_query_infos_;
+  common::ObSEArray<common::ObSEArray<ObReqMatchExpr *, 4, common::ModulePageAllocator, true>, 4, common::ModulePageAllocator, true> match_exprs_matrix_;
 
+  void set_msm_apply_type();
+  inline bool combine_keywords() const {
+    return opr_ == T_OP_OR && (score_type_ != SCORE_TYPE_PHRASE || keyword_exprs_.count() == tkn_cnt_);
+  }
   inline bool is_valid() const {
     if (OB_ISNULL(query_req_) || OB_ISNULL(score_expr_) || OB_ISNULL(condition_expr_)) {
       return false;
@@ -169,28 +162,69 @@ public:
       case QUERY_ITEM_MATCH:
       case QUERY_ITEM_MULTI_MATCH:
       case QUERY_ITEM_QUERY_STRING:
-        return !field_exprs_.empty() && !query_keywords_.empty() &&
-               (OB_ISNULL(qs_msm_info_.msm_expr_) || qs_msm_info_.msm_val_ > 0) && boost_ > 0;
+        return !field_exprs_.empty() && !keyword_exprs_.empty() &&
+               (OB_ISNULL(msm_info_.msm_expr_) || msm_info_.msm_expr_->get_numeric_value() > 0) &&
+               (OB_ISNULL(boost_expr_) || boost_expr_->get_numeric_value() > 0);
       case QUERY_ITEM_TERM:
       case QUERY_ITEM_RANGE:
-        return (OB_ISNULL(qs_msm_info_.msm_expr_) || qs_msm_info_.msm_val_ > 0) && boost_ > 0;
       default:
-        return false;
+        return true;
     }
-  }
-  inline bool support_es_mode() {
-    set_es_mode_((query_item_ == QUERY_ITEM_MATCH ||
-                  query_item_ == QUERY_ITEM_MULTI_MATCH||
-                  query_item_ == QUERY_ITEM_QUERY_STRING) &&
-                 operator_ == T_OP_OR &&
-                 boost_ != 0.0 &&
-                 (score_type_ == SCORE_TYPE_BEST_FIELDS || score_type_ == SCORE_TYPE_MOST_FIELDS));
-    return apply_es_mode_;
   }
   inline bool is_es_mode() const {
     return apply_es_mode_;
   }
+  bool need_construct_sub_query_with_minimum_should_match() const;
+  bool support_es_mode();
+  uint64_t get_upward_depth() const;
+  uint64_t get_total_depth() const;
+  inline ObEsQueryInfo *get_top_query_info() const {
+    ObEsQueryInfo *top_query_info = const_cast<ObEsQueryInfo *>(this);
+    while (top_query_info->parent_query_info_ != nullptr) {
+      top_query_info = top_query_info->parent_query_info_;
+    }
+    return top_query_info;
+  }
+
+  TO_STRING_KV(K(query_req_), K(need_cal_score_), K(total_depth_), K(parent_query_info_),
+               K(outer_query_item_), K(query_item_), K(score_type_), K(opr_),
+               K(boost_expr_),K(score_expr_), K(condition_expr_), K(score_alias_expr_),
+               K(esql_condition_expr_), K(esql_options_expr_), K(msm_info_), K(query_text_),
+               K(has_must_), K(has_must_not_), K(has_should_), K(has_filter_),
+               K(score_is_const_), K(tkn_cnt_), K(apply_es_mode_));
+
 private:
+  ObEsQueryInfo(ObQueryReqFromJson *query_req, ObEsQueryInfo *parent_query_info, ObEsQueryItem outer_query_item, bool need_cal_score)
+    : query_req_(query_req),
+      need_cal_score_(need_cal_score),
+      total_depth_(1),
+      parent_query_info_(parent_query_info),
+      outer_query_item_(outer_query_item),
+      query_item_(QUERY_ITEM_UNKNOWN),
+      score_type_(SCORE_TYPE_BEST_FIELDS),
+      opr_(T_OP_OR),
+      msm_info_(),
+      boost_expr_(nullptr),
+      score_expr_(nullptr),
+      condition_expr_(nullptr),
+      score_alias_expr_(nullptr),
+      esql_condition_expr_(nullptr),
+      esql_options_expr_(nullptr),
+      query_text_(ObString()),
+      has_must_(false),
+      has_must_not_(false),
+      has_should_(false),
+      has_filter_(false),
+      score_is_const_(false),
+      tkn_cnt_(0),
+      score_items_(),
+      condition_items_(),
+      score_alias_items_(),
+      field_exprs_(),
+      keyword_exprs_(),
+      sub_query_infos_(),
+      match_exprs_matrix_(),
+      apply_es_mode_(false) {}
   bool apply_es_mode_;
   inline void set_es_mode_(bool value) {
     apply_es_mode_ = value;
@@ -200,15 +234,15 @@ private:
 class ObESQueryParser
 {
 public :
-  ObESQueryParser(ObIAllocator &alloc, common::ObString *table_name) : alloc_(alloc), source_cols_(),
-    need_json_wrap_(false), table_name_(*table_name), user_cols_(), item_seq_(0), out_cols_(nullptr), enable_es_mode_(false),
-    fusion_config_(), default_size_(nullptr) {}
+  ObESQueryParser(ObIAllocator &alloc, common::ObString *table_name) :
+    alloc_(alloc), source_cols_(), need_json_wrap_(false), table_name_(*table_name), database_name_(), index_name_map_(),
+    user_cols_(), out_cols_(nullptr), enable_es_mode_(false), fusion_config_(), default_size_(nullptr) {}
   ObESQueryParser(ObIAllocator &alloc, bool need_json_wrap,
                   const common::ObString *table_name,
                   const common::ObString *database_name = nullptr,
-                  bool enable_es_mode = false)
-    : alloc_(alloc), source_cols_(), need_json_wrap_(need_json_wrap), table_name_(*table_name), database_name_(*database_name),
-      user_cols_(), item_seq_(0), out_cols_(nullptr), enable_es_mode_(enable_es_mode), fusion_config_(), default_size_(nullptr) {}
+                  bool enable_es_mode = false) :
+    alloc_(alloc), source_cols_(), need_json_wrap_(need_json_wrap), table_name_(*table_name), database_name_(*database_name), index_name_map_(),
+    user_cols_(), out_cols_(nullptr), enable_es_mode_(enable_es_mode), fusion_config_(), default_size_(nullptr) {}
   virtual ~ObESQueryParser() {}
   int parse(const common::ObString &req_str, ObQueryReqFromJson *&query_req);
   inline ColumnIndexNameMap &get_index_name_map() { return index_name_map_; }
@@ -218,11 +252,10 @@ private :
   int parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
   int parse_source(ObIJsonBase &req_node);
   int parse_bool(ObIJsonBase &req_node, ObEsQueryInfo &query_info);
-  int parse_must_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&condition_expr, common::ObIArray<ObReqExpr *> &score_items, bool need_cal_score = true);
-  int parse_must_not_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&condition_expr);
-  int parse_should_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&condition_expr, common::ObIArray<ObReqExpr *> &score_items,
-                           BoolQueryMinShouldMatchInfo &bq_msm_info, bool need_cal_score = true);
-  int parse_filter_clauses(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req, ObReqExpr *&condition_expr);
+  int parse_must_clauses(ObIJsonBase &req_node, ObEsQueryInfo &query_info, ObReqExpr *&condition_expr, common::ObIArray<ObReqExpr *> &score_items);
+  int parse_must_not_clauses(ObIJsonBase &req_node, ObEsQueryInfo &query_info, ObReqExpr *&condition_expr);
+  int parse_should_clauses(ObIJsonBase &req_node, ObEsQueryInfo &query_info, ObReqExpr *&condition_expr, common::ObIArray<ObReqExpr *> &score_items);
+  int parse_filter_clauses(ObIJsonBase &req_node, ObEsQueryInfo &query_info, ObReqExpr *&condition_expr);
   int parse_single_term(ObIJsonBase &req_node, ObEsQueryInfo &query_info);
   int parse_match(ObIJsonBase &req_node, ObEsQueryInfo &query_info);
   int parse_range(ObIJsonBase &req_node, ObEsQueryInfo &query_info);
@@ -241,35 +274,39 @@ private :
                             ObReqConstExpr *&const_para1, ObReqConstExpr *&const_para2, bool &positive);
   int parse_basic_table(const ObString &table_name, ObQueryReqFromJson *query_req);
   int parse_field(ObIJsonBase &val_node, ObReqColumnExpr *&field);
+  int parse_boost(ObIJsonBase &req_node, ObReqConstExpr *&boost_expr);
   int parse_const(ObIJsonBase &val_node, ObReqConstExpr *&var, const bool accept_numeric_string = false, const bool cover_value_to_str = false);
   int parse_keyword(const ObString &query_text, ObEsQueryInfo &query_info);
   int parse_keyword_array(ObIJsonBase &val_node, common::ObIArray<ObReqConstExpr *> &value_items);
-  int parse_keyword_query_string(const ObString &query_text, ObEsQueryInfo &query_info);
-  int parse_keyword_multi_match(const ObString &query_text, ObEsQueryInfo &query_info);
+  int parse_keyword_query_string(ObEsQueryInfo &query_info, const char *&current, const char *end, common::ObIArray<ObReqConstExpr *> &raw_keywords);
+  int parse_keyword_multi_match(ObEsQueryInfo &query_info, const char *&current, const char *end, common::ObIArray<ObReqConstExpr *> &raw_keywords);
   int process_phrase_keywords(common::ObIArray<ObReqConstExpr *> &phrase_keywords, ObEsQueryInfo &query_info);
   int parse_minimum_should_match(ObIJsonBase &req_node, ObEsQueryInfo &query_info);
   int parse_minimum_should_match_by_value(const common::ObString &val, const int64_t term_cnt, uint64_t &msm_count);
-  int parse_minimum_should_match_with_bool_query(ObIJsonBase &req_node, const int64_t term_cnt, BoolQueryMinShouldMatchInfo &bq_msm_info);
   int parse_best_fields(ObEsQueryInfo &query_info);
   int parse_cross_fields(ObEsQueryInfo &query_info);
   int parse_most_fields(ObEsQueryInfo &query_info);
   int parse_phrase(ObEsQueryInfo &query_info);
+  int concat_const_exprs(const common::ObIArray<ObReqConstExpr *> &array, const ObString &connect_str, ObReqConstExpr *&result);
+  int construct_expr_with_boost(ObReqExpr *expr, ObReqConstExpr *boost_expr, ObReqExpr *&result);
   int construct_es_expr(ObEsQueryInfo &query_info);
-  int construct_es_expr_params(const ObEsQueryInfo &query_info, ObReqConstExpr *&options);
-  int construct_es_expr_fields(ObReqColumnExpr *raw_field, ObReqExpr *&field);
-  int construct_condition_best_fields(ObEsQueryInfo &query_info, common::ObIArray<ObReqExpr *> &conditions);
-  int construct_condition_most_fields(ObEsQueryInfo &query_info, common::ObIArray<ObReqExpr *> &conditions);
-  int construct_condition_cross_fields(ObEsQueryInfo &query_info, common::ObIArray<ObReqExpr *> &conditions);
-  int construct_condition_phrase(ObEsQueryInfo &query_info, common::ObIArray<ObReqExpr *> &conditions);
+  int construct_es_expr_options(ObEsQueryInfo &query_info);
+  int construct_es_expr_field(ObReqColumnExpr *raw_field, ObReqExpr *&field);
+  int construct_condition_best_fields(ObEsQueryInfo &query_info);
+  int construct_condition_most_fields(ObEsQueryInfo &query_info);
+  int construct_condition_cross_fields(ObEsQueryInfo &query_info);
+  int construct_condition_phrase(ObEsQueryInfo &query_info);
+  int construct_match_exprs_matrix(ObEsQueryInfo &query_info);
+  int construct_query_string_score(ObEsQueryInfo &query_info);
   int construct_query_string_condition(ObEsQueryInfo &query_info);
   int construct_in_expr(ObReqColumnExpr *col_expr, common::ObIArray<ObReqConstExpr *> &value_exprs, ObReqOpExpr *&in_expr);
   int wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson *&query_req);
   int wrap_json_result(ObQueryReqFromJson *&query_req);
   int construct_query_with_similarity(ObVectorIndexDistAlgorithm algor, ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req);
   int construct_all_query(ObQueryReqFromJson *&query_req);
-  int construct_sub_query_table(ObString &sub_query_name, ObQueryReqFromJson *query_req, ObReqTable *&sub_query);
+  int construct_sub_query_table(const ObString &sub_query_name, ObQueryReqFromJson *query_req, ObReqTable *&sub_query);
   int construct_hybrid_query(ObQueryReqFromJson *fts, ObQueryReqFromJson *knn, ObQueryReqFromJson *&hybrid);
-  int construct_score_sum_expr(ObReqExpr *fts_score, ObReqExpr *vs_score, ObString &score_alias, ObReqOpExpr *&score);
+  int construct_score_sum_expr(ObReqExpr *fts_score, ObReqExpr *vs_score, const ObString &score_alias, ObReqOpExpr *&score);
   int construct_rank_feat_expr(const ObRankFeatDef &rank_feat_def, ObReqExpr *&rank_feat_expr);
   int construct_order_by_item(ObReqExpr *order_expr, bool ascent, OrderInfo *&order_info);
   int construct_join_condition(const ObString &l_table, const ObString &r_table,
@@ -295,12 +332,14 @@ private :
                                                                  col_name == "__pk_increment" ||
                                                                  col_name == "_keyword_rank" ||
                                                                  col_name == "_semantic_rank"; }
-  int construct_minimum_should_match_info(ObIJsonBase &req_node, BoolQueryMinShouldMatchInfo &bq_msm_info);
+  int construct_minimum_should_match_info(ObIJsonBase &req_node, ObEsQueryInfo &query_info);
   int construct_required_params(const char *params_name[], uint32_t name_len, RequiredParamsSet &required_params);
   int get_base_table_query(ObQueryReqFromJson *query_req, ObQueryReqFromJson *&base_table_req, ReqTableType *table_type = nullptr);
-  int build_should_condition_combine(uint64_t start, uint64_t k, const common::ObIArray<ObReqExpr *> &items, common::ObIArray<ObReqExpr *> &expr_array, ObReqExpr *&should_condition);
-  int build_should_condition_compare(uint64_t msm_val, ObReqConstExpr *msm_expr, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&should_condition);
-  int construct_should_group_expr_for_query_string(ObEsQueryInfo &query_info);
+  int build_should_condition_combine(uint64_t start, uint64_t k, const common::ObIArray<ObReqExpr *> &items, common::ObIArray<ObReqExpr *> *work_array, ObReqExpr *&should_condition);
+  int build_should_condition_compare(ObReqConstExpr *msm_expr, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&should_condition);
+  int handle_msm_for_sub_score(ObEsQueryInfo &query_info, ObEsQueryInfo &inner_query_info, ObReqExpr *score_expr);
+  int handle_msm_for_sub_condition(ObEsQueryInfo &query_info);
+  int construct_should_group_expr(ObEsQueryInfo &query_info);
   int check_rank_feat_param(ObIJsonBase *sub_node, uint64_t &algorithm_count, bool &has_field, const ObString &key);
   int parse_multi_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
   int knn_fusion(const ObIArray<ObQueryReqFromJson*> &knn_queries, ObQueryReqFromJson *&query_req);
@@ -310,16 +349,11 @@ private :
   int construct_rank_score(const ObString &table_name, const ObString &rank_alias, ObReqExpr *&rank_score);
   int construct_rank_query(ObString &sub_query_name, ObReqExpr *order_expr, ObString &rank_alias, ObQueryReqFromJson *&query_req);
   int init_default_params(ObIJsonBase &req_node);
-  bool check_need_construct_msm_expr(ObEsQueryInfo &query_info);
-
-  /// use in basic query
-  int construct_basic_query_filter_condition_with_and_expr(ObQueryReqFromJson *query_req);
-  int construct_basic_query_filter_condition_with_or_expr(BoolQueryMinShouldMatchInfo &bq_msm_info, ObQueryReqFromJson *query_req, const common::ObIArray<ObReqExpr *> &items, ObReqExpr *&or_expr);
-  int construct_basic_query_select_items_with_query_string(ObEsQueryInfo &query_info, common::ObIArray<ObReqExpr *> &score_items);
-  int construct_alias_column_expr_to_select_items(ObQueryReqFromJson &query_req, const ObEsQueryInfo &query_info);
-  int construct_alias_column_expr_to_select_items_with_query_string(ObQueryReqFromJson &query_req, const ObEsQueryInfo &query_info);
-  int construct_sub_query_with_minimum_should_match(ObQueryReqFromJson *&query_req);
-
+  int construct_sub_query_with_minimum_should_match(ObQueryReqFromJson *&query_req, ObEsQueryInfo &query_info);
+  int get_query_depth(ObIJsonBase &req_node, uint64_t &depth);
+  inline bool check_is_bool_key(ObString &key) {
+    return key.case_compare("must") == 0 || key.case_compare("must_not") == 0 || key.case_compare("should") == 0 || key.case_compare("filter") == 0 || key.case_compare("bool") == 0;
+  }
   ObIAllocator &alloc_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> source_cols_;
   bool need_json_wrap_;
@@ -327,8 +361,6 @@ private :
   common::ObString database_name_;
   ColumnIndexNameMap index_name_map_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> user_cols_;
-  uint32_t item_seq_;
-
   ObIArray<ObString> *out_cols_;
   // if enable es mode
   bool enable_es_mode_ = false;
@@ -345,13 +377,9 @@ private :
   static const ObString SIZE_DEFAULT;
   static const ObString FTS_ALIAS;
   static const ObString VS_ALIAS;
-
-  int check_is_basic_query(ObIJsonBase &req_node, int depth, ObQueryReqFromJson *query_req);
-  inline bool check_is_bool_query(ObString &key) {
-    return key == "must" || key == "must_not" ||
-           key == "should" || key == "filter" ||
-           key == "bool";
-  }
+  static const ObString MSM_KEY;
+  static const ObString FTS_SUB_SCORE_PREFIX;
+  static const ObString HIDDEN_COLUMN_VISIBLE_HINT;
 };
 
 }  // namespace share

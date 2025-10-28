@@ -25,12 +25,17 @@ class ObQueryReqFromJson : public ObReqFromJson
 public :
   ObQueryReqFromJson()
     : ObReqFromJson(), select_items_(), group_items_(),
-      having_items_(), score_items_(), output_all_columns_(true),
-      score_alias_(), is_basic_query_(true) {}
+      having_items_(), score_items_(), inner_score_items_(), outer_score_items_(), outer_condition_items_(), sub_score_item_seq_(0), output_all_columns_(true),
+      score_alias_() {}
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> select_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> group_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> having_items_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_items_;
+  // for sub query
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> inner_score_items_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> outer_score_items_;
+  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> outer_condition_items_;
+  uint64_t sub_score_item_seq_;
   int translate(char *buf, int64_t buf_len, int64_t &res_len);
   int add_score_item(ObIAllocator &alloc, ObReqExpr *score_item);
   inline bool is_score_item_exist() { return !score_items_.empty(); }
