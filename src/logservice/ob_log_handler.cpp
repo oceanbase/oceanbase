@@ -750,6 +750,7 @@ int ObLogHandler::disable_sync()
 
 bool ObLogHandler::is_sync_enabled() const
 {
+  bool bool_ret = false;
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
@@ -757,9 +758,9 @@ bool ObLogHandler::is_sync_enabled() const
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else {
-    ret = palf_handle_->is_sync_enabled();
+    bool_ret = palf_handle_->is_sync_enabled();
   }
-  return ret;
+  return bool_ret;
 }
 
 int ObLogHandler::advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild)
@@ -2137,7 +2138,7 @@ int ObLogHandler::offline()
     PALF_LOG(INFO, "ObLogHandler has already been destroyed", K(ret), KPC(this));
   } else if (OB_FAIL(disable_replay())) {
     CLOG_LOG(WARN, "disable_replay failed", K(ret), KPC(this));
-  } else if (OB_FAIL(disable_sync()) && OB_NOT_INIT != ret) {
+  } else if (OB_FAIL(disable_sync()) && OB_NOT_INIT != ret && OB_NOT_RUNNING != ret) {
     CLOG_LOG(WARN, "disable_sync failed", K(ret), KPC(this));
   } else {
     WLockGuard guard(lock_);
