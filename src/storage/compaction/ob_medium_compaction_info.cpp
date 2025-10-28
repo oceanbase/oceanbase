@@ -350,6 +350,7 @@ OB_SERIALIZE_MEMBER_SIMPLE(
 const char *ObMediumCompactionInfo::ObCompactionTypeStr[] = {
     "MEDIUM_COMPACTION",
     "MAJOR_COMPACTION",
+    "INC_MAJOR_COMPACTION",
 };
 
 const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionType type)

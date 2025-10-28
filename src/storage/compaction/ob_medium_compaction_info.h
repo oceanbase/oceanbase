@@ -178,6 +178,7 @@ public:
   {
     MEDIUM_COMPACTION = 0,
     MAJOR_COMPACTION = 1,
+    INC_MAJOR_COMPACTION = 2,
     COMPACTION_TYPE_MAX,
   };
   static const char *ObCompactionTypeStr[];
