@@ -56,7 +56,9 @@ public:
       SHARE_LOG(ERROR, "init share resource throttle tool failed", KR(ret));
     } else {
       tenant_id_ = MTL_ID();
-      share_resource_throttle_tool_.enable_adaptive_limit<FakeAllocatorForTxShare>();
+      if (!is_meta_tenant(tenant_id_)) {
+        share_resource_throttle_tool_.enable_adaptive_limit<FakeAllocatorForTxShare>();
+      }
       SHARE_LOG(INFO, "finish init mtl share mem allocator mgr", K(tenant_id_), KP(this));
     }
     return ret;
