@@ -10975,11 +10975,37 @@ int ObDDLService::check_modify_column_when_upgrade(
   }
   return ret;
 }
+
+/*
+ * since some function only need to push up schema version,
+ * get schema from guard to avoid uploading some parameters only exist in mem instead of inner tables;
+*/
+int ObDDLService::sync_aux_schema_version_for_history(const uint64_t tenant_id,
+                                                      const uint64_t table_id,
+                                                      ObSchemaGetterGuard &schema_guard,
+                                                      common::ObMySQLTransaction &trans,
+                                                      ObDDLOperator &ddl_operator)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema should not be null", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(trans, *table_schema))) {
+    LOG_WARN("fail to sync aux schema version for history", K(ret), K(tenant_id), K(table_id));
+  }
+  return ret;
+}
+
 int ObDDLService::alter_shadow_column_for_index(
     const ObArray<ObTableSchema> &idx_schema_array,
     const AlterColumnSchema *alter_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
+    ObSchemaGetterGuard &schema_guard,
     common::ObMySQLTransaction &trans,
     ObIArray<ObTableSchema> *globla_idx_schema_array)
 {
@@ -11037,10 +11063,8 @@ int ObDDLService::alter_shadow_column_for_index(
                       new_aux_column_schema,
                       need_del_stats))) {
               LOG_WARN("schema service update aux column failed", K(ret), K(idx_table_schema), K(new_aux_column_schema));
-            } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(
-                    trans,
-                    idx_table_schema))) {
-              LOG_WARN("fail to update aux schema version for update column", K(ret), K(idx_table_schema));
+            } else if (OB_FAIL(sync_aux_schema_version_for_history(idx_table_schema.get_tenant_id(), idx_table_schema.get_table_id(), schema_guard, trans, ddl_operator))) {
+              LOG_WARN("fail to update aux schema version for update column", K(ret), K(idx_table_schema.get_tenant_id()), K(idx_table_schema.get_table_id()));
             }
           } // end SMART_VAR
         }
@@ -11242,9 +11266,7 @@ int ObDDLService::alter_table_update_aux_column(
           }
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(
-                  trans,
-                  *aux_table_schema))) {
+          } else if (OB_FAIL(sync_aux_schema_version_for_history(tenant_id, tid, schema_guard, trans, ddl_operator))) {
             RS_LOG(WARN, "fail to update aux schema version for update column");
           }
         }
@@ -12444,7 +12466,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             } else if (OB_FAIL(ddl_operator.update_single_column(
                          trans, origin_table_schema, new_table_schema, new_column_schema, need_del_stats))) {
               RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
-            } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans, global_idx_schema_array))) {
+            } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, schema_guard, trans, global_idx_schema_array))) {
               RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
             } else if (OB_FAIL(alter_table_update_index_and_view_column(
                                  new_table_schema,
@@ -12571,7 +12593,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                  new_column_schema,
                                  need_del_stats))) {
                 RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
-              } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans, global_idx_schema_array))) {
+              } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, schema_guard, trans, global_idx_schema_array))) {
                 RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
               } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                           new_column_schema,
