@@ -1394,7 +1394,7 @@ public:
     common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> win_func_idxs_;
     bool use_hash_sort_;  // use hash sort for none/hash dist method
     bool is_push_down_;  // push down window function for hash dist method
-    bool use_topn_sort_;  // use part topn sort for none/hash/range dist method
+    bool use_topn_sort_;  // use part topn sort for none/hash dist method
     TO_STRING_KV(K_(algo), K_(win_func_idxs), K_(use_hash_sort), K_(is_push_down), K_(use_topn_sort));
   };
 
