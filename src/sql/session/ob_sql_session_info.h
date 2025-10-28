@@ -1215,6 +1215,7 @@ public:
                     const ObNameTypeClass type_class, bool &is_equal) const;
   int kill_query();
   int set_query_deadlocked();
+  inline void set_inner_flag(bool inner_flag) { inner_flag_ = inner_flag; }
 
   inline void set_inner_session()
   {

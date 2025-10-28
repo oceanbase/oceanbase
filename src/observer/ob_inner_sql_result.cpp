@@ -40,6 +40,27 @@ inline int ObInnerSQLResult::check_extend_value(const common::ObObj &obj)
   return ret;
 }
 
+ObInnerSQLResult::ObInnerSessionGuard::ObInnerSessionGuard(sql::ObSQLSessionInfo *session_info, bool is_inner)
+  : session_info_(session_info), old_inner_flag_(false), is_inner_(is_inner)
+{
+  if (OB_NOT_NULL(session_info_)) {
+    old_inner_flag_ = session_info_->is_inner();
+    if (!is_inner_ && !old_inner_flag_) {
+      session_info_->set_inner_flag(true);
+    }
+    // For PL execution (old_inner_flag_=true), do nothing
+  }
+}
+
+ObInnerSQLResult::ObInnerSessionGuard::~ObInnerSessionGuard()
+{
+  if (OB_NOT_NULL(session_info_) && !is_inner_ && !old_inner_flag_) {
+    // Only restore if we actually changed it (i.e., it was false before)
+    // For PL execution (old_inner_flag_=true), we didn't change anything, so don't restore
+    session_info_->set_inner_flag(old_inner_flag_);
+  }
+}
+
 ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_session, ObDiagnosticInfo *di)
     : column_map_created_(false), column_indexed_(false), column_map_(),
       mem_context_(nullptr),
@@ -57,7 +78,8 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_sess
       tenant_(nullptr),
       is_inner_session_(is_inner_session),
       inner_sql_di_(di),
-      interrupt_checker_()
+      interrupt_checker_(),
+      inner_session_guard_(&session, is_inner_session)
 
 {
   sql_ctx_.exec_type_ = InnerSql;
