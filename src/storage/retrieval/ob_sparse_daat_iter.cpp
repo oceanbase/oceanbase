@@ -897,7 +897,7 @@ int ObSRBlockMaxTopKIterImpl::try_generate_next_range_from_merge_heap(
   const double top_k_threshold = score_threshold;;
   int64_t iter_idx = 0;
   double max_score = 0.0;
-  while (OB_SUCC(ret) && max_score < top_k_threshold && !curr_range_reach_end && !merge_heap_->empty()) {
+  while (OB_SUCC(ret) && max_score <= top_k_threshold && !curr_range_reach_end && !merge_heap_->empty()) {
     const ObSRMergeItem *top_item = nullptr;
     ObISRDimBlockMaxIter *iter = nullptr;
     const ObDatum *curr_domain_id = nullptr;
