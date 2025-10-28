@@ -280,8 +280,9 @@ int ObPLDataType::adjust_routine_param_type(const ObRoutineParam *iparam,
   if (ob_is_numeric_type(pl_type.get_obj_type())) {
     if (iparam->is_in_param()) {
       OZ (ObPLResolver::adjust_routine_param_type(pl_type));
-    } else {
-      // do nothing
+    } else if (OB_NOT_NULL(pl_type.get_data_type())
+               && ObDecimalIntType == pl_type.get_data_type()->get_obj_type()) {
+      pl_type.get_data_type()->set_obj_type(ObNumberType);
     }
   } else {
     OZ (ObPLResolver::adjust_routine_param_type(pl_type));
