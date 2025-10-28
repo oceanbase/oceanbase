@@ -956,7 +956,6 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, calibrate_res));
   get_macro_block_scatter_dir_size(scatter_dir_size);
   ASSERT_EQ(shared_mini_ls_dir_size + shared_minor_ls_dir_size + scatter_dir_size, calibrate_res.total_file_size_);
-
 }
 
 TEST_F(TestFileManager, test_tmp_file_operator)
