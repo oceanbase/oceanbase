@@ -384,7 +384,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
         ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = &schema_guard;
         try {
           if (OB_FAIL(pl.execute(*ctx.exec_ctx_,
-                                 *ctx.get_top_expr_allocator(),
+                                 ctx.tmp_alloc_for_copy_param_,
                                  package_id,
                                  proc_id,
                                  path_array,
