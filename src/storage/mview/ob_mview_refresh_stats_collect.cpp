@@ -147,51 +147,55 @@ int ObMViewRefreshStatsCollection::collect_after_refresh(ObMViewRefreshCtx &refr
     if (collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL) {
       for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
         const ObDependencyInfo &dep = dependency_infos.at(i);
-        int64_t num_rows_ins = 0;
-        int64_t num_rows_upd = 0;
-        int64_t num_rows_del = 0;
-        int64_t num_rows = 0;
-        const ObTableSchema *table_schema = nullptr;
-        ObScnRange &tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dep.get_ref_obj_id(), table_schema))) {
-          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_));
-        } else if (OB_ISNULL(table_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table schema is null", KR(ret));
-        } else if (table_schema->is_materialized_view()) {
-          tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
+        if (dep.get_ref_obj_type() == ObObjectType::TABLE) {
+          int64_t num_rows_ins = 0;
+          int64_t num_rows_upd = 0;
+          int64_t num_rows_del = 0;
+          int64_t num_rows = 0;
+          const ObTableSchema *table_schema = nullptr;
+          ObScnRange &tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dep.get_ref_obj_id(), table_schema))) {
+            LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is null", KR(ret), K(dep));
+          } else if (table_schema->is_materialized_view()) {
+            tmp_scn_range = refresh_ctx.mview_refresh_scn_range_;
+          } else {
+            tmp_scn_range = refresh_ctx.base_table_scn_range_;
+          }
+          if (OB_SUCC(ret)) {
+            ObWarningBufferIgnoreScope ignore_warning_guard;
+            if (ObOptimizerUtil::find_item(tables_need_mlog, dep.get_ref_obj_id()) &&
+                OB_TMP_FAIL(ObMViewRefreshHelper::get_mlog_dml_row_num(
+                  trans, tenant_id_, table_schema->get_mlog_tid(), tmp_scn_range,
+                  num_rows_ins, num_rows_upd, num_rows_del))) {
+              LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(table_schema->get_mlog_tid()));
+            }
+            if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
+                OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
+                  trans, tenant_id_, dep.get_ref_obj_id(), tmp_scn_range.end_scn_,
+                  num_rows))) {
+              LOG_WARN("fail to get based table row num", KR(tmp_ret), K(dep));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ObMViewRefreshChangeStats change_stats;
+            change_stats.set_tenant_id(tenant_id_);
+            change_stats.set_refresh_id(refresh_id_);
+            change_stats.set_mview_id(mview_id_);
+            change_stats.set_retry_id(retry_id_);
+            change_stats.set_detail_table_id(dep.get_ref_obj_id());
+            change_stats.set_num_rows_ins(num_rows_ins);
+            change_stats.set_num_rows_upd(num_rows_upd);
+            change_stats.set_num_rows_del(num_rows_del);
+            change_stats.set_num_rows(num_rows);
+            if (OB_FAIL(change_stats_array_.push_back(change_stats))) {
+              LOG_WARN("fail to push back change stats", KR(ret), K(change_stats));
+            }
+          }
         } else {
-          tmp_scn_range = refresh_ctx.base_table_scn_range_;
-        }
-        if (OB_SUCC(ret)) {
-          ObWarningBufferIgnoreScope ignore_warning_guard;
-          if (ObOptimizerUtil::find_item(tables_need_mlog, dep.get_ref_obj_id()) &&
-              OB_TMP_FAIL(ObMViewRefreshHelper::get_mlog_dml_row_num(
-                trans, tenant_id_, table_schema->get_mlog_tid(), tmp_scn_range,
-                num_rows_ins, num_rows_upd, num_rows_del))) {
-            LOG_WARN("fail to get mlog dml row num", KR(tmp_ret), K(table_schema->get_mlog_tid()));
-          }
-          if (ObMVRefreshStatsCollectionLevel::ADVANCED == collection_level_ &&
-              OB_TMP_FAIL(ObMViewRefreshHelper::get_table_row_num(
-                trans, tenant_id_, dep.get_ref_obj_id(), tmp_scn_range.end_scn_,
-                num_rows))) {
-            LOG_WARN("fail to get based table row num", KR(tmp_ret), K(dep));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          ObMViewRefreshChangeStats change_stats;
-          change_stats.set_tenant_id(tenant_id_);
-          change_stats.set_refresh_id(refresh_id_);
-          change_stats.set_mview_id(mview_id_);
-          change_stats.set_retry_id(retry_id_);
-          change_stats.set_detail_table_id(dep.get_ref_obj_id());
-          change_stats.set_num_rows_ins(num_rows_ins);
-          change_stats.set_num_rows_upd(num_rows_upd);
-          change_stats.set_num_rows_del(num_rows_del);
-          change_stats.set_num_rows(num_rows);
-          if (OB_FAIL(change_stats_array_.push_back(change_stats))) {
-            LOG_WARN("fail to push back change stats", KR(ret), K(change_stats));
-          }
+          LOG_INFO("skip dep obj", K(dep));
         }
       }
     }

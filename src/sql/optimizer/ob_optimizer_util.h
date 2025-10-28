@@ -1089,6 +1089,18 @@ public:
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
   static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr, bool is_query_range = false, bool allow_imprecise_column_cast = false);
   static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr, bool is_query_range = false, bool allow_imprecise_column_cast = false);
+  static int extract_real_dep_expr(ObRawExpr *ori_depend_expr,
+                                   ObRawExpr *&real_depend_expr);
+  static int check_and_extract_matched_gen_col_exprs(ObRawExpr *&depend_expr,
+                                                     ObRawExpr *&target_expr,
+                                                     bool &is_match,
+                                                     ObExprEqualCheckContext *equal_ctx,
+                                                     const bool skip_extract_real_dep_expr);
+  static int check_match_to_type(ObRawExpr *to_type_expr,
+                                 ObRawExpr *candi_expr,
+                                 bool &is_same,
+                                 ObExprEqualCheckContext *equal_ctx);
+
   /**
    * This interface is specifically designed for query range, used to retrieve the column c1 that can extract the range from nvl(c1, 1) = 1.
   */

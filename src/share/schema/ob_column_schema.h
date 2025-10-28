@@ -385,6 +385,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
   inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
   int is_same_collection_column(const ObColumnSchemaV2 &other, bool &is_same) const;
+  static bool can_set_on_update_column_type(const common::ObObjMeta &meta_type);
+  bool is_minimal_mode_related_time_column() const;
   DECLARE_VIRTUAL_TO_STRING;
 private:
   int alloc_column_ref_set();

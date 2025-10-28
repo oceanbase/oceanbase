@@ -1537,12 +1537,21 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       bool skip_null_error = true;
       bool skip_column_error = true;
       ObString local_session_var;
+      ObString mview_expand_definition;
       ObString default_session_var(""); //default value is empty string
+      ObString default_mview_expand_definition(""); //default value is empty string
       EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "local_session_vars", local_session_var,
                                                     skip_null_error, skip_column_error, default_session_var);
-      if (OB_SUCC(ret) && !local_session_var.empty()
-          && OB_FAIL(table_schema.get_local_session_var().fill_local_session_var_from_str(local_session_var))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to deserialize mview_session_var", K(ret));
+      EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "mview_expand_definition", mview_expand_definition,
+                                                     skip_null_error, skip_column_error, default_mview_expand_definition);
+      if (OB_SUCC(ret)) {
+        if (!local_session_var.empty()
+            && OB_FAIL(table_schema.get_local_session_var().fill_local_session_var_from_str(local_session_var))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to deserialize mview_session_var", K(ret));
+        } else if (!mview_expand_definition.empty()
+            && OB_FAIL(table_schema.get_view_schema().set_expand_view_definition_for_mv(mview_expand_definition))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to deserialize mview_expand_definition", K(ret));
+        }
       }
     }
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, semistruct_encoding_type, table_schema, 

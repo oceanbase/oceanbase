@@ -113,6 +113,7 @@ enable_major_freeze
 enable_manual_storage_cache_policy
 enable_mlog_auto_maintenance
 enable_monotonic_weak_read
+enable_mv_binlog_minimal_mode
 enable_ob_error_msg_style
 enable_ob_ratelimit
 enable_perf_event

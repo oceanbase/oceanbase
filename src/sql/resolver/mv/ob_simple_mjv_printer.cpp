@@ -68,7 +68,7 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
   } else if (OB_FAIL(create_simple_table_item(base_del_stmt, mv_schema_.get_table_name(), mv_table))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (ctx_.for_union_all_child_query()
-             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, mv_table, marker_filter))) {
+             && OB_FAIL(create_union_all_child_refresh_filter(mv_table, marker_filter))) {
     LOG_WARN("failed to create union all child refresh filter", K(ret));
   } else {
     mv_table->database_name_ = mv_db_name_;

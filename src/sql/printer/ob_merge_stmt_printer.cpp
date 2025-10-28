@@ -187,16 +187,11 @@ int ObMergeStmtPrinter::print_insert_clause(const ObMergeStmt &merge_stmt)
   }
   DATA_PRINTF(" when not matched then insert (");
   for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
-    const ObColumnRefRawExpr* column = merge_stmt.get_values_desc().at(i);
-    if (OB_ISNULL(column)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column is NULL", K(ret));
-    } else {
-      ObString column_name = column->get_column_name();
-      CONVERT_CHARSET_FOR_RPINT(allocator, column_name);
-      DATA_PRINTF(" %.*s %c", LEN_AND_PTR(column_name),
-                             (i < column_count - 1 ? ',' : ')'));
+    DATA_PRINTF(" ");
+    if (OB_FAIL(expr_printer_.do_print(merge_stmt.get_values_desc().at(i), T_INSERT_SCOPE))) {
+      LOG_WARN("fail to print value expr", K(ret));
     }
+    DATA_PRINTF(" %c", i < column_count - 1 ? ',' : ')');
   }
   DATA_PRINTF(" values (");
   for (int64_t i = 0; OB_SUCC(ret) && i < value_count; ++i) {

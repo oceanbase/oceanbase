@@ -38,7 +38,9 @@ ob_set_subtarget(ob_sql common_mixed
   resolver/mv/ob_simple_mav_printer.cpp
   resolver/mv/ob_simple_mjv_printer.cpp
   resolver/mv/ob_simple_join_mav_printer.cpp
+  resolver/mv/ob_outer_join_mv_printer_helper.cpp
   resolver/mv/ob_outer_join_mjv_printer.cpp
+  resolver/mv/ob_outer_join_mav_printer.cpp
   resolver/mv/ob_union_all_mv_printer.cpp
   resolver/mv/ob_major_refresh_mjv_printer.cpp
   resolver/mv/ob_mv_dep_utils.cpp

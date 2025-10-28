@@ -19,9 +19,11 @@
 #include "sql/resolver/mv/ob_simple_join_mav_printer.h"
 #include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 #include "sql/resolver/mv/ob_outer_join_mjv_printer.h"
+#include "sql/resolver/mv/ob_outer_join_mav_printer.h"
 #include "sql/resolver/mv/ob_union_all_mv_printer.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 
 namespace oceanbase
 {
@@ -54,6 +56,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
   } else {
     lib::ContextParam param;
     const uint64_t tenant_id = session_info->get_effective_tenant_id();
+    ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependent_columns;
     param.set_mem_attr(tenant_id, "MVProvider", ObCtxIds::DEFAULT_CTX_ID)
          .set_properties(lib::USE_TL_PAGE_OPTIONAL)
          .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
@@ -74,6 +77,10 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
       bool is_rt_expand = false;
       SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
         LinkExecCtxGuard link_guard(*session_info, exec_ctx);
+        // add empty sql ctx
+        ObSqlCtx empty_ctx;
+        empty_ctx.schema_guard_ = schema_guard;
+        exec_ctx.set_sql_ctx(&empty_ctx);
         exec_ctx.set_my_session(session_info);
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
         ObMVPrinterCtx mv_printer_ctx(alloc,
@@ -94,6 +101,10 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                    || OB_ISNULL(mv_schema) || OB_UNLIKELY(!mv_schema->is_materialized_view())) {
           COVER_SUCC(OB_ERR_UNEXPECTED);
           LOG_WARN("unexpected mv schema", K(ret), KPC(mv_schema));
+        } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(mv_schema->get_data_table_id(), mv_container_schema))
+                   || OB_ISNULL(mv_container_schema)) {
+          COVER_SUCC(OB_ERR_UNEXPECTED);
+          LOG_WARN("fail to get mv container schema", KR(ret), K(mv_schema->get_data_table_id()), K(mv_container_schema));
         } else if (OB_FAIL(check_mview_dep_session_vars(*mv_schema, *session_info, true, is_vars_matched))) {
           LOG_WARN("failed to check mview dep session vars", K(ret));
         } else if (OB_FAIL(generate_mv_stmt(alloc,
@@ -127,7 +138,7 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
           LOG_WARN("failed to collect tables need mlog", K(ret));
         } else if (OB_FAIL(tables_need_mlog_.assign(tables_need_mlog))) {
           LOG_WARN("failed to assign tables need mlog", K(ret));
-        } else if (OB_FAIL(check_mv_column_type(mv_schema, view_stmt, *session_info))) {
+        } else if (OB_FAIL(check_mv_column_type(mv_container_schema, view_stmt, *session_info))) {
           if (OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
             inited_ = true;
             refreshable_type_ = OB_MV_REFRESH_INVALID;
@@ -135,10 +146,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
           } else {
             LOG_WARN("failed to check mv column type", K(ret));
           }
-        } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(mv_schema->get_data_table_id(), mv_container_schema))
-                   || OB_ISNULL(mv_container_schema)) {
-          COVER_SUCC(OB_ERR_UNEXPECTED);
-          LOG_WARN("fail to get mv container schema", KR(ret), K(mv_schema->get_data_table_id()), K(mv_container_schema));
         } else if (OB_FAIL(check_is_rt_expand(check_refreshable_only, *mv_schema, mv_printer_ctx, is_rt_expand))) {
           LOG_WARN("failed to check is rt expand", K(ret));
         } else {
@@ -149,13 +156,18 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                               *mv_container_schema,
                               is_rt_expand,
                               fast_refreshable_note_,
+                              fast_refresh_dependent_columns,
                               table_referenced_columns_info);
-          if (OB_FAIL(pre_process_view_stmt(*view_stmt))) {
+          if (OB_FAIL(ObMVChecker::pre_process_view_stmt(&expr_factory, session_info, checker.get_gen_cols(), *view_stmt))) {
             LOG_WARN("failed to pre process view stmt", K(ret));
           } else if (OB_FAIL(checker.check_mv_refresh_type())) {
             LOG_WARN("failed to check mv refresh type", K(ret));
-          } else if (OB_MV_COMPLETE_REFRESH >= (refreshable_type_ = checker.get_refersh_type())) {
+          } else if (!IS_VALID_FAST_REFRESH_TYPE(refreshable_type_ = checker.get_refersh_type())) {
             LOG_TRACE("mv not support fast refresh", K_(refreshable_type), K(mv_schema->get_table_name()));
+          } else if (!fast_refresh_dependent_columns.empty()) {
+            refreshable_type_ = OB_MV_COMPLETE_REFRESH;
+            fast_refreshable_note_.error_.assign_fmt("missing fast refresh dependent columns in the SELECT list");
+            LOG_TRACE("mv not support fast refresh, need additional dependent columns", K(mv_schema->get_table_name()), K(fast_refresh_dependent_columns));
           } else if (check_refreshable_only) {
             inited_ = true;
           } else if (OB_FAIL(print_mv_operators(mv_printer_ctx,
@@ -172,26 +184,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
           }
         }
         exec_ctx.set_physical_plan_ctx(NULL);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObMVProvider::pre_process_view_stmt(ObSelectStmt &view_stmt)
-{
-  int ret = OB_SUCCESS;
-  if (view_stmt.is_set_stmt()) {
-    ObIArray<ObSelectStmt*> &set_queries = view_stmt.get_set_query();
-    const int64_t sel_size = view_stmt.get_select_item_size();
-    for (int64_t i = 0; OB_SUCC(ret) && i < sel_size; ++i) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < set_queries.count(); ++j) {
-        if (OB_ISNULL(set_queries.at(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(i), K(j), K(view_stmt));
-        } else if (0 < j) {
-          set_queries.at(j)->get_select_item(i).alias_name_ = set_queries.at(0)->get_select_item(i).alias_name_;
-        }
       }
     }
   }
@@ -285,13 +277,25 @@ int ObMVProvider::print_mv_operators(ObMVPrinterCtx &mv_printer_ctx,
     }
     case OB_MV_FAST_REFRESH_UNION_ALL: {
       ObUnionAllMVPrinter printer(mv_printer_ctx, mv_schema, mv_container_schema,
-                                  mv_def_stmt, 
+                                  mv_def_stmt,
                                   checker.get_union_all_marker_idx(),
                                   checker.get_child_refresh_types(),
                                   checker.get_mlog_tables(),
                                   checker.get_expand_aggrs());
       if (OB_FAIL(printer.print_mv_operators(inner_alloc_, operators))) {
         LOG_WARN("failed to print union all operator stmts", K(ret));
+      }
+      break;
+    }
+    case OB_MV_FAST_REFRESH_OUTER_JOIN_MAV: {
+      ObOuterJoinMAVPrinter printer(mv_printer_ctx,
+                                    mv_schema,
+                                    mv_container_schema,
+                                    mv_def_stmt,
+                                    checker.get_mlog_tables(),
+                                    checker.get_expand_aggrs());
+      if (OB_FAIL(printer.print_mv_operators(inner_alloc_, operators))) {
+        LOG_WARN("failed to print outer join mav operator stmts", K(ret));
       }
       break;
     }
@@ -531,6 +535,9 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
 {
   int ret = OB_SUCCESS;
   view_stmt = NULL;
+  const ObString raw_view_def = mv_schema.get_view_schema().get_expand_view_definition_for_mv_str().empty() ?
+                                mv_schema.get_view_schema().get_view_definition_str() :
+                                mv_schema.get_view_schema().get_expand_view_definition_for_mv_str();
   ObString view_definition;
   ParseResult parse_result;
   ParseNode *node = NULL;
@@ -546,11 +553,12 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
   resolver_ctx.is_mview_definition_sql_ = true;
   ObSelectStmt *sel_stmt = NULL;
   ObSelectResolver select_resolver(resolver_ctx);
-  if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(alloc,
-                                                                session_info.get_local_collation_connection(),
-                                                                mv_schema.get_view_schema(),
-                                                                view_definition))) {
-    LOG_WARN("fail to generate view definition for resolve", K(ret));
+  if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(alloc,
+                                                          raw_view_def,
+                                                          view_definition,
+                                                          CS_TYPE_UTF8MB4_GENERAL_CI,
+                                                          session_info.get_local_collation_connection()))) {
+    LOG_WARN("fail to copy and convert string charset", K(ret));
   } else if (OB_FAIL(parser.parse(view_definition, parse_result))) {
     LOG_WARN("parse view definition failed", K(view_definition), K(ret));
   } else if (OB_ISNULL(node = parse_result.result_tree_->children_[0]) ||
@@ -568,8 +576,6 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
                                                                                &session_info,
                                                                                sel_stmt))) {
     LOG_WARN("failed to init query hint", K(ret), K(sel_stmt));
-  } else if (OB_FAIL(sel_stmt->formalize_stmt_expr_reference(&expr_factory, &session_info, true))) {
-    LOG_WARN("failed to formalize stmt reference", K(ret));
   } else {
     view_stmt = sel_stmt;
     LOG_DEBUG("generate mv stmt", KPC(view_stmt));
@@ -662,6 +668,10 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
   int ret = OB_SUCCESS;
   mview_str.reset();
   lib::ContextParam param;
+  ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
+  FastRefreshableNotes fast_refreshable_note;
+  ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependent_columns;
+  ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos;
   param.set_mem_attr(session_info.get_effective_tenant_id(), "MVProvider", ObCtxIds::DEFAULT_CTX_ID)
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
@@ -673,6 +683,7 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
     ObRawExprFactory expr_factory(alloc);
     ObSchemaChecker schema_checker;
     ObQueryCtx *query_ctx = NULL;
+    const ObTableSchema *mv_container_schema = NULL;
     SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
       LinkExecCtxGuard link_guard(session_info, exec_ctx);
       exec_ctx.set_my_session(&session_info);
@@ -685,6 +696,10 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
       } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_, (session_info.get_session_type() != ObSQLSessionInfo::INNER_SESSION
                                                                             ? session_info.get_sessid_for_table() : OB_INVALID_ID)))) {
         LOG_WARN("init schema checker failed", K(ret));
+      } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(mv_schema.get_data_table_id(), mv_container_schema))
+                 || OB_ISNULL(mv_container_schema)) {
+        COVER_SUCC(OB_ERR_UNEXPECTED);
+        LOG_WARN("fail to get mv container schema", KR(ret), K(mv_schema.get_data_table_id()), K(mv_container_schema));
       } else if (OB_FAIL(generate_mv_stmt(alloc,
                                           stmt_factory,
                                           expr_factory,
@@ -702,6 +717,18 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
                                                &stmt_factory))) {
         LOG_WARN("failed to transform mv stmt", K(ret));
       } else if (OB_FALSE_IT(view_stmt = static_cast<ObSelectStmt *>(trans_stmt))) {
+      } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
+                           view_stmt, &alloc, &schema_checker, &stmt_factory,
+                           &expr_factory, &session_info, *mv_container_schema,
+                           mv_schema.mv_on_query_computation(), refresh_type, fast_refreshable_note,
+                           fast_refresh_dependent_columns, required_columns_infos))) {
+        LOG_WARN("fail to check mv type", KR(ret));
+      } else if (OB_FAIL(expand_mv_stmt_with_dependent_columns(view_stmt,
+                                                               fast_refresh_dependent_columns,
+                                                               alloc,
+                                                               &session_info,
+                                                               expr_factory))) {
+        LOG_WARN("failed to expand mv stmt with dependency columns", K(ret));
       } else if (OB_FAIL(ObMVPrinter::print_complete_refresh_mview_operator(expr_factory,
                                                                             mv_refresh_scn,
                                                                             table_refresh_scn,
@@ -755,17 +782,23 @@ int ObMVProvider::get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
                                      uint64_t &rule_set)
 {
   int ret = OB_SUCCESS;
-  bool need_eliminate_oj = false;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
   ObSEArray<const JoinedTable*, 8> joined_table;
-  rule_set = 0;
   if (OB_ISNULL(mv_def_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(mv_def_stmt));
+  } else if (OB_FAIL(mv_def_stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret), KPC(mv_def_stmt));
   } else if (OB_FAIL(append(joined_table, mv_def_stmt->get_joined_tables()))) {
     LOG_WARN("failed to append joined tables", K(ret));
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    if (OB_FAIL(SMART_CALL(get_trans_rule_set(child_stmts.at(i), rule_set)))) {
+      LOG_WARN("failed to get trans rule set", K(ret), KPC(child_stmts.at(i)));
+    }
+  }
   // check whether need ELIMINATE_OJ
-  while (OB_SUCC(ret) && !need_eliminate_oj && !joined_table.empty()) {
+  while (OB_SUCC(ret) && (0 == (rule_set & 1L << ELIMINATE_OJ)) && !joined_table.empty()) {
     const JoinedTable* table = NULL;
     if (OB_FAIL(joined_table.pop_back(table))) {
       LOG_WARN("failed to pop back joined table", K(ret));
@@ -773,7 +806,7 @@ int ObMVProvider::get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), KPC(table));
     } else if (!table->is_inner_join()) {
-      need_eliminate_oj = true;
+      rule_set |= 1L << ELIMINATE_OJ;
     } else if (table->left_table_->is_joined_table()
                && OB_FAIL(joined_table.push_back(static_cast<const JoinedTable*>(table->left_table_)))) {
       LOG_WARN("failed to append left joined tables", K(ret));
@@ -782,13 +815,10 @@ int ObMVProvider::get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
       LOG_WARN("failed to append right joined tables", K(ret));
     }
   }
-  if (OB_SUCC(ret) && need_eliminate_oj) {
-    rule_set |= 1L << ELIMINATE_OJ;
-  }
   return ret;
 }
 
-int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id, 
+int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
                                                const uint64_t mview_id,
                                                const uint64_t table_id,
                                                ObSQLSessionInfo *session_info,
@@ -797,7 +827,6 @@ int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObTableReferencedColumnsInfo table_referenced_columns_info;
-  
   if (OB_FAIL(table_referenced_columns_info.init())) {
     LOG_WARN("failed to init table referenced columns info", KR(ret));
   } else if (OB_FAIL(init_mv_provider(session_info, schema_guard, true /*check_refreshable_only*/, NULL /*refresh_info*/, &table_referenced_columns_info))) {
@@ -837,6 +866,145 @@ int ObMVProvider::check_is_rt_expand(const bool check_refreshable_only,
   return ret;
 }
 
+int ObMVProvider::expand_mv_stmt_with_dependent_columns(ObSelectStmt *view_stmt,
+                                                        const ObIArray<std::pair<ObRawExpr*, int64_t>> &dependent_columns,
+                                                        ObIAllocator &alloc,
+                                                        ObSQLSessionInfo *session_info,
+                                                        ObRawExprFactory &expr_factory)
+{
+  int ret = OB_SUCCESS;
+  int64_t alias_name_idx = 0;
+  if (OB_ISNULL(view_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(view_stmt));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < dependent_columns.count(); ++i) {
+    const std::pair<ObRawExpr*, int64_t> &dep_column = dependent_columns.at(i);
+    ObString alias_name;
+    if (OB_ISNULL(dep_column.first)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(dep_column.first));
+    } else if (OB_FAIL(gen_dep_column_alias_name(*view_stmt, alias_name_idx, alloc, alias_name))) {
+      LOG_WARN("failed to gen dep column alias name", K(ret));
+    } else if (OB_FAIL(create_select_item_for_mv_stmt(view_stmt,
+                                                      dep_column.first,
+                                                      dep_column.second,
+                                                      alias_name,
+                                                      expr_factory))) {
+      LOG_WARN("failed to create select item for mv stmt", K(ret));
+    } else if (view_stmt->is_set_stmt()
+               && OB_FAIL(ObOptimizerUtil::gen_set_target_list(&alloc,
+                                                               session_info,
+                                                               &expr_factory,
+                                                               view_stmt))) {
+      LOG_WARN("failed to generate select list for set", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMVProvider::gen_dep_column_alias_name(const ObSelectStmt &stmt,
+                                            int64_t &idx,
+                                            ObIAllocator &alloc,
+                                            ObString &alias_name)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
+  char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
+  int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
+  int64_t pos = 0;
+  bool need_gen_next = true;
+  while (OB_SUCC(ret) && need_gen_next) {
+    alias_name.reset();
+    pos = 0;
+    need_gen_next = false;
+    if (OB_FAIL(BUF_PRINTF("__MV_DEP_COL_%ld$$", idx++))) {
+      LOG_WARN("failed to buf print for alias name", K(ret));
+    } else if (OB_FAIL(ob_write_string(alloc, ObString(pos, buf), alias_name))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_item_size(); ++i) {
+      const SelectItem &select_item = stmt.get_select_item(i);
+      if (ObCharset::case_compat_mode_equal(alias_name, select_item.alias_name_)) {
+        need_gen_next = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMVProvider::create_select_item_for_mv_stmt(ObSelectStmt *stmt,
+                                                 ObRawExpr *select_expr,
+                                                 const int64_t sub_stmt_idx,
+                                                 ObString &alias_name,
+                                                 ObRawExprFactory &expr_factory)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_UNLIKELY(OB_INVALID_ID != sub_stmt_idx && NULL == select_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt), K(sub_stmt_idx), K(select_expr));
+  } else if (OB_INVALID_ID != sub_stmt_idx) {
+    const ObIArray<ObSelectStmt*> &set_queries = stmt->get_set_query();
+    if (OB_UNLIKELY(sub_stmt_idx < 0 || sub_stmt_idx >= set_queries.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid sub stmt idx", K(ret), K(sub_stmt_idx), K(set_queries.count()));
+    } else if (OB_FAIL(create_select_item_for_mv_stmt(set_queries.at(sub_stmt_idx),
+                                                      select_expr,
+                                                      OB_INVALID_ID,
+                                                      alias_name,
+                                                      expr_factory))) {
+      LOG_WARN("failed to create select item for mv stmt", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < set_queries.count(); ++i) {
+      if (i == sub_stmt_idx) {
+        // do nothing
+      } else if (OB_FAIL(create_select_item_for_mv_stmt(set_queries.at(i),
+                                                        NULL,
+                                                        OB_INVALID_ID,
+                                                        alias_name,
+                                                        expr_factory))) {
+        LOG_WARN("failed to create select item for mv stmt", K(ret));
+      }
+    }
+  } else if (NULL == select_expr
+             && OB_FAIL(ObRawExprUtils::build_null_expr(expr_factory, select_expr))) {
+    LOG_WARN("failed to build null expr", K(ret));
+  } else {
+    ObSEArray<ObRawExpr*, 8> column_exprs;
+    SelectItem select_item;
+    select_item.expr_ = select_expr;
+    select_item.expr_name_ = select_expr->get_expr_name();
+    select_item.alias_name_ = alias_name;
+    select_item.is_real_alias_ = true;
+    if (OB_FAIL(stmt->add_select_item(select_item))) {
+      LOG_WARN("failed to add select item", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(select_expr, column_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      ObRawExpr *expr = column_exprs.at(i);
+      ObColumnRefRawExpr *col_expr = NULL;
+      if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_column_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected column expr", K(ret), K(i), KPC(column_exprs.at(i)));
+      } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
+      } else if (NULL != stmt->get_column_item(col_expr->get_table_id(), col_expr->get_column_id())) {
+        // do nothing, column item already exists
+      } else {
+        ColumnItem column_item;
+        column_item.expr_ = col_expr;
+        column_item.table_id_ = col_expr->get_table_id();
+        column_item.column_id_ = col_expr->get_column_id();
+        column_item.column_name_ = col_expr->get_column_name();
+        if (OB_FAIL(stmt->add_column_item(column_item))) {
+          LOG_WARN("add column item to stmt failed", K(ret), K(column_item));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 }//end of namespace sql
 }//end of namespace oceanbase

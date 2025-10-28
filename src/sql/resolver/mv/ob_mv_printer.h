@@ -25,11 +25,15 @@
 
 #define DELTA_TABLE_FORMAT_NAME "DLT_%.*s$$"
 #define PRE_TABLE_FORMAT_NAME "PRE_%.*s$$"
+#define DELETE_TABLE_FORMAT_NAME "DEL_%.*s$$"
+#define INSERT_TABLE_FORMAT_NAME "INS_%.*s$$"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+class ObOuterJoinMVPrinterHelper;
 
 struct SharedPrinterRawExprs
 {
@@ -110,6 +114,7 @@ struct ObMVPrinterCtx {
 
 class ObMVPrinter
 {
+  friend class ObOuterJoinMVPrinterHelper;
 public:
   explicit ObMVPrinter(ObMVPrinterCtx &ctx,
                        const share::schema::ObTableSchema &mv_schema,
@@ -146,7 +151,7 @@ public:
   static const ObString WIN_CNT_NOT_NULL_COL_NAME;
 
   int print_mv_operators(ObIAllocator &str_alloc, ObIArray<ObString> &operators);
-  int gen_child_refresh_dmls_for_union_all(const int64_t marker_idx, ObIArray<ObDMLStmt*> &dml_stmts);
+  int gen_child_refresh_dmls_for_union_all(ObIArray<ObDMLStmt*> &dml_stmts);
   static int print_complete_refresh_mview_operator(ObRawExprFactory &expr_factory,
                                                   const share::SCN *mv_refresh_scn,
                                                   const share::SCN *table_refresh_scn,
@@ -178,6 +183,7 @@ protected:
   int gen_rowkey_join_conds_for_table(const TableItem &origin_table,
                                       const TableItem &left_table,
                                       const TableItem &right_table,
+                                      const bool left_is_mlog_table,
                                       const bool right_use_orig_sel_alias,
                                       ObIArray<ObRawExpr*> &all_conds);
   int get_column_name_from_origin_select_items(const uint64_t table_id,
@@ -219,7 +225,8 @@ protected:
   int add_normal_column_to_select_list(const TableItem &table,
                                        const TableItem &source_table,
                                        ObIArray<SelectItem> &select_items,
-                                       bool need_all_normal_col = true);
+                                       const bool is_for_mlog_table,
+                                       const bool need_all_normal_col = true);
   int add_max_min_seq_window_to_select_list(const TableItem &table,
                                             const TableItem &source_table,
                                             ObRawExpr *sequence_expr,
@@ -239,21 +246,33 @@ protected:
                                const ObString &table_name,
                                TableItem *&table_item,
                                ObSelectStmt *view_stmt = NULL,
-                               const bool add_to_from = true);
+                               const bool add_to_from = true,
+                               const TableItem *source_table = NULL);
+  int create_table_item_with_infos(ObDMLStmt *stmt,
+                                   const TableItem *ori_table,
+                                   TableItem *&new_table,
+                                   ObSelectStmt *view_stmt = NULL,
+                                   const char *view_name_fmt = NULL,
+                                   const bool add_to_from = true);
   int create_joined_table_item(ObDMLStmt *stmt,
                                const ObJoinType joined_type,
                                const TableItem &left_table,
                                const TableItem &right_table,
                                const bool is_top,
                                JoinedTable *&joined_table);
-  int create_union_all_child_refresh_filter(const int64_t marker_idx,
-                                            const TableItem *table,
+  int create_union_all_child_refresh_filter(const TableItem *table,
                                             ObRawExpr *&marker_filter);
+  int add_union_all_child_refresh_filter_if_needed(ObDMLStmt *stmt,
+                                                   const TableItem *mv_table);
   int assign_simple_sel_stmt(ObSelectStmt &target_stmt, ObSelectStmt &source_stmt);
   int append_old_new_col_filter(const TableItem &table, ObIArray<ObRawExpr*>& conds);
   int deep_copy_mv_def_stmt(ObSelectStmt *&new_stmt);
-  int get_table_logic_pk_ids(const ObTableSchema *table_schema, ObIArray<uint64_t> &logic_pk_ids);
-  int get_table_rowkey_exprs(const TableItem &table, const TableItem &source_table, const bool use_orig_sel_alias, ObIArray<ObRawExpr *> &rowkey_exprs);
+  int get_table_rowkey_ids(const ObTableSchema *table_schema, ObIArray<uint64_t> &rowkey_ids);
+  int get_table_rowkey_exprs(const TableItem &table,
+                             const TableItem &source_table,
+                             const bool is_for_mlog_table,
+                             const bool use_orig_sel_alias,
+                             ObIArray<ObRawExpr *> &rowkey_exprs);
   int gen_mv_rowkey_expr(const TableItem *mv_table, ObOpRawExpr *&rowkey_expr);
   int add_col_exprs_into_select(ObIArray<SelectItem> &select_items, const ObIArray<ObRawExpr*> &col_exprs);
   int add_mv_rowkey_into_select(ObSelectStmt *stmt, const TableItem *mv_table);
@@ -261,6 +280,12 @@ protected:
   int add_semi_to_inner_hint(ObDMLStmt *stmt);
   int add_dynamic_sampling_hint(ObDMLStmt *stmt, const TableItem *table);
   bool is_table_skip_refresh(const TableItem &table) const;
+  int create_simple_exists_expr(const TableItem *ori_table,
+                                ObSelectStmt *from_view,
+                                const char *from_view_name_fmt,
+                                const ObIArray<ObRawExpr*> &conds,
+                                const bool is_exists,
+                                ObRawExpr *&exists_expr);
   template <typename StmtType>
   inline int create_simple_stmt(StmtType *&stmt)
   {

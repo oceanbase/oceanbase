@@ -393,11 +393,20 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("base table schema is null", KR(ret));
   } else if (base_table_schema->has_mlog_table()) {
+    bool has_mlog_task = false;
     if ((OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_schema->get_mlog_tid(), mlog_schema)))) {
       LOG_WARN("failed to get mlog schema", KR(ret), K(base_table_schema->get_mlog_tid()));
     } else if (OB_ISNULL(mlog_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mlog schema is null", KR(ret), K(base_table_schema->get_mlog_tid()));
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+                   *GCTX.sql_proxy_, *mlog_schema, tenant_id_,
+                   base_table_schema->get_table_id(), has_mlog_task))) {
+      LOG_WARN("fail to check has index task", KR(ret), K(tenant_id_),
+               K(base_table_schema->get_table_id()),
+               K(mlog_schema->get_table_id()));
+    } else if (has_mlog_task) {
+      ret = OB_EAGAIN;
     }
   }
   if (OB_SUCC(ret)) {
@@ -566,15 +575,19 @@ int ObBuildMViewTask::update_based_schema_obj_info()
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg_.based_schema_object_infos_.count(); i++) {
       ObBasedSchemaObjectInfo &based_info = arg_.based_schema_object_infos_.at(i);
-      const ObTableSchema *base_table_schema = nullptr;
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, based_info.schema_id_, base_table_schema))) {
-        LOG_WARN("failed to get base table schema", KR(ret), K(based_info.schema_id_));
-      } else if (OB_ISNULL(base_table_schema)) {
+      const ObSchema *schema_obj = nullptr;
+      int64_t based_obj_schema_version = OB_INVALID_VERSION;
+      ObSchemaType schema_type = OB_MAX_SCHEMA;
+      const ObObjectType based_obj_type = ObMViewUtils::get_object_type_for_mview(based_info.schema_type_);
+      if (OB_FAIL(ObMViewUtils::get_schema_object_from_dependency(tenant_id_, schema_guard,
+                  based_info.schema_id_, based_obj_type, schema_obj, based_obj_schema_version, schema_type))) {
+        LOG_WARN("failed to get schema object from dependency", KR(ret), K(based_info));
+      } else if (OB_ISNULL(schema_obj)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("base table schema is null", KR(ret));
+        LOG_WARN("base table schema is null", KR(ret), K(based_info));
       } else {
-        LOG_INFO("update based info schema version", K(based_info), K(base_table_schema->get_schema_version()));
-        based_info.schema_version_ = base_table_schema->get_schema_version();
+        LOG_INFO("update based info schema version", K(based_info), K(based_obj_schema_version));
+        based_info.schema_version_ = based_obj_schema_version;
       }
     }
   }

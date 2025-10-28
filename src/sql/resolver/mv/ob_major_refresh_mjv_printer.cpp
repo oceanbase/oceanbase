@@ -474,7 +474,7 @@ int ObMajorRefreshMJVPrinter::create_mr_rt_mv_access_mv_from_table(ObSelectStmt 
   } else if (OB_FAIL(copier.copy_on_replace(all_conds, mv_join_delta_right->get_join_conditions()))) {
     LOG_WARN("failed to copy on replace exprs", K(ret), K(all_conds));
   } else if (OB_FAIL(gen_rowkey_join_conds_for_table(*orig_left_table, delta_left_table,
-                                                     mv_table, true, mv_join_delta_left->get_join_conditions()))) {
+                                                     mv_table, false, true, mv_join_delta_left->get_join_conditions()))) {
     LOG_WARN("failed to generate rowkey join conds for table", K(ret));
   }
   return ret;
@@ -600,7 +600,7 @@ int ObMajorRefreshMJVPrinter::gen_exists_cond_for_mview(const TableItem &source_
   } else if (OB_FAIL(subquery->get_select_items().push_back(sel_item))) {
     LOG_WARN("failed to push back not exists expr", K(ret));
   } else if (OB_FAIL(gen_rowkey_join_conds_for_table(source_table, outer_table,
-                                                     *mv_table, true, subquery->get_condition_exprs()))) {
+                                                     *mv_table, false, true, subquery->get_condition_exprs()))) {
     LOG_WARN("failed to generate rowkey join conds for table", K(ret));
   } else {
     exists_expr = exists_op_expr;

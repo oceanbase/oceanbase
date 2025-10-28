@@ -3312,10 +3312,11 @@ int ObTableSqlService::gen_table_dml_without_check(
           && OB_FAIL(dml.add_column("dynamic_partition_policy", ObHexEscapeSqlStr(dynamic_partition_policy))))
       || (data_version >= DATA_VERSION_4_3_5_2
           && OB_FAIL(dml.add_column("merge_engine_type", table.get_merge_engine_type())))
-      ) {
+      || (data_version >= DATA_VERSION_4_3_5_5
+          && OB_FAIL(dml.add_column("mview_expand_definition", ObHexEscapeSqlStr(table.get_view_schema().get_expand_view_definition_for_mv()))))
+        ) {
         LOG_WARN("add column failed", K(ret));
       }
-
   return ret;
 }
 

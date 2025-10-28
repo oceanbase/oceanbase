@@ -875,7 +875,7 @@ int ObMViewInfo::update_mview_data_attr(ObISQLClient &sql_client,
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObMVDepUtils::get_mview_dep_infos(sql_client,
-                     tenant_id, mview_info.get_mview_id(), mv_dep_infos))) {
+                     tenant_id, mview_info.get_mview_id(), mv_dep_infos, true))) {
     LOG_WARN("fail to get mv dep infos", K(ret), K(mview_info));
   } else if (mv_dep_infos.count() <= 0) {
     ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;

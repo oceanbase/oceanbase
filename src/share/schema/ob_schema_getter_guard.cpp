@@ -4044,6 +4044,7 @@ int ObSchemaGetterGuard::get_schema_version(
         GET_SCHEMA_VERSION(tablegroup, ObSimpleTablegroupSchema);
         break;
       }
+    case VIEW_SCHEMA :
     case TABLE_SCHEMA : {
         if (is_cte_table(schema_id)) {
           // fake table, we should avoid error in such situation.

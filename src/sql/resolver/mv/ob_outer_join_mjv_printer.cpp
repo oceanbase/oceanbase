@@ -23,12 +23,11 @@ namespace sql
 int ObOuterJoinMJVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
-  ObSqlBitSet<> refreshed_table_idxs;
   dml_stmts.reuse();
   if (OB_FAIL(gen_delta_pre_table_views())) {
     LOG_WARN("failed to generate delta pre table views", K(ret));
-  } else if (OB_FAIL(right_table_idxs_.prepare_allocate(mv_def_stmt_.get_table_size()))) {
-    LOG_WARN("failed to prepare allocate table idx array", K(ret), K(mv_def_stmt_.get_table_size()));
+  } else if (OB_FAIL(init_outer_join_mv_printer_helper())) {
+    LOG_WARN("failed to init outer join mv printer helper", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_from_item_size(); ++i) {
     TableItem *from_table = NULL;
@@ -36,7 +35,6 @@ int ObOuterJoinMJVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
       LOG_WARN("failed to get from table", K(ret));
     } else if (OB_FAIL(gen_refresh_dmls_for_table(from_table,
                                                   NULL,
-                                                  refreshed_table_idxs,
                                                   dml_stmts))) {
       LOG_WARN("failed to gen refresh dmls for table", K(ret));
     }
@@ -75,107 +73,14 @@ int ObOuterJoinMJVPrinter::gen_delta_pre_table_views()
   return ret;
 }
 
-int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_table(const TableItem *table,
-                                                      const JoinedTable *upper_table,
-                                                      ObSqlBitSet<> &refreshed_table_idxs,
-                                                      ObIArray<ObDMLStmt*> &dml_stmts)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table is null", K(ret));
-  } else if (table->is_joined_table()) {
-    const JoinedTable *joined_table = static_cast<const JoinedTable *>(table);
-    const TableItem *first_table = NULL;  // outer join null side
-    const TableItem *second_table = NULL; // outer join not null side
-    if (RIGHT_OUTER_JOIN == joined_table->joined_type_) {
-      first_table = joined_table->left_table_;
-      second_table = joined_table->right_table_;
-    } else {
-      first_table = joined_table->right_table_;
-      second_table = joined_table->left_table_;
-    }
-    if (OB_FAIL(SMART_CALL(gen_refresh_dmls_for_table(first_table,
-                                                      joined_table,
-                                                      refreshed_table_idxs,
-                                                      dml_stmts)))) {
-      LOG_WARN("failed to gen refresh dmls for the first table", K(ret));
-    } else if (OB_FAIL(SMART_CALL(gen_refresh_dmls_for_table(second_table,
-                                                             upper_table,
-                                                             refreshed_table_idxs,
-                                                             dml_stmts)))) {
-      LOG_WARN("failed to gen refresh dmls for the second table", K(ret));
-    }
-  } else {
-    int64_t delta_table_idx = -1;
-    if (OB_FAIL(mv_def_stmt_.get_table_item_idx(table, delta_table_idx))) {
-      LOG_WARN("failed to get delta table idx", K(ret));
-    } else if (is_table_skip_refresh(*table)) {
-      // do nothing, no need to refresh
-    } else if (NULL == upper_table || INNER_JOIN == upper_table->joined_type_) {
-      if (OB_FAIL(gen_refresh_dmls_for_inner_join(table,
-                                                  delta_table_idx,
-                                                  refreshed_table_idxs,
-                                                  dml_stmts))) {
-        LOG_WARN("failed to gen refresh dmls for inner join", K(ret));
-      }
-    } else if (OB_FAIL(gen_refresh_dmls_for_left_join(table,
-                                                      delta_table_idx,
-                                                      upper_table,
-                                                      refreshed_table_idxs,
-                                                      dml_stmts))) {
-      LOG_WARN("failed to gen refresh dmls for left join", K(ret));
-    }
-    if (OB_SUCC(ret) && OB_FAIL(update_table_idx_array(delta_table_idx,
-                                                       upper_table,
-                                                       refreshed_table_idxs))) {
-      LOG_WARN("failed to update table idx array", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOuterJoinMJVPrinter::update_table_idx_array(const int64_t delta_table_idx,
-                                                  const JoinedTable *upper_table,
-                                                  ObSqlBitSet<> &refreshed_table_idxs)
-{
-  int ret = OB_SUCCESS;
-  ObRelIds join_cond_relids;
-  if (OB_FAIL(refreshed_table_idxs.add_member(delta_table_idx))) {
-    LOG_WARN("failed to add member", K(ret), K(delta_table_idx));
-  } else if (NULL != upper_table) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < upper_table->join_conditions_.count(); ++i) {
-      const ObRawExpr *expr = upper_table->join_conditions_.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null expr", K(ret), K(i));
-      } else if (OB_FAIL(join_cond_relids.add_members(expr->get_relation_ids()))) {
-        LOG_WARN("failed to add members", K(ret));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < right_table_idxs_.count(); ++i) {
-      if (!join_cond_relids.has_member(i + 1) || delta_table_idx == i) {
-        // do nothing
-      } else if (OB_FAIL(right_table_idxs_.at(i).add_member(delta_table_idx))) {
-        LOG_WARN("failed to add member", K(ret), K(delta_table_idx));
-      } else if (OB_FAIL(right_table_idxs_.at(i).add_members(right_table_idxs_.at(delta_table_idx)))) {
-        LOG_WARN("failed to add members", K(ret), K(delta_table_idx));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_inner_join(const TableItem *delta_table,
                                                            const int64_t delta_table_idx,
-                                                           const ObSqlBitSet<> &refreshed_table_idxs,
                                                            ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(gen_delete_for_inner_join(delta_table, dml_stmts))) {
     LOG_WARN("failed to gen delete stmt for inner join", K(ret));
   } else if (OB_FAIL(gen_insert_for_outer_join_mjv(delta_table_idx,
-                                                   refreshed_table_idxs,
                                                    NULL, /* upper_table */
                                                    false, /* is_outer_join */
                                                    dml_stmts))) {
@@ -187,24 +92,20 @@ int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_inner_join(const TableItem *delt
 int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_left_join(const TableItem *delta_table,
                                                           const int64_t delta_table_idx,
                                                           const JoinedTable *upper_table,
-                                                          const ObSqlBitSet<> &refreshed_table_idxs,
                                                           ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(gen_delete_for_left_join(delta_table,
                                        delta_table_idx,
                                        upper_table,
-                                       refreshed_table_idxs,
                                        true, /* is_first_delete */
                                        dml_stmts))) {
     LOG_WARN("failed to generate the first delete stmt for left join", K(ret));
   } else if (OB_FAIL(gen_update_for_left_join(delta_table,
                                               delta_table_idx,
-                                              refreshed_table_idxs,
                                               dml_stmts))) {
     LOG_WARN("failed to generate update stmt for left join", K(ret));
   } else if (OB_FAIL(gen_insert_for_outer_join_mjv(delta_table_idx,
-                                                   refreshed_table_idxs,
                                                    upper_table,
                                                    true, /* is_outer_join */
                                                    dml_stmts))) {
@@ -212,7 +113,6 @@ int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_left_join(const TableItem *delta
   } else if (OB_FAIL(gen_delete_for_left_join(delta_table,
                                               delta_table_idx,
                                               upper_table,
-                                              refreshed_table_idxs,
                                               false, /* is_first_delete */
                                               dml_stmts))) {
     LOG_WARN("failed to generate the second delete stmt for left join", K(ret));
@@ -242,6 +142,8 @@ int ObOuterJoinMJVPrinter::gen_delete_for_inner_join(const TableItem *delta_tabl
     LOG_WARN("failed to create simple column exprs", K(ret));
   } else if (OB_FAIL(del_stmt->get_condition_exprs().push_back(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(del_stmt, mv_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(del_stmt))) {
     LOG_WARN("failed to push back delete stmt", K(ret));
   }
@@ -249,7 +151,6 @@ int ObOuterJoinMJVPrinter::gen_delete_for_inner_join(const TableItem *delta_tabl
 }
 
 int ObOuterJoinMJVPrinter::gen_insert_for_outer_join_mjv(const int64_t delta_table_idx,
-                                                         const ObSqlBitSet<> &refreshed_table_idxs,
                                                          const JoinedTable *upper_table,
                                                          const bool is_outer_join,
                                                          ObIArray<ObDMLStmt*> &dml_stmts)
@@ -281,7 +182,7 @@ int ObOuterJoinMJVPrinter::gen_insert_for_outer_join_mjv(const int64_t delta_tab
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(gen_insert_select_stmt(delta_table_idx, refreshed_table_idxs, upper_table, is_outer_join, ins_sel_stmt))) {
+  } else if (OB_FAIL(gen_insert_select_stmt(delta_table_idx, upper_table, is_outer_join, ins_sel_stmt))) {
     LOG_WARN("failed to gen insert select stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(ins_stmt, DELTA_MV_VIEW_NAME, ins_source_table, ins_sel_stmt))) {
     LOG_WARN("failed to create simple table item", K(ret));
@@ -292,7 +193,6 @@ int ObOuterJoinMJVPrinter::gen_insert_for_outer_join_mjv(const int64_t delta_tab
 }
 
 int ObOuterJoinMJVPrinter::gen_insert_select_stmt(const int64_t delta_table_idx,
-                                                  const ObSqlBitSet<> &refreshed_table_idxs,
                                                   const JoinedTable *upper_table,
                                                   const bool is_outer_join,
                                                   ObSelectStmt *&sel_stmt)
@@ -305,7 +205,6 @@ int ObOuterJoinMJVPrinter::gen_insert_select_stmt(const int64_t delta_table_idx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(gen_tables_for_insert_select_stmt(delta_table_idx,
-                                                       refreshed_table_idxs,
                                                        sel_stmt))) {
     LOG_WARN("failed to generate table items for select stmt", K(ret));
   } else if (OB_FAIL(init_expr_copier_for_stmt(*sel_stmt, copier))) {
@@ -342,13 +241,9 @@ int ObOuterJoinMJVPrinter::gen_insert_select_stmt(const int64_t delta_table_idx,
 }
 
 int ObOuterJoinMJVPrinter::gen_tables_for_insert_select_stmt(const int64_t delta_table_idx,
-                                                             const ObSqlBitSet<> &refreshed_table_idxs,
                                                              ObSelectStmt *sel_stmt)
 {
   int ret = OB_SUCCESS;
-  const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
-  char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
-  int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
   if (OB_ISNULL(sel_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(sel_stmt));
@@ -357,13 +252,12 @@ int ObOuterJoinMJVPrinter::gen_tables_for_insert_select_stmt(const int64_t delta
     const TableItem *ori_table = NULL;
     TableItem *new_table = NULL;
     ObSelectStmt *view_stmt = NULL;
-    int64_t pos = 0;
     if (delta_table_idx == i) {
       if (OB_ISNULL(view_stmt = all_delta_table_views_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i));
       }
-    } else if (!refreshed_table_idxs.has_member(i)) {
+    } else if (!refreshed_table_idxs_.has_member(i)) {
       if (OB_ISNULL(view_stmt = all_pre_table_views_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i));
@@ -373,20 +267,13 @@ int ObOuterJoinMJVPrinter::gen_tables_for_insert_select_stmt(const int64_t delta
     } else if (OB_ISNULL(ori_table = mv_def_stmt_.get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i), K(ori_table));
-    } else if (OB_FAIL(create_simple_table_item(sel_stmt, ori_table->table_name_, new_table, view_stmt, false))) {
+    } else if (OB_FAIL(create_table_item_with_infos(sel_stmt,
+                                                    ori_table,
+                                                    new_table,
+                                                    view_stmt,
+                                                    delta_table_idx == i ? DELTA_TABLE_FORMAT_NAME : PRE_TABLE_FORMAT_NAME,
+                                                    false))) {
       LOG_WARN("failed to create simple table item", K(ret));
-    } else if (OB_ISNULL(new_table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("new table item is null", K(ret));
-    } else if (new_table->is_basic_table()) {
-      // access current data
-      set_info_for_simple_table_item(*new_table, *ori_table);
-    } else if (OB_FAIL(BUF_PRINTF(delta_table_idx == i ? DELTA_TABLE_FORMAT_NAME : PRE_TABLE_FORMAT_NAME,
-                                  ori_table->get_object_name().length(),
-                                  ori_table->get_object_name().ptr()))) {
-      LOG_WARN("failed to buf print for delta/pre view name", K(ret));
-    } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), new_table->alias_name_))) {
-      LOG_WARN("failed to write string", K(ret));
     }
   }
   return ret;
@@ -395,7 +282,6 @@ int ObOuterJoinMJVPrinter::gen_tables_for_insert_select_stmt(const int64_t delta
 int ObOuterJoinMJVPrinter::gen_delete_for_left_join(const TableItem *delta_table,
                                                     const int64_t delta_table_idx,
                                                     const JoinedTable *upper_table,
-                                                    const ObSqlBitSet<> &refreshed_table_idxs,
                                                     const bool is_first_delete,
                                                     ObIArray<ObDMLStmt*> &dml_stmts)
 {
@@ -418,14 +304,12 @@ int ObOuterJoinMJVPrinter::gen_delete_for_left_join(const TableItem *delta_table
              && OB_FAIL(gen_select_for_left_join_first_delete(delta_table,
                                                               delta_table_idx,
                                                               upper_table,
-                                                              refreshed_table_idxs,
                                                               cond_sel_stmt))) {
     LOG_WARN("failed to generate select stmt for semi filter", K(ret));
   } else if (!is_first_delete
              && OB_FAIL(gen_select_for_left_join_second_delete(delta_table,
                                                                delta_table_idx,
                                                                upper_table,
-                                                               refreshed_table_idxs,
                                                                cond_sel_stmt))) {
     LOG_WARN("failed to generate select stmt for semi filter", K(ret));
   } else if (OB_FAIL(gen_mv_rowkey_expr(mv_table, mv_pk_expr))) {
@@ -450,7 +334,6 @@ int ObOuterJoinMJVPrinter::gen_delete_for_left_join(const TableItem *delta_table
 int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem *delta_table,
                                                                  const int64_t delta_table_idx,
                                                                  const JoinedTable *upper_table,
-                                                                 const ObSqlBitSet<> &refreshed_table_idxs,
                                                                  ObSelectStmt *&cond_sel_stmt)
 {
   int ret = OB_SUCCESS;
@@ -462,7 +345,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   ObSEArray<ObRawExpr*, 4> dlt_t_mlog_rowkeys;
   ObSEArray<int64_t, 4> other_join_table_idxs; // useless for the first delete
   ObSEArray<ObRawExpr*, 16> other_join_table_rowkeys;
-  ObSEArray<ObRawExpr*, 16> win_func_partiton_key;
+  ObSEArray<ObRawExpr*, 16> win_func_partition_key;
   ObOpRawExpr *mv_stat_cond_expr = NULL;
   ObQueryRefRawExpr *in_sel_query_expr = NULL;
   ObOpRawExpr *left_table_rowkey_row = NULL;
@@ -496,12 +379,17 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
   } else if (OB_FAIL(gen_rowkey_join_conds_for_table(*delta_table,
                                                      *dlt_t_mlog_table,
                                                      *mv_table,
-                                                     true,
+                                                     false, /* left_is_mlog_table */
+                                                     true, /* right_use_orig_sel_alias */
                                                      mv_stat_from_table->get_join_conditions()))) {
     LOG_WARN("failed to generate rowkey join conds", K(ret));
   } else if (OB_FAIL(add_mv_rowkey_into_select(mv_stat_stmt, mv_table))) {
     LOG_WARN("failed to add mv pk into select", K(ret));
-  } else if (OB_FAIL(get_table_rowkey_exprs(*dlt_t_mlog_table, *delta_table, false, dlt_t_mlog_rowkeys))) {
+  } else if (OB_FAIL(get_table_rowkey_exprs(*dlt_t_mlog_table,
+                                            *delta_table,
+                                            false, /* is_for_mlog_table */
+                                            false, /* use_orig_sel_alias */
+                                            dlt_t_mlog_rowkeys))) {
     LOG_WARN("failed to get table rowkey exprs", K(ret));
   } else if (OB_UNLIKELY(dlt_t_mlog_rowkeys.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -512,10 +400,10 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
                                                  right_table_idxs_.at(delta_table_idx),
                                                  other_join_table_idxs,
                                                  other_join_table_rowkeys,
-                                                 win_func_partiton_key))) {
+                                                 win_func_partition_key))) {
     LOG_WARN("failed to get left table rowkey exprs", K(ret));
   } else if (OB_FAIL(gen_mv_stat_winfunc_expr(dlt_t_mlog_rowkeys.at(0),
-                                              win_func_partiton_key,
+                                              win_func_partition_key,
                                               mv_stat_stmt))) {
     LOG_WARN("failed to generate mv_stat winfunc expr", K(ret));
   // generate where conditions for mv_stat
@@ -551,6 +439,8 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(mv_stat_stmt, mv_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   }
   // build cond_sel_stmt
   TableItem *mv_stat_table = NULL;
@@ -642,7 +532,11 @@ int ObOuterJoinMJVPrinter::get_left_table_rowkey_exprs(const int64_t delta_table
      } else if (OB_ISNULL(cur_table = mv_def_stmt_.get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
-    } else if (OB_FAIL(get_table_rowkey_exprs(*outer_table, *cur_table, true, cur_table_rowkeys))) {
+    } else if (OB_FAIL(get_table_rowkey_exprs(*outer_table,
+                                              *cur_table,
+                                              false, /* is_for_mlog_table */
+                                              true, /* use_orig_sel_alias */
+                                              cur_table_rowkeys))) {
       LOG_WARN("failed to get table rowkey exprs", K(ret), KPC(cur_table));
     } else if (OB_FAIL(append(all_other_table_rowkeys, cur_table_rowkeys))) {
       LOG_WARN("failed to append table rowkey", K(ret));
@@ -728,7 +622,6 @@ int ObOuterJoinMJVPrinter::gen_mv_stat_winfunc_expr(ObRawExpr *pk_expr,
 
 int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table,
                                                     const int64_t delta_table_idx,
-                                                    const ObSqlBitSet<> &refreshed_table_idxs,
                                                     ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
@@ -751,6 +644,8 @@ int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table
     LOG_WARN("failed to push back semi filter", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(upd_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(upd_stmt, mv_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_ISNULL((ptr = ctx_.alloc_.alloc(sizeof(ObUpdateTableInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate table info", K(ret));
@@ -847,7 +742,6 @@ int ObOuterJoinMJVPrinter::add_set_null_to_upd_stmt(const ObRelIds &set_null_tab
 int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableItem *delta_table,
                                                                   const int64_t delta_table_idx,
                                                                   const JoinedTable *upper_table,
-                                                                  const ObSqlBitSet<> &refreshed_table_idxs,
                                                                   ObSelectStmt *&cond_sel_stmt)
 {
   int ret = OB_SUCCESS;
@@ -864,10 +758,6 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   ObSEArray<ObRawExpr*, 16> left_table_rowkey_row_params;
   ObQueryRefRawExpr *in_sel_query_expr = NULL;
   ObRawExprCopier in_sel_stmt_copier(ctx_.expr_factory_);
-  const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
-  char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
-  int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
-  int64_t pos = 0;
   cond_sel_stmt = NULL;
   if (OB_ISNULL(delta_table) || OB_ISNULL(upper_table)) {
     ret = OB_ERR_UNEXPECTED;
@@ -881,7 +771,11 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   } else if (OB_ISNULL(mv_stat_stmt) || OB_ISNULL(mv_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(mv_stat_stmt), K(mv_table));
-  } else if (OB_FAIL(get_table_rowkey_exprs(*mv_table, *delta_table, true, delta_table_rowkeys))) {
+  } else if (OB_FAIL(get_table_rowkey_exprs(*mv_table,
+                                            *delta_table,
+                                            false, /* is_for_mlog_table */
+                                            true, /* use_orig_sel_alias */
+                                            delta_table_rowkeys))) {
     LOG_WARN("failed to get table rowkey exprs", K(ret));
   } else if (OB_UNLIKELY(delta_table_rowkeys.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -889,7 +783,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   } else if (OB_FAIL(get_left_table_rowkey_exprs(delta_table_idx,
                                                  mv_table,
                                                  upper_table->get_join_conditions(),
-                                                 refreshed_table_idxs,
+                                                 refreshed_table_idxs_,
                                                  other_join_table_idxs,
                                                  other_join_table_rowkeys,
                                                  all_other_table_rowkeys))) {
@@ -916,20 +810,17 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
     LOG_WARN("failed to push back where condition", K(ret));
   } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
     LOG_WARN("failed to add semi to inner hint", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(mv_stat_stmt, mv_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_UNLIKELY(0 > delta_table_idx || all_delta_table_views_.count() <= delta_table_idx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table idx", K(ret), K(delta_table_idx), K(all_delta_table_views_.count()));
-  } else if (OB_FAIL(create_simple_table_item(in_sel_stmt,
-                                              delta_table->get_object_name(),
-                                              new_table,
-                                              all_delta_table_views_.at(delta_table_idx)))) {
+  } else if (OB_FAIL(create_table_item_with_infos(in_sel_stmt,
+                                                  delta_table,
+                                                  new_table,
+                                                  all_delta_table_views_.at(delta_table_idx),
+                                                  DELTA_TABLE_FORMAT_NAME))) {
     LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF(DELTA_TABLE_FORMAT_NAME,
-                                delta_table->get_object_name().length(),
-                                delta_table->get_object_name().ptr()))) {
-    LOG_WARN("failed to buf print for delta/pre view name", K(ret));
-  } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), new_table->alias_name_))) {
-    LOG_WARN("failed to write string", K(ret));
   } else if (OB_FAIL(init_expr_copier_for_table(delta_table, new_table, in_sel_stmt_copier))) {
     LOG_WARN("failed to init expr copier for delta table", K(ret));
   }
@@ -937,7 +828,6 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
     const TableItem *left_table = NULL;
     ObSEArray<ObRawExpr*, 4> table_rowkeys;
     int64_t table_idx = other_join_table_idxs.at(i);
-    pos = 0;
     new_table = NULL;
     if (OB_UNLIKELY(0 > table_idx || all_pre_table_views_.count() <= table_idx)) {
       ret = OB_ERR_UNEXPECTED;
@@ -945,23 +835,22 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
     } else if (OB_ISNULL(left_table = mv_def_stmt_.get_table_item(table_idx))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(other_join_table_idxs.at(i)), K(table_idx));
-    } else if (OB_FAIL(create_simple_table_item(in_sel_stmt,
-                                                left_table->get_object_name(),
-                                                new_table,
-                                                all_pre_table_views_.at(table_idx)))) {
+    } else if (OB_FAIL(create_table_item_with_infos(in_sel_stmt,
+                                                    left_table,
+                                                    new_table,
+                                                    all_pre_table_views_.at(table_idx),
+                                                    PRE_TABLE_FORMAT_NAME))) {
       LOG_WARN("failed to create simple table item", K(ret));
     } else if (OB_ISNULL(new_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(new_table));
-    } else if (OB_FAIL(BUF_PRINTF(PRE_TABLE_FORMAT_NAME,
-                                  left_table->get_object_name().length(),
-                                  left_table->get_object_name().ptr()))) {
-      LOG_WARN("failed to buf print for delta/pre view name", K(ret));
-    } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), new_table->alias_name_))) {
-      LOG_WARN("failed to write string", K(ret));
     } else if (OB_FAIL(init_expr_copier_for_table(left_table, new_table, in_sel_stmt_copier))) {
       LOG_WARN("failed to init expr copier for left table", K(ret), KPC(left_table));
-    } else if (OB_FAIL(get_table_rowkey_exprs(*new_table, *left_table, false, table_rowkeys))) {
+    } else if (OB_FAIL(get_table_rowkey_exprs(*new_table,
+                                              *left_table,
+                                              false, /* is_for_mlog_table */
+                                              false, /* use_orig_sel_alias */
+                                              table_rowkeys))) {
       LOG_WARN("failed to get table rowkey exprs", K(ret));
     } else if (OB_FAIL(add_col_exprs_into_select(in_sel_stmt->get_select_items(), table_rowkeys))) {
       LOG_WARN("failed to add col exprs into select", K(ret));

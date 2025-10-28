@@ -67,7 +67,6 @@ int ObMViewRefreshExecutor::execute(ObExecContext &ctx, const ObMViewRefreshArg 
     tenant_id_, DATA_VERSION_4_3_0_0, "tenant's data version is below 4.3.0.0, refresh mview is"));
   OZ(resolve_arg(arg));
   OZ(mview_infos_.prepare_allocate(mview_ids_.count()));
-
   if (OB_SUCC(ret)) {
     if (mview_ids_.empty()) {
       // do nothing
@@ -185,8 +184,11 @@ int ObMViewRefreshExecutor::do_refresh()
     refresh_ctx.allocator_.set_tenant_id(tenant_id_);
     refresh_ctx.tenant_id_ = tenant_id_;
     refresh_ctx.mview_id_ = mview_id;
+    const ObTableSchema *mv_schema = nullptr;
     if (OB_FAIL(stats_collector.alloc_collection(mview_id, refresh_stats_collection))) {
       LOG_WARN("fail to alloc collection", KR(ret), K(mview_id));
+    } else if (OB_FAIL(ctx_->get_sql_ctx()->schema_guard_->get_table_schema(tenant_id_, mview_id, mv_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(mview_id));
     }
     // 1. refresh mview
     if (OB_SUCC(ret)) {
@@ -200,6 +202,7 @@ int ObMViewRefreshExecutor::do_refresh()
         ObMViewTransaction trans;
         ObMViewRefresher refresher;
         const int64_t subtask_start_time = ObTimeUtil::current_time();
+        const sql::ObLocalSessionVar *mv_solidified_session_var = &mv_schema->get_local_session_var();
         if (OB_FAIL(get_and_check_mview_database_schema(ctx_->get_sql_ctx()->schema_guard_,
                                                         mview_id,
                                                         database_schema))) {
@@ -207,14 +210,12 @@ int ObMViewRefreshExecutor::do_refresh()
         } else if (OB_FAIL(trans.start(ctx_->get_my_session(),
                                        ctx_->get_sql_proxy(),
                                        database_schema->get_database_id(),
-                                       database_schema->get_database_name_str()))) {
+                                       database_schema->get_database_name_str(),
+                                       mv_solidified_session_var))) {
           LOG_WARN("fail to start trans", KR(ret), K(database_schema->get_database_id()),
               K(database_schema->get_database_name_str()));
-        } else if (OB_FAIL(set_session_vars_(mview_id, trans))) {
-          LOG_WARN("fail to set collation var", K(ret), K(mview_id));
         } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
-        } else if (OB_FAIL(
-                     refresher.init(*ctx_, refresh_ctx, refresh_param, refresh_stats_collection))) {
+        } else if (OB_FAIL(refresher.init(*ctx_, refresh_ctx, refresh_param, refresh_stats_collection))) {
           LOG_WARN("fail to init refresher", KR(ret), K(refresh_param));
         } else if (OB_FAIL(refresher.refresh())) {
           LOG_WARN("fail to do refresh", KR(ret), K(refresh_param));
@@ -601,7 +602,7 @@ int ObMViewRefreshExecutor::scheduler_nested_mviews_sync_refresh_(
                                tenant_id_, mview_id, table_schema))) {
               LOG_WARN("fail to get table schema", K(ret));
             } else if (OB_ISNULL(table_schema)) {
-              LOG_INFO("mview not exist, skip refresh it, may try complete refresh", K(ret));
+              LOG_INFO("mview not exist, skip refresh it, may try complete refresh", K(ret), K(mview_id), KP(table_schema));
             } else if (OB_FAIL(generate_database_table_name_(table_schema, table_name))) {
               LOG_INFO("fail to generate database table name", K(ret), K(table_name));
             } else if (OB_FALSE_IT(refresh_arg.list_ = table_name.ptr())) {

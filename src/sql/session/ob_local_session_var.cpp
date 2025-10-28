@@ -171,8 +171,6 @@ int ObLocalSessionVar::get_different_vars_from_session(const sql::ObBasicSession
       if (OB_ISNULL(local_session_vars_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i));
-      } else if (SYS_VAR_SQL_MODE == local_session_vars_.at(i)->type_) {
-        /* just ignore sql mode now */
       } else if (OB_FAIL(check_var_same_with_session(*session, local_session_vars_.at(i), is_same, &session_val))) {
         LOG_WARN("fail to check var same with session", K(ret));
       } else if (is_same) {

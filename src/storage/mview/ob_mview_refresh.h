@@ -62,8 +62,13 @@ public:
 
   static int calc_mv_refresh_parallelism(int64_t explict_parallelism,
                                          sql::ObSQLSessionInfo *session_info, int64_t &final_parallelism);
+  static int collect_based_schema_object_infos(const uint64_t tenant_id,
+                                               const uint64_t data_version,
+                                               share::schema::ObSchemaGetterGuard &schema_guard,
+                                               const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
+                                               ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
 
-  TO_STRING_KV(KP_(ctx), KP_(refresh_ctx), K_(refresh_param), KP_(refresh_stats_collection));
+  TO_STRING_KV(KP_(ctx), KP_(refresh_ctx), K_(refresh_param), KP_(refresh_stats_collection), K_(data_version));
 
 private:
   int lock_mview_for_refresh();
@@ -93,6 +98,7 @@ private:
   ObMViewRefreshParam refresh_param_;
   ObMViewRefreshStatsCollection *refresh_stats_collection_;
   bool is_inited_;
+  uint64_t data_version_;
 };
 
 } // namespace storage

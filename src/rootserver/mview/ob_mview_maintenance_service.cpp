@@ -602,6 +602,7 @@ int ObMViewMaintenanceService::get_all_mview_deps()
       } else if (OB_ISNULL(table_schema)) {
         // A dep on B and B complete refreshed, container table changed, ignore this null
         // if can not refresh success, it would return error when refreshing
+        // ignore udt and udf, casue of they can not get table schema and not need to refresh
         LOG_INFO("table schema is null, maybe dep is deleted", K(ret), K(tenant_id), K(curr_dep_info.p_obj_));
       } else if (table_schema->is_materialized_view()) {
         dep_ids.push_back(curr_dep_info.p_obj_);

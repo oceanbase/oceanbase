@@ -79,7 +79,8 @@ protected:
   int gen_merge_conds(ObMergeStmt &merge_stmt);
   int gen_simple_mav_delta_mv_view(ObSelectStmt *&view_stmt);
   int gen_simple_mav_delta_mv_select_list(ObRawExprCopier &copier,
-                                          const TableItem &table,
+                                          const TableItem *table,
+                                          const int64_t explicit_dml_factor,
                                           const ObIArray<ObRawExpr*> &group_by_exprs,
                                           ObIArray<SelectItem> &select_items);
   int gen_simple_join_mav_basic_select_list(const TableItem &table,
@@ -92,7 +93,7 @@ protected:
   int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
   int add_replaced_expr_for_min_max_aggr(const TableItem &source_table, ObRawExprCopier &copier);
   int get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr, ObString &sel_name);
-  int gen_min_max_aggr_print_expr(const TableItem &outer_table,
+  int gen_min_max_aggr_print_expr(const ObIArray<ObRawExpr*> &outer_group_by_exprs,
                                   ObAggFunRawExpr &aggr_expr,
                                   ObRawExpr *&aggr_print_expr);
   inline const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }

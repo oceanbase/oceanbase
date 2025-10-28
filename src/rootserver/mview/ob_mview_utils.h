@@ -35,12 +35,80 @@ public:
                                     share::schema::ObSchemaGetterGuard &schema_guard,
                                     const share::schema::ObTableSchema *base_table_schema,
                                     int64_t &task_id);
+
+  static int generate_mview_complete_refresh_sql(const uint64_t tenant_id,
+                                                 const int64_t mview_table_id,
+                                                 const int64_t container_table_id,
+                                                 ObSchemaGetterGuard &schema_guard,
+                                                 const int64_t snapshot_version,
+                                                 const uint64_t mview_target_data_sync_scn,
+                                                 const int64_t execution_id,
+                                                 const int64_t task_id,
+                                                 const int64_t parallelism,
+                                                 const bool use_schema_version_hint_for_src_table,
+                                                 const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
+                                                 const ObString &mview_select_sql,
+                                                 ObSqlString &sql_string);
+
+  static int check_schema_version_and_generate_ddl_schema_hint(const uint64_t tenant_id,
+                                                                   const uint64_t mview_table_id,
+                                                                   share::schema::ObSchemaGetterGuard &schema_guard,
+                                                                   const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
+                                                                   const bool is_oracle_mode,
+                                                                   ObSqlString &sql_string);
+  static int generate_mview_insert_hint(ObSqlString &sql_string,
+                                        const int64_t parallelism,
+                                        const int64_t execution_id,
+                                        const int64_t task_id,
+                                        const bool load_data_hint = true,
+                                        const bool use_pdml_hint = true);
   static int get_base_table_name_for_print(const uint64_t tenant_id,
                                       const share::schema::ObTableSchema *base_table_schema,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
                                       ObString &base_table_name);
   static int get_mlog_column_list_str(const ObIArray<ObString> &mlog_columns,
                                       ObSqlString &column_list_str);
+
+  // Helper function to get schema object from dependency info
+  static int get_schema_object_from_dependency(
+      const uint64_t tenant_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t schema_id,
+      const ObObjectType ref_obj_type,
+      const share::schema::ObSchema *&schema_obj,
+      int64_t &schema_version,
+      share::schema::ObSchemaType &schema_type);
+
+  // Map schema type to object type
+  // The followed table_schema view_schema routine_schema udt_schema are used for mview now
+  static ObObjectType get_object_type_for_mview(const ObSchemaType schema_type)
+  {
+    ObObjectType object_type = ObObjectType::MAX_TYPE;
+    switch (schema_type) {
+      case TABLE_SCHEMA:
+        object_type = ObObjectType::TABLE;
+        break;
+      case ROUTINE_SCHEMA:
+        object_type = ObObjectType::FUNCTION;
+        break;
+      case UDT_SCHEMA:
+        object_type = ObObjectType::TYPE;
+        break;
+      case VIEW_SCHEMA:
+        object_type = ObObjectType::VIEW;
+        break;
+      default:
+        break;
+    }
+    return object_type;
+  }
+  
+  // Extract column names from container_table_schema and format them for INSERT statement
+  static int extract_columns_from_schema(const ObTableSchema &container_table_schema,
+                                         const bool is_oracle_mode,
+                                         ObSqlString &column_list_str,
+                                         ObIAllocator &allocator);
+  static bool is_hidden_column(const ObString &column_name);
 };
 
 class ObMViewAutoMlogEventInfo

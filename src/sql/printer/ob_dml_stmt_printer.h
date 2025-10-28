@@ -152,6 +152,7 @@ public:
   bool is_root_stmt() const { return is_root_; }
   int print_with();
   bool need_print_catalog_name(const ObString& catalog_name);
+  int print_flashback_info(const TableItem *table_item);
 private:
   // added for json table
   int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);

@@ -229,7 +229,6 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
   } else {//check user table
     is_valid = table_schema->is_user_table()
                || table_schema->is_external_table()
-               || table_schema->is_mlog_table()
                || (need_index_table && table_schema->is_index_table());
   }
   return ret;

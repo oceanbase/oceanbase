@@ -3050,7 +3050,6 @@ struct NullAwareAntiJoinInfo {
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_precise);
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
                          bool is_precise, ObIArray<ObPCConstParamInfo> &param_infos);
-    int check_match_to_type(ObRawExpr *to_type, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx);
     int check_can_use_global_stat_instead(const uint64_t ref_table_id,
                                           const ObTableSchema &table_schema,
                                           ObIArray<int64_t> &all_used_parts,

@@ -6500,6 +6500,129 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
   return ret;
 }
 
+int ObOptimizerUtil::extract_real_dep_expr(ObRawExpr *ori_depend_expr,
+                                           ObRawExpr *&real_depend_expr)
+{
+  int ret = OB_SUCCESS;
+  real_depend_expr = ori_depend_expr;
+  bool is_lossless = false;
+  if (OB_ISNULL(ori_depend_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("depend_expr is null", K(ret), K(ori_depend_expr));
+  } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_conv(ori_depend_expr, is_lossless))) {
+    LOG_WARN("check depend epxr lossless failed", K(ret));
+  } else if(is_lossless && OB_FALSE_IT(real_depend_expr = ori_depend_expr->get_param_expr(4))) {
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(real_depend_expr, real_depend_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::check_and_extract_matched_gen_col_exprs(ObRawExpr *&depend_expr,
+                                                             ObRawExpr *&target_expr,
+                                                             bool &is_match,
+                                                             ObExprEqualCheckContext *equal_ctx,
+                                                             const bool skip_extract_real_dep_expr)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (NULL != equal_ctx) {
+    equal_ctx->reset();
+    equal_ctx->override_const_compare_ = true;
+    equal_ctx->ignore_implicit_cast_ = true;
+    equal_ctx->ignore_char_padding_ = true;
+  }
+
+  if (!skip_extract_real_dep_expr &&
+      OB_FAIL(ObOptimizerUtil::extract_real_dep_expr(depend_expr, depend_expr))) {
+    LOG_WARN("failed to extract real dep expr", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(target_expr, target_expr))) {
+    LOG_WARN("fail to get real child without lossless cast", K(ret));
+  } else if (OB_ISNULL(depend_expr) || OB_ISNULL(target_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(depend_expr), K(target_expr));
+  } else if (depend_expr->same_as(*target_expr, equal_ctx)) {
+    is_match = true;
+  } else {
+    if (NULL != equal_ctx) {
+      equal_ctx->reset();
+      equal_ctx->override_const_compare_ = true;
+      equal_ctx->ignore_implicit_cast_ = true;
+      equal_ctx->ignore_char_padding_ = true;
+    }
+    if (OB_FAIL(check_match_to_type(depend_expr, target_expr, is_match, equal_ctx))) {
+      LOG_WARN("fail to check if to_<type> expr can be extracted", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::check_match_to_type(ObRawExpr *to_type_expr, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext *equal_ctx) {
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  is_same = false;
+  ObRawExpr *to_type_child = NULL;
+  //check expr type and param type of to_<type> expr
+  if (OB_ISNULL(to_type_expr) || OB_ISNULL(candi_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is unexpected null", K(ret), K(to_type_expr), K(candi_expr));
+  } else {
+    ObItemType type = to_type_expr->get_expr_type();
+    ObItemType candi_type = candi_expr->get_expr_type();
+    if (T_FUN_SYS_TO_CHAR == type
+        || T_FUN_SYS_TO_NCHAR == type
+        || T_FUN_SYS_TO_NUMBER == type
+        || T_FUN_SYS_TO_BINARY_FLOAT == type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == type
+        || T_FUN_SYS_DATE == type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == type) {
+      is_valid = true;
+    } else if (T_FUN_SYS_TO_CHAR == candi_type
+        || T_FUN_SYS_TO_NCHAR == candi_type
+        || T_FUN_SYS_TO_NUMBER == candi_type
+        || T_FUN_SYS_TO_BINARY_FLOAT == candi_type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == candi_type
+        || T_FUN_SYS_DATE == candi_type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == candi_type) {
+      std::swap(to_type_expr, candi_expr);
+      is_valid = true;
+    }
+    if (is_valid && to_type_expr->get_param_count() > 1) {
+      is_valid = false; //TODO: if the fmt param is same as session default fmt, to_date/to_char/to_timestamp/to_timestamp_tz is the same as cast expr
+    }
+  }
+  if (OB_SUCC(ret) && is_valid) {
+    if (OB_ISNULL(to_type_child = to_type_expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null",K(ret));
+    } else if (ObOptimizerUtil::is_lossless_type_conv(to_type_child->get_result_type(),to_type_expr->get_result_type())) {
+      if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child))) {
+        LOG_WARN("fail to get real child without lossless cast", K(ret));
+      } else if (OB_ISNULL(to_type_child) || OB_ISNULL(candi_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(to_type_child), K(candi_expr));
+      } else {
+        is_same = to_type_child->same_as(*candi_expr, equal_ctx);
+      }
+    } else if (to_type_expr->get_result_type().get_type() == candi_expr->get_result_type().get_type()
+               && T_FUN_SYS_CAST == candi_expr->get_expr_type()) {
+      if (ob_is_string_tc(to_type_expr->get_result_type().get_type())) {
+        if (to_type_expr->get_result_type().get_accuracy() == candi_expr->get_result_type().get_accuracy()
+            && to_type_expr->get_result_type().get_collation_type() == candi_expr->get_result_type().get_collation_type()) {
+          is_same = true;
+        }
+      } else if (to_type_expr->get_result_type().get_scale() == candi_expr->get_result_type().get_scale()
+                 && to_type_expr->get_result_type().get_precision() == candi_expr->get_result_type().get_precision()) {
+        is_same = true;
+      }
+      if (is_same) {
+        is_same = to_type_child->same_as(*(candi_expr->get_param_expr(0)), equal_ctx);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*& expr)
 {
   int ret = OB_SUCCESS;

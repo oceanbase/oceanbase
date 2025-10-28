@@ -21,6 +21,7 @@
 #include "storage/ob_partition_pre_split.h"
 #include "storage/mview/ob_mview_mds.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
+#include "rootserver/mview/ob_mview_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -43,21 +44,18 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const common::ObCurTraceId::TraceId &trace_id,
     const int64_t parallelism,
     const bool use_heap_table_ddl_plan,
-    const bool is_mview_complete_refresh,
-    const int64_t mview_table_id,
     ObRootService *root_service,
     const common::ObAddr &inner_sql_exec_addr,
     const int64_t data_format_version,
     const bool is_retryable_ddl,
-    const uint64_t mview_target_data_sync_scn,
-    const ObString &mview_select_sql)
+    const obrpc::ObMViewRefreshInfo &mview_refresh_info)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
-    is_mview_complete_refresh_(is_mview_complete_refresh), is_retryable_ddl_(is_retryable_ddl), mview_table_id_(mview_table_id),
+    is_retryable_ddl_(is_retryable_ddl),
     root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0),
-    mview_target_data_sync_scn_(mview_target_data_sync_scn), mview_select_sql_(mview_select_sql)
+    mview_refresh_info_(mview_refresh_info)
 {
   set_retry_times(0); // do not retry
 }
@@ -104,7 +102,6 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   bool oracle_mode = false;
   bool need_exec_new_inner_sql = true;
   const ObTableSchema *data_table_schema = nullptr;
-
   if (OB_UNLIKELY(!is_inited_ || OB_ISNULL(GCTX.sql_proxy_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redefinition sstable build task not inited", K(ret));
@@ -128,47 +125,22 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
-  } else {
-    if (is_mview_complete_refresh_) {
-      LOG_INFO("print select sql", K(mview_select_sql_));
-      if (mview_target_data_sync_scn_ != OB_INVALID_SCN_VAL &&
-          OB_FAIL(ObMViewRefreshHelper::collect_deps_and_check_satisfy(
-                  tenant_id_, mview_table_id_, mview_target_data_sync_scn_,
-                  snapshot_version_, *GCTX.sql_proxy_, schema_guard))) {
-          LOG_WARN("fail to check satisfied", K(ret), K(oracle_mode),
-                   K(mview_table_id_), K(mview_target_data_sync_scn_), K(snapshot_version_));
-      } else if (OB_FAIL(ObDDLUtil::generate_build_mview_replica_sql(tenant_id_,
-                                                                     mview_table_id_,
-                                                                     data_table_id_,
-                                                                     schema_guard,
-                                                                     snapshot_version_,
-                                                                     mview_target_data_sync_scn_,
-                                                                     execution_id_,
-                                                                     task_id_,
-                                                                     parallelism_,
-                                                                     true/*use_schema_version_hint_for_src_table*/,
-                                                                     based_schema_object_infos_,
-                                                                     mview_select_sql_,
-                                                                     sql_string))) {
-        LOG_WARN("fail to generate build mview replica sql", K(ret));
-      }
-    } else {
-      ObString partition_names;
-      if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
-                                                        data_table_id_,
-                                                        dest_table_id_,
-                                                        data_table_schema->get_schema_version(),
-                                                        snapshot_version_,
-                                                        execution_id_,
-                                                        task_id_,
-                                                        parallelism_,
-                                                        use_heap_table_ddl_plan_,
-                                                        true/*use_schema_version_hint_for_src_table*/,
-                                                        &col_name_map_,
-                                                        partition_names,
-                                                        sql_string))) {
-        LOG_WARN("fail to generate build replica sql", K(ret));
-      }
+  } else if (!mview_refresh_info_.is_mview_complete_refresh_) {
+    ObString partition_names;
+    if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
+                                                      data_table_id_,
+                                                      dest_table_id_,
+                                                      data_table_schema->get_schema_version(),
+                                                      snapshot_version_,
+                                                      execution_id_,
+                                                      task_id_,
+                                                      parallelism_,
+                                                      use_heap_table_ddl_plan_,
+                                                      true/*use_schema_version_hint_for_src_table*/,
+                                                      &col_name_map_,
+                                                      partition_names,
+                                                      sql_string))) {
+      LOG_WARN("fail to generate build replica sql", K(ret));
     }
     if (OB_SUCC(ret)) {
       ObTimeoutCtx timeout_ctx;
@@ -176,34 +148,31 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       int64_t affected_rows = 0;
       if (oracle_mode) {
         sql_mode_ = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
-      } else if (is_mview_complete_refresh_) {
-        sql_mode_ = SMO_STRICT_ALL_TABLES;
       }
-
+      ObSessionParam session_param;
+      InnerDDLInfo ddl_info;
+      session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
+      session_param.tz_info_wrap_ = &tz_info_wrap_;
+      ddl_info.set_is_ddl(true);
+      ddl_info.set_source_table_hidden(false);
+      ddl_info.set_dest_table_hidden(true);
+      ddl_info.set_heap_table_ddl(use_heap_table_ddl_plan_);
+      ddl_info.set_mview_complete_refresh(false);
+      ddl_info.set_refreshing_mview(false);
+      ddl_info.set_retryable_ddl(is_retryable_ddl_);
+      session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+      session_param.consumer_group_id_ = consumer_group_id_;
+      if (oracle_mode) {
+        user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+      } else {
+        user_sql_proxy = GCTX.ddl_sql_proxy_;
+      }
       common::ObAddr *sql_exec_addr = nullptr;
       const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
       if (inner_sql_exec_addr_.is_valid()) {
         sql_exec_addr = &inner_sql_exec_addr_;
         LOG_INFO("inner sql execute addr" , K(*sql_exec_addr), "ddl_event_info", ObDDLEventInfo());
       }
-      if (oracle_mode) {
-        user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
-      } else {
-        user_sql_proxy = GCTX.ddl_sql_proxy_;
-      }
-      ObSessionParam session_param;
-      session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
-      session_param.tz_info_wrap_ = &tz_info_wrap_;
-      InnerDDLInfo ddl_info;
-      ddl_info.set_is_ddl(!is_mview_complete_refresh_);
-      ddl_info.set_source_table_hidden(false);
-      ddl_info.set_dest_table_hidden(true);
-      ddl_info.set_heap_table_ddl(use_heap_table_ddl_plan_);
-      ddl_info.set_mview_complete_refresh(is_mview_complete_refresh_);
-      ddl_info.set_refreshing_mview(is_mview_complete_refresh_);
-      ddl_info.set_retryable_ddl(is_retryable_ddl_);
-      session_param.use_external_session_ = true;  // means session id dispatched by session mgr
-      session_param.consumer_group_id_ = consumer_group_id_;
       add_event_info(ret, "ddl redefinition sstable build task generate innersql");
       LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_),
       "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT), "ddl_event_info", ObDDLEventInfo());
@@ -218,48 +187,20 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                           ObCompatibilityMode::ORACLE_MODE :
                                           ObCompatibilityMode::MYSQL_MODE;
         ObMySQLTransaction trans;
-        if (is_mview_complete_refresh_) {
-          ObMViewOpArg arg;
-          arg.table_id_ = mview_table_id_;
-          arg.parallel_ = parallelism_;
-          arg.session_id_ = 100; // fixed session id
-          arg.start_ts_ = ObTimeUtil::current_time();
-          arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
-          arg.read_snapshot_ = snapshot_version_;
-          if (mview_target_data_sync_scn_ != OB_INVALID_SCN_VAL &&
-              OB_FAIL(arg.target_data_sync_scn_.convert_for_tx(mview_target_data_sync_scn_))) {
-            LOG_WARN("fail to conver to scn", K(ret), K(mview_target_data_sync_scn_), K(arg));
-          } else if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
-            LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
-          } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
-            LOG_WARN("register mview mds failed", K(ret), K(tenant_id_), K(arg));
-          }
-          DEBUG_SYNC(BEFORE_MV_LOAD_DATA);
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
-            LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-          } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-                                                   compat_mode, &session_param, sql_exec_addr))) {
-            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-          }
-          tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-            LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-            ret = OB_SUCC(ret) ? tmp_ret : ret;
-          }
-        } else {
-          if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
-            LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-          } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-                                                   compat_mode, &session_param, sql_exec_addr))) {
-            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-          } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
-            LOG_WARN("fail to check sstable checksum_report_finish",
-              K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
-          }
+        if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
+          LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+        } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                                                  compat_mode, &session_param, sql_exec_addr))) {
+          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+        } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+          LOG_WARN("fail to check sstable checksum_report_finish",
+            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
         }
       }
     }
+  } else if (mview_refresh_info_.is_mview_complete_refresh_ &&
+             OB_FAIL(procress_mview_complete_refresh_(oracle_mode))) {
+    LOG_WARN("fail to process mview complete refresh", K(ret));
   }
   if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::on_sstable_complement_job_reply(unused_tablet_id, unused_addr, task_key, snapshot_version_, execution_id_, ret, info))) {
     LOG_WARN("fail to finish sstable complement", KR(tmp_ret), "ddl_event_info", ObDDLEventInfo());
@@ -305,14 +246,11 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         trace_id_,
         parallelism_,
         use_heap_table_ddl_plan_,
-        is_mview_complete_refresh_,
-        mview_table_id_,
         root_service_,
         inner_sql_exec_addr_,
         data_format_version_,
         is_retryable_ddl_,
-        mview_target_data_sync_scn_,
-        mview_select_sql_);
+        mview_refresh_info_);
     if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {
@@ -329,6 +267,126 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
     }
   }
   return new_task;
+}
+
+
+int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
+                                       const bool oracle_mode)
+{ 
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *mview_table_schema = nullptr;
+  ObSqlString sql_string;
+  ObCurTraceId::set(trace_id_); // reset trace id again to avoid trace id use 0x10 prefix
+  uint64_t mview_target_data_sync_scn = OB_INVALID_SCN_VAL;
+  const uint64_t mview_table_id = mview_refresh_info_.mview_table_id_;
+  const bool nested_consistent_refresh = mview_refresh_info_.mview_target_data_sync_scn_.is_valid();
+  if (OB_UNLIKELY(!is_inited_ || OB_ISNULL(GCTX.sql_proxy_))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ddl redefinition sstable build task not inited", K(ret));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+                     tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
+                     mview_refresh_info_.mview_table_id_, mview_table_schema))) {
+    LOG_WARN("get mview table schema failed", K(ret), K(tenant_id_), K(mview_refresh_info_));
+  } else if (OB_ISNULL(mview_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("mview table not exist", K(ret), K(tenant_id_), K(mview_refresh_info_));
+  } else if (nested_consistent_refresh &&
+             OB_FALSE_IT(mview_target_data_sync_scn =
+             mview_refresh_info_.mview_target_data_sync_scn_.get_val_for_tx())) {
+  } else if (nested_consistent_refresh &&
+             OB_FAIL(ObMViewRefreshHelper::collect_deps_and_check_satisfy(
+                     tenant_id_, mview_table_id, mview_target_data_sync_scn,
+                     snapshot_version_, *GCTX.sql_proxy_, schema_guard))) {
+      LOG_WARN("fail to check satisfied", K(ret), K(oracle_mode),
+                K(mview_table_id), K(mview_target_data_sync_scn), K(snapshot_version_));
+  } else if (OB_FAIL(ObMViewUtils::generate_mview_complete_refresh_sql(tenant_id_, mview_table_id,
+                      data_table_id_, schema_guard, snapshot_version_, mview_target_data_sync_scn,
+                      execution_id_, task_id_, parallelism_,
+                      true/*use_schema_version_hint_for_src_table*/,
+                      based_schema_object_infos_, mview_refresh_info_.select_sql_, sql_string))) {
+    LOG_WARN("fail to generate build mview replica sql", K(ret), K(mview_refresh_info_));
+  }
+  add_event_info(ret, "ddl redefinition sstable build task generate innersql for mview");
+  if (OB_SUCC(ret)) {
+    ObTimeoutCtx timeout_ctx;
+    common::ObCommonSqlProxy *user_sql_proxy = nullptr;
+    int64_t affected_rows = 0;
+    ObCompatibilityMode compat_mode;
+    common::ObAddr *sql_exec_addr = nullptr;
+    const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+    if (oracle_mode) {
+      compat_mode = ObCompatibilityMode::ORACLE_MODE;
+      user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+      sql_mode_ = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
+    } else {
+      compat_mode = ObCompatibilityMode::MYSQL_MODE;
+      user_sql_proxy = GCTX.ddl_sql_proxy_;
+      sql_mode_ = SMO_STRICT_ALL_TABLES;
+    }
+    ObSessionParam session_param;
+    InnerDDLInfo ddl_info;
+    session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
+    session_param.tz_info_wrap_ = &tz_info_wrap_;
+    ddl_info.set_is_ddl(false);
+    ddl_info.set_retryable_ddl(is_retryable_ddl_);
+    ddl_info.set_source_table_hidden(false);
+    ddl_info.set_dest_table_hidden(true);
+    ddl_info.set_heap_table_ddl(use_heap_table_ddl_plan_);
+    ddl_info.set_mview_complete_refresh(true);
+    ddl_info.set_refreshing_mview(true);
+    session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+    session_param.consumer_group_id_ = consumer_group_id_;
+    if (OB_FAIL(session_param.ddl_info_.init(ddl_info, 0))) {
+      LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(0));
+    } else if (OB_FAIL(session_param.mview_local_session_vars_.deep_copy(mview_table_schema->get_local_session_var()))) {
+      LOG_WARN("fail to copy mview local session vars", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      LOG_WARN("set trx timeout failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      LOG_WARN("set timeout failed", K(ret));
+    } else if (inner_sql_exec_addr_.is_valid()) {
+      sql_exec_addr = &inner_sql_exec_addr_;
+      LOG_INFO("inner sql execute addr" , K(*sql_exec_addr), "ddl_event_info", ObDDLEventInfo());
+    }
+    LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(mview_refresh_info_), K(tenant_id_),
+              "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT),
+              "ddl_event_info", ObDDLEventInfo());
+    if (OB_SUCC(ret)) { // execute mview complete refresh sql
+      ObMySQLTransaction trans;
+      ObMViewOpArg arg;
+      arg.table_id_ = mview_table_id;
+      arg.parallel_ = parallelism_;
+      arg.session_id_ = 100; // fixed session id
+      arg.start_ts_ = ObTimeUtil::current_time();
+      arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
+      arg.read_snapshot_ = snapshot_version_;
+      if (mview_target_data_sync_scn != OB_INVALID_SCN_VAL &&
+          OB_FAIL(arg.target_data_sync_scn_.convert_for_tx(mview_target_data_sync_scn))) {
+        LOG_WARN("fail to convert to scn", K(ret), K(mview_target_data_sync_scn), K(arg));
+      } else if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
+        LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
+      } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
+        LOG_WARN("register mview mds failed", K(ret), K(tenant_id_), K(arg));
+      }
+      DEBUG_SYNC(BEFORE_MV_LOAD_DATA);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, REDEF_SSTABLE_BULD_TASK_PROCESS_FAILED))) {
+        LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+      } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                          compat_mode, &session_param, sql_exec_addr))) {
+        LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+      }
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  return ret;
 }
 
 int ObDDLRedefinitionTask::prepare(const ObDDLTaskStatus next_task_status)

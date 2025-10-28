@@ -18,6 +18,8 @@
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 #include "lib/string/ob_sql_string.h"
 
+#include "sql/session/ob_local_session_var.h"
+#include "src/share/system_variable/ob_system_variable_factory.h"
 #ifdef OB_BUILD_DBLINK
 #endif
 using namespace oceanbase::common;
@@ -239,6 +241,32 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
   if (OB_SUCC(ret) && nullptr != param && nullptr != param->tz_info_wrap_) {
     if (OB_FAIL(conn->set_tz_info_wrap(*param->tz_info_wrap_))) {
       LOG_WARN("fail to set time zone info wrap", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && nullptr != param && param->mview_local_session_vars_.get_var_count() != 0) {
+    using namespace oceanbase::sql;
+    const ObLocalSessionVar &mview_local_session_vars = param->mview_local_session_vars_;
+    ObSEArray<const ObSessionSysVar *, 10> mv_session_vars;
+    if (OB_FAIL(mview_local_session_vars.get_local_vars(mv_session_vars))) {
+      LOG_WARN("fail to get local session vars", K(ret));
+    } else {
+      ARRAY_FOREACH(mv_session_vars, i) {
+        ObString var_name = share::ObSysVarFactory::get_sys_var_name_by_id(mv_session_vars[i]->type_);
+        if (var_name.empty()) {
+          // do nothing
+        } else if (mv_session_vars[i]->val_.is_varchar()) {
+          if (OB_FAIL(conn->set_session_variable(
+                      var_name, mv_session_vars[i]->val_.get_varchar()))) {
+            LOG_WARN("fail to set session variable", K(ret), K(mv_session_vars[i]->type_), K(mv_session_vars[i]->val_));
+          }
+        } else if (mv_session_vars[i]->val_.is_int()) {
+          if (OB_FAIL(conn->set_session_variable(
+                      var_name, mv_session_vars[i]->val_.get_int()))) {
+            LOG_WARN("fail to set session variable", K(ret), K(mv_session_vars[i]->type_), K(mv_session_vars[i]->val_));
+          }
+        }
+        LOG_INFO("set mview session variable", K(var_name), K(mv_session_vars[i]->val_));
+      }
     }
   }
   if (OB_SUCC(ret)) {

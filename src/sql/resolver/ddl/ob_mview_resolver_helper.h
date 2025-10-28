@@ -69,6 +69,10 @@ private:
   static int get_dep_session_vars_from_stmt(ObSQLSessionInfo &session_info,
                                             ObSelectStmt *stmt,
                                             ObLocalSessionVar &dep_vars);
+  static int add_hidden_cols_for_mv(ObTableSchema &table_schema,
+                                    const uint64_t column_id,
+                                    const SelectItem &select_item,
+                                    ObCreateViewResolver &resolver);
 };
 }  // namespace sql
 }  // namespace oceanbase

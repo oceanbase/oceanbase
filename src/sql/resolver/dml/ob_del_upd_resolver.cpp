@@ -1924,20 +1924,69 @@ int ObDelUpdResolver::build_returning_lob_expr(ObColumnRefRawExpr *ref_expr, ObS
   return ret;
 }
 
-bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
-                                        const int64_t binlog_row_image)
+int ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
+                                       const int64_t binlog_row_image,
+                                       bool &need_all_cols)
 {
-  // Returns True although binlog_row_image is MINIMAL temporarily,
-  // because optimizer may need full columns currently.
-  // This can be optimized later.
-  return (table_schema.is_table_without_pk() ||
-          table_schema.get_foreign_key_infos().count() > 0 ||
-          table_schema.get_trigger_list().count() > 0 ||
-          table_schema.has_check_constraint() ||
-          table_schema.has_generated_and_partkey_column() ||
-          table_schema.is_delete_insert_merge_engine() || // delete insert mode needs all columns in old rows
-          binlog_row_image == ObBinlogRowImage::FULL ||
-          binlog_row_image == ObBinlogRowImage::MINIMAL);
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t data_version = 0;
+  need_all_cols = true;
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get tenant data version", KR(ret), K(data_version));
+  } else if (table_schema.mv_container_table()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    const bool enable_mv_minimal_mode = data_version >= DATA_VERSION_4_3_5_5 &&
+                                        tenant_config.is_valid() &&
+                                        tenant_config->enable_mv_binlog_minimal_mode;
+    if (table_schema.get_foreign_key_infos().count() > 0 ||
+        table_schema.get_trigger_list().count() > 0 ||
+        table_schema.has_check_constraint() ||
+        table_schema.has_generated_and_partkey_column()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("foreign key, trigger, check constraint, generated partkey column are not supported in mviews. they shouldn't exist",
+               KR(ret), 
+               K(table_schema.get_table_name()),
+               K(table_schema.get_table_id()),
+               K(table_schema.get_foreign_key_infos().count()),
+               K(table_schema.get_trigger_list().count()),
+               K(table_schema.has_check_constraint()),
+               K(table_schema.has_generated_and_partkey_column()));
+    } else if (!enable_mv_minimal_mode) {
+      need_all_cols = true;
+    } else if (table_schema.is_delete_insert_merge_engine()) {
+      need_all_cols = true;
+    } else {
+      need_all_cols = false;
+    }
+  } else {
+    // Returns True although binlog_row_image is MINIMAL temporarily,
+    // because optimizer may need full columns currently.
+    // This can be optimized later.
+    need_all_cols =
+      table_schema.is_table_without_pk() ||
+      table_schema.get_foreign_key_infos().count() > 0 ||
+      table_schema.get_trigger_list().count() > 0 ||
+      table_schema.has_check_constraint() ||
+      table_schema.has_generated_and_partkey_column() ||
+      table_schema.is_delete_insert_merge_engine() || // delete insert mode needs all columns in old rows
+      binlog_row_image == ObBinlogRowImage::FULL ||
+      binlog_row_image == ObBinlogRowImage::MINIMAL;
+  }
+
+  LOG_TRACE("check if need all columns", KR(ret), K(need_all_cols), K(binlog_row_image),
+            K(table_schema.get_table_name()),
+            K(table_schema.get_table_id()),
+            K(table_schema.is_table_without_pk()),
+            K(table_schema.mv_container_table()),
+            K(table_schema.get_foreign_key_infos().count()),
+            K(table_schema.get_trigger_list().count()),
+            K(table_schema.has_check_constraint()),
+            K(table_schema.has_generated_and_partkey_column()),
+            K(table_schema.is_delete_insert_merge_engine()));
+
+  return ret;
 }
 
 int ObDelUpdResolver::add_all_columns_to_stmt(const TableItem &table_item,
@@ -2263,6 +2312,147 @@ int ObDelUpdResolver::add_all_partition_key_columns_to_stmt(const TableItem &tab
       }
     }
   }
+  return ret;
+}
+
+int ObDelUpdResolver::add_all_unique_key_columns_to_stmt(const TableItem &table_item,
+                                                         ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const TableItem &base_table_item = table_item.get_base_table_item();
+
+  if (OB_ISNULL(params_.session_info_) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(params_.session_info_), K(schema_checker_));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       table_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("table schema not found", K(base_table_item));
+  } else if (NULL == table_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid table schema", K(table_item));
+  } else {
+    // extract all column_ids for unique key, and add them into stmt
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos failed", K(ret));
+    } else {
+      const uint64_t tenant_id = table_schema->get_tenant_id();
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+        const ObTableSchema *index_table_schema = NULL;
+        if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
+            simple_index_infos.at(i).table_id_, index_table_schema))) {
+          LOG_WARN("fail to get table schema", K(tenant_id), K(simple_index_infos.at(i).table_id_), K(ret));
+        } else if (OB_ISNULL(index_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("index table schema must not be NULL", K(ret));
+        } else if (!index_table_schema->is_unique_index()) {
+          // not unique index, skip
+        } else {
+          ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
+          ObTableSchema::const_column_iterator end = index_table_schema->column_end();
+          for ( ; OB_SUCC(ret) && iter != end; iter++) {
+            const ObColumnSchemaV2 *column_schema = *iter;
+            if (OB_ISNULL(column_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null", KR(ret));
+            } else if (!column_schema->is_index_column()) {
+              // skip non index column
+            } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
+              LOG_WARN("add column to stmt failed", K(ret), K(table_item));
+            } else { /*do nothing*/ }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDelUpdResolver::add_all_time_columns_to_stmt(const TableItem &table_item,
+                                                   ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const TableItem& base_table_item = table_item.get_base_table_item();
+
+  if (OB_ISNULL(params_.session_info_) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(params_.session_info_), K(schema_checker_));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       table_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("not find table schema", K(ret), K(base_table_item));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_schema));
+  } else {
+    ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+    ObTableSchema::const_column_iterator end = table_schema->column_end();
+    for (; OB_SUCC(ret) && iter != end; ++iter) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", K(ret), K(column));
+      } else if (column->is_minimal_mode_related_time_column()) {
+        // date/datatime and time/timestamp column need to be added to old_row
+        if (OB_FAIL(add_column_to_stmt(table_item, *column, column_exprs))) {
+          LOG_WARN("add column item to stmt failed", K(ret));
+        }
+      } else { /* do nothing */ }
+    }
+  }
+
+  return ret;
+}
+
+int ObDelUpdResolver::add_all_mlog_columns_to_stmt(const TableItem &table_item,
+                                                   ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const ObTableSchema *mlog_schema = NULL;
+  const TableItem &base_table_item = table_item.get_base_table_item();
+
+  if (OB_ISNULL(params_.session_info_) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(params_.session_info_), K(schema_checker_));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       table_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("table schema not found", K(base_table_item));
+  } else if (NULL == table_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid table schema", K(table_item));
+  } else if (!table_schema->has_mlog_table()) {
+    // skip
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                 table_schema->get_mlog_tid(), mlog_schema))) {
+    LOG_WARN("fail to get table schema", K(ret));
+  } else if (OB_ISNULL(mlog_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(mlog_schema));
+  } else {
+    ObTableSchema::const_column_iterator iter = mlog_schema->column_begin();
+    ObTableSchema::const_column_iterator end = mlog_schema->column_end();
+    for (; OB_SUCC(ret) && iter != end; iter++) {
+      const ObColumnSchemaV2 *column_schema = *iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", KR(ret));
+      } else if (column_schema->get_column_id() >= OB_MLOG_SEQ_NO_COLUMN_ID) {
+        // skip
+      } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
+        LOG_WARN("add column to stmt failed", K(ret), K(table_item));
+      } else { /*do nothing*/}
+    }
+  }
+  
   return ret;
 }
 

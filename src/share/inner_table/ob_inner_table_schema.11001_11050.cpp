@@ -15054,6 +15054,97 @@ int ObInnerTableSchema::all_virtual_core_all_table_schema(ObTableSchema &table_s
       dynamic_partition_policy_default,
       dynamic_partition_policy_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj external_location_id_default;
+    external_location_id_default.set_int(OB_INVALID_ID);
+    ADD_COLUMN_SCHEMA_T("external_location_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      external_location_id_default,
+      external_location_id_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("external_sub_path", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_BINARY, //column_collation_type
+      OB_MAX_VARCHAR_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj micro_block_format_version_default;
+    micro_block_format_version_default.set_int(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+    ADD_COLUMN_SCHEMA_T("micro_block_format_version", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      micro_block_format_version_default,
+      micro_block_format_version_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj semistruct_properties_default;
+    semistruct_properties_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
+    ADD_COLUMN_SCHEMA_T("semistruct_properties", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObLongTextType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      0, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      semistruct_properties_default,
+      semistruct_properties_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj mview_expand_definition_default;
+    mview_expand_definition_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
+    ADD_COLUMN_SCHEMA_T("mview_expand_definition", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObLongTextType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      0, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      mview_expand_definition_default,
+      mview_expand_definition_default); //default_value
+  }
   table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

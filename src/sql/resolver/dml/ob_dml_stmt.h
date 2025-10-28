@@ -791,7 +791,8 @@ public:
                                     ObSQLSessionInfo *session_info,
                                     bool explicit_for_col = false);
   int formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
-                                          ObSQLSessionInfo *session_info);
+                                          ObSQLSessionInfo *session_info,
+                                          bool explicit_for_col);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
   int check_stmt_valid();
@@ -846,6 +847,7 @@ public:
   inline common::ObIArray<ColumnItem> &get_column_items() { return column_items_; }
   inline const common::ObIArray<ColumnItem> &get_column_items() const { return column_items_; }
   int get_column_ids(uint64_t table_id, ObSqlBitSet<> &column_ids)const;
+  int get_column_ids(uint64_t table_id, ObIArray<uint64_t> &column_ids) const;
   int get_column_items(uint64_t table_id, ObIArray<ColumnItem> &column_items) const;
   int get_column_items(ObIArray<uint64_t> &table_ids, ObIArray<ColumnItem> &column_items) const;
   int append_column_items_nodup(uint64_t table_id, uint64_t column_id, ObIArray<ColumnItem> &column_items) const;
@@ -931,6 +933,7 @@ public:
   int assign_tables_hash(const ObDMLStmtTableHash &tables_hash);
   ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
   ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
+  const ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id) const;
   int add_column_item(ColumnItem &column_item);
   int add_column_item(ObIArray<ColumnItem> &column_items);
   int remove_column_item(uint64_t table_id, uint64_t column_id);

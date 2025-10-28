@@ -4050,6 +4050,7 @@ public:
 
   inline int set_view_definition(const char *view_definition) { return deep_copy_str(view_definition, view_definition_); }
   inline int set_view_definition(const common::ObString &view_definition) { return deep_copy_str(view_definition, view_definition_); }
+  inline int set_expand_view_definition_for_mv(const common::ObString &expand_view_definition_for_mv) { return deep_copy_str(expand_view_definition_for_mv, expand_view_definition_for_mv_); }
   inline void set_view_check_option(const ViewCheckOption option) { view_check_option_ = option; }
   inline void set_view_is_updatable(const bool is_updatable) { view_is_updatable_ = is_updatable; }
   inline void set_materialized(const bool materialized) { materialized_ = materialized; }
@@ -4064,6 +4065,8 @@ public:
   // ObSQLUtils::generate_view_definition_for_resolve
   inline const common::ObString &get_view_definition_str() const { return view_definition_; }
   inline const char *get_view_definition() const { return extract_str(view_definition_); }
+  inline const common::ObString &get_expand_view_definition_for_mv_str() const { return expand_view_definition_for_mv_; }
+  inline const char *get_expand_view_definition_for_mv() const { return extract_str(expand_view_definition_for_mv_); }
   inline ViewCheckOption get_view_check_option() const { return view_check_option_; }
   inline bool get_view_is_updatable() const { return view_is_updatable_; }
   inline bool get_materialized() const { return materialized_; }
@@ -4082,7 +4085,8 @@ public:
                N_CHECK_OPTION, ob_view_check_option_str(view_check_option_),
                N_IS_UPDATABLE, STR_BOOL(view_is_updatable_),
                N_IS_MATERIALIZED, STR_BOOL(materialized_),
-               K_(character_set_client), K_(collation_connection));
+               K_(character_set_client), K_(collation_connection),
+               K_(expand_view_definition_for_mv));
 private:
   common::ObString view_definition_;
   ViewCheckOption view_check_option_;
@@ -4092,6 +4096,7 @@ private:
   common::ObCollationType collation_connection_;
   uint64_t container_table_id_;
   const obrpc::ObMVAdditionalInfo *mv_additional_info_; //only for pass write param, don't need serialize and memory is hold by caller
+  common::ObString expand_view_definition_for_mv_;
 };
 
 class ObColumnSchemaHashWrapper

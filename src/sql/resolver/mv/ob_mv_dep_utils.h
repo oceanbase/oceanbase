@@ -61,7 +61,8 @@ public:
   static int get_mview_dep_infos(common::ObISQLClient &sql_client,
                                  const uint64_t tenant_id,
                                  const uint64_t mview_table_id,
-                                 common::ObIArray<ObMVDepInfo> &dep_infos);
+                                 common::ObIArray<ObMVDepInfo> &dep_infos,
+                                 bool ignore_udt_udf = false);
   static int insert_mview_dep_infos(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
                                     const uint64_t mview_table_id,

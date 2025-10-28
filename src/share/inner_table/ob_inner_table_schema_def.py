@@ -327,6 +327,11 @@ all_table_def = dict(
       ('merge_engine_type', 'int', 'false', '0'),
       ('semistruct_encoding_type', 'int', 'false', '0'),
       ('dynamic_partition_policy', 'varchar:OB_MAX_DYNAMIC_PARTITION_POLICY_LENGTH', 'false', ''),
+      ('external_location_id', 'int', 'false', 'OB_INVALID_ID'), # patch from master 4.5
+      ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'), # patch from master 4.5
+      ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'), # patch from master 4.5
+      ('semistruct_properties', 'longtext', 'false', ''), # patch from master 4.5
+      ('mview_expand_definition', 'longtext', 'false', ''),
     ],
 )
 
@@ -64854,28 +64859,40 @@ def_table_schema(
     view_definition = """
     SELECT
       D.DATABASE_NAME AS MVIEW_OWNER,
-      B.TABLE_NAME AS MVIEW_NAME,
-      E.DATABASE_NAME AS DEP_OWNER,
-      C.TABLE_NAME AS DEP_NAME,
-      CAST (
-       CASE C.TABLE_TYPE
-        WHEN 3 THEN 'TABLE'
-        WHEN 4 THEN 'VIEW'
-        WHEN 7 THEN 'MV'
-        WHEN 14 THEN 'EXTERNAL TABLE'
+      B.TABLE_NAME    AS MVIEW_NAME,
+      COALESCE(EDB.DATABASE_NAME, RDB.DATABASE_NAME, TDB.DATABASE_NAME) AS DEP_OWNER,
+      COALESCE(C.TABLE_NAME, R.ROUTINE_NAME, T.TYPE_NAME) AS DEP_NAME,
+      CASE A.P_TYPE
+        WHEN 1 THEN 'TABLE'
+        WHEN 8 THEN 'VIEW'
+        WHEN 9 THEN 'FUNCTION'
+        WHEN 4 THEN 'TYPE'
         ELSE 'INVALID TYPE'
-       END AS CHAR(64)
-      ) AS DEP_TYPE
-    FROM SYS.ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT A,
-         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
-         SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C,
-         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D,
-         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT E
-    WHERE A.mview_id = B.table_id
-    AND   A.p_obj = C.table_id
-    AND   B.database_id = D.database_id
-    AND   C.database_id = E.database_id
-    AND   bitand((C.table_mode / 16777216), 1) = 0
+      END AS DEP_TYPE
+    FROM SYS.ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT A
+    JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B
+        ON A.MVIEW_ID = B.TABLE_ID
+    JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
+        ON B.DATABASE_ID = D.DATABASE_ID
+
+    LEFT JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C
+        ON A.P_OBJ = C.TABLE_ID
+    LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT EDB
+        ON C.DATABASE_ID = EDB.DATABASE_ID
+
+    LEFT JOIN SYS.ALL_VIRTUAL_ROUTINE_REAL_AGENT R
+        ON A.P_OBJ = R.ROUTINE_ID
+    LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT RDB
+        ON R.DATABASE_ID = RDB.DATABASE_ID
+
+    LEFT JOIN SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T
+        ON A.P_OBJ = T.TYPE_ID
+    LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT TDB
+        ON T.DATABASE_ID = TDB.DATABASE_ID
+    WHERE
+        (A.P_TYPE IN (1, 8) AND BITAND(TRUNC(C.TABLE_MODE / POWER(2,24)), 1) = 0)
+    OR (A.P_TYPE = 9)
+    OR (A.P_TYPE = 4);
 """.replace("\n", " ")
 )
 

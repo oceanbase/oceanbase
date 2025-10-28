@@ -298,14 +298,11 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
         trace_id_,
         parallelism_,
         use_heap_table_ddl_plan_,
-        alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_,
-        alter_table_arg_.mview_refresh_info_.mview_table_id_,
         GCTX.root_service_,
         alter_table_arg_.inner_sql_exec_addr_,
         data_format_version_,
         is_ddl_retryable_,
-        alter_table_arg_.mview_refresh_info_.mview_target_data_sync_scn_.get_val_for_gts(),
-        alter_table_arg_.mview_refresh_info_.select_sql_);
+        alter_table_arg_.mview_refresh_info_);
     if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
@@ -316,7 +313,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
       LOG_WARN("fail to init table redefinition sstable build task", K(ret));
     } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
       LOG_WARN("fail to submit ddl build single replica", K(ret));
-    }
+    } 
   }
   return ret;
 }

@@ -12,6 +12,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "storage/mview/ob_mview_refresh.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,7 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   refresh_info.refresh_method_ = ObMVRefreshMethod::FORCE; //default method is force
   refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND; //default mode is demand
+  uint64_t data_version = 0;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -125,6 +127,8 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
   } else if (OB_UNLIKELY(T_MV_OPTIONS != options_node->type_ || 1 != options_node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(options_node));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(resolver.session_info_->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K(data_version));
   } else if (OB_FAIL(resolve_mv_refresh_info(options_node->children_[0], refresh_info, resolver))) {
     LOG_WARN("fail to resolve mv refresh info", KR(ret));
   } else {
@@ -143,11 +147,23 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
                 ObMVRefreshMethod::FAST == refresh_info.refresh_method_)) {
       ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
       FastRefreshableNotes fast_refreshable_note;
-      if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
-              stmt, resolver.allocator_, resolver.schema_checker_, resolver.params_.stmt_factory_,
+      ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependency_columns;
+      ObDMLStmt *copied_stmt = NULL;
+      if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*resolver.params_.stmt_factory_,
+              *resolver.params_.expr_factory_,
+              stmt, copied_stmt))) {
+        LOG_WARN("failed to deep copy stmt", K(ret));
+      } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
+              static_cast<ObSelectStmt*>(copied_stmt), resolver.allocator_, resolver.schema_checker_,
+              resolver.params_.stmt_factory_,
               resolver.params_.expr_factory_, resolver.session_info_, container_table_schema,
-              table_schema.mv_on_query_computation(), refresh_type, fast_refreshable_note, required_columns_infos))) {
+              table_schema.mv_on_query_computation(), refresh_type, fast_refreshable_note,
+              fast_refresh_dependency_columns, required_columns_infos))) {
         LOG_WARN("fail to check mv type", KR(ret));
+      } else if (fast_refresh_dependency_columns.count() > 0 && data_version < DATA_VERSION_4_3_5_5) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("data version below 4.3.5.5, not support fast refresh auto add dependency columns", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.5, not support fast refresh auto add dependency columns");
       } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(refresh_type))) {
         // When creating an MV, which can not be fast refreshed, with both fast refresh
         // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
@@ -166,10 +182,48 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
         container_table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
         refresh_info.refresh_mode_ = ObMVRefreshMode::MAJOR_COMPACTION;
         LOG_INFO("[MAJ_REF_MV] match major refresh mv", K(table_schema.get_table_name()));
+      } 
+      if (OB_SUCC(ret)) {
+        if ((fast_refresh_dependency_columns.count() > 0) &&
+            OB_FAIL(ObMVProvider::expand_mv_stmt_with_dependent_columns(static_cast<ObSelectStmt*>(copied_stmt),
+                    fast_refresh_dependency_columns, *resolver.allocator_, resolver.session_info_, *resolver.params_.expr_factory_))) {
+            LOG_WARN("failed to expand mv stmt with dependency columns", K(ret));
+        } else if (table_schema.mv_on_query_computation() &&
+                   OB_FAIL(check_on_query_computation_supported(static_cast<ObSelectStmt*>(copied_stmt)))) {
+          LOG_WARN("fail to check on query computation mv column type", KR(ret));
+        }
       }
-      if (OB_SUCC(ret) && table_schema.mv_on_query_computation() &&
-          OB_FAIL(check_on_query_computation_supported(stmt))) {
-        LOG_WARN("fail to check on query computation mv column type", KR(ret));
+      if (OB_SUCC(ret)) {
+        int append_columns_count = fast_refresh_dependency_columns.count();
+        int expend_stmt_select_items_count = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item_size();
+        if (append_columns_count == 0) {
+          // do nothing
+        } else {
+          // for exp: user defined columns (a, b, c) + hidden column (d),
+          // expend_stmt_select_items_count = 4, append_columns_count = 1
+          // select_item_index = 3, column_index = 0, hidden_column_index = 4
+          int select_item_index = (expend_stmt_select_items_count - append_columns_count);
+          int column_index = 0;  // columns idx for fast_refresh_dependency_columns to get expend column info
+          int hidden_column_index = container_table_schema.get_max_used_column_id() + 1; // columns idx for container table
+          if (select_item_index > 0) {
+            for (; column_index < append_columns_count && OB_SUCC(ret);
+                 select_item_index++, column_index++, hidden_column_index++) {
+              const SelectItem &select_item = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item(select_item_index);
+              if (OB_FAIL(add_hidden_cols_for_mv(container_table_schema, hidden_column_index, select_item, resolver))) {
+                LOG_WARN("failed to add hidden cols for mv", KR(ret));
+              }
+            }
+            ObString sql;
+            ObSchemaGetterGuard *schema_guard = resolver.schema_checker_->get_schema_guard();
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(*resolver.allocator_, 
+                               copied_stmt, sql, schema_guard, resolver.session_info_->create_obj_print_params()))) {
+              LOG_WARN("failed to reconstruct sql", KR(ret));
+            } else if (OB_FAIL(table_schema.set_expand_view_definition_for_mv(sql))) {
+              LOG_WARN("failed to set expend view definition for mv", KR(ret));
+            }
+          }
+        }
       }
     }
   }
@@ -485,7 +539,6 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.3.5 BP4, create materialized view with table AS OF PROCTIME() is");
     }
-
     if (OB_SUCC(ret)) {
       int64_t refresh_parallelism = 0;
       if (OB_FAIL(resolver.resolve_hints(parse_tree.children_[ObCreateViewResolver::HINT_NODE],
@@ -504,6 +557,42 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
     }
   }
 
+  return ret;
+}
+
+int ObMViewResolverHelper::add_hidden_cols_for_mv(
+                           ObTableSchema &table_schema,
+                           const uint64_t column_id,
+                           const SelectItem &select_item,
+                           ObCreateViewResolver &resolver)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *expr = select_item.expr_;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(expr));
+  } else {
+    ObColumnSchemaV2 hidden_column;
+    hidden_column.reset();
+    hidden_column.set_column_id(column_id);
+    hidden_column.set_is_hidden(true);
+    // Set column name
+    if (OB_FAIL(hidden_column.set_column_name(expr->get_alias_column_name()))) {
+      LOG_WARN("failed to set column name", KR(ret));
+    } else if (OB_FAIL(resolver.fill_column_meta_infos(*expr,
+                                                       table_schema.get_charset_type(),
+                                                       table_schema.get_table_id(),
+                                                       *resolver.session_info_,
+                                                       hidden_column,
+                                                       true))) {
+      LOG_WARN("failed to fill column meta infos for mv", K(ret), K(hidden_column));
+    } else if (OB_FAIL(table_schema.add_column(hidden_column))) {
+      LOG_WARN("add column to table_schema failed", KR(ret), K(hidden_column));
+    } else {
+      // for debug
+      LOG_INFO("add hidden column", K(hidden_column));
+    }
+  }
   return ret;
 }
 

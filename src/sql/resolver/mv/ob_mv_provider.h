@@ -60,6 +60,15 @@ public:
                                             const share::SCN *table_refresh_scn,
                                             ObIAllocator &str_alloc,
                                             ObString &mview_str);
+  static int expand_mv_stmt_with_dependent_columns(ObSelectStmt *view_stmt,
+                                                   const ObIArray<std::pair<ObRawExpr*, int64_t>> &dependent_columns,
+                                                   ObIAllocator &alloc,
+                                                   ObSQLSessionInfo *session_info,
+                                                   ObRawExprFactory &expr_factory);
+  static int gen_dep_column_alias_name(const ObSelectStmt &stmt,
+                                       int64_t &idx,
+                                       ObIAllocator &alloc,
+                                       ObString &alias_name);
   int get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
                                 ObSchemaGetterGuard *schema_guard,
                                 const share::SCN &last_refresh_scn,
@@ -118,7 +127,6 @@ private:
                               ObSQLSessionInfo &session_info,
                               const ObTableSchema &mv_schema,
                               ObSelectStmt *&view_stmt);
-  int pre_process_view_stmt(ObSelectStmt &view_stmt);
   static int collect_tables_need_mlog(const ObSelectStmt* stmt,
                                       ObIArray<uint64_t> &tables_need_mlog);
   int print_mv_operators(ObMVPrinterCtx &mv_printer_ctx,
@@ -130,6 +138,11 @@ private:
   static int get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
                                 uint64_t &rule_set);
   int check_is_rt_expand(const bool check_refreshable_only, const ObTableSchema &mv_schema, const ObMVPrinterCtx &mv_printer_ctx, bool &is_rt_expand);
+  static int create_select_item_for_mv_stmt(ObSelectStmt *stmt,
+                                            ObRawExpr *select_expr,
+                                            const int64_t sub_stmt_idx,
+                                            ObString &alias_name,
+                                            ObRawExprFactory &expr_factory);
   TO_STRING_KV(K_(mview_id), K_(inited), K_(refreshable_type),
                 K_(operators), K_(dependency_infos), K_(tables_need_mlog));
 

@@ -2823,3 +2823,7 @@ DEF_BOOL(_disable_record_outrow_lob_in_clog, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          "Control the prexec protocol prepare with or without parameters during the prepare phase.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(enable_mv_binlog_minimal_mode, OB_TENANT_PARAMETER, "False",
+         "Switch of the minimal mode for materialized view ",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

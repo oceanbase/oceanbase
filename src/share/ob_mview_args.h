@@ -130,7 +130,8 @@ public:
       parent_task_id_(0),
       target_data_sync_scn_(),
       select_sql_(),
-      required_columns_infos_()
+      required_columns_infos_(),
+      use_direct_load_for_complete_refresh_(true)
   {
   }
   ~ObMViewCompleteRefreshArg() = default;
@@ -148,7 +149,8 @@ public:
                        "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
                        K_(parent_task_id),
                        K_(target_data_sync_scn),
-                       K_(select_sql));
+                       K_(select_sql),
+                       K_(use_direct_load_for_complete_refresh));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_; // mview table id
@@ -163,6 +165,7 @@ public:
   share::SCN target_data_sync_scn_;
   ObString select_sql_;
   ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
+  bool use_direct_load_for_complete_refresh_;
 };
 
 struct ObMViewCompleteRefreshRes final
@@ -201,7 +204,8 @@ public:
       start_time_(OB_INVALID_TIMESTAMP),
       is_mview_complete_refresh_(false),
       mview_target_data_sync_scn_(),
-      select_sql_()
+      select_sql_(),
+      use_direct_load_for_complete_refresh_(true)
   {
   }
   ~ObMViewRefreshInfo() = default;
@@ -214,7 +218,8 @@ public:
                K_(start_time),
                K_(is_mview_complete_refresh),
                K_(mview_target_data_sync_scn),
-               K_(select_sql));
+               K_(select_sql),
+               K_(use_direct_load_for_complete_refresh));
 public:
   uint64_t mview_table_id_;
   share::SCN last_refresh_scn_;
@@ -223,6 +228,7 @@ public:
   bool is_mview_complete_refresh_;
   share::SCN mview_target_data_sync_scn_;
   ObString select_sql_;
+  bool use_direct_load_for_complete_refresh_;
 };
 
 struct ObAlterMViewArg

@@ -8219,7 +8219,8 @@ ObViewSchema::ObViewSchema()
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
       collation_connection_(CS_TYPE_INVALID),
-      container_table_id_(OB_INVALID_ID)
+      container_table_id_(OB_INVALID_ID),
+      expand_view_definition_for_mv_()
 {
 }
 
@@ -8231,7 +8232,8 @@ ObViewSchema::ObViewSchema(ObIAllocator *allocator)
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
       collation_connection_(CS_TYPE_INVALID),
-      container_table_id_(OB_INVALID_ID)
+      container_table_id_(OB_INVALID_ID),
+      expand_view_definition_for_mv_()
 {
 }
 
@@ -8248,7 +8250,8 @@ ObViewSchema::ObViewSchema(const ObViewSchema &src_schema)
       character_set_client_(CHARSET_INVALID),
       collation_connection_(CS_TYPE_INVALID),
       container_table_id_(OB_INVALID_ID),
-      mv_additional_info_(nullptr)
+      mv_additional_info_(nullptr),
+      expand_view_definition_for_mv_()
 {
   *this = src_schema;
 }
@@ -8270,7 +8273,9 @@ ObViewSchema &ObViewSchema::operator =(const ObViewSchema &src_schema)
     if (OB_FAIL(deep_copy_str(src_schema.view_definition_, view_definition_))) {
       LOG_WARN("Fail to deep copy view definition, ", K(ret));
     }
-
+    if (OB_FAIL(deep_copy_str(src_schema.expand_view_definition_for_mv_, expand_view_definition_for_mv_))) {
+      LOG_WARN("Fail to deep copy expand view definition for mv, ", K(ret));
+    }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }
@@ -8288,7 +8293,8 @@ bool ObViewSchema::operator==(const ObViewSchema &other) const
       && character_set_client_ == other.character_set_client_
       && collation_connection_ == other.collation_connection_
       && container_table_id_ == other.container_table_id_
-      && mv_additional_info_ == other.mv_additional_info_;
+      && mv_additional_info_ == other.mv_additional_info_
+      && expand_view_definition_for_mv_ == other.expand_view_definition_for_mv_;
 }
 
 bool ObViewSchema::operator!=(const ObViewSchema &other) const
@@ -8302,6 +8308,7 @@ int64_t ObViewSchema::get_convert_size() const
 
   convert_size += sizeof(*this);
   convert_size += view_definition_.length() + 1;
+  convert_size += expand_view_definition_for_mv_.length() + 1;
 
   return convert_size;
 }
@@ -8314,6 +8321,7 @@ bool ObViewSchema::is_valid() const
 void ObViewSchema::reset()
 {
   reset_string(view_definition_);
+  reset_string(expand_view_definition_for_mv_);
   view_check_option_ = VIEW_CHECK_OPTION_NONE;
   view_is_updatable_ = false;
   materialized_ = false;
@@ -8335,7 +8343,8 @@ OB_DEF_SERIALIZE(ObViewSchema)
               materialized_,
               character_set_client_,
               collation_connection_,
-              container_table_id_);
+              container_table_id_,
+              expand_view_definition_for_mv_);
   return ret;
 }
 
@@ -8351,7 +8360,8 @@ OB_DEF_DESERIALIZE(ObViewSchema)
               materialized_,
               character_set_client_,
               collation_connection_,
-              container_table_id_);
+              container_table_id_,
+              expand_view_definition_for_mv_);
 
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
@@ -8372,7 +8382,8 @@ OB_DEF_SERIALIZE_SIZE(ObViewSchema)
               materialized_,
               character_set_client_,
               collation_connection_,
-              container_table_id_);
+              container_table_id_,
+              expand_view_definition_for_mv_);
   return len;
 }
 
@@ -10313,6 +10324,7 @@ bool is_normal_schema(const ObSchemaType schema_type)
       schema_type == DBLINK_SCHEMA ||
       schema_type == MOCK_FK_PARENT_TABLE_SCHEMA ||
       schema_type == CCL_RULE_SCHEMA ||
+      schema_type == VIEW_SCHEMA ||
       false;
 }
 

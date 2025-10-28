@@ -142,7 +142,6 @@ int ObSimpleMAVPrinter::gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &v
   sel_item.expr_ = exprs_.int_one_;
   const ObIArray<SelectItem> &select_items = mv_def_stmt_.get_select_items();
   const ObIArray<ObRawExpr*> &group_by_exprs = mv_def_stmt_.get_group_exprs();
-  ObRawExpr *marker_filter = NULL;
   if (OB_UNLIKELY(values.count() != select_items.count())) {
     LOG_WARN("unexpected params", K(ret), K(values.count()), K(select_items.count()));
   } else if (OB_FAIL(create_simple_stmt(subquery))) {
@@ -161,12 +160,8 @@ int ObSimpleMAVPrinter::gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &v
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(subquery->get_select_items().push_back(sel_item))) {
     LOG_WARN("failed to push back not exists expr", K(ret));
-  } else if (ctx_.for_union_all_child_query()
-             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, mv_table, marker_filter))) {
-    LOG_WARN("failed to create union all child refresh filter", K(ret));
-  } else if (NULL != marker_filter
-             && OB_FAIL(subquery->get_condition_exprs().push_back(marker_filter))) {
-    LOG_WARN("failed to push back null safe equal expr", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(subquery, mv_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else {
     mv_table->database_name_ = mv_db_name_;
     query_ref_expr->set_ref_stmt(subquery);
@@ -202,7 +197,6 @@ int ObSimpleMAVPrinter::gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
   TableItem *source_table = NULL;
   void *ptr = NULL;
   ObUpdateTableInfo *table_info = NULL;
-  ObRawExpr *marker_filter = NULL;
   if (OB_FAIL(create_simple_stmt(update_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_ISNULL((ptr = ctx_.alloc_.alloc(sizeof(ObUpdateTableInfo))))) {
@@ -219,12 +213,8 @@ int ObSimpleMAVPrinter::gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
     LOG_WARN("failed gen update assignments", K(ret));
   } else if (OB_FAIL(gen_update_conds(*target_table, *source_table, update_stmt->get_condition_exprs()))) {
     LOG_WARN("failed gen update conds", K(ret));
-  } else if (ctx_.for_union_all_child_query()
-             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, target_table, marker_filter))) {
-    LOG_WARN("failed to create union all child refresh filter", K(ret));
-  } else if (NULL != marker_filter
-             && OB_FAIL(update_stmt->get_condition_exprs().push_back(marker_filter))) {
-    LOG_WARN("failed to push back null safe equal expr", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(update_stmt, target_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else {
     target_table->database_name_ = mv_db_name_;
   }
@@ -262,19 +252,14 @@ int ObSimpleMAVPrinter::gen_delete_for_mav(ObDeleteStmt *&delete_stmt)
   int ret = OB_SUCCESS;
   delete_stmt = NULL;
   TableItem *target_table = NULL;
-  ObRawExpr *marker_filter = NULL;
   if (OB_FAIL(create_simple_stmt(delete_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(delete_stmt, mv_schema_.get_table_name(), target_table))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(gen_delete_conds(*target_table, delete_stmt->get_condition_exprs()))) {
     LOG_WARN("failed gen update conds", K(ret));
-  } else if (ctx_.for_union_all_child_query()
-             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, target_table, marker_filter))) {
-    LOG_WARN("failed to create union all child refresh filter", K(ret));
-  } else if (NULL != marker_filter
-             && OB_FAIL(delete_stmt->get_condition_exprs().push_back(marker_filter))) {
-    LOG_WARN("failed to push back null safe equal expr", K(ret));
+  } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(delete_stmt, target_table))) {
+    LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else {
     target_table->database_name_ = mv_db_name_;
   }
@@ -918,7 +903,7 @@ int ObSimpleMAVPrinter::gen_merge_conds(ObMergeStmt &merge_stmt)
     if (OB_ISNULL(target_table = merge_stmt.get_table_item_by_id(merge_stmt.get_target_table_id()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(merge_stmt.get_target_table_id()), K(merge_stmt.get_table_items()));
-    } else if (OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, target_table, marker_filter))) {
+    } else if (OB_FAIL(create_union_all_child_refresh_filter(target_table, marker_filter))) {
       LOG_WARN("failed to create union all child refresh filter", K(ret));
     } else if (OB_FAIL(merge_stmt.get_match_condition_exprs().push_back(marker_filter))) {
       LOG_WARN("failed to push back null safe equal expr", K(ret));
@@ -963,7 +948,7 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_view(ObSelectStmt *&view_stmt)
   } else if (OB_FAIL(copier.copy_on_replace(mv_def_stmt_.get_group_exprs(),
                                             view_stmt->get_group_exprs()))) {
     LOG_WARN("failed to generate group by exprs", K(ret));
-  } else if (OB_FAIL(gen_simple_mav_delta_mv_select_list(copier, *table_item,
+  } else if (OB_FAIL(gen_simple_mav_delta_mv_select_list(copier, table_item, 0,
                                                          view_stmt->get_group_exprs(),
                                                          view_stmt->get_select_items()))) {
     LOG_WARN("failed to gen select list ", K(ret));
@@ -976,7 +961,8 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_view(ObSelectStmt *&view_stmt)
 }
 
 int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &copier,
-                                                            const TableItem &table,
+                                                            const TableItem *table,
+                                                            const int64_t explicit_dml_factor,
                                                             const ObIArray<ObRawExpr*> &group_by_exprs,
                                                             ObIArray<SelectItem> &select_items)
 {
@@ -989,7 +975,14 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
   if (OB_UNLIKELY(orig_group_by_exprs.count() != group_by_exprs.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected group by size", K(ret), K(group_by_exprs), K(orig_group_by_exprs));
-  } else if (OB_FAIL(create_simple_column_expr(table.get_table_name(), DML_FACTOR_COL_NAME, table.table_id_, dml_factor))) {
+  } else if (NULL == table) {
+    if (OB_UNLIKELY(1 != explicit_dml_factor && -1 != explicit_dml_factor)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected explicit dml factor", K(ret), K(explicit_dml_factor));
+    } else {
+      dml_factor = 1 == explicit_dml_factor ? exprs_.int_one_ : exprs_.int_neg_one_;
+    }
+  } else if (OB_FAIL(create_simple_column_expr(table->get_table_name(), DML_FACTOR_COL_NAME, table->table_id_, dml_factor))) {
     LOG_WARN("failed to create simple column expr", K(ret));
   }
   // add select list for group by
@@ -1022,7 +1015,7 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
                && !ctx_.for_rt_expand()) {
       if (OB_FAIL(get_inner_sel_name_for_aggr(*aggr_expr, sel_item.alias_name_))) {
         LOG_WARN("failed to get inner select name for aggr", K(ret));
-      } else if (OB_FAIL(gen_min_max_aggr_print_expr(table, *aggr_expr, sel_item.expr_))) {
+      } else if (OB_FAIL(gen_min_max_aggr_print_expr(group_by_exprs, *aggr_expr, sel_item.expr_))) {
         LOG_WARN("failed to gen min max aggr expr", K(ret));
       } else if (OB_FAIL(select_items.push_back(sel_item))) {
         LOG_WARN("failed to pushback", K(ret));
@@ -1207,7 +1200,10 @@ int ObSimpleMAVPrinter::add_replaced_expr_for_min_max_aggr(const TableItem &sour
     } else if (copier.is_existed(orig_aggr)) {
       // do nothing
     } else if (ctx_.for_rt_expand()) {
-      if (OB_FAIL(gen_min_max_aggr_print_expr(source_table, *orig_aggr, print_expr))) {
+      ObSEArray<ObRawExpr*, 16> cur_group_by_exprs;
+      if (OB_FAIL(copier.copy_on_replace(mv_def_stmt_.get_group_exprs(), cur_group_by_exprs))) {
+        LOG_WARN("failed to generate group by exprs", K(ret));
+      } else if (OB_FAIL(gen_min_max_aggr_print_expr(cur_group_by_exprs, *orig_aggr, print_expr))) {
         LOG_WARN("failed to gen min max aggr expr", K(ret));
       } else if (OB_FAIL(copier.add_replaced_expr(orig_aggr, print_expr))) {
         LOG_WARN("failed to add replace pair", K(ret));
@@ -1247,11 +1243,11 @@ int ObSimpleMAVPrinter::get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr,
     int64_t pos = 0;
     const char* name_fmt = T_FUN_MIN == aggr.get_expr_type()
                            ? "MIN_%.*s$$" : "MAX_%.*s$$";
-    
+
     if (OB_FAIL(BUF_PRINTF(name_fmt, param_name.length(), param_name.ptr()))) {
       LOG_WARN("failed to print buff", K(ret));
     } else if (OB_FAIL(ob_write_string(ctx_.alloc_, ObString(pos, buf), sel_name))) {
-      LOG_WARN("Write string error", K(ret));                             
+      LOG_WARN("Write string error", K(ret));
     }
   }
   return ret;
@@ -1259,7 +1255,7 @@ int ObSimpleMAVPrinter::get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr,
 
 // max(expr)  --> (select max(expr) from base_table where base_table.gby_expr1 <=> gby_expr1 and ...)
 // min(expr)  --> (select min(expr) from base_table where base_table.gby_expr1 <=> gby_expr1 and ...)
-int ObSimpleMAVPrinter::gen_min_max_aggr_print_expr(const TableItem &outer_table,
+int ObSimpleMAVPrinter::gen_min_max_aggr_print_expr(const ObIArray<ObRawExpr*> &outer_group_by_exprs,
                                                     ObAggFunRawExpr &aggr_expr,
                                                     ObRawExpr *&aggr_print_expr)
 {
@@ -1281,7 +1277,7 @@ int ObSimpleMAVPrinter::gen_min_max_aggr_print_expr(const TableItem &outer_table
       || OB_UNLIKELY(!aggr_param->is_column_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(aggr_expr), K(mv_def_stmt_.get_table_size()),
-                              K(source_table), KPC(aggr_param));
+                                  K(source_table), KPC(aggr_param));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, query_ref_expr))) {
     LOG_WARN("failed to create raw expr", K(ret));
   } else if (OB_ISNULL(query_ref_expr)) {
@@ -1314,27 +1310,13 @@ int ObSimpleMAVPrinter::gen_min_max_aggr_print_expr(const TableItem &outer_table
     sel_item.alias_name_ = static_cast<ObColumnRefRawExpr*>(aggr_param)->get_column_name();
     query_ref_expr->set_ref_stmt(subquery);
     ObRawExpr *cur_col = NULL;
-    ObRawExpr *upper_col = NULL;
-    ObString col_name;
     const ObIArray<ObRawExpr*> &group_by_exprs = mv_def_stmt_.get_group_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < group_by_exprs.count(); ++i) {
-      ObRawExpr* const &group_by_expr = group_by_exprs.at(i);
-      if (OB_ISNULL(group_by_expr) || OB_UNLIKELY(!group_by_expr->is_column_ref_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected group by expr", K(ret), KPC(group_by_expr));
-      } else if (OB_FAIL(copier.copy_on_replace(group_by_expr, cur_col))) {
-        LOG_WARN("failed to generate group by exprs", K(ret));
-      } else if (ctx_.for_rt_expand() && OB_FAIL(get_mv_select_item_name(group_by_exprs.at(i), col_name))) {
-        LOG_WARN("failed to get mv select item name", K(ret));
-      } else if (OB_FAIL(create_simple_column_expr(outer_table.get_table_name(),
-                                                   ctx_.for_rt_expand() ? col_name
-                                                   : static_cast<const ObColumnRefRawExpr*>(group_by_expr)->get_column_name(),
-                                                   outer_table.table_id_,
-                                                   upper_col))) {
-        LOG_WARN("failed to create simple column exprs", K(ret));
+      if (OB_FAIL(copier.copy_on_replace(group_by_exprs.at(i), cur_col))) {
+        LOG_WARN("failed to generate group by exprs", K(ret));  
       } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(ctx_.expr_factory_,
                                                                      T_OP_NSEQ,
-                                                                     upper_col,
+                                                                     outer_group_by_exprs.at(i),
                                                                      cur_col,
                                                                      match_cond))) {
         LOG_WARN("failed to build null safe equal expr", K(ret));

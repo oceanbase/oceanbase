@@ -85,6 +85,8 @@
 #include "rootserver/ob_alter_table_constraint_checker.h"
 #include "share/ob_license_utils.h"
 #include "share/ob_mview_args.h"
+#include "storage/mview/ob_mview_refresh.h"
+#include "rootserver/mview/ob_mview_utils.h"
 
 namespace oceanbase
 {
@@ -2822,6 +2824,12 @@ int ObDDLService::start_mview_complete_refresh_task(
   } else if (OB_ISNULL(data_format_schema) || OB_ISNULL(nls_timestamp_format) || OB_ISNULL(nls_timestamp_tz_format)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("var schema must not be null", K(ret));
+  } else if (OB_FAIL(ObMViewRefresher::collect_based_schema_object_infos(tenant_id,
+                                                                         tenant_data_version,
+                                                                         schema_guard,
+                                                                         *dep_infos,
+                                                                         arg.based_schema_object_infos_))) {
+    LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id), K(tenant_data_version));
   } else {
     arg.parallelism_ = mv_refresh_info->parallel_;
     arg.tz_info_ =  arg.tz_info_wrap_.get_tz_info_offset();
@@ -2829,38 +2837,7 @@ int ObDDLService::start_mview_complete_refresh_task(
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format->get_value();
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format->get_value();
     arg.ddl_stmt_str_ = ddl_stmt_str;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < dep_infos->count(); ++i) {
-    const ObDependencyInfo &dep = dep_infos->at(i);
-    const ObSimpleTableSchemaV2 *base_table_schema = nullptr;
-    if ((compat_version < DATA_VERSION_4_3_5_0) && OB_UNLIKELY(ObObjectType::TABLE != dep.get_ref_obj_type())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ref obj type is not table, not supported", KR(ret), K(dep));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the ref obj type of materialized view not user table is");
-    } else if ((compat_version >= DATA_VERSION_4_3_5_0)
-        && OB_UNLIKELY((ObObjectType::TABLE != dep.get_ref_obj_type())
-                        && ObObjectType::VIEW != dep.get_ref_obj_type())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ref obj type is not table or mview, not supported", KR(ret), K(dep));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "the ref obj type of materialized view not user table or mview is");
-    } else if (OB_FAIL(
-          schema_guard.get_simple_table_schema(tenant_id, dep.get_ref_obj_id(), base_table_schema))) {
-      LOG_WARN("fail to get table schema", K(ret), K(dep));
-    } else if (OB_ISNULL(base_table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("base table schema is nullptr", K(ret));
-    } else {
-      ObBasedSchemaObjectInfo base_info;
-      base_info.schema_id_ = dep.get_ref_obj_id();
-      base_info.schema_type_ = ObSchemaType::TABLE_SCHEMA;
-      base_info.schema_version_ = base_table_schema->get_schema_version();
-      base_info.schema_tenant_id_ = tenant_id;
-      max_dependency_version = MAX(max_dependency_version, base_table_schema->get_schema_version());
-      if (OB_FAIL(arg.based_schema_object_infos_.push_back(base_info))) {
-        LOG_WARN("fail to push back base info", KR(ret));
-      }
-    }
-  }
+  } 
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(max_dependency_version > mview_schema.get_max_dependency_version())) {
       ret = OB_OLD_SCHEMA_VERSION;
@@ -23948,22 +23925,23 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           }
           for (int64_t i = 0; OB_SUCC(ret) && is_based_schema_version_consistent && i < alter_table_arg.based_schema_object_infos_.count(); ++i) {
             const ObBasedSchemaObjectInfo &based_info = alter_table_arg.based_schema_object_infos_.at(i);
-            const ObTableSchema *based_table_schema = nullptr;
-            if (OB_FAIL(schema_guard.get_table_schema(tenant_id, based_info.schema_id_,
-                                                      based_table_schema))) {
-              LOG_WARN("fail to get table schema", KR(ret), K(based_info));
-            } else if (OB_ISNULL(based_table_schema)) {
-              // ignore ret
-              LOG_WARN("based table is not exist", KR(ret), K(based_info));
+            const ObSchema *schema_obj = nullptr;
+            int64_t based_obj_schema_version = OB_INVALID_VERSION;
+            ObSchemaType based_obj_schema_type = OB_MAX_SCHEMA;
+            const ObObjectType ref_obj_type = ObMViewUtils::get_object_type_for_mview(based_info.schema_type_);
+            if (OB_FAIL(ObMViewUtils::get_schema_object_from_dependency(tenant_id, schema_guard, based_info.schema_id_,
+                        ref_obj_type, schema_obj, based_obj_schema_version, based_obj_schema_type))) {
+              if (OB_TABLE_NOT_EXIST == ret || OB_OBJECT_NAME_NOT_EXIST == ret) {
+                is_based_schema_version_consistent = false;
+                ret = OB_SUCCESS;
+                LOG_WARN("based object is not exist", KR(ret), K(based_info));
+              }
+              LOG_WARN("fail to get schema object from dependency", KR(ret), K(based_info));
+            } else if (OB_UNLIKELY(based_obj_schema_version != based_info.schema_version_)) {
               is_based_schema_version_consistent = false;
-            } else if (OB_UNLIKELY(based_table_schema->get_schema_version() !=
-                                   based_info.schema_version_)) {
-              // ignore ret
-              LOG_WARN("based table schema version is changed", KR(ret), K(based_info),
-                      KPC(based_table_schema));
-              is_based_schema_version_consistent = false;
+              LOG_WARN("based schema version is changed", KR(ret), K(based_info), KP(schema_obj));
             } else {
-              max_dependency_version = MAX(max_dependency_version, based_info.schema_version_);
+              max_dependency_version = MAX(max_dependency_version, based_obj_schema_version);
             }
           }
           if (OB_SUCC(ret) && !is_based_schema_version_consistent) {

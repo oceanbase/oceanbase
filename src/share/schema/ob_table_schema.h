@@ -1553,6 +1553,7 @@ public:
   int add_subpartition_key(const common::ObString &column_name);
   int add_zone(const common::ObString &zone);
   int set_view_definition(const common::ObString &view_definition);
+  int set_expand_view_definition_for_mv(const common::ObString &expand_view_definition_for_mv);
   int set_parser_name_and_properties(const common::ObString &parser_name, const common::ObString &parser_properties);
   int set_parser_name(const common::ObString &parser_name) { return deep_copy_str(parser_name, parser_name_); }
   int set_parser_properties(const common::ObString &parser_properties) { return deep_copy_str(parser_properties, parser_properties_); }
