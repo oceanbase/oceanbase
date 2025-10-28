@@ -594,6 +594,8 @@ public:
   void set_external_py_sch_resource_cache(void *cache) { external_py_sch_resource_cache_ = cache; }
   void *get_py_sub_inter_ctx() { return py_sub_inter_ctx_; }
   void set_py_sub_inter_ctx(void *sub_inter_ctx) { py_sub_inter_ctx_ = sub_inter_ctx; }
+  bool need_try_serialize_package_var() const { return need_try_serialize_package_var_; }
+  void set_need_try_serialize_package_var(bool need_try_serialize_package_var) { need_try_serialize_package_var_ = need_try_serialize_package_var; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -800,6 +802,7 @@ protected:
    *        The value is a file array related to the key.
    * */
   ObLakeTableFileMap *lake_table_file_map_;
+  bool need_try_serialize_package_var_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

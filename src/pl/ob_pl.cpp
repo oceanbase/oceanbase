@@ -5125,14 +5125,7 @@ int ObPLExecState::execute(bool is_first_execute)
     if (top_call_
         && ctx_.exec_ctx_->get_my_session()->is_track_session_info()
         && ctx_.exec_ctx_->get_my_session()->is_package_state_changed()) {
-      LOG_DEBUG("++++++++ add changed package info to session! +++++++++++");
-      int tmp_ret = ctx_.exec_ctx_->get_my_session()->add_changed_package_info();
-      if (tmp_ret != OB_SUCCESS) {
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("failed to add changed package info", K(ret));
-      } else {
-        ctx_.exec_ctx_->get_my_session()->reset_all_package_changed_info();
-      }
+      ctx_.exec_ctx_->set_need_try_serialize_package_var(true);
     }
 #undef PL_DYNAMIC_STACK_CHECK
 

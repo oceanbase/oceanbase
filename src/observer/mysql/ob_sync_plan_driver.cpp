@@ -15,6 +15,7 @@
 #include "observer/mysql/ob_sync_plan_driver.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include "observer/mysql/obmp_query.h"
+#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -74,6 +75,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     if (retry_ctrl_.need_retry()) {
       result.set_will_retry();
     }
+    int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to add changed package info", K(tmp_ret));
+    }
     cret = result.close(cli_ret);
     if (cret != OB_SUCCESS &&
         cret != OB_TRANSACTION_SET_VIOLATION &&
@@ -110,6 +115,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       if (retry_ctrl_.need_retry()) {
         result.set_will_retry();
       }
+      int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to add changed package info", K(tmp_ret));
+      }
       int cret = result.close(ret);
       if (cret != OB_SUCCESS) {
         LOG_WARN("close result set fail", K(cret));
@@ -143,6 +152,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
 
       eofp.set_server_status(flags);
+      int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to add changed package info", K(tmp_ret));
+      }
 
       // for proxy
       // in multi-stmt, send extra ok packet in the last stmt(has no more result)
@@ -184,6 +197,10 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
     }
   } else {
+    int tmp_ret = ObMPUtils::try_add_changed_package_info(session_, result.get_exec_context());
+    if (tmp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to add changed package info", K(tmp_ret));
+    }
     if (is_prexecute_ && OB_FAIL(response_query_header(result, false, false, true))) {
       // need close result set
       int close_ret = OB_SUCCESS;

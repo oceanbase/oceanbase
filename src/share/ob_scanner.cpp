@@ -16,6 +16,7 @@
 
 #include "sql/session/ob_sql_session_info.h"
 #include "pl/ob_pl_package_state.h"
+#include "observer/mysql/obmp_utils.h"
 
 namespace oceanbase
 {
@@ -270,27 +271,31 @@ int ObScanner::assign(const ObScanner &other)
   return ret;
 }
 
-int ObScanner::set_session_var_map(const sql::ObSQLSessionInfo *p_session_info)
+int ObScanner::set_session_var_map(sql::ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *p_session_info = exec_ctx.get_my_session();
   if (OB_ISNULL(p_session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session pointer is null", K(ret));
   } else {
-    const sql::ObSessionValMap &current_map = p_session_info->get_user_var_val_map();
-    if (current_map.size() > 0) {
-      //Init user var map on demand when setting to avoid wasting CPU and memory when there is no user var synchronization
-      if (!user_var_map_.get_val_map().created()) {
-        OZ (user_var_map_.init(1024 * 1024 * 2, 256, NULL));
-      }
-      for (sql::ObSessionValMap::VarNameValMap::const_iterator iter = current_map.get_val_map().begin();
-        OB_SUCC(ret) && iter != current_map.get_val_map().end(); ++iter) {
-        if (iter->first.prefix_match(pl::package_key_prefix_v1) // For package variables, only changes will be synchronized
-            && !p_session_info->is_already_tracked(
-                  iter->first, p_session_info->get_changed_user_var())) {
-          // do nothing ...
-        } else {
-          OZ (user_var_map_.set_refactored(iter->first, iter->second));
+    OZ (observer::ObMPUtils::try_add_changed_package_info(*p_session_info, exec_ctx));
+    if (OB_SUCC(ret)) {
+      const sql::ObSessionValMap &current_map = p_session_info->get_user_var_val_map();
+      if (current_map.size() > 0) {
+        //Init user var map on demand when setting to avoid wasting CPU and memory when there is no user var synchronization
+        if (!user_var_map_.get_val_map().created()) {
+          OZ (user_var_map_.init(1024 * 1024 * 2, 256, NULL));
+        }
+        for (sql::ObSessionValMap::VarNameValMap::const_iterator iter = current_map.get_val_map().begin();
+          OB_SUCC(ret) && iter != current_map.get_val_map().end(); ++iter) {
+          if (iter->first.prefix_match(pl::package_key_prefix_v1) // For package variables, only changes will be synchronized
+              && !p_session_info->is_already_tracked(
+                    iter->first, p_session_info->get_changed_user_var())) {
+            // do nothing ...
+          } else {
+            OZ (user_var_map_.set_refactored(iter->first, iter->second));
+          }
         }
       }
     }
