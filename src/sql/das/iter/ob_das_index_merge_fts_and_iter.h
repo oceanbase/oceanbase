@@ -118,11 +118,14 @@ struct ObDASIndexMergeFTSAndIterParam : public ObDASIndexMergeIterParam
 {
   public:
   ObDASIndexMergeFTSAndIterParam()
-    : ObDASIndexMergeIterParam()
-  {
-    limit_ = 0;
-    offset_ = 0;
-  }
+    : ObDASIndexMergeIterParam(),
+      limit_(0),
+      offset_(0),
+      relevance_exprs_(),
+      pushdown_topk_iter_(nullptr),
+      pushdown_topk_iter_tree_(nullptr),
+      first_fts_idx_(OB_INVALID_INDEX)
+  {}
 
   int64_t limit_;
   int64_t offset_;
@@ -144,14 +147,18 @@ public:
       cur_result_item_idx_(0),
       result_item_size_(0),
       result_items_(NULL),
-      first_round_min_relevance_(0),
+      pushdown_topk_iter_(nullptr),
+      pushdown_topk_iter_tree_(nullptr),
+      pushdown_topk_(0),
+      first_fts_idx_(OB_INVALID_INDEX),
       pushdown_topk_iter_first_scan_(true),
       fts_index_idxs_(),
       normal_index_idxs_(),
       relevance_cmp_(),
       relevance_exprs_(),
       fts_index_output_exprs_(),
-      normal_index_output_exprs_()
+      normal_index_output_exprs_(),
+      execute_strategy_(NORMAL_INDEX_MERGE)
   {}
 
   virtual ~ObDASIndexMergeFTSAndIter() {}
@@ -160,6 +167,7 @@ public:
   ObDASIter *get_pushdown_topk_iter_tree() const { return pushdown_topk_iter_tree_; }
 
 protected:
+  virtual int do_table_scan() override;
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
   virtual int inner_release() override;
@@ -168,17 +176,21 @@ protected:
 
 private:
 
+  enum ExecuteStrategy {
+    NORMAL_INDEX_MERGE = 0,
+    SECOND_PHASE_ONLY = 1,
+  };
+
   typedef ObSPIVFixedSizeHeap<ObFTSResultItem, ObFTSResultRelevanceCmp> ObMinRelevanceHeap;
 
+  int determine_execute_strategy();
+  int estimate_child_index_selectivity(int64_t child_idx, double &selectivity);
   int get_relevance(int64_t child_idx, double &relevance);
   int compare(ObDASIndexMergeIter::MergeResultBuffer* row_buffer, IndexMergeRowStore &cmp_store, int &cmp_ret) const;
   int fill_other_child_stores(int64_t capacity);
   int fill_one_child_stores(int64_t capacity, int64_t child_idx, ObDASIter *child_iter);
   int prepare_outout(bool is_vectorized, int64_t capacity);
 
-  int execute_first_round_scan(ObMinRelevanceHeap &first_round_results) { return OB_NOT_IMPLEMENT; };
-  int execute_first_round_scan_vectorized(int64_t capacity, ObMinRelevanceHeap &first_round_results);
-  int set_topk_relevance_threshold();
   int execute_second_round_scan(bool is_vectorized, int64_t capacity, ObMinRelevanceHeap &first_round_results);
   int get_topn_fts_result(ObMinRelevanceHeap &heap) { return OB_NOT_IMPLEMENT; };
   int get_topn_fts_result_vectorized(int64_t capacity, ObMinRelevanceHeap &heap);
@@ -194,9 +206,9 @@ private:
   int64_t result_item_size_;
   ObFTSResultItem* result_items_;
 
-  double first_round_min_relevance_;
   ObDASTRMergeIter *pushdown_topk_iter_;
   ObDASIter *pushdown_topk_iter_tree_;
+  int64_t pushdown_topk_;
   int64_t first_fts_idx_;
   bool pushdown_topk_iter_first_scan_;
 
@@ -208,6 +220,7 @@ private:
 
   common::ObSEArray<ObExpr*, 16> fts_index_output_exprs_;
   common::ObSEArray<ObExpr*, 16> normal_index_output_exprs_;
+  ExecuteStrategy execute_strategy_;
 };
 
 }  // namespace sql

@@ -19637,6 +19637,8 @@ int ObLogPlan::try_push_topn_into_index_merge_scan(ObLogicalOperator *&top,
       LOG_WARN("failed to push back order item", K(ret));
     } else if (OB_FAIL(table_scan->set_op_ordering(tmp_sort_keys))) {
       LOG_WARN("failed to set op ordering", K(ret));
+    } else {
+      need_further_sort = true;
     }
   }
   return ret;

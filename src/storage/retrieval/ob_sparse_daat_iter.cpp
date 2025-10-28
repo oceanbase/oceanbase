@@ -541,6 +541,38 @@ int ObSRBlockMaxTopKIterImpl::init(
   return ret;
 }
 
+int ObSRBlockMaxTopKIterImpl::adjust_topk_limit(const int64_t new_topk_limit)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(new_topk_limit < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid topk limit", K(ret), K(new_topk_limit));
+  } else if (new_topk_limit > top_k_count_) {
+    // Need to expand id_cache_
+    // Since ObFixedArray doesn't support resize, we need to destroy and reinit
+    id_cache_.destroy();
+    if (OB_FAIL(id_cache_.init(new_topk_limit))) {
+      LOG_WARN("failed to init id cache with new topk limit", K(ret), K(new_topk_limit));
+    } else if (OB_FAIL(id_cache_.prepare_allocate(new_topk_limit))) {
+      LOG_WARN("failed to prepare allocate id cache with new topk limit", K(ret), K(new_topk_limit));
+    } else {
+      top_k_count_ = new_topk_limit;
+    }
+  } else {
+    // new_topk_limit <= top_k_count_
+    // For shrink or equal case: no need to reallocate id_cache_
+    // Keep the larger id_cache_ capacity to avoid frequent reallocation
+    top_k_count_ = new_topk_limit;
+  }
+
+  // Update iter_param_ topk_limit_ to keep it in sync
+  if (OB_SUCC(ret) && OB_NOT_NULL(iter_param_)) {
+    iter_param_->topk_limit_ = new_topk_limit;
+  }
+
+  return ret;
+}
+
 void ObSRBlockMaxTopKIterImpl::reuse(const bool switch_tablet)
 {
   while (!top_k_heap_.empty()) {

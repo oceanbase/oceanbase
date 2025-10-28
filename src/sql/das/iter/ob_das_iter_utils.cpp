@@ -3222,7 +3222,6 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
           merge_param.pushdown_topk_iter_ = static_cast<ObDASTRMergeIter*>(pushdown_topk_iter);
           merge_param.pushdown_topk_iter_tree_ = child_iter;
           merge_param.first_fts_idx_ = first_fts_idx;
-          merge_param.pushdown_topk_iter_->set_topk_limit((limit + offset)*2);
 
           if (!merge_param.pushdown_topk_iter_->is_topk_mode()) {
             ret = OB_ERR_UNEXPECTED;
