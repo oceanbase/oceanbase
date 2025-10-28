@@ -440,6 +440,7 @@ int ObHbaseColumnFamilyService::del(const ObHbaseQuery &hbase_query, ObTableExec
   ObHbaseAdapterGuard adapter_guard(exec_ctx.get_allocator());
   ObTableQueryIterableResult wide_row;
   wide_row.set_need_append_family(false);
+  const_cast<ObHbaseQuery &>(hbase_query).set_qualifier_with_family(false);
   ObNewRow cell;
   ObIHbaseAdapter *adapter = nullptr;
   const ObTableQuery table_query = hbase_query.get_query();

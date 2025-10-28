@@ -1046,6 +1046,7 @@ ObHbaseCFIterator::ObHbaseCFIterator(const ObHbaseQuery &hbase_query, ObTableExe
       filter_(nullptr),
       is_timeseries_table_(false)
 {
+  iterable_result_.set_need_append_family(hbase_query_.get_qualifier_with_family());
 }
 
 ObHbaseCFIterator::~ObHbaseCFIterator()
