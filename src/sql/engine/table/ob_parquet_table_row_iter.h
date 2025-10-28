@@ -167,7 +167,8 @@ public:
     page_skip_ranges_(allocator_),
     stat_(),
     mode_(FilterCalcMode::DYNAMIC_EAGER_CALC),
-    reader_metrics_() {}
+    reader_metrics_(),
+    column_index_type_(sql::ColumnIndexType::NAME) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -493,6 +494,7 @@ private:
   ParquetStatInfo stat_;
   FilterCalcMode mode_;
   ObLakeTableReaderMetrics reader_metrics_;
+  sql::ColumnIndexType column_index_type_;
 };
 
 }

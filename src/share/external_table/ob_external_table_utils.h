@@ -224,6 +224,9 @@ class ObExternalTableUtils {
                                               common::ObIAllocator &allocator,
                                               ObFileScanTask *scan_task,
                                               bool &is_valid);
+  static int convert_lake_table_scan_task(const int64_t file_id,
+                                          const uint64_t part_id,
+                                          ObFileScanTask *scan_task);
   static int convert_external_table_empty_task(const common::ObString &file_url,
                                                 const common::ObString &content_digest,
                                                 const int64_t file_size,

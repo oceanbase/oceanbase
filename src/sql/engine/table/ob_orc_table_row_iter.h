@@ -246,7 +246,7 @@ namespace sql {
     ObOrcTableRowIterator() :
       query_flag_(0), inner_sector_reader_(nullptr), sector_reader_(nullptr), bit_vector_cache_(NULL),
       options_(), file_prebuffer_(data_access_driver_), reader_metrics_(),
-      file_contains_attribute_key_(false)
+      column_index_type_(sql::ColumnIndexType::NAME)
     {}
     virtual ~ObOrcTableRowIterator()
     {
@@ -465,7 +465,6 @@ private:
     int load_filter_column(const common::ObIArray<uint64_t> &col_ids);
     int next_batch(int64_t &read_count, const int64_t capacity);
 
-    int compute_column_id_by_table_type(int64_t index, int64_t &orc_col_id);
     int create_file_reader(const ObString& data_file_path,
                           ObExternalFileAccess& file_access_driver,
                           ObFilePreBuffer& file_prebuffer,
@@ -518,7 +517,7 @@ private:
     common::ObArenaAllocator temp_allocator_; // used for lob filter pushdown
     common::ObArrayWrap<ObFilePreBuffer::ColumnRangeSlices *> column_range_slices_;
     ObLakeTableReaderMetrics reader_metrics_;
-    bool file_contains_attribute_key_;
+    sql::ColumnIndexType column_index_type_;
 };
 
 }
