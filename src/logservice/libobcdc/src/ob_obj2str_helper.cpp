@@ -232,8 +232,8 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
 
     if (OB_SUCC(ret)) {
       // For a varchar with a default value of '', str_len=0, the empty string should be synchronised and not output as NULL
-      if (0 == obj.get_val_len()) {
-        str.assign_ptr(EMPTY_STRING, static_cast<ObString::obstr_size_t>(obj.get_val_len()));
+      if (0 == str.length()) {
+        str.assign_ptr(EMPTY_STRING, 0);
       }
     }
   } else {
