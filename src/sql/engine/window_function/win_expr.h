@@ -35,6 +35,7 @@ namespace sql
 {
 class ObCompactRow;
 class WinFuncColExpr;
+class WinFuncInfo;
 
 namespace winfunc
 {
@@ -294,11 +295,36 @@ private:
 class NthValue final: public NonAggrWinExpr
 {
 public:
+  NthValue()
+      : NonAggrWinExpr(), last_result_is_valid_(false),
+        last_result_is_null_(false), last_result_(nullptr),
+        last_result_size_(-1), last_result_capacity_(-1), last_frame_(),
+        param_index_(-1), reuse_count_(0), store_count_(0) {}
   virtual int process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *res, bool &is_null) override;
   virtual int generate_extra() override;
+  virtual void destroy() override;
 private:
-  ParamStatus param_status_;
+  // -- optimize for first()/last() in half sliding window
+  // fast path for reuse last result
+  int may_reuse_last_result(
+    WinExprEvalCtx &ctx, const Frame& frame, const WinFuncInfo& wf_info, int nth_val,
+    bool& /* out */ may_reused, bool& /* out */ may_store);
+
+  // store current result for further usage
+  int store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
+                               int32_t len, const Frame &frame);
+  void store_null_for_reuse(const Frame& frame);
+
+  bool last_result_is_valid_;
+  bool last_result_is_null_;
+  char* last_result_;
+  int last_result_size_;
+  int last_result_capacity_;
+  Frame last_frame_;
+  int64_t param_index_;  // column index of param[0]
+  uint32_t reuse_count_;
+  uint32_t store_count_;
 };
 
 class LeadOrLag final: public NonAggrWinExpr
