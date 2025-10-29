@@ -901,6 +901,7 @@ const int64_t MAX_VERSION_LENGTH = 128;
 const int64_t MAX_FREEZE_STATUS_LENGTH = 64;
 const int64_t MAX_FREEZE_SUBMIT_STATUS_LENGTH = 64;
 const int64_t MAX_REPLAY_LOG_TYPE_LENGTH = 64;
+const int64_t MAX_UNCOMMIT_TX_INFO_LENGTH = 256; // enough for single uncommit tx info
 //columns
 const int64_t MAX_TABLE_CATALOG_LENGTH = 4096;
 const int64_t MAX_COLUMN_COMMENT_LENGTH = 2048;

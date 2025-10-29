@@ -378,6 +378,10 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(row_count);
           break;
         }
+        case UNCOMMIT_TX_INFO: {
+          cur_row_.cells_[i].set_null();
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

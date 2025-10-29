@@ -11737,7 +11737,8 @@ def_table_schema(
       ('data_checksum', 'int'),
       ('table_flag', 'int'),
       ('rec_scn', 'int'),
-      ('row_count','int')
+      ('row_count','int'),
+      ('uncommit_tx_info', 'varchar:MAX_UNCOMMIT_TX_INFO_LENGTH')
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
