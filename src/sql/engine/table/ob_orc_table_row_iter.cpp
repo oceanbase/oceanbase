@@ -71,7 +71,7 @@ int ObOrcTableRowIterator::build_type_name_id_map(const orc::Type* type, ObIArra
 int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id)
 {
   int ret = OB_SUCCESS;
-  switch (scan_param_->external_file_format_.orc_format_.column_index_type_) {
+  switch (column_index_type_) {
     case sql::ColumnIndexType::NAME: {
       ObString col_name;
       ObDataAccessPathExtraInfo *data_access_info =
@@ -80,13 +80,14 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
       OZ (name_to_id_.get_refactored(col_name, orc_col_id));
       break;
     }
-    case sql::ColumnIndexType::POSITION: {
+    case sql::ColumnIndexType::POSITION:
+    case sql::ColumnIndexType::ID: {
       orc_col_id = file_column_exprs_.at(index)->extra_;
       break;
     }
     default:
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unknown orc column_index_type", K(ret), K(scan_param_->external_file_format_.orc_format_.column_index_type_));
+      LOG_WARN("unknown orc column_index_type", K(ret), K(column_index_type_));
       break;
   }
   return ret;
@@ -124,7 +125,7 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
     int64_t orc_col_id = -1;
-    OZ (compute_column_id_by_table_type(i, orc_col_id));
+    OZ (compute_column_id_by_index_type(i, orc_col_id));
     CK (orc_col_id != -1);
     orc::ColumnVectorBatch *batch = nullptr;
     const orc::Type *type = nullptr;
@@ -132,9 +133,9 @@ int ObOrcTableRowIterator::prepare_read_orc_file()
                                           &colid_default_value_arr_.at(i) : nullptr;
 
     if (OB_SUCC(ret)) {
-      int tmp_ret = file_contains_attribute_key_ ?
-                    iceberg_id_to_type_.get_refactored(orc_col_id, type) :
-                    id_to_type_.get_refactored(orc_col_id, type);
+      int tmp_ret = column_index_type_ == sql::ColumnIndexType::ID
+                        ? iceberg_id_to_type_.get_refactored(orc_col_id, type)
+                        : id_to_type_.get_refactored(orc_col_id, type);
 
       if (OB_HASH_NOT_EXIST == tmp_ret && is_lake_table()) {
         type = nullptr;
@@ -298,8 +299,6 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
         break;
       }
     }
-    const sql::ColumnIndexType index_type =
-                                  scan_param_->external_file_format_.orc_format_.column_index_type_;
 
     if (is_lake_table()) {
       OZ(ObExternalTableRowIterator::init_default_batch(file_column_exprs_));
@@ -824,7 +823,7 @@ int ObOrcTableRowIterator::next_file()
           id_to_type_.reuse();
           name_to_id_.reuse();
 
-          if (!file_contains_attribute_key_) {
+          if (column_index_type_ != sql::ColumnIndexType::ID) {
             if (project_reader_.row_reader_) {
               ObArray<ObString> col_names;
               if (OB_FAIL(SMART_CALL(build_type_name_id_map(&project_reader_.row_reader_->getSelectedType(),
@@ -899,96 +898,95 @@ int ObOrcTableRowIterator::create_row_readers()
   std::list<std::string> eager_column_names;
   std::list<uint64_t> eager_column_ids;
 
+  column_index_type_ = scan_param_->external_file_format_.orc_format_.column_index_type_;
   if (is_iceberg_lake_table()) {
     orc::RowReaderOptions rowReaderOptions;
     all_row_reader_ = reader_->createRowReader(rowReaderOptions);
     const orc::Type *all_orc_type = &all_row_reader_->getSelectedType();
 
-    file_contains_attribute_key_ = is_contain_attribute_key(all_orc_type);
-    if (file_contains_attribute_key_) {
-      OZ (build_iceberg_id_to_type_map(all_orc_type));
+    if (is_contain_attribute_key(all_orc_type)) {
+      column_index_type_ = sql::ColumnIndexType::ID;
+      OZ(build_iceberg_id_to_type_map(all_orc_type));
     }
   }
 
-  ColumnIndexType column_index_type = file_contains_attribute_key_ ?
-      sql::ColumnIndexType::ID : scan_param_->external_file_format_.orc_format_.column_index_type_;
-
-  switch (column_index_type) {
-    case sql::ColumnIndexType::NAME: {
-      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-        ObDataAccessPathExtraInfo *data_access_info =
-            static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-        if (OB_SUCC(ret)) {
-          std::string col_name(data_access_info->data_access_path_.ptr(),
-                                data_access_info->data_access_path_.length());
-          bool is_project_column = true;
-          if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-            eager_column_names.push_front(col_name);
-            if (!is_dup_project_.at(i)) {
-              is_project_column = false;
-            }
-          }
-          if (is_project_column) {
-            project_column_names.push_front(col_name);
-          }
-        }
-      }
-      break;
-    }
-    case sql::ColumnIndexType::POSITION: {
-      for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-        bool is_project_column = true;
-        int64_t column_id = file_column_exprs_.at(i)->extra_ - 1;
-        if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-          eager_column_ids.push_back(column_id);
-          if (!is_dup_project_.at(i)) {
-            is_project_column = false;
-          }
-        }
-        if (is_project_column) {
-          project_column_ids.push_back(column_id);
-        }
-      }
-      break;
-    }
-    case sql::ColumnIndexType::ID: {
-      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-        int64_t column_id = file_column_exprs_.at(i)->extra_;
-        CK (column_id != -1);
-
-        if (OB_SUCC(ret)) {
-          const orc::Type *type = nullptr;
-          int tmp_ret = iceberg_id_to_type_.get_refactored(column_id, type);
-          if (OB_HASH_NOT_EXIST == tmp_ret) {
-            type = nullptr;
-            ret = OB_SUCCESS;
-          } else if (OB_SUCCESS != tmp_ret) {
-            ret = tmp_ret;
-            LOG_WARN("fail to get id to type", K(ret), K(column_id));
-          }
-
-          if (OB_SUCC(ret) && type != nullptr) {
+  if (OB_SUCC(ret)) {
+    switch (column_index_type_) {
+      case sql::ColumnIndexType::NAME: {
+        for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+          ObDataAccessPathExtraInfo *data_access_info =
+              static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+          if (OB_SUCC(ret)) {
+            std::string col_name(data_access_info->data_access_path_.ptr(),
+                                  data_access_info->data_access_path_.length());
             bool is_project_column = true;
-            int64_t orc_col_id = type->getColumnId() - 1;
             if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-              eager_column_ids.push_back(orc_col_id);
+              eager_column_names.push_front(col_name);
               if (!is_dup_project_.at(i)) {
                 is_project_column = false;
               }
             }
             if (is_project_column) {
-              project_column_ids.push_back(orc_col_id);
+              project_column_names.push_front(col_name);
             }
           }
         }
+        break;
       }
-      break;
+      case sql::ColumnIndexType::POSITION: {
+        for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+          bool is_project_column = true;
+          int64_t column_id = file_column_exprs_.at(i)->extra_ - 1;
+          if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
+            eager_column_ids.push_back(column_id);
+            if (!is_dup_project_.at(i)) {
+              is_project_column = false;
+            }
+          }
+          if (is_project_column) {
+            project_column_ids.push_back(column_id);
+          }
+        }
+        break;
+      }
+      case sql::ColumnIndexType::ID: {
+        for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+          int64_t column_id = file_column_exprs_.at(i)->extra_;
+          CK (column_id != -1);
+
+          if (OB_SUCC(ret)) {
+            const orc::Type *type = nullptr;
+            int tmp_ret = iceberg_id_to_type_.get_refactored(column_id, type);
+            if (OB_HASH_NOT_EXIST == tmp_ret) {
+              type = nullptr;
+              ret = OB_SUCCESS;
+            } else if (OB_SUCCESS != tmp_ret) {
+              ret = tmp_ret;
+              LOG_WARN("fail to get id to type", K(ret), K(column_id));
+            }
+
+            if (OB_SUCC(ret) && type != nullptr) {
+              bool is_project_column = true;
+              int64_t orc_col_id = type->getColumnId() - 1;
+              if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
+                eager_column_ids.push_back(orc_col_id);
+                if (!is_dup_project_.at(i)) {
+                  is_project_column = false;
+                }
+              }
+              if (is_project_column) {
+                project_column_ids.push_back(orc_col_id);
+              }
+            }
+          }
+        }
+        break;
+      }
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unknown orc column_index_type", K(ret), K(column_index_type_));
+        break;
     }
-    default:
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unknown orc column_index_type",
-              K(ret), K(scan_param_->external_file_format_.orc_format_.column_index_type_));
-      break;
   }
   if (OB_SUCC(ret)) {
     try {
@@ -1262,7 +1260,7 @@ int ObOrcTableRowIterator::OrcMinMaxFilterParamBuilder::build(
     if (!col_stat) {
       // no orc column statistics
     } else {
-      if (orc_row_iter_->file_contains_attribute_key_) {
+      if (orc_row_iter_->column_index_type_ == sql::ColumnIndexType::ID) {
         if (OB_FAIL(orc_row_iter_->iceberg_id_to_type_.get_refactored(orc_col_id, orc_type))) {
           LOG_WARN("fail to get orc type", K(ret), K(orc_col_id));
         }
@@ -2061,8 +2059,7 @@ int ObOrcTableRowIterator::get_data_column_batch(
   const orc::Type *cur_type = type;
   const orc::StructVectorBatch *cur_batch = root_batch;
   batch = nullptr;
-
-  if (file_contains_attribute_key_) {
+  if (column_index_type_ == sql::ColumnIndexType::ID) {
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < cur_type->getSubtypeCount(); i++) {
       const std::string &id_val = cur_type->getSubtype(i)->getAttributeValue(ICEBERG_ID_KEY);
       if (id_val == std::to_string(col_id)) {
@@ -2105,17 +2102,6 @@ ObOrcTableRowIterator::make_external_table_access_options(stmt::StmtType stmt_ty
     options_ = ObExternalTableAccessOptions::lazy_defaults();
   }
   return options_;
-}
-
-int ObOrcTableRowIterator::compute_column_id_by_table_type(int64_t index, int64_t &orc_col_id)
-{
-  int ret = OB_SUCCESS;
-  if (!file_contains_attribute_key_) {
-    OZ (compute_column_id_by_index_type(index, orc_col_id));
-  } else {
-    orc_col_id = file_column_exprs_.at(index)->extra_;
-  }
-  return ret;
 }
 
 int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)

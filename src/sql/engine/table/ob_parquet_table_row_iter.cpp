@@ -169,7 +169,19 @@ int ObParquetTableRowIterator::compute_column_id_by_index_type(int index, int &f
                                                                const bool is_collection_column)
 {
   int ret = OB_SUCCESS;
-  switch (scan_param_->external_file_format_.parquet_format_.column_index_type_) {
+  switch (column_index_type_) {
+    case sql::ColumnIndexType::ID: {
+      int64_t target_field_id = file_column_exprs_.at(index)->extra_;
+      bool is_found = false;
+      for (int j = 0; OB_SUCC(ret) && j < file_meta_->schema()->num_columns() && !is_found; ++j) {
+        const parquet::schema::Node *root_node = file_meta_->schema()->GetColumnRoot(j);
+        if (root_node->field_id() == target_field_id) {
+          is_found = true;
+          file_col_id = j;
+        }
+      }
+      break;
+    }
     case sql::ColumnIndexType::NAME: {
       ObDataAccessPathExtraInfo *data_access_info =
         static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
@@ -196,8 +208,7 @@ int ObParquetTableRowIterator::compute_column_id_by_index_type(int index, int &f
     }
     default:
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unknown orc column_index_type", K(ret),
-                              K(scan_param_->external_file_format_.orc_format_.column_index_type_));
+      LOG_WARN("unknown orc column_index_type", K(ret), K(column_index_type_));
       break;
   }
   return ret;
@@ -366,33 +377,31 @@ int ObParquetTableRowIterator::next_file()
     }
 
     BEGIN_CATCH_EXCEPTIONS
-      bool contains_field_id = !skip_create_file_reader ? is_contain_field_id(file_meta_) : false;
+      column_index_type_ = scan_param_->external_file_format_.parquet_format_.column_index_type_;
+      if (OB_SUCC(ret)) {
+        if (skip_create_file_reader) {
+          // do nothing for skipping reading file meta
+        } else {
+          if (is_iceberg_lake_table() && is_contain_field_id(file_meta_)) {
+            column_index_type_ = sql::ColumnIndexType::ID;
+          }
+        }
+      }
+
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
         ObDataAccessPathExtraInfo *data_access_info =
             static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
         int column_index = -1;
-        if (contains_field_id) {
-          int64_t target_field_id = file_column_exprs_.at(i)->extra_;
-          bool is_found = false;
-          for (int j = 0;
-                        OB_SUCC(ret) && j < file_meta_->schema()->num_columns() && !is_found; ++j) {
-            const parquet::schema::Node* root_node = file_meta_->schema()->GetColumnRoot(j);
-            if (root_node->field_id() == target_field_id) {
-              is_found = true;
-              column_index = j;
-            }
-          }
-        } else {
-          OZ (compute_column_id_by_index_type(i, column_index,
-                           ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_)));
-        }
+        OZ(compute_column_id_by_index_type(
+            i,
+            column_index,
+            ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_)));
 
         if (OB_SUCC(ret)) {
           const parquet::ColumnDescriptor *col_desc = NULL;
           if (column_index < 0 || column_index >= file_meta_->schema()->num_columns()) {
             if (!is_lake_table()) {
-              if (scan_param_->external_file_format_.parquet_format_.column_index_type_ ==
-                                                                    sql::ColumnIndexType::POSITION) {
+              if (column_index_type_ == sql::ColumnIndexType::POSITION) {
                 ret = OB_ERR_INVALID_COLUMN_ID;
                 LOG_WARN("invalid column index", K(ret), K(column_index),
                         K(file_meta_->schema()->num_columns()));
