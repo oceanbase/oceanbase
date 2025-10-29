@@ -1213,7 +1213,7 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(
     total_size = estimate_size;
   } else {
     RangeSplitInfoArray range_info_array;
-    if (OB_FAIL(get_range_split_infos(tables, index_read_info, range_array, range_info_array, total_size))) {
+    if (OB_FAIL(get_range_split_infos(tables, index_read_info, range_array, range_info_array, range_size))) {
       STORAGE_LOG(WARN, "Failed to get range split info array", K(ret));
     } else {
       total_size = estimate_size + range_size;
