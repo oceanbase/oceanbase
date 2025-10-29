@@ -35,21 +35,24 @@ public:
       const ObIArray<uint32_t> &stat_projectors,
       ObTableScanParam &scan_param,
       bool scan_single_major_only = false,
-      bool scan_max_sstable_block_granule = false);
+      bool scan_max_sstable_block_granule = false,
+      bool force_scan_whole_range = false);
 
   const ObIArray<ObSkipIndexColMeta> *get_stat_cols() const { return stat_cols_; }
   const ObIArray<uint32_t> *get_stat_projectors() const { return stat_projectors_; }
   ObTableScanParam *get_scan_param() const { return scan_param_; }
   bool is_scan_single_major_only() const { return scan_single_major_only_; }
   bool is_scan_max_sstable_block_granule() const { return scan_max_sstable_block_granule_; }
+  bool force_scan_whole_range() const { return force_scan_whole_range_; }
   TO_STRING_KV(KPC_(stat_cols), KPC_(stat_projectors), KPC_(scan_param),
-      K_(scan_single_major_only), K_(scan_max_sstable_block_granule));
+      K_(scan_single_major_only), K_(scan_max_sstable_block_granule), K_(force_scan_whole_range));
 private:
   const ObIArray<ObSkipIndexColMeta> *stat_cols_;
   const ObIArray<uint32_t> *stat_projectors_;
   ObTableScanParam *scan_param_; // TODO: maybe we do not need table scan param when scan major only
   bool scan_single_major_only_;
   bool scan_max_sstable_block_granule_;
+  bool force_scan_whole_range_;
 };
 
 // Iterator for block-level statistics in one single tablet
@@ -127,7 +130,7 @@ private:
     bool iter_end_;
   };
 private:
-  int init_scan_range(const ObTabletHandle &tablet_handle, ObTableScanParam &scan_param);
+  int init_scan_range(const ObTabletHandle &tablet_handle, ObBlockStatScanParam &scan_param);
   int init_memtable_access_param(const ObTabletHandle &tablet_handle, ObTableScanParam &scan_param);
   int refresh_scan_table_on_demand();
   int refresh_tablet_iter();

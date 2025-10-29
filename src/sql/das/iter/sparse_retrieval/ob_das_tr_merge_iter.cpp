@@ -287,6 +287,7 @@ int ObDASTRMergeIter::init_doc_length_est_param()
       doc_len_est_spec.scan_col_proj_,
       *inv_scan_params_[0], // TODO: use independent param with whole scan range
       true,
+      true,
       true))) {
     LOG_WARN("failed to init doc length est param", K(ret));
   }
