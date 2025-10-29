@@ -45,22 +45,6 @@ int ObIndexBackDim::compare(const ObSkylineDim &other, CompareStat &status) cons
   return ret;
 }
 
-int ObInterestOrderDim::add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids)
-{
-  int ret = OB_SUCCESS;
-  if (filter_column_ids.count() < 0 || filter_column_ids.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("too many columns", K(ret), K(filter_column_ids.count()));
-  } else {
-    MEMSET(filter_column_ids_, 0, sizeof(uint64_t) * OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-    for (int i = 0; OB_SUCC(ret) && i < filter_column_ids.count(); ++i) {
-      filter_column_ids_[i] = filter_column_ids.at(i);
-    }
-    filter_column_cnt_ = filter_column_ids.count();
-    lib::ob_sort(filter_column_ids_, filter_column_ids_ + filter_column_cnt_);//do sort, for quick compare
-  }
-  return ret;
-}
 /*
  * 比较interesting order
  * */
@@ -88,23 +72,6 @@ int ObInterestOrderDim::compare(const ObSkylineDim &other, CompareStat &status) 
     } else if (!is_interesting_order_ && tmp.is_interesting_order_) {
       status = RIGHT_DOMINATED;
     }
-    if (OB_SUCC(ret) && !can_extract_range_ && !tmp.can_extract_range_ &&
-        need_index_back_ && tmp.need_index_back_ &&
-        (LEFT_DOMINATED == status or RIGHT_DOMINATED == status)) {
-      RangeSubsetComp comp;
-      if (OB_FAIL(comp(filter_column_ids_, filter_column_cnt_,
-                       tmp.filter_column_ids_, tmp.filter_column_cnt_))) {
-        LOG_WARN("compare query range failed", K(ret), K(*this), K(other));
-      } else if (LEFT_DOMINATED == status &&
-                 (LEFT_DOMINATED == comp.get_result() || EQUAL == comp.get_result())) {
-        /*do nothing*/
-      } else if (RIGHT_DOMINATED == status &&
-                 (RIGHT_DOMINATED == comp.get_result() || EQUAL == comp.get_result())) {
-        /* do nothing*/
-      } else {
-        status = UNCOMPARABLE;
-      }
-    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -519,10 +486,7 @@ int ObIndexSkylineDim::add_index_back_dim(const bool is_index_back,
   return ret;
 }
 
-int ObIndexSkylineDim::add_interesting_order_dim(const bool is_index_back,
-                                                 const bool can_extract_range,
-                                                 const ObIArray<uint64_t> &filter_column_ids,
-                                                 const ObIArray<uint64_t> &interest_column_ids,
+int ObIndexSkylineDim::add_interesting_order_dim(const ObIArray<uint64_t> &interest_column_ids,
                                                  const ObIArray<bool> &const_column_info,
                                                  ObIAllocator &allocator)
 {
@@ -534,13 +498,6 @@ int ObIndexSkylineDim::add_interesting_order_dim(const bool is_index_back,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to create dimension", K(ret));
   } else {
-    dim->set_index_back(is_index_back);
-    dim->set_extract_range(can_extract_range);
-    if (is_index_back && !can_extract_range) {
-      if (OB_FAIL(dim->add_filter_column_ids(filter_column_ids))) {
-        LOG_WARN("failed to add filter column id", K(ret));
-      } else { /*do nothing*/ }
-    }
     if (OB_SUCC(ret)) {
       if (interest_column_ids.count() > 0) {
         dim->set_interesting_order(true);

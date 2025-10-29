@@ -91,37 +91,21 @@ public:
   friend class ObOptimizerTraceImpl;
   ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
     is_interesting_order_(false),
-    column_cnt_(0),
-    need_index_back_(false),
-    can_extract_range_(false),
-    filter_column_cnt_(0)
-  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-    MEMSET(filter_column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER); }
+    column_cnt_(0)
+  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER); }
   virtual ~ObInterestOrderDim() {}
   void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
   int add_const_column_info(const common::ObIArray<bool> &const_column_info);
-  void set_index_back(const bool index_back) { need_index_back_ = index_back; }
-  void set_extract_range(const bool can) { can_extract_range_ = can; }
-  int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
                K_(column_cnt),
-               "column_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_),
-               K_(need_index_back),
-               K_(can_extract_range),
-               K_(filter_column_cnt),
-               "filter column_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
+               "column_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
 private:
   bool is_interesting_order_;
   int64_t column_cnt_;
   uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
   bool const_column_info_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
-  // some filter conditions on index columns
-  bool need_index_back_;
-  bool can_extract_range_;
-  int64_t filter_column_cnt_;
-  uint64_t filter_column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
 };
 
 //consider query range subset
@@ -246,10 +230,7 @@ public:
   void set_index_id(const uint64_t index_id) { index_id_ = index_id; }
   int add_index_back_dim(const bool is_index_back,
                          common::ObIAllocator &allocator);
-  int add_interesting_order_dim(const bool is_index_back,
-                                const bool can_extract_range,
-                                const common::ObIArray<uint64_t> &filter_column_ids,
-                                const common::ObIArray<uint64_t> &interest_column_ids,
+  int add_interesting_order_dim(const common::ObIArray<uint64_t> &interest_column_ids,
                                 const common::ObIArray<bool> &const_column_info,
                                 common::ObIAllocator &allocator);
   int add_query_range_dim(const common::ObIArray<uint64_t> &prefix_range_ids,

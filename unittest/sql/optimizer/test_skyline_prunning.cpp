@@ -113,7 +113,7 @@ ObIndexSkylineDim *ObSkylinePrunningTest::create_skyline_index_dim(
   to_array(interest_ids, interest_cnt, interest_array);
   to_array(range_ids, range_cnt, rowkey_array);
   dummy_const_column_info(interest_cnt, const_column_info);
-  t->add_interesting_order_dim(index_back, range_cnt > 0, filter_array, interest_array, const_column_info, allocator_);
+  t->add_interesting_order_dim(interest_array, const_column_info, allocator_);
   t->add_query_range_dim(rowkey_array, allocator_, false);
   return t;
 }
