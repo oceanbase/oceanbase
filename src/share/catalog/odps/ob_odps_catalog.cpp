@@ -294,18 +294,9 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       inner_table_schema->set_schema_version(latest_schema_version);
       inner_table_schema->set_lake_table_format(share::ObLakeTableFormat::ODPS);
       odps_table_metadata->lake_table_metadata_version_ = latest_schema_version;
-      // ref to ob_create_table_resolver.cpp:create_default_partition_for_table
-      ObPartition partition;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(partition.set_part_name("P_DEFAULT"))) {
-        LOG_WARN("set partition name failed", K(ret));
-      } else if (OB_FAIL(inner_table_schema->add_partition(partition))) {
-        LOG_WARN("add partition failed", K(ret));
-      } else if (OB_FALSE_IT(inner_table_schema->set_part_num(1))) {
-      }
     }
   }
-
+  bool part_table_flag = false;
   if (OB_SUCC(ret)) {
     if (GCONF._use_odps_jni_connector) {
 #ifdef OB_BUILD_JNI_ODPS
@@ -336,6 +327,7 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
           LOG_WARN("failed to build column schemas for odps", K(ret));
         } else if (OB_FAIL(ObDMLResolver::set_partition_info_for_odps(*inner_table_schema, part_col_names))) {
           LOG_WARN("failed to set partition info for odps", K(ret));
+        } else if (OB_FALSE_IT(part_table_flag = odps_jni_driver.is_part_table())) {
         }
       }
 #else
@@ -356,6 +348,7 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
           LOG_WARN("failed to build column schemas for odps", K(ret));
         } else if (OB_FAIL(ObDMLResolver::set_partition_info_for_odps(*inner_table_schema, part_col_names))) {
           LOG_WARN("failed to set partition info for odps", K(ret));
+        } else if (OB_FALSE_IT(part_table_flag = odps_driver.is_part_table())) {
         }
       }
 #else
@@ -363,7 +356,23 @@ int ObOdpsCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
 #endif
     }
   }
-
+  if (OB_SUCC(ret)) {
+    if (part_table_flag) {
+      int64_t part_num = inner_table_schema->get_partition_num();
+      if (part_num == 0) {
+        // ref to ob_create_table_resolver.cpp:create_default_partition_for_table
+        ObPartition partition;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(partition.set_part_name("P_DEFAULT"))) {
+          LOG_WARN("set partition name failed", K(ret));
+        } else if (OB_FALSE_IT(partition.set_part_id(INT64_MAX))) {
+        } else if (OB_FAIL(inner_table_schema->add_partition(partition))) {
+          LOG_WARN("add partition failed", K(ret));
+        } else if (OB_FALSE_IT(inner_table_schema->set_part_num(1))) {
+        }
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     table_metadata = odps_table_metadata;
   }
@@ -679,6 +688,8 @@ int ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(common::ObIAllo
         // do nothing as no partition
         LOG_WARN("partition is null", K(ret), K(partition_id));
         ret = OB_SUCCESS;
+      } else if (partition->get_part_name().compare("P_DEFAULT") == 0) {
+        // skip default partition
       } else if (OB_ISNULL(partition_value = partition_values.alloc_place_holder())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for partition value", K(ret));
