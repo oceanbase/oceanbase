@@ -348,6 +348,11 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
   inline bool is_heap_table_primary_key_column() const
   { return ::oceanbase::share::schema::is_heap_table_primary_key_column(column_flags_); }
+  inline bool is_heap_table_clustering_key_column() const
+  { return ::oceanbase::share::schema::is_heap_table_clustering_key_column(column_flags_); }
+  inline bool is_hidden_clustering_key_column() const
+  { return ::oceanbase::share::schema::is_heap_table_clustering_key_column(column_flags_) && is_hidden(); }
+
   inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
   inline bool is_user_visible_column() const { return !(is_hidden() || is_invisible_column()); }
   inline void set_unused()

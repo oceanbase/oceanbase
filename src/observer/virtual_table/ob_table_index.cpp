@@ -336,6 +336,10 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to get column schema", K(ret), K(store_column_ids.at(rowkey_info_idx_).col_id_));
     } else {
+      // For tables with clustering key, show the clustering key columns in extended mode (compat mode)
+      if (table_schema.is_table_with_clustering_key() && column_schema->is_heap_table_clustering_key_column()) {
+        is_column_visible = is_compat;
+      }
       is_end = false;
     }
   }

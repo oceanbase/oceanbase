@@ -788,6 +788,8 @@ int ObDDLUtil::generate_column_name_str(
     const bool with_origin_name,
     const bool with_alias_name,
     const bool use_heap_table_ddl_plan,
+    const bool is_add_clustering_key,
+    const bool is_alter_clustering_key_tbl_partition_by,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -797,7 +799,7 @@ int ObDDLUtil::generate_column_name_str(
   } else {
     bool with_comma = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
-      if (use_heap_table_ddl_plan && column_names.at(i).column_name_ == OB_HIDDEN_PK_INCREMENT_COLUMN_NAME) {
+      if ((use_heap_table_ddl_plan || is_add_clustering_key || is_alter_clustering_key_tbl_partition_by) && column_names.at(i).column_name_ == OB_HIDDEN_PK_INCREMENT_COLUMN_NAME) {
       } else if (OB_FAIL(generate_column_name_str(column_names.at(i), is_oracle_mode, with_origin_name, with_alias_name, with_comma, sql_string))) {
         LOG_WARN("generate column name string failed", K(ret));
       } else {
@@ -1081,6 +1083,7 @@ int ObDDLUtil::generate_build_replica_sql(
     const bool use_schema_version_hint_for_src_table,
     const ObColumnNameMap *col_name_map,
     const ObString &partition_names,
+    const bool is_alter_clustering_key_tbl_partition_by,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -1120,6 +1123,7 @@ int ObDDLUtil::generate_build_replica_sql(
     bool is_shadow_column = false;
     const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, false/*is mv refresh*/);
     // get dest table column names
+    bool is_add_clustering_key = !source_table_schema->is_table_with_clustering_key() && dest_table_schema->is_table_with_clustering_key();
     if (OB_FAIL(dest_table_schema->get_column_ids(column_ids))) {
       LOG_WARN("fail to get column ids", K(ret));
     } else {
@@ -1145,6 +1149,8 @@ int ObDDLUtil::generate_build_replica_sql(
           }
         } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, is_shadow_column)))) {
           LOG_WARN("fail to push back column name", K(ret));
+        } else if ((is_alter_clustering_key_tbl_partition_by || is_add_clustering_key) && column_schema->is_hidden_clustering_key_column()) {
+          // do nothing
         } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
           LOG_WARN("push back select column id failed", K(ret), K(col_id));
         } else if (!is_shadow_column) {
@@ -1289,9 +1295,9 @@ int ObDDLUtil::generate_build_replica_sql(
         }
 
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_column_name_str(column_names, oracle_mode, true/*with origin name*/, true/*with alias name*/, use_heap_table_ddl_plan, query_column_sql_string))) {
+        } else if (OB_FAIL(generate_column_name_str(column_names, oracle_mode, true/*with origin name*/, true/*with alias name*/, use_heap_table_ddl_plan, is_add_clustering_key, is_alter_clustering_key_tbl_partition_by, query_column_sql_string))) {
           LOG_WARN("fail to generate column name str", K(ret));
-        } else if (OB_FAIL(generate_column_name_str(insert_column_names, oracle_mode, true/*with origin name*/, false/*with alias name*/, use_heap_table_ddl_plan, insert_column_sql_string))) {
+        } else if (OB_FAIL(generate_column_name_str(insert_column_names, oracle_mode, true/*with origin name*/, false/*with alias name*/, use_heap_table_ddl_plan, is_add_clustering_key, is_alter_clustering_key_tbl_partition_by, insert_column_sql_string))) {
           LOG_WARN("generate column name str failed", K(ret));
         } else if (!use_heap_table_ddl_plan && OB_FAIL(generate_order_by_str(select_column_ids, order_column_ids, rowkey_column_sql_string))) {
           LOG_WARN("generate order by string failed", K(ret));

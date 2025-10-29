@@ -204,6 +204,7 @@ ob_set_subtarget(ob_share common
   ob_global_merge_table_operator.cpp
   ob_global_stat_proxy.cpp
   ob_gts_info.cpp
+  ob_heap_organized_table_util.cpp
   ob_i_tablet_scan.cpp
   ob_index_builder_util.cpp
   ob_fts_index_builder_util.cpp

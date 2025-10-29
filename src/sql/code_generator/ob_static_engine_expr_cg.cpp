@@ -312,6 +312,8 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     rt_expr->is_boolean_ = raw_expr->is_bool_expr();
     rt_expr->nullable_ = !(raw_expr->is_column_ref_expr()
                             && (static_cast<ObColumnRefRawExpr *> (raw_expr))->get_result_type().has_result_flag(NOT_NULL_FLAG));
+    rt_expr->is_hidden_clustering_key_column_ = raw_expr->is_column_ref_expr() && (static_cast<ObColumnRefRawExpr *> (raw_expr))->is_hidden_clustering_key_column();
+
     if (T_OP_ROW != raw_expr->get_expr_type()) {
       // init datum_meta_
       rt_expr->datum_meta_ = ObDatumMeta(result_meta.get_type(),

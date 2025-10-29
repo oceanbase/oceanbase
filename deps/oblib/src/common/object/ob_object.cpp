@@ -16,6 +16,7 @@
 #include "common/object/ob_obj_compare.h"
 #include "lib/string/ob_sql_string.h"
 #include "common/object/ob_obj_funcs.h"
+#include "lib/geo/ob_s2adapter.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -1273,6 +1274,96 @@ void ObCenterId::reset()
 bool ObCenterId::is_valid() const
 {
   return ObTabletID(tablet_id_).is_valid() && center_id_ >= 0;
+}
+
+ObHiddenClusteringKey::ObHiddenClusteringKey()
+  : tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    seq_id_(0)
+{
+  static_assert(sizeof(ObHiddenClusteringKey) == OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH,
+                "size of ObHiddenClusteringKey isn't equal to OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH");
+}
+
+ObHiddenClusteringKey::ObHiddenClusteringKey(const uint64_t tablet_id, const uint64_t seq_id)
+  : tablet_id_(tablet_id),
+    seq_id_(seq_id)
+{
+  static_assert(sizeof(ObHiddenClusteringKey) == OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH,
+                "size of ObHiddenClusteringKey isn't equal to OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH");
+}
+
+bool ObHiddenClusteringKey::operator==(const ObHiddenClusteringKey &other) const
+{
+  return tablet_id_ == other.tablet_id_ && seq_id_ == other.seq_id_;
+}
+
+bool ObHiddenClusteringKey::operator!=(const ObHiddenClusteringKey &other) const
+{
+  return !(operator==(other));
+}
+
+bool ObHiddenClusteringKey::operator <(const ObHiddenClusteringKey &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret= true;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret = false;
+  } else if (seq_id_ < other.seq_id_) {
+    bool_ret= true;
+  } else if (seq_id_ > other.seq_id_) {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+bool ObHiddenClusteringKey::operator >(const ObHiddenClusteringKey &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret = false;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret= true;
+  } else if (seq_id_ < other.seq_id_) {
+    bool_ret = false;
+  } else if (seq_id_ > other.seq_id_) {
+    bool_ret= true;
+  }
+
+  return bool_ret;
+
+}
+
+void ObHiddenClusteringKey::reset()
+{
+  tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+  seq_id_ = 0;
+}
+
+bool ObHiddenClusteringKey::is_valid() const
+{
+  return ObTabletID(tablet_id_).is_valid() && seq_id_ > 0;
+}
+int ObHiddenClusteringKey::set_hidden_clustering_key_to_string(const ObHiddenClusteringKey &hidden_clustering_key,
+                                                              ObString &str)
+{
+  int ret = OB_SUCCESS;
+  if (!hidden_clustering_key.is_valid() || OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH != str.size()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid hidden clustering key or string", KR(ret), K(hidden_clustering_key), K(str));
+  } else {
+    ObHiddenClusteringKey tmp;
+    tmp.tablet_id_ = hidden_clustering_key.tablet_id_;
+    tmp.seq_id_ = htonll(hidden_clustering_key.seq_id_);
+    if (OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH != str.write(reinterpret_cast<const char *>(&tmp), OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "failed write data to string", KR(ret), K(hidden_clustering_key), K(str));
+    }
+  }
+  return ret;
 }
 
 ObPqCenterId::ObPqCenterId()

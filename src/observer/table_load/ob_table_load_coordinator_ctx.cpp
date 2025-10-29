@@ -339,8 +339,7 @@ int ObTableLoadCoordinatorCtx::init_column_idxs(const ObIArray<uint64_t> &column
   const ObIArray<ObColDesc> &column_descs = ctx_->schema_.column_descs_;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColDesc &col_desc = column_descs.at(i);
-    bool found_column = (ctx_->schema_.is_table_with_hidden_pk_column_ && i == 0); // skip hidden pk in heap table
-    // todo@lanyi find the pk column using column id
+    bool found_column = (ctx_->schema_.is_table_without_pk_ && i == 0);
     // 在源数据的列数组中找到对应的列
     for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
       const uint64_t column_id = column_ids.at(j);

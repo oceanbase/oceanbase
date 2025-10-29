@@ -1060,6 +1060,8 @@ int ObTableReplaceOp::check_values(bool &is_equal,
         // 隐藏主键列不处理
       } else if ((type == ObDocIDType::TABLET_SEQUENCE) && (MY_SPEC.doc_id_col_id_ == column_ids[i])) {
         // skip doc id (only for current doc id)
+      } else if (MY_SPEC.hidden_ck_col_id_ == column_ids[i]) {
+        // skip hidden clustering(sort) key
       } else {
         const ObDatum &insert_datum = replace_row->cells()[i];
         const ObDatum &del_datum = delete_row->cells()[i];

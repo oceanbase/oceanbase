@@ -524,7 +524,11 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
   container_table_schema.set_table_type(ObTableType::USER_TABLE);
   container_table_schema.get_view_schema().reset();
   container_table_schema.set_max_dependency_version(OB_INVALID_VERSION);
-  if (OB_FAIL(resolve_partition_option(partition_node, container_table_schema, true))) {
+  ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", KR(ret));
+  } else if (OB_FAIL(resolve_partition_option(partition_node, container_table_schema, true))) {
     LOG_WARN("fail to resolve_partition_option", KR(ret));
   } else if (OB_FAIL(set_table_option_to_schema(container_table_schema))) {
     SQL_RESV_LOG(WARN, "set table option to schema failed", KR(ret));
@@ -545,7 +549,7 @@ int ObCreateViewResolver::resolve_materialized_view_container_table(ParseNode *p
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(container_table_schema.check_primary_key_cover_partition_column())) {
+  } else if (OB_FAIL(container_table_schema.check_primary_key_cover_partition_column(*schema_guard))) {
     SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", KR(ret));
   } else {
     container_table_schema.set_collation_type(collation_type_);

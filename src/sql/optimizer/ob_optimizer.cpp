@@ -710,6 +710,7 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
   const share::schema::ObTableSchema *table_schema = NULL;
   const ObDelUpdStmt *pdml_stmt = NULL;
   ObSEArray<const ObDmlTableInfo*, 1> dml_table_infos;
+  bool is_table_with_logic_pk = false;
   // check if the target table is heap table
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -729,7 +730,9 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
                                                     dml_table_infos.at(0)->ref_table_id_,
                                                     table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if(OB_NOT_NULL(table_schema) && table_schema->is_table_without_pk()) {
+  } else if (OB_NOT_NULL(table_schema) && table_schema->is_table_with_logic_pk(*schema_guard, is_table_with_logic_pk)) {
+    LOG_WARN("fail to check table is with logic pk", KPC(table_schema));
+  } else if (!is_table_with_logic_pk) {
     ctx_.set_is_pdml_heap_table(true);
   }
   return ret;

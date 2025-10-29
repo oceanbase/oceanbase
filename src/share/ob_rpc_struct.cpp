@@ -2212,7 +2212,9 @@ int ObAlterTableArg::serialize_index_args(char *buf, const int64_t data_len, int
   for (int i = 0; OB_SUCC(ret) && i < index_arg_list_.size(); ++i) {
     ObIndexArg *index_arg = index_arg_list_.at(i);
     if (index_arg->index_action_type_ == ObIndexArg::ALTER_PRIMARY_KEY
-      || index_arg->index_action_type_ == ObIndexArg::DROP_PRIMARY_KEY) {
+      || index_arg->index_action_type_ == ObIndexArg::DROP_PRIMARY_KEY
+      || index_arg->index_action_type_ == ObIndexArg::DROP_CLUSTERING_KEY
+      || index_arg->index_action_type_ == ObIndexArg::ALTER_CLUSTERING_KEY) {
       ObAlterPrimaryArg *alter_pk_arg = static_cast<ObAlterPrimaryArg *>(index_arg);
       if (NULL == alter_pk_arg) {
         ret = OB_INVALID_ARGUMENT;
@@ -2224,7 +2226,8 @@ int ObAlterTableArg::serialize_index_args(char *buf, const int64_t data_len, int
         SHARE_LOG(WARN, "failed to serialize create index arg!", K(data_len), K(pos), K(ret));
       }
     } else if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX
-              || index_arg->index_action_type_ == ObIndexArg::ADD_PRIMARY_KEY) {
+              || index_arg->index_action_type_ == ObIndexArg::ADD_PRIMARY_KEY
+              || index_arg->index_action_type_ == ObIndexArg::ADD_CLUSTERING_KEY) {
       ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
       if (NULL == create_index_arg) {
         ret = OB_INVALID_ARGUMENT;
@@ -2318,7 +2321,9 @@ int ObAlterTableArg::alloc_index_arg(const ObIndexArg::IndexActionType index_act
   int ret = OB_SUCCESS;
   void *tmp_ptr = nullptr;
   if (index_action_type == ObIndexArg::ALTER_PRIMARY_KEY
-    || index_action_type == ObIndexArg::DROP_PRIMARY_KEY) {
+    || index_action_type == ObIndexArg::DROP_PRIMARY_KEY
+    || index_action_type == ObIndexArg::DROP_CLUSTERING_KEY
+    || index_action_type == ObIndexArg::ALTER_CLUSTERING_KEY) {
     ObAlterPrimaryArg *alter_pk_arg = NULL;
     if (NULL == (tmp_ptr = allocator_.alloc(sizeof(ObAlterPrimaryArg)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2327,7 +2332,8 @@ int ObAlterTableArg::alloc_index_arg(const ObIndexArg::IndexActionType index_act
       index_arg = new (tmp_ptr) ObAlterPrimaryArg();
     }
   } else if (index_action_type == ObIndexArg::ADD_INDEX
-            || index_action_type == ObIndexArg::ADD_PRIMARY_KEY) {
+            || index_action_type == ObIndexArg::ADD_PRIMARY_KEY
+            || index_action_type == ObIndexArg::ADD_CLUSTERING_KEY) {
     ObCreateIndexArg *create_index_arg = NULL;
     if (NULL == (tmp_ptr = allocator_.alloc(sizeof(ObCreateIndexArg)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2444,7 +2450,9 @@ int64_t ObAlterTableArg::get_index_args_serialize_size() const
     } else {
       len += serialization::encoded_length(index_arg->index_action_type_);
       if (ObIndexArg::DROP_PRIMARY_KEY == index_arg->index_action_type_
-        || ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_) {
+        || ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_
+        || ObIndexArg::DROP_CLUSTERING_KEY == index_arg->index_action_type_
+        || ObIndexArg::ALTER_CLUSTERING_KEY == index_arg->index_action_type_) {
         ObAlterPrimaryArg *alter_pk_arg = static_cast<ObAlterPrimaryArg *>(index_arg);
         if (NULL == alter_pk_arg) {
           ret = OB_INVALID_ARGUMENT;
@@ -2453,7 +2461,8 @@ int64_t ObAlterTableArg::get_index_args_serialize_size() const
           len += alter_pk_arg->get_serialize_size();
         }
       } else if (ObIndexArg::ADD_INDEX == index_arg->index_action_type_
-                || ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_) {
+                || ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_
+                || ObIndexArg::ADD_CLUSTERING_KEY == index_arg->index_action_type_) {
         ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
         if (NULL == create_index_arg) {
           ret = OB_INVALID_ARGUMENT;

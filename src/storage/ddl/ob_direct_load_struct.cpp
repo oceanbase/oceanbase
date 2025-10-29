@@ -147,6 +147,25 @@ int ObDDLSliceRowIterator::get_next_row(
               LOG_WARN("expr is NULL", K(ret), K(i));
             } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
               LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
+            } else if (e->type_ == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
+              share::ObTabletAutoincrementService &auto_inc = share::ObTabletAutoincrementService::get_instance();
+              uint64_t seq_id = 0;
+              uint64_t buf_len = sizeof(ObHiddenClusteringKey);
+              char *buf = e->get_str_res_mem(eval_ctx, buf_len);
+              ObString hidden_clustering_key_str(buf_len, 0, buf);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to allocate memory", K(ret), KP(buf));
+              } else if (OB_FAIL(auto_inc.get_autoinc_seq(MTL_ID(), tablet_id_, seq_id))) {
+                LOG_WARN("fail to get tablet autoinc seq", K(ret), K(tablet_id_));
+              } else {
+                ObHiddenClusteringKey hidden_clustering_key(tablet_id_.id(), seq_id);
+                if (OB_FAIL(ObHiddenClusteringKey::set_hidden_clustering_key_to_string(hidden_clustering_key, hidden_clustering_key_str))) {
+                  LOG_WARN("failed to set hidden clustering key to string", KR(ret), K(hidden_clustering_key), K(hidden_clustering_key_str));
+                } else {
+                  datum->set_string(hidden_clustering_key_str);
+                }
+              }
             } else if (need_check_outrow_lob_) {
               if (e->obj_meta_.is_lob_storage()) {
                 has_lob = true;
@@ -2599,7 +2618,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid args", KR(ret), KPC(cur_row));
           } else if (OB_FAIL(check_null_and_length(false/*is_index_table*/, false/*has_lob_rowkey*/,
-                                                   ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
+                                                   false/*is_table_with_clustering_key*/, ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT, *cur_row))) {
             LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
           } else if (OB_FAIL(prepare_slice_store_if_need(ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT,
               false/*is_column_store*/, 1L/*unsued*/, 1L/*unused*/, nullptr /*storage_schema*/, start_scn,
@@ -2890,7 +2909,7 @@ int ObDirectLoadSliceWriter::fill_lob_meta_sstable_slice(
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid args", KR(ret), KPC(cur_row), K(column_count));
       } else if (OB_FAIL(check_null_and_length(false/*is_index_table*/, false/*has_lob_rowkey*/,
-                                               rowkey_column_count, *cur_row))) {
+                                               false/*is_table_with_clustering_key*/, rowkey_column_count, *cur_row))) {
         LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
       } else if (OB_FAIL(prepare_slice_store_if_need(rowkey_column_count,
                                                      false/*is_column_store*/,
@@ -2980,7 +2999,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(check_null_and_length(schema_item.is_index_table_, schema_item.has_lob_rowkey_,
-                                               schema_item.rowkey_column_num_, *cur_row))) {
+                                               schema_item.is_table_with_clustering_key_, schema_item.rowkey_column_num_, *cur_row))) {
         LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));
       } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_,
                                                      schema_item.is_column_store_,
@@ -3074,7 +3093,7 @@ int ObDirectLoadSliceWriter::fill_sstable_slice(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_null_and_length(schema_item.is_index_table_, schema_item.has_lob_rowkey_,
-                                             schema_item.rowkey_column_num_, datum_rows))) {
+                                             schema_item.is_table_with_clustering_key_, schema_item.rowkey_column_num_, datum_rows))) {
       LOG_WARN("fail to check rowkey null value and length in row", KR(ret));
     } else if (OB_FAIL(prepare_slice_store_if_need(schema_item.rowkey_column_num_,
                                                    schema_item.is_column_store_,
@@ -3262,6 +3281,7 @@ int ObDirectLoadSliceWriter::report_unique_key_dumplicated(
 int ObDirectLoadSliceWriter::check_null_and_length(
     const bool is_index_table,
     const bool has_lob_rowkey,
+    const bool is_table_with_clustering_key,
     const int64_t rowkey_column_num,
     const ObDatumRow &row_val) const
 {
@@ -3279,7 +3299,8 @@ int ObDirectLoadSliceWriter::check_null_and_length(
       rowkey_length += cell.len_;
       has_null |= cell.is_null();
     }
-    if (!is_index_table && has_null) {
+    // For tables with clustering key (heap tables), null values in rowkey are allowed
+    if (!is_index_table && !is_table_with_clustering_key && has_null) {
       ret = OB_ER_INVALID_USE_OF_NULL;
       LOG_WARN("invalid null cell for row key column", KR(ret), K(row_val));
     }
@@ -3295,6 +3316,7 @@ int ObDirectLoadSliceWriter::check_null_and_length(
 int ObDirectLoadSliceWriter::check_null_and_length(
     const bool is_index_table,
     const bool has_lob_rowkey,
+    const bool is_table_with_clustering_key,
     const int64_t rowkey_column_num,
     const ObBatchDatumRows &datum_rows)
 {
@@ -3321,7 +3343,8 @@ int ObDirectLoadSliceWriter::check_null_and_length(
         }
       }
     }
-    if (OB_SUCC(ret) && !is_index_table && has_null) {
+    // For tables with clustering key (heap tables), null values in rowkey are allowed
+    if (OB_SUCC(ret) && !is_index_table && !is_table_with_clustering_key && has_null) {
       ret = OB_ER_INVALID_USE_OF_NULL;
       LOG_WARN("invalid null cell for row key column", KR(ret), K(datum_rows));
     }

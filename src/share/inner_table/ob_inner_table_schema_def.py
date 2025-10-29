@@ -18060,6 +18060,7 @@ def_table_schema(
           AND    t.database_id = db.database_id
           AND    db.in_recyclebin = 0
           AND    db.database_name != '__recyclebin'
+          AND    t.table_mode >> 30 & 1 = 0
         UNION ALL
           SELECT db.database_name                                           AS TABLE_SCHEMA,
               t.table_name                                                  AS TABLE_NAME,
@@ -18395,6 +18396,7 @@ def_table_schema(
                       on a.tenant_id = c.tenant_id and a.database_id = c.database_id
                     where a.tenant_id = 0
                       and a.table_mode >> 12 & 15 in (0,1)
+                      and a.table_mode >> 30 & 1 = 0
                       and a.index_attributes_set & 16 = 0
                       and c.in_recyclebin = 0
                       and c.database_name != '__recyclebin'
@@ -33943,6 +33945,7 @@ def_table_schema(
       AND t.table_mode >> 16 & 1 = 0
       AND t.table_mode >> 12 & 15 in (0,1)
       AND t.index_attributes_set & 16 = 0
+      AND t.table_mode >> 30 & 1 = 0
       AND (0 = sys_privilege_check('table_acc', effective_tenant_id())
            OR 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name))
 

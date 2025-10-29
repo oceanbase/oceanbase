@@ -591,8 +591,8 @@ int ObTableInsertUpOp::do_insert_up_cache()
         LOG_WARN("do_handle_before_row failed", K(ret));
       } else if (OB_FAIL(ObDMLService::process_update_row(upd_ctdef, upd_rtdef, is_skipped, *this))) {
         LOG_WARN("process update failed", K(ret), K(upd_ctdef));
-      } else if (upd_ctdef.is_table_without_pk_ &&
-          OB_FAIL(set_heap_table_new_pk(upd_ctdef, upd_rtdef))) {
+      } else if ((upd_ctdef.is_table_without_pk_ || upd_ctdef.is_table_with_clustering_key_) &&
+        OB_FAIL(set_heap_table_new_pk(upd_ctdef, upd_rtdef))) {
         LOG_WARN("set heap table hidden_pk failed", K(ret), K(upd_ctdef));
       } else if (OB_FAIL(conflict_checker_.convert_exprs_to_stored_row(get_primary_table_upd_new_row(),
                                                                        upd_new_row))) {
@@ -780,7 +780,7 @@ int ObTableInsertUpOp::try_insert_row(bool &is_skipped)
       break;
     } else if (OB_FAIL(calc_insert_tablet_loc(ins_ctdef, ins_rtdef, tablet_loc))) {
       LOG_WARN("calc insert partition key failed", K(ret));
-    } else if (ins_ctdef.is_table_without_pk_ &&
+    } else if ((ins_ctdef.is_table_without_pk_ || ins_ctdef.is_table_with_clustering_key_) &&
         OB_FAIL(ObDMLService::set_heap_table_hidden_pk(ins_ctdef, tablet_loc->tablet_id_, eval_ctx_))) {
       LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc));
     } else if (OB_FAIL(insert_row_to_das(ins_ctdef, ins_rtdef, tablet_loc, modify_row))) {

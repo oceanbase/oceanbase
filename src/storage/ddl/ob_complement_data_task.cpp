@@ -2610,7 +2610,8 @@ int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
 
       if (OB_SUCC(ret)) {
         ObSqlString query_column_sql_string;
-        if (OB_FAIL(ObDDLUtil::generate_column_name_str(column_names_, is_oracle_mode, true, true, false/*use_heap_table_ddl_plan*/, query_column_sql_string))) {
+        if (OB_FAIL(ObDDLUtil::generate_column_name_str(column_names_, is_oracle_mode, true, true, false/*use_heap_table_ddl_plan*/,
+                                                        false/*is_add_clustering_key*/, false/*is_alter_clustering_key_tbl_partition_by*/, query_column_sql_string))) {
           LOG_WARN("fail to generate column name str", K(ret));
         } else {
           ObString orig_database_name_with_escape;
@@ -2748,6 +2749,8 @@ int ObRemoteScan::generate_range_condition(
                                                     true,
                                                     false,
                                                     false/*use_heap_table_ddl_plan*/,
+                                                    false/*is_add_clustering_key*/,
+                                                    false/*is_alter_clustering_key_tbl_partition_by*/,
                                                     rowkey_cols_str))) {
       LOG_WARN("failed to generate rowkey column string", K(ret));
     } else if (OB_FAIL(sql.append(" WHERE "))) {

@@ -466,7 +466,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
       IndexDMLInfo *index_info = get_replace_index_dml_infos().at(i);
       ObSqlSchemaGuard *schema_guard = NULL;
       const ObTableSchema *table_schema = NULL;
-      bool is_heap_table = false;
+      bool is_heap_or_cluster_by_table = false;
       ObArray<ObRawExpr *> column_exprs;
       if (OB_ISNULL(get_plan()) ||
           OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
@@ -474,7 +474,8 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(index_info->ref_table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
-      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_table_without_pk())) {
+      } else if (table_schema != NULL && FALSE_IT(is_heap_or_cluster_by_table =
+                (table_schema->is_table_without_pk() || table_schema->is_table_with_clustering_key()))) {
         // do nothing.
       } else {
         // When lookup_part_id_expr is a virtual generated column,
@@ -486,11 +487,11 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
           LOG_WARN("replace dml info is null", K(ret));
         } else if (OB_FAIL(generate_old_calc_partid_expr(*index_info))) {
           LOG_WARN("failed to generate calc partid expr", K(ret));
-        } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
+        } else if (!is_heap_or_cluster_by_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
                                             index_info->old_part_id_expr_,
                                             index_info->lookup_part_id_expr_))){
           LOG_WARN("failed to replace expr", K(ret));
-        } else if (is_heap_table) {
+        } else if (is_heap_or_cluster_by_table) {
           if (OB_FAIL(generate_lookup_part_id_expr(*index_info))) {
             LOG_WARN("failed to generate lookup part id expr", K(ret));
           } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(
@@ -511,7 +512,7 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
       IndexDMLInfo *dml_info = get_insert_up_index_dml_infos().at(i);
       ObSqlSchemaGuard *schema_guard = NULL;
       const ObTableSchema *table_schema = NULL;
-      bool is_heap_table = false;
+      bool is_heap_or_cluster_by_table = false;
       ObArray<ObRawExpr *> column_exprs;
       if (OB_ISNULL(get_plan()) ||
           OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
@@ -519,7 +520,8 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(dml_info->ref_table_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
-      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_table_without_pk())) {
+      } else if (table_schema != NULL && FALSE_IT(is_heap_or_cluster_by_table =
+                (table_schema->is_table_without_pk() || table_schema->is_table_with_clustering_key()))) {
         // do nothing.
       } else {
         // When lookup_part_id_expr is a virtual generated column,
@@ -534,11 +536,11 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
           LOG_WARN("fail to generate calc partid expr", K(ret));
         } else if (OB_FAIL(generate_update_new_calc_partid_expr(*dml_info))) {
           LOG_WARN("failed to generate update new part id expr", K(ret));
-        } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
+        } else if (!is_heap_or_cluster_by_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
                                             dml_info->old_part_id_expr_,
                                             dml_info->lookup_part_id_expr_))){
           LOG_WARN("failed to replace expr", K(ret));
-        } else if (is_heap_table) {
+        } else if (is_heap_or_cluster_by_table) {
           if (OB_FAIL(generate_lookup_part_id_expr(*dml_info))) {
             LOG_WARN("failed to generate lookup part id expr", K(ret));
           } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(
@@ -672,7 +674,7 @@ int ObLogInsert::generate_in_filter_for_insertup_opt()
       LOG_WARN("get unexpected null", K(ret), K(table_schema));
     } else if (OB_FAIL(table_schema->get_is_column_store(is_column_store))) {
       LOG_WARN("failed to get is column store", K(ret));
-    } else if (is_column_store && table_schema->is_heap_organized_table()) {
+    } else if (is_column_store && table_schema->is_heap_organized_table() && table_schema->is_table_without_pk()) {
       // only generate in filter for heap column table
       ObOpRawExpr *in_filter_expr = nullptr;
       ObRawExpr *pk_increment = nullptr;

@@ -21,6 +21,7 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/ob_heap_organized_table_util.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -81,6 +82,7 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
       && OB_FAIL(add_all_column_infos(op,
                                       index_dml_info.column_exprs_,
                                       ins_ctdef.is_table_without_pk_,
+                                      ins_ctdef.is_table_with_clustering_key_,
                                       ins_ctdef.column_infos_))) {
     LOG_WARN("add column info failed", K(ret), K(index_dml_info.column_exprs_));
   } else if (OB_FAIL(generate_das_ins_ctdef(op,
@@ -495,6 +497,7 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                                 upd_ctdef.related_upd_ctdefs_))) {
     LOG_WARN("generate related upd ctdef failed", K(ret));
   } else if (OB_FAIL(convert_upd_assign_infos(upd_ctdef.is_table_without_pk_,
+                                              upd_ctdef.is_table_with_clustering_key_,
                                               index_dml_info,
                                               upd_ctdef.assign_columns_))) {
     LOG_WARN("convert upd assign infos failed", K(ret), K(index_dml_info));
@@ -646,7 +649,8 @@ int ObDmlCgService::get_table_unique_key_exprs(ObLogDelUpd &op,
 {
   int ret = OB_SUCCESS;
   bool is_heap_table = false;
-  if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
+  bool is_cluster_by_table = false;
+  if (OB_FAIL(check_is_heap_table_or_cluster_by_table(op, index_dml_info.ref_table_id_, is_heap_table, is_cluster_by_table))) {
     LOG_WARN("check is heap table failed", K(ret));
   } else if (OB_FAIL(index_dml_info.get_rowkey_exprs(unique_key_exprs))) {
     LOG_WARN("get table rowkey failed", K(ret), K(index_dml_info));
@@ -692,11 +696,13 @@ int ObDmlCgService::table_unique_key_for_conflict_checker(ObLogDelUpd &op,
 {
   int ret = OB_SUCCESS;
   bool is_heap_table = false;
-  if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
+  bool is_cluster_by_table = false;
+
+  if (OB_FAIL(check_is_heap_table_or_cluster_by_table(op, index_dml_info.ref_table_id_, is_heap_table, is_cluster_by_table))) {
     LOG_WARN("check is heap table failed", K(ret));
   } else if (OB_FAIL(index_dml_info.get_rowkey_exprs(rowkey_exprs))) {
     LOG_WARN("get table rowkey failed", K(ret), K(index_dml_info));
-  } else if (is_heap_table) {
+  } else if (is_heap_table || is_cluster_by_table) {
     if (OB_FAIL(get_heap_table_part_exprs(op, index_dml_info, rowkey_exprs))) {
       LOG_WARN("get heap table part exprs failed", K(ret), K(index_dml_info));
     }
@@ -892,14 +898,15 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> rowkey_exprs;
   bool is_heap_table = false;
+  bool is_cluster_by_table = false;
   // When the partition key is a virtual generated column,
   // the table with the primary key needs to be replaced,
   // and the table without the primary key does not need to be replaced
   if (OB_FAIL(table_unique_key_for_conflict_checker(op, index_dml_info, rowkey_exprs))) {
     LOG_WARN("get table unique key exprs failed", K(ret), K(index_dml_info));
-  } else if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
+  } else if (OB_FAIL(check_is_heap_table_or_cluster_by_table(op, index_dml_info.ref_table_id_, is_heap_table, is_cluster_by_table))) {
     LOG_WARN("check is heap table failed", K(ret));
-  } else if (!is_heap_table && OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
+  } else if ((!is_heap_table && !is_cluster_by_table) && OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
     LOG_WARN("fail to replace generated column exprs", K(ret), K(rowkey_exprs));
   } else if (OB_FAIL(cg_.generate_rt_exprs(rowkey_exprs, conflict_checker_ctdef.data_table_rowkey_expr_))) {
     LOG_WARN("fail to generate data_table rowkey_expr", K(ret), K(rowkey_exprs));
@@ -1298,6 +1305,7 @@ int ObDmlCgService::generate_index_scan_ctdef(ObLogDelUpd &op,
     ObSEArray<ObRawExpr*, 16> access_exprs;
     ObSEArray<ObRawExpr *, 8> rowkey_exprs;
     bool is_heap_table = false;
+    bool is_cluster_by_table = false;
     uint64_t rowkey_column_id = 0;
     const ObRowkeyInfo &rowkey_info = index_table_schema->get_rowkey_info();
     const common::ObIArray<ObColumnRefRawExpr*> &columns_exprs = ins_index_dml_info.column_exprs_;
@@ -1364,9 +1372,9 @@ int ObDmlCgService::generate_index_scan_ctdef(ObLogDelUpd &op,
     } else if (OB_FAIL(table_unique_key_for_conflict_checker(op, ins_index_dml_info, rowkey_exprs))) {
       // consistency with data_table_rowkey_expr_ of checker ctdef
       LOG_WARN("get table unique key exprs failed", K(ret), K(ins_index_dml_info));
-    } else if (OB_FAIL(check_is_heap_table(op, ins_index_dml_info.ref_table_id_, is_heap_table))) {
+    } else if (OB_FAIL(check_is_heap_table_or_cluster_by_table(op, ins_index_dml_info.ref_table_id_, is_heap_table, is_cluster_by_table))) {
       LOG_WARN("check is heap table failed", K(ret));
-    } else if (!is_heap_table && OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
+    } else if (!is_heap_table && !is_cluster_by_table && OB_FAIL(adjust_unique_key_exprs(rowkey_exprs))) {
       LOG_WARN("fail to replace generated column exprs", K(ret), K(rowkey_exprs));
     } else if (OB_FAIL(append(access_exprs, rowkey_exprs))) {
       LOG_WARN("fail to append access exprs", K(ret));
@@ -2037,7 +2045,7 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
   } else if (OB_FAIL(append_time_type_column_id(table_schema, minimal_column_ids))) {
     // append time_type column
     LOG_WARN("fail to append time type column_id", K(ret));
-  } else if (table_schema->is_table_without_pk() &&
+  } else if ((table_schema->is_table_without_pk() || table_schema->is_table_with_clustering_key()) &&
       OB_FAIL(append_heap_table_part_key_dependcy_column(table_schema, minimal_column_ids))) {
     // append heap table part_key_column_id and dependency column
     LOG_WARN("fail to append heap table part_id", K(ret));
@@ -2188,7 +2196,7 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObLogDelUpd &op,
   } else if (OB_FAIL(append_all_uk_column_id(schema_guard, table_schema, minimal_column_ids))) {
     // append unique key
     LOG_WARN("fail to append all unique key column_id");
-  } else if (table_schema->is_table_without_pk()) {
+  } else if (table_schema->is_table_without_pk() || table_schema->is_table_with_clustering_key()) {
     if (OB_FAIL(append_heap_table_part_key_dependcy_column(table_schema, minimal_column_ids))) {
       // append heap table part_key_column_id and dependcy column
       LOG_WARN("fail to append heap table part_id", K(ret));
@@ -2823,9 +2831,10 @@ int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *gua
   return ret;
 }
 
-int ObDmlCgService::check_is_heap_table(ObLogicalOperator &op,
-                                        uint64_t ref_table_id,
-                                        bool &is_heap_table)
+int ObDmlCgService::check_is_heap_table_or_cluster_by_table(ObLogicalOperator &op,
+                                                            uint64_t ref_table_id,
+                                                            bool &is_heap_table,
+                                                            bool &is_cluster_by_table)
 {
   int ret = OB_SUCCESS;
   ObLogPlan *log_plan = op.get_plan();
@@ -2843,8 +2852,10 @@ int ObDmlCgService::check_is_heap_table(ObLogicalOperator &op,
     LOG_WARN("table schema is null", K(ret), K(table_schema));
   } else if (table_schema->is_table_with_pk()) {
     is_heap_table = false;
+    is_cluster_by_table = table_schema->is_table_with_clustering_key();
   } else {
     is_heap_table = true;
+    is_cluster_by_table = false;
   }
   return ret;
 }
@@ -2866,11 +2877,13 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
   } else if (OB_FAIL(cg_.generate_rt_exprs(new_row, dml_base_ctdef.new_row_))) {
     LOG_WARN("generate new row exprs failed", K(ret));
   } else if (index_dml_info.is_primary_index_) {
-    bool is_heap_table = false;
-    if (OB_FAIL(check_is_heap_table(op, index_dml_info.ref_table_id_, is_heap_table))) {
-      LOG_WARN("convert foreign keys failed", K(ret));
+    bool is_table_without_pk = false;
+    bool is_cluster_by_table = false;
+    if (OB_FAIL(check_is_heap_table_or_cluster_by_table(op, index_dml_info.ref_table_id_, is_table_without_pk, is_cluster_by_table))) {
+      LOG_WARN("check is heap table or cluster by table failed", KR(ret), K(index_dml_info.ref_table_id_));
     } else {
-      dml_base_ctdef.is_table_without_pk_ = is_heap_table;
+      dml_base_ctdef.is_table_without_pk_ = is_table_without_pk;
+      dml_base_ctdef.is_table_with_clustering_key_ = is_cluster_by_table;
     }
   }
 
@@ -3397,6 +3410,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
 int ObDmlCgService::add_all_column_infos(ObLogDelUpd &op,
                                          const ObIArray<ObColumnRefRawExpr*> &columns,
                                          bool is_heap_table,
+                                         bool is_cluster_by_table,
                                          ColContentFixedArray &column_infos)
 {
   int ret = OB_SUCCESS;
@@ -3443,14 +3457,18 @@ int ObDmlCgService::add_all_column_infos(ObLogDelUpd &op,
           } else if (base_cid == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
             skip_this_column = true;
           }
+        } else if (is_cluster_by_table) {
+          if (column->is_hidden_clustering_key_column()) {
+            skip_this_column = true;
+          }
         }
 
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (skip_this_column) {
-          // this column is hidden_pk of heap table，
+          // this column is hidden_pk of heap table，or hidden clustering key of cluster by table
           // skip not null check
-          LOG_TRACE("skip hidden_pk not check", KPC(column));
+          LOG_TRACE("skip hidden_pk or hidden clustering key not check", KPC(column));
         } else if (OB_FAIL(ob_write_string(cg_.phy_plan_->get_allocator(),
                                            column->get_column_name(),
                                            column_content.column_name_))) {
@@ -3467,6 +3485,7 @@ int ObDmlCgService::add_all_column_infos(ObLogDelUpd &op,
 }
 
 int ObDmlCgService::convert_upd_assign_infos(bool is_heap_table,
+                                             bool is_cluster_by_table,
                                              const IndexDMLInfo &index_dml_info,
                                              ColContentFixedArray &assign_infos)
 {
@@ -3488,6 +3507,10 @@ int ObDmlCgService::convert_upd_assign_infos(bool is_heap_table,
         assigns.at(i).expr_->get_expr_type() == T_TABLET_AUTOINC_NEXTVAL) {
       // skip it
       // update across partition, the hidden_pk of heap table must be generated once
+    } else if (is_cluster_by_table &&
+               assigns.at(i).expr_->get_expr_type() == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
+      // skip hidden clustering key
+      // update across partition, the hidden clustering key of cluster by table must be generated once
     } else if (OB_FAIL(ob_write_string(cg_.phy_plan_->get_allocator(),
                                 col->get_column_name(),
                                 column_content.column_name_))) {

@@ -328,6 +328,8 @@ public:
   }
 
   OB_INLINE bool is_collection() const { return meta_type_.is_collection_sql_type(); }
+  OB_INLINE bool is_hidden_clustering_key_column() const { return ::oceanbase::share::schema::is_heap_table_clustering_key_column(column_flags_) && is_hidden(); }
+  OB_INLINE bool is_heap_table_clustering_key_column() const { return ::oceanbase::share::schema::is_heap_table_clustering_key_column(column_flags_); }
 
   NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(

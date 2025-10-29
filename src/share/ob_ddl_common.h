@@ -1146,6 +1146,7 @@ public:
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
       const ObString &partition_names,
+      const bool is_alter_clustering_key_tbl_partition_by,
       ObSqlString &sql_string);
 
   static int generate_build_mview_replica_sql(
@@ -1339,6 +1340,8 @@ public:
     const bool with_origin_name,
     const bool with_alias_name,
     const bool use_heap_table_ddl_plan,
+    const bool is_add_clustering_key,
+    const bool is_alter_clustering_key_tbl_partition_by,
     ObSqlString &column_name_str);
   static int generate_column_name_str(
       const ObColumnNameInfo &column_name_info,

@@ -1417,6 +1417,8 @@ int ObSchemaPrinter::print_rowkey_info(
                        "column_id", rowkey_info.get_column(j)->column_id_);
     } else if (col->get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID) {
       // do nothing
+    } else if (col->is_hidden_clustering_key_column()) {
+      //do nothing
     } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
                 allocator,
                 col->get_column_name_str(),
@@ -1779,7 +1781,10 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     } else if (data_version >= DATA_VERSION_4_3_5_1 && !strict_compat_ && !table_schema.mv_container_table()) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, "ORGANIZATION %s ",
                                   table_schema.is_heap_organized_table() ? "HEAP" : "INDEX"))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to print default charset", K(ret), K(table_schema));
+        SHARE_SCHEMA_LOG(WARN, "fail to print default charset", KR(ret), K(table_schema));
+      } else if (data_version >= DATA_VERSION_4_4_1_0 && table_schema.is_table_with_clustering_key() &&
+                OB_FAIL(print_table_definition_clustering_key(table_schema, buf, buf_len, pos))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print clustering key", KR(ret), K(table_schema));
       }
     }
     uint64_t auto_increment = 0;
@@ -6602,6 +6607,22 @@ int ObSchemaPrinter::get_table_schema_(const uint64_t tenant_id, const uint64_t 
     ret = sql_schema_guard_->get_table_schema(tenant_id, table_id, table_schema);
   } else {
     ret = schema_guard_.get_table_schema(tenant_id, table_id, table_schema);
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::print_table_definition_clustering_key(const ObTableSchema &table_schema,
+                                                           char* buf,
+                                                           const int64_t& buf_len,
+                                                           int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "CLUSTER BY ("))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print CLUSTER BY (", KR(ret));
+  } else if (OB_FAIL(print_rowkey_info(table_schema, buf, buf_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print rowkey info", KR(ret));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ") "))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print )", KR(ret));
   }
   return ret;
 }

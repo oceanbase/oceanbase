@@ -122,9 +122,10 @@ public:
   int get_table_rowkey_exprs(const IndexDMLInfo &index_dml_info,
                              ObIArray<ObRawExpr*> &rowkey_exprs);
 
-  int check_is_heap_table(ObLogicalOperator &op,
-                          uint64_t ref_table_id,
-                          bool &is_heap_table);
+  int check_is_heap_table_or_cluster_by_table(ObLogicalOperator &op,
+                                              uint64_t ref_table_id,
+                                              bool &is_heap_table,
+                                              bool &is_cluster_by_table);
   int get_column_ref_base_cid(const ObLogicalOperator &op, const ObColumnRefRawExpr *col, uint64_t &base_cid);
 
 private:
@@ -327,8 +328,10 @@ private:
   int add_all_column_infos(ObLogDelUpd &op,
                            const common::ObIArray<ObColumnRefRawExpr*> &columns,
                            bool is_heap_table,
+                           bool is_cluster_by_table,
                            ColContentFixedArray &column_infos);
   int convert_upd_assign_infos(bool is_heap_table,
+                               bool is_cluster_by_table,
                                const IndexDMLInfo &index_dml_info,
                                ColContentFixedArray &assign_infos);
   int convert_check_constraint(ObLogDelUpd &log_op,

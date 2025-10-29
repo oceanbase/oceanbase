@@ -1054,6 +1054,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_AUTOINC_NEXTVAL == type_
       || T_FUN_SYS_DOC_ID == type_
       || T_FUN_SYS_VEC_VID == type_
+      || T_PSEUDO_HIDDEN_CLUSTERING_KEY == type_
       || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == type_
       || T_FUN_SYS_ROWNUM == type_
       || T_FUN_SYS_ROWKEY_TO_ROWID == type_
@@ -6797,6 +6798,11 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
       break;
     case T_TABLET_AUTOINC_NEXTVAL:
       if (OB_FAIL(BUF_PRINTF("T_HIDDEN_PK"))) {
+        LOG_WARN("failed to print", K(ret));
+      }
+      break;
+    case T_PSEUDO_HIDDEN_CLUSTERING_KEY:
+      if (OB_FAIL(BUF_PRINTF("T_HIDDEN_CLUSTERING_KEY"))) {
         LOG_WARN("failed to print", K(ret));
       }
       break;

@@ -176,7 +176,7 @@ struct ObTableSchemaItem final
 public:
   ObTableSchemaItem()
     : is_column_store_(false), is_index_table_(false), is_unique_index_(false), has_lob_rowkey_(false),
-      rowkey_column_num_(0), compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+      is_table_with_clustering_key_(false), rowkey_column_num_(0), compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
       vec_idx_param_(), vec_dim_(0)
   {}
   ~ObTableSchemaItem() { reset(); }
@@ -186,6 +186,7 @@ public:
     is_index_table_ = false;
     is_unique_index_ = false;
     has_lob_rowkey_ = false;
+    is_table_with_clustering_key_ = false;
     rowkey_column_num_ = 0;
     compress_type_ = NONE_COMPRESSOR;
     lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
@@ -193,13 +194,14 @@ public:
     vec_dim_ = 0;
   }
   TO_STRING_KV(K(is_column_store_), K(is_index_table_), K(is_unique_index_), K_(has_lob_rowkey),
-    K(rowkey_column_num_), K(compress_type_), K_(lob_inrow_threshold), K_(vec_idx_param), K_(vec_dim));
+    K(is_table_with_clustering_key_), K(rowkey_column_num_), K(compress_type_), K_(lob_inrow_threshold), K_(vec_idx_param), K_(vec_dim));
 
 public:
   bool is_column_store_;
   bool is_index_table_;
   bool is_unique_index_;
   bool has_lob_rowkey_;
+  bool is_table_with_clustering_key_;
   int64_t rowkey_column_num_;
   common::ObCompressorType compress_type_;
   int64_t lob_inrow_threshold_;
@@ -1343,11 +1345,13 @@ private:
   int check_null_and_length(
       const bool is_index_table,
       const bool has_lob_rowkey,
+      const bool is_table_with_clustering_key,
       const int64_t rowkey_column_cnt,
       const blocksstable::ObDatumRow &row_val) const;
   int check_null_and_length(
       const bool is_index_table,
       const bool has_lob_rowkey,
+      const bool is_table_with_clustering_key,
       const int64_t rowkey_column_cnt,
       const blocksstable::ObBatchDatumRows &datum_rows);
   int prepare_slice_store_if_need(

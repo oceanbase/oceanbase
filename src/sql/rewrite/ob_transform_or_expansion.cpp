@@ -872,6 +872,8 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
       } else if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID ==
                  static_cast<ObColumnRefRawExpr*>(expr)->get_column_id()) {
         target_expr = expr;
+      } else if (static_cast<ObColumnRefRawExpr*>(expr)->is_hidden_clustering_key_column()) {
+        target_expr = expr;
       }
     }
     if (OB_SUCC(ret)) {

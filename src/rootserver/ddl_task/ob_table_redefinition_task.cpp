@@ -310,7 +310,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
       LOG_WARN("failed to get orig table schema", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, hidden_table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(target_object_id_));
-    } else if (OB_FAIL(task.init(*orig_table_schema, *hidden_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
+    } else if (OB_FAIL(task.init(task_type_, *orig_table_schema, *hidden_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
       LOG_WARN("fail to init table redefinition sstable build task", K(ret));
     } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
       LOG_WARN("fail to submit ddl build single replica", K(ret));
@@ -377,9 +377,11 @@ int ObTableRedefinitionTask::check_use_heap_table_ddl_plan(const ObTableSchema *
     LOG_WARN("invalid arguments", K(ret), KP(target_table_schema));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, TABLE_REDEF_TASK_CHECK_USE_HEAP_PLAN_FAILED))) {
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
-  } else if (target_table_schema->is_table_with_hidden_pk_column() &&
+  } else if (target_table_schema->is_table_without_pk() &&
              (DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_ ||
               DDL_MVIEW_COMPLETE_REFRESH == task_type_)) {
+    use_heap_table_ddl_plan_ = true;
+  } else if (target_table_schema->is_table_with_clustering_key() && DDL_DROP_PRIMARY_KEY == task_type_) {
     use_heap_table_ddl_plan_ = true;
   }
   return ret;

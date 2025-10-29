@@ -84,7 +84,8 @@ public:
                const int64_t size);
   int cast_row(int32_t session_id,
                const table::ObTableLoadObjRow &obj_row,
-               const ObDirectLoadDatumRow *&datum_row);
+               const ObDirectLoadDatumRow *&datum_row,
+               const common::ObTabletID &tablet_id);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:
@@ -99,12 +100,14 @@ private:
                   const share::schema::ObColumnSchemaV2 *column_schema,
                   const common::ObObj &obj,
                   blocksstable::ObStorageDatum &datum,
-                  int32_t session_id);
+                  int32_t session_id,
+                  const common::ObTabletID &tablet_id);
   int cast_row(common::ObArenaAllocator &cast_allocator,
                ObDataTypeCastParams cast_params,
                const table::ObTableLoadObjRow &obj_row,
                ObDirectLoadDatumRow &datum_row,
-               int32_t session_id);
+               int32_t session_id,
+               const common::ObTabletID &tablet_id);
   int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
                             const common::ObObj &obj,
                             blocksstable::ObStorageDatum &datum,
@@ -113,6 +116,11 @@ private:
                              const common::ObObj &obj,
                              common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
+  int handle_hidden_clustering_key_column(common::ObArenaAllocator &cast_allocator,
+                                          const share::schema::ObColumnSchemaV2 *column_schema,
+                                          const common::ObObj &obj,
+                                          const common::ObTabletID &tablet_id,
+                                          blocksstable::ObStorageDatum &datum);
   int check_rowkey_length(const ObDirectLoadDatumRow &datum_row,
                           const int64_t rowkey_column_count);
 

@@ -1371,6 +1371,12 @@ public:
       str = "drop materialized view log";
     } else if (RENAME_MLOG == type) {
       str = "rename materialized view log";
+    } else if (ADD_CLUSTERING_KEY == type) {
+      str = "add clustering key";
+    } else if (DROP_CLUSTERING_KEY == type) {
+      str = "drop clustering key";
+    } else if (ALTER_CLUSTERING_KEY == type) {
+      str = "alter clustering key";
     }
     return str;
   }

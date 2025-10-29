@@ -174,7 +174,7 @@ protected:
       } else if (!slice_calc.support_vectorized_calc() && !slice_calc.is_multi_slice_calc_type()) {
         for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
           ObExpr *expr = spec_.output_.at(i);
-          if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
+          if (T_TABLET_AUTOINC_NEXTVAL == expr->type_ || T_PSEUDO_HIDDEN_CLUSTERING_KEY == expr->type_) {
             ObIVector *vec = expr->get_vector(eval_ctx_);
             const char *payload = vec->get_payload(0);
             if (NULL != payload) {
@@ -233,7 +233,7 @@ protected:
             CALC_TYPE == ObSliceIdxCalc::SliceCalcType::BC2HOST;
           for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
             ObExpr *expr = spec_.output_.at(i);
-            if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
+            if (T_TABLET_AUTOINC_NEXTVAL == expr->type_ || T_PSEUDO_HIDDEN_CLUSTERING_KEY == expr->type_) {
               ObIVector *vec = expr->get_vector(eval_ctx_);
               const char *payload = vec->get_payload(0);
               if (NULL != payload) {
@@ -280,7 +280,7 @@ protected:
         } else {
           for (int64_t i = 0; i < spec_.output_.count() && OB_SUCC(ret); i++) {
             ObExpr *expr = spec_.output_.at(i);
-            if (T_TABLET_AUTOINC_NEXTVAL == expr->type_) {
+            if (T_TABLET_AUTOINC_NEXTVAL == expr->type_ || T_PSEUDO_HIDDEN_CLUSTERING_KEY == expr->type_) {
               ObIVector *vec = expr->get_vector(eval_ctx_);
               const char *payload = vec->get_payload(0);
               if (NULL != payload) {

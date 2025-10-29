@@ -151,6 +151,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"client", CLIENT},
   {"close", CLOSE},
   {"cluster", CLUSTER},
+  {"clustering", CLUSTERING},
   {"cluster_name", CLUSTER_NAME},
   {"cluster_id", CLUSTER_ID},
   {"coalesce", COALESCE},

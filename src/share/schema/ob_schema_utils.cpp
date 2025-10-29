@@ -383,6 +383,11 @@ bool ObSchemaUtils::is_label_se_column(uint64_t flag)
   return (flag & LABEL_SE_COLUMN_FLAG) != 0;
 }
 
+bool ObSchemaUtils::is_clustering_key_column(const uint64_t flag)
+{
+  return flag & HEAP_TABLE_CLUSTERING_KEY_FLAG;
+}
+
 int ObSchemaUtils::add_column_to_table_schema(ObColumnSchemaV2 &column, ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

@@ -34,7 +34,7 @@ int ObPxMultiPartUpdateOp::inner_open()
   } else if (!(MY_SPEC.row_desc_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table or row desc is invalid", K(ret), K(MY_SPEC.row_desc_));
-  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), upd_rtdef_, this, this, false))) {
+  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), upd_rtdef_, this, this, false, false))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
                                                   upd_rtdef_,

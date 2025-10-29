@@ -21,6 +21,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/ob_heap_organized_table_util.h"
 #include "share/ob_license_utils.h"
 
 
@@ -113,32 +114,41 @@ int ObCreateTableResolver::add_hidden_tablet_seq_col()
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt_)) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), K(ret));
-  } else if (0 == get_primary_key_size()) {
+    SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), KR(ret));
+  } else {
     ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-    ObColumnSchemaV2 hidden_pk;
-    hidden_pk.reset();
-    hidden_pk.set_column_id(OB_HIDDEN_PK_INCREMENT_COLUMN_ID);
-    hidden_pk.set_data_type(ObUInt64Type);
-    hidden_pk.set_nullable(false);
-    hidden_pk.set_is_hidden(true);
-    hidden_pk.set_charset_type(CHARSET_BINARY);
-    hidden_pk.set_collation_type(CS_TYPE_BINARY);
-    hidden_pk.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt64Type]);
-    if (OB_FAIL(hidden_pk.set_column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME))) {
-      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
-    } else if (OB_FAIL(primary_keys_.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
-      SQL_RESV_LOG(WARN, "failed to push_back column_id", K(ret));
-    } else {
-      hidden_pk.set_rowkey_position(primary_keys_.count());
-      if (OB_FAIL(table_schema.add_column(hidden_pk))) {
-        SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_pk));
+    if (0 == get_primary_key_size()) {
+      ObColumnSchemaV2 hidden_pk;
+      hidden_pk.reset();
+      hidden_pk.set_column_id(OB_HIDDEN_PK_INCREMENT_COLUMN_ID);
+      hidden_pk.set_data_type(ObUInt64Type);
+      hidden_pk.set_nullable(false);
+      hidden_pk.set_is_hidden(true);
+      hidden_pk.set_charset_type(CHARSET_BINARY);
+      hidden_pk.set_collation_type(CS_TYPE_BINARY);
+      hidden_pk.set_accuracy(ObAccuracy::MAX_ACCURACY[ObUInt64Type]);
+      if (OB_FAIL(hidden_pk.set_column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME))) {
+        SQL_RESV_LOG(WARN, "failed to set column name", KR(ret));
+      } else if (OB_FAIL(primary_keys_.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
+        SQL_RESV_LOG(WARN, "failed to push_back column_id", KR(ret));
+      } else {
+        hidden_pk.set_rowkey_position(primary_keys_.count());
+        if (OB_FAIL(table_schema.add_column(hidden_pk))) {
+          SQL_RESV_LOG(WARN, "add column to table_schema failed", KR(ret), K(hidden_pk));
+        }
       }
+    } else if (table_schema.is_table_with_clustering_key()) {
+      uint64_t available_col_id = gen_column_id();
+      if (OB_FAIL(ObHeapTableUtil::generate_pk_increment_column(table_schema, available_col_id, primary_keys_.count() + 1))) {
+        LOG_WARN("failed to generate pk increment column", KR(ret));
+      } else if (OB_FAIL(primary_keys_.push_back(available_col_id))) {
+        SQL_RESV_LOG(WARN, "failed to push_back column_id", KR(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "tablet seq expects to be the first primary key", K(stmt_), KR(ret));
     }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "tablet seq expects to be the first primary key", K(stmt_), K(ret));
   }
   return ret;
 }
@@ -669,6 +679,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
         ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
         uint64_t data_version = 0;
+        bool has_clustering_key = false;
+        int64_t clustering_key_index = -1;
 
         // resolve table organizations before resolve table elements
         if (OB_FAIL(ret)) {
@@ -676,7 +688,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
           LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
         } else if (!is_inner_table(table_id_) && !lib::is_oracle_mode() &&
-                    OB_FAIL(resolve_table_organization(tenant_config, create_table_node->children_[4]))) {
+                    OB_FAIL(resolve_table_organization(tenant_config, create_table_node->children_[4],
+                                                       has_clustering_key, clustering_key_index))) {
           SQL_RESV_LOG(WARN, "resolve table organization failed", K(ret));
         } else if (is_organization_set_to_heap()) {
           if (data_version < DATA_VERSION_4_3_5_1) {
@@ -713,6 +726,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "resolve table elements non-col failed", K(ret));
             }
           }
+
+          if (OB_SUCC(ret) && !lib::is_oracle_mode() && has_clustering_key) {
+            if (OB_FAIL(resolve_clustering_key_option(create_table_node->children_[4], clustering_key_index))) {
+              SQL_RESV_LOG(WARN, "resolve clustering key option failed", KR(ret));
+            }
+          }
+
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
             if (OB_FAIL(generate_primary_key_name_array(create_table_stmt->get_create_table_arg().schema_, pk_columns_name))) {
               SQL_RESV_LOG(WARN, "generate primary_key_name_array failed", K(ret));
@@ -1107,9 +1127,13 @@ int ObCreateTableResolver::resolve_partition_option(
     SQL_RESV_LOG(WARN, "set __sess_id as partition key failed", KR(ret));
   }
   if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_oracle_temp_table_)) {
-    if (OB_FAIL(check_generated_partition_column(table_schema))) {
+    ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", KR(ret));
+    } else if (OB_FAIL(check_generated_partition_column(table_schema))) {
       LOG_WARN("Failed to check generate partition column", KR(ret));
-    } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
+    } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column(*schema_guard))) {
       SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", KR(ret));
     }
   }
@@ -3986,8 +4010,8 @@ int ObCreateTableResolver::resolve_primary_key_node_in_heap_table(const ParseNod
                || column_list_node->num_child_ <= 0
                || OB_ISNULL(column_list_node->children_)) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "unexpected.",
-                   K(ret), K(column_list_node->type_), K(column_list_node->num_child_));
+      SQL_RESV_LOG(WARN, "unexpected column_list_node: type must be T_COLUMN_LIST, num_child_ > 0, children_ not null",
+                   KR(ret), K(column_list_node->type_), K(column_list_node->num_child_), KP(column_list_node->children_));
     } else {
       ParseNode *key_node = nullptr;
       for (int32_t i = 0; OB_SUCC(ret) && i < column_list_node->num_child_; ++i) {
@@ -4178,6 +4202,113 @@ int ObCreateTableResolver::uk_or_heap_table_pk_add_to_index_list(ObArray<int> &i
     // do nothing
   }
   return ret;
+}
+
+int ObCreateTableResolver::resolve_clustering_key_option(const ParseNode *node, const int64_t clustering_key_index)
+{
+  return OB_NOT_SUPPORTED;
+  /*
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(session_info_) || OB_ISNULL(node) || clustering_key_index < 0)){
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "unexpected values", KR(ret), K(node), K_(session_info), K(clustering_key_index));
+  } else if (OB_UNLIKELY(get_primary_key_size() > 0)) {
+    ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+    SQL_RESV_LOG(WARN, "multiple primary key defined", KR(ret), K_(primary_keys));
+  }
+
+  if (OB_SUCC(ret)) {
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
+    } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cluster by table is not supported in data version less than 4.4.1", KR(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster by table in data version less than 4.4.1");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ParseNode *clustering_key_option_node = nullptr;
+    int32_t num = 0;
+    if (T_TABLE_OPTION_LIST != node->type_ || OB_ISNULL(node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
+    } else {
+      num = node->num_child_;
+      if (num <= clustering_key_index) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid clustering key node index", KR(ret), K(clustering_key_index), K(node->num_child_));
+      } else {
+        clustering_key_option_node = node->children_[clustering_key_index];
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_ISNULL(clustering_key_option_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "clustering_key_option_node is null.", KR(ret));
+    } else if (T_CLUSTERING_KEY != clustering_key_option_node->type_
+            || clustering_key_option_node->num_child_ <= 0
+            || OB_ISNULL(clustering_key_option_node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "unexpected clustering_key_option_node: type is not T_CLUSTERING_KEY or num_child_ <= 0 or children_ is null",
+                KR(ret), K(clustering_key_option_node->type_), K(clustering_key_option_node->num_child_));
+    } else if (clustering_key_option_node->num_child_ > (OB_USER_MAX_ROWKEY_COLUMN_NUMBER - 1)) {
+      ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+      LOG_WARN("too many clustering key columns", KR(ret), K(clustering_key_option_node->num_child_));
+      LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    } else {
+      ParseNode *column_list_node = clustering_key_option_node->children_[0];
+      int64_t pk_data_length = 0;
+      if (T_COLUMN_LIST != column_list_node->type_
+          || column_list_node->num_child_ <= 0
+          || OB_ISNULL(column_list_node->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "unexpected column_list_node: type is not T_COLUMN_LIST or num_child_ <= 0 or children_ is null",
+                  KR(ret), K(column_list_node->type_), K(column_list_node->num_child_));
+      }
+      for (int32_t i = 0; OB_SUCC(ret) && i < column_list_node->num_child_; ++i) {
+        ParseNode *column_node = column_list_node->children_[i];
+        if (OB_ISNULL(column_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "invalid parse tree", KR(ret));
+        } else {
+          ObString column_name;
+          column_name.assign_ptr(column_node->str_value_,static_cast<int32_t>(column_node->str_len_));
+          ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+          ObColumnSchemaV2 *col = NULL;
+          if (OB_ISNULL(create_table_stmt)) {
+            ret = OB_NOT_INIT;
+            SQL_RESV_LOG(WARN, "stmt is null", KR(ret), KP(create_table_stmt));
+          } else if (OB_FAIL(ObCreateTableResolverBase::add_primary_key_part(column_name,
+                                                                             create_table_stmt->get_create_table_arg().schema_,
+                                                                             primary_keys_.count(),
+                                                                             pk_data_length,
+                                                                             col,
+                                                                             true))) {
+            LOG_WARN("failed to add primary key part", KR(ret), K(column_name));
+          } else if (OB_ISNULL(col)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "col is null", KR(ret), K(column_name));
+          } else if (OB_FAIL(primary_keys_.push_back(col->get_column_id()))) {
+            SQL_RESV_LOG(WARN, "push primary key to array failed", KR(ret));
+          }
+        }
+      }
+      // cluster by table also have a hidden __pk_increment column, so it's maximum rowkey size is 16K - 16 bytes
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else {
+        if (pk_data_length > (OB_MAX_USER_ROW_KEY_LENGTH - OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH)) {
+          ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+          LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+        }
+      }
+    }
+  }
+  return ret;
+  */
 }
 }//end namespace sql
 }//end namespace oceanbase

@@ -983,7 +983,8 @@ int ObDelUpdLogPlan::replace_assignment_expr_from_dml_info(const IndexDMLInfo &d
       LOG_WARN("get unexpected null", K(ret));
     } else if (expr == assignment.column_expr_
                && OB_NOT_NULL(assignment.expr_)
-               && assignment.expr_->get_expr_type() != T_TABLET_AUTOINC_NEXTVAL) {
+               && assignment.expr_->get_expr_type() != T_TABLET_AUTOINC_NEXTVAL
+               && assignment.expr_->get_expr_type() != T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
       expr = assignment.expr_;
       break;
     } else { /*do nothing*/ }

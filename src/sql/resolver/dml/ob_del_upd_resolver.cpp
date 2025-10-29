@@ -3079,6 +3079,8 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
         } else if (expr->get_expr_type() == T_TABLET_AUTOINC_NEXTVAL) {
           // 如果是堆表的隐藏自增列，不需要构建conv表达式
           function_expr = expr;
+        } else if (expr->get_expr_type() == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
+          function_expr = expr;
         } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
                                                                   *params_.allocator_,
                                                                   *column_item->get_expr(),
@@ -3989,7 +3991,8 @@ int ObDelUpdResolver::build_hidden_pk_assignment(ObTableAssignment &ta,
     if (NULL == column_schema) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get column schema fail", K(column_schema));
-    } else if (column_schema->get_column_id() != OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+    } else if (column_schema->get_column_id() != OB_HIDDEN_PK_INCREMENT_COLUMN_ID &&
+              !column_schema->is_hidden_clustering_key_column()) {
       //do nothing
     } else {
       is_end_loop = true;
@@ -4011,8 +4014,10 @@ int ObDelUpdResolver::build_hidden_pk_assignment(ObTableAssignment &ta,
         LOG_WARN("get column item failed", K(ret),
                  "table_id", table_item->table_id_,
                  "column_id", col_exprs.at(0)->get_column_id());
-      } else if (OB_FAIL(build_heap_table_hidden_pk_expr(expr, col_expr))) {
+      } else if (column_schema->get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID && OB_FAIL(build_heap_table_hidden_pk_expr(expr, col_expr))) {
         LOG_WARN("fail to build heap_hidden_pk_expr", K(ret), K(col_expr));
+      } else if (column_schema->is_hidden_clustering_key_column() && OB_FAIL(build_hidden_clustering_key_expr(expr, col_expr))) {
+        LOG_WARN("fail to build hidden_clustering_key_assignment", K(ret), K(col_expr));
       } else {
         assignment.column_expr_ = col_item->expr_;
         assignment.expr_ = expr;
@@ -4050,8 +4055,8 @@ int ObDelUpdResolver::check_heap_table_update(ObTableAssignment &tas)
                                                        table_schema, table->is_link_table()))) {
     LOG_WARN("fail to get table schema", K(ret),
              "base_table_id", table->get_base_table_item().ref_id_);
-  } else if (table_schema->is_table_with_pk()) {
-    // 不是堆表，什么都不需要做
+  } else if (!table_schema->is_table_with_hidden_pk_column()) {
+    // 表没有隐藏列，什么都不需要做
   } else if (OB_FAIL(check_update_part_key(tas,
                                            table->get_base_table_item().ref_id_,
                                            is_update_part_key,

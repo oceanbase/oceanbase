@@ -574,7 +574,8 @@ int ObInsertLogPlan::check_insertup_opt_for_column_store()
 
     if (OB_FAIL(ret)) {
     } else if (has_unsupported_index_type || is_update_local_unique_key || is_no_unique_key_in_values) {
-    } else if ((table_schema->is_table_with_hidden_pk_column() && unique_index_count == 1) ||
+    } else if (table_schema->is_table_with_clustering_key()) {
+    } else if ((table_schema->is_table_without_pk() && unique_index_count == 1) ||
                (table_schema->is_table_with_pk() && unique_index_count == 0)) {
       // only support one local unique index
       // for table with hidden pk column, if there is no user-defined unique index,

@@ -3139,6 +3139,19 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_CLUSTERING_KEY: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
+        } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("cluster by table is not supported in data version less than 4.4.1", KR(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster by table in data version less than 4.4.1");
+        } else {
+          // do nothing
+        }
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_UNEXPECTED;
@@ -4033,7 +4046,7 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_null(ObColumnSchemaV2 
     }
   } else {
     //set non_primary_key_column to nullable
-    if (!resolve_stat.is_primary_key_) {
+    if (!resolve_stat.is_primary_key_ || column.is_heap_table_clustering_key_column()) {
       column.set_nullable(true);
     }
   }
@@ -8720,7 +8733,7 @@ int ObDDLResolver::check_indexes_on_same_cols(const ObTableSchema &table_schema,
       }
     }
   }
-  if (OB_SUCC(ret) && !has_other_indexes_on_same_cols && table_schema.is_table_with_pk()) {
+  if (OB_SUCC(ret) && !has_other_indexes_on_same_cols && table_schema.is_index_organized_table_with_pk()) {
     ObSEArray<uint64_t, 8> pk_column_ids;
     ObSEArray<ObString, 8> pk_columns_names;
     table_schema.get_rowkey_column_ids(pk_column_ids);
@@ -12023,6 +12036,8 @@ int ObDDLResolver::try_set_auto_partition_by_config(const ParseNode *node,
   if (!table_schema.is_user_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("attempt to set auto_partition by tenant config for non_user_table", KR(ret), K(table_schema));
+  } else if (table_schema.is_table_with_clustering_key()) {
+    // do nothing
   } else if (table_schema.is_partitioned_table() &&
              !table_schema.get_part_option().is_valid_split_part_type()) {
     // do nothing

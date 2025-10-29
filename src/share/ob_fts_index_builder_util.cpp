@@ -2492,26 +2492,33 @@ int ObFtsIndexBuilderUtil::check_fulltext_index_allowed(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KPC(index_arg), K(data_schema));
   } else if (static_cast<int64_t>(ObDDLResolver::INDEX_KEYNAME::FTS_KEY) == index_arg->index_key_) {
-    ObCollationType collation_type = CS_TYPE_INVALID;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
-      const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column name is empty", K(ret), K(column_name));
-      } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
-            column_name.ptr());
-      } else if (OB_UNLIKELY(col_schema->is_virtual_generated_column()
-                             || col_schema->is_stored_generated_column())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Fulltext index on generated column is");
-      } else if (CS_TYPE_INVALID == collation_type) {
-        collation_type = col_schema->get_collation_type();
-      } else if (collation_type != col_schema->get_collation_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different collation");
+    // Check if table has clustering key - fulltext index is not allowed on tables with clustering key
+    if (data_schema.is_table_with_clustering_key()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("fulltext index is not supported on tables with clustering key", K(ret), K(data_schema.get_table_name_str()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext index on tables with clustering key is");
+    } else {
+      ObCollationType collation_type = CS_TYPE_INVALID;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_arg->index_columns_.count(); ++i) {
+        const ObString &column_name = index_arg->index_columns_.at(i).column_name_;
+        const ObColumnSchemaV2 *col_schema = nullptr;
+        if (column_name.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column name is empty", K(ret), K(column_name));
+        } else if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
+          ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+          LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(),
+              column_name.ptr());
+        } else if (OB_UNLIKELY(col_schema->is_virtual_generated_column()
+                               || col_schema->is_stored_generated_column())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Fulltext index on generated column is");
+        } else if (CS_TYPE_INVALID == collation_type) {
+          collation_type = col_schema->get_collation_type();
+        } else if (collation_type != col_schema->get_collation_type()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different collation");
+        }
       }
     }
   }

@@ -414,10 +414,19 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
     } else {
       const ObIArray<ObExpr*> &child_expr = child_->get_spec().output_;
       ObExpr *auto_inc_expr = nullptr;
+      ObExpr *hidden_clustering_key_expr = nullptr;
+      ObExpr *hidden_clustering_key_column_expr = nullptr;
       uint64_t next_autoinc_val = 0;
+      const int64_t rowkey_cnt = MY_SPEC.ins_ctdef_.das_ctdef_.rowkey_cnt_;
       for (int64_t i = 0; OB_SUCC(ret) && i < child_expr.count(); ++i) {
         if (child_expr.at(i)->type_ == T_TABLET_AUTOINC_NEXTVAL) {
           auto_inc_expr = child_expr.at(i);
+          break;
+        } else if (child_expr.at(i)->type_ == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
+          hidden_clustering_key_expr = child_expr.at(i);
+          break;
+        } else if (child_expr.at(i)->is_hidden_clustering_key_column_) {
+          hidden_clustering_key_column_expr = child_expr.at(i);
           break;
         }
       }
@@ -425,9 +434,9 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
         auto_inc_expr = child_expr.at(child_expr.count() - 1);
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(auto_inc_expr)) {
+      } else if (OB_ISNULL(auto_inc_expr) && OB_ISNULL(hidden_clustering_key_expr) && OB_ISNULL(hidden_clustering_key_column_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cannot find tablet autoinc expr", K(child_->get_spec().output_));
+        LOG_WARN("cannot find tablet autoinc expr or hidden clustering key expr", K(child_->get_spec().output_));
       } else if (curr_tablet_idx_ < 0 || curr_tablet_idx_ >= tablet_seq_caches_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected curr tablet idx", K(ret), K(curr_tablet_idx_));
@@ -441,15 +450,34 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
       }
 
       if (OB_SUCC(ret)) {
-        ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx_);
         ObTabletID tablet_id = tablet_seq_caches_.at(curr_tablet_idx_).tablet_id_;
-        if (is_vec_gen_vid_) {
-          // TODO @lhd make vid into struct
-          datum.set_uint(next_autoinc_val);
-        } else {
-          datum.set_uint(next_autoinc_val);
+        if (!OB_ISNULL(auto_inc_expr)) {
+          ObDatum &datum = auto_inc_expr->locate_datum_for_write(eval_ctx_);
+          if (is_vec_gen_vid_) {
+            // TODO @lhd make vid into struct
+            datum.set_uint(next_autoinc_val);
+          } else {
+            datum.set_uint(next_autoinc_val);
+          }
+          auto_inc_expr->set_evaluated_projected(eval_ctx_);
+        } else if (!OB_ISNULL(hidden_clustering_key_expr)) {
+          ObDatum &datum = hidden_clustering_key_expr->locate_datum_for_write(eval_ctx_);
+          uint64_t buf_len = sizeof(ObHiddenClusteringKey);
+          char *buf = hidden_clustering_key_expr->get_str_res_mem(eval_ctx_, buf_len);
+          ObString hidden_clustering_key_str(buf_len, 0, buf);
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory for hidden clustering key", KR(ret), KP(buf));
+          } else {
+            ObHiddenClusteringKey hidden_clustering_key(tablet_id.id(), next_autoinc_val);
+            if (OB_FAIL(ObHiddenClusteringKey::set_hidden_clustering_key_to_string(hidden_clustering_key, hidden_clustering_key_str))) {
+              LOG_WARN("failed to set hidden clustering key to string", KR(ret), K(hidden_clustering_key), K(hidden_clustering_key_str));
+            } else {
+              datum.set_string(hidden_clustering_key_str);
+              hidden_clustering_key_expr->set_evaluated_projected(eval_ctx_);
+            }
+          }
         }
-        auto_inc_expr->set_evaluated_projected(eval_ctx_);
       }
     }
   } else {

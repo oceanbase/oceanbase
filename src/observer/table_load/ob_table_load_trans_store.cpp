@@ -30,6 +30,7 @@
 #include "storage/direct_load/ob_direct_load_external_multi_partition_table.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_writer.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_builder.h"
+#include "share/ob_tablet_autoincrement_service.h"
 
 namespace oceanbase
 {
@@ -830,7 +831,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < row_array.count(); ++i) {
       const ObTableLoadTabletObjRow &row = row_array.at(i);
       if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, row.obj_row_,
-                           session_ctx.datum_row_, session_id))) {
+                           session_ctx.datum_row_, session_id, row.tablet_id_))) {
         ObTableLoadErrorRowHandler *error_row_handler =
           trans_ctx_->ctx_->store_ctx_->error_row_handler_;
         if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
@@ -930,7 +931,8 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
                                           ObDataTypeCastParams cast_params,
                                           const ObTableLoadObjRow &obj_row,
                                           ObDirectLoadDatumRow &datum_row,
-                                          int32_t session_id)
+                                          const int32_t session_id,
+                                          const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(obj_row.count_ != table_data_desc_->column_count_)) {
@@ -942,7 +944,7 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
     const ObColumnSchemaV2 *column_schema = column_schemas_.at(i);
     const ObObj &obj = obj_row.cells_[i];
     ObStorageDatum &datum = datum_row.storage_datums_[i];
-    if (OB_FAIL(cast_column(cast_allocator, cast_params, column_schema, obj, datum, session_id))) {
+    if (OB_FAIL(cast_column(cast_allocator, cast_params, column_schema, obj, datum, session_id, tablet_id))) {
       LOG_WARN("fail to cast column", KR(ret), K(i), K(obj), KPC(column_schema));
     }
   }
@@ -958,13 +960,14 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
 
 int ObTableLoadTransStoreWriter::cast_row(int32_t session_id,
                                           const ObTableLoadObjRow &obj_row,
-                                          const ObDirectLoadDatumRow *&datum_row)
+                                          const ObDirectLoadDatumRow *&datum_row,
+                                          const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   SessionContext &session_ctx = session_ctx_array_[session_id - 1];
   session_ctx.cast_allocator_.reuse();
   if (OB_FAIL(cast_row(session_ctx.cast_allocator_, session_ctx.cast_params_, obj_row,
-                       session_ctx.datum_row_, session_id))) {
+                       session_ctx.datum_row_, session_id, tablet_id))) {
     LOG_WARN("fail to cast row", KR(ret));
   } else {
     datum_row = &session_ctx.datum_row_;
@@ -978,7 +981,8 @@ int ObTableLoadTransStoreWriter::cast_column(
     const ObColumnSchemaV2 *column_schema,
     const ObObj &obj,
     ObStorageDatum &datum,
-    int32_t session_id)
+    int32_t session_id,
+    const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObCastCtx cast_ctx(&cast_allocator, &cast_params, cast_mode_, column_schema->get_collation_type());
@@ -1024,6 +1028,10 @@ int ObTableLoadTransStoreWriter::cast_column(
       if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
         LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
       }
+    }
+  } else if (column_schema->is_hidden_clustering_key_column()) {
+    if (OB_FAIL(handle_hidden_clustering_key_column(cast_allocator, column_schema, obj, tablet_id, datum))) {
+      LOG_WARN("fail to handle hidden clustering key column", KR(ret), K(obj), K(tablet_id));
     }
   } else {
     // 普通列
@@ -1107,6 +1115,39 @@ int ObTableLoadTransStoreWriter::check_rowkey_length(const ObDirectLoadDatumRow 
       ret = OB_ERR_TOO_LONG_KEY_LENGTH;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
       OB_LOG(WARN, "rowkey is too long", KR(ret), K(rowkey_len));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::handle_hidden_clustering_key_column(ObArenaAllocator &cast_allocator,
+                                                                     const ObColumnSchemaV2 *column_schema,
+                                                                     const ObObj &obj,
+                                                                     const ObTabletID &tablet_id,
+                                                                     ObStorageDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(column_schema) || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(column_schema), K(tablet_id));
+  } else {
+    share::ObTabletAutoincrementService &auto_inc = share::ObTabletAutoincrementService::get_instance();
+    uint64_t seq_id = 0;
+    uint64_t buf_len = sizeof(ObHiddenClusteringKey);
+    char *buf = reinterpret_cast<char *>(cast_allocator.alloc(buf_len));
+    ObString hidden_clustering_key_str(buf_len, 0, buf);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), KP(buf));
+    } else if (OB_FAIL(auto_inc.get_autoinc_seq(MTL_ID(), tablet_id, seq_id))) {
+      LOG_WARN("fail to get tablet autoinc seq", K(ret), K(tablet_id));
+    } else {
+      ObHiddenClusteringKey hidden_clustering_key(tablet_id.id(), seq_id);
+      if (OB_FAIL(ObHiddenClusteringKey::set_hidden_clustering_key_to_string(hidden_clustering_key, hidden_clustering_key_str))) {
+        LOG_WARN("failed to set hidden clustering key to string", KR(ret), K(hidden_clustering_key), K(hidden_clustering_key_str));
+      } else {
+        datum.set_string(hidden_clustering_key_str);
+      }
     }
   }
   return ret;

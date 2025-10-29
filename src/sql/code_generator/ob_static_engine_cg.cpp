@@ -140,6 +140,7 @@
 #include "sql/engine/basic/ob_values_table_access_op.h"
 #include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 #include "sql/code_generator/ob_enable_rich_format_flags.h"
+#include "share/ob_heap_organized_table_util.h"
 
 namespace oceanbase
 {
@@ -465,6 +466,7 @@ int ObStaticEngineCG::check_expr_columnlized(const ObRawExpr *expr)
              // T_TABLET_AUTOINC_NEXTVAL is the hidden_pk for heap_table
              // this column is an pseudo column
              || T_TABLET_AUTOINC_NEXTVAL == expr->get_expr_type()
+             || T_PSEUDO_HIDDEN_CLUSTERING_KEY == expr->get_expr_type()
              || T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->get_expr_type()
              || expr->is_set_op_expr()
              || (expr->is_sys_func_expr() && 0 == expr->get_param_count()) // sys func with no param
@@ -3428,6 +3430,14 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
     OZ(check_only_one_unique_key(*log_plan, table_schema, spec.only_one_unique_key_));
     uint64_t ft_col_id = OB_INVALID_ID;
     OZ(table_schema->get_fulltext_column_ids(spec.doc_id_col_id_, ft_col_id));
+
+    // set hidden clustering key column id if exists
+    if (OB_FAIL(ret)) {
+    } else if (table_schema->is_table_with_clustering_key()) {
+      uint64_t hidden_ck_col_id = OB_INVALID_ID;
+      OZ(share::ObHeapTableUtil::get_hidden_clustering_key_column_id(*table_schema, hidden_ck_col_id));
+      OX(spec.hidden_ck_col_id_ = hidden_ck_col_id);
+    }
 
     // 记录当前主表的rowkey的column_ref表达式和column_id
     CK(primary_dml_info->column_exprs_.count() == primary_dml_info->column_convert_exprs_.count());
@@ -10777,7 +10787,7 @@ int ObStaticEngineCG::check_only_one_unique_key(const ObLogPlan& log_plan,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(table_schema));
   } else {
-    if (table_schema->is_table_with_pk()) {
+    if (table_schema->is_index_organized_table_with_pk()) {
       ++unique_index_cnt;
     }
     if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {

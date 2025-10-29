@@ -708,7 +708,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int drop_primary_key(ObTableSchema &new_table_schema);
   int add_primary_key(
       const common::ObIArray<common::ObString> &pk_column_names,
-      share::schema::ObTableSchema &new_table_schema);
+      share::schema::ObTableSchema &new_table_schema,
+      share::schema::ObSchemaGetterGuard &schema_guard);
   // 1. table with primary key -> hidden table with new primary key, i.e., modify primary key.
   // 2. table without primary key -> hidden table with primary key, i.e., add primary key.
   // 3. table with primary key -> hidden table without primary key, i.e., drop primary key.

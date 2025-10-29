@@ -142,6 +142,7 @@ int ObIndexSSTableBuildTask::process()
                                                             !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
                                                             nullptr,
                                                             partition_names,
+                                                            false/*is_alter_clustering_key_tbl_partition_by*/,
                                                             sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret));
       } else if (OB_FAIL(data_schema->is_need_padding_for_generated_column(need_padding))) {

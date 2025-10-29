@@ -145,6 +145,7 @@ private:
   int set_default_micro_block_format_version_(share::schema::ObTableSchema &table_schema);
   int check_building_domain_index_legal();
   int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
+  int resolve_clustering_key_option(const ParseNode *node, const int64_t clustering_key_index);
 
 private:
   // data members

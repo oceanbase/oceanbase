@@ -2765,9 +2765,27 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
     if (!include_hidden) {
       if (!ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
         //do nothing
-      } else if (current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) {
+      } else if ((current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) && !session_info_->get_ddl_info().is_ddl()) {
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_WARN("not allowed update insert hidden pk increment column", K(ret));
+      } else if (stmt->get_stmt_type() == stmt::T_SELECT && (current_scope_ == T_FIELD_LIST_SCOPE || current_scope_ == T_WHERE_SCOPE) && !session_info_->is_inner()) {
+        // 专为排序键表的隐式主键列 __pk_increment 提供支持，因为他是生成列，第一遍解析步伐顺利拦截。
+        // 精准定位用户执行的SELECT __pk_increment操作
+        // 只有当同时满足以下条件时才进行检查：
+        // 1. 当前是SELECT语句
+        // 2. 当前在字段列表作用域（T_FIELD_LIST_SCOPE）或WHERE作用域（T_WHERE_SCOPE）
+        const ObGlobalHint &global_hint = query_ctx->get_query_hint().get_global_hint();
+        bool has_enable_param = false;
+        if (OB_FAIL(global_hint.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
+          LOG_WARN("failed to check has enable opt param", K(ret));
+        } else if (OB_UNLIKELY(!has_enable_param)) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("SELECT __pk_increment not allowed without enable param", K(ret));
+          ObString column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME);
+          ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                                                      scope_name.length(), scope_name.ptr());
+        }
       }
     }
   } else {
@@ -9024,6 +9042,33 @@ int ObDMLResolver::build_heap_table_hidden_pk_expr(ObRawExpr *&expr, const ObCol
   return ret;
 }
 
+int ObDMLResolver::build_hidden_clustering_key_expr(ObRawExpr *&expr, const ObColumnRefRawExpr *ref_expr)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *func_expr = nullptr;
+
+  if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K_(session_info), K_(params_.expr_factory));
+  } else if (OB_ISNULL(ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref_expr is NULL", K(ret));
+  } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_PSEUDO_HIDDEN_CLUSTERING_KEY, func_expr))) {
+    LOG_WARN("create hidden clustering key expr failed", K(ret));
+  } else {
+    func_expr->set_expr_name(ObString::make_string("hidden_clustering_key"));
+    func_expr->set_accuracy(ref_expr->get_accuracy());
+    func_expr->set_result_flag(ref_expr->get_result_flag());
+    func_expr->set_data_type(ref_expr->get_data_type());
+    if (OB_FAIL(func_expr->formalize(session_info_))) {
+      LOG_WARN("failed to formalize hidden clustering key expr", K(ret));
+    } else {
+      expr = func_expr;
+    }
+  }
+  return ret;
+}
+
 // build next_val expr; set expr as its param
 int ObDMLResolver::build_autoinc_nextval_expr(ObRawExpr *&expr,
                                               const uint64_t autoinc_table_id,
@@ -10846,7 +10891,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
                                                                  this,
                                                                  schema_checker_))) {
     LOG_WARN("build generated column expr failed", K(ret));
-  } else if (OB_NOT_NULL(column_schema) && column_schema->is_doc_id_column()
+  } else if (OB_NOT_NULL(column_schema) && (column_schema->is_doc_id_column())
       && OB_FAIL(fill_doc_id_expr_param(table_item.table_id_, table_item.ref_id_, table_schema, ref_expr, stmt))) {
     LOG_WARN("fail to fill doc id expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
   } else if (OB_NOT_NULL(column_schema) && column_schema->is_vec_hnsw_vid_column()
@@ -13559,6 +13604,11 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
                 col_expr->set_udt_set_id(col_ref->get_udt_set_id());
                 if (stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) {
                   col_expr->set_hidden_column(col_ref->is_hidden_column());
+                  // For clustering key table, we need to propagate column_flags (including clustering key flag)
+                  // through view hierarchy to correctly identify hidden clustering key columns
+                  if (col_ref->is_hidden_clustering_key_column()) {
+                    col_expr->set_heap_table_clustering_key_column();
+                  }
                 }
                 ColumnItem *item = ref_stmt->get_column_item_by_id(col_ref->get_table_id(), col_ref->get_column_id());
                 if (OB_ISNULL(item)) {
@@ -20278,46 +20328,9 @@ int ObDMLResolver::fill_doc_id_expr_param(
     ObDMLStmt *stmt /* = NULL */)
 {
   int ret = OB_SUCCESS;
-  if (NULL == stmt) {
-    stmt = get_stmt();
+  if (OB_FAIL(fill_tablet_id_seq_id_expr_param(table_id, index_tid, table_schema, doc_id_expr, stmt))) {
+    LOG_WARN("unexpected null expr", K(ret));
   }
-  if (OB_ISNULL(table_schema) || OB_ISNULL(doc_id_expr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(doc_id_expr));
-  } else if (OB_UNLIKELY(index_tid != table_schema->get_table_id())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index table id", K(ret), K(index_tid), K(table_schema->get_table_id()));
-  } else if (OB_UNLIKELY(T_FUN_SYS_DOC_ID != doc_id_expr->get_expr_type())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not doc id expr", K(ret), "expr type", doc_id_expr->get_expr_type());
-  } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is NULL", KP_(session_info), KP_(params_.expr_factory), KP(stmt));
-  } else {
-    CopySchemaExpr copier(*params_.expr_factory_);
-    ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(doc_id_expr);
-    ObRawExpr *part_expr = nullptr;
-    ObRawExpr *subpart_expr = nullptr;
-    schema::ObPartitionLevel part_level = table_schema->get_part_level();
-    ObRawExpr *calc_tablet_id_expr = nullptr;
-    if (OB_FAIL(copier.copy(stmt->get_part_expr(table_id, index_tid), part_expr))) {
-      LOG_WARN("failed to copy expr", K(ret));
-    } else if (OB_FAIL(copier.copy(stmt->get_subpart_expr(table_id, index_tid), subpart_expr))) {
-      LOG_WARN("failed to copy expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_calc_partition_tablet_id_expr(*params_.expr_factory_, *session_info_, index_tid,
-            part_level, part_expr, subpart_expr, calc_tablet_id_expr))) {
-      LOG_WARN("fail to build calculate tablet id expr", K(ret), K(index_tid), KPC(table_schema));
-    } else if (OB_ISNULL(calc_tablet_id_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null expr", K(ret), KP(calc_tablet_id_expr));
-    } else if (OB_FAIL(expr->set_param_expr(calc_tablet_id_expr))) {
-      LOG_WARN("fail to add param expr", K(ret), KP(calc_tablet_id_expr));
-    } else if (OB_FAIL(expr->formalize(session_info_))) {
-      LOG_WARN("fail to formalize", K(ret), KP(session_info_));
-    }
-  }
-  STORAGE_FTS_LOG(DEBUG, "The dml resolver fills doc id expr parameter", K(ret), K(table_id), K(index_tid),
-      KPC(doc_id_expr), KPC(table_schema));
   return ret;
 }
 
@@ -20499,6 +20512,20 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   }
   LOG_DEBUG("The dml resolver fills ivf vector index expr parameter", K(ret), K(table_id), K(index_tid),
       KPC(raw_expr), KPC(table_schema));
+  return ret;
+}
+
+int ObDMLResolver::fill_hidden_clustering_key_expr_param(
+  const uint64_t table_id,
+  const uint64_t index_tid,
+  const ObTableSchema *table_schema,
+  ObRawExpr *&hidden_clustering_key_expr,
+  ObDMLStmt *stmt /* = NULL */)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(fill_tablet_id_seq_id_expr_param(table_id, index_tid, table_schema, hidden_clustering_key_expr, stmt))) {
+    LOG_WARN("unexpected null expr", K(ret));
+  }
   return ret;
 }
 
@@ -21542,6 +21569,58 @@ int ObDMLResolver::get_ivf_index_type_if_ddl(const ObDMLStmt &stmt, bool &is_ddl
       }
     }
   }
+  return ret;
+}
+
+int ObDMLResolver::fill_tablet_id_seq_id_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&tablet_id_seq_id_expr,
+    ObDMLStmt *stmt /* = NULL */)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == stmt) {
+    stmt = get_stmt();
+  }
+  if (OB_ISNULL(table_schema) || OB_ISNULL(tablet_id_seq_id_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(tablet_id_seq_id_expr));
+  } else if (OB_UNLIKELY(index_tid != table_schema->get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index table id", K(ret), K(index_tid), K(table_schema->get_table_id()));
+  } else if (OB_UNLIKELY(T_FUN_SYS_DOC_ID != tablet_id_seq_id_expr->get_expr_type()
+                      && T_PSEUDO_HIDDEN_CLUSTERING_KEY!= tablet_id_seq_id_expr->get_expr_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not doc id expr", K(ret), "expr type", tablet_id_seq_id_expr->get_expr_type());
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret), KP_(session_info), KP_(params_.expr_factory), KP(stmt));
+  } else {
+    CopySchemaExpr copier(*params_.expr_factory_);
+    ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(tablet_id_seq_id_expr);
+    ObRawExpr *part_expr = nullptr;
+    ObRawExpr *subpart_expr = nullptr;
+    schema::ObPartitionLevel part_level = table_schema->get_part_level();
+    ObRawExpr *calc_tablet_id_expr = nullptr;
+    if (OB_FAIL(copier.copy(stmt->get_part_expr(table_id, index_tid), part_expr))) {
+      LOG_WARN("failed to copy expr", K(ret));
+    } else if (OB_FAIL(copier.copy(stmt->get_subpart_expr(table_id, index_tid), subpart_expr))) {
+      LOG_WARN("failed to copy expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_calc_partition_tablet_id_expr(*params_.expr_factory_, *session_info_, index_tid,
+            part_level, part_expr, subpart_expr, calc_tablet_id_expr))) {
+      LOG_WARN("fail to build calculate tablet id expr", K(ret), K(index_tid), KPC(table_schema));
+    } else if (OB_ISNULL(calc_tablet_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret), KP(calc_tablet_id_expr));
+    } else if (OB_FAIL(expr->set_param_expr(calc_tablet_id_expr))) {
+      LOG_WARN("fail to add param expr", K(ret), KP(calc_tablet_id_expr));
+    } else if (OB_FAIL(expr->formalize(session_info_))) {
+      LOG_WARN("fail to formalize", K(ret), KP(session_info_));
+    }
+  }
+  STORAGE_FTS_LOG(DEBUG, "The dml resolver fills table_id+seq_id expr parameter", K(ret), K(table_id), K(index_tid),
+      KPC(tablet_id_seq_id_expr), KPC(table_schema));
   return ret;
 }
 }  // namespace sql

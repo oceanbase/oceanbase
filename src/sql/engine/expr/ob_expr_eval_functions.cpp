@@ -1432,7 +1432,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprAIRerank::eval_ai_rerank,                                     /* 859 */
   NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
   ObExprUDF::eval_mysql_udtf,                                         /* 861 */
-  NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
+  NULL, // ObExprHiddenClusteringKey::eval_hidden_clustering_key,     /* 862 */
   ObExprFormatProfile::format_profile,                                /* 863 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
   NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
@@ -1868,7 +1868,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprAIEmbed::eval_ai_embed_vector,                                   /* 230 */
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
   NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
-  NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
+  NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key, /* 233 */
   ObExprToPinyin::eval_to_pinyin_vector,                                 /* 234 */
   ObExprMul::mul_decint32_decint32_int32_vector,                         /* 235 */
   ObExprMul::mul_decint32_int32_decint32_vector,                         /* 236 */

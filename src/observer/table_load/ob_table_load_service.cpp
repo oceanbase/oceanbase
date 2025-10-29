@@ -734,6 +734,9 @@ int ObTableLoadService::check_support_direct_load_for_default_value(
         // 自增列
         else if (column_schema->is_autoincrement() || column_schema->is_identity_column()) {
         }
+        // hidden clustering key column in clustering key table
+        else if (column_schema->is_hidden_clustering_key_column()) {
+        }
         // 默认值是表达式
         else if (OB_UNLIKELY(lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext())) {
           ret = OB_NOT_SUPPORTED;

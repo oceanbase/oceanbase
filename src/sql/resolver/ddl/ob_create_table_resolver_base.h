@@ -41,13 +41,15 @@ protected:
                            ObTableSchema &table_schema,
                            const int64_t cur_rowkey_size,
                            int64_t &pk_data_length,
-                           ObColumnSchemaV2 *&col);
+                           ObColumnSchemaV2 *&col,
+                           const bool is_heap_table_clustering_key = false);
 
   int resolve_column_group_helper(const ParseNode *cg_node, ObTableSchema &table_schema);
   // check this type of table_schema should build column_group or not
   uint64_t gen_column_group_id();
   virtual int resolve_column_group(const ParseNode *cg_node) final;
-  int resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node);
+  int resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node,
+                                 bool &has_clustering_key, int64_t &clustering_key_index);
 protected:
   uint64_t cur_column_group_id_;
 };

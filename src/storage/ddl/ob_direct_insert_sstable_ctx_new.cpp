@@ -1517,6 +1517,7 @@ int ObTabletDirectLoadMgr::prepare_schema_item_on_demand(const uint64_t table_id
         schema_item_.is_index_table_ = table_schema->is_index_table();
         schema_item_.rowkey_column_num_ = table_schema->get_rowkey_column_num();
         schema_item_.is_unique_index_ = table_schema->is_unique_index();
+        schema_item_.is_table_with_clustering_key_ = table_schema->is_table_with_clustering_key();
         schema_item_.lob_inrow_threshold_ = is_vector_data_complement ?
                                             data_table_schema->get_lob_inrow_threshold() :
                                             table_schema->get_lob_inrow_threshold();

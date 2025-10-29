@@ -940,6 +940,12 @@ public:
   // returns true when users define the table organization as index (by tenant config or table option)
   inline bool is_index_organized_table() const
   { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_; }
+  inline bool is_table_with_clustering_key() const
+  { return is_table_with_pk() && is_table_with_hidden_pk_column(); }
+  // returns true when the table is index-organized and has a user-defined primary key (IOT with PK)
+  // 返回true: 表为索引组织表（IOT）且用户明确指定了主键
+  inline bool is_index_organized_table_with_pk() const
+  { return is_index_organized_table() && is_table_with_pk(); }
   inline bool view_column_filled() const
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
@@ -1309,7 +1315,8 @@ public:
     const bool multivalue_case = is_partitioned_table() && is_index_local_storage() && is_multivalue_index_aux();
     const bool vec_case = is_partitioned_table() && is_index_local_storage() &&
                           (is_vec_delta_buffer_type() || is_vec_index_id_type() || is_vec_index_snapshot_data_type() || is_vec_spiv_index_aux());
-    return heap_case || fts_case || vec_case || multivalue_case;
+    const bool cluster_case = is_partitioned_table() && is_index_local_storage() && data_table_schema.is_table_with_clustering_key();
+    return heap_case || fts_case || vec_case || multivalue_case || cluster_case;
   }
   inline void set_with_dynamic_partition_policy(bool with_dynamic_partition_policy)
   {
@@ -1769,6 +1776,7 @@ public:
   virtual int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
   virtual int set_precision_to_column_desc(common::ObIArray<share::schema::ObColDesc> &column_ids) const override;
   int get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int get_rowkey_column_ids_without_valid_check(common::ObIArray<uint64_t> &column_ids) const;
   int get_rowkey_partkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   int get_column_ids_without_rowkey(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool no_virtual = false) const;
   int get_generated_column_ids(common::ObIArray<uint64_t> &column_ids) const;
@@ -1780,6 +1788,7 @@ public:
   // 返回用户指定的主键列（IOT模式和HEAP模式）；
   int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
   int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
+  int get_heap_table_pk_without_valid_check(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
@@ -1943,8 +1952,8 @@ public:
   int get_partition_keys_by_part_func_expr(const common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
   int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
   int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
-  int check_primary_key_cover_partition_column();
-  int check_rowkey_cover_partition_keys(const common::ObPartitionKeyInfo &part_key);
+  int check_primary_key_cover_partition_column(ObSchemaGetterGuard &schema_guard);
+  int check_logic_pk_cover_partition_keys(const common::ObPartitionKeyInfo &part_key, const common::ObIArray<uint64_t> &logic_pks);
   int check_index_table_cover_partition_keys(const common::ObPartitionKeyInfo &part_key) const;
   int check_create_index_on_hidden_primary_key(const ObTableSchema &index_table) const;
   int check_skip_index_valid() const;

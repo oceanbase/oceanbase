@@ -108,6 +108,7 @@ public:
   static bool is_generated_column(uint64_t flag) { return is_virtual_generated_column(flag) || is_stored_generated_column(flag); }
   static bool is_identity_column(uint64_t flag) { return is_always_identity_column(flag) || is_default_identity_column(flag) || is_default_on_null_identity_column(flag); }
   static bool is_label_se_column(uint64_t flag);
+  static bool is_clustering_key_column(const uint64_t flag);
   static int add_column_to_table_schema(ObColumnSchemaV2 &column, ObTableSchema &table_schema);
   static int convert_sys_param_to_sysvar_schema(const ObSysParam &sysparam, ObSysVarSchema &sysvar_schema);
   static bool is_support_parallel_drop(const ObTableType table_type);

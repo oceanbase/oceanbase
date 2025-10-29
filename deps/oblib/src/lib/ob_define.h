@@ -2123,6 +2123,8 @@ const int64_t OB_DEFAULT_DUPLICATE_READ_CONSISTENCY = 0;
 // ss_gc
 const int64_t OB_SS_GC_TASK_TYPE_LENGTH = 32;
 
+// length for cluster by table __pk_increment column
+const int64_t OB_CLUSTER_BY_TABLE_HIDDEN_PK_BYTE_LENGTH = (sizeof(uint64_t) * 2);
 // json partial update expr flag
 enum ObJsonPartialUpdateFlag
 {

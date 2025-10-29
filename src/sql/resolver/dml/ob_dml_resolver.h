@@ -348,6 +348,7 @@ public:
   }
   ObIArray<ObExecParamRawExpr*> *get_query_ref_exec_params() { return query_ref_exec_params_; }
   int build_heap_table_hidden_pk_expr(ObRawExpr *&expr, const ObColumnRefRawExpr *ref_expr);
+  int build_hidden_clustering_key_expr(ObRawExpr *&expr, const ObColumnRefRawExpr *ref_expr);
   static int copy_schema_expr(ObRawExprFactory &factory,
                               ObRawExpr *expr,
                               ObRawExpr *&new_expr);
@@ -518,6 +519,12 @@ protected:
     const uint64_t index_tid,
     const ObTableSchema *table_schema,
     ObRawExpr *&vec_id_expr,
+    ObDMLStmt *stmt = NULL);
+  int fill_hidden_clustering_key_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&hidden_clustering_key_expr,
     ObDMLStmt *stmt = NULL);
   int fill_ivf_vec_expr_param(
     const uint64_t table_id,
@@ -1149,6 +1156,11 @@ private:
   int build_mocked_external_table_item(const share::schema::ObTableSchema *table_schema,
                                         TableItem *&tbl_item,
                                         const ParseNode *alias_node = NULL);
+  int fill_tablet_id_seq_id_expr_param(const uint64_t table_id,
+                                       const uint64_t index_tid,
+                                       const ObTableSchema *table_schema,
+                                       ObRawExpr *&tablet_id_seq_id_expr,
+                                       ObDMLStmt *stmt = NULL);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

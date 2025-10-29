@@ -1209,6 +1209,11 @@ inline static bool is_heap_table_primary_key_column(const int64_t column_flags)
 {
   return column_flags & HEAP_TABLE_PRIMARY_KEY_FLAG;
 }
+
+inline static bool is_heap_table_clustering_key_column(const int64_t column_flags)
+{
+  return column_flags & HEAP_TABLE_CLUSTERING_KEY_FLAG;
+}
 struct ObTenantTableId
 {
   ObTenantTableId() : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID)
