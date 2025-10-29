@@ -268,6 +268,17 @@ int ObHdfsCacheUtils::parse_hdfs_auth_info_(ObObjectStorageInfo *storage_info,
           OB_LOG(WARN, "failed to setup hdfs configs", K(ret), K(token),
                  K(kerberos_config.hdfs_configs), K(kerberos_config.configs_len));
         }
+      } else if (0 == strncmp(HADOOP_USERNAME, token, strlen(HADOOP_USERNAME))) {
+        if (OB_FAIL(ob_set_field(token + strlen(HADOOP_USERNAME),
+                                 kerberos_config.hadoop_username,
+                                 kerberos_config.username_len))) {
+          OB_LOG(WARN,
+                 "failed to setup hdfs username",
+                 K(ret),
+                 K(token),
+                 K(kerberos_config.hadoop_username),
+                 K(kerberos_config.username_len));
+        }
       }
     }
   }
@@ -290,6 +301,7 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
   char principal[OB_MAX_HDFS_SINGLE_CONF_LENGTH] = { 0 };
   char keytab_path[OB_MAX_HDFS_SINGLE_CONF_LENGTH] = { 0 };
   char ticiket_path[OB_MAX_HDFS_SINGLE_CONF_LENGTH] = { 0 };
+  char hadoop_username[OB_MAX_HDFS_SINGLE_CONF_LENGTH] = { 0 };
   char hdfs_configs[OB_MAX_HDFS_CONFS_LENGTH] = { 0 };
 
   bool is_kerberized = false;
@@ -305,7 +317,8 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
       principal,     sizeof(principal),
       keytab_path,   sizeof(keytab_path),   
       ticiket_path,  sizeof(ticiket_path),
-      hdfs_configs,  sizeof(hdfs_configs)};
+      hdfs_configs,  sizeof(hdfs_configs),
+      hadoop_username, sizeof(hadoop_username)};
 
   if (OB_ISNULL(hdfs_client)) {
     ret = OB_HDFS_INVALID_ARGUMENT;
@@ -326,6 +339,15 @@ int ObHdfsCacheUtils::create_fs_(ObHdfsFsClient *hdfs_client,
     if (0 != rv) {
       ret = OB_HDFS_INVALID_ARGUMENT;
       OB_LOG(WARN, "failed to set conf for fall back simple auth", K(ret), K(rv));
+    }
+    if (OB_SUCC(ret)) {
+      const char *username = kerberos_config.hadoop_username;
+      if (OB_ISNULL(username) || OB_LIKELY(0 == STRLEN(username))) {
+        /* do nothing */
+      } else {
+        obHdfsBuilderSetUserName(hdfs_builder, username);
+        OB_LOG(TRACE, "setup hadoop username", K(ret), K(username));
+      }
     }
     if (OB_SUCC(ret) && OB_LIKELY(kerberos_config.is_kerberized())) {
       OB_LOG(TRACE, "storage info krb 5conf", K(ret), K(kerberos_config.krb5conf_path));

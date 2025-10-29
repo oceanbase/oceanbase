@@ -191,6 +191,14 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
           LOG_WARN("failed to set configs", K(ret), KP(token));
         }
+      } else if (0 == strncmp(HADOOP_USERNAME, token, strlen(HADOOP_USERNAME))) {
+        if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
+          ret = OB_INVALID_BACKUP_DEST;
+          LOG_WARN("device don't support HADOOP_USERNAME yet", K(ret), K_(device_type), KP(token));
+        } else if (OB_FAIL(
+                       set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
+          LOG_WARN("failed to set hadoop username", K(ret), KP(token));
+        }
       }
     }
   }

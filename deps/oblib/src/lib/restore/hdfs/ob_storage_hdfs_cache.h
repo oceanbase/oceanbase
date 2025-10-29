@@ -83,6 +83,8 @@ private:
     const int64_t ticket_len;
     char *hdfs_configs;
     const int64_t configs_len;
+    char *hadoop_username;
+    const int64_t username_len;
 
     bool is_kerberized() const;
     bool is_using_ticket_cache() const;
