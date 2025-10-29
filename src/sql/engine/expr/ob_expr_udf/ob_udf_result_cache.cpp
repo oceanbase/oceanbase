@@ -240,28 +240,45 @@ int ObPLUDFResultCacheSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   ObPLUDFResultCacheCtx& rc_ctx = static_cast<ObPLUDFResultCacheCtx&>(ctx);
   rc_ctx.schema_guard_->set_session_id(rc_ctx.session_info_->get_sessid_for_table());
   ObSEArray<PCVPlSchemaObj, 4> schema_array;
+  ObSEArray<PCVPlSchemaObj, 4> sys_schema_array;
   bool has_old_version_err = false;
 
   schema_array.reset();
+  sys_schema_array.reset();
   int64_t new_tenant_schema_version = OB_INVALID_VERSION;
+  int64_t new_sys_schema_version = OB_INVALID_VERSION;
   bool need_check_schema = true;
+  bool need_check_sys_obj = true;
   bool is_old_version = false;
   bool is_same = true;
   pl::ObPLUDFResultCacheObject *cache_object = nullptr;
   if (OB_FAIL(get_all_dep_schema(rc_ctx,
-                                rc_ctx.session_info_->get_database_id(),
                                 new_tenant_schema_version,
-                                need_check_schema,
-                                schema_array))) {
+                                new_sys_schema_version,
+                                schema_array,
+                                sys_schema_array))) {
     LOG_WARN("failed to get all table schema", K(ret));
-  } else if (schema_array.count() != 0 && OB_FAIL(match_dep_schema(rc_ctx, schema_array, is_same))) {
+  } else if (schema_array.count() != 0 && OB_FAIL(match_dep_schema(rc_ctx, stored_schema_objs_, schema_array, is_same))) {
+    LOG_WARN("failed to match_dep_schema", K(ret));
+  } else if (!is_same) {
+    ret = OB_OLD_SCHEMA_VERSION;
+    LOG_WARN("failed to get all table schema", K(ret));
+  } else if (sys_schema_array.count() != 0 && OB_FAIL(match_dep_schema(rc_ctx, stored_sys_schema_objs_, sys_schema_array, is_same))) {
     LOG_WARN("failed to match_dep_schema", K(ret));
   } else if (!is_same) {
     ret = OB_OLD_SCHEMA_VERSION;
     LOG_WARN("failed to get all table schema", K(ret));
   } else if (OB_FAIL(check_value_version(rc_ctx.schema_guard_,
-                                          need_check_schema,
+                                          stored_schema_objs_,
                                           schema_array,
+                                          is_old_version))) {
+    LOG_WARN("fail to check table version", K(ret));
+  } else if (true == is_old_version) {
+    ret = OB_OLD_SCHEMA_VERSION;
+    LOG_WARN("failed to get all table schema", K(ret));
+  } else if (OB_FAIL(check_value_version(rc_ctx.schema_guard_,
+                                          stored_sys_schema_objs_,
+                                          sys_schema_array,
                                           is_old_version))) {
     LOG_WARN("fail to check table version", K(ret));
   } else if (true == is_old_version) {
@@ -279,7 +296,7 @@ int ObPLUDFResultCacheSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   } else {
     cache_obj = cache_object;
     cache_obj->set_dynamic_ref_handle(rc_ctx.handle_id_);
-    if (OB_FAIL(lift_tenant_schema_version(new_tenant_schema_version))) {
+    if (OB_FAIL(lift_schema_version(new_tenant_schema_version, new_sys_schema_version))) {
       LOG_WARN("failed to lift pcv's tenant schema version", K(ret));
     }
   }
@@ -299,31 +316,49 @@ int ObPLUDFResultCacheSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
   ObPLUDFResultCacheCtx& rc_ctx = static_cast<ObPLUDFResultCacheCtx&>(ctx);
   pl::ObPLUDFResultCacheObject *cache_object = static_cast<pl::ObPLUDFResultCacheObject *>(cache_obj);
   ObSEArray<PCVPlSchemaObj, 4> schema_array;
+  ObSEArray<PCVPlSchemaObj, 4> sys_schema_array;
 
   if (OB_ISNULL(rc_ctx.dependency_tables_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null dependency tables", K(ret));
   } else if (OB_FAIL(get_all_dep_schema(*rc_ctx.schema_guard_,
                                         *rc_ctx.dependency_tables_,
-                                        schema_array))) {
+                                        schema_array,
+                                        sys_schema_array))) {
     LOG_WARN("failed to get all dep schema", K(ret));
   } else {
     bool is_same = true;
     bool is_old_version = false;
     if (schema_array.count() != 0) {
-      if (OB_FAIL(match_dep_schema(rc_ctx, schema_array, is_same))) {
+      if (OB_FAIL(match_dep_schema(rc_ctx, stored_schema_objs_, schema_array, is_same))) {
         LOG_WARN("failed to match_dep_schema", K(ret));
       } else if (!is_same) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_WARN("old schema version, to be delete", K(ret), K(schema_array));
       } else if (check_value_version(rc_ctx.schema_guard_,
-                                      true,
+                                      stored_schema_objs_,
                                       schema_array,
                                       is_old_version)) {
         LOG_WARN("fail to check table version", K(ret));
       } else if (true == is_old_version) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_WARN("old schema version, to be delete", K(ret), K(schema_array));
+      }
+    }
+    if (OB_SUCC(ret) && sys_schema_array.count() != 0) {
+      if (OB_FAIL(match_dep_schema(rc_ctx, stored_sys_schema_objs_, sys_schema_array, is_same))) {
+        LOG_WARN("failed to match_dep_schema", K(ret));
+      } else if (!is_same) {
+        ret = OB_OLD_SCHEMA_VERSION;
+        LOG_WARN("old schema version, to be delete", K(ret), K(sys_schema_array));
+      } else if (check_value_version(rc_ctx.schema_guard_,
+                                      stored_sys_schema_objs_,
+                                      sys_schema_array,
+                                      is_old_version)) {
+        LOG_WARN("fail to check table version", K(ret));
+      } else if (true == is_old_version) {
+        ret = OB_OLD_SCHEMA_VERSION;
+        LOG_WARN("old schema version, to be delete", K(ret), K(sys_schema_array));
       }
     }
   }
