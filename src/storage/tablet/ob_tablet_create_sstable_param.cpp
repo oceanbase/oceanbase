@@ -262,8 +262,8 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     tx_data_recycle_scn_.set_min();
     rec_scn_.set_min();
     original_size_ = 0;
-    // TODO: (jiahua.cjh): add barrier version of 44x or 43x once patch is merged
-    compressor_type_ = compat_version >= DATA_VERSION_4_5_0_0
+    compressor_type_ = (compat_version >= MOCK_CLUSTER_VERSION_4_4_2_0
+                       || (MOCK_DATA_VERSION_4_3_5_5 <= compat_version && compat_version < DATA_VERSION_4_4_0_0))
                        ? storage_schema.get_compressor_type()
                        : ObCompressorType::NONE_COMPRESSOR;
     table_backup_flag_.reset();
