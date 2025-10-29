@@ -11251,9 +11251,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.plan_->set_enable_append(direct_load_optimizer_ctx.use_direct_load());
     spec.plan_->set_enable_inc_direct_load(ObDirectLoadMethod::is_incremental(direct_load_optimizer_ctx.load_method_));
     spec.plan_->set_enable_replace(direct_load_optimizer_ctx.insert_mode_ == ObDirectLoadInsertMode::INC_REPLACE);
-    spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
-                                                         .get_exec_ctx()->get_table_direct_insert_ctx()
-                                                         .get_online_sample_percent());
+    spec.plan_->set_online_sample_percent(direct_load_optimizer_ctx.online_sample_percent_);
+    spec.plan_->set_is_online_gather_statistics(direct_load_optimizer_ctx.is_online_gather_statistics_);
     spec.plan_->set_direct_load_need_sort(direct_load_optimizer_ctx.need_sort_);
     // check is insert overwrite
     bool is_insert_overwrite = false;
