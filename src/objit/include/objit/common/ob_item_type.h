@@ -2949,7 +2949,7 @@ typedef enum ObItemType
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_HYBRID_SEARCH_EXPRESSION = 4915,
   T_RESCAN = 4916, // rescan_op
-  T_DEFAULT_CATALOG = 4917, // for hive metastore side default catalog
+  T_HMS_CATALOG_NAME = 4917, // FARM COMPAT WHITELIST for hive metastore side default catalog
   T_TABLE_VERSION_QUERY = 4918,
   T_TABLE_VERSION_QUERY_TIMESTAMP = 4919,
   T_TABLE_LOCK_MODE_HINT = 4920,  // to lock table before execute dml
