@@ -1549,6 +1549,7 @@ public:
     index_ids_.reset();
     table_id_ = common::OB_INVALID_ID;
     is_drop_in_rebuild_task_ = false;
+    is_oracle_tmp_table_v2_index_table_ = false;
   }
   virtual ~ObDropIndexArg() {}
   int assign(const ObDropIndexArg &other);
@@ -1568,6 +1569,7 @@ public:
     index_ids_.reset();
     table_id_ = common::OB_INVALID_ID;
     is_drop_in_rebuild_task_ = false;
+    is_oracle_tmp_table_v2_index_table_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1583,6 +1585,7 @@ public:
   common::ObSEArray<int64_t, 5> index_ids_;
   uint64_t table_id_;
   bool is_drop_in_rebuild_task_;
+  bool is_oracle_tmp_table_v2_index_table_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -1774,6 +1777,7 @@ public:
       session_id_(common::OB_INVALID_ID),
       database_name_(),
       table_name_(),
+      table_id_(common::OB_INVALID_ID),
       is_add_to_scheduler_(false),
       compat_mode_(lib::Worker::CompatMode::INVALID),
       foreign_key_checks_(false)
@@ -1789,6 +1793,7 @@ public:
   uint64_t session_id_; //Pass in session id when truncate table
   common::ObString database_name_;
   common::ObString table_name_;
+  uint64_t table_id_;
   bool is_add_to_scheduler_;
   lib::Worker::CompatMode compat_mode_;
   bool foreign_key_checks_;
