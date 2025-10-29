@@ -4429,39 +4429,52 @@ int ObLSTabletService::safe_update_cas_tablet(
 
   ObTimeGuard time_guard("PickPriTransEpoch", 100_ms);
   // lock free
-  if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ls service", K(ret), KP(ls_svr));
-  } else if (OB_UNLIKELY(!mig_param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid mig_param", K(ret), K(mig_param));
-  } else if (OB_UNLIKELY(mig_param.get_transfer_dest_ls_id() != dest_ls_id)) { // check dest_ls
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dest_ls mismatch with mig_param", K(ret), K(dest_ls), K(mig_param));
-  } else if (FALSE_IT(src_ls_id = mig_param.get_transfer_src_ls_id())) {
-  } else if (OB_FAIL(ls_svr->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("failed to get src ls", K(ret), K(src_ls_id));
-  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null src_ls", K(ret), K(src_ls_handle));
-  } else if (OB_FAIL(src_ls->ha_get_tablet(tablet_id, src_tablet_handle))) {
-    LOG_WARN("failed to ha get tablet", K(ret), K(tablet_id), K(src_ls_handle), K(mig_param));
-  } else if (FALSE_IT(time_guard.click("GetSrcTablet"))) {
-  } else if (OB_FAIL(src_tablet_handle.get_obj()->get_private_transfer_epoch(old_private_transfer_epoch))) {
-    LOG_WARN("failed to get private transfer epoch from src_tablet", K(ret), "src_tablet_meta", src_tablet_handle.get_obj()->get_tablet_meta(),
-      K(mig_param));
-  } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.pick_private_transfer_epoch(dest_ls_id,
-                                                                             dest_ls.get_ls_epoch(),
-                                                                             tablet_id,
-                                                                             old_private_transfer_epoch,
-                                                                             private_transfer_epoch))) {
-    LOG_WARN("failed to pick private transfer epoch", K(dest_ls_id), K(tablet_id),
-      K(old_private_transfer_epoch), K(private_transfer_epoch));
+  if (!GCTX.is_shared_storage_mode()) {
+    // do nothing
   } else {
-    time_guard.click("PickPriTransEpoch");
-    LOG_INFO("succeed to pick private transfer epoch by mig_param", K(ret), K(dest_ls_id),
-      K(src_ls_id), K(tablet_id), "transfer_info", mig_param.transfer_info_, K(old_private_transfer_epoch),
-      K(private_transfer_epoch), K(time_guard));
+    if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ls service", K(ret), KP(ls_svr));
+    } else if (OB_UNLIKELY(!mig_param.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid mig_param", K(ret), K(mig_param));
+    } else if (OB_UNLIKELY(mig_param.get_transfer_dest_ls_id() != dest_ls_id)) { // check dest_ls
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dest_ls mismatch with mig_param", K(ret), K(dest_ls), K(mig_param));
+    } else if (FALSE_IT(src_ls_id = mig_param.get_transfer_src_ls_id())) {
+    } else if (OB_FAIL(ls_svr->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get src ls", K(ret), K(src_ls_id));
+    } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null src_ls", K(ret), K(src_ls_handle));
+    } else if (OB_FAIL(src_ls->ha_get_tablet(tablet_id, src_tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(mig_param.transfer_info_.get_private_transfer_epoch(old_private_transfer_epoch))) {
+          LOG_WARN("failed to get transfer epoch from mig param", K(ret), K(mig_param));
+        }
+      } else {
+        LOG_WARN("failed to ha get tablet", K(ret), K(tablet_id), K(src_ls_handle), K(mig_param));
+      }
+    } else if (FALSE_IT(time_guard.click("GetSrcTablet"))) {
+    } else if (OB_FAIL(src_tablet_handle.get_obj()->get_private_transfer_epoch(old_private_transfer_epoch))) {
+      LOG_WARN("failed to get private transfer epoch from src_tablet", K(ret), "src_tablet_meta", src_tablet_handle.get_obj()->get_tablet_meta(),
+        K(mig_param));
+    }
+
+    if (FAILEDx(TENANT_STORAGE_META_SERVICE.pick_private_transfer_epoch(dest_ls_id,
+                                                                              dest_ls.get_ls_epoch(),
+                                                                              tablet_id,
+                                                                              old_private_transfer_epoch,
+                                                                              private_transfer_epoch))) {
+      LOG_WARN("failed to pick private transfer epoch", K(dest_ls_id), K(tablet_id),
+        K(old_private_transfer_epoch), K(private_transfer_epoch));
+    } else {
+      time_guard.click("PickPriTransEpoch");
+      LOG_INFO("succeed to pick private transfer epoch by mig_param", K(ret), K(dest_ls_id),
+        K(src_ls_id), K(tablet_id), "transfer_info", mig_param.transfer_info_, K(old_private_transfer_epoch),
+        K(private_transfer_epoch), K(time_guard));
+    }
   }
   return ret;
 }
