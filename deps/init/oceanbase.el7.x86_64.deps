@@ -49,7 +49,7 @@ obdevtools-llvm-11.0.1-312022092921.el7.x86_64.rpm cpp_standard=11
 obdevtools-llvm-17.0.3-232024111415.el7.x86_64.rpm cpp_standard=20
 
 [tools-deps]
-devdeps-oblogmsg-1.1-142025090420.el7.x86_64.rpm
+devdeps-oblogmsg-1.1-52024052811.el7.x86_64.rpm
 devdeps-rocksdb-6.22.1-32024123015.el7.x86_64.rpm
 obstack-2.0.4-172024070513.el7.x86_64.rpm
 obshell-4.3.2.0-52025092411.el7.x86_64.rpm target=community

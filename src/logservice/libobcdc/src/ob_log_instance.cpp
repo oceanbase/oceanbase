@@ -158,7 +158,7 @@ ObLogInstance::ObLogInstance() :
     output_dml_br_count_(0),
     output_ddl_br_count_(0),
     stop_flag_(true),
-    last_heartbeat_timestamp_nano_sec_(0),
+    last_heartbeat_timestamp_micro_sec_(0),
     is_assign_log_dir_valid_(false),
     br_index_in_trans_(0),
     part_trans_task_count_(0),
@@ -643,7 +643,7 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       flow_control_tid_ = 0;
       output_dml_br_count_ = 0;
       output_ddl_br_count_ = 0;
-      last_heartbeat_timestamp_nano_sec_ = start_tstamp_ns - 1;
+      last_heartbeat_timestamp_micro_sec_ = start_tstamp_ns / NS_CONVERSION - 1;
       log_clean_cycle_time_us_ = TCONF.log_clean_cycle_time_in_hours * _HOUR_;
       part_trans_task_count_ = 0;
     }
@@ -1451,7 +1451,7 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
 
     TCONF.destroy();
     stop_flag_ = true;
-    last_heartbeat_timestamp_nano_sec_ = 0;
+    last_heartbeat_timestamp_micro_sec_ = 0;
     trans_stat_mgr_ = NULL;
     tenant_mgr_ = NULL;
     global_errno_ = 0;
@@ -1761,14 +1761,14 @@ int ObLogInstance::next_record(IBinlogRecord **record,
       int record_type = (*record)->recordType();
 
       if (HEARTBEAT == record_type) {
-        int64_t timestamp_nano_sec = (*record)->getTimestamp() * _SEC_NS_ + (*record)->getRecordUsec();
-        last_heartbeat_timestamp_nano_sec_ =
-            std::max(timestamp_nano_sec, last_heartbeat_timestamp_nano_sec_);
+        int64_t timestamp_usec = (*record)->getTimestamp() * 1000000 + (*record)->getRecordUsec();
+        last_heartbeat_timestamp_micro_sec_ =
+            std::max(timestamp_usec, last_heartbeat_timestamp_micro_sec_);
       }
 
       // NOTE: Set the timestamp of the last heartbeat to Checkpoint1 of the data
-      (*record)->setCheckpoint(last_heartbeat_timestamp_nano_sec_ / _SEC_NS_,
-          (last_heartbeat_timestamp_nano_sec_ % _SEC_NS_) / 1000);
+      (*record)->setCheckpoint(last_heartbeat_timestamp_micro_sec_ / 1000000,
+          last_heartbeat_timestamp_micro_sec_ % 1000000);
 
       if (EDDL == record_type) {
         ATOMIC_INC(&output_ddl_br_count_);

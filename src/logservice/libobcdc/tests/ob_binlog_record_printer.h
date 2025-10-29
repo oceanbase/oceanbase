@@ -15,7 +15,6 @@
 #ifndef OCEANBASE_LIBOBCDC_TESTS_BINLOG_RECORD_PRINTER_H__
 #define OCEANBASE_LIBOBCDC_TESTS_BINLOG_RECORD_PRINTER_H__
 
-#include <cstdint>
 #ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
 #else
@@ -74,7 +73,6 @@ public:
       const bool enable_print_special_detail);
   void destroy();
   static int64_t get_precise_timestamp(IBinlogRecord &br);
-  static void get_br_commit_version_delta(IBinlogRecord &br, int64_t &timestamp, int64_t &delta_usec);
 
 private:
   int open_file_(const char *data_file, int &fd);
