@@ -1307,12 +1307,25 @@ inline void ObLogger::do_log_message(const char *mod_name,
           log_item->set_data_len(pos);
           log_item->set_header_len(pos);
           if (allow) {
-            if (OB_FAIL(log_data_func(buf, buf_len, pos)) && buf_len == MAX_LOG_SIZE) {
-              LOG_STDERR("log data error ret = %d\n", ret);
+            if (OB_FAIL(log_data_func(buf, buf_len, pos))) {
+              if (OB_SIZE_OVERFLOW == ret) {
+                if (buf_len != MAX_LOG_SIZE) {
+                  // do-nothing
+                } else {
+                  if (pos < buf_len - 2) {
+                    pos = buf_len - 2;
+                  }
+                  check_log_end(*log_item, pos);
+                }
+              } else {
+                LOG_STDERR("log data error ret = %d\n", ret);
+              }
             } else if (OB_FAIL(check_log_end(*log_item, pos))) {
               // do nothing
-            } else if (OB_FAIL(backtrace_if_needed(*log_item, force_bt)) && buf_len == MAX_LOG_SIZE) {
-              LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
+            } else if (OB_FAIL(backtrace_if_needed(*log_item, force_bt))) {
+              if (OB_SIZE_OVERFLOW != ret) {
+                LOG_STDERR("backtrace_if_needed error ret = %d\n", ret);
+              }
             }
           } else {
             int64_t pos = log_item->get_header_len();
