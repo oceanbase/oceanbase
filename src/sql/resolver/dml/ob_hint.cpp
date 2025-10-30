@@ -33,6 +33,7 @@ void ObPhyPlanHint::reset()
   log_level_.reset();
   parallel_ = -1;
   monitor_ = false;
+  table_lock_mode_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(ObPhyPlanHint,
@@ -42,7 +43,8 @@ OB_SERIALIZE_MEMBER(ObPhyPlanHint,
                     force_trace_log_,
                     log_level_,
                     parallel_,
-                    monitor_);
+                    monitor_,
+                    table_lock_mode_);
 
 int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator)
 {
@@ -53,6 +55,7 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   force_trace_log_ = other.force_trace_log_;
   parallel_ = other.parallel_;
   monitor_ = other.monitor_;
+  table_lock_mode_ = other.table_lock_mode_;
   if (OB_FAIL(ob_write_string(allocator, other.log_level_, log_level_))) {
     LOG_WARN("Failed to deep copy log level", K(ret));
   }
