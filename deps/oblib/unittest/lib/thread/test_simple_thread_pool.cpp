@@ -89,8 +89,22 @@ TEST(TestSimpleThreadPool, test_dynamic_simple_thread_pool_bind)
   ret = pool.set_adaptive_thread(1, 3);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_TRUE(pool.has_bind_);
+
+  cotesting::FlexPool bg_thread([&pool] {
+    {
+      SpinWLockGuard guard(ObSimpleThreadPoolDynamicMgr::get_instance().simple_thread_pool_list_lock_);
+      pool.inc_ref();
+    }
+    usleep(10 * 1000);
+    pool.dec_ref();
+  }, 1);
+  bg_thread.start(false);
+  usleep(1000);
   pool.stop();
   ASSERT_FALSE(pool.has_bind_);
+  pool.wait();
+  ASSERT_EQ(pool.get_ref_cnt(), 0);
+  bg_thread.wait();
 }
 
 TEST(TestSimpleThreadPool, DISABLED_test_dynamic_simple_thread_pool)

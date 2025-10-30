@@ -381,11 +381,23 @@ void ObSimpleDynamicThreadPool::destroy()
   int64_t ref_cnt = 0;
   while ((ref_cnt = get_ref_cnt()) > 0) {
     if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-      COMMON_LOG(INFO, "wait tenant io manager quit", K(*this), K(ref_cnt));
+      COMMON_LOG(INFO, "wait ObSimpleDynamicThreadPool ref cnt", K(*this), K(ref_cnt));
     }
     ob_usleep((useconds_t)10L * 1000L);
   }
   lib::ThreadPool::stop();
+  lib::ThreadPool::wait();
+}
+
+void ObSimpleDynamicThreadPool::wait()
+{
+  int64_t ref_cnt = 0;
+  while ((ref_cnt = get_ref_cnt()) > 0) {
+    if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+      COMMON_LOG(INFO, "wait ObSimpleDynamicThreadPool ref cnt", K(*this), K(ref_cnt));
+    }
+    ob_usleep((useconds_t)10L * 1000L);
+  }
   lib::ThreadPool::wait();
 }
 

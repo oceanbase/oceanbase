@@ -103,6 +103,7 @@ public:
   int init(const int64_t thread_num, const char* name, const int64_t tenant_id);
   virtual void stop() override;
   void destroy();
+  void wait();
   int set_adaptive_thread(int64_t min_thread_num, int64_t max_thread_num);
   virtual int64_t get_queue_num() const = 0;
   void try_expand_thread_count();
