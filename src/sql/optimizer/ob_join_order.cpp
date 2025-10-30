@@ -14445,8 +14445,11 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add path", K(ret));
-    } else if (CONNECT_BY_JOIN == join_type &&
-               OB_FAIL(push_down_order_siblings(join_path, right_path))) {
+    } else if (CONNECT_BY_JOIN == join_type
+               && OB_FAIL(push_down_right_order_siblings(join_path, right_path))) {
+      LOG_WARN("push down order siblings by condition failed", K(ret));
+    } else if (CONNECT_BY_JOIN == join_type
+               && OB_FAIL(push_down_left_order_siblings(join_path, left_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
     } else {
       LOG_TRACE("succeed to create a hash join path", K(join_type),
@@ -17012,7 +17015,93 @@ int ObJoinOrder::find_minimal_cost_path(const ObIArray<ObSEArray<Path*, 16>> &pa
   return ret;
 }
 
-int ObJoinOrder::push_down_order_siblings(JoinPath *join_path, const Path *right_path)
+int ObJoinOrder::map_connect_by_columns(const ObSelectStmt *stmt,
+                                        const ObIArray<ObRawExpr *> &right_column_exprs,
+                                        ObIArray<ObRawExpr *> &left_column_exprs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t left_table_id = OB_INVALID_ID;
+  if (stmt->get_table_items().count() != 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect table items num for connect by", K(ret));
+  } else {
+    left_table_id = stmt->get_table_items().at(0)->table_id_;
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < right_column_exprs.count(); i++) {
+    if (!OB_ISNULL(right_column_exprs.at(i)) && right_column_exprs.at(i)->is_column_ref_expr()) {
+      const ObColumnRefRawExpr *right_column_ref_expr =
+        static_cast<const ObColumnRefRawExpr *>(right_column_exprs.at(i));
+      if (left_table_id == right_column_ref_expr->get_table_id()) {
+        left_table_id = stmt->get_table_items().at(1)->table_id_;
+      }
+      const ColumnItem *column_item =
+        stmt->get_column_item(left_table_id, right_column_ref_expr->get_column_id());
+      if (OB_ISNULL(column_item) || OB_ISNULL(column_item->expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find column item", K(ret), K(right_column_ref_expr));
+      } else if (OB_FAIL(left_column_exprs.push_back(column_item->expr_))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::push_down_left_order_siblings(JoinPath *join_path, const Path *left_path)
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt());
+  if (OB_ISNULL(join_path) || OB_ISNULL(left_path) ||
+      OB_ISNULL(stmt) || OB_ISNULL(left_path->get_sharding())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt), K(join_path), K(left_path), K(ret));
+  } else if (stmt->is_order_siblings()) {
+    ObSEArray<OrderItem, 4> left_order_items;
+    for (int i = 0; OB_SUCC(ret) && i < stmt->get_order_items().count(); i++) {
+      ObSEArray<ObRawExpr *, 4> col_exprs;
+      ObSEArray<ObRawExpr *, 4> new_exprs;
+      OrderItem order_item_clone;
+      const OrderItem &order_item = stmt->get_order_items().at(i);
+      order_item_clone.order_type_ = order_item.order_type_;
+      ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+      if (OB_FAIL(ObRawExprUtils::extract_column_exprs(order_item.expr_, col_exprs))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      } else if (OB_FAIL(map_connect_by_columns(stmt, col_exprs, new_exprs))) {
+        LOG_WARN("failed to copy order exprs", K(ret));
+      } else if (OB_FAIL(copier.add_replaced_expr(col_exprs, new_exprs))) {
+        LOG_WARN("failed to replace expr", K(ret));
+      } else if (OB_FAIL(copier.copy_on_replace(order_item.expr_, order_item_clone.expr_))) {
+        LOG_WARN("failed to replace expr", K(ret));
+      } else if (OB_FAIL(left_order_items.push_back(order_item_clone))) {
+        LOG_WARN("failed to assign expr", K(ret));
+      }
+    }
+    int64_t left_prefix_pos = 0;
+    bool left_need_sort = true;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL((ObOptimizerUtil::check_need_sort(left_order_items,
+                                                  left_path->ordering_,
+                                                  left_path->parent_->get_fd_item_set(),
+                                                  left_path->parent_->get_output_equal_sets(),
+                                                  left_path->parent_->get_output_const_exprs(),
+                                                  get_plan()->get_onetime_query_refs(),
+                                                  left_path->parent_->get_is_at_most_one_row(),
+                                                  left_need_sort,
+                                                  left_prefix_pos)))) {
+      LOG_WARN("failed to check if need sort", K(ret));
+    } else {
+      join_path->left_need_sort_ = left_need_sort;
+      join_path->left_prefix_pos_ = left_prefix_pos;
+      if (OB_FAIL(join_path->left_sort_keys_.assign(left_order_items))) {
+        LOG_WARN("failed to assign expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::push_down_right_order_siblings(JoinPath *join_path, const Path *right_path)
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt());
@@ -17036,8 +17125,7 @@ int ObJoinOrder::push_down_order_siblings(JoinPath *join_path, const Path *right
     } else {
       join_path->right_need_sort_ = right_need_sort;
       join_path->right_prefix_pos_ = right_prefix_pos;
-      if (join_path->is_right_need_sort() &&
-          OB_FAIL(join_path->right_sort_keys_.assign(stmt->get_order_items()))) {
+      if (OB_FAIL(join_path->right_sort_keys_.assign(stmt->get_order_items()))) {
         LOG_WARN("failed to assign expr", K(ret));
       } else { /*do nothing*/ }
     }
@@ -17118,7 +17206,10 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
     }
     if (OB_FAIL(ret)) {
     } else if (CONNECT_BY_JOIN == join_type &&
-               OB_FAIL(push_down_order_siblings(join_path, right_path))) {
+               OB_FAIL(push_down_right_order_siblings(join_path, right_path))) {
+      LOG_WARN("push down order siblings by condition failed", K(ret));
+    } else if (CONNECT_BY_JOIN == join_type &&
+               OB_FAIL(push_down_left_order_siblings(join_path, left_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));

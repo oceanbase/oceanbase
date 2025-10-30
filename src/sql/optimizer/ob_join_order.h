@@ -2427,8 +2427,11 @@ struct MergeKeyInfoHelper
                                      bool &best_need_sort,
                                      int64_t &best_prefix_pos,
                                      bool prune_mj);
-
-    int push_down_order_siblings(JoinPath *join_path, const Path *right_path);
+    int map_connect_by_columns(const ObSelectStmt *stmt,
+                               const ObIArray<ObRawExpr *> &right_column_exprs,
+                               ObIArray<ObRawExpr *> &left_column_exprs);
+    int push_down_left_order_siblings(JoinPath *join_path, const Path *right_path);
+    int push_down_right_order_siblings(JoinPath *join_path, const Path *right_path);
 
     int create_and_add_nl_path(const Path *left_path,
                                const Path *right_path,
