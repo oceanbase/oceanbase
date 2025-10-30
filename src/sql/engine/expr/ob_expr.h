@@ -884,6 +884,7 @@ public:
       uint64_t is_fixed_length_data_:1; // wether data of this expr is fixed length
       uint64_t nullable_:1;
       uint64_t is_hidden_clustering_key_column_:1;
+      uint64_t eager_evaluation_:1;
     };
     uint64_t flag_;
   };
