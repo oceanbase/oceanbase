@@ -81,9 +81,7 @@ public:
   static int get_distance_threshold_hnsw(ObExpr &expr,
                                          float &similarity_threshold,
                                          float &distance_threshold);
-  static int get_distance_threshold_ivf(ObExpr &expr,
-                                        float &similarity_threshold,
-                                        float &distance_threshold);
+  static int check_ivf_support_similarity_threshold(ObExpr &expr);
 };
 
 }  // namespace sql

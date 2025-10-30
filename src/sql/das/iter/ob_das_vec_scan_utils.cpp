@@ -114,23 +114,17 @@ int ObDasVecScanUtils::get_distance_threshold_hnsw(ObExpr &expr,
   return ret;
 }
 
-int ObDasVecScanUtils::get_distance_threshold_ivf(ObExpr &expr,
-                                                  float &similarity_threshold,
-                                                  float &distance_threshold)
+int ObDasVecScanUtils::check_ivf_support_similarity_threshold(ObExpr &expr)
 {
   int ret = OB_SUCCESS;
 
   switch (expr.type_) {
     case T_FUN_SYS_L2_DISTANCE:
-      // l2_similarity = 1 / (1 + l2_square_distance), ob use l2_distance
-      distance_threshold = sqrt(1 / similarity_threshold - 1);
       break;
     // currently we don't support ip similarity
     // case T_FUN_SYS_INNER_PRODUCT:
     // case T_FUN_SYS_NEGATIVE_INNER_PRODUCT:
     case T_FUN_SYS_COSINE_DISTANCE:
-      // cosine_similarity = (1 + cosine) / 2, ob cosine_distance = 1 - cosine
-      distance_threshold = 2 - 2 * similarity_threshold;
       break;
     default:
       ret = OB_NOT_SUPPORTED;
