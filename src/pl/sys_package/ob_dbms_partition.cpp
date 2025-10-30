@@ -17,17 +17,20 @@
 #include "rootserver/ob_tenant_event_def.h"
 #include "share/ob_dynamic_partition_manager.h"
 #include "lib/string/ob_sql_string.h"
+#include "pl/ob_pl.h"
 
 namespace oceanbase
 {
 using namespace tenant_event;
+using namespace share;
+using namespace share::schema;
 
 namespace pl
 {
 
 /**
  * @brief ObDBMSPartition::manage_dynamic_partition
- * @param exec_ctx
+ * @param pl_ctx
  * @param params
  *      0. precreate_time    VARCHAR2    DEFAULT NULL,
  *      1. time_unit         VARCHAR2    DEFAULT NULL,
@@ -43,7 +46,7 @@ namespace pl
  *   NULL means all dynamic partition tables will perform dynamic partition manage.
  *   We have an hourly scheduled task with time_unit = 'hour', and a daily scheduled task with time_unit = 'day,week,month,year'.
  */
-int ObDBMSPartition::manage_dynamic_partition(ObExecContext &exec_ctx, ParamStore &params, ObObj &result)
+int ObDBMSPartition::manage_dynamic_partition(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &result)
 {
   int ret = OB_SUCCESS;
   FLOG_INFO("[DYNAMIC_PARTITION] start to manage dynamic partition");
@@ -57,13 +60,16 @@ int ObDBMSPartition::manage_dynamic_partition(ObExecContext &exec_ctx, ParamStor
   ObArray<ObString> time_unit_strs;
   ObSchemaGetterGuard schema_guard;
   ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
-  if (OB_ISNULL(exec_ctx.get_my_session())) {
+  if (OB_ISNULL(pl_ctx.exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec context is null", KR(ret));
+  } else if (OB_ISNULL(pl_ctx.exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", KR(ret));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is null", KR(ret));
-  } else if (FALSE_IT(tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id())) {
+  } else if (FALSE_IT(tenant_id = pl_ctx.exec_ctx_->get_my_session()->get_effective_tenant_id())) {
   } else if (OB_FAIL(ObDynamicPartitionManager::check_tenant_is_valid_for_dynamic_partition(tenant_id, is_valid_tenant))) {
     LOG_WARN("fail to check tenant is valid for dynamic partition", KR(ret), K(tenant_id));
   } else if (!is_valid_tenant) {
@@ -114,7 +120,7 @@ int ObDBMSPartition::manage_dynamic_partition(ObExecContext &exec_ctx, ParamStor
         ObDynamicPartitionManager dynamic_partition_manager;
         int tmp_ret = OB_SUCCESS;
         bool skipped = false;
-        if (OB_TMP_FAIL(dynamic_partition_manager.init(table_schema, exec_ctx.get_my_session()))) {
+        if (OB_TMP_FAIL(dynamic_partition_manager.init(table_schema, pl_ctx.exec_ctx_->get_my_session()))) {
           LOG_WARN("fail to init dynamic partition manager", KR(tmp_ret), KPC(table_schema));
         } else if (OB_TMP_FAIL(dynamic_partition_manager.execute(precreate_time_str, time_unit_strs, skipped))) {
           LOG_WARN("fail to execute dynamic partition manage", KR(tmp_ret), K(precreate_time_str), K(time_unit_strs));
