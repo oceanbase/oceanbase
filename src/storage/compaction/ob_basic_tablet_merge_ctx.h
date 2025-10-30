@@ -275,10 +275,10 @@ public:
   OB_INLINE int64_t get_snapshot() const { return static_param_.version_range_.snapshot_version_; }
   OB_INLINE const SCN & get_end_scn() const { return static_param_.scn_range_.end_scn_; }
   virtual const share::ObPreWarmerParam &get_pre_warm_param() const { return static_param_.pre_warm_param_; }
-  int get_storage_schema();
+  int get_storage_schema(ObStorageSchema *&schema);
   int update_storage_schema_by_memtable(
-    const ObStorageSchema &schema_on_tablet,
-    const ObTablesHandleArray &merge_tables_handle);
+    const ObTablesHandleArray &merge_tables_handle,
+    ObStorageSchema &schema);
   static bool need_swap_tablet(
     ObProtectedMemtableMgrHandle &memtable_mgr_handle,
     const int64_t row_count,
@@ -314,11 +314,6 @@ protected:
   virtual int prepare_index_tree() = 0;
   virtual void update_and_analyze_progress() {}
   virtual int create_sstable(const blocksstable::ObSSTable *&new_sstable) = 0;
-  OB_INLINE int get_schema_info_from_tables(
-    const ObTablesHandleArray &merge_tables_handle,
-    const int64_t column_cnt_in_schema,
-    int64_t &max_column_cnt_in_memtable,
-    int64_t &max_schema_version_in_memtable);
   virtual int update_tablet_directly(ObGetMergeTablesResult &get_merge_table_result)
   {
     UNUSED(get_merge_table_result);

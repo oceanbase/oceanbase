@@ -2228,10 +2228,14 @@ void ObStorageSchema::reset_string(ObString &str)
   str.reset();
 }
 
-void ObStorageSchema::update_column_cnt(const int64_t input_col_cnt)
+void ObStorageSchema::update_column_cnt_and_schema_version(
+    const int64_t input_col_cnt,
+    const int64_t input_store_col_cnt,
+    const int64_t input_schema_version)
 {
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
-  store_column_cnt_ = MAX(store_column_cnt_, input_col_cnt);
+  store_column_cnt_ = MAX(store_column_cnt_, input_store_col_cnt);
+  schema_version_ = MAX(schema_version_, input_schema_version);
   if (column_cnt_ != column_array_.count()) {
     column_info_simplified_ = true;
     STORAGE_LOG(INFO, "update column cnt", K(column_cnt_), K(store_column_cnt_), K(column_cnt_), K(column_array_.count()));

@@ -4112,7 +4112,7 @@ int ObTablet::get_max_sync_storage_schema_version_(int64_t &max_schema_version) 
   return ret;
 }
 
-int ObTablet::get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt)
+int ObTablet::get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt) const
 {
   int ret = OB_SUCCESS;
   max_column_cnt = 0;
@@ -7419,13 +7419,9 @@ int ObTablet::get_storage_schema_for_transfer_in(
     ObStorageSchema &storage_schema) const
 {
   int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   ObStorageSchema *tablet_storage_schema = nullptr;
   ObArray<ObTableHandleV2> memtables;
-  int64_t max_column_cnt_in_memtable = 0;
-  int64_t max_schema_version_in_memtable = 0;
-  int64_t store_column_cnt_in_schema = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -7436,36 +7432,15 @@ int ObTablet::get_storage_schema_for_transfer_in(
     LOG_WARN("failed to get all memtable", K(ret), KPC(this));
   } else if (OB_FAIL(load_storage_schema(allocator, tablet_storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret), K_(storage_schema_addr));
-  } else if (OB_FAIL(tablet_storage_schema->get_store_column_count(store_column_cnt_in_schema, true/*full_col*/))) {
-    LOG_WARN("failed to get store column count", K(ret), K(store_column_cnt_in_schema));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
-      ObITable *table = memtables.at(i).get_table();
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table in tables_handle is invalid", K(ret), KP(table));
-      } else if (table->is_memtable()) {
-        ObITabletMemtable *memtable = static_cast<ObITabletMemtable *>(table);
-        if (OB_FAIL(memtable->get_schema_info(
-                store_column_cnt_in_schema, max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
-          LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(table));
-        }
-      }
-    }
-
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(storage_schema.init(allocator, *tablet_storage_schema))) {
-    LOG_WARN("failed to init storage schema", K(ret), K(ls_id), K(tablet_id), KPC(tablet_storage_schema));
+    LOG_WARN("failed to init storage schema", K(ret), KPC(tablet_storage_schema));
+  } else if (OB_FAIL(ObStorageSchemaUtil::update_storage_schema_by_memtable(*this, memtables, storage_schema))) {
+    LOG_WARN("failed to update storage schema by memtable", K(ret), KPC(this));
   } else {
-    int64_t old_column_cnt = storage_schema.get_column_count();
-    int64_t old_schema_version = storage_schema.get_schema_version();
-    storage_schema.update_column_cnt(max_column_cnt_in_memtable);
-    storage_schema.schema_version_ = MAX(old_schema_version, max_schema_version_in_memtable);
-    LOG_INFO("succeeded to get storage schema from transfer source tablet", K(ret), K(storage_schema), K(max_column_cnt_in_memtable),
-        K(max_schema_version_in_memtable), K(old_column_cnt), K(store_column_cnt_in_schema), K(old_schema_version));
+    LOG_INFO("succeeded to get storage schema from transfer source tablet",
+      K(ret), "old_schema", *tablet_storage_schema, "new_schema", storage_schema);
   }
+
   ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
   return ret;
 }

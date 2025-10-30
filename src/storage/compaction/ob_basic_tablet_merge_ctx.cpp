@@ -750,19 +750,18 @@ bool ObBasicTabletMergeCtx::need_swap_tablet(
   return bret;
 }
 
-int ObBasicTabletMergeCtx::get_storage_schema()
+int ObBasicTabletMergeCtx::get_storage_schema(ObStorageSchema *&schema)
 {
   int ret  = OB_SUCCESS;
-  ObStorageSchema *schema_on_tablet = nullptr;
+  schema = nullptr;
   ObTabletHAStatus ha_status = get_tablet()->get_tablet_meta().ha_status_;
-  if (OB_FAIL(get_tablet()->load_storage_schema(mem_ctx_.get_allocator(), schema_on_tablet))) {
+  if (OB_FAIL(get_tablet()->load_storage_schema(mem_ctx_.get_allocator(), schema))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
   } else if (OB_UNLIKELY(!ha_status.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ha status", K(ret), K(ha_status));
   } else {
-    static_param_.schema_ = schema_on_tablet;
-    static_param_.is_delete_insert_merge_ = schema_on_tablet->is_delete_insert_merge_engine();
+    static_param_.is_delete_insert_merge_ = schema->is_delete_insert_merge_engine();
     static_param_.is_ha_compeleted_ = ha_status.is_none();
   }
   return ret;
@@ -771,9 +770,11 @@ int ObBasicTabletMergeCtx::get_storage_schema()
 int ObBasicTabletMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_storage_schema())) {
+  ObStorageSchema *schema = nullptr;
+  if (OB_FAIL(get_storage_schema(schema))) {
     LOG_WARN("failed to get storage schema on tablet", KR(ret));
   } else {
+    static_param_.schema_ = schema;
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC_(static_param_.schema));
   }
   return ret;
@@ -1218,79 +1219,31 @@ int ObBasicTabletMergeCtx::build_index_tree(
   return ret;
 }
 
-int ObBasicTabletMergeCtx::get_schema_info_from_tables(
-  const ObTablesHandleArray &merge_tables_handle,
-  const int64_t column_cnt_in_schema,
-  int64_t &max_column_cnt_in_memtable,
-  int64_t &max_schema_version_in_memtable)
-{
-  int ret = OB_SUCCESS;
-  int64_t max_column_cnt_on_recorder = 0;
-  max_column_cnt_in_memtable = 0;
-  max_schema_version_in_memtable = 0;
-  ObITable *table = nullptr;
-  memtable::ObMemtable *memtable = nullptr;
-  for (int i = merge_tables_handle.get_count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    if (OB_ISNULL(table = merge_tables_handle.get_table(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table in tables_handle is invalid", KR(ret), KPC(table));
-    } else if (OB_ISNULL(memtable = static_cast<memtable::ObMemtable *>(table))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table pointer does not point to a ObMemtable object", KR(ret), KPC(table));
-    } else if (OB_FAIL(memtable->get_schema_info(column_cnt_in_schema,
-        max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
-      LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(memtable));
-    }
-  } // end of for
-  if (FAILEDx(tablet_handle_.get_obj()->get_max_column_cnt_on_schema_recorder(max_column_cnt_on_recorder))) {
-    LOG_WARN("failed to get max column cnt on schema recorder", KR(ret));
-  } else {
-    max_column_cnt_in_memtable = MAX(max_column_cnt_in_memtable, max_column_cnt_on_recorder);
-  }
-  return ret;
-}
-
 // TODO(@lixia.yq): input schema_on_tablet is from tablet, if generate new schema from memtable_info, the old one could be freed
 int ObBasicTabletMergeCtx::update_storage_schema_by_memtable(
-  const ObStorageSchema &schema_on_tablet,
-  const ObTablesHandleArray &merge_tables_handle)
+  const ObTablesHandleArray &merge_tables_handle,
+  ObStorageSchema &schema)
 {
   int ret = OB_SUCCESS;
-  int64_t max_column_cnt_in_memtable = 0;
-  int64_t max_schema_version_in_memtable = 0;
-  int64_t column_cnt_in_schema = 0;
-  bool column_info_simplified = false;
+  ObArray<ObTableHandleV2> memtable_handles;
+  ObTablet *tablet = nullptr;
+
   if (!is_mini_merge(get_merge_type()) || get_tablet_id().is_ls_inner_tablet()) {
     // do nothing
-  } else if (OB_FAIL(schema_on_tablet.get_store_column_count(column_cnt_in_schema, true/*full_col*/))) {
-    LOG_WARN("failed to get store column count", K(ret), K(column_cnt_in_schema));
-  } else if (OB_FAIL(get_schema_info_from_tables(merge_tables_handle, column_cnt_in_schema,
-      max_column_cnt_in_memtable, max_schema_version_in_memtable))) {
-    LOG_WARN("failed to get schemaFrom tables", K(ret), K(merge_tables_handle), K(column_cnt_in_schema));
-  } else if (FALSE_IT(column_info_simplified = max_column_cnt_in_memtable > column_cnt_in_schema)) {
-    // can't get new added column info from memtable, need simplify column info
-  } else if (column_info_simplified
-    || max_schema_version_in_memtable > schema_on_tablet.get_schema_version()) {
-    // need alloc new storage schema & set column cnt
-    ObStorageSchema *storage_schema = nullptr;
-    if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), storage_schema))) {
-      LOG_WARN("failed to alloc storage schema", K(ret));
-    } else if (OB_FAIL(storage_schema->init(mem_ctx_.get_allocator(), schema_on_tablet, column_info_simplified))) {
-      LOG_WARN("failed to init storage schema", K(ret), K(schema_on_tablet));
-      ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), storage_schema);
-      storage_schema = nullptr;
-    } else {
-      // only update column cnt by memtable, use schema version on tablet_schema
-      storage_schema->column_cnt_ = MAX(storage_schema->column_cnt_, max_column_cnt_in_memtable);
-      storage_schema->store_column_cnt_ = MAX(column_cnt_in_schema, max_column_cnt_in_memtable);
-      storage_schema->schema_version_ = MAX(max_schema_version_in_memtable, schema_on_tablet.get_schema_version());
-      static_param_.schema_ = storage_schema;
-    }
+  } else if (OB_FAIL(merge_tables_handle.get_table_handles(memtable_handles))) {
+    LOG_WARN("failed to get tables", KR(ret), K(merge_tables_handle));
+  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be null", KR(ret));
+  } else if (OB_FAIL(ObStorageSchemaUtil::update_storage_schema_by_memtable(
+      *tablet, memtable_handles, schema))) {
+    LOG_WARN("failed to update storage schema by memtable", KR(ret), KPC(tablet),
+      K(memtable_handles), K(schema));
   }
+
   if (OB_SUCC(ret)) {
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-    FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC_(static_param_.schema),
-      K(max_column_cnt_in_memtable), K(max_schema_version_in_memtable));
+    FLOG_INFO("get storage schema to merge", "param", get_dag_param(), K(schema));
   }
   return ret;
 }
