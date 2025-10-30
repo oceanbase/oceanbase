@@ -2059,6 +2059,10 @@ constexpr int OB_AI_FUNC_MODEL_NOT_FOUND = -11118;
 constexpr int OB_AI_FUNC_MODEL_EXISTS = -11119;
 constexpr int OB_ERROR_DURING_COMMIT = -11120;
 constexpr int OB_ERR_TABLE_SNAPSHOT_NOT_EXIST = -11121;
+constexpr int OB_HTTP_BAD_REQUEST = -11122;
+constexpr int OB_HTTP_UNAUTHORIZED = -11123;
+constexpr int OB_HTTP_NOT_FOUND = -11124;
+constexpr int OB_HTTP_SERVER_ERROR = -11125;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4568,6 +4572,10 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_AI_FUNC_MODEL_EXISTS__USER_ERROR_MSG "This ai model \'%.*s\' is already exists"
 #define OB_ERROR_DURING_COMMIT__USER_ERROR_MSG "Got error during COMMIT: %s"
 #define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Table snapshot '%.*s' does not exist"
+#define OB_HTTP_BAD_REQUEST__USER_ERROR_MSG "Bad http request: %s"
+#define OB_HTTP_UNAUTHORIZED__USER_ERROR_MSG "Unauthorized http request: %s"
+#define OB_HTTP_NOT_FOUND__USER_ERROR_MSG "Http request not found: %s"
+#define OB_HTTP_SERVER_ERROR__USER_ERROR_MSG "Http server error: %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9575,6 +9583,14 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERROR_DURING_COMMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11120, Got error during COMMIT: %s"
 #define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11121, Table snapshot '%.*s' does not exist"
 #define OB_ERR_TABLE_SNAPSHOT_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11121, Table snapshot '%.*s' does not exist"
+#define OB_HTTP_BAD_REQUEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11122, Bad http request: %s"
+#define OB_HTTP_BAD_REQUEST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11122, Bad http request: %s"
+#define OB_HTTP_UNAUTHORIZED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11123, Unauthorized http request: %s"
+#define OB_HTTP_UNAUTHORIZED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11123, Unauthorized http request: %s"
+#define OB_HTTP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11124, Http request not found: %s"
+#define OB_HTTP_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11124, Http request not found: %s"
+#define OB_HTTP_SERVER_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11125, Http server error: %s"
+#define OB_HTTP_SERVER_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11125, Http server error: %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9594,7 +9610,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2505];
+extern int g_all_ob_errnos[2509];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
