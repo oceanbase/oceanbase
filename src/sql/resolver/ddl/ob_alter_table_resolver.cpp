@@ -1965,12 +1965,15 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
     if (OB_FAIL(ret)) {
     } else if (is_unique_key && lib::is_oracle_mode()) {
       // oracle mode
-      if (node.num_child_ != 2) {
+      if (node.num_child_ != 2 && node.num_child_ != 3) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
       } else {
         index_name_node = node.children_[0];
         column_list_node = node.children_[1];
+        if (node.num_child_ >= 3) {
+          table_option_node = node.children_[2];
+        }
       }
     } else {
       // mysql mode
