@@ -15,6 +15,7 @@
 #include "sql/optimizer/ob_insert_log_plan.h"
 #include "sql/optimizer/ob_log_expr_values.h"
 #include "sql/optimizer/ob_log_insert_all.h"
+#include "sql/optimizer/ob_explain_note.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
@@ -455,6 +456,7 @@ int ObInsertLogPlan::check_insertup_opt_for_column_store()
   bool is_update_local_unique_key = false;
   bool is_no_unique_key_in_values = false;
   bool has_unsupported_index_type = false;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   bool enable_insertup_column_store_opt = tenant_config.is_valid() ?
                                           tenant_config->_enable_insertup_column_store_opt :
@@ -464,8 +466,10 @@ int ObInsertLogPlan::check_insertup_opt_for_column_store()
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get min data version", K(ret));
   } else if (data_version < DATA_VERSION_4_5_0_0) {
-    // do nothing
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "data version is less than 4.5.0.0");
   } else if (OB_UNLIKELY(!enable_insertup_column_store_opt)) {
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "enable_insertup_column_store_opt is off");
+  } else if (OB_UNLIKELY(insert_up_index_upd_infos_.empty())) {
     // do nothing
   } else if (OB_ISNULL(upd_index_dml_info = insert_up_index_upd_infos_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
@@ -475,15 +479,13 @@ int ObInsertLogPlan::check_insertup_opt_for_column_store()
                          upd_index_dml_info->is_update_part_key_ ||     // partition table updates part key
                          upd_index_dml_info->is_update_unique_key_ ||   // global index table updates unique key
                          upd_index_dml_info->is_update_primary_key_)) { // index organized table updates primary key
-    // do nothing
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support update unique/primary/part key");
   } else if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(stmt));
   } else if (stmt->with_explicit_autoinc_column()) {
     LOG_TRACE("not support auto inc column");
-  }  else if (stmt->get_insert_table_info().is_insertup_update_assign_need_calc_) {
-    // not support calculate expr
-    LOG_TRACE("not support calculate expr");
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support auto increment column");
   } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_guard is null", K(schema_guard));
@@ -494,93 +496,127 @@ int ObInsertLogPlan::check_insertup_opt_for_column_store()
     LOG_WARN("table schema is null", K(ret), K(table_schema));
   } else if (OB_FAIL(table_schema->get_is_column_store(is_column_store))) {
     LOG_WARN("get is column store failed", K(ret), K(table_schema));
-  } else if (!is_column_store ||
-             0 < table_schema->get_trigger_list().count() ||
-             0 < table_schema->get_foreign_key_infos().count()) {
+  } else if (!is_column_store) {
     // the opt is only for column store,
-    // and not support trigger or foreign key
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "only support column store table");
+  } else if (table_schema->is_table_with_clustering_key()) {
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support table with clustering key");
+  } else if (0 < table_schema->get_trigger_list().count() ||
+             0 < table_schema->get_foreign_key_infos().count()) {
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support trigger or foreign key");
   } else if (table_schema->has_generated_column()) {
     LOG_TRACE("not support generated column");
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support generated column");
+  }  else if (stmt->get_insert_table_info().is_insertup_update_assign_need_calc_) {
+    // not support calculate expr
+    LOG_TRACE("not support calculate expr");
+    opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support update assignment that needs to be calculated");
   } else {
-    if (table_schema->get_index_tid_count() > 0) {
-      ObSEArray<uint64_t, 4> assignment_ids;
-      ObSEArray<uint64_t, 4> values_ids;
-      for (int64_t i = 0; OB_SUCC(ret) && i < upd_index_dml_info->assignments_.count(); ++i) {
-        ObColumnRefRawExpr *column_expr = upd_index_dml_info->assignments_.at(i).column_expr_;
-        ColumnItem *column_item = nullptr;
-        if (OB_ISNULL(column_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null column expr", K(ret));
-        } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
-                                                                       column_expr->get_column_id()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null column item", K(ret), KPC(column_expr));
-        } else {
-          assignment_ids.push_back(column_item->base_cid_);
-        }
-      }
+    ObSEArray<uint64_t, 4> values_ids;
+    ObSEArray<uint64_t, 4> assignment_ids;
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_insert_table_info().values_desc_.count(); ++i) {
-        ObColumnRefRawExpr *column_expr = stmt->get_insert_table_info().values_desc_.at(i);
-        ColumnItem *column_item = nullptr;
-        if (OB_ISNULL(column_expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null column expr", K(ret));
-        } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
-                                                                       column_expr->get_column_id()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null column item", K(ret), KPC(column_expr));
-        } else {
-          values_ids.push_back(column_item->base_cid_);
-        }
+    // assignments
+    for (int64_t i = 0; OB_SUCC(ret) && i < upd_index_dml_info->assignments_.count(); ++i) {
+      ObColumnRefRawExpr *column_expr = upd_index_dml_info->assignments_.at(i).column_expr_;
+      ColumnItem *column_item = nullptr;
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column expr", K(ret));
+      } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
+                                                                     column_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column item", K(ret), KPC(column_expr));
+      } else {
+        assignment_ids.push_back(column_item->base_cid_);
       }
+    }
 
-      for (int64_t i = 0; OB_SUCC(ret) && !has_unsupported_index_type && !is_update_local_unique_key && i < table_schema->get_index_tid_count(); ++i) {
-        ObSEArray<uint64_t, 8> pk_ids;
-        const ObTableSchema *index_schema = NULL;
-        if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_schema->get_simple_index_infos().at(i).table_id_, index_schema))) {
-          LOG_WARN("fail to get index schema", K(ret));
-        } else if (OB_ISNULL(index_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", table_schema->get_simple_index_infos().at(i).table_id_);
-        } else if (index_schema->is_global_index_table() || index_schema->is_domain_index()) {
+    // values
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_insert_table_info().values_desc_.count(); ++i) {
+      ObColumnRefRawExpr *column_expr = stmt->get_insert_table_info().values_desc_.at(i);
+      ColumnItem *column_item = nullptr;
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column expr", K(ret));
+      } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(column_expr->get_table_id(),
+                                                                     column_expr->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null column item", K(ret), KPC(column_expr));
+      } else {
+        values_ids.push_back(column_item->base_cid_);
+      }
+    }
+
+    // indexes
+    for (int64_t i = 0; OB_SUCC(ret) && !has_unsupported_index_type && !is_update_local_unique_key && i < table_schema->get_index_tid_count(); ++i) {
+      ObSEArray<uint64_t, 8> pk_ids;
+      const ObTableSchema *index_schema = NULL;
+      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_schema->get_simple_index_infos().at(i).table_id_, index_schema))) {
+        LOG_WARN("fail to get index schema", K(ret));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", table_schema->get_simple_index_infos().at(i).table_id_);
+      } else if (index_schema->is_global_index_table() || index_schema->is_domain_index()) {
+        has_unsupported_index_type = true;
+      } else if (index_schema->is_unique_index()) {
+        if (index_schema->get_index_type() != INDEX_TYPE_UNIQUE_LOCAL &&
+            index_schema->get_index_type() != INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY) {
           has_unsupported_index_type = true;
-        } else if (index_schema->is_unique_index()) {
-          if (index_schema->get_index_type() != INDEX_TYPE_UNIQUE_LOCAL &&
-              index_schema->get_index_type() != INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY) {
-                has_unsupported_index_type = true;
-          } else {
-            unique_index_count ++;
+        } else {
+          unique_index_count ++;
 
-            if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(pk_ids))) {
-              LOG_WARN("failed to get rowkey column ids", K(ret));
-            } else {
-              for (int64_t i = 0; !is_update_local_unique_key && !is_no_unique_key_in_values && i < pk_ids.count(); ++i) {
-                if (is_shadow_column(pk_ids.at(i))) {
-                  // do noting
-                } else if (has_exist_in_array(assignment_ids, pk_ids.at(i))) {
-                  is_update_local_unique_key = true;
-                } else if (!has_exist_in_array(values_ids, pk_ids.at(i))) {
-                  is_no_unique_key_in_values = true;
-                }
+          if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(pk_ids))) {
+            LOG_WARN("failed to get rowkey column ids", K(ret));
+          } else {
+            for (int64_t i = 0; !is_update_local_unique_key && !is_no_unique_key_in_values && i < pk_ids.count(); ++i) {
+              if (is_shadow_column(pk_ids.at(i))) {
+                // do noting
+              } else if (has_exist_in_array(assignment_ids, pk_ids.at(i))) {
+                is_update_local_unique_key = true;
+              } else if (!has_exist_in_array(values_ids, pk_ids.at(i))) {
+                is_no_unique_key_in_values = true;
               }
             }
           }
-        } else {
-          LOG_TRACE("index type", K(ret), K(index_schema->get_index_type()));
+        }
+      } else {
+        LOG_TRACE("index type", K(ret), K(index_schema->get_index_type()));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (table_schema->is_table_with_pk() && unique_index_count == 0) {
+      // table with pk and no user-defined unique index, need to check if the primary key is updated
+      ObSEArray<uint64_t, 8> pk_ids;
+      if (OB_FAIL(table_schema->get_rowkey_info().get_column_ids(pk_ids))) {
+        LOG_WARN("failed to get rowkey column ids", K(ret));
+      } else {
+        for (int64_t i = 0; !is_update_local_unique_key && !is_no_unique_key_in_values && i < pk_ids.count(); ++i) {
+          if (has_exist_in_array(assignment_ids, pk_ids.at(i))) {
+            is_update_local_unique_key = true;
+          } else if (!has_exist_in_array(values_ids, pk_ids.at(i))) {
+            is_no_unique_key_in_values = true;
+          }
         }
       }
     }
 
     if (OB_FAIL(ret)) {
-    } else if (has_unsupported_index_type || is_update_local_unique_key || is_no_unique_key_in_values) {
-    } else if (table_schema->is_table_with_clustering_key()) {
+    } else if (has_unsupported_index_type) {
+      opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support global index or domain index, and only support local unique index");
+    } else if (is_update_local_unique_key) {
+      opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support update unique/primary key");
+    } else if (is_no_unique_key_in_values) {
+      opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "not support update without unique/primary key");
     } else if ((table_schema->is_table_without_pk() && unique_index_count == 1) ||
                (table_schema->is_table_with_pk() && unique_index_count == 0)) {
       // only support one local unique index
       // for table with hidden pk column, if there is no user-defined unique index,
       // there must be no conflict, and the performance will be better by going to try insert
       is_insertup_opt_for_column_store_ = true;
+      opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_ENABLED);
+    } else {
+      opt_ctx.add_plan_note(INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED, "only support one local unique index");
     }
   }
 
@@ -591,8 +627,7 @@ int ObInsertLogPlan::check_insertup_opt_for_column_store()
                                     K(is_update_local_unique_key),
                                     K(has_unsupported_index_type),
                                     K(is_no_unique_key_in_values),
-                                    K(data_version),
-                                    K(upd_index_dml_info));
+                                    K(data_version));
   return ret;
 }
 
