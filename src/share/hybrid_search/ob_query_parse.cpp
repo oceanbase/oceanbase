@@ -139,6 +139,15 @@ int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *
           LOG_WARN("fail to choose limit expr", K(ret));
         }
       }
+
+      // when the score is equal, use __pk_increment to order by
+      if (OB_SUCC(ret)) {
+        ObEsQueryItem query_item = is_hybrid ? QUERY_ITEM_HYBRID : (query != NULL ? QUERY_ITEM_QUERY : QUERY_ITEM_KNN);
+        if (OB_FAIL(add_pk_to_sort(query_req, query_item))) {
+          LOG_WARN("fail to add pk to sort", K(ret));
+        }
+      }
+
       if (OB_SUCC(ret) && !out_cols_->empty()) {
         if (OB_FAIL(set_output_columns(*query_req, is_hybrid))) {
           LOG_WARN("fail to set output columns", K(ret));
@@ -146,6 +155,56 @@ int ObESQueryParser::parse(const common::ObString &req_str, ObQueryReqFromJson *
           LOG_WARN("fail to wrap json result", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+
+int ObESQueryParser::add_pk_to_sort(ObQueryReqFromJson *query_req, const ObEsQueryItem query_item)
+{
+  int ret = OB_SUCCESS;
+  const ObString rowkey = ROWKEY_NAME;
+  if (OB_ISNULL(query_req)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else if (QUERY_ITEM_QUERY != query_item &&
+             QUERY_ITEM_KNN != query_item &&
+             QUERY_ITEM_HYBRID != query_item
+            ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid query item", K(ret), K(query_item));
+  } else if (QUERY_ITEM_QUERY == query_item) {
+    // when is full text search, add hit
+    ObQueryReqFromJson *base_table_req = NULL;
+    ObReqColumnExpr *rowkey_expr = NULL;
+    const ObString rowkey_hint = HIDDEN_COLUMN_VISIBLE_HINT;
+    if (OB_FAIL(get_base_table_query(query_req, base_table_req))) {
+      LOG_WARN("fail to get base table query", K(ret));
+    } else if (OB_FAIL(base_table_req->add_req_hint(rowkey_hint))) {
+      LOG_WARN("fail to add rowkey hint", K(ret));
+    } else if (OB_FAIL(ObReqColumnExpr::construct_column_expr(rowkey_expr, alloc_, rowkey))) {
+      LOG_WARN("fail to create column expr", K(ret));
+    } else if (query_req != base_table_req) {
+      // need to add __pk_increment to select items,
+      // ignore occurence of 'Unknown column '__pk_increment'' error
+      if (OB_FAIL(base_table_req->select_items_.push_back(rowkey_expr))) {
+        LOG_WARN("fail to add rowkey expr", K(ret));
+      }
+    }
+  }
+
+  // add __pk_increment to order by
+  if (OB_FAIL(ret)) {
+  } else if (QUERY_ITEM_QUERY == query_item) {
+    ObString empty_str = "";
+    if (OB_FAIL(set_order_by_column(query_req, rowkey, empty_str, true))) {
+      LOG_WARN("fail to set order by column", K(ret));
+    }
+  } else if (QUERY_ITEM_HYBRID == query_item) {
+    ObString table_name = VS_ALIAS;
+    if (OB_FAIL(set_order_by_column(query_req, rowkey, table_name, true))) {
+      LOG_WARN("fail to set order by column", K(ret));
     }
   }
   return ret;
@@ -605,7 +664,7 @@ int ObESQueryParser::set_default_score(ObQueryReqFromJson *query_req, double def
   return ret;
 }
 
-int ObESQueryParser::set_order_by_column(ObQueryReqFromJson *query_req, const ObString &column_name, bool ascent)
+int ObESQueryParser::set_order_by_column(ObQueryReqFromJson *query_req, const ObString &column_name, const ObString &table_name, bool ascent/* true */)
 {
   int ret = OB_SUCCESS;
   ObReqColumnExpr *column_expr = nullptr;
@@ -616,6 +675,8 @@ int ObESQueryParser::set_order_by_column(ObQueryReqFromJson *query_req, const Ob
     LOG_WARN("fail to construct order by item", K(ret));
   } else if (OB_FAIL(query_req->order_items_.push_back(order_info))) {
     LOG_WARN("fail to push order item", K(ret));
+  } else if (!table_name.empty()) {
+    column_expr->table_name = table_name;
   }
   return ret;
 }
@@ -838,9 +899,7 @@ int ObESQueryParser::parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&que
 
   if (OB_FAIL(ret)) {
   } else if (query_info->score_is_const_) {
-    if (OB_FAIL(set_order_by_column(query_req, ROWKEY_NAME, true))) {
-      LOG_WARN("fail to set order by rowkey", K(ret));
-    }
+    // do nothing
   } else {
     OrderInfo *order_info = nullptr;
     if (OB_FAIL(construct_order_by_item(query_req->score_items_.at(0), false, order_info))) {
@@ -2967,22 +3026,13 @@ int ObESQueryParser::construct_sub_query_with_minimum_should_match(ObQueryReqFro
       LOG_WARN("fail to construct and expr", K(ret));
     } else if (OB_FAIL(query_req->condition_items_.push_back(condition_expr))) {
       LOG_WARN("fail to push back condition expr", K(ret));
-    } else if (base_query_req->outer_score_items_.empty()) {
-      const ObString rowkey = ROWKEY_NAME;
-      const ObString rowkey_hint = HIDDEN_COLUMN_VISIBLE_HINT;
-      ObReqColumnExpr *rowkey_expr = nullptr;
-      if (OB_FAIL(base_query_req->add_req_hint(rowkey_hint))) {
-        LOG_WARN("fail to add rowkey hint to sub query", K(ret));
-      } else if (OB_FAIL(ObReqColumnExpr::construct_column_expr(rowkey_expr, alloc_, rowkey))) {
-        LOG_WARN("fail to create rowkey column expr", K(ret));
-      } else if (OB_FAIL(base_query_req->select_items_.push_back(rowkey_expr))) {
-        LOG_WARN("fail to add rowkey to select items", K(ret));
+    } else if (!base_query_req->outer_score_items_.empty()) {
+      if (OB_FAIL(ObReqOpExpr::construct_op_expr(score_expr, alloc_, T_OP_ADD, base_query_req->outer_score_items_))) {
+        LOG_WARN("fail to construct add expr", K(ret));
+      } else if (OB_FALSE_IT(score_expr->alias_name = SCORE_NAME)) {
+      } else if (OB_FAIL(query_req->score_items_.push_back(score_expr))) {
+        LOG_WARN("fail to push back score expr", K(ret));
       }
-    } else if (OB_FAIL(ObReqOpExpr::construct_op_expr(score_expr, alloc_, T_OP_ADD, base_query_req->outer_score_items_))) {
-      LOG_WARN("fail to construct add expr", K(ret));
-    } else if (OB_FALSE_IT(score_expr->alias_name = SCORE_NAME)) {
-    } else if (OB_FAIL(query_req->score_items_.push_back(score_expr))) {
-      LOG_WARN("fail to push back score expr", K(ret));
     }
   }
   return ret;
@@ -3704,8 +3754,6 @@ int ObESQueryParser::construct_all_query(ObQueryReqFromJson *&query_req)
     LOG_WARN("fail to parse basic table", K(ret));
   } else if (OB_FAIL(set_default_score(query_req, 1.0))) {
     LOG_WARN("fail to set default score", K(ret));
-  } else if (OB_FAIL(set_order_by_column(query_req, ROWKEY_NAME, true))) {
-    LOG_WARN("fail to set order by rowkey", K(ret));
   }
   return ret;
 }

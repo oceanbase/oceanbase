@@ -45,6 +45,7 @@ enum ObEsQueryItem : int8_t {
   QUERY_ITEM_RANK_FEATURE,
   QUERY_ITEM_TERMS,
   QUERY_ITEM_KNN, // FARM COMPAT WHITELIST
+  QUERY_ITEM_HYBRID,
 };
 
 enum ObFusionMethod
@@ -316,7 +317,7 @@ private :
   int construct_ip_expr(ObReqColumnExpr *vec_field, ObReqConstExpr *query_vec, ObReqCaseWhenExpr *&case_when/* score */,
                         ObReqOpExpr *&minus_expr/* distance */, ObReqExpr *&order_by_vec);
   int set_default_score(ObQueryReqFromJson *query_req, double default_score);
-  int set_order_by_column(ObQueryReqFromJson *query_req, const ObString &column_name, bool ascent = true);
+  int set_order_by_column(ObQueryReqFromJson *query_req, const ObString &column_name, const ObString &table_name, bool ascent = true);
   int set_fts_limit_expr(ObQueryReqFromJson *query, const ObReqConstExpr *size_expr, const ObReqConstExpr *from_expr);
   inline bool query_not_need_order(ObQueryReqFromJson *query_req) { return OB_ISNULL(query_req->limit_item_) && query_req->group_items_.empty(); }
   int get_distance_algor_type(const ObReqColumnExpr &vec_field, ObVectorIndexDistAlgorithm &alg_type);
@@ -344,6 +345,7 @@ private :
   int parse_multi_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query_req);
   int knn_fusion(const ObIArray<ObQueryReqFromJson*> &knn_queries, ObQueryReqFromJson *&query_req);
   int add_score_col(const ObString &table_name, ObQueryReqFromJson &query_req);
+  int add_pk_to_sort(ObQueryReqFromJson *query, const ObEsQueryItem query_item);
   int parse_rank(ObIJsonBase &req_node);
   int parse_rrf(ObIJsonBase &req_node);
   int construct_rank_score(const ObString &table_name, const ObString &rank_alias, ObReqExpr *&rank_score);
