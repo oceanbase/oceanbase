@@ -340,6 +340,7 @@ private:
   int build_rowkey_vid_range();
   int init_rel_map(ObPluginVectorIndexAdaptor* adaptor);
   bool is_hnsw_bq() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;}
+  bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;}
   bool need_save_distance_result() {
     return distance_calc_ != nullptr && ! is_hnsw_bq();
   }
@@ -442,10 +443,16 @@ private:
   inline bool is_in_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;}
   inline bool is_post_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                       ||  vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
-                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER)
+                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_POST_FILTER);}
   inline bool is_adaptive_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;}
-  inline bool is_iter_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
-                      || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
+  inline bool is_iter_filter()
+  {
+    return is_ipivf() ? false
+                      : (vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER ||
+                            (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN &&
+                                vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER));
+  }
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER
                                                                  || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
                                                                  && vec_aux_ctdef_->relevance_col_cnt_ == 0;}
@@ -471,6 +478,7 @@ private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t VSAG_MAX_EF_SEARCH = 1000;
   static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
+  static constexpr double SPARSE_FIXED_MAGNIFICATION_RATIO = 50.0;
   static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
   static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
@@ -605,6 +613,11 @@ private:
 
   void release_brute_force_distance_memory(ObPluginVectorIndexAdaptor* adaptor,
                                           const DistanceResult& dist_result);
+  inline void swap_vid_iter () {
+    tmp_adaptor_vid_iter_ = adaptor_vid_iter_;
+    adaptor_vid_iter_ = nullptr;
+  }
+  inline bool need_filter () { return data_filter_iter_ != nullptr; }
 };
 
 

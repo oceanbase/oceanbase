@@ -240,7 +240,8 @@ bool ObDASIterUtils::is_vec_hnsw_scan(const ObDASBaseCtDef *attach_ctdef, ObDASB
     } else if (vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ
     || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
-    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH) {
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       bret = true;
     }
   }

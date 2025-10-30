@@ -310,6 +310,8 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           } else if (index_type_ == VIAT_MAX) {
             ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
             ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+            uint32_t idx_ipivf = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
+                                       "ipivf", 5, 1);
             uint32_t idx_sq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
                                        "hnsw_sq", 7, 1);
             uint32_t idx_bq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
@@ -319,6 +321,11 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
             if (OB_ISNULL(adp)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get invalid adp", K(ret));
+            } else if (idx_ipivf > 0) {
+              index_type_ = VIAT_IPIVF;
+              if (OB_FAIL(adp->try_init_snap_data(VIAT_IPIVF))) {
+                LOG_WARN("failed to init sparse vector snap data", K(ret), K(index_type_));
+              }
             } else if (idx_sq > 0) {
               index_type_ = VIAT_HNSW_SQ;
               if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_SQ))) {

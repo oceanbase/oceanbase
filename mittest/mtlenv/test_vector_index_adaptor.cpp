@@ -616,7 +616,7 @@ public:
   {
     int ret = OB_SUCCESS;
     ObTestHNSWDeserializeCallback::CbParam &param = static_cast<ObTestHNSWDeserializeCallback::CbParam&>(cb_param);
-    if (param.cur_pos_ <= param.size_) {
+    if (param.cur_pos_ < param.size_) {
       read_size = (param.size_ - param.cur_pos_) > param.part_size_ ? param.part_size_ : (param.size_ - param.cur_pos_);
       data = ((char*)param.data_) + param.cur_pos_;
       param.cur_pos_ += read_size;
@@ -1491,6 +1491,289 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
   ASSERT_EQ(0, obvectorutil::get_index_number(des_index_handler, index_size));
   ASSERT_EQ(index_size, num_vectors);
   ASSERT_EQ(OB_SUCCESS, test_knn_search(index_handler, ids, vecs, dim, num_vectors, ef_search, &test_filter));
+}
+
+TEST_F(TestVectorIndexAdaptor, test_sparse_vector_index_query)
+{
+  obvsag::VectorIndexPtr index_handler = nullptr;
+
+  const char* const METRIC = "ip";
+  const char* const DATATYPE = "sparse";
+  bool use_reorder = false;
+  float doc_prune_ratio = 0.0;
+  int window_size = 10000;
+  VsagMemContext vsag_mem_context;
+  ASSERT_EQ(vsag_mem_context.init(), 0);
+
+  ASSERT_EQ(obvectorutil::create_index(index_handler,
+                                      obvsag::IPIVF_TYPE,
+                                      DATATYPE,
+                                      METRIC,
+                                      use_reorder,
+                                      doc_prune_ratio,
+                                      window_size,
+                                      &vsag_mem_context), 0);
+
+  std::vector<std::pair<std::vector<uint32_t>, std::vector<float>>> custom_data = {{{1, 2, 3}, {0.1f, 0.2f, 0.3f}},
+      {{2, 3, 4}, {0.2f, 0.3f, 0.4f}},
+      {{3, 4, 5}, {0.3f, 0.4f, 0.5f}},
+      {{4, 5, 6}, {0.4f, 0.5f, 0.6f}},
+      {{5, 6, 7}, {0.5f, 0.6f, 0.7f}},
+      {{6, 7, 8}, {0.6f, 0.7f, 0.8f}},
+      {{7, 8, 9}, {0.7f, 0.8f, 0.9f}},
+      {{8, 9, 10}, {0.8f, 0.9f, 1.0f}},
+      {{9, 10, 11}, {0.9f, 1.0f, 1.1f}},
+      {{11, 10, 12}, {1.1f, 1.0f, 1.2f}}};
+  int num_sparse_vector = custom_data.size();
+  int total_length = num_sparse_vector * 3;
+  ObArenaAllocator allocator;
+  uint32_t *lens = static_cast<uint32_t *>(allocator.alloc(sizeof(uint32_t) * num_sparse_vector));
+  uint32_t *dims = static_cast<uint32_t *>(allocator.alloc(sizeof(uint32_t) * total_length));
+  float *vals = static_cast<float *>(allocator.alloc(sizeof(float) * total_length));
+  int64_t *ids = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * num_sparse_vector));
+  int pos = 0;
+  for (int i = 0; i < custom_data.size(); ++i) {
+    lens[i] = 3;
+    MEMCPY(dims + pos, custom_data[i].first.data(), custom_data[i].first.size() * sizeof(uint32_t));
+    MEMCPY(vals + pos, custom_data[i].second.data(), custom_data[i].second.size() * sizeof(float));
+    pos += 3;
+    ids[i] = i + 1;
+  }
+  pos = 0;
+  for (int i = 0; i < custom_data.size(); ++i) {
+    ASSERT_EQ(0, obvectorutil::add_index(index_handler, &lens[i], dims+pos, vals+pos, &ids[i], 1));
+    pos += 3;
+  }
+  int64_t index_size = 0;
+  ASSERT_EQ(0, obvectorutil::get_index_number(index_handler, index_size));
+  ASSERT_EQ(index_size, num_sparse_vector);
+  int64_t min_id = 1, max_id = custom_data.size();
+  int64_t min, max;
+  ASSERT_EQ(0, obvectorutil::get_vid_bound(index_handler, min, max));
+  // ASSERT_EQ(min_id, min);
+  // ASSERT_EQ(max_id, max);
+  std::cout << "num vectors: " << index_size << ", min id: " << min << ", max id: " << max << std::endl;
+
+  int query_len = 2;
+  uint32_t query_dims[2] = {3, 4};
+  float query_vals[2] = {1, 1};
+
+  const float* result_dist0;
+  const int64_t* result_ids0;
+  const char* extra_info_buf_ptr = nullptr;
+  float query_prune_ratio = 0.0;
+  int64_t n_candidate = 10;
+  int64_t top_k = 10;
+  int64_t result_size = 0;
+  roaring::api::roaring64_bitmap_t *bitmap = roaring::api::roaring64_bitmap_create();
+  TestFilter test_filter(bitmap);
+
+  std::cout << "===================== Query Result ================" << std::endl;
+
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
+                                      query_len,
+                                      query_dims,
+                                      query_vals,
+                                      top_k,
+                                      result_dist0,
+                                      result_ids0,
+                                      extra_info_buf_ptr,
+                                      result_size,
+                                      query_prune_ratio,
+                                      n_candidate,
+                                      &test_filter));
+  std::cout << "result size: " << result_size << std::endl;
+  for (int64_t i = 0; i < result_size; ++i) {
+    std::cout << i <<  " id: " << result_ids0[i] << " dis: " << result_dist0[i] << ", Vector: {";
+    auto data = custom_data[result_ids0[i] - 1];
+    for (int j = 0; j < data.first.size(); j++) {
+      if (j > 0) std::cout << ", ";
+      std::cout << data.first[j] << ":" << data.second[j];
+    }
+    std::cout << "}" << std::endl;
+  }
+
+  uint32_t query_dims1[2] = {13, 14};
+  float query_vals1[2] = {1, 1};
+  const float* result_dist1;
+  const int64_t* result_ids1;
+  result_size = 0;
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
+                                      query_len,
+                                      query_dims1,
+                                      query_vals1,
+                                      top_k,
+                                      result_dist1,
+                                      result_ids1,
+                                      extra_info_buf_ptr,
+                                      result_size,
+                                      query_prune_ratio,
+                                      n_candidate,
+                                      nullptr));
+  std::cout << "result size: " << result_size << std::endl;
+  ASSERT_EQ(0, result_size);
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
+                                      0,
+                                      query_dims,
+                                      query_vals,
+                                      top_k,
+                                      result_dist1,
+                                      result_ids1,
+                                      extra_info_buf_ptr,
+                                      result_size,
+                                      query_prune_ratio,
+                                      n_candidate,
+                                      nullptr));
+  std::cout << "result size: " << result_size << std::endl;
+  ASSERT_EQ(0, result_size);
+}
+
+TEST_F(TestVectorIndexAdaptor, test_sparse_vector_index_serial)
+{
+  void* raw_memory = (void*)malloc(sizeof(common::obvectorutil::ObVsagLogger));
+  common::obvectorutil::ObVsagLogger* ob_logger = new (raw_memory)common::obvectorutil::ObVsagLogger();
+  obvsag::set_logger(ob_logger);
+  obvsag::VectorIndexPtr index_handler = nullptr;
+
+  const char* const METRIC = "ip";
+  const char* const DATATYPE = "sparse";
+  bool use_reorder = false;
+  float doc_prune_ratio = 0.0;
+  int window_size = 10000;
+  std::mt19937 rng;
+  rng.seed(50);
+  VsagMemContext vsag_mem_context;
+  ASSERT_EQ(vsag_mem_context.init(), 0);
+
+  ASSERT_EQ(obvectorutil::create_index(index_handler,
+                                      obvsag::IPIVF_TYPE,
+                                      DATATYPE,
+                                      METRIC,
+                                      use_reorder,
+                                      doc_prune_ratio,
+                                      window_size,
+                                      &vsag_mem_context), 0);
+
+  int num_vectors = 1000;
+  int dim = 3;
+  uint32_t *lens = new uint32_t[num_vectors];
+  int64_t *ids = new int64_t[num_vectors];
+  uint32_t *dims = new uint32_t[dim * num_vectors];
+  float *vecs = new float[dim * num_vectors];
+
+  std::uniform_real_distribution<> distrib_real;
+  for (int64_t i = 0; i < num_vectors; ++i) {
+    ids[i] = i + 1;
+    lens[i] = dim;
+  }
+
+  for (int64_t i = 0; i < num_vectors * dim; ++i) {
+    vecs[i] = (i % dim + 1) / 10.0;
+    dims[i] = i % dim + 1;
+  }
+
+  ASSERT_EQ(0, obvectorutil::add_index(index_handler, lens, dims, vecs, ids, num_vectors));
+  int64_t index_size = 0;
+  ASSERT_EQ(0, obvectorutil::get_index_number(index_handler, index_size));
+  ASSERT_EQ(index_size, num_vectors);
+
+  int64_t min_id = 1, max_id = num_vectors;
+  int64_t min, max;
+  ASSERT_EQ(0, obvectorutil::get_vid_bound(index_handler, min, max));
+  // ASSERT_EQ(min_id, min);
+  // ASSERT_EQ(max_id, max);
+  std::cout << "num vectors: " << index_size << ", min id: " << min << ", max id: " << max << std::endl;
+
+  int query_len = 2;
+  uint32_t query_dims[2] = {2, 3};
+  float query_vals[2] = {1, 1};
+
+  const float* result_dist0;
+  const int64_t* result_ids0;
+  int64_t result_size0 = 0;
+  const char* extra_info_buf_ptr = nullptr;
+  float query_prune_ratio = 0.0;
+  int64_t n_candidate = 0;
+  int64_t top_k = num_vectors;
+  roaring::api::roaring64_bitmap_t *bitmap = roaring::api::roaring64_bitmap_create();
+  TestFilter test_filter(bitmap);
+
+  std::cout << "===================== Query Result ================" << std::endl;
+
+  ASSERT_EQ(0, obvectorutil::knn_search(index_handler,
+                                      query_len,
+                                      query_dims,
+                                      query_vals,
+                                      top_k,
+                                      result_dist0,
+                                      result_ids0,
+                                      extra_info_buf_ptr,
+                                      result_size0,
+                                      query_prune_ratio,
+                                      n_candidate,
+                                      &test_filter));
+  std::cout << "result size: " << result_size0 << std::endl;
+
+  // do serialize
+  ObArenaAllocator allocator;
+  ObVectorIndexSerializer index_seri(allocator);
+  ObTestHNSWSerializeCallback ser_callback;
+  ObOStreamBuf::Callback ser_cb = ser_callback;
+
+  ObTestHNSWSerializeCallback::CbParam ser_param;
+  ser_param.allocator_ = &allocator;
+  ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb, MTL_ID()));
+  std::cout << "serialize size " << ser_param.size_ << std::endl;
+
+  // do deserialize
+  obvsag::VectorIndexPtr des_index_handler = nullptr;
+  ObTestHNSWDeserializeCallback des_callback;
+  ObIStreamBuf::Callback des_cb = des_callback;
+
+  ObTestHNSWDeserializeCallback::CbParam des_param;
+  des_param.allocator_ = &allocator;
+  des_param.data_ = ser_param.data_;
+  des_param.size_ = ser_param.size_;
+  des_param.cur_pos_ = 0;
+  des_param.part_size_ = 1000;
+  ASSERT_EQ(obvectorutil::create_index(des_index_handler,
+                                      obvsag::IPIVF_TYPE,
+                                      DATATYPE,
+                                      METRIC,
+                                      use_reorder,
+                                      doc_prune_ratio,
+                                      window_size,
+                                      &vsag_mem_context), 0);
+  ASSERT_EQ(0, index_seri.deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
+  // check vector count
+  ASSERT_EQ(0, obvectorutil::get_index_number(des_index_handler, index_size));
+  ASSERT_EQ(index_size, num_vectors);
+  std::cout << "deserialize index number: " << index_size << std::endl;
+
+  int query_len1 = 2;
+  uint32_t *query_dims1 = new uint32_t[2];
+  query_dims1[0] = 2;
+  query_dims1[1] = 3;
+  float *query_vals1 = new float[2];
+  query_vals1[0] = 1;
+  query_vals1[1] = 1;
+  const float* result_dist1;
+  const int64_t* result_ids1;
+  int64_t result_size1 = 0;
+  extra_info_buf_ptr = nullptr;
+  ASSERT_EQ(0, obvectorutil::knn_search(des_index_handler,
+                                      query_len1,
+                                      query_dims1,
+                                      query_vals1,
+                                      top_k,
+                                      result_dist1,
+                                      result_ids1,
+                                      extra_info_buf_ptr,
+                                      result_size1,
+                                      query_prune_ratio,
+                                      n_candidate,
+                                      &test_filter));
+  std::cout << "result size: " << result_size1 << std::endl;
 }
 
 };

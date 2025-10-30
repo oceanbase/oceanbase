@@ -92,11 +92,19 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
                  int max_degree, int ef_construction, int ef_search, void* allocator = nullptr,
                  int extra_info_size = 0, int16_t refine_type = 0,
                  int16_t bq_bits_query = 32, bool bq_use_fht = false);
+int create_index(VectorIndexPtr &index_handler, IndexType index_type, const char *dtype, const char *metric,
+    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator, int extra_info_size = 0);
 int build_index(VectorIndexPtr& index_handler, float* vector_list, int64_t* ids, int dim, int size, char *extra_infos = nullptr);
+int build_index(VectorIndexPtr &index_handler, uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size,
+    char *extra_info = nullptr);
 int add_index(VectorIndexPtr& index_handler, float* vector, int64_t* ids, int dim, int size, char *extra_info = nullptr);
+int add_index(VectorIndexPtr &index_handler, uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size,
+    char *extra_info = nullptr);
 int get_index_number(VectorIndexPtr& index_handler, int64_t &size);
 int get_index_type(VectorIndexPtr& index_handler);
 int cal_distance_by_id(VectorIndexPtr& index_handler, const float* vector, const int64_t* ids, int64_t count, const float *&distances);
+int cal_distance_by_id(VectorIndexPtr& index_handler, uint32_t len, uint32_t *dims, float *vals, const int64_t *ids,
+    int64_t count, const float *&distances);
 int get_vid_bound(VectorIndexPtr& index_handler, int64_t &min_vid, int64_t &max_vid);
 int knn_search(VectorIndexPtr& index_handler,float* query_vector, int dim, int64_t topk,
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
@@ -108,6 +116,11 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector, int dim, int64
                bool need_extra_info, const char*& extra_infos,
                void* invalid = nullptr, bool reverse_filter = false,
                bool use_extra_info_filter = false, void *allocator = nullptr, float valid_ratio = 1, float distance_threshold = FLT_MAX);
+int knn_search(obvsag::VectorIndexPtr &index_handler, uint32_t len, uint32_t *dims, float *vals, int64_t topk,
+    const float *&result_dist, const int64_t *&result_ids, const char *&extra_infos, int64_t &result_size,
+    float query_prune_ratio, int64_t n_candidate, void *invalid = nullptr, bool reverse_filter = false,
+    bool is_extra_info_filter = false, float valid_ratio = 1.0, void *allocator = nullptr,
+    bool need_extra_info = false);
 int serialize(VectorIndexPtr& index_handler, const std::string dir);
 int deserialize_bin(VectorIndexPtr& index_handler, const std::string dir);
 int fserialize(VectorIndexPtr& index_handler, std::ostream& out_stream);

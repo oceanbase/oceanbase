@@ -101,7 +101,7 @@ enum ObVecIdxAdaTryPath : uint8_t
   VEC_INDEX_PRE_FILTER = 1,
   VEC_INDEX_ITERATIVE_FILTER = 2,
   VEC_INDEX_IN_FILTER = 3,
-  VEC_INDEX_POST_FILTER=4,
+  VEC_INDEX_POST_FILTER = 4,
   VEC_PATH_MAX = 5
 };
 const static double VEC_ESTIMATE_MEMORY_FACTOR = 2.0;
@@ -218,11 +218,11 @@ struct ObVectorIndexParam
     nbits_ = other.nbits_;
     sync_interval_type_ = other.sync_interval_type_;
     sync_interval_value_ = other.sync_interval_value_;
-    prune_ = false;
-    refine_ = false;
-    ob_sparse_drop_ratio_build_ = 0;
-    window_size_ = DEFAULT_WINDOW_SIZE;
-    ob_sparse_drop_ratio_search_ = 0;
+    prune_ = other.prune_;
+    refine_ = other.refine_;
+    ob_sparse_drop_ratio_build_ = other.ob_sparse_drop_ratio_build_;
+    window_size_ = other.window_size_;
+    ob_sparse_drop_ratio_search_ = other.ob_sparse_drop_ratio_search_;
     similarity_threshold_ = other.similarity_threshold_;
     MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
     return ret;
@@ -274,6 +274,7 @@ struct ObVecIdxExtraInfo
 static constexpr double DEFAULT_SELECTIVITY_RATE = 0.3;
 static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY = 0.35;
 static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_IDX = 0.15;
+static constexpr double DEFAULT_SINDI_SELECTIVITY_RATE = 0.1;
 static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
@@ -296,6 +297,7 @@ static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
   inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
+  // TODO(ningxin.ning): add ipivf here?
   inline bool is_hnsw_vec_scan() const
   {
     return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
@@ -733,6 +735,11 @@ public:
       uint64_t &est_mem,
       bool is_build = false
   );
+  static int estimate_sparse_memory(
+      uint64_t num_vectors,
+      const ObVectorIndexParam &param,
+      uint64_t &est_mem
+  );
   static int estimate_ivf_memory(uint64_t num_vectors,
                                  const ObVectorIndexParam &param,
                                  uint64_t &construct_mem,
@@ -792,7 +799,8 @@ public:
                                     double &selectivity,
                                     sql::ObRawExpr *&vector_expr,
                                     const sql::ObDMLStmt *&stmt);
-  static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx);
+  static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx, bool is_ipivf=false);
+  static bool is_sindi_index(const ObTableSchema *vec_index_schema);
 private:
   static void save_column_schema(
       const ObColumnSchemaV2 *&old_column,

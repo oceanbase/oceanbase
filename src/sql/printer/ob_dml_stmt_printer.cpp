@@ -2299,6 +2299,9 @@ int ObDMLStmtPrinter::print_vector_index_query_param()
       if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
         DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
       }
+      if (OB_SUCC(ret) && param.is_set_drop_ratio_search_) {
+        DATA_PRINTF(", drop_ratio_search=%f", param.ob_sparse_drop_ratio_search_);
+      }
       if (OB_SUCC(ret) && param.is_set_similarity_threshold_) {
         DATA_PRINTF(", similarity_threshold=%f", param.similarity_threshold_);
       }

@@ -106,6 +106,8 @@ int ObVectorIndexUtil::parser_params_from_string(
             param.type_ = ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
           } else if (new_param_value == "HNSW_BQ") {
             param.type_ = ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
+          } else if (new_param_value == "SINDI") {
+            param.type_ = ObVectorIndexAlgorithmType::VIAT_IPIVF;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support vector index type", K(ret), K(new_param_value));
@@ -223,7 +225,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           if (err != 0 || (new_param_value.ptr() + new_param_value.length()) != endptr) {
             ret = OB_DATA_OUT_OF_RANGE;
             LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
-          } else if (out_val < 1.0 || out_val > 1e6) {
+          } else if (out_val < 1.0 || out_val > 1000) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support vector index refine_k value", K(ret), K(out_val), K(new_param_value));
           } else {
@@ -259,9 +261,53 @@ int ObVectorIndexUtil::parser_params_from_string(
             LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
           } else if (out_val < 1.0 || out_val > 1e6) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not support vector index refine_k value", K(ret), K(out_val), K(new_param_value));
+            LOG_WARN("not support vector index similarity value", K(ret), K(out_val), K(new_param_value));
           } else {
             param.similarity_threshold_ = out_val;
+          }
+        } else if (new_param_name == "PRUNE") {
+          if (new_param_value == "FALSE") {
+            param.prune_ = false;
+          } else if (new_param_value == "TRUE") {
+            param.prune_ = true;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index prune value", K(ret), K(new_param_name), K(new_param_value));
+          }
+        } else if (new_param_name == "REFINE") {
+          if (new_param_value == "FALSE") {
+            param.refine_ = false;
+          } else if (new_param_value == "TRUE") {
+            param.refine_ = true;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index refine value", K(ret), K(new_param_name), K(new_param_value));
+          }
+        } else if (new_param_name == "DROP_RATIO_BUILD") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_param_value.ptr(), new_param_value.length(), &endptr, &err);
+          if (err != 0 || (new_param_value.ptr() + new_param_value.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
+          } else if (out_val < 0.0 || out_val > 0.9) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index drop_ratio_build value", K(ret), K(out_val), K(new_param_value));
+          } else {
+            param.ob_sparse_drop_ratio_build_ = out_val;
+          }
+        } else if (new_param_name == "DROP_RATIO_SEARCH") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_param_value.ptr(), new_param_value.length(), &endptr, &err);
+          if (err != 0 || (new_param_value.ptr() + new_param_value.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
+          } else if (out_val < 0.0 || out_val > 0.9) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index drop_ratio_search value", K(ret), K(out_val), K(new_param_value));
+          } else {
+            param.ob_sparse_drop_ratio_search_ = out_val;
           }
         } else {
           ret = OB_INVALID_ARGUMENT;
@@ -290,6 +336,9 @@ int ObVectorIndexUtil::parser_params_from_string(
         if (param.extra_info_actual_size_ > 0 && param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW) {
           param.type_ = ObVectorIndexAlgorithmType::VIAT_HGRAPH;
         }
+        if (param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF && param.dist_algorithm_ == VIDA_MAX) {
+          param.dist_algorithm_ = VIDA_IP;
+        }
       } else if (index_type == ObVectorIndexType::VIT_IVF_INDEX) {
         if (param.nlist_ == 0) {
           param.nlist_ = default_nlist_value;
@@ -304,6 +353,9 @@ int ObVectorIndexUtil::parser_params_from_string(
           param.nbits_ = default_nbits_value;
         }
       } else if (index_type == ObVectorIndexType::VIT_SPIV_INDEX) {
+        if (param.dist_algorithm_ == VIDA_MAX) {
+          param.dist_algorithm_ = VIDA_IP;
+        }
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support vector index type", K(ret), K(index_type));
@@ -362,7 +414,11 @@ int ObVectorIndexParam::print_to_string(char *buf, int64_t buf_len, int64_t &pos
   PRINT_PARAM("sync_interval_type=%d,", static_cast<int>(sync_interval_type_));
   PRINT_PARAM("sync_interval_value=%ld,", sync_interval_value_);
   PRINT_PARAM("endpoint=%s,", endpoint_);
-  PRINT_PARAM("nbits=%ld", nbits_);
+  PRINT_PARAM("nbits=%ld,", nbits_);
+  PRINT_PARAM("prune=%s,", prune_ ? "true" : "false");
+  PRINT_PARAM("refine=%s,", refine_ ? "true" : "false");
+  PRINT_PARAM("drop_ratio_build=%f,", ob_sparse_drop_ratio_build_);
+  PRINT_PARAM("drop_ratio_search=%f", ob_sparse_drop_ratio_search_);
   #undef PRINT_PARAM
   return ret;
 }
@@ -379,7 +435,7 @@ int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param
       search_param.ef_search_ = query_param.ef_search_;
     }
     if (query_param.is_set_refine_k_) {
-      if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ != index_param.type_) {
+      if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ != index_param.type_ && ObVectorIndexAlgorithmType::VIAT_IPIVF != index_param.type_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("refine_k is not support parameter for current index", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "refine_k parameter for current index is");
@@ -387,7 +443,8 @@ int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param
         search_param.refine_k_ = query_param.refine_k_;
       }
     }
-    if (query_param.is_set_similarity_threshold_) {
+    if (OB_FAIL(ret)) {
+    } else if (query_param.is_set_similarity_threshold_) {
       if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_SPIV) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("similarity is not support parameter for current index", K(ret));
@@ -398,6 +455,16 @@ int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "similarity parameter for inner_product distance is");
       } else {
         search_param.similarity_threshold_ = query_param.similarity_threshold_;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (query_param.is_set_drop_ratio_search_) {
+      if (ObVectorIndexAlgorithmType::VIAT_IPIVF != index_param.type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("drop_ratio_search is not support parameter for current index", K(ret), K(index_param.type_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop_ratio_search parameter for current index is");
+      } else {
+        search_param.ob_sparse_drop_ratio_search_ = query_param.ob_sparse_drop_ratio_search_;
       }
     }
     LOG_TRACE("vector param", K(index_param), K(query_param), K(search_param));
@@ -449,6 +516,7 @@ int ObVectorIndexUtil::resolve_query_param(
         } else if (out_val < 1.0 || out_val > 1000) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid vector index refine_k value", K(ret), K(out_val), K(value_str));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector index refine_k value");
         } else {
           param.refine_k_ = out_val;
           param.is_set_refine_k_ = 1;
@@ -485,6 +553,26 @@ int ObVectorIndexUtil::resolve_query_param(
         } else {
           param.ivf_nprobes_ = value_node->value_;
           param.is_set_ivf_nprobes_ = 1;
+        }
+      } else if (param_name.case_compare("DROP_RATIO_SEARCH") == 0) {
+        int err = 0;
+        char *endptr = NULL;
+        ObString value_str(static_cast<int32_t>(value_node->str_len_), value_node->str_value_);
+        double out_val = 0;
+        if (param.is_set_drop_ratio_search_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate drop_ratio_search param", K(ret), K(i));
+        } else if (OB_FALSE_IT(out_val = ObCharset::strntod(value_str.ptr(), value_str.length(), &endptr, &err))) {
+        } else if (err != 0 || (value_str.ptr() + value_str.length()) != endptr) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("fail to cast string to double", K(ret), K(value_str), K(err), KP(endptr));
+        } else if (out_val < 0 || out_val > 0.9) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid vector index drop_ratio_search value", K(ret), K(out_val), K(value_str));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "vector index drop_ratio_search value");
+        } else {
+          param.ob_sparse_drop_ratio_search_ = out_val;
+          param.is_set_drop_ratio_search_ = 1;
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -651,11 +739,14 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
     if (OB_FAIL(ret)) {
     } else if (new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_MAX) {
       // type is reset, check new set is same as old, only support rebuild from hnsw <==> hnsw_sq
-      if ((new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ) ||
+      if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF && new_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
+        // do nothing
+      } else if ((new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && new_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ) ||
           (old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW && old_vec_param.type_ != ObVectorIndexAlgorithmType::VIAT_HNSW_SQ)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("it must be rebuild from hnsw <==> hnsw_sq now", K(ret), K(new_vec_param), K(old_vec_param));
-      } else {
+      }
+      if (OB_SUCC(ret)) {
         new_type_is_set = true;
       }
     } else {
@@ -674,6 +765,8 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
         tmp_type = ObString("HNSW_BQ");
       } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH) {
         tmp_type = ObString("HGRAPH");
+      } else if (old_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
+        tmp_type = ObString("SINDI");
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected old vec param type", K(ret), K(old_vec_param.type_));
@@ -685,24 +778,68 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (new_vec_param.m_ != 0) {
+    } else if (new_vec_param.m_ != 0 || new_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       // m is reset
     } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", M=%ld", old_vec_param.m_))) {
       LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.m_));
     }
 
     if (OB_FAIL(ret)) {
-    } else if (new_vec_param.ef_search_ != 0) {
+    } else if (new_vec_param.ef_search_ != 0 || new_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       // ef_search is reset
     } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EF_SEARCH=%ld", old_vec_param.ef_search_))) {
       LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ef_search_));
     }
 
     if (OB_FAIL(ret)) {
-    } else if (new_vec_param.ef_construction_ != 0) {
+    } else if (new_vec_param.ef_construction_ != 0 || new_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
       // ef_construction is reset
     } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EF_CONSTRUCTION=%ld", old_vec_param.ef_construction_))) {
       LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ef_construction_));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
+
+      ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+      uint32_t drop_ratio_build_is_set = ObCharset::locate(calc_cs_type, new_index_params.ptr(), new_index_params.length(), "DROP_RATIO_BUILD", 16, 1);
+      uint32_t prune_is_set = ObCharset::locate(calc_cs_type, new_index_params.ptr(), new_index_params.length(), "PRUNE", 5, 1);
+      uint32_t refine_is_set = ObCharset::locate(calc_cs_type, new_index_params.ptr(), new_index_params.length(), "REFINE", 6, 1);
+      uint32_t refine_k_is_set = ObCharset::locate(calc_cs_type, new_index_params.ptr(), new_index_params.length(), "REFINE_K", 8, 1);
+      uint32_t drop_ratio_search_is_set = ObCharset::locate(calc_cs_type, new_index_params.ptr(), new_index_params.length(), "DROP_RATIO_SEARCH", 17, 1);
+
+      if (drop_ratio_build_is_set) {
+      } else if (OB_FAIL(databuff_printf(
+                     not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", DROP_RATIO_BUILD=%f", old_vec_param.ob_sparse_drop_ratio_build_))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ob_sparse_drop_ratio_build_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (drop_ratio_search_is_set) {
+        // drop_ratio_search is reset
+      } else if (OB_FAIL(databuff_printf(
+                     not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", DROP_RATIO_SEARCH=%f", old_vec_param.ob_sparse_drop_ratio_search_))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ob_sparse_drop_ratio_search_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (refine_k_is_set) {
+        // refine_k is reset
+      } else if (OB_FAIL(databuff_printf(
+                     not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", REFINE_K=%f", old_vec_param.refine_k_))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.refine_k_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (prune_is_set) {
+        // prune is reset
+      } else if (OB_FAIL(databuff_printf(
+                     not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", PRUNE=%s", old_vec_param.prune_ ? "TRUE" : "FALSE"))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.prune_));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (refine_is_set) {
+        // refine is reset
+      } else if (OB_FAIL(databuff_printf(
+                     not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", REFINE=%s", old_vec_param.refine_ ? "TRUE" : "FALSE"))) {
+        LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.refine_));
+      }
     }
     // verify extra_info_max_size and extra_info_actual_size
     if (OB_FAIL(ret)) {
@@ -1285,6 +1422,9 @@ int ObVectorIndexUtil::get_vector_dim_from_extend_type_info(const ObIArray<ObStr
     if (0 == spilt_str.compare("ARRAY") || 0 == spilt_str.compare("MAP")) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unexpected column type", K(ret), K(spilt_str));
+    } else if (0 == extend_type_info_str.compare("SPARSEVECTOR")) {
+      const int64_t default_sparse_vector_dim = 1024;
+      dim = default_sparse_vector_dim;
     } else if (0 != spilt_str.compare("VECTOR")) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected column extend info type", K(ret), K(spilt_str));
@@ -2411,10 +2551,6 @@ int ObVectorIndexUtil::check_index_param(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("invalid vector param num", K(ret), K(option_node->num_child_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index params not set distance and type is");
-    } else if (is_sparse_vec) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not sopport sparse vector index", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vector index is");
     }
     ObString last_variable;
     ObString key_parser_name;
@@ -2432,6 +2568,10 @@ int ObVectorIndexUtil::check_index_param(
     int64_t extra_info_max_size = 0;
     int64_t nlist_value = 0;
     int64_t nbits_value = 0;
+    bool prune_value = false;
+    bool refine_value = false;
+    double drop_ratio_build = 0.0;
+    double drop_ratio_search = 0.0;
 
     bool distance_is_set = false;       // ivf/hnsw/spiv
     bool lib_is_set = false;            // ivf/hnsw
@@ -2451,6 +2591,12 @@ int ObVectorIndexUtil::check_index_param(
     bool refine_k_is_set = false;    // hnsw_bq
     bool bq_use_fht_is_set = false;    // hnsw_bq
     bool bq_bits_query_set = false;    // hnsw_bq
+    bool type_sindi_is_set = false; // sparse index with vsag
+    bool type_spiv_is_set = false; // sparse index with ob
+    bool prune_is_set = false;
+    bool refine_is_set = false;
+    bool drop_ratio_build_is_set = false;
+    bool drop_ratio_search_is_set = false;
 
     // [4.3.5.3, 4.4.0.0) or [4.4.1.0, )
     bool is_enable_bp_param = (tenant_data_version >= MOCK_DATA_VERSION_4_3_5_3 && tenant_data_version < DATA_VERSION_4_4_0_0)
@@ -2490,7 +2636,11 @@ int ObVectorIndexUtil::check_index_param(
                    new_variable_name != "BQ_BITS_QUERY" &&
                    new_variable_name != "REFINE_K" &&
                    new_variable_name != "BQ_USE_FHT" &&
-                   new_variable_name != "NBITS") {
+                   new_variable_name != "NBITS" &&
+                   new_variable_name != "PRUNE" &&
+                   new_variable_name != "REFINE" &&
+                   new_variable_name != "DROP_RATIO_BUILD" &&
+                   new_variable_name != "DROP_RATIO_SEARCH") {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected vector variable name", K(ret), K(new_variable_name));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "unexpected vector index params items is");
@@ -2514,6 +2664,12 @@ int ObVectorIndexUtil::check_index_param(
           new_parser_name = data_parser_name;
         } else if (option_node->children_[i]->type_ == T_BOOL) {
           parser_value = option_node->children_[i]->value_;
+          str_len = static_cast<int32_t>(option_node->children_[i]->str_len_);
+          data_parser_name.assign_ptr(option_node->children_[i]->str_value_, str_len);
+          new_parser_name = data_parser_name;
+          if (OB_FAIL(ob_simple_low_to_up(allocator, data_parser_name, new_parser_name))) {
+            LOG_WARN("string low to up failed", K(ret), K(data_parser_name));
+          }
         } else {
           str_len = static_cast<int32_t>(option_node->children_[i]->str_len_);
           data_parser_name.assign_ptr(option_node->children_[i]->str_value_, str_len);
@@ -2564,6 +2720,8 @@ int ObVectorIndexUtil::check_index_param(
           } else if (new_parser_name == "HNSW_BQ") {
             type_hnsw_is_set = true;
             type_hnsw_bq_is_set = true;
+          } else if (new_parser_name == "SINDI") {
+            type_sindi_is_set = true;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support vector index type", K(ret), K(new_parser_name));
@@ -2663,6 +2821,54 @@ int ObVectorIndexUtil::check_index_param(
             LOG_WARN("invalid vector index nbits value", K(ret), K(parser_value));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index nbits is");
           }
+        } else if (last_variable == "PRUNE") {
+          if (! (0 == parser_value || 1 == parser_value)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support sparse vector index prune value", K(ret), K(last_variable), K(parser_value));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of sparse vector index prune is");
+          } else {
+            prune_is_set = true;
+            prune_value = parser_value;
+          }
+        } else if (last_variable == "REFINE") {
+          if (! (0 == parser_value || 1 == parser_value)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support sparse vector index refine value", K(ret), K(last_variable), K(parser_value));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of sparse vector index refine is");
+          } else {
+            refine_is_set = true;
+            refine_value = parser_value;
+          }
+        } else if (last_variable == "DROP_RATIO_BUILD") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_parser_name.ptr(), new_parser_name.length(), &endptr, &err);
+          if (err != 0 || (new_parser_name.ptr() + new_parser_name.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_parser_name), K(err), KP(endptr));
+          } else if (out_val < 0 || out_val > 0.9 ) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index drop_ratio_build value", K(ret), K(out_val));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index drop_ratio_build is");
+          } else {
+            drop_ratio_build_is_set = true;
+            drop_ratio_build = out_val;
+          }
+        } else if (last_variable == "DROP_RATIO_SEARCH") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_parser_name.ptr(), new_parser_name.length(), &endptr, &err);
+          if (err != 0 || (new_parser_name.ptr() + new_parser_name.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_parser_name), K(err), KP(endptr));
+          } else if (out_val < 0 || out_val > 0.9 ) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index drop_ratio_search value", K(ret), K(out_val));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index drop_ratio_search is");
+          } else {
+            drop_ratio_search_is_set = true;
+            drop_ratio_search = out_val;
+          }
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support vector index param", K(ret), K(last_variable));
@@ -2683,8 +2889,16 @@ int ObVectorIndexUtil::check_index_param(
       }
     }
 
+    if (OB_SUCC(ret) && type_sindi_is_set) {
+      if (tenant_data_version < DATA_VERSION_4_5_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("for sindi index current version is not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "for sindi index current version is");
+      }
+    }
+
     if (OB_SUCC(ret) && ! type_hnsw_bq_is_set
-        && (refine_type_is_set || refine_k_is_set
+        && (refine_type_is_set || (refine_k_is_set && !type_sindi_is_set)
             || bq_use_fht_is_set || bq_bits_query_set)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support parameter for current index", K(ret),
@@ -2857,13 +3071,13 @@ int ObVectorIndexUtil::check_index_param(
         }
       }
     } else if (is_sparse_vec) {
-      if (!distance_is_set) {
+      if (!type_sindi_is_set || !distance_is_set) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("sparse vector index distance algorithm need to be set 'INNER_PRODUCT'", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vector index distance algorithm need to be set 'INNER_PRODUCT'");
+        LOG_WARN("unexpected setting of vector index param, distance or type has not been set",
+          K(ret), K(distance_is_set), K(type_sindi_is_set));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance or type not set is");
       } else {
-        if (lib_is_set
-            || type_hnsw_is_set
+        if (type_hnsw_is_set
             || m_is_set
             || ef_construction_is_set
             || ef_search_is_set
@@ -2875,8 +3089,14 @@ int ObVectorIndexUtil::check_index_param(
             || type_ivf_pq_is_set
             || extra_info_max_size_is_set) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("sparce vector index only support to set distance algorithm", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparce vector index only support to set distance algorithm");
+          LOG_WARN("parameter for sparse vector index is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "parameter for sparse vector index is");
+        } else if (!prune_value) {
+          if (refine_value != false || drop_ratio_build != 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("sparse vector index not support to set refine or ob_sparse_drop_ratio_build when prune is false.", K(ret), K(refine_value), K(drop_ratio_build));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "sparse vector index set refine or ob_sparse_drop_ratio_build when prune is false is");
+          }
         }
       }
     }
@@ -2884,7 +3104,11 @@ int ObVectorIndexUtil::check_index_param(
     out_index_type = INDEX_TYPE_MAX;
     if (OB_FAIL(ret)) {
     } else if (is_sparse_vec) {
-      out_index_type = INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
+      if (type_sindi_is_set) {
+        out_index_type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
+      } else {
+        out_index_type = INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
+      }
     } else if (type_hnsw_is_set) {
       out_index_type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
     } else if (type_ivf_flat_is_set) {
@@ -4771,6 +4995,35 @@ int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
   return ret;
 }
 
+int ObVectorIndexUtil::estimate_sparse_memory(uint64_t num_vectors, const ObVectorIndexParam &param, uint64_t &est_mem)
+{
+  int ret = OB_SUCCESS;
+  est_mem = 0;
+  obvsag::VectorIndexPtr index_handler = nullptr;
+  const char *const DATATYPE_SPARSE = "sparse";
+  ObVectorIndexAlgorithmType build_type = param.type_;
+  if (build_type != VIAT_IPIVF) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid hnsw algorithm type", K(ret), K(param));
+  } else if (OB_FAIL(obvectorutil::create_index(index_handler,
+          build_type,
+          DATATYPE_SPARSE,
+          VEC_INDEX_ALGTH[param.dist_algorithm_],
+          param.refine_,
+          param.ob_sparse_drop_ratio_build_,
+          param.window_size_,
+          nullptr, /* memory ctx, use default */
+          param.extra_info_actual_size_))) {
+    LOG_WARN("failed to create vsag index.", K(ret), K(param));
+  } else if (OB_ISNULL(index_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(index_handler));
+  } else if (OB_FALSE_IT(est_mem = obvectorutil::estimate_memory(index_handler, num_vectors, false))) {
+  } else if (OB_FALSE_IT(obvectorutil::delete_index(index_handler))) {
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
                                            const ObVectorIndexParam &param,
                                            uint64_t &construct_mem,
@@ -5123,6 +5376,7 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
   estimate_memory = 0;
 
   const char* const DATATYPE_FLOAT32 = "float32";
+  const char* const DATATYPE_SPARSE = "sparse";
   obvsag::VectorIndexPtr index_handler = nullptr;
   ObVectorIndexParam param;
   int64_t dim = 0;
@@ -5163,7 +5417,17 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
     int64_t build_metric = param.m_;
     param.dim_ = dim;
     build_metric = param.type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param.m_) : param.m_;
-    if (OB_FAIL(obvectorutil::create_index(index_handler,
+    if (build_type == VIAT_IPIVF && OB_FAIL(obvectorutil::create_index(index_handler,
+                                        build_type,
+                                        DATATYPE_SPARSE,
+                                        VEC_INDEX_ALGTH[param.dist_algorithm_],
+                                        param.refine_,
+                                        param.ob_sparse_drop_ratio_build_,
+                                        param.window_size_,
+                                        nullptr, /* memory ctx, use default */
+                                        param.extra_info_actual_size_))) {
+      LOG_WARN("failed to create vsag index.", K(ret), K(param));
+    } else if (build_type != VIAT_IPIVF && OB_FAIL(obvectorutil::create_index(index_handler,
                                            build_type,
                                            DATATYPE_FLOAT32,
                                            VEC_INDEX_ALGTH[param.dist_algorithm_],
@@ -5557,6 +5821,16 @@ int ObVectorIndexUtil::check_only_change_search_params(const ObString &old_idx_p
       LOG_WARN("fail to parser params from string", K(ret), K(old_idx_params));
     } else if (OB_FAIL(parser_params_from_string(new_idx_params, index_type, new_vector_index_param))) {
       LOG_WARN("fail to parser params from string", K(ret), K(new_idx_params));
+    } else if (old_vector_index_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF) {
+      if (old_vector_index_param.lib_ != new_vector_index_param.lib_ ||
+          old_vector_index_param.prune_ != new_vector_index_param.prune_ ||
+          old_vector_index_param.refine_ != new_vector_index_param.refine_ ||
+          old_vector_index_param.ob_sparse_drop_ratio_build_ != new_vector_index_param.ob_sparse_drop_ratio_build_) {
+        only_change_search_params = false;
+      } else if (old_vector_index_param.refine_k_ != new_vector_index_param.refine_k_ ||
+          old_vector_index_param.ob_sparse_drop_ratio_search_ != new_vector_index_param.ob_sparse_drop_ratio_search_) {
+        only_change_search_params = true;
+      }
     } else {
       if (old_vector_index_param.type_ != new_vector_index_param.type_ ||
           old_vector_index_param.lib_ != new_vector_index_param.lib_ ||
@@ -5604,17 +5878,25 @@ int ObVectorIndexUtil::set_vector_index_param(const ObTableSchema *&vec_index_sc
   return ret;
 }
 
-int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx)
+int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx, bool is_ipivf)
 {
   int ret = OB_SUCCESS;
   double output_row_count = vc_info.row_count_ * vc_info.selectivity_;
-  if (vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN) {
+  if (is_ipivf) {
+    if (vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN) {
+      if (vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_SINDI_SELECTIVITY_RATE) {
+        vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
+      } else {
+        vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_POST_FILTER;
+      }
+    }
+  } else if (vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN) {
     if (output_row_count <= ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE) {
       vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
     } else if (is_primary_idx) {
       vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY
                                     && vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY) ?
-                                    ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER :  ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
+                                    ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER : ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
     } else {
       vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_IDX
                                     && vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) ?
@@ -5627,6 +5909,15 @@ int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const b
     }
   }
   return ret;
+}
+
+bool ObVectorIndexUtil::is_sindi_index(const ObTableSchema *vec_index_schema)
+{
+  ObString index_params = vec_index_schema->get_index_params();
+  ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+  uint32_t idx = ObCharset::locate(calc_cs_type, index_params.ptr(), index_params.length(), "SINDI", 4, 1);
+  // for ipivf, is_vec_hnsw_index() should return true.
+  return vec_index_schema->is_vec_hnsw_index() && idx > 0;
 }
 
 int ObVecIdxExtraInfo::set_vec_param_info(const ObTableSchema *vec_index_schema)
