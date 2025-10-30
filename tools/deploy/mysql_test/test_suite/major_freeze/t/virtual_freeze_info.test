@@ -1,5 +1,5 @@
-#owner: donglou.zl 
-#owner group: rootserver
+#owner: huhaosheng.hhs
+#owner group: storage
 #tags: virtual_freeze_info 
 
 connect (sys_conn,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
