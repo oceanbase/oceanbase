@@ -994,6 +994,8 @@ int ObStaticEngineExprCG::cg_frame_layout(const ObIArray<ObRawExpr *> &exprs,
       if (OB_ISNULL(c_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("const raw expr is null", K(ret));
+      } else if (!c_expr->get_value().get_meta().is_unknown()) {
+        // do nothing if the question mark is not unknown type (e.g. null type)
       } else if (OB_FAIL(c_expr->get_value().get_unknown(param_idx))) {
         LOG_WARN("get question mark value failed", K(ret), K(*c_expr));
       } else {
