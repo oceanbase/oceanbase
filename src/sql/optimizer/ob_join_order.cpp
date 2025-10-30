@@ -20993,83 +20993,87 @@ int ObJoinOrder::process_index_for_match_expr(const uint64_t table_id,
   } else if (FALSE_IT(is_es_match = static_cast<ObMatchFunRawExpr *>(all_match_exprs.at(0))->is_es_match())) {
     LOG_WARN("failed to get es match", K(ret));
   } else if (is_es_match) {
-    bool match_filter_exist = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < helper.filters_.count(); ++i) {
-      ObRawExpr *filter = helper.filters_.at(i);
-      if (OB_ISNULL(filter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr to filter expr", K(ret), K(i), KPC(filter));
-      } else if (filter->get_expr_type() == T_OP_BOOL && filter->has_flag(CNT_MATCH_EXPR)) {
-        if (OB_UNLIKELY(match_filter_exist)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("match filter already exist", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "different matchs not connected by OR is");
-        } else {
-          match_filter_exist = true;
-          ObRawExpr *param_expr = filter->get_param_expr(0);
-          if (OB_ISNULL(param_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null param expr for bool op", K(ret));
-          } else if (OB_UNLIKELY(!param_expr->has_flag(IS_MATCH_EXPR))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected non-match expr", K(ret));
-          }
-        }
-      } else if (filter->get_expr_type() == T_OP_OR && filter->has_flag(CNT_MATCH_EXPR)) {
-        if (OB_UNLIKELY(match_filter_exist)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("match filter already exist", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "different matchs not connected by OR is");
-        } else {
-          match_filter_exist = true;
-          for (int64_t j = 0; OB_SUCC(ret) && j < filter->get_param_count(); ++j) {
-            ObRawExpr *param_expr = filter->get_param_expr(j);
+    if (helper.is_index_merge_ && !ObOptimizerUtil::find_item(helper.filters_, all_match_exprs.at(0))) {
+      // no match filter in this path
+    } else {
+      bool match_filter_exist = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < helper.filters_.count(); ++i) {
+        ObRawExpr *filter = helper.filters_.at(i);
+        if (OB_ISNULL(filter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr to filter expr", K(ret), K(i), KPC(filter));
+        } else if (filter->get_expr_type() == T_OP_BOOL && filter->has_flag(CNT_MATCH_EXPR)) {
+          if (OB_UNLIKELY(match_filter_exist)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("match filter already exist", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "different matchs not connected by OR is");
+          } else {
+            match_filter_exist = true;
+            ObRawExpr *param_expr = filter->get_param_expr(0);
             if (OB_ISNULL(param_expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null param expr for bool op", K(ret));
-            } else if (OB_UNLIKELY(param_expr->get_expr_type() != T_OP_BOOL || !param_expr->has_flag(CNT_MATCH_EXPR))) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("the match case is", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "the match case is");
-            } else {
-              ObRawExpr *child_param_expr = param_expr->get_param_expr(0);
-              if (OB_ISNULL(child_param_expr)) {
+            } else if (OB_UNLIKELY(!param_expr->has_flag(IS_MATCH_EXPR))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected non-match expr", K(ret));
+            }
+          }
+        } else if (filter->get_expr_type() == T_OP_OR && filter->has_flag(CNT_MATCH_EXPR)) {
+          if (OB_UNLIKELY(match_filter_exist)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("match filter already exist", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "different matchs not connected by OR is");
+          } else {
+            match_filter_exist = true;
+            for (int64_t j = 0; OB_SUCC(ret) && j < filter->get_param_count(); ++j) {
+              ObRawExpr *param_expr = filter->get_param_expr(j);
+              if (OB_ISNULL(param_expr)) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected null child param expr", K(ret));
-              } else if (OB_UNLIKELY(!child_param_expr->has_flag(IS_MATCH_EXPR))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected non-match expr", K(ret));
+                LOG_WARN("unexpected null param expr for bool op", K(ret));
+              } else if (OB_UNLIKELY(param_expr->get_expr_type() != T_OP_BOOL || !param_expr->has_flag(CNT_MATCH_EXPR))) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("the match case is", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "the match case is");
+              } else {
+                ObRawExpr *child_param_expr = param_expr->get_param_expr(0);
+                if (OB_ISNULL(child_param_expr)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected null child param expr", K(ret));
+                } else if (OB_UNLIKELY(!child_param_expr->has_flag(IS_MATCH_EXPR))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected non-match expr", K(ret));
+                }
               }
             }
           }
+        } else if (OB_UNLIKELY(filter->has_flag(CNT_MATCH_EXPR) || filter->has_flag(IS_MATCH_EXPR))) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("the match case is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "the match case is");
         }
-      } else if (OB_UNLIKELY(filter->has_flag(CNT_MATCH_EXPR) || filter->has_flag(IS_MATCH_EXPR))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("the match case is not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "the match case is");
       }
-    }
-    if (OB_SUCC(ret) && !match_filter_exist) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("no match filter found", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_match_exprs.count(); ++i) {
-      ObMatchFunRawExpr *curr_expr = static_cast<ObMatchFunRawExpr *>(all_match_exprs.at(i));
-      ObSEArray<const MatchExprInfo *, 4> match_expr_infos;
-      if (OB_ISNULL(curr_expr)) {
+      if (OB_SUCC(ret) && !match_filter_exist) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null ");
-      } else if (OB_FAIL(find_match_expr_infos(helper.match_expr_infos_, curr_expr, match_expr_infos))) {
-        LOG_WARN("failed to find match expr info", K(ret), KPC(curr_expr));
-      } else if (match_expr_infos.count() == 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null match expr info", K(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < match_expr_infos.count(); ++j) {
-          if (OB_FAIL(access_path.domain_idx_info_.match_exprs_.push_back(curr_expr))) {
-            LOG_WARN("failed to append func lookup exprs", K(ret), KPC(curr_expr));
-          } else if (OB_FAIL(access_path.domain_idx_info_.match_index_ids_.push_back(match_expr_infos.at(j)->inv_idx_id_))) {
-            LOG_WARN("failed to append func lookup index id", K(ret));
+        LOG_WARN("no match filter found", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_match_exprs.count(); ++i) {
+        ObMatchFunRawExpr *curr_expr = static_cast<ObMatchFunRawExpr *>(all_match_exprs.at(i));
+        ObSEArray<const MatchExprInfo *, 4> match_expr_infos;
+        if (OB_ISNULL(curr_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ");
+        } else if (OB_FAIL(find_match_expr_infos(helper.match_expr_infos_, curr_expr, match_expr_infos))) {
+          LOG_WARN("failed to find match expr info", K(ret), KPC(curr_expr));
+        } else if (match_expr_infos.count() == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null match expr info", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < match_expr_infos.count(); ++j) {
+            if (OB_FAIL(access_path.domain_idx_info_.match_exprs_.push_back(curr_expr))) {
+              LOG_WARN("failed to append func lookup exprs", K(ret), KPC(curr_expr));
+            } else if (OB_FAIL(access_path.domain_idx_info_.match_index_ids_.push_back(match_expr_infos.at(j)->inv_idx_id_))) {
+              LOG_WARN("failed to append func lookup index id", K(ret));
+            }
           }
         }
       }
