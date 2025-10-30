@@ -1091,7 +1091,8 @@ void ObPLContext::destory(
               //异步提交无法带给proxy未hit信息(ObPartitionHitInfo默认值是Hit),如果未hit走同步提交
               && session_info_->partition_hit().get_bool()
               // 如果顶层调用有出参也不走异步提交, 因为要向客户端回数据
-              && !has_output_arguments()) {
+              && !has_output_arguments()
+              && !ctx.need_try_serialize_package_var()) {
             if (OB_SUCCESS !=
                 (tmp_ret = implicit_end_trans(session_info, ctx, false, true))) {
               // 不覆盖原来的错误码
