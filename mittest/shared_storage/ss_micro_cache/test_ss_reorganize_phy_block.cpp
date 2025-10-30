@@ -510,9 +510,9 @@ TEST_F(TestSSReorganizePhyBlock, test_delete_block_from_sparse_blk_map)
   int64_t start_macro_id = 1;
   int64_t macro_cnt = SS_MIN_REORGAN_BLK_CNT * 3;
   int64_t micro_cnt = 10000;
-  const int64_t micro_size = macro_cnt * DEFAULT_BLOCK_SIZE / micro_cnt;
+  const int64_t micro_size = DEFAULT_BLOCK_SIZE / micro_cnt;
   ObArray<ReorganSSMicroDataInfo> micro_data_info_arr;
-  add_batch_micro_block(start_macro_id, 1/*macro_cnt*/, micro_cnt, micro_size, micro_data_info_arr);
+  add_batch_micro_block(start_macro_id, macro_cnt, micro_cnt, micro_size, micro_data_info_arr);
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
   int64_t data_blk_used_cnt = phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_;
   ASSERT_LT(SS_MIN_REORGAN_BLK_CNT, data_blk_used_cnt);
