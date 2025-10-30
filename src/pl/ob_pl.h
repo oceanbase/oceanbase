@@ -592,30 +592,43 @@ private:
   common::hash::ObHashMap<std::pair<uint64_t, uint64_t>, int64_t> recursion_depth_map_;
 };
 
+#define OB_PL_SQLMSG_MAX_SIZE 2048
+
 struct ObPLSqlCodeInfo
 {
 public:
-  ObPLSqlCodeInfo() : sqlcode_(OB_SUCCESS), sqlmsg_() {}
-  inline void set_sqlcode(int sqlcode, const ObString &sqlmsg = ObString(""))
+  ObPLSqlCodeInfo() : sqlcode_(OB_SUCCESS), sqlmsg_buf_(NULL), sqlmsg_() {}
+  inline void set_sqlcode(int sqlcode)
   {
     sqlcode_ = sqlcode;
-    sqlmsg_ = sqlmsg;
   }
   inline void reset()
   {
     sqlcode_ = OB_SUCCESS;
+    sqlmsg_buf_ = NULL;
     sqlmsg_ = ObString("");
     stakced_warning_buff_.reset();
   }
-  inline void set_sqlmsg(const ObString &sqlmsg) { sqlmsg_ = sqlmsg; }
+  inline void set_sqlmsg(const ObString &sqlmsg) {
+    if (OB_NOT_NULL(sqlmsg.ptr()) && sqlmsg.length() > 0 && OB_NOT_NULL(sqlmsg_buf_)) {
+      int copy_len = MIN (sqlmsg.length(), OB_PL_SQLMSG_MAX_SIZE);
+      MEMCPY(sqlmsg_buf_, sqlmsg.ptr(), copy_len);
+      sqlmsg_.assign_ptr(sqlmsg_buf_, copy_len);
+    } else {
+      sqlmsg_ = ObString("");
+    }
+  }
   inline int get_sqlcode() const { return sqlcode_; }
   inline const ObString& get_sqlmsg() const { return sqlmsg_; }
   inline common::ObIArray<ObWarningBuffer>& get_stack_warning_buf()
   {
     return stakced_warning_buff_;
   }
+  inline void set_sqlmsg_buf(char* sqlmsg_buf) { sqlmsg_buf_ = sqlmsg_buf; }
+  inline char* get_sqlmsg_buf() { return sqlmsg_buf_; }
 private:
   int sqlcode_;
+  char* sqlmsg_buf_;
   ObString sqlmsg_;
   common::ObSEArray<ObWarningBuffer, 4> stakced_warning_buff_;
 };
