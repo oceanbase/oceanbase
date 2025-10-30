@@ -2456,10 +2456,18 @@ int ObDelUpdLogPlan::check_update_primary_key(ObSchemaGetterGuard &schema_guard,
       for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info->assignments_.count()
                           && !index_dml_info->is_vec_hnsw_index_vid_opt_; ++i) {
         ObColumnRefRawExpr *col_expr = index_dml_info->assignments_.at(i).column_expr_;
+        ColumnItem *column_item = nullptr;
         ObIndexType index_type = INDEX_TYPE_MAX;
         bool is_col_has_vec_idx = false;
-        if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*index_schema, schema_guard, col_expr->get_column_id(),
-                                                                     is_col_has_vec_idx, index_type))) {
+        if (OB_ISNULL(col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null column expr", K(ret));
+        } else if (OB_ISNULL(column_item = stmt->get_column_item_by_id(col_expr->get_table_id(),
+                                                                       col_expr->get_column_id()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null column item", K(ret), KPC(col_expr));
+        } else if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*index_schema, schema_guard, column_item->base_cid_,
+                                                                            is_col_has_vec_idx, index_type))) {
           LOG_WARN("failed to check column has vector index", K(ret));
         } else if (is_col_has_vec_idx && index_type == ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {
           index_dml_info->is_update_primary_key_ = true;
