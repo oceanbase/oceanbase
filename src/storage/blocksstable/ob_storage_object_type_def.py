@@ -4714,3 +4714,35 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 }
 ''',
 )
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_INC_MAJOR_DATA_MACRO',
+    owner = 'cyh438514',
+    access_mode = 'shared',
+    data_type = 'macro_data',
+    read_odirect = False,
+    write_odirect = True,
+    is_support_fd_cache = True,
+    is_read_out_of_bounds = False,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}''',
+)
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_INC_MAJOR_META_MACRO',
+    owner = 'cyh438514',
+    access_mode = 'shared',
+    data_type = 'macro_meta',
+    read_odirect = False,
+    write_odirect = True,
+    is_support_fd_cache = True,
+    is_read_out_of_bounds = False,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}''',
+)

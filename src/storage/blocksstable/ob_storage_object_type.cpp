@@ -107,6 +107,8 @@ static const char *ob_storage_object_type_strs[] = {
   "EXTERNAL_TABLE_FILE",
   "MACRO_CACHE_CKPT_DATA",
   "MACRO_CACHE_CKPT_META",
+  "SHARED_INC_MAJOR_DATA_MACRO",
+  "SHARED_INC_MAJOR_META_MACRO",
   "MAX"
 };
 static inline const char *get_ls_inner_tablet_name_(const int64_t tablet_id)
@@ -4481,6 +4483,22 @@ int ObMacroCacheCkptMetaType::get_object_id(const ObStorageObjectOpt &opt, Macro
   object_id.set_second_id(opt.ss_macro_cache_ckpt_opt_.version_id_);
   return OB_SUCCESS;
 }
+/**
+ * ---------------------------------------ObSharedIncMajorDataMacroType----------------------------------------
+ */
+
+bool ObSharedIncMajorDataMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+/**
+ * ---------------------------------------ObSharedIncMajorMetaMacroType----------------------------------------
+ */
+
+bool ObSharedIncMajorMetaMacroType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
 
 const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStorageObjectType type)
 {
@@ -4807,6 +4825,14 @@ const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStora
     }
     case ObStorageObjectType::MACRO_CACHE_CKPT_META: {
       static const ObMacroCacheCkptMetaType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO: {
+      static const ObSharedIncMajorDataMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO: {
+      static const ObSharedIncMajorMetaMacroType instance;
       return instance;
     }
     default: {

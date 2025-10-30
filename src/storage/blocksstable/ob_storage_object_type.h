@@ -111,6 +111,8 @@ enum class ObStorageObjectType : uint8_t
     EXTERNAL_TABLE_FILE,
     MACRO_CACHE_CKPT_DATA,
     MACRO_CACHE_CKPT_META,
+    SHARED_INC_MAJOR_DATA_MACRO,
+    SHARED_INC_MAJOR_META_MACRO,
     MAX
 };
 static constexpr uint8_t SS_OBJECT_MAX_TYPE_VAL = static_cast<uint8_t>(ObStorageObjectType::MAX);
@@ -1871,6 +1873,38 @@ public:
 #endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedIncMajorDataMacroType----------------------------------------
+ */
+class ObSharedIncMajorDataMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedIncMajorDataMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_INC_MAJOR_DATA_MACRO) {}
+  virtual ~ObSharedIncMajorDataMacroType() {}
+  virtual bool is_macro_data() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
+};
+
+/**
+ * ---------------------------------------ObSharedIncMajorMetaMacroType----------------------------------------
+ */
+class ObSharedIncMajorMetaMacroType : public ObStorageObjectTypeBase
+{
+public:
+  ObSharedIncMajorMetaMacroType() : ObStorageObjectTypeBase(ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO) {}
+  virtual ~ObSharedIncMajorMetaMacroType() {}
+  virtual bool is_macro_meta() const { return true; }
+  virtual bool is_shared() const { return true; }
+  virtual bool is_direct_write() const { return true; }
+  virtual bool is_support_fd_cache() const { return true; }
+  virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_valid(const MacroBlockId &file_id) const;
 };
 
 } // end namespace blocksstable
