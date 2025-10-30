@@ -450,6 +450,7 @@ extern bool nodename_is_sdo_geometry_type(const ParseNode *node);
 #define OB_NODE_CAST_C_LEN_IDX 1
 #define OB_NODE_CAST_GEO_TYPE_IDX 1
 #define OB_NODE_CAST_CS_LEVEL_IDX 2
+#define OB_NODE_CAST_COLLECTION_TYPE_IDX 3
 
 typedef enum ObNumberParseType
 {
