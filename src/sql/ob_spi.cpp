@@ -1664,6 +1664,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       ObString sqlstr(sql);
       OZ (ObSPIResultSet::check_nested_stmt_legal(*(ctx->exec_ctx_), sqlstr, stmt::T_END_TRANS));
       int64_t saved_query_start_time = my_session->get_query_start_time();
+      int64_t saved_try_cnt = audit_record.try_cnt_;
       my_session->set_query_start_time(ObTimeUtility::current_time());
       if (OB_SUCC(ret)) {
         if (my_session->is_in_transaction() &&
@@ -1774,6 +1775,8 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
                                   *my_session, ctx->exec_ctx_->get_sql_ctx()->is_sensitive_);
       // restore query_start_time
       my_session->set_query_start_time(saved_query_start_time);
+      // restore try_cnt
+      audit_record.try_cnt_ = saved_try_cnt;
     }
   }
   if (OB_SUCC(ret)
