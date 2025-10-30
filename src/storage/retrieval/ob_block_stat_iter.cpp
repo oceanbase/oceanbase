@@ -25,7 +25,8 @@ ObBlockStatScanParam::ObBlockStatScanParam()
     stat_projectors_(nullptr),
     scan_param_(nullptr),
     scan_single_major_only_(false),
-    scan_max_sstable_block_granule_(false)
+    scan_max_sstable_block_granule_(false),
+    force_scan_whole_range_(false)
 {
 }
 
@@ -36,17 +37,15 @@ void ObBlockStatScanParam::reset()
   scan_param_ = nullptr;
   scan_single_major_only_ = false;
   scan_max_sstable_block_granule_ = false;
+  force_scan_whole_range_ = false;
 }
 
 bool ObBlockStatScanParam::is_valid() const
 {
-  bool valid = false;
-  if (nullptr == stat_cols_ || nullptr == stat_projectors_ || nullptr == scan_param_) {
-    valid = false;
-  } else {
-    valid = stat_cols_->count() == stat_projectors_->count();
-  }
-  return valid;
+  const bool ptr_valid = nullptr != stat_cols_ && nullptr != stat_projectors_ && nullptr != scan_param_;
+  const bool stat_meta_valie = stat_cols_->count() == stat_projectors_->count();
+  const bool range_valid = (!force_scan_whole_range_ || scan_single_major_only_);
+  return ptr_valid && stat_meta_valie && range_valid;
 }
 
 int ObBlockStatScanParam::init(
@@ -54,7 +53,8 @@ int ObBlockStatScanParam::init(
     const ObIArray<uint32_t> &stat_projectors,
     ObTableScanParam &scan_param,
     bool scan_single_major_only,
-    bool scan_max_sstable_block_granule)
+    bool scan_max_sstable_block_granule,
+    bool force_scan_whole_range)
 {
   int ret = OB_SUCCESS;
   stat_cols_ = &stat_cols;
@@ -62,6 +62,7 @@ int ObBlockStatScanParam::init(
   scan_param_ = &scan_param;
   scan_single_major_only_ = scan_single_major_only;
   scan_max_sstable_block_granule_ = scan_max_sstable_block_granule;
+  force_scan_whole_range_ = force_scan_whole_range;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(stat_cols), K(stat_projectors), K(scan_param),
@@ -171,7 +172,7 @@ int ObBlockStatIterator::init(const ObTabletHandle &tablet_handle, ObBlockStatSc
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(scan_param), K(tablet_handle), K(store_ctx));
   } else if (FALSE_IT(scan_param_ = &scan_param)) {
-  } else if (OB_FAIL(init_scan_range(tablet_handle, *table_scan_param))) {
+  } else if (OB_FAIL(init_scan_range(tablet_handle, scan_param))) {
     LOG_WARN("failed to init scan range", K(ret));
   } else if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle))) {
     LOG_WARN("failed to set tablet handle to iter", K(ret));
@@ -258,16 +259,18 @@ int ObBlockStatIterator::advance_to(const ObDatumRowkey &advance_key, const bool
 }
 
 
-int ObBlockStatIterator::init_scan_range(const ObTabletHandle &tablet_handle, ObTableScanParam &scan_param)
+int ObBlockStatIterator::init_scan_range(const ObTabletHandle &tablet_handle, ObBlockStatScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
   bool is_tablet_splitting = false;
-  if (OB_FAIL(ObTabletSplitMdsHelper::get_is_spliting(*tablet_handle.get_obj(), is_tablet_splitting))) {
+  if (scan_param.force_scan_whole_range()) {
+    curr_scan_range_.set_whole_range();
+  } else if (OB_FAIL(ObTabletSplitMdsHelper::get_is_spliting(*tablet_handle.get_obj(), is_tablet_splitting))) {
     LOG_WARN("failed to get is tablet splitting", K(ret));
   } else if (OB_UNLIKELY(is_tablet_splitting)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("splitting tablet not supported for block stat iterator", K(ret));
-  } else if (OB_FAIL(scan_range_.init(scan_param, *tablet_handle.get_obj(), is_tablet_splitting))) {
+  } else if (OB_FAIL(scan_range_.init(*scan_param.get_scan_param(), *tablet_handle.get_obj(), is_tablet_splitting))) {
     LOG_WARN("failed to init scan range", K(ret));
   } else if (OB_UNLIKELY(scan_range_.get_ranges().empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -520,7 +523,7 @@ int ObBlockStatIterator::next_baseline_range(bool &beyond_range)
 
   if (OB_FAIL(ret)) {
   } else if (iter.is_iter_end()) {
-    curr_endkey_ = &scan_range_.get_ranges().at(0).get_end_key();
+    curr_endkey_ = &curr_scan_range_.get_end_key();
     beyond_range = true;
   } else if (scan_param_->is_scan_single_major_only()) {
     // skip
