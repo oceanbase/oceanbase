@@ -1517,13 +1517,10 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             }
           } else if (ob_is_json(obj_type) || ob_is_string_type(obj_type) ||
                        ob_is_enumset_tc(obj_type)) {
+            // string to double no need scale information
             result_type.set_double();
-            // todo jiuren
-            // todo blob and text@hanhui
-            if (result_type.get_scale() >= 0) {
-              scale_increment_recover = result_type.get_scale();
-              result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
-            }
+            result_type.set_scale(SCALE_UNKNOWN_YET);
+            result_type.set_precision(PRECISION_UNKNOWN_YET);
           } else {
             result_type.set_number();
             // todo jiuren
