@@ -169,15 +169,19 @@ int ObBalanceJobDesc::get_unit_lcm_count(int64_t &lcm_count) const
       const ObDisplayZoneUnitCnt &zone_unit = zone_unit_num_list_.at(i);
       const ObReplicaType &replica_type = zone_unit.get_replica_type();
       int64_t unit_num = zone_unit.get_unit_cnt();
-      if (enable_gts_standalone_ && ObReplicaTypeCheck::gts_standalone_applicable(replica_type)) {
-        unit_num--;
-      }
-      if (unit_num <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unit num is less than 0", KR(ret), K(tenant_id_), K(zone_unit), K(unit_num),
-            K(replica_type), K(enable_gts_standalone_));
+      if (!ObReplicaTypeCheck::need_to_align_to_ug(replica_type)) {
+        // skip this zone
       } else {
-        lcm_count = lcm(lcm_count, unit_num);
+        if (enable_gts_standalone_ && ObReplicaTypeCheck::gts_standalone_applicable(replica_type)) {
+          unit_num--;
+        }
+        if (unit_num <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unit num is less than 0", KR(ret), K(tenant_id_), K(zone_unit), K(unit_num),
+              K(replica_type), K(enable_gts_standalone_));
+        } else {
+          lcm_count = lcm(lcm_count, unit_num);
+        }
       }
     }
   }
