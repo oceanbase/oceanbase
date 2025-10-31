@@ -491,6 +491,47 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
               if (need_set) {
                 val.set_int(node->value_);
               }
+            } else if (ob_is_collection_sql_type(data_type)) {
+              // set subschema id for cast as array
+              uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+              uint16_t subschema_id = 0;
+              uint8_t depth = 0;
+              ObExecContext *exec_ctx = NULL;
+              if (node->num_child_ != 1) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected number of children", K(ret), K(node->num_child_));
+              } else if ((cluster_version < MOCK_CLUSTER_VERSION_4_3_5_5)
+                        || (CLUSTER_VERSION_4_4_0_0 <= cluster_version && cluster_version < CLUSTER_VERSION_4_4_1_0)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("cluster version is less than 4.4.1.0, cast as array not supported", K(ret), K(cluster_version));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.4.1, cast as array");
+              } else if (OB_ISNULL(ctx_.session_info_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("session info is null", K(ret));
+              } else if (OB_ISNULL(exec_ctx = const_cast<ObSQLSessionInfo *>(ctx_.session_info_)->get_cur_exec_ctx())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("exec ctx is null", K(ret));
+              } else {
+                ObIAllocator &allocator = exec_ctx->get_allocator();
+                ObStringBuffer buf(&allocator);
+                ParseNode tmp_node;
+                tmp_node.type_ = static_cast<ObItemType>(T_COLLECTION);
+                tmp_node.int32_values_[0] = tmp_node.int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX]; // collection type
+                tmp_node.num_child_ = 1;
+                tmp_node.children_ = node->children_;
+                if (OB_FAIL(ObResolverUtils::resolve_collection_type_info(cluster_version, tmp_node, buf, depth))) {
+                  LOG_WARN("failed to append type string", K(ret), K(tmp_node.type_));
+                } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(buf.string(), subschema_id))) {
+                  LOG_WARN("cast array element type", K(tmp_node.type_), K(buf.string()));
+                } else {
+                  tmp_node.value_ = node->value_;
+                  tmp_node.int16_values_[OB_NODE_CAST_COLL_IDX] = (subschema_id >> 8) & UINT_MAX8;
+                  tmp_node.int16_values_[OB_NODE_CAST_CS_LEVEL_IDX] = subschema_id & UINT_MAX8;
+                  tmp_node.int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = node->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX];
+                  val.set_int(tmp_node.value_);
+                  c_expr->set_expr_name(buf.string()); // for ctas to generate inner sql
+                }
+              }
             } else {
               ObCollationType coll_type = static_cast<ObCollationType>(node->int16_values_[OB_NODE_CAST_COLL_IDX]);
               if (CS_TYPE_INVALID != coll_type) {

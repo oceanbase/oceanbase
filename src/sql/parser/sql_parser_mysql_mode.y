@@ -6694,6 +6694,12 @@ BINARY opt_string_length_i_v2
   $$->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &($$->str_len_));
   $$->sql_str_off_ = @1.first_column;
 }
+| ARRAY '(' data_type ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT, 1, $3);
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_COLLECTION; /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLLECTION_TYPE_IDX] = 0 /* array type */
+}
 ;
 
 opt_integer:
