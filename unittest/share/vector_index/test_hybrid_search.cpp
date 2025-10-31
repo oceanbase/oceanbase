@@ -371,7 +371,7 @@ TEST_F(TestHybridSearch, should_with_must_no_minimum_should_match)
       }
     }
   })";
-  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(book_id) against('1' in natural language mode) + match(age) against('2' in natural language mode) + match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode) ORDER BY _score DESC, __pk_increment LIMIT 10");
+  common::ObString result("SELECT /*+ opt_param('hidden_column_visible', 'true') */*, (match(book_id) against('1' in natural language mode) + match(age) against('2' in natural language mode) + match(query) against('database or oceanBase' in natural language mode) + match(content) against('Elasticsearch' in natural language mode)) as _score FROM doc_table WHERE match(book_id) against('1' in natural language mode) AND match(age) against('2' in natural language mode) AND (match(query) against('database or oceanBase' in natural language mode) OR match(content) against('Elasticsearch' in natural language mode)) ORDER BY _score DESC, __pk_increment LIMIT 10");
 
   ObString table_name("doc_table");
   TestHybridSearchHelp::runtest(table_name, req_str, result);

@@ -42,11 +42,6 @@ public :
   bool output_all_columns_;
   common::ObString score_alias_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> match_idxs_;
-
-  // used in basic query.
-  bool is_basic_query_;
-  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> tmp_outer_filter_items_;
-  common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> outer_filter_items_;
 };
 
 }  // namespace share

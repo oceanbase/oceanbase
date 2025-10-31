@@ -312,6 +312,8 @@ int ObRequestTranslator::translate_where()
     }
     if (OB_FAIL(expr->translate_expr(print_params_, buf_, buf_len_, pos_, WHERE_SCOPE, false))) {
       LOG_WARN("fail to translate expr", K(ret));
+    } else if (i + 1 < req_->condition_items_.count()) {
+      DATA_PRINTF(" AND ");
     }
   }
   return ret;

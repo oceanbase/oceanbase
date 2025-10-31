@@ -170,8 +170,7 @@ int ObESQueryParser::add_pk_to_sort(ObQueryReqFromJson *query_req, const ObEsQue
     LOG_WARN("unexpected null pointer", K(ret));
   } else if (QUERY_ITEM_QUERY != query_item &&
              QUERY_ITEM_KNN != query_item &&
-             QUERY_ITEM_HYBRID != query_item
-            ) {
+             QUERY_ITEM_HYBRID != query_item) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid query item", K(ret), K(query_item));
   } else if (QUERY_ITEM_QUERY == query_item) {
@@ -195,15 +194,9 @@ int ObESQueryParser::add_pk_to_sort(ObQueryReqFromJson *query_req, const ObEsQue
   }
 
   // add __pk_increment to order by
-  if (OB_FAIL(ret)) {
-  } else if (QUERY_ITEM_QUERY == query_item) {
-    ObString empty_str = "";
-    if (OB_FAIL(set_order_by_column(query_req, rowkey, empty_str, true))) {
-      LOG_WARN("fail to set order by column", K(ret));
-    }
-  } else if (QUERY_ITEM_HYBRID == query_item) {
-    ObString table_name = VS_ALIAS;
-    if (OB_FAIL(set_order_by_column(query_req, rowkey, table_name, true))) {
+  if (OB_SUCC(ret) && query_item != QUERY_ITEM_KNN) {
+    ObString table_name = (query_item == QUERY_ITEM_HYBRID) ? VS_ALIAS : "";
+    if (OB_FAIL(set_order_by_column(query_req, rowkey, table_name))) {
       LOG_WARN("fail to set order by column", K(ret));
     }
   }
@@ -887,7 +880,7 @@ int ObESQueryParser::parse_query(ObIJsonBase &req_node, ObQueryReqFromJson *&que
     LOG_WARN("failed add term to score items", K(ret));
   } else if (OB_FAIL(parse_basic_table(table_name_, query_req))) {
     LOG_WARN("fail to parse basic table", K(ret));
-  } else if (OB_FAIL(construct_sub_query_with_minimum_should_match(query_req, *query_info))) {
+  } else if (OB_FAIL(construct_sub_query_with_minimum_should_match(query_req, *query_info, "_fts_sub"))) {
     LOG_WARN("fail to construct query with minimum should match", K(ret));
   } else if (query_req->score_items_.empty()) {
     if (OB_FAIL(set_default_score(query_req, 0.0))) {
@@ -1084,7 +1077,7 @@ int ObESQueryParser::parse_bool(ObIJsonBase &req_node, ObEsQueryInfo &query_info
       continue;
     } else if (key.case_compare("minimum_should_match") == 0) {
       // if no should clause, minimum_should_match must be specified
-      if (!query_info.has_should_ && query_info.msm_info_.get_msm_val() > 0) {
+      if (query_info.should_cnt_ < 1 && query_info.msm_info_.get_msm_val() > 0) {
         ObReqConstExpr *zero_expr = nullptr;
         if (query_info.msm_info_.term_cnt_ != 0) {
           ret = OB_ERR_UNEXPECTED;
@@ -1104,7 +1097,7 @@ int ObESQueryParser::parse_bool(ObIJsonBase &req_node, ObEsQueryInfo &query_info
     }
   }
 
-  if (OB_SUCC(ret) && query_info.need_cal_score_ && score_items.empty() && !query_info.has_must_not_ && !query_info.has_filter_) {
+  if (OB_SUCC(ret) && query_info.need_cal_score_ && score_items.empty() && query_info.must_not_cnt_ < 1 && query_info.filter_cnt_ < 1) {
     ObReqConstExpr *score_expr = nullptr;
     if (OB_FAIL(ObReqConstExpr::construct_const_numeric_expr(score_expr, alloc_, 1.0, ObIntType))) {
       LOG_WARN("fail to create score expr", K(ret));
@@ -1168,6 +1161,8 @@ int ObESQueryParser::parse_must_clauses(ObIJsonBase &req_node, ObEsQueryInfo &qu
   } else if (req_node.json_type() == ObJsonNodeType::J_OBJECT && count > 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("must clause must only has one key", K(ret));
+  } else {
+    query_info.must_cnt_ = count;
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
     if (req_node.json_type() == ObJsonNodeType::J_OBJECT) {
@@ -1222,8 +1217,9 @@ int ObESQueryParser::parse_must_not_clauses(ObIJsonBase &req_node, ObEsQueryInfo
   } else if (req_node.json_type() == ObJsonNodeType::J_OBJECT && count > 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("must not clause must only has one key", K(ret));
+  } else {
+    query_info.must_not_cnt_ = count;
   }
-
   for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
     if (req_node.json_type() == ObJsonNodeType::J_OBJECT) {
       clause_val = &req_node;
@@ -1292,6 +1288,8 @@ int ObESQueryParser::parse_should_clauses(ObIJsonBase &req_node, ObEsQueryInfo &
   } else if (req_node.json_type() == ObJsonNodeType::J_OBJECT && count > 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("should clause must only has one key", K(ret));
+  } else {
+    query_info.should_cnt_ = count;
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
     if (req_node.json_type() == ObJsonNodeType::J_OBJECT) {
@@ -1353,6 +1351,8 @@ int ObESQueryParser::parse_filter_clauses(ObIJsonBase &req_node, ObEsQueryInfo &
   } else if (req_node.json_type() == ObJsonNodeType::J_OBJECT && count > 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("filter clause must only has one key", K(ret));
+  } else {
+    query_info.filter_cnt_ = count;
   }
   for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
     if (req_node.json_type() == ObJsonNodeType::J_OBJECT) {
@@ -2640,8 +2640,6 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
     LOG_WARN("fail to create query request", K(ret));
   } else if (OB_FAIL(construct_required_params(params_name, 3, required_params))) {
     LOG_WARN("fail to create required params set", K(ret));
-  } else {
-    query_req->is_basic_query_ = false;
   }
   ObReqColumnExpr *vec_field = NULL;
   ObReqConstExpr *query_vec = NULL;
@@ -2651,6 +2649,7 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
   ObReqExpr *dist_vec = NULL;
   OrderInfo *order_info = NULL;
   ObReqExpr *filter_expr = NULL;
+  ObEsQueryInfo *query_info = nullptr;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_array;
   for (uint64_t i = 0; OB_SUCC(ret) && i < req_node.element_count(); i++) {
     ObString key;
@@ -2688,10 +2687,12 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
     } else if (key.case_compare("num_candidates") == 0) {
       // do nothing, ignore
     } else if (key.case_compare("filter") == 0) {
-      ObEsQueryInfo *tmp_query_info = nullptr;
-      if (OB_FAIL(ObEsQueryInfo::init_query_info(tmp_query_info, alloc_, query_req, nullptr, QUERY_ITEM_KNN))) {
+      if (OB_FAIL(ObEsQueryInfo::init_query_info(query_info, alloc_, query_req, nullptr, QUERY_ITEM_UNKNOWN))) {
         LOG_WARN("fail to create temp query info", K(ret));
-      } else if (OB_FAIL(parse_filter_clauses(*sub_node, *tmp_query_info, filter_expr))) {
+      } else if (OB_FAIL(get_query_depth(*sub_node, query_info->total_depth_))) {
+        LOG_WARN("fail to get query depth", K(ret));
+      } else if (OB_FALSE_IT(query_info->query_item_ = QUERY_ITEM_KNN)) {
+      } else if (OB_FAIL(parse_filter_clauses(*sub_node, *query_info, filter_expr))) {
         LOG_WARN("fail to parse filter clauses", K(ret), K(i));
       }
     } else {
@@ -2758,13 +2759,17 @@ int ObESQueryParser::parse_knn(ObIJsonBase &req_node, ObQueryReqFromJson *&query
       LOG_WARN("fail to construct score expr with boost", K(ret));
     } else if (OB_FAIL(query_req->add_score_item(alloc_, score_expr))) {
       LOG_WARN("failed add term to score items", K(ret));
-    }
-    if (OB_SUCC(ret) && similar != NULL) {
+    } else if (similar != NULL) {
       ObReqExpr *dist = (alg_type == ObVectorIndexDistAlgorithm::VIDA_IP) ? add_expr : dist_vec;
       if (OB_FAIL(construct_query_with_similarity(alg_type, dist, similar, query_req))) {
         LOG_WARN("fail to construct query with similarity", K(ret));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(query_info) &&
+      OB_FAIL(construct_sub_query_with_minimum_should_match(query_req, *query_info, "_vs_sub"))) {
+    LOG_WARN("fail to construct sub query with minimum should match", K(ret));
   }
 
   return ret;
@@ -2961,7 +2966,7 @@ int ObESQueryParser::construct_sub_query_table(const ObString &sub_query_name, O
   return ret;
 }
 
-int ObESQueryParser::wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson *&query_req)
+int ObESQueryParser::wrap_sub_query(const ObString &sub_query_name, ObQueryReqFromJson *&query_req)
 {
   int ret = OB_SUCCESS;
   ObQueryReqFromJson *wrap_query = NULL;
@@ -3003,23 +3008,24 @@ int ObESQueryParser::construct_query_with_similarity(ObVectorIndexDistAlgorithm 
   return ret;
 }
 
-int ObESQueryParser::construct_sub_query_with_minimum_should_match(ObQueryReqFromJson *&query_req, ObEsQueryInfo &query_info)
+int ObESQueryParser::construct_sub_query_with_minimum_should_match(ObQueryReqFromJson *&query_req, ObEsQueryInfo &query_info, const ObString &sub_query_name)
 {
   int ret = OB_SUCCESS;
   if (!query_info.need_construct_sub_query_with_minimum_should_match()) {
     LOG_DEBUG("no need to construct sub query with minimum should match", K(ret));
   } else {
-    ObString sub_query_name("_fts_sub");
     ObReqOpExpr *score_expr = nullptr;
     ObReqOpExpr *condition_expr = nullptr;
-    ObQueryReqFromJson *base_query_req = query_req;
-    for (uint64_t i = 0; OB_SUCC(ret) && i < query_req->inner_score_items_.count(); i++) {
-      if (OB_FAIL(base_query_req->select_items_.push_back(query_req->inner_score_items_.at(i)))) {
+    ObQueryReqFromJson *base_query_req = query_info.query_req_;
+    for (uint64_t i = 0; OB_SUCC(ret) && i < base_query_req->inner_score_items_.count(); i++) {
+      if (OB_FAIL(base_query_req->select_items_.push_back(base_query_req->inner_score_items_.at(i)))) {
         LOG_WARN("fail to push back score expr", K(ret));
       }
     }
+    // if query_req is the same as base_query_req, then wrap the sub query,
+    // otherwise, query_req is already a sub query
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(wrap_sub_query(sub_query_name, query_req))) {
+    } else if (query_req == base_query_req && OB_FAIL(wrap_sub_query(sub_query_name, query_req))) {
       LOG_WARN("fail to wrap sub query", K(ret));
     } else if (OB_FALSE_IT(query_info.query_req_ = query_req)) {
     } else if (OB_FAIL(ObReqOpExpr::construct_op_expr(condition_expr, alloc_, T_OP_AND, base_query_req->outer_condition_items_))) {
@@ -3053,13 +3059,13 @@ int ObESQueryParser::construct_minimum_should_match_info(ObIJsonBase &req_node, 
       } else if (OB_FAIL(req_node.get_object_value(i, sub_node))) {
         LOG_WARN("fail to get value", K(ret), K(i));
       } else if (key.case_compare("must") == 0) {
-        query_info.has_must_ = true;
+        query_info.must_cnt_ = 0;
       } else if (key.case_compare("must_not") == 0) {
-        query_info.has_must_not_ = true;
+        query_info.must_not_cnt_ = 0;
       } else if (key.case_compare("filter") == 0) {
-        query_info.has_filter_ = true;
+        query_info.filter_cnt_ = 0;
       } else if (key.case_compare("should") == 0) {
-        query_info.has_should_ = true;
+        query_info.should_cnt_ = 0;
         if (sub_node->json_type() == ObJsonNodeType::J_ARRAY) {
           query_info.msm_info_.term_cnt_ = sub_node->element_count();
         } else if (sub_node->json_type() == ObJsonNodeType::J_OBJECT) {
@@ -3144,13 +3150,11 @@ int ObESQueryParser::parse_minimum_should_match(ObIJsonBase &req_node, ObEsQuery
   }
 
   if ((OB_SUCC(ret) || ret == OB_SEARCH_NOT_FOUND) && raw_msm_val != -1) {
-    if (query_info.query_item_ != QUERY_ITEM_BOOL || raw_msm_val != 0 || !(query_info.has_must_ || query_info.has_filter_)) {
-      raw_msm_val = (raw_msm_val != 0) ? raw_msm_val : 1;
-      if (OB_FAIL(ObReqConstExpr::construct_const_numeric_expr(msm_info.msm_expr_, alloc_, raw_msm_val, ObIntType))) {
-        LOG_WARN("fail to create const expr", K(ret));
-      } else {
-        query_info.set_msm_apply_type();
-      }
+    raw_msm_val = (raw_msm_val != 0) ? raw_msm_val : 1;
+    if (OB_FAIL(ObReqConstExpr::construct_const_numeric_expr(msm_info.msm_expr_, alloc_, raw_msm_val, ObIntType))) {
+      LOG_WARN("fail to create const expr", K(ret));
+    } else {
+      query_info.set_msm_apply_type();
     }
   }
   return ret;
@@ -3656,14 +3660,12 @@ int ObESQueryParser::handle_msm_for_sub_score(ObEsQueryInfo &query_info, ObEsQue
   ObReqColumnExpr *sub_score_col = nullptr;
   ObQueryReqFromJson *query_req = query_info.query_req_;
   if (query_info.msm_info_.apply_type_ != MSM_APPLY_WITH_SUB &&
-      (inner_query_info.get_total_depth() > 2 ||
+      (inner_query_info.total_depth_ > 2 ||
        (inner_query_info.outer_query_item_ != QUERY_ITEM_MUST &&
         inner_query_info.outer_query_item_ != QUERY_ITEM_SHOULD))) {
     LOG_DEBUG("no need to handle msm for sub score", K(query_info.msm_info_.apply_type_), K(inner_query_info.outer_query_item_));
-  } else if (query_info.get_total_depth() == 2 && query_info.get_upward_depth() == 0 &&
+  } else if (query_info.total_depth_ == 2 && query_info.get_upward_depth() == 0 &&
              (inner_query_info.query_item_ == QUERY_ITEM_MULTI_MATCH || inner_query_info.query_item_ == QUERY_ITEM_QUERY_STRING)) {
-    LOG_DEBUG("no need to handle msm for sub score", K(ret));
-  } else if (query_info.get_top_query_info()->outer_query_item_ == QUERY_ITEM_KNN) {
     LOG_DEBUG("no need to handle msm for sub score", K(ret));
   } else if (OB_ISNULL(score_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3698,8 +3700,6 @@ int ObESQueryParser::handle_msm_for_sub_condition(ObEsQueryInfo &query_info)
         query_info.get_upward_depth() == 1 &&
         query_info.outer_query_item_ == QUERY_ITEM_SHOULD &&
         query_info.parent_query_info_->msm_info_.apply_type_ == MSM_APPLY_WITH_SUB)) {
-    LOG_DEBUG("no need to handle msm for sub condition", K(ret));
-  } else if (query_info.get_top_query_info()->outer_query_item_ == QUERY_ITEM_KNN) {
     LOG_DEBUG("no need to handle msm for sub condition", K(ret));
   } else if (msm_info.msm_items_.empty()) {
     ret = OB_ERR_UNEXPECTED;
@@ -3878,7 +3878,7 @@ void ObEsQueryInfo::set_msm_apply_type()
     }
   }
   if (apply_msm) {
-    if (get_total_depth() > 2 || msm_val == msm_info_.term_cnt_ || msm_val == 1 || get_top_query_info()->outer_query_item_ == QUERY_ITEM_KNN) {
+    if (total_depth_ > 2 || msm_val == msm_info_.term_cnt_ || msm_val == 1) {
       msm_info_.apply_type_ = MSM_APPLY_NOT_SUB;
     } else {
       msm_info_.apply_type_ = MSM_APPLY_WITH_SUB;
@@ -3891,7 +3891,7 @@ void ObEsQueryInfo::set_msm_apply_type()
 bool ObEsQueryInfo::need_construct_sub_query_with_minimum_should_match() const
 {
   ObEsQueryInfo *top_query_info = get_top_query_info();
-  return !top_query_info->is_es_mode() && top_query_info->get_total_depth() <= 2 && !top_query_info->query_req_->outer_condition_items_.empty();
+  return !top_query_info->is_es_mode() && top_query_info->total_depth_ <= 2 && !top_query_info->query_req_->outer_condition_items_.empty();
 }
 
 bool ObEsQueryInfo::support_es_mode()
@@ -3916,6 +3916,8 @@ int ObEsQueryInfo::init_query_info(ObEsQueryInfo *&query_info, ObIAllocator &all
   if (OB_ISNULL(query_info = OB_NEWx(ObEsQueryInfo, &alloc, query_req, parent_query_info, outer_query_item, need_cal_score))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create query info", K(ret));
+  } else {
+    query_info->total_depth_ = query_info->get_total_depth();
   }
   return ret;
 }

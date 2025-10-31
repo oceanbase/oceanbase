@@ -137,10 +137,12 @@ public:
   ObReqExpr *esql_condition_expr_;
   ObReqConstExpr *esql_options_expr_;
   ObString query_text_;
-  bool has_must_;
-  bool has_must_not_;
-  bool has_should_;
-  bool has_filter_;
+  // count of items in must, must_not, should, filter,
+  // inited to -1 meaning the key does not exist
+  int64_t must_cnt_;
+  int64_t must_not_cnt_;
+  int64_t should_cnt_;
+  int64_t filter_cnt_;
   bool score_is_const_;
   uint64_t tkn_cnt_;
   common::ObSEArray<ObReqExpr *, 4, common::ModulePageAllocator, true> score_items_;
@@ -191,7 +193,7 @@ public:
                K(outer_query_item_), K(query_item_), K(score_type_), K(opr_),
                K(boost_expr_),K(score_expr_), K(condition_expr_), K(score_alias_expr_),
                K(esql_condition_expr_), K(esql_options_expr_), K(msm_info_), K(query_text_),
-               K(has_must_), K(has_must_not_), K(has_should_), K(has_filter_),
+               K(must_cnt_), K(must_not_cnt_), K(should_cnt_), K(filter_cnt_),
                K(score_is_const_), K(tkn_cnt_), K(apply_es_mode_));
 
 private:
@@ -212,10 +214,10 @@ private:
       esql_condition_expr_(nullptr),
       esql_options_expr_(nullptr),
       query_text_(ObString()),
-      has_must_(false),
-      has_must_not_(false),
-      has_should_(false),
-      has_filter_(false),
+      must_cnt_(-1),
+      must_not_cnt_(-1),
+      should_cnt_(-1),
+      filter_cnt_(-1),
       score_is_const_(false),
       tkn_cnt_(0),
       score_items_(),
@@ -301,7 +303,7 @@ private :
   int construct_query_string_score(ObEsQueryInfo &query_info);
   int construct_query_string_condition(ObEsQueryInfo &query_info);
   int construct_in_expr(ObReqColumnExpr *col_expr, common::ObIArray<ObReqConstExpr *> &value_exprs, ObReqOpExpr *&in_expr);
-  int wrap_sub_query(ObString &sub_query_name, ObQueryReqFromJson *&query_req);
+  int wrap_sub_query(const ObString &sub_query_name, ObQueryReqFromJson *&query_req);
   int wrap_json_result(ObQueryReqFromJson *&query_req);
   int construct_query_with_similarity(ObVectorIndexDistAlgorithm algor, ObReqExpr *dist, ObReqConstExpr *similar, ObQueryReqFromJson *&query_req);
   int construct_all_query(ObQueryReqFromJson *&query_req);
@@ -351,7 +353,7 @@ private :
   int construct_rank_score(const ObString &table_name, const ObString &rank_alias, ObReqExpr *&rank_score);
   int construct_rank_query(ObString &sub_query_name, ObReqExpr *order_expr, ObString &rank_alias, ObQueryReqFromJson *&query_req);
   int init_default_params(ObIJsonBase &req_node);
-  int construct_sub_query_with_minimum_should_match(ObQueryReqFromJson *&query_req, ObEsQueryInfo &query_info);
+  int construct_sub_query_with_minimum_should_match(ObQueryReqFromJson *&query_req, ObEsQueryInfo &query_info, const ObString &sub_query_name);
   int get_query_depth(ObIJsonBase &req_node, uint64_t &depth);
   inline bool check_is_bool_key(ObString &key) {
     return key.case_compare("must") == 0 || key.case_compare("must_not") == 0 || key.case_compare("should") == 0 || key.case_compare("filter") == 0 || key.case_compare("bool") == 0;
