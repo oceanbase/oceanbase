@@ -838,7 +838,7 @@ TEST_F(TestSSReorganizePhyBlock, test_reorganize_all_phy_blk)
 //   ASSERT_EQ(OB_SUCCESS, micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.execute_checkpoint());
 //   ASSERT_EQ(0, phy_blk_mgr.get_reusable_blocks_cnt());
 //   ASSERT_EQ(true, phy_blk_mgr.blk_cnt_info_.has_free_blk(ObSSPhyBlockType::SS_REORGAN_BLK));
-//   LOG_INFO("TEST_CAST: finish test_reorganize_all_phy_blk", K(phy_blk_mgr.blk_cnt_info_));
+//   LOG_INFO("TEST_CASE: finish test_reorganize_all_phy_blk", K(phy_blk_mgr.blk_cnt_info_));
 // }
 
 }  // namespace storage
