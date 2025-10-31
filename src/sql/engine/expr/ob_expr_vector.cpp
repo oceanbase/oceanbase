@@ -424,7 +424,7 @@ int ObExprVectorDistance::get_normal_vector_data(const ObExpr *arg, ObEvalCtx &c
                 if (contain_null) {
                   ret = OB_ERR_NULL_VALUE;
                   LOG_WARN("array with null can't calculate vector distance", K(ret));
-                  FORWARD_USER_ERROR(OB_ERR_NULL_VALUE, "array with null can't calculate vector distance");
+                  FORWARD_USER_ERROR(OB_ERR_NULL_VALUE, "Null value");
                 } else {
                   size = len;
                   data = reinterpret_cast<const float*>(array_data);
