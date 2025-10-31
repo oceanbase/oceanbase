@@ -13660,7 +13660,7 @@ def_table_schema(
 )
 # 12375: __all_virtual_time_guard_slow_history
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_lease_mgr',
   table_id = '12376',
   table_type = 'VIRTUAL_TABLE',
@@ -13693,7 +13693,7 @@ def_table_schema(
 # 12377: __all_virtual_dup_ls_follower_lease_info
 
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_tablet_set',
   table_id = '12378',
   table_type = 'VIRTUAL_TABLE',
@@ -13722,7 +13722,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_tablets',
   table_id = '12379',
   table_type = 'VIRTUAL_TABLE',
