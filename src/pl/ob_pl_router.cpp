@@ -121,6 +121,8 @@ int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_inf
       }
     } else if (OB_FAIL(analyze_stmt(func_ast.get_body(), route_sql))) {
       LOG_WARN("failed to analyze stmt", K(ret));
+    } else if (OB_FAIL(mark_sql_transpiler_eligible(func_ast, routine_info))) {
+      LOG_WARN("failed to mark sql transpiler eligible", K(ret));
     } else {
       ObString dep_attr;
       OZ (ObDependencyInfo::collect_dep_infos(func_ast.get_dependency_table(),
@@ -322,5 +324,154 @@ int ObPLRouter::check_route_sql(const ObPLSql *pl_sql, ObString &route_sql)
   return ret;
 }
 
+int ObPLRouter::mark_sql_transpiler_eligible(const ObPLFunctionAST &func_ast, ObRoutineInfo &routine_info)
+{
+  int ret = OB_SUCCESS;
+
+  bool eligible = false;
+  const ObPLReturnStmt *return_stmt = nullptr;
+
+  // check structure is eligible
+  if (OB_FAIL(try_extract_sql_transpiler_expr(func_ast, eligible, return_stmt))) {
+    LOG_WARN("failed to check structure sql transpiler eligible", K(ret));
+  }
+
+  // check param types are eligible
+  if (OB_SUCC(ret) && eligible) {
+    for (int64_t i = 0; OB_SUCC(ret) && eligible && i < func_ast.get_symbol_table().get_count(); ++i) {
+      const ObPLVar *var = func_ast.get_symbol_table().get_symbol(i);
+      const ObRoutineParam *param = nullptr;
+
+      if (OB_ISNULL(var)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL param", K(ret), K(var), K(func_ast), K(i));
+      } else if (i >= routine_info.get_param_count()) {
+        eligible = false;
+      } else if (OB_ISNULL(param = routine_info.get_routine_params().at(i + routine_info.get_param_start_idx()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL param", K(ret), K(var), K(func_ast), K(i), K(routine_info));
+      } else if (!param->is_in_param()) {
+        eligible = false;
+      } else if (OB_FAIL(check_type_sql_transpiler_eligible(var->get_type(), eligible))) {
+        LOG_WARN("failed to check type sql transpiler eligible", K(ret), K(var), K(i));;
+      }
+    }
+  }
+
+  // check ret type is eligible
+  if (OB_SUCC(ret) && eligible) {
+    if (OB_FAIL(check_type_sql_transpiler_eligible(func_ast.get_ret_type(), eligible))) {
+      LOG_WARN("failed to check type sql transpiler eligible", K(ret), K(func_ast.get_ret_type()));
+    }
+  }
+
+  // check exprs are eligible
+  if (OB_SUCC(ret) && eligible) {
+    const ObRawExpr *ret_expr = nullptr;
+
+    CK (OB_NOT_NULL(return_stmt));
+    CK (OB_NOT_NULL(ret_expr = return_stmt->get_ret_expr()));
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(check_expr_sql_transpiler_eligible(*ret_expr, eligible))) {
+      LOG_WARN("failed to check expr sql transpiler eligible", K(ret), K(*ret_expr));
+    }
+  }
+
+  if (OB_SUCC(ret) && eligible) {
+    routine_info.set_sql_transpiler_eligible();
+  }
+
+  return ret;
 }
+
+int ObPLRouter::try_extract_sql_transpiler_expr(const ObPLFunctionAST &func_ast, bool &success, const ObPLReturnStmt *&return_stmt)
+{
+  int ret = OB_SUCCESS;
+
+  success = false;
+  return_stmt = nullptr;
+
+  const ObPLStmtBlock *body = func_ast.get_body();
+
+  CK (OB_NOT_NULL(body));
+  CK (PL_BLOCK == body->get_type());
+
+  // check structure contains only one return statement
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (0 < func_ast.get_routine_table().get_count()) {
+    // do nothing
+  } else if (1 == body->get_child_size()) {
+    const ObPLStmt *child_stmt = body->get_child_stmt(0);
+
+    CK (OB_NOT_NULL(child_stmt));
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (PL_BLOCK == child_stmt->get_type()) {
+      const ObPLStmtBlock *child_block = static_cast<const ObPLStmtBlock *>(child_stmt);
+      const ObPLStmt *grandchild = nullptr;
+
+      if (1 == child_block->get_child_size()
+            && OB_NOT_NULL(grandchild = child_block->get_child_stmt(0))
+            && PL_RETURN == grandchild->get_type()) {
+        return_stmt = static_cast<const ObPLReturnStmt*>(grandchild);
+        success = true;
+      }
+    } else if (PL_RETURN == child_stmt->get_type()) {
+      return_stmt = static_cast<const ObPLReturnStmt*>(child_stmt);
+      success = true;
+    }
+  }
+
+  return ret;
 }
+
+int ObPLRouter::check_type_sql_transpiler_eligible(const ObPLDataType &type, bool &eligible)
+{
+  int ret = OB_SUCCESS;
+
+  ObObjType obj_type = type.get_obj_type();
+
+  if (PL_OBJ_TYPE != type.get_type()) {
+    eligible = false;
+  } else if (ob_is_user_defined_type(obj_type)) {
+    eligible = false;
+  } else if (ob_is_json(obj_type) || ob_is_geometry(obj_type) || ob_is_roaringbitmap(obj_type)) {
+    eligible = false;
+  } else if (PL_TYPE_LOCAL != type.get_type_from()
+               || PL_TYPE_LOCAL != type.get_type_from_origin()) {
+    eligible = false;
+  } else if (ob_is_enum_or_set_type(obj_type) || ob_is_enum_or_set_inner_type(obj_type)) {
+    eligible = false;
+  }
+
+  return ret;
+}
+
+int ObPLRouter::check_expr_sql_transpiler_eligible(const ObRawExpr &expr, bool &eligible)
+{
+  int ret = OB_SUCCESS;
+
+  if (expr.has_flag(IS_PL_UDF) || expr.has_flag(CNT_PL_UDF)) {
+    eligible = false;
+  } else if (ObRawExpr::EXPR_PL_QUERY_REF == expr.get_expr_class()) {
+    eligible = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && eligible && i < expr.get_param_count(); ++i) {
+      if (OB_ISNULL(expr.get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL param expr", K(ret), K(expr), K(i));
+      } else if (OB_FAIL(SMART_CALL(check_expr_sql_transpiler_eligible(*expr.get_param_expr(i), eligible)))) {
+        LOG_WARN("failed to check expr sql transpiler eligible", K(ret), K(expr.get_param_expr(i)));
+      }
+    }
+  }
+
+  return ret;
+}
+
+}  // namespace pl
+}  // namespace oceanbase

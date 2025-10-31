@@ -290,6 +290,7 @@ public:
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
+  inline ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
   inline ObPLBlockNS &get_current_namespace() const { return current_block_->get_namespace(); }
   inline const ObIArray<int64_t> &get_subprogram_path() const { return current_subprogram_path_; }
   inline int push_subprogram_path(int64_t idx) { return current_subprogram_path_.push_back(idx); }
@@ -384,6 +385,14 @@ public:
                              ObIArray<ObRawExpr*> &real_exprs,
                              ObPLCompileUnitAST &unit_ast,
                              sql::ObRawExpr *&expr);
+
+  int try_sql_transpiler(ObObjAccessIdx &access_idx,
+                         ObPLCompileUnitAST &mock_ast,
+                         sql::ObRawExpr *&expr);
+
+  int sql_transpiler_substitute(const ObPLFunctionAST &ast,
+                                ObUDFRawExpr &udf_expr,
+                                ObRawExpr *&target_expr);
 
   static
   int resolve_obj_access_node(ParseNode *node,

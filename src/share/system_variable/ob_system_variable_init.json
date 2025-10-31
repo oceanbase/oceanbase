@@ -11826,10 +11826,9 @@
       "BASIC"
     ],
     "publish_version": "4.3.5.5",
-    "info_cn": "",
+    "info_cn": "控制是否开启 SQL Transpiler 功能。当开启时，满足条件的 PL/SQL 函数会被自动改写成 SQL 表达式，无需用户介入。",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "plsql_can_transform_sql_to_assign": {
     "id": 10755,

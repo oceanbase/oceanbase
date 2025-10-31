@@ -36,10 +36,16 @@ public:
   int analyze(ObString &route_sql, common::ObIArray<share::schema::ObDependencyInfo> &dep_infos, ObRoutineInfo &routine_info, obrpc::ObDDLArg *ddl_arg);
   int simple_resolve(ObPLFunctionAST &func_ast);
   static int analyze_stmt(const ObPLStmt *stmt, ObString &route_sql);
+  static int try_extract_sql_transpiler_expr(const ObPLFunctionAST &func_ast, bool &success, const ObPLReturnStmt *&return_stmt);
 
 private:
   static int check_route_sql(const ObPLSql *pl_sql, ObString &route_sql);
   static int check_error_in_resolve(int code);
+
+  static int mark_sql_transpiler_eligible(const ObPLFunctionAST &func_ast, ObRoutineInfo &routine_info);
+  static int check_type_sql_transpiler_eligible(const ObPLDataType &type, bool &eligible);
+  static int check_expr_sql_transpiler_eligible(const ObRawExpr &expr, bool &eligible);
+
 private:
   const share::schema::ObRoutineInfo &routine_info_;
   sql::ObSQLSessionInfo &session_info_;

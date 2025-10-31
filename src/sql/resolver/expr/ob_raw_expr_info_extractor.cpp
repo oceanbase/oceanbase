@@ -152,6 +152,7 @@ int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
   bool is_implicit_cast = expr_info.has_member(IS_OP_OPERAND_IMPLICIT_CAST);
   bool is_self_param = expr_info.has_member(IS_UDT_UDF_SELF_PARAM);
   bool is_auto_part_expr = expr_info.has_member(IS_AUTO_PART_EXPR);
+  bool is_pl_sql_transpiled = expr_info.has_member(IS_PL_SQL_TRANSPILED);
   expr.reset_flag();
   if (is_implicit_cast) {
     OZ(expr.add_flag(IS_OP_OPERAND_IMPLICIT_CAST));
@@ -162,6 +163,12 @@ int ObRawExprInfoExtractor::clear_info(ObRawExpr &expr)
   if (is_auto_part_expr) {
     OZ(expr.add_flag(IS_AUTO_PART_EXPR));
   }
+
+  if (is_pl_sql_transpiled) {
+    OZ(expr.add_flag(IS_PL_SQL_TRANSPILED));
+    OZ(expr.add_flag(CNT_PL_UDF));
+  }
+
   return ret;
 }
 
