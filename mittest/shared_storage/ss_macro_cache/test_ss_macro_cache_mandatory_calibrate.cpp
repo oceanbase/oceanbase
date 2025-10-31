@@ -79,7 +79,7 @@ TEST_F(ObMandatoryCalibrateTest, test_mandatory_calibrate)
   int64_t cur_type_used_size_mandatory = 0;
   const int64_t overflow_size = 10 * ObTenantFileManager::MB; // 10MB
   int64_t deviation_threshold = 0;
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.get_deviation_threshold(0, 0, deviation_threshold));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.get_deviation_threshold(0, 0, 0, deviation_threshold));
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.calibrate_disk_space());
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.calibrate_disk_space());
   ASSERT_TRUE(tenant_file_mgr->calibrate_disk_space_task_.run_cnt_ > 1);
