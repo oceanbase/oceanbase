@@ -44,8 +44,8 @@ public:
   int64_t timestamp_ms;
   std::optional<int32_t> schema_id;
   ObString manifest_list;
-  ObArray<ObString> v1_manifests;
-  ObArray<std::pair<ObString, ObString>> summary;
+  ObFixedArray<ObString, ObIAllocator> v1_manifests;
+  ObFixedArray<std::pair<ObString, ObString>, ObIAllocator> summary;
 
   static constexpr const char *SNAPSHOT_ID = "snapshot-id";
   static constexpr const char *PARENT_SNAPSHOT_ID = "parent-snapshot-id";
@@ -63,7 +63,7 @@ private:
   // snapshot 一旦加载完成过一个 manifest file，这个字段就会被填充
   // 后续该 snapshot 读取 manifest_file 直接从这个字段返回
   // 有效减少内存开销
-  ObArray<ManifestFile *> cached_manifest_file_;
+  ObFixedArray<ManifestFile *, ObIAllocator> cached_manifest_file_;
 };
 
 struct SnapshotLog

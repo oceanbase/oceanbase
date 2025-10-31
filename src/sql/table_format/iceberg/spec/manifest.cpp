@@ -14,12 +14,14 @@
 
 #include "sql/table_format/iceberg/spec/manifest.h"
 
-#include <avro/Generic.hh>
-#include <avro/GenericDatum.hh>
-
 #include "share/ob_define.h"
+#include "sql/table_format/iceberg/avro_schema_util.h"
+#include "sql/table_format/iceberg/spec/manifest_list.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "storage/lob/ob_lob_manager.h"
+
+#include <avro/Generic.hh>
+#include <avro/GenericDatum.hh>
 
 namespace oceanbase
 {
@@ -28,8 +30,12 @@ namespace sql
 namespace iceberg
 {
 
-OB_SERIALIZE_MEMBER(ObSerializableDataFile, content_, file_format_,
-                    record_count_, file_size_in_bytes_, file_path_)
+OB_SERIALIZE_MEMBER(ObSerializableDataFile,
+                    content_,
+                    file_format_,
+                    record_count_,
+                    file_size_in_bytes_,
+                    file_path_)
 
 ManifestMetadata::ManifestMetadata(ObIAllocator &allocator)
     : SpecWithAllocator(allocator), schema(allocator), partition_spec(allocator)
@@ -157,205 +163,221 @@ int ManifestMetadata::init_partition_fields_from_metadata(const ObString &metada
 }
 
 DataFile::DataFile(ObIAllocator &allocator)
-    : SpecWithAllocator(allocator),
-      partition(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      column_sizes(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      value_counts(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      null_value_counts(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      nan_value_counts(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      lower_bounds(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      upper_bounds(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      split_offsets(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-      equality_ids(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator_))
+    : SpecWithAllocator(allocator), partition(allocator_), column_sizes(allocator_),
+      value_counts(allocator_), null_value_counts(allocator_), nan_value_counts(allocator_),
+      lower_bounds(allocator_), upper_bounds(allocator_), split_offsets(allocator_),
+      equality_ids(allocator_)
 {
 }
 
-int DataFile::init_from_avro(const ManifestMetadata &manifest_metadata,
-                             const avro::GenericRecord &avro_data_file)
+int DataFile::decode_field(const ManifestMetadata &manifest_metadata,
+                           const FieldProjection &field_projection,
+                           avro::Decoder &decoder)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_SUCC(ret)) {
-    std::optional<int32_t> tmp_data_file_content;
-    if (OB_FAIL(
-            ObCatalogAvroUtils::get_primitive(avro_data_file, CONTENT, tmp_data_file_content))) {
-      LOG_WARN("failed to get content", K(ret));
-    } else if (!tmp_data_file_content.has_value()) {
-      // all v1 files are data files
-      content = DataFileContent::DATA;
-    } else if (tmp_data_file_content.value() < static_cast<int32_t>(DataFileContent::DATA)
-               || tmp_data_file_content.value() > static_cast<int32_t>(DataFileContent::EQUALITY_DELETES)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid data file content", K(ret));
-    } else {
-      content = static_cast<DataFileContent>(tmp_data_file_content.value());
+  switch (field_projection.field_id_) {
+    case CONTENT_FIELD_ID: {
+      std::optional<int32_t> tmp_data_file_content;
+      if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_,
+                                              decoder,
+                                              tmp_data_file_content))) {
+        LOG_WARN("failed to get content", K(ret));
+      } else if (!tmp_data_file_content.has_value()) {
+        // all v1 files are data files
+        content = DataFileContent::DATA;
+      } else if (tmp_data_file_content.value() < static_cast<int32_t>(DataFileContent::DATA)
+                 || tmp_data_file_content.value()
+                        > static_cast<int32_t>(DataFileContent::EQUALITY_DELETES)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid data file content", K(ret));
+      } else {
+        content = static_cast<DataFileContent>(tmp_data_file_content.value());
+      }
+      break;
+    }
+    case FILE_PATH_FIELD_ID: {
+      // file_path
+      if (OB_FAIL(AvroUtils::decode_binary(allocator_,
+                                           field_projection.avro_node_,
+                                           decoder,
+                                           file_path))) {
+        LOG_WARN("fail to get file_path", K(ret));
+      }
+      break;
+    }
+    case FILE_FORMAT_FIELD_ID: {
+      // file_format
+      ObString tmp_file_format;
+      ObArenaAllocator tmp_allocator;
+      if (OB_FAIL(AvroUtils::decode_binary(tmp_allocator,
+                                           field_projection.avro_node_,
+                                           decoder,
+                                           tmp_file_format))) {
+        LOG_WARN("failed to get file_format", K(ret));
+      } else if (0 == tmp_file_format.case_compare("AVRO")) {
+        file_format = DataFileFormat::AVRO;
+      } else if (0 == tmp_file_format.case_compare("ORC")) {
+        file_format = DataFileFormat::ORC;
+      } else if (0 == tmp_file_format.case_compare("PARQUET")) {
+        file_format = DataFileFormat::PARQUET;
+      } else if (0 == tmp_file_format.case_compare("PUFFIN")) {
+        file_format = DataFileFormat::PUFFIN;
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported data file format", K(ret), K(tmp_file_format));
+      }
+      break;
+    }
+    case PARTITION_FIELD_ID: {
+      // partition
+      if (OB_FAIL(decode_partitions_(manifest_metadata, field_projection, decoder))) {
+        LOG_WARN("fail to get partition", K(ret));
+      }
+      break;
+    }
+    case RECORD_COUNT_FIELD_ID: {
+      // record_count
+      if (OB_FAIL(
+              AvroUtils::decode_primitive(field_projection.avro_node_, decoder, record_count))) {
+        LOG_WARN("fail to get record_count", K(ret));
+      }
+      break;
+    }
+    case FILE_SIZE_IN_BYTES_FIELD_ID: {
+      // file_size_in_bytes
+      if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_,
+                                              decoder,
+                                              file_size_in_bytes))) {
+        LOG_WARN("failed to get file_size_in_bytes", K(ret));
+      }
+      break;
+    }
+    case COLUMN_SIZE_FIELD_ID: {
+      // column sizes
+      if (OB_FAIL(AvroUtils::decode_primitive_map(field_projection.avro_node_,
+                                                  decoder,
+                                                  column_sizes))) {
+        LOG_WARN("fail to get column_sizes", K(ret));
+      }
+      break;
+    }
+    case VALUE_COUNTS_FIELD_ID: {
+      // value_counts
+      if (OB_FAIL(AvroUtils::decode_primitive_map(field_projection.avro_node_,
+                                                  decoder,
+                                                  value_counts))) {
+        LOG_WARN("failed to get value_counts", K(ret));
+      }
+      break;
+    }
+    case NULL_VALUE_COUNTS_FIELD_ID: {
+      // null_value_counts
+      if (OB_FAIL(AvroUtils::decode_primitive_map(field_projection.avro_node_,
+                                                  decoder,
+                                                  null_value_counts))) {
+        LOG_WARN("failed to get null_value_counts", K(ret));
+      }
+      break;
+    }
+    case NAN_VALUE_COUNTS_FIELD_ID: {
+      // nan_value_counts
+      if (OB_FAIL(AvroUtils::decode_primitive_map(field_projection.avro_node_,
+                                                  decoder,
+                                                  nan_value_counts))) {
+        LOG_WARN("failed to get nan_value_counts", K(ret));
+      }
+      break;
+    }
+    case LOWER_BOUNDS_FIELD_ID: {
+      // lower_bounds
+      if (OB_FAIL(AvroUtils::decode_binary_map(allocator_,
+                                               field_projection.avro_node_,
+                                               decoder,
+                                               lower_bounds))) {
+        LOG_WARN("failed to get lower_bounds", K(ret));
+      }
+      break;
+    }
+    case UPPER_BOUNDS_FIELD_ID: {
+      // upper_bounds
+      if (OB_FAIL(AvroUtils::decode_binary_map(allocator_,
+                                               field_projection.avro_node_,
+                                               decoder,
+                                               upper_bounds))) {
+        LOG_WARN("failed to get upper_bounds", K(ret));
+      }
+      break;
+    }
+    case KEY_METADATA_FIELD_ID: {
+      // key_metadata
+      if (OB_FAIL(AvroUtils::decode_binary(allocator_,
+                                           field_projection.avro_node_,
+                                           decoder,
+                                           key_metadata))) {
+        LOG_WARN("failed to get key_metadata", K(ret));
+      }
+      break;
+    }
+    case SPLIT_OFFSETS_FIELD_ID: {
+      // split_offsets
+      if (OB_FAIL(AvroUtils::decode_primitive_array(field_projection.avro_node_,
+                                                    decoder,
+                                                    split_offsets))) {
+        LOG_WARN("failed to get split_offsets", K(ret));
+      }
+      break;
+    }
+    case EQUALITY_IDS_FIELD_ID: {
+      // equality_deletes
+      if (OB_FAIL(AvroUtils::decode_primitive_array(field_projection.avro_node_,
+                                                    decoder,
+                                                    equality_ids))) {
+        LOG_WARN("failed to get equality_ids", K(ret));
+      } else if (OB_UNLIKELY(DataFileContent::EQUALITY_DELETES == content
+                             && equality_ids.empty())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("eq delete must have equality_deletes field", K(ret));
+      }
+      break;
+    }
+    case SORT_ORDER_ID_FIELD_ID: {
+      // sort_order_id
+      if (OB_FAIL(
+              AvroUtils::decode_primitive(field_projection.avro_node_, decoder, sort_order_id))) {
+        LOG_WARN("failed to get sort_order_id", K(ret));
+      }
+      break;
+    }
+    case REFERENCED_DATA_FILE_FIELD_ID: {
+      if (OB_FAIL(AvroUtils::decode_binary(allocator_,
+                                           field_projection.avro_node_,
+                                           decoder,
+                                           referenced_data_file))) {
+        LOG_WARN("failed to get referenced_data_file", K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unreachable", K(ret));
     }
   }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_binary<avro::Type::AVRO_STRING>(allocator_,
-                                                                        avro_data_file,
-                                                                        FILE_PATH,
-                                                                        file_path))) {
-      LOG_WARN("fail to get file_path", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ObString tmp_file_format;
-    ObArenaAllocator tmp_allocator;
-    if (OB_FAIL(ObCatalogAvroUtils::get_binary<avro::Type::AVRO_STRING>(tmp_allocator,
-                                                                        avro_data_file,
-                                                                        FILE_FORMAT,
-                                                                        tmp_file_format))) {
-      LOG_WARN("failed to get file_format", K(ret));
-    } else if (0 == tmp_file_format.case_compare("AVRO")) {
-      file_format = DataFileFormat::AVRO;
-    } else if (0 == tmp_file_format.case_compare("ORC")) {
-      file_format = DataFileFormat::ORC;
-    } else if (0 == tmp_file_format.case_compare("PARQUET")) {
-      file_format = DataFileFormat::PARQUET;
-    } else if (0 == tmp_file_format.case_compare("PUFFIN")) {
-      file_format = DataFileFormat::PUFFIN;
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unsupported data file format", K(ret), K(tmp_file_format));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_partitions_(manifest_metadata, avro_data_file))) {
-      LOG_WARN("fail to get partition", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_data_file, RECORD_COUNT, record_count))) {
-      LOG_WARN("fail to get record_count", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_data_file,
-                                                  FILE_SIZE_IN_BYTES,
-                                                  file_size_in_bytes))) {
-      LOG_WARN("failed to get file_size_in_bytes", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(
-            ObCatalogAvroUtils::get_primitive_map(avro_data_file, COLUMN_SIZES, column_sizes))) {
-      LOG_WARN("fail to get column_sizes", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(
-            ObCatalogAvroUtils::get_primitive_map(avro_data_file, VALUE_COUNTS, value_counts))) {
-      LOG_WARN("failed to get value_counts", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive_map(avro_data_file,
-                                                      NULL_VALUE_COUNTS,
-                                                      null_value_counts))) {
-      LOG_WARN("failed to get null_value_counts", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive_map(avro_data_file,
-                                                      NAN_VALUE_COUNTS,
-                                                      nan_value_counts))) {
-      LOG_WARN("failed to get nan_value_counts", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_binary_map<avro::Type::AVRO_BYTES>(allocator_,
-                                                                           avro_data_file,
-                                                                           LOWER_BOUNDS,
-                                                                           lower_bounds))) {
-      LOG_WARN("failed to get lower_bounds", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_binary_map<avro::Type::AVRO_BYTES>(allocator_,
-                                                                           avro_data_file,
-                                                                           UPPER_BOUNDS,
-                                                                           upper_bounds))) {
-      LOG_WARN("failed to get upper_bounds", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_binary<avro::Type::AVRO_BYTES>(allocator_,
-                                                                       avro_data_file,
-                                                                       KEY_METADATA,
-                                                                       key_metadata))) {
-      LOG_WARN("failed to get key_metadata", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive_array(avro_data_file,
-                                                        SPLIT_OFFSETS,
-                                                        split_offsets))) {
-      LOG_WARN("failed to get split_offsets", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(
-            ObCatalogAvroUtils::get_primitive_array(avro_data_file, EQUALITY_IDS, equality_ids))) {
-      LOG_WARN("failed to get equality_ids", K(ret));
-    } else if (DataFileContent::EQUALITY_DELETES == content && equality_ids.empty()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("eq delete must have equality_deletes field", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_data_file, SORT_ORDER_ID, sort_order_id))) {
-      LOG_WARN("failed to get sort_order_id", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObCatalogAvroUtils::get_binary<avro::Type::AVRO_STRING>(allocator_,
-                                                                        avro_data_file,
-                                                                        REFERENCED_DATA_FILE,
-                                                                        referenced_data_file))) {
-      LOG_WARN("failed to get referenced_data_file", K(ret));
-    }
-  }
-
   return ret;
 }
 
-int DataFile::get_partitions_(const ManifestMetadata &manifest_metadata,
-                              const avro::GenericRecord &avro_data_file)
+int DataFile::decode_partitions_(const ManifestMetadata &manifest_metadata,
+                                 const FieldProjection &field_projection,
+                                 avro::Decoder &decoder)
 {
   int ret = OB_SUCCESS;
-  const avro::GenericDatum *partition_generic_datum = NULL;
-  if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_RECORD>(avro_data_file,
-                                                                     PARTITION,
-                                                                     partition_generic_datum))) {
-    LOG_WARN("failed to get avro partition", K(ret));
-  } else if (OB_ISNULL(partition_generic_datum)) {
+  if (OB_UNLIKELY(avro::Type::AVRO_RECORD != field_projection.avro_node_->type())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("partition is null", K(ret));
-  } else if (avro::Type::AVRO_RECORD != partition_generic_datum->type()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("partition is illegal type", K(ret), K(partition_generic_datum->type()));
-  } else if (OB_FAIL(DataFile::read_partition_values_from_avro(
-                 allocator_,
-                 manifest_metadata,
-                 partition_generic_datum->value<avro::GenericRecord>(),
-                 partition))) {
+    LOG_WARN("partition is illegal type", K(ret), K(field_projection.avro_node_->type()));
+  } else if (OB_FAIL(DataFile::read_partition_values_from_avro(allocator_,
+                                                               manifest_metadata,
+                                                               field_projection,
+                                                               decoder,
+                                                               partition))) {
     LOG_WARN("fail to get partition values", K(ret));
   }
   return ret;
@@ -363,26 +385,55 @@ int DataFile::get_partitions_(const ManifestMetadata &manifest_metadata,
 
 int DataFile::read_partition_values_from_avro(ObIAllocator &allocator,
                                               const ManifestMetadata &manifest_metadata,
-                                              const avro::GenericRecord &avro_record_partition,
+                                              const FieldProjection &field_projection,
+                                              avro::Decoder &decoder,
                                               ObIArray<ObObj> &partition_values)
 {
   int ret = OB_SUCCESS;
-  for (int32_t i = 0; i < manifest_metadata.partition_spec.fields.size(); i++) {
-    const PartitionField *partition_field = manifest_metadata.partition_spec.fields.at(i);
+  if (OB_UNLIKELY(field_projection.children_.count()
+                  != manifest_metadata.partition_spec.fields.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("PartitionField counts not matched",
+             K(ret),
+             K(field_projection.children_.count()),
+             K(manifest_metadata.partition_spec.fields.count()));
+  } else if (OB_FAIL(partition_values.reserve(manifest_metadata.partition_spec.fields.count()))) {
+    LOG_WARN("fail to reserve values", K(ret));
+  }
+
+  // todo 将来需要考虑 PartitionField 和 Avro Data Schema 里面列顺序不一样的情况
+  for (int64_t i = 0; OB_SUCC(ret) && i < field_projection.children_.count(); i++) {
+    const FieldProjection *child_field_projection = field_projection.children_[i];
+    const PartitionField *partition_field = NULL;
     const schema::ObColumnSchemaV2 *column_schema = NULL;
-    avro::GenericDatum avro_value;
-    ObObj partition_value;
-    if (OB_FAIL(manifest_metadata.schema.get_column_schema_by_field_id(partition_field->source_id,
-                                                                       column_schema))) {
+    if (OB_UNLIKELY(FieldProjection::Kind::Invalid == child_field_projection->kind_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid field projection", K(ret));
+    } else if (FieldProjection::Kind::NOT_EXISTED == child_field_projection->kind_) {
+      // skip
+      if (OB_FAIL(AvroUtils::skip_decode(child_field_projection->avro_node_, decoder))) {
+        LOG_WARN("fail to skip decode", K(ret));
+      }
+    } else if (OB_FAIL(manifest_metadata.partition_spec.get_partition_field_by_field_id(
+                   child_field_projection->field_id_,
+                   partition_field))) {
+      LOG_WARN("fail to get partition field", K(ret));
+    } else if (OB_FAIL(manifest_metadata.schema.get_column_schema_by_field_id(
+                   partition_field->source_id,
+                   column_schema))) {
       LOG_WARN("failed to get column_schema", K(ret), K(partition_field->source_id));
-    } else if (OB_FAIL(read_partition_value_from_avro(allocator,
-                                                      partition_field,
-                                                      column_schema,
-                                                      avro_record_partition,
-                                                      partition_value))) {
-      LOG_WARN("failed to get partition value", K(ret));
-    } else if (OB_FAIL(partition_values.push_back(partition_value))) {
-      LOG_WARN("failed to push_back partition_value", K(ret), K(partition_value));
+    } else {
+      ObObj partition_value;
+      if (OB_FAIL(read_partition_value_from_avro(allocator,
+                                                 partition_field,
+                                                 column_schema,
+                                                 child_field_projection->avro_node_,
+                                                 decoder,
+                                                 partition_value))) {
+        LOG_WARN("failed to get partition value", K(ret));
+      } else if (OB_FAIL(partition_values.push_back(partition_value))) {
+        LOG_WARN("failed to add partition value", K(ret));
+      }
     }
   }
   return ret;
@@ -391,101 +442,95 @@ int DataFile::read_partition_values_from_avro(ObIAllocator &allocator,
 int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
                                              const PartitionField *partition_field,
                                              const schema::ObColumnSchemaV2 *column_schema,
-                                             const avro::GenericRecord &avro_record_partition,
+                                             const avro::NodePtr &avro_node,
+                                             avro::Decoder &decoder,
                                              ObObj &obj)
 {
   int ret = OB_SUCCESS;
   const Transform &transform = partition_field->transform;
   const ObString &partition_column_name = partition_field->name;
-  const avro::GenericDatum *partition_avro_datum = NULL;
   ObObjType result_type;
   if (OB_FAIL(transform.get_result_type(column_schema->get_data_type(), result_type))) {
     LOG_WARN("failed to get result_type", K(ret));
   } else {
     switch (result_type) {
       case ObTinyIntType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_BOOL>(avro_record_partition,
-                                                                         partition_column_name,
-                                                                         partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<bool> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode bool", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_bool(partition_avro_datum->value<bool>());
+          obj.set_bool(value.value());
         }
         break;
       }
       case ObInt32Type: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_INT>(avro_record_partition,
-                                                                        partition_column_name,
-                                                                        partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<int32_t> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode int32", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_int32(partition_avro_datum->value<int32_t>());
+          obj.set_int32(value.value());
         }
         break;
       }
       case ObIntType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_LONG>(avro_record_partition,
-                                                                         partition_column_name,
-                                                                         partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<int64_t> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode int64", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_int(partition_avro_datum->value<int64_t>());
+          obj.set_int(value.value());
         }
         break;
       }
       case ObFloatType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_FLOAT>(avro_record_partition,
-                                                                          partition_column_name,
-                                                                          partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<float> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode float", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_float(partition_avro_datum->value<float>());
+          obj.set_float(value.value());
         }
         break;
       }
       case ObDoubleType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_DOUBLE>(avro_record_partition,
-                                                                           partition_column_name,
-                                                                           partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<double> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode double", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_double(partition_avro_datum->value<double>());
+          obj.set_double(value.value());
         }
         break;
       }
       case ObDecimalIntType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_FIXED>(avro_record_partition,
-                                                                          partition_column_name,
-                                                                          partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<ObString> value;
+        if (OB_FAIL(AvroUtils::decode_binary(allocator, avro_node, decoder, value))) {
+          LOG_WARN("failed to decode fixed", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else if (column_schema->get_data_precision() <= 0
                    || column_schema->get_data_scale() <= 0) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid decimal type", K(ret));
         } else {
-          const avro::GenericFixed &fixed_datum = partition_avro_datum->value<avro::GenericFixed>();
-          int32_t buffer_size
-              = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_schema->get_data_precision());
+          int32_t buffer_size = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(
+              column_schema->get_data_precision());
           uint8_t *buf = static_cast<uint8_t *>(allocator.alloc(buffer_size));
           memset(buf, 0, buffer_size);
           if (OB_ISNULL(buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocate memory", K(ret));
           } else {
-            for (int32_t i = 0; i < fixed_datum.value().size(); i++) {
-              const uint8_t &tmp = fixed_datum.value()[i];
+            const ObString &bytes = value.value();
+            for (int32_t i = 0; i < bytes.length(); i++) {
+              const uint8_t &tmp = bytes.ptr()[i];
               buf[buffer_size - 1 - i] = tmp;
             }
             ObDecimalInt *decint = reinterpret_cast<ObDecimalInt *>(buf);
@@ -495,118 +540,79 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
         break;
       }
       case ObDateType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_INT>(avro_record_partition,
-                                                                        partition_column_name,
-                                                                        partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<int32_t> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode int32", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_date(partition_avro_datum->value<int32_t>());
+          obj.set_date(value.value());
         }
         break;
       }
       case ObTimeType: {
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_LONG>(avro_record_partition,
-                                                                         partition_column_name,
-                                                                         partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<int64_t> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode int64", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_time(partition_avro_datum->value<int64_t>());
+          obj.set_time(value.value());
         }
         break;
       }
       case ObDateTimeType: {
         // aka iceberg timestamp
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_LONG>(avro_record_partition,
-                                                                         partition_column_name,
-                                                                         partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<int64_t> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode int64", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_datetime(partition_avro_datum->value<int64_t>());
+          obj.set_datetime(value.value());
         }
         break;
       }
       case ObTimestampType: {
         // aka iceberg timestamptz
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_LONG>(avro_record_partition,
-                                                                         partition_column_name,
-                                                                         partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<int64_t> value;
+        if (OB_FAIL(AvroUtils::decode_primitive(avro_node, decoder, value))) {
+          LOG_WARN("failed to decode int64", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          obj.set_timestamp(partition_avro_datum->value<int64_t>());
+          obj.set_timestamp(value.value());
         }
         break;
       }
       case ObMediumTextType: {
-        if (ObCollationType::CS_TYPE_BINARY == column_schema->get_collation_type()) {
-          // iceberg binary type
-          ObString deep_copy_str;
-          ObString lob_with_header;
-          if (OB_FAIL(
-                  ObCatalogAvroUtils::get_value<avro::Type::AVRO_BYTES>(avro_record_partition,
-                                                                        partition_column_name,
-                                                                        partition_avro_datum))) {
-            LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-          } else if (NULL == partition_avro_datum
-                     || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
-            obj.set_null();
-          } else {
-            std::vector<uint8_t> bytes = partition_avro_datum->value<std::vector<uint8_t>>();
-            OZ(ob_write_string(allocator,
-                               ObString(bytes.size(), reinterpret_cast<const char *>(bytes.data())),
-                               deep_copy_str));
-            OZ(storage::ObLobManager::fill_lob_header(allocator, deep_copy_str, lob_with_header));
-            OX(obj.set_string(ObObjType::ObMediumTextType, lob_with_header));
-            OX(obj.set_has_lob_header());
-            OX(obj.set_collation_type(ObCollationType::CS_TYPE_BINARY));
-          }
+        // iceberg binary/string
+        ObArenaAllocator tmp_allocator;
+        std::optional<ObString> value;
+        if (OB_FAIL(AvroUtils::decode_binary(tmp_allocator, avro_node, decoder, value))) {
+          LOG_WARN("failed to decode binary", K(ret));
+        } else if (!value.has_value()) {
+          obj.set_null();
         } else {
-          // iceberg string type
-          ObString deep_copy_str;
+          ObString bytes = value.value();
           ObString lob_with_header;
-          if (OB_FAIL(
-                  ObCatalogAvroUtils::get_value<avro::Type::AVRO_STRING>(avro_record_partition,
-                                                                         partition_column_name,
-                                                                         partition_avro_datum))) {
-            LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-          } else if (NULL == partition_avro_datum
-                     || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
-            obj.set_null();
-          } else {
-            std::string str = partition_avro_datum->value<std::string>();
-            ObString deep_copy_str;
-            OZ(ob_write_string(allocator, ObString(str.size(), str.data()), deep_copy_str));
-            OZ(storage::ObLobManager::fill_lob_header(allocator, deep_copy_str, lob_with_header));
-            OX(obj.set_string(ObObjType::ObMediumTextType, lob_with_header));
-            OX(obj.set_has_lob_header());
-            OX(obj.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN));
-          }
+          OZ(storage::ObLobManager::fill_lob_header(allocator, bytes, lob_with_header));
+          OX(obj.set_string(ObObjType::ObMediumTextType, lob_with_header));
+          OX(obj.set_has_lob_header());
+          OX(obj.set_collation_type(column_schema->get_collation_type()));
         }
         break;
       }
       case ObVarcharType: {
         // fixed/uuid
-        if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_BYTES>(avro_record_partition,
-                                                                          partition_column_name,
-                                                                          partition_avro_datum))) {
-          LOG_WARN("failed to get partition avro datum", K(ret), K(partition_column_name));
-        } else if (NULL == partition_avro_datum
-                   || avro::Type::AVRO_NULL == partition_avro_datum->type()) {
+        std::optional<ObString> value;
+        if (OB_FAIL(AvroUtils::decode_binary(allocator, avro_node, decoder, value))) {
+          LOG_WARN("failed to decode binary", K(ret));
+        } else if (!value.has_value()) {
           obj.set_null();
         } else {
-          std::vector<uint8_t> bytes = partition_avro_datum->value<std::vector<uint8_t>>();
-          ObString deep_copy_str;
-          OZ(ob_write_string(allocator,
-                             ObString(bytes.size(), reinterpret_cast<const char *>(bytes.data())),
-                             deep_copy_str));
-          OX(obj.set_varbinary(deep_copy_str));
+          ObString bytes = value.value();
+          OX(obj.set_varbinary(bytes));
         }
         break;
       }
@@ -619,108 +625,197 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
   return ret;
 }
 
-ManifestEntry::ManifestEntry(ObIAllocator &allocator)
-    : SpecWithAllocator(allocator), data_file(allocator), partition_spec(allocator)
-{
-}
-
-int ManifestEntry::init_from_avro(const ManifestFile &parent_manifest_file,
-                                  const ManifestMetadata &manifest_metadata,
-                                  const avro::GenericRecord &avro_manifest_entry)
+int DataFile::get_read_expected_schema(ObIAllocator &allocator,
+                                       const ManifestMetadata &manifest_metadata,
+                                       StructType *&struct_type)
 {
   int ret = OB_SUCCESS;
+
+  SchemaField *partition_schema_field = NULL;
+  StructType *partition_struct_type = NULL;
+  // setup partition_spec's schema
   if (OB_SUCC(ret)) {
-    int32_t tmp_status = -1;
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_manifest_entry, STATUS, tmp_status))) {
-      LOG_WARN("failed to get status", K(ret));
-    } else {
-      switch (tmp_status) {
-        case 0:
-          status = ManifestEntryStatus::EXISTING;
-          break;
-        case 1:
-          status = ManifestEntryStatus::ADDED;
-          break;
-        case 2:
-          status = ManifestEntryStatus::DELETED;
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid status", K(tmp_status));
+    if (OB_ISNULL(partition_struct_type = OB_NEWx(StructType, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else if (OB_ISNULL(partition_schema_field = OB_NEWx(SchemaField,
+                                                          &allocator,
+                                                          PARTITION_FIELD_ID,
+                                                          PARTITION,
+                                                          partition_struct_type))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    }
+    for (int32_t i = 0; OB_SUCC(ret) && i < manifest_metadata.partition_spec.fields.count(); i++) {
+      const PartitionField *partition_field = manifest_metadata.partition_spec.fields[i];
+      SchemaField *schema_field = NULL;
+      // todo 因为现在 schema project 只是根据 field name
+      // 映射，不考虑类型，所以这里所有分区列都直接用 StringType
+      if (OB_ISNULL(schema_field = OB_NEWx(SchemaField,
+                                           &allocator,
+                                           partition_field->field_id,
+                                           partition_field->name,
+                                           StringType::get_instance(),
+                                           true,
+                                           ""))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else if (OB_FAIL(partition_struct_type->add_schema_field(schema_field))) {
+        LOG_WARN("failed to add schema field", K(ret));
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    std::optional<int64_t> tmp_snapshot_id;
-    if (OB_FAIL(
-            ObCatalogAvroUtils::get_primitive(avro_manifest_entry, SNAPSHOT_ID, tmp_snapshot_id))) {
-      LOG_WARN("failed to get snapshot_id", K(ret));
-    } else if (tmp_snapshot_id.has_value()) {
-      snapshot_id = tmp_snapshot_id.value();
-    } else {
-      // Inherited when null.
-      snapshot_id = parent_manifest_file.added_snapshot_id;
+    if (OB_ISNULL(struct_type = OB_NEWx(StructType,
+                                        &allocator,
+                                        {&CONTENT_FIELD,
+                                         &FILE_PATH_FIELD,
+                                         &FILE_FORMAT_FIELD,
+                                         partition_schema_field,
+                                         &RECORD_COUNT_FIELD,
+                                         &FILE_SIZE_FIELD,
+                                         &COLUMN_SIZES_FIELD,
+                                         &VALUE_COUNTS_FIELD,
+                                         &NULL_VALUE_COUNTS_FIELD,
+                                         &NAN_VALUE_COUNTS_FIELD,
+                                         &LOWER_BOUNDS_FIELD,
+                                         &UPPER_BOUNDS_FIELD,
+                                         &KEY_METADATA_FIELD,
+                                         &SPLIT_OFFSETS_FIELD,
+                                         &EQUALITY_IDS_FIELD,
+                                         &SORT_ORDER_ID_FIELD,
+                                         &REFERENCED_DATA_FILE_FIELD}))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    // in v1 tables, the data sequence number is not persisted and can be safely defaulted to 0
-    // in v2 tables, the data sequence number should be inherited iff the entry status is ADDED
-    std::optional<int64_t> tmp_data_sequence_number;
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_manifest_entry,
-                                                  SEQUENCE_NUMBER,
-                                                  tmp_data_sequence_number))) {
-      LOG_WARN("failed to get sequence_number", K(ret));
-    } else if (tmp_data_sequence_number.has_value()) {
-      sequence_number = tmp_data_sequence_number.value();
-    } else if (!tmp_data_sequence_number.has_value()
-               && (0 == parent_manifest_file.sequence_number
-                   || ManifestEntryStatus::ADDED == status)) {
-      // 对于 v1 表，parent_manifest_file.sequence_number 就已经是 0 了，所以直接用即可。
-      // 如果 status 不是 ADDED 的，那么 data/file sequence number 必须显示指定
-      sequence_number = parent_manifest_file.sequence_number;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid sequence number", K(ret), K(status));
-    }
-  }
+ManifestEntry::ManifestEntry(ObIAllocator &allocator)
+    : SpecWithAllocator(allocator), data_file(allocator), partition_spec(allocator)
+{
+}
 
-  if (OB_SUCC(ret)) {
-    // in v1 tables, the file sequence number is not persisted and can be safely defaulted to 0
-    // in v2 tables, the file sequence number should be inherited iff the entry status is ADDED
-    std::optional<int64_t> tmp_file_sequence_number;
-    if (OB_FAIL(ObCatalogAvroUtils::get_primitive(avro_manifest_entry,
-                                                  FILE_SEQUENCE_NUMBER,
-                                                  tmp_file_sequence_number))) {
-      LOG_WARN("failed to get file_sequence_number", K(ret));
-    } else if (tmp_file_sequence_number.has_value()) {
-      file_sequence_number = tmp_file_sequence_number.value();
-    } else if (!tmp_file_sequence_number.has_value()
-               && (0 == parent_manifest_file.sequence_number
-                   || ManifestEntryStatus::ADDED == status)) {
-      // 对于 v1 表，parent_manifest_file.sequence_number 就已经是 0 了，所以直接用即可。
-      // 如果 status 不是 ADDED 的，那么 data/file sequence number 必须显示指定
-      file_sequence_number = parent_manifest_file.sequence_number;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid file sequence number", K(ret), K(status));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_data_file_(manifest_metadata, avro_manifest_entry))) {
-      LOG_WARN("failed to get data_file", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+int ManifestEntry::apply(const ManifestMetadata &manifest_metadata)
+{
+  int ret = OB_SUCCESS;
+  // 这里浅拷贝 PartitionSpec 就行了（PartitionSpec 的内存来自于 ManifestMetadata）
+  if (OB_FAIL(partition_spec.shallow_assign(manifest_metadata.partition_spec))) {
+    LOG_WARN("failed to shallow assign partition spec", K(ret));
+  } else {
     partition_spec_id = manifest_metadata.partition_spec_id;
-    partition_spec.assign(manifest_metadata.partition_spec);
-    // reassign partition_spec's spec_id to correct value
+    // ManifestMetadata 里面的 PartitionSpec 解析出来时没有 spec_id
+    // 的(v1的PartitionSpec标准)，所以这里需要重新 reassign() reassign partition_spec's spec_id to
+    // correct value
     partition_spec.spec_id = partition_spec_id;
   }
+  return ret;
+}
 
+int ManifestEntry::decode_field(const ManifestFile &parent_manifest_file,
+                                const ManifestMetadata &manifest_metadata,
+                                const FieldProjection &field_projection,
+                                avro::Decoder &decoder)
+{
+  int ret = OB_SUCCESS;
+  switch (field_projection.field_id_) {
+    case STATUS_FIELD_ID: {
+      // status
+      int32_t tmp_status = -1;
+      if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_, decoder, tmp_status))) {
+        LOG_WARN("failed to get status", K(ret));
+      } else {
+        switch (tmp_status) {
+          case 0:
+            status = ManifestEntryStatus::EXISTING;
+            break;
+          case 1:
+            status = ManifestEntryStatus::ADDED;
+            break;
+          case 2:
+            status = ManifestEntryStatus::DELETED;
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid status", K(ret), K(tmp_status));
+        }
+      }
+      break;
+    }
+    case SNAPSHOT_ID_FIELD_ID: {
+      // snapshot-id
+      std::optional<int64_t> tmp_snapshot_id;
+      if (OB_FAIL(
+              AvroUtils::decode_primitive(field_projection.avro_node_, decoder, tmp_snapshot_id))) {
+        LOG_WARN("failed to get snapshot-id", K(ret));
+      } else if (tmp_snapshot_id.has_value()) {
+        snapshot_id = tmp_snapshot_id.value();
+      } else {
+        // Inherited when null.
+        snapshot_id = parent_manifest_file.added_snapshot_id;
+      }
+      break;
+    }
+    case SEQUENCE_NUMBER_FIELD_ID: {
+      // sequence_number
+      // in v1 tables, the data sequence number is not persisted and can be safely defaulted to 0
+      // in v2 tables, the data sequence number should be inherited iff the entry status is ADDED
+      std::optional<int64_t> tmp_data_sequence_number;
+      if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_,
+                                              decoder,
+                                              tmp_data_sequence_number))) {
+        LOG_WARN("failed to get sequence_number", K(ret));
+      } else if (tmp_data_sequence_number.has_value()) {
+        sequence_number = tmp_data_sequence_number.value();
+      } else if (!tmp_data_sequence_number.has_value()
+                 && (0 == parent_manifest_file.sequence_number
+                     || ManifestEntryStatus::ADDED == status)) {
+        // 对于 v1 表，parent_manifest_file.sequence_number 就已经是 0 了，所以直接用即可。
+        // 如果 status 不是 ADDED 的，那么 data/file sequence number 必须显示指定
+        sequence_number = parent_manifest_file.sequence_number;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid sequence number", K(ret), K(status));
+      }
+      break;
+    }
+    case FILE_SEQUENCE_NUMBER_FIELD_ID: {
+      // file_sequence_number
+      // in v1 tables, the file sequence number is not persisted and can be safely defaulted to 0
+      // in v2 tables, the file sequence number should be inherited iff the entry status is ADDED
+      std::optional<int64_t> tmp_file_sequence_number;
+      if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_,
+                                              decoder,
+                                              tmp_file_sequence_number))) {
+        LOG_WARN("failed to get file_sequence_number", K(ret));
+      } else if (tmp_file_sequence_number.has_value()) {
+        file_sequence_number = tmp_file_sequence_number.value();
+      } else if (!tmp_file_sequence_number.has_value()
+                 && (0 == parent_manifest_file.sequence_number
+                     || ManifestEntryStatus::ADDED == status)) {
+        // 对于 v1 表，parent_manifest_file.sequence_number 就已经是 0 了，所以直接用即可。
+        // 如果 status 不是 ADDED 的，那么 data/file sequence number 必须显示指定
+        file_sequence_number = parent_manifest_file.sequence_number;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid file sequence number", K(ret), K(status));
+      }
+      break;
+    }
+    case DATA_FILE_FIELD_ID: {
+      // data_file
+      if (OB_FAIL(decode_data_file_(manifest_metadata, field_projection, decoder))) {
+        LOG_WARN("failed to get data_file", K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported field id", K(ret), K(field_projection.field_id_));
+    }
+  }
   return ret;
 }
 
@@ -755,26 +850,58 @@ bool ManifestEntry::is_delete_file() const
   return is_position_delete_file() || is_equality_delete_file();
 }
 
-int ManifestEntry::get_data_file_(const ManifestMetadata &manifest_metadata,
-                                  const avro::GenericRecord &avro_manifest_entry)
+int ManifestEntry::decode_data_file_(const ManifestMetadata &manifest_metadata,
+                                     const FieldProjection &field_projection,
+                                     avro::Decoder &decoder)
 {
   int ret = OB_SUCCESS;
-  const avro::GenericDatum *field_datum = NULL;
-  if (OB_FAIL(ObCatalogAvroUtils::get_value<avro::Type::AVRO_RECORD>(avro_manifest_entry,
-                                                                     DATA_FILE,
-                                                                     field_datum))) {
-    LOG_WARN("failed to get data_file", K(ret));
-  } else if (OB_ISNULL(field_datum) ) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get null data_file", K(ret));
-  } else if (avro::Type::AVRO_RECORD != field_datum->type()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data_file is illegal type", K(ret), K(field_datum->type()));
-  } else if (OB_FAIL(data_file.init_from_avro(manifest_metadata,
-                                              field_datum->value<avro::GenericRecord>()))) {
-    LOG_WARN("failed to init data_file", K(ret));
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < field_projection.children_.count(); idx++) {
+    const FieldProjection *child_field_projection = field_projection.children_[idx];
+    if (OB_ISNULL(child_field_projection)
+        || FieldProjection::Kind::Invalid == child_field_projection->kind_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid child field projection", K(ret));
+    } else if (FieldProjection::Kind::NOT_EXISTED == child_field_projection->kind_) {
+      if (OB_FAIL(AvroUtils::skip_decode(child_field_projection->avro_node_, decoder))) {
+        LOG_WARN("failed to skip decode", K(ret));
+      }
+    } else if (OB_FAIL(
+                   data_file.decode_field(manifest_metadata, *child_field_projection, decoder))) {
+      LOG_WARN("failed to set data_file", K(ret));
+    }
   }
 
+  return ret;
+}
+
+int ManifestEntry::get_read_expected_schema(ObIAllocator &allocator,
+                                            const ManifestMetadata &manifest_metadata,
+                                            StructType *&struct_type)
+{
+  int ret = OB_SUCCESS;
+  SchemaField *datafile_schema_field = NULL;
+  StructType *datafile_struct_type = NULL;
+  if (OB_FAIL(
+          DataFile::get_read_expected_schema(allocator, manifest_metadata, datafile_struct_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get datafile schema", K(ret));
+  } else if (OB_ISNULL(datafile_schema_field = OB_NEWx(SchemaField,
+                                                       &allocator,
+                                                       DATA_FILE_FIELD_ID,
+                                                       DATA_FILE,
+                                                       datafile_struct_type))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else if (OB_ISNULL(struct_type = OB_NEWx(StructType,
+                                             &allocator,
+                                             {&STATUS_FIELD,
+                                              &SNAPSHOT_ID_FIELD,
+                                              &SEQUENCE_NUMBER_FIELD,
+                                              &FILE_SEQUENCE_NUMBER_FIELD,
+                                              datafile_schema_field}))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  }
   return ret;
 }
 
@@ -783,3 +910,50 @@ int ManifestEntry::get_data_file_(const ManifestMetadata &manifest_metadata,
 } // namespace sql
 
 } // namespace oceanbase
+
+namespace avro
+{
+using namespace oceanbase::sql::iceberg;
+
+void codec_traits<ManifestEntryDatum>::encode(Encoder &e, const ManifestEntryDatum &v)
+{
+  throw avro::Exception("unsupported encoded");
+}
+
+void codec_traits<ManifestEntryDatum>::decode(Decoder &d, ManifestEntryDatum &v)
+{
+  int ret = OB_SUCCESS;
+  // reset previous value
+  v.manifest_entry_ = NULL;
+
+  const ObFixedArray<FieldProjection *, ObIAllocator> &field_projections
+      = v.schema_projection_.fields_;
+
+  if (OB_ISNULL(v.manifest_entry_ = OB_NEWx(ManifestEntry, &v.allocator_, v.allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < field_projections.count(); i++) {
+    const FieldProjection *field_projection = field_projections[i];
+    if (OB_ISNULL(field_projection) || FieldProjection::Kind::Invalid == field_projection->kind_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid field projection", K(ret));
+    } else if (FieldProjection::Kind::NOT_EXISTED == field_projection->kind_) {
+      if (OB_FAIL(AvroUtils::skip_decode(field_projection->avro_node_, d))) {
+        LOG_WARN("failed to skip decode", K(ret));
+      }
+    } else if (OB_FAIL(v.manifest_entry_->decode_field(v.parent_manifest_file_,
+                                                       v.manifest_metadata_,
+                                                       *field_projection,
+                                                       d))) {
+      LOG_WARN("failed to set manifest entry", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to decode manifest entry", K(ret));
+    throw avro::Exception("failed to decode manifest entry");
+  }
+}
+
+} // namespace avro

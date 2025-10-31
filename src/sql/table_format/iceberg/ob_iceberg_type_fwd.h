@@ -28,7 +28,40 @@ static constexpr int32_t DEFAULT_SCHEMA_ID = 0;
 static constexpr const int32_t INITIAL_SPEC_ID = 0;
 // IDs for partition fields start at 1000
 static constexpr const int32_t PARTITION_DATA_ID_START = 1000;
-const int64_t OB_MALLOC_SMALL_BLOCK_SIZE = (1LL << 10) - 256;  // 1KB
+
+enum class TypeId
+{
+  kStruct = 0,
+  kList,
+  kMap,
+  kBoolean,
+  kInt,
+  kLong,
+  kFloat,
+  kDouble,
+  kDecimal,
+  kDate,
+  kTime,
+  kTimestamp,
+  kTimestampTz,
+  kString,
+  kUuid,
+  kFixed,
+  kBinary,
+};
+class Type;
+class SchemaField;
+class StructType;
+class MapType;
+class ListType;
+class BinaryType;
+class BooleanType;
+class IntType;
+class LongType;
+class StringType;
+
+class SchemaProjection;
+class FieldProjection;
 
 class TableMetadata;
 enum class FormatVersion;

@@ -14,12 +14,11 @@
 #define USING_LOG_PREFIX SHARE
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
+#include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 
 #include <avro/DataFile.hh>
-#include <avro/Generic.hh>
-#include <avro/GenericDatum.hh>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -59,21 +58,27 @@ TEST_F(TestIcebergManifest, test_partition_parse)
   const std::map<std::string, std::vector<uint8_t>> &metadata = avro_reader_base->metadata();
   ManifestMetadata manifest_metadata(allocator);
   ASSERT_EQ(OB_SUCCESS, manifest_metadata.init_from_metadata(metadata));
-
-  avro::DataFileReader<avro::GenericDatum> avro_reader(std::move(avro_reader_base));
-  avro::GenericDatum generic_datum(avro_reader.dataSchema());
-  avro_reader.read(generic_datum);
-  ManifestEntry *manifest_entry = OB_NEWx(ManifestEntry, &allocator, allocator);
-  const auto &partitions_avro = generic_datum.value<avro::GenericRecord>()
-                                    .field(ManifestEntry::DATA_FILE)
-                                    .value<avro::GenericRecord>()
-                                    .field(DataFile::PARTITION);
-  ObArray<ObObj> partition_values;
+  StructType *expected_avro_schema = NULL;
+  SchemaProjection schema_projection(allocator);
+  ASSERT_EQ(
+      OB_SUCCESS,
+      ManifestEntry::get_read_expected_schema(allocator, manifest_metadata, expected_avro_schema));
   ASSERT_EQ(OB_SUCCESS,
-            DataFile::read_partition_values_from_avro(allocator,
-                                                      manifest_metadata,
-                                                      partitions_avro.value<avro::GenericRecord>(),
-                                                      partition_values));
+            AvroSchemaProjectionUtils::project(allocator,
+                                               *expected_avro_schema,
+                                               avro_reader_base->dataSchema().root(),
+                                               schema_projection));
+  avro::DataFileReader<ManifestEntryDatum> avro_reader(std::move(avro_reader_base));
+  ManifestFile dummy_manifest_file(allocator);
+  ManifestEntryDatum manifest_entry_datum(allocator,
+                                          schema_projection,
+                                          dummy_manifest_file,
+                                          manifest_metadata);
+  ASSERT_TRUE(avro_reader.read(manifest_entry_datum));
+
+  ObFixedArray<ObObj, ObIAllocator> &partition_values
+      = manifest_entry_datum.manifest_entry_->data_file.partition;
+
   {
     // bool true
     ObObj result;

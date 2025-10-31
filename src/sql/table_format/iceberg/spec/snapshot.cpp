@@ -15,6 +15,7 @@
 #include "sql/table_format/iceberg/spec/snapshot.h"
 
 #include "share/ob_define.h"
+#include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/scan/delete_file_index.h"
 #include "sql/table_format/iceberg/scan/task.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
@@ -31,10 +32,8 @@ namespace iceberg
 {
 
 Snapshot::Snapshot(ObIAllocator &allocator)
-    : SpecWithAllocator(allocator),
-      v1_manifests(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      summary(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      cached_manifest_file_(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
+    : SpecWithAllocator(allocator), v1_manifests(allocator), summary(allocator),
+      cached_manifest_file_(allocator)
 {
 }
 
@@ -133,11 +132,7 @@ int Snapshot::assign(const Snapshot &other)
     timestamp_ms = other.timestamp_ms;
     schema_id = other.schema_id;
     OZ(ob_write_string(allocator_, other.manifest_list, manifest_list));
-    for (int64_t i = 0; OB_SUCC(ret) && i < other.v1_manifests.size(); i++) {
-      ObString tmp;
-      OZ(ob_write_string(allocator_, other.v1_manifests[i], tmp));
-      OZ(v1_manifests.push_back(tmp));
-    }
+    OZ(ObIcebergUtils::deep_copy_array_string(allocator_, other.v1_manifests, v1_manifests));
     OZ(ObIcebergUtils::deep_copy_map_string(allocator_, other.summary, summary));
   }
   return ret;
@@ -163,24 +158,23 @@ int Snapshot::get_manifest_files(const ObString &access_info,
     if (OB_UNLIKELY(cached_manifest_file_.empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ManifestFile is empty", K(ret));
-    } else if (OB_FAIL(manifest_files.reserve(cached_manifest_file_.size()))) {
-      LOG_WARN("failed to reserve manifest file", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < cached_manifest_file_.size(); i++) {
-        OZ(manifest_files.push_back(cached_manifest_file_.at(i)));
-      }
+    } else if (OB_FAIL(manifest_files.assign(cached_manifest_file_))) {
+      LOG_WARN("failed to assign manifest files", K(ret));
     }
   }
   return ret;
 }
 
 int Snapshot::get_manifest_files_(const ObString &access_info,
-                                 ObIArray<ManifestFile *> &manifest_files) const
+                                  ObIArray<ManifestFile *> &manifest_files) const
 {
   int ret = OB_SUCCESS;
   if (!v1_manifests.empty()) {
     // handle manifest v1
-    for (int i = 0; OB_SUCC(ret) && i < v1_manifests.size(); ++i) {
+    if (OB_FAIL(manifest_files.reserve(v1_manifests.count()))) {
+      LOG_WARN("failed to reserve space", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < v1_manifests.count(); ++i) {
       ManifestFile *manifest_file = OB_NEWx(ManifestFile, &allocator_, allocator_);
       if (OB_ISNULL(manifest_file)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -197,6 +191,7 @@ int Snapshot::get_manifest_files_(const ObString &access_info,
       }
     }
   } else {
+    ObArray<ManifestFile *> tmp_manifest_files;
     ObArenaAllocator tmp_allocator;
     char *buf = NULL;
     int64_t read_size = 0;
@@ -211,26 +206,37 @@ int Snapshot::get_manifest_files_(const ObString &access_info,
                                                                   read_size))) {
     } else {
       try {
-        avro::DataFileReader<avro::GenericDatum> avro_reader(std::move(input_stream));
-        avro::GenericDatum generic_datum(avro_reader.dataSchema());
-        while (OB_SUCC(ret) && avro_reader.read(generic_datum)) {
-          ManifestFile *manifest_file = OB_NEWx(ManifestFile, &allocator_, allocator_);
-          if (OB_ISNULL(manifest_file)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocate manifest file", K(ret));
-          } else if (avro::Type::AVRO_RECORD != generic_datum.type()) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid manifest file", K(ret), K(generic_datum.type()));
-          } else if (OB_FAIL(manifest_file->init_from_avro(
-                         generic_datum.value<avro::GenericRecord>()))) {
-            LOG_WARN("failed to init manifest file", K(ret));
-          } else if (OB_FAIL(manifest_files.push_back(manifest_file))) {
+        avro::DataFileReader<ManifestFileDatum> avro_reader(std::move(input_stream));
+        SchemaProjection schema_projection(tmp_allocator);
+        StructType *expected_avro_schema = NULL;
+
+        if (OB_FAIL(ManifestFile::get_read_expected_schema(expected_avro_schema))) {
+          LOG_WARN("failed to get expected manifest file avro schema", K(ret));
+        } else if (OB_FAIL(AvroSchemaProjectionUtils::project(tmp_allocator,
+                                                              *expected_avro_schema,
+                                                              avro_reader.dataSchema().root(),
+                                                              schema_projection))) {
+          LOG_WARN("failed to project manifest file avro schema", K(ret));
+        }
+        ManifestFileDatum manifest_file_datum(allocator_, schema_projection);
+        while (OB_SUCC(ret) && avro_reader.read(manifest_file_datum)) {
+          if (OB_ISNULL(manifest_file_datum.manifest_file_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to decode manifest file", K(ret));
+          } else if (OB_FAIL(tmp_manifest_files.push_back(manifest_file_datum.manifest_file_))) {
             LOG_WARN("failed to add manifest file", K(ret));
           }
         }
+        avro_reader.close();
       } catch (std::exception &e) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to read manifest file", K(ret), K(e.what()));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(manifest_files.assign(tmp_manifest_files))) {
+        LOG_WARN("failed to assign manifest files", K(ret));
       }
     }
   }

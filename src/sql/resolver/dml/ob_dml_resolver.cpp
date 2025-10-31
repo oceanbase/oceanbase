@@ -11100,6 +11100,8 @@ int ObDMLResolver::resolve_generated_column_expr_temp(TableItem *table_item)
   } else if (table_item->ref_id_ == OB_INVALID_ID) {
     //do nothing
     LOG_TRACE("show invalid id", K(*table_item));
+  } else if (is_external_object_id(table_item->ref_id_)) {
+    // do nothing
   } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_item->ref_id_,
               table_schema))) {
     LOG_WARN("get table schema failed", K(ret));

@@ -28,8 +28,8 @@ namespace iceberg
 
 BlobMetadata::BlobMetadata(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      fields(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator)),
-      properties(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      fields(allocator),
+      properties(allocator)
 {
 }
 
@@ -39,7 +39,7 @@ int BlobMetadata::assign(const BlobMetadata &other)
   if (this != &other) {
     snapshot_id = other.snapshot_id;
     sequence_number = other.sequence_number;
-    if (OB_FAIL(ObIcebergUtils::deep_copy_optional_string(allocator_, other.type, type))) {
+    if (OB_FAIL(ob_write_string(allocator_, other.type, type))) {
       LOG_WARN("failed to deep copy type", K(ret));
     } else if (OB_FAIL(fields.assign(other.fields))) {
       LOG_WARN("failed to assign fields", K(ret));
@@ -101,7 +101,7 @@ int BlobMetadata::init_from_json(const ObJsonObject &json_object)
 
 StatisticsFile::StatisticsFile(ObIAllocator &allocator)
     : SpecWithAllocator(allocator),
-      blob_metadata(OB_MALLOC_SMALL_BLOCK_SIZE, ModulePageAllocator(allocator))
+      blob_metadata(allocator)
 {
 }
 
@@ -186,6 +186,8 @@ int StatisticsFile::parse_blob_metadata_(const ObJsonObject &json_object)
   } else if (ObJsonNodeType::J_ARRAY != json_blob_metadata->json_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid blob-metadata type", K(ret));
+  } else if (OB_FAIL(blob_metadata.reserve(json_blob_metadata->element_count()))) {
+    LOG_WARN("failed to reserve", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < json_blob_metadata->element_count(); i++) {
       ObIJsonBase *json_element = NULL;
