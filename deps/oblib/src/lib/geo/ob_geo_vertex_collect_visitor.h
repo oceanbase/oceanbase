@@ -24,18 +24,23 @@ namespace common
 class ObGeoVertexCollectVisitor : public ObEmptyGeoVisitor
 {
 public:
-  ObGeoVertexCollectVisitor(ObVertexes &vertexes) : vertexes_(vertexes), x_min_(NAN), x_max_(NAN) {}
+  ObGeoVertexCollectVisitor(ObVertexes &vertexes)
+    : vertexes_(vertexes), x_min_(NAN), x_max_(NAN), y_min_(NAN), y_max_(NAN) {}
   virtual ~ObGeoVertexCollectVisitor() {}
   bool prepare(ObGeometry *geo);  
   int visit(ObIWkbPoint *geo);
   int visit(ObIWkbGeometry *geo) { UNUSED(geo); return OB_SUCCESS; }
   inline double get_x_min() { return x_min_; }
   inline double get_x_max() { return x_max_; }
+  inline double get_y_min() { return y_min_; }
+  inline double get_y_max() { return y_max_; }
 
 private:
   ObVertexes &vertexes_;
   double x_min_;
   double x_max_;
+  double y_min_;
+  double y_max_;
   DISALLOW_COPY_AND_ASSIGN(ObGeoVertexCollectVisitor);
 };
 

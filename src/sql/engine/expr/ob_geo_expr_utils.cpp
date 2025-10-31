@@ -1135,9 +1135,11 @@ int ObGeoExprUtils::expr_prepare_build_geometry(MultimodeAlloctor &allocator, co
 
 void ObGeoExprUtils::init_box_by_cache(ObGeogBox *&box_ptr, ObGeogBox& box, ObCachedGeom* cache_geo)
 {
-  if (OB_NOT_NULL(cache_geo)) {
+  if (OB_NOT_NULL(cache_geo) && cache_geo->is_inited()) {
     box.xmax = cache_geo->get_x_max();
     box.xmin = cache_geo->get_x_min();
+    box.ymin = cache_geo->get_y_min();
+    box.ymax = cache_geo->get_y_max();
     box_ptr = &box;
   }
 }
@@ -1208,7 +1210,7 @@ ObGeoConstParamCache::~ObGeoConstParamCache()
     }
     if (OB_NOT_NULL(cached_param2_)) {
       cached_param2_->destroy_cache();
-      cached_param1_ = nullptr;
+      cached_param2_ = nullptr;
     }
   }
 
