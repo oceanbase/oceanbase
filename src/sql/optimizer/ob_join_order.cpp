@@ -2839,7 +2839,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
         bool is_vec_tid = false;
         if (OB_FAIL(is_vector_inv_index_tid(tid, is_vec_tid))) {
           LOG_WARN("Failed to check is vec index tid", K(ret), K(tid));
-        } else {
+        } else if (is_vec_tid) {
           index_dim->set_can_prunning(false);
         }
       }
