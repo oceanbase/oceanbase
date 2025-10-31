@@ -136,29 +136,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSystemAdminUtil);
 };
 
-class ObAdminSwitchReplicaRole : public ObSystemAdminUtil
-{
-public:
-  explicit ObAdminSwitchReplicaRole(const ObSystemAdminCtx &ctx) : ObSystemAdminUtil(ctx) {}
-  virtual ~ObAdminSwitchReplicaRole() {}
-
-  int execute(const obrpc::ObAdminSwitchReplicaRoleArg &arg);
-
-private:
-  static const int64_t TENANT_BUCKET_NUM = 1000;
-
-  static int alloc_tenant_id_set(common::hash::ObHashSet<uint64_t> &tenant_id_set);
-  template<typename T>
-  static int convert_set_to_array(const common::hash::ObHashSet<T> &set,
-      ObArray<T> &array);
-  int get_tenants_of_zone(const common::ObZone &zone,
-      common::hash::ObHashSet<uint64_t> &tenant_id_set);
-  int get_switch_replica_tenants(const common::ObZone &zone, const common::ObAddr &server,
-      const uint64_t &tenant_id, common::ObArray<uint64_t> &tenant_ids);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObAdminSwitchReplicaRole);
-};
-
 class ObAdminCallServer : public ObSystemAdminUtil
 {
 public:

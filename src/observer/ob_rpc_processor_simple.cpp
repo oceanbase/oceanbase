@@ -45,6 +45,7 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"  // ObAdminDRTaskUtil
+#include "rootserver/ob_admin_switch_replica_role.h" // ObAdminSwitchReplicaRole
 #include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/ob_disaster_recovery_service.h" // for ObDRService
 #include "rootserver/ob_split_partition_helper.h"
@@ -58,7 +59,6 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
-#include "rootserver/ob_admin_drtask_util.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
@@ -352,6 +352,21 @@ int ObAdminDRTaskP::process()
     LOG_WARN("fail to handle ob admin command", KR(ret), K_(arg));
   }
   LOG_INFO("finish handle ls replica task triggered by ob_admin", K_(arg));
+  return ret;
+}
+
+int ObAdminSwitchReplicaRoleP::process()
+{
+  int ret = OB_SUCCESS;
+  ObCurTraceId::init(GCONF.self_addr_);
+  LOG_INFO("start to handle switch replica role command triggered by ob_admin", K_(arg));
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else if (OB_FAIL(rootserver::ObAdminSwitchReplicaRole::handle_switch_replica_role_obadmin_command(arg_))) {
+    LOG_WARN("fail to handle switch replica role command", KR(ret), K_(arg));
+  }
+  LOG_INFO("finish handle switch replica role command triggered by ob_admin", KR(ret), K_(arg));
   return ret;
 }
 

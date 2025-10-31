@@ -5361,6 +5361,25 @@ private:
   ObAdminDRTaskType task_type_;
 };
 
+struct ObAdminSwitchReplicaRoleStr
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminSwitchReplicaRoleStr()
+    : admin_command_() {}
+  ~ObAdminSwitchReplicaRoleStr() {}
+public:
+  int assign(const ObAdminSwitchReplicaRoleStr &other);
+  int init(const ObString &admin_command);
+  bool is_valid() const { return !admin_command_.is_empty(); }
+  void reset() { admin_command_.reset(); }
+  const ObString get_admin_command_str() const { return admin_command_.str(); }
+  TO_STRING_KV(K(admin_command_));
+private:
+  common::ObFixedLengthString<OB_MAX_ADMIN_COMMAND_LENGTH + 1> admin_command_;
+};
+
 #ifdef OB_BUILD_ARBITRATION
 // send to leader to add A-replica for log stream
 struct ObAddArbArg
@@ -6689,6 +6708,7 @@ public:
   ~ObAdminSwitchReplicaRoleArg() {}
 
   bool is_valid() const;
+  void reset();
   TO_STRING_KV(K_(role), K_(ls_id), K_(server), K_(zone), K_(tenant_name));
 
   common::ObRole role_;

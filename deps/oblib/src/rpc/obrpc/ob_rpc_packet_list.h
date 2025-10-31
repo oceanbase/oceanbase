@@ -1378,6 +1378,8 @@ PCODE_DEF(OB_COLLECT_CN_TX_RECYCLE_SCN, 0x167A)
 // for tablet physical row count
 PCODE_DEF(OB_FETCH_TABLET_PHYSICAL_ROW_CNT, 0x1681)
 
+PCODE_DEF(OB_EXEC_SWITCH_REPLICA_ROLE, 0x1682)
+
 //**** 注意：在此行之前增加新的RPC ID ******
 //
 //占位须知：
