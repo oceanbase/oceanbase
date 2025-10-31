@@ -440,7 +440,6 @@ int ObHbaseColumnFamilyService::del(const ObHbaseQuery &hbase_query, ObTableExec
   ObHbaseAdapterGuard adapter_guard(exec_ctx.get_allocator());
   ObTableQueryIterableResult wide_row;
   wide_row.set_need_append_family(false);
-  const_cast<ObHbaseQuery &>(hbase_query).set_qualifier_with_family(false);
   ObNewRow cell;
   ObIHbaseAdapter *adapter = nullptr;
   const ObTableQuery table_query = hbase_query.get_query();
@@ -472,8 +471,15 @@ int ObHbaseColumnFamilyService::del(const ObHbaseQuery &hbase_query, ObTableExec
       if (OB_UNLIKELY(timestamp <= 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid timestamp", K(ret), K(timestamp));
+      } else if (OB_FALSE_IT(cell.get_cell(ObHTableConstants::COL_IDX_T).set_int(-timestamp))) {
+        // do nothing
       } else {
-        cell.get_cell(ObHTableConstants::COL_IDX_T).set_int(-timestamp);
+        // process Q
+        ObString qualifier = cell.get_cell(ObHTableConstants::COL_IDX_Q).get_string(); // qualifier format: cf\0qualifier
+        if (OB_NOT_NULL(qualifier.find('\0'))) {
+          ObString original_qualifier = qualifier.after('\0');
+          cell.get_cell(ObHTableConstants::COL_IDX_Q).set_varbinary(original_qualifier);
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(delete_cell(hbase_query, exec_ctx, cell, *adapter))) {

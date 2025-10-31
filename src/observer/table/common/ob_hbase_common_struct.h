@@ -110,7 +110,6 @@ public:
   OB_INLINE ObTableQuery &get_query() { return query_; }
   OB_INLINE const ObTableQuery &get_query() const { return query_; }
   OB_INLINE bool get_qualifier_with_family() const { return qualifier_with_family_; }
-  OB_INLINE void set_qualifier_with_family(bool qualifier_with_family) { qualifier_with_family_ = qualifier_with_family; }
 
   OB_INLINE void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   OB_INLINE void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
