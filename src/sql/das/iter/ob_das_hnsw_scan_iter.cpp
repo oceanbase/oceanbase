@@ -592,6 +592,28 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row, int64_t size)
   return ret;
 }
 
+// cannot run post filter when parallel with block granule
+bool ObDASHNSWScanIter::check_need_force_switch_run_path()
+{
+  return can_retry_ && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER) && is_parallel_with_block_granule();
+}
+
+bool ObDASHNSWScanIter::is_parallel_with_block_granule()
+{
+  int64_t expected_worker_cnt = 0;
+  bool is_block_granule_type = false;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  if (OB_NOT_NULL(exec_ctx_)) {
+    task_exec_ctx = exec_ctx_->get_task_executor_ctx();
+    is_block_granule_type = exec_ctx_->is_block_granule_type();
+    if (OB_NOT_NULL(task_exec_ctx)) {
+      expected_worker_cnt = task_exec_ctx->get_expected_worker_cnt();
+    }
+  }
+  LOG_DEBUG("print worker cnt and granule type", K(expected_worker_cnt), K(is_block_granule_type));
+  return expected_worker_cnt > 1 && is_block_granule_type;
+}
+
 int ObDASHNSWScanIter::check_iter_filter_need_retry()
 {
   int ret = OB_SUCCESS;
@@ -608,6 +630,7 @@ int ObDASHNSWScanIter::check_iter_filter_need_retry()
             OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY : OB_SUCCESS;
     }
   }
+
   LOG_TRACE("switch path check iter filter need retry:", K(ret), K(adaptive_ctx_), K(iter_selectivity), K(output_row_cnt));
   return ret;
 }
@@ -617,6 +640,8 @@ int ObDASHNSWScanIter::check_pre_filter_need_retry()
   int ret = OB_SUCCESS;
   double pre_selectivity = double(adaptive_ctx_.pre_scan_row_cnt_) / double(adaptive_ctx_.row_count_);
   if (adaptive_ctx_.pre_scan_row_cnt_ <= MAX_HNSW_BRUTE_FORCE_SIZE) {
+    /*do nothing*/
+  } else if (is_parallel_with_block_granule()) {
     /*do nothing*/
   } else if (!adaptive_ctx_.is_primary_index_ && pre_selectivity > ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
     ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
@@ -706,7 +731,11 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
 {
   int ret = OB_SUCCESS;
   can_retry_ = check_if_can_retry();
-  if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
+  bool need_force_switch_path = check_need_force_switch_run_path();
+  if (need_force_switch_path) {
+    ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
+  }
+  if (need_force_switch_path || OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
     if (ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY && can_retry_) {
       ret = OB_SUCCESS;
       if (OB_FAIL(reset_filter_path())) {

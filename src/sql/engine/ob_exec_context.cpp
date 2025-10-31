@@ -211,7 +211,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     auto_dop_map_(),
     force_local_plan_(false),
     diagnosis_manager_(),
-    deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+    deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    current_granule_type_(OB_GRANULE_UNINITIALIZED)
 {
 }
 
