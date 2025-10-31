@@ -1292,6 +1292,8 @@ int ObMVPrinter::get_mv_rowkey_column_ids(ObIArray<uint64_t> &rowkey_column_ids)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard *schema_guard = NULL;
+  ObSEArray<uint64_t, 4> part_column_ids;
+  ObSEArray<uint64_t, 4> subpart_column_ids;
   bool has_pk = false;
   if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())
       || OB_ISNULL(schema_guard = ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_schema_guard())) {
@@ -1309,11 +1311,14 @@ int ObMVPrinter::get_mv_rowkey_column_ids(ObIArray<uint64_t> &rowkey_column_ids)
   } else if (OB_FAIL(rowkey_column_ids.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
     LOG_WARN("failed to push back hidden pk column ids", K(ret));
   } else if (mv_container_schema_.get_partition_key_info().is_valid() &&
-             OB_FAIL(mv_container_schema_.get_partition_key_info().get_column_ids(rowkey_column_ids))) {
-    LOG_WARN("failed to add part column ids", K(ret));
+             OB_FAIL(mv_container_schema_.get_partition_key_info().get_column_ids(part_column_ids))) {
+    LOG_WARN("failed to get part column ids", K(ret));
   } else if (mv_container_schema_.get_subpartition_key_info().is_valid() &&
-             OB_FAIL(mv_container_schema_.get_subpartition_key_info().get_column_ids(rowkey_column_ids))) {
-    LOG_WARN("failed to add subpart column ids", K(ret));
+             OB_FAIL(mv_container_schema_.get_subpartition_key_info().get_column_ids(subpart_column_ids))) {
+    LOG_WARN("failed to get subpart column ids", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(rowkey_column_ids, part_column_ids)) ||
+             OB_FAIL(append_array_no_dup(rowkey_column_ids, subpart_column_ids))) {
+    LOG_WARN("failed to append part and subpart column ids", K(ret));
   }
   return ret;
 }
