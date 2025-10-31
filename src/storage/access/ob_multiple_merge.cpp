@@ -1300,11 +1300,6 @@ bool ObMultipleMerge::is_fuse_row_cache_force_disable() const
   return OB_INVALID_ARGUMENT == EN_FUSE_ROW_CACHE_FORCE_CONTROL;
 }
 
-bool ObMultipleMerge::is_fuse_row_cache_force_enable() const
-{
-  return OB_ERR_UNEXPECTED == EN_FUSE_ROW_CACHE_FORCE_CONTROL;
-}
-
 int ObMultipleMerge::open()
 {
   int ret = OB_SUCCESS;

@@ -180,16 +180,16 @@ int ObMultipleGetMerge::construct_iters()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tables_.count() == 0)) {
   } else {
-    // firstly construct iterators for all memtables
-    // then iterate OB_MULTI_GET_OPEN_ROWKEY_NUM rowkeys in memtables at most
-    // finally construct iterators for all sstables
-    // and prefetch OB_MULTI_GET_OPEN_ROWKEY_NUM rowkeys in sstables at most
     if (is_read_memtable_only()) {
       access_ctx_->use_fuse_row_cache_ = false;
       if (OB_FAIL(construct_specified_iters(is_memtable))) {
         STORAGE_LOG(WARN, "fail to construct iterators from all memtables only", K(ret));
       }
     } else {
+      // firstly construct iterators for all memtables
+      // then iterate OB_MULTI_GET_OPEN_ROWKEY_NUM rowkeys in memtables at most
+      // finally construct iterators for all sstables
+      // and prefetch OB_MULTI_GET_OPEN_ROWKEY_NUM rowkeys in sstables at most
       if (OB_FAIL(init_resource())) {
         STORAGE_LOG(WARN, "fail to init resource", K(ret));
       } else if (OB_FAIL(construct_specified_iters(is_memtable))) {
@@ -254,11 +254,9 @@ int ObMultipleGetMerge::init_resource()
                                     OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
                                     !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                     !tablet_meta.has_transfer_table() &&
-                                    (rowkeys_->count() <= MAX(MAX_ROW_CNT_IN_CACHE, access_ctx_->get_fuse_row_cache_put_count_threshold()) ||
-                                      is_fuse_row_cache_force_enable()) &&
                                     !is_fuse_row_cache_force_disable();
   access_ctx_->query_flag_.set_not_use_row_cache();
-  STORAGE_LOG(DEBUG, "multiple get merge start", K(rowkeys_), K(tables_.count()), K(iters_.count()), K(access_ctx_->use_fuse_row_cache_),
+  STORAGE_LOG(DEBUG, "multiple get merge start", K(rowkeys_->count()), K(tables_.count()), K(iters_.count()), K(access_ctx_->use_fuse_row_cache_),
               K(access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_)),
               K(tablet_meta.snapshot_version_), K(access_ctx_->get_fuse_row_cache_put_count_threshold()));
 
@@ -504,8 +502,10 @@ int ObMultipleGetMerge::check_final_row(ObDatumRow &fuse_row, bool &is_valid_row
         && access_ctx_->query_flag_.is_lookup_for_4377()) {
       ret = handle_4377("[index lookup]ObMultipleGetMerge::inner_get_next_row");
       STORAGE_LOG(WARN,"[index lookup] row not found", K(ret),
+                  K(access_ctx_->use_fuse_row_cache_),
                   KPC(rowkeys_),
                   K(get_row_range_idx_),
+                  K(rowkeys_->count()),
                   K(rowkeys_->at(get_row_range_idx_)),
                   K(fuse_row));
     }

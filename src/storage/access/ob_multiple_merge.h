@@ -62,7 +62,6 @@ public:
   virtual int open(ObTableScanRange &table_scan_range) { return OB_NOT_SUPPORTED; }
 
   bool is_fuse_row_cache_force_disable() const;
-  bool is_fuse_row_cache_force_enable() const;
   void disable_padding() { need_padding_ = false; }
   void disable_fill_default() { need_fill_default_ = false; }
   void disable_fill_virtual_column() { need_fill_virtual_columns_ = false; }
