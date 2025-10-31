@@ -3026,8 +3026,7 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   }
   if (OB_SUCC(ret) && prune_all && !input_ranges.empty()) {
     if (MY_CTDEF.enable_new_false_range_) {
-      scan_ranges.reuse();
-      ss_ranges.reuse();
+      // do nothing
     } else {
       ObNewRange false_range;
       ObNewRange whole_range;
