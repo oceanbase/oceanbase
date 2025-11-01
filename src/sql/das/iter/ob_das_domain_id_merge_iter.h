@@ -19,6 +19,7 @@
 #include "share/ob_ls_id.h"
 #include "storage/access/ob_dml_param.h"
 #include "share/domain_id/ob_domain_id.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -153,6 +154,16 @@ protected:
       common::ObIArray<common::ObRowkey> &rowkeys,
       common::ObIArray<share::ObDomainIdUtils::DomainIds> &domain_ids);
   int get_domain_id_count(const ObDASScanCtDef *ctdef, int64_t &domain_id_count);
+  int multi_get_row();
+  int multi_get_rows(int64_t &count, int64_t capacity);
+  int check_is_emb_vec_domain(int64_t iter_idx, bool &is_emb_vec);
+  int check_is_emb_vec_domain_by_table_id(int64_t table_id, bool &is_emb_vec);
+  int check_use_rowkey_vid_tbl_by_table_id(int64_t table_id, bool &use_rowkey_vid_tbl);
+  int reset_rowkey_domain_iter_scan_range(int64_t iter_idx, const common::ObRowkey &data_table_rowkey);
+  int fill_null_domain_id_in_data_table(const ObDASScanCtDef *ctdef,
+                                       ObDASScanRtDef *rtdef,
+                                       common::ObIAllocator &allocator);
+  int get_sync_interval_type(int64_t table_id, ObVectorIndexSyncIntervalType &sync_interval_type);
 private:
   bool need_filter_rowkey_domain_;
   bool is_no_sample_;
@@ -166,6 +177,7 @@ private:
   ObArray<ObTabletID> rowkey_domain_tablet_ids_;
   share::ObLSID rowkey_domain_ls_id_;
   lib::MemoryContext merge_memctx_;
+  bool is_need_multi_get_;
 };
 
 } // end namespace sql

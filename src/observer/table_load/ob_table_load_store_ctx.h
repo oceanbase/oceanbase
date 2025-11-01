@@ -12,8 +12,8 @@
 
 #pragma once
 
-#include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_link_hashmap.h"
+#include "observer/table_load/dag/ob_table_load_dag_exec_ctx.h"
 #include "observer/table_load/ob_table_load_object_allocator.h"
 #include "share/ob_autoincrement_param.h"
 #include "share/table/ob_table_load_array.h"
@@ -48,13 +48,13 @@ class ObTableLoadTransStore;
 class ObITableLoadTaskScheduler;
 class ObTableLoadMerger;
 class ObTableLoadErrorRowHandler;
-class ObTableLoadSchema;
 class ObTableLoadStoreDataTableCtx;
 class ObTableLoadStoreIndexTableCtx;
 class ObTableLoadMergerManager;
 class ObTableLoadOpenInsertTableCtxManager;
 class ObTableLoadPreSorter;
 class ObTableLoadMergeRootOp;
+class ObTableLoadDagWriteChannel;
 
 struct ObTableLoadStoreWriteCtx
 {
@@ -62,7 +62,6 @@ public:
   ObTableLoadStoreWriteCtx()
     : table_data_desc_(),
       dml_row_handler_(nullptr),
-      schema_(nullptr),
       is_fast_heap_table_(false),
       is_multiple_mode_(false),
       is_single_part_(false),
@@ -73,13 +72,14 @@ public:
       px_column_project_idxs_(),
       single_tablet_id_(),
       single_tablet_id_vector_(nullptr),
-      tablet_idx_map_()
+      tablet_idx_map_(),
+      write_channel_(nullptr),
+      is_inited_(false)
   {
   }
   TO_STRING_KV(K_(table_data_desc),
                K_(trans_param),
                KP_(dml_row_handler),
-               KP_(schema),
                K_(is_fast_heap_table),
                K_(is_multiple_mode),
                K_(is_single_part),
@@ -89,13 +89,14 @@ public:
                K_(px_column_descs),
                K_(px_column_project_idxs),
                K_(single_tablet_id),
-               KP_(single_tablet_id_vector));
+               KP_(single_tablet_id_vector),
+               KP_(write_channel),
+               K_(is_inited));
 public:
   typedef hash::ObHashMap<uint64_t, int64_t, hash::NoPthreadDefendMode> TabletIdxMap;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   storage::ObDirectLoadTransParam trans_param_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
-  ObTableLoadSchema *schema_;
   bool is_fast_heap_table_;
   bool is_multiple_mode_;
   bool is_single_part_; // for px mode
@@ -104,11 +105,15 @@ public:
   int64_t px_writer_cnt_;
   // px写入的列(包含隐藏主键列)
   ObArray<share::schema::ObColDesc> px_column_descs_;
+  ObArray<common::ObAccuracy> px_column_accuracys_;
   // px写入的列到写入旁路导入列的映射
   ObArray<int64_t> px_column_project_idxs_;
   ObTabletID single_tablet_id_;
   ObIVector *single_tablet_id_vector_;
   TabletIdxMap tablet_idx_map_;
+  // for dag
+  ObTableLoadDagWriteChannel *write_channel_;
+  bool is_inited_;
 };
 
 class ObTableLoadStoreCtx
@@ -172,6 +177,11 @@ public:
   int set_status_error(int error_code);
   int set_status_abort(int error_code);
   int check_status(table::ObTableLoadStatusType status) const;
+  OB_INLINE bool is_status_merging()
+  {
+    obsys::ObRLockGuard guard(status_lock_);
+    return table::ObTableLoadStatusType::MERGING == status_;
+  }
   void heart_beat();
   bool check_heart_beat_expired(const uint64_t expired_time_us);
 private:
@@ -193,6 +203,9 @@ public:
     common::ObIArray<ObTableLoadTransStore *> &trans_store_array) const;
   int check_exist_trans(bool &exist) const;
   int init_write_ctx();
+  int init_write_ctx_for_dag();
+  int init_dag();
+  int get_table_store_for_store_write(ObDirectLoadTableStore &table_store);
   int start_merge();
   int handle_pre_sort_success();
   int init_trans_param(storage::ObDirectLoadTransParam &trans_param);
@@ -217,6 +230,7 @@ public:
   common::ObArenaAllocator allocator_;
   int64_t thread_cnt_;
   ObITableLoadTaskScheduler *task_scheduler_;
+  ObITableLoadTaskScheduler *dag_task_scheduler_;
   ObTableLoadErrorRowHandler *error_row_handler_;
   ObTableLoadStoreDataTableCtx *data_store_table_ctx_;
   ObArray<ObTableLoadStoreIndexTableCtx *> index_store_table_ctxs_;
@@ -236,6 +250,9 @@ public:
   int64_t max_mem_chunk_count_;
   int64_t mem_chunk_size_; // 在资源控制模式下, 动态获取
   int64_t heap_table_mem_chunk_size_; // 在资源控制模式下, 动态获取
+  // dag
+  ObTableLoadDagExecCtx dag_exec_ctx_;
+  bool enable_dag_;
   // write
   ObTableLoadStoreWriteCtx write_ctx_;
   // merge

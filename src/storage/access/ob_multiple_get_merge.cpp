@@ -151,27 +151,20 @@ int ObMultipleGetMerge::calc_scan_range()
       rowkeys_->reuse();
       range_idx_delta_ += curr_scan_index_ + 1;
       for (int64_t i = l; i < r && OB_SUCC(ret); ++i) {
-        tmp_rowkeys.at(i).is_skip_prefetch_ = false;
-        if (OB_FAIL(rowkeys_->push_back(tmp_rowkeys.at(i)))) {
-          STORAGE_LOG(WARN, "push back rowkey failed", K(ret));
+        if (OB_UNLIKELY(!tmp_rowkeys.at(i).is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "invalid rowkey", K(ret), K(i), K(tmp_rowkeys));
+        } else {
+          tmp_rowkeys.at(i).is_skip_prefetch_ = false;
+          if (OB_FAIL(rowkeys_->push_back(tmp_rowkeys.at(i)))) {
+            STORAGE_LOG(WARN, "push back rowkey failed", K(ret));
+          }
         }
       }
       STORAGE_LOG(DEBUG, "skip rowkeys", KPC(rowkeys_), K(range_idx_delta_));
     }
   }
 
-  return ret;
-}
-
-int ObMultipleGetMerge::is_range_valid() const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(rowkeys_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "rowkeys is null", K(ret));
-  } else if (0 == rowkeys_->count()) {
-    ret = OB_ITER_END;
-  }
   return ret;
 }
 
@@ -254,6 +247,7 @@ int ObMultipleGetMerge::init_resource()
                                     OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
                                     !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                     !tablet_meta.has_transfer_table() &&
+                                    !(access_ctx_->is_inc_major_query_ && table->is_column_store_sstable()) && // inc major query with co sstables does not use fuse row cache
                                     !is_fuse_row_cache_force_disable();
   access_ctx_->query_flag_.set_not_use_row_cache();
   STORAGE_LOG(DEBUG, "multiple get merge start", K(rowkeys_->count()), K(tables_.count()), K(iters_.count()), K(access_ctx_->use_fuse_row_cache_),
@@ -305,30 +299,34 @@ int ObMultipleGetMerge::construct_specified_iters(const CHECK_TABLE_TYPE check_t
   const int64_t iter_cnt = iters_.count();
   int64_t iter_idx = 0;
 
-  for (int64_t i = tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i, ++iter_idx) {
-    ObITable *table = nullptr;
-    if (OB_FAIL(tables_.at(i, table))) {
-      STORAGE_LOG(WARN, "fail to get table", K(ret));
-    } else if (check_table_type(table)) {
-      if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "fail to get iter param", K(ret), K(i), K(*table));
-      } else if (iter_idx >= iter_cnt) {
-        if (OB_FAIL(table->multi_get(*iter_param, *access_ctx_, *rowkeys_, iter))) {
-          STORAGE_LOG(WARN, "fail to multi get", K(ret));
-        } else if (OB_FAIL(iters_.push_back(iter))) {
-          iter->~ObStoreRowIterator();
-          iter = nullptr;
-          STORAGE_LOG(WARN, "fail to push back iter", K(ret));
+  if (OB_UNLIKELY(0 == rowkeys_->count())) {
+    ret = OB_ITER_END;
+  } else {
+    for (int64_t i = tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i, ++iter_idx) {
+      ObITable *table = nullptr;
+      if (OB_FAIL(tables_.at(i, table))) {
+        STORAGE_LOG(WARN, "fail to get table", K(ret));
+      } else if (check_table_type(table)) {
+        if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "fail to get iter param", K(ret), K(i), K(*table));
+        } else if (iter_idx >= iter_cnt) {
+          if (OB_FAIL(table->multi_get(*iter_param, *access_ctx_, *rowkeys_, iter))) {
+            STORAGE_LOG(WARN, "fail to multi get", K(ret));
+          } else if (OB_FAIL(iters_.push_back(iter))) {
+            iter->~ObStoreRowIterator();
+            iter = nullptr;
+            STORAGE_LOG(WARN, "fail to push back iter", K(ret));
+          }
+        } else if (OB_FAIL(iters_.at(iter_idx)->init(*iter_param, *access_ctx_, table, rowkeys_))) {
+          STORAGE_LOG(WARN, "fail to init iterator", K(ret));
         }
-      } else if (OB_FAIL(iters_.at(iter_idx)->init(*iter_param, *access_ctx_, table, rowkeys_))) {
-        STORAGE_LOG(WARN, "fail to init iterator", K(ret));
+      } else if (is_sstable(table)) {
+        break;
       }
-    } else if (is_sstable(table)) {
-      break;
     }
+    STORAGE_LOG(DEBUG, "construct iterators success", K(ret), K(iter_cnt), K(iters_.count()));
   }
-  STORAGE_LOG(DEBUG, "construct iterators success", K(ret), K(iter_cnt), K(iters_.count()));
   return ret;
 }
 

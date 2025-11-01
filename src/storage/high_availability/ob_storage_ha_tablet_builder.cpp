@@ -887,6 +887,7 @@ int ObStorageHATabletsBuilder::build_copy_tablet_sstable_info_arg_(
     const ObSSTableArray &major_sstable_array = table_store_wrapper.get_member()->get_major_sstables();
     const ObSSTableArray &minor_sstable_array = table_store_wrapper.get_member()->get_minor_sstables();
     const ObSSTableArray &ddl_sstable_array = table_store_wrapper.get_member()->get_ddl_sstables();
+    const ObSSTableArray &inc_major_ddl_sstable_array = table_store_wrapper.get_member()->get_inc_major_ddl_sstables();
 
     //major
     if (OB_SUCC(ret)) {
@@ -906,7 +907,10 @@ int ObStorageHATabletsBuilder::build_copy_tablet_sstable_info_arg_(
     if (OB_SUCC(ret)) {
       //TODO(muwei.ym) now do not reuse ddl sstable, will reuse it in 4.3
       if (OB_FAIL(get_need_copy_ddl_sstable_range_(tablet, ddl_sstable_array, arg.ddl_sstable_scn_range_))) {
-        LOG_WARN("failed to get need copy ddl sstable range", K(ret));
+        LOG_WARN("failed to get need copy ddl sstable range", K(ret), K(ddl_sstable_array));
+      } else if (OB_FAIL(get_need_copy_inc_major_ddl_sstable_end_scn_(
+          tablet, inc_major_ddl_sstable_array, arg.inc_major_ddl_sstable_end_scn_))) {
+        LOG_WARN("failed to get need copy inc major ddl sstable end scn", K(ret), K(inc_major_ddl_sstable_array));
       }
     }
 
@@ -1066,6 +1070,36 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
   return ret;
 }
 
+int ObStorageHATabletsBuilder::get_need_copy_inc_major_ddl_sstable_end_scn_(
+    const ObTablet *tablet,
+    const ObSSTableArray &ddl_sstable_array,
+    share::SCN &need_copy_end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tablet)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be null", K(ret));
+  } else {
+    const SCN ddl_checkpoint_scn = tablet->get_tablet_meta().ddl_checkpoint_scn_;
+    if (!ddl_sstable_array.empty()) {
+      if (OB_FAIL(get_ddl_sstable_min_start_scn_(ddl_sstable_array, need_copy_end_scn))) {
+        LOG_WARN("failed to get ddl sstable min start scn", K(ret));
+      }
+    } else {
+      need_copy_end_scn = ddl_checkpoint_scn;
+    }
+#ifdef ERRSIM
+    LOG_INFO("get_need_copy_inc_major_ddl_sstable_end_scn", K(ddl_sstable_array), K(ddl_checkpoint_scn), K(common::lbt()));
+    SERVER_EVENT_SYNC_ADD("storage_ha", "get_need_copy_inc_major_ddl_sstable_end_scn",
+                          "tablet_id", tablet->get_tablet_meta().tablet_id_,
+                          "dest_ddl_sstable_count", ddl_sstable_array.count(),
+                          "start_scn", SCN::min_scn(),
+                          "end_scn", need_copy_end_scn);
+#endif
+  }
+  return ret;
+}
+
 int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_scn_(
     const ObSSTableArray &ddl_sstable_array,
     SCN &max_start_scn)
@@ -1089,7 +1123,7 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_scn_(
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable should not be NULL", K(ret), KP(table), K(param_));
-      } else if (!table->is_ddl_dump_sstable()) {
+      } else if (!table->is_ddl_dump_sstable() && !table->is_inc_major_ddl_dump_sstable()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable type is unexpected", K(ret), KP(table), K(param_));
       } else {
@@ -2630,10 +2664,10 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                             &major_sstables_param.storage_schema_,
                             ls->get_rebuild_seq(),
                             static_cast<const blocksstable::ObSSTable *>(table),
-                            true/*allow_duplicate_sstable*/);
+                            true/*allow_duplicate_sstable*/,
+                            false/*need_wait_check_flag*/);
     if (OB_FAIL(param.init_with_ha_info(
             ObHATableStoreParam(transfer_seq,
-                                true /*need_check_sstable*/,
                                 true /*need_check_transfer_seq*/,
                                 batch_extra_param.need_replace_remote_sstable_,
                                 batch_extra_param.is_only_replace_major_)))) {
@@ -2730,8 +2764,18 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
       LOG_WARN("failed to append ddl tables handle", K(ret), K(param));
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_tablet_(param.tablet_id_, param.ls_, tablet_handle))) {
+    // inc major type tables maybe [inc sst1, inc co2, inc cg2_1, inc cg2_2, inc sst3, inc co4, inc cg4_1, ...]
+    if (OB_FAIL(ret) || param.inc_major_ddl_tables_.empty()) {
+    } else if (OB_FAIL(assemble_and_append_hybrid_store_tables_(param.inc_major_ddl_tables_, sstables))) {
+      LOG_WARN("failed to deal with inc major ddl tables", K(ret), K(param));
+    }
+
+    if (OB_FAIL(ret) || param.inc_major_tables_.empty()) {
+    } else if (OB_FAIL(assemble_and_append_hybrid_store_tables_(param.inc_major_tables_, sstables))) {
+      LOG_WARN("failed to deal with inc major tables", K(ret), K(param));
+    }
+
+    if (FAILEDx(get_tablet_(param.tablet_id_, param.ls_, tablet_handle))) {
       LOG_WARN("failed to get tablet", K(ret), K(param));
     } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
     } else if (OB_FAIL(inner_update_tablet_table_store_with_minor_(param, tablet, need_tablet_meta_merge,
@@ -2741,6 +2785,49 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
   }
   return ret;
 }
+
+int ObStorageHATabletBuilderUtil::assemble_and_append_hybrid_store_tables_(
+    const ObTablesHandleArray &hybrid_tables,
+    ObTablesHandleArray &sstables)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = 0;
+  ObTableHandleV2 table_hdl;
+
+  while (OB_SUCC(ret) && idx < hybrid_tables.get_count()) {
+    table_hdl.reset();
+    if (OB_FAIL(hybrid_tables.get_table(idx, table_hdl))) {
+      LOG_WARN("failed to get table", K(ret), K(idx), K(hybrid_tables));
+    } else if (!table_hdl.get_table()->is_column_store_sstable()) { // row store sstable
+      if (FAILEDx(sstables.add_table(table_hdl))) {
+        LOG_WARN("failed to add table", K(ret), K(table_hdl));
+      } else {
+        ++idx;
+      }
+    } else { // column store sstable
+      ObTablesHandleArray column_store_tables;
+      ObTablesHandleArray co_tables;
+      for ( ; OB_SUCC(ret) && idx < hybrid_tables.get_count(); ++idx) {
+        table_hdl.reset();
+        if (OB_FAIL(hybrid_tables.get_table(idx, table_hdl))) {
+          LOG_WARN("failed to get table", K(ret), K(idx), K(hybrid_tables));
+        } else if (!table_hdl.get_table()->is_column_store_sstable()) {
+          break;
+        } else if (OB_FAIL(column_store_tables.add_table(table_hdl))) {
+          LOG_WARN("failed to add table", K(ret), K(table_hdl));
+        }
+      }
+
+      if (FAILEDx(assemble_column_oriented_sstable_(column_store_tables, co_tables))) {
+        LOG_WARN("failed to assemble column oriented sstable", K(ret), K(column_store_tables));
+      } else if (OB_FAIL(append_sstable_array_(sstables, co_tables))) {
+        LOG_WARN("failed to append column oriented sstable", K(ret), K(co_tables));
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
     const BatchBuildMinorSSTablesParam &param,
@@ -2849,6 +2936,8 @@ ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::BatchBuildMinorSSTab
     mds_tables_(),
     minor_tables_(),
     ddl_tables_(),
+    inc_major_ddl_tables_(),
+    inc_major_tables_(),
     restore_action_(ObTabletRestoreAction::MAX),
     release_mds_scn_()
 {
@@ -2872,6 +2961,8 @@ void ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::reset()
   mds_tables_.reset();
   minor_tables_.reset();
   ddl_tables_.reset();
+  inc_major_ddl_tables_.reset();
+  inc_major_tables_.reset();
   restore_action_ = ObTabletRestoreAction::MAX;
   release_mds_scn_.reset();
 }
@@ -2879,7 +2970,9 @@ void ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::reset()
 int ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::assign_sstables(
     ObTablesHandleArray &mds_tables,
     ObTablesHandleArray &minor_tables,
-    ObTablesHandleArray &ddl_tables)
+    ObTablesHandleArray &ddl_tables,
+    ObTablesHandleArray &inc_major_tables,
+    ObTablesHandleArray &inc_major_ddl_tables)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(mds_tables_.assign(mds_tables))) {
@@ -2888,6 +2981,10 @@ int ObStorageHATabletBuilderUtil::BatchBuildMinorSSTablesParam::assign_sstables(
     LOG_WARN("failed to assign minor tables", K(ret), K(minor_tables));
   } else if (OB_FAIL(ddl_tables_.assign(ddl_tables))) {
     LOG_WARN("failed to assign ddl tables", K(ret), K(ddl_tables));
+  } else if (OB_FAIL(inc_major_ddl_tables_.assign(inc_major_ddl_tables))) {
+    LOG_WARN("failed to assign inc major ddl tables", K(ret), K(inc_major_ddl_tables));
+  } else if (OB_FAIL(inc_major_tables_.assign(inc_major_tables))) {
+    LOG_WARN("failed to assign inc major tables", K(ret), K(inc_major_tables));
   }
   return ret;
 }

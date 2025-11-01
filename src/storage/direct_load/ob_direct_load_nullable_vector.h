@@ -13,6 +13,7 @@
 #pragma once
 
 #include "share/vector/ob_bitmap_null_vector_base.h"
+#include "share/vector/ob_discrete_base.h"
 #include "share/vector/ob_uniform_base.h"
 #include "storage/direct_load/ob_direct_load_vector.h"
 
@@ -43,6 +44,11 @@ public:
   void sum_bytes_usage(int64_t *sum_bytes, const int64_t batch_size) const override
   {
     data_vector_.sum_bytes_usage(sum_bytes, batch_size);
+  }
+
+  int sum_lob_length(int64_t *sum_bytes, const int64_t batch_size) const override
+  {
+    return data_vector_.sum_lob_length(sum_bytes, batch_size);
   }
 
   void reuse(const int64_t batch_size) override
@@ -99,7 +105,10 @@ public:
     switch (format) {
       case VEC_FIXED:
       case VEC_CONTINUOUS:
+        _append_batch(batch_idx, static_cast<ObBitmapNullVectorBase *>(src), offset, size);
+        break;
       case VEC_DISCRETE:
+        _adapt_vector_batch(static_cast<ObDiscreteBase *>(src), offset, size);
         _append_batch(batch_idx, static_cast<ObBitmapNullVectorBase *>(src), offset, size);
         break;
       case VEC_UNIFORM:
@@ -152,7 +161,10 @@ public:
     switch (format) {
       case VEC_FIXED:
       case VEC_CONTINUOUS:
+        _append_selective(batch_idx, static_cast<ObBitmapNullVectorBase *>(src), selector, size);
+        break;
       case VEC_DISCRETE:
+        _adapt_vector_selective(static_cast<ObDiscreteBase *>(src), selector, size);
         _append_selective(batch_idx, static_cast<ObBitmapNullVectorBase *>(src), selector, size);
         break;
       case VEC_UNIFORM:
@@ -217,7 +229,10 @@ public:
     switch (format) {
       case VEC_FIXED:
       case VEC_CONTINUOUS:
+        _shallow_copy(static_cast<ObBitmapNullVectorBase *>(src), batch_size);
+        break;
       case VEC_DISCRETE:
+        _adapt_vector_batch(static_cast<ObDiscreteBase *>(src), 0 /*offset*/, batch_size);
         _shallow_copy(static_cast<ObBitmapNullVectorBase *>(src), batch_size);
         break;
       case VEC_UNIFORM:
@@ -389,6 +404,36 @@ private:
   inline void _shallow_copy<true>(const ObDatum *datums, const int64_t batch_size)
   {
     _append_batch<true>(0 /*batch_idx*/, datums, 0 /*offset*/, batch_size);
+  }
+
+  template <typename VEC>
+  inline void _adapt_vector_batch(VEC *vec, const int64_t offset, const int64_t size);
+  template <typename VEC>
+  inline void _adapt_vector_selective(VEC *vec, const uint16_t *selector, const int64_t size);
+  // ObDiscreteBase: 将null对应的len设置为0
+  template <>
+  inline void _adapt_vector_batch(ObDiscreteBase *vec, const int64_t offset, const int64_t size)
+  {
+    if (vec->has_null()) {
+      sql::ObBitVector *nulls = vec->get_nulls();
+      ObLength *lens = vec->get_lens();
+      for (int64_t i = offset; i < offset + size; ++i) {
+        lens[i] *= !nulls->at(i);
+      }
+    }
+  }
+  template <>
+  inline void _adapt_vector_selective(ObDiscreteBase *vec, const uint16_t *selector,
+                                      const int64_t size)
+  {
+    if (vec->has_null()) {
+      sql::ObBitVector *nulls = vec->get_nulls();
+      ObLength *lens = vec->get_lens();
+      for (int64_t i = 0; i < size; ++i) {
+        const int64_t idx = selector[i];
+        lens[idx] *= !nulls->at(idx);
+      }
+    }
   }
 
 private:

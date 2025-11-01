@@ -44,6 +44,12 @@ public:
     destroy();
   }
 
+  void reuse()
+  {
+    destroy();
+    map_.reuse();
+  }
+
   int add(const Key &key, const Value &value)
   {
     int ret = common::OB_SUCCESS;
@@ -108,6 +114,8 @@ public:
     }
     return ret;
   }
+
+  bool empty() const { return map_.empty(); }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectLoadMultiMapNoLock);

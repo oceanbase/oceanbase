@@ -106,6 +106,7 @@ enum ObVecIdxAdaTryPath : uint8_t
 };
 const static double VEC_ESTIMATE_MEMORY_FACTOR = 2.0;
 constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
+constexpr static int64_t MAX_DIM_LIMITED = 4096;
 constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
   "l2",
   "ip",
@@ -155,7 +156,7 @@ struct ObVectorIndexAlgorithmHeader
 };
 
 // TODO: opt struct
-struct ObVectorIndexParam
+struct ObVectorIndexParam //FARM COMPAT WHITELIST
 {
   static constexpr float DEFAULT_REFINE_K = 4.0;
   static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
@@ -306,6 +307,8 @@ static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
   }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+  inline bool is_hybrid_index() const { return strlen(vector_index_param_.endpoint_) > 0; }
+
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
@@ -441,9 +444,20 @@ public:
       ObVectorIndexType vector_index_type,
       ObVectorIndexParam &param,
       const bool set_default=true);
+  static int parse_time_string_to_seconds(const ObString &time_str, int64_t &seconds);
   static int resolve_query_param(
       const ParseNode *option_node,
       ObVectorIndexQueryParam& query_param);
+  static int get_vector_from_text_by_embedding(
+      ObIAllocator &allocator,
+      const ObString &query_text,
+      const ObString &param_str,
+      ObString &output_vec);
+  static int get_vector_from_vector_array_string(
+      ObIAllocator &allocator,
+      const ObString &vector_array_str,
+      const ObString &param_str,
+      ObString &output_vec);
   static int filter_index_param(
     const ObString &index_param_str,
     const char *to_filter,
@@ -531,6 +545,17 @@ public:
       const ObTableSchema &data_table_schema,
       uint64_t &tid,
       const bool allow_unavailable = false);
+  static int check_hybrid_embedded_vec_table_readable(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      uint64_t &tid,
+      const bool allow_unavailable = false);
+  static int check_hybrid_embedded_vec_cid_table_readable(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      const uint64_t column_id,
+      uint64_t &tid,
+      const bool allow_unavailable = false);
   static int get_right_index_tid_in_rebuild(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -550,7 +575,9 @@ public:
     const int64_t col_id,
     uint64_t &inc_tid,
     uint64_t &vbitmap_tid,
-    uint64_t &snapshot_tid);
+    uint64_t &snapshot_tid,
+    uint64_t &emdedded_tid,
+    bool is_hybrid);
   static int get_vector_index_tid_with_index_prefix(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,
@@ -564,12 +591,24 @@ public:
       const ObIndexType index_type,
       const int64_t vec_cid_col_id,
       uint64_t &tid);
+  static int get_hybrid_embedded_vector_tid_check_valid(
+      sql::ObSqlSchemaGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      const ObIndexType index_type,
+      const int64_t embedded_col_id,
+      uint64_t &tid);
+  static int check_index_table_has_hybrid_vec_column(
+      const ObTableSchema &index_table_schema,
+      bool &res);
   static int get_vector_index_tids(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
       const ObIndexType index_type,
       const int64_t col_id,
       ObIArray<IvfIndexTableInfo> &tids);
+  static int get_vec_dis_type_from_dis_algorithm(
+      ObVectorIndexDistAlgorithm dis_Algorithm,
+      int64_t &vec_dis_type);
   static int get_vector_index_param(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -665,10 +704,10 @@ public:
       const int64_t schema_count,
       int64_t &rowkey_vid_ith, int64_t &vid_rowkey_ith,
       int64_t &domain_index_ith, int64_t &index_id_ith,
-      int64_t &snapshot_data_ith, int64_t &centroid_ith,
-      int64_t &cid_vector_ith, int64_t &rowkey_cid_ith,
-      int64_t &sq_meta_ith, int64_t &pq_centroid_ith,
-      int64_t &pq_code_ith);
+      int64_t &snapshot_data_ith, int64_t &embedded_vec_ith,
+      int64_t &centroid_ith, int64_t &cid_vector_ith,
+      int64_t &rowkey_cid_ith, int64_t &sq_meta_ith,
+      int64_t &pq_centroid_ith, int64_t &pq_code_ith);
   static int get_rowkey_vid_tablets(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &data_table_schema,
@@ -800,6 +839,10 @@ public:
                                     sql::ObRawExpr *&vector_expr,
                                     const sql::ObDMLStmt *&stmt);
   static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx, bool is_ipivf=false);
+  static int check_need_embedding_when_rebuild(const ObString &old_idx_params,
+                                               const ObString &new_idx_params,
+                                               const ObTableSchema &index_table_schema,
+                                               bool &need_embedding_when_rebuild);
   static bool is_sindi_index(const ObTableSchema *vec_index_schema);
 private:
   static void save_column_schema(
@@ -811,6 +854,7 @@ private:
       common::ObIAllocator &allocator,
       const int64_t vector_dim,
       const bool is_sparse_vec,
+      const bool is_text_col,
       ObString &index_params,
       ObIndexType &out_index_type,
       const ObTableSchema &tbl_schema,
@@ -849,6 +893,11 @@ private:
   static bool check_is_match_index_type(
       const ObIndexType type1, const ObIndexType type2);
   static int is_int_val(const ObString &str, bool &is_int);
+  static int cast_vector_array_str_to_float_array_binary(
+      ObIAllocator &allocator,
+      const ObString &vector_array_str,
+      int64_t dim,
+      ObString &output_vec);
 };
 
 // For vector index snapshot write data
@@ -953,6 +1002,11 @@ struct ObVecExtraInfoObj {
   }
   int from_datum(const ObDatum &datum, const common::ObObjMeta &type, ObIAllocator *allocator = nullptr);
   int from_obj(const ObObj &obj, ObIAllocator *allocator = nullptr);
+  int from_vector(
+      const ObIVector &vector,
+      const int row_pos,
+      const common::ObObjMeta &type,
+      ObIAllocator *allocator /*nullptr*/);
   const char *ptr_;
   int32_t len_;
   common::ObObjDatumMapType obj_map_type_;

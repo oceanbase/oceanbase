@@ -123,7 +123,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
                                                                    param.insert_mode_,
                                                                    param.load_mode_,
                                                                    param.load_level_,
-                                                                   column_ids))) {
+                                                                   column_ids,
+                                                                   param.enable_inc_major_))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
       if (OB_NOT_SUPPORTED == ret
@@ -503,11 +504,13 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
     LOG_WARN("failed to get gts", KR(ret), K(tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id, ddl_param.is_no_logging_))) {
+    LOG_WARN("fail to get no logging param", KR(ret));
   } else {
     ddl_param.dest_table_id_ = table_id;
     ddl_param.task_id_ = raw_id.id();
     ddl_param.schema_version_ = table_schema->get_schema_version();
-    ddl_param.snapshot_version_ = current_scn.convert_to_ts();
+    ddl_param.snapshot_version_ = current_scn.get_val_for_tx();
     ddl_param.data_version_ = tenant_data_version;
     ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
     LOG_INFO("init ddl param for inc direct load succeed", K(ddl_param));

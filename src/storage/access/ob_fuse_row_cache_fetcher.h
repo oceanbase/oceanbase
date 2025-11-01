@@ -33,6 +33,8 @@ public:
            const int64_t read_start_version, const int64_t read_snapshot_version);
   int get_fuse_row_cache(const blocksstable::ObDatumRowkey &rowkey, blocksstable::ObFuseRowValueHandle &handle);
   int put_fuse_row_cache(const blocksstable::ObDatumRowkey &rowkey, blocksstable::ObDatumRow &row);
+  TO_STRING_KV(K(is_inited_), K(type_), K(tablet_id_), KPC(read_info_),
+               K(read_start_version_), K(read_snapshot_version_));
 private:
   bool is_inited_;
   StorageScanType type_;

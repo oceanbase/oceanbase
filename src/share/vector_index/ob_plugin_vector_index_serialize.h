@@ -116,12 +116,15 @@ class ObHNSWDeserializeCallback {
 public:
   struct CbParam : public ObIStreamBuf::CbParam {
     CbParam(ObNewRowIterator *iter, ObIAllocator *allocator)
-      : iter_(iter), allocator_(allocator), str_iter_(nullptr)
+      : iter_(iter), allocator_(allocator), str_iter_(nullptr),
+        is_vec_tablet_rebuild_(false), is_need_unvisible_row_(false)
     {}
     CbParam()
       : iter_(nullptr),
         allocator_(nullptr),
-        str_iter_(nullptr)
+        str_iter_(nullptr),
+        is_vec_tablet_rebuild_(false),
+        is_need_unvisible_row_(false)
     {}
     virtual ~CbParam() {
       if (str_iter_ != nullptr) {
@@ -140,6 +143,8 @@ public:
     ObNewRowIterator *iter_;
     ObIAllocator *allocator_;
     ObTextStringIter *str_iter_;
+    bool is_vec_tablet_rebuild_;
+    bool is_need_unvisible_row_;
   };
 public:
   ObHNSWDeserializeCallback(void *adp) : index_type_(VIAT_MAX), adp_(adp)

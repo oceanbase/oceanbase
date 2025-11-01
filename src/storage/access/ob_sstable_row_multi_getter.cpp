@@ -151,7 +151,7 @@ int ObSSTableRowMultiGetter::inner_get_next_row(const blocksstable::ObDatumRow *
       if (OB_NOT_NULL(sstable_)) {
         if (sstable_->is_minor_sstable()) {
           ++access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_;
-        } else if (sstable_->is_major_sstable()) {
+        } else if (sstable_->is_major_type_sstable()) {
           ++access_ctx_->table_store_stat_.major_sstable_read_row_cnt_;
         }
       }

@@ -26,10 +26,13 @@ public:
   void reset();
   void reuse();
   int init(const common::ObIArray<share::schema::ObColDesc> &px_col_descs,
+           const common::ObIArray<common::ObAccuracy> &px_col_accuracys,
            const common::ObIArray<int64_t> &px_column_project_idxs, // px列对应哪个store列
            const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const sql::ObBitVector *col_nullables, const ObDirectLoadRowFlag &row_flag,
-           const int64_t max_batch_size);
+           const int64_t max_batch_size,
+           // 为了老路径farm能过
+           const bool need_reshape);
 
   // 深拷贝
   int append_batch(const IVectorPtrs &vectors, const int64_t offset, const int64_t size);
@@ -61,8 +64,12 @@ public:
   TO_STRING_KV(K_(vectors), K_(batch_rows), K_(is_inited));
 
 private:
+  ObArray<ObObjMeta> col_types_;
+  ObArray<ObAccuracy> col_accuracys_;
   ObArray<storage::ObDirectLoadVector *> vectors_;
+  ObArenaAllocator reshape_allocator_;
   storage::ObDirectLoadBatchRows batch_rows_;
+  bool need_reshape_;
   bool is_inited_;
 };
 

@@ -4665,7 +4665,7 @@ TEST_F(TestMultiVersionMerge, across_multi_blocks)
 int main(int argc, char **argv)
 {
   system("rm -rf test_multi_version_sstable_merge.log*");
-  OB_LOGGER.set_file_name("test_multi_version_sstable_merge.log");
+  OB_LOGGER.set_file_name("test_multi_version_sstable_merge.log", true);
   OB_LOGGER.set_log_level("INFO");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

@@ -22,6 +22,7 @@
 #include "storage/tablet/ob_table_store_util.h"
 #include "storage/blocksstable/ob_table_flag.h"
 #include "storage/blocksstable/ob_column_checksum_struct.h"
+#include "storage/compaction/ob_uncommit_tx_info.h"
 namespace oceanbase
 {
 namespace storage
@@ -128,6 +129,7 @@ public:
   int decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos);
 
   void set_upper_trans_version(const int64_t upper_trans_version);
+  void set_filled_tx_scn(const share::SCN &filled_tx_scn);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size() const;
@@ -225,8 +227,6 @@ public:
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE int64_t get_col_checksum_cnt() const { return column_ckm_struct_.count_; }
   OB_INLINE int64_t *get_col_checksum() const { return column_ckm_struct_.column_checksums_; }
-  OB_INLINE int64_t get_tx_id_count() const { return tx_ctx_.get_count(); }
-  OB_INLINE int64_t get_tx_ids(const int64_t idx) const { return tx_ctx_.get_tx_id(idx); }
   OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
   OB_INLINE int64_t get_rowkey_column_count() const { return basic_meta_.rowkey_column_count_; }
   OB_INLINE int64_t get_column_count() const { return basic_meta_.column_cnt_; }
@@ -246,6 +246,7 @@ public:
   }
   OB_INLINE int64_t get_occupy_size() const { return basic_meta_.occupy_size_; }
   OB_INLINE int64_t get_row_count() const { return basic_meta_.row_count_; }
+  OB_INLINE const compaction::ObMetaUncommitTxInfo& get_uncommit_tx_info() const { return uncommit_tx_info_; }
   OB_INLINE int64_t get_end_row_id(const bool is_ddl_merge_empty_sstable) const { return is_ddl_merge_empty_sstable ? INT64_MAX : basic_meta_.row_count_ - 1; }
   OB_INLINE int64_t get_data_micro_block_count() const
   {
@@ -334,9 +335,6 @@ private:
   int init_data_index_tree_info(
       const storage::ObTabletCreateSSTableParam &param,
       common::ObArenaAllocator &allocator);
-  int prepare_tx_context(
-    const ObTxContext::ObTxDesc &tx_desc,
-    common::ObArenaAllocator &allocator);
   int serialize_(const uint64_t data_verion, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(
       common::ObArenaAllocator &allocator,
@@ -355,7 +353,8 @@ private:
   ObSSTableMacroInfo macro_info_;
   ObSSTableArray cg_sstables_;
   ObColumnCkmStruct column_ckm_struct_;
-  ObTxContext tx_ctx_;
+  ObTxContext tx_ctx_;  // abandon meta !!!
+  compaction::ObMetaUncommitTxInfo uncommit_tx_info_;
   // The following fields don't to persist
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);
@@ -377,6 +376,7 @@ public:
   TO_STRING_KV(K_(basic_meta),
                K(column_checksums_.count()),
                K_(column_checksums),
+               K_(uncommit_tx_info),
                K_(table_key),
                K(column_default_checksums_.count()),
                K_(column_default_checksums),
@@ -414,6 +414,7 @@ public:
   ObMetaDiskAddr data_block_macro_meta_addr_;
   char *data_block_macro_meta_buf_;
   bool is_meta_root_;
+  compaction::ObMemUncommitTxInfo uncommit_tx_info_;
   OB_UNIS_VERSION(MIGRATION_SSTABLE_PARAM_VERSION);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSSTableParam);

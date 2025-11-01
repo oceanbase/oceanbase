@@ -138,7 +138,8 @@ private:
       int64_t &vid_rowkey_ith,
       int64_t &domain_index_ith,
       int64_t &index_id_ith,
-      int64_t &snapshot_data_ith);
+      int64_t &snapshot_data_ith,
+      int64_t &embedded_vec_ith);
   int recognize_vec_ivf_index_schemas(
       const common::ObIArray<share::schema::ObTableSchema> &index_schemas,
       const bool is_vec_inner_drop,

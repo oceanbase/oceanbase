@@ -416,6 +416,11 @@ void ObSSTableBasicMeta::set_upper_trans_version(const int64_t upper_trans_versi
   }
 }
 
+void ObSSTableBasicMeta::set_filled_tx_scn(const share::SCN &filled_tx_scn)
+{
+  filled_tx_scn_ = std::max(filled_tx_scn, filled_tx_scn_);
+}
+
 //================================== ObTxDesc & ObTxContext ==================================
 int ObTxContext::ObTxDesc::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
@@ -603,6 +608,7 @@ ObSSTableMeta::ObSSTableMeta()
     cg_sstables_(),
     column_ckm_struct_(),
     tx_ctx_(),
+    uncommit_tx_info_(),
     is_inited_(false)
 {
 }
@@ -636,6 +642,7 @@ void ObSSTableMeta::reset()
   column_ckm_struct_.reset();
   cg_sstables_.reset();
   tx_ctx_.reset();
+  uncommit_tx_info_.reset();
   is_inited_ = false;
 }
 
@@ -712,20 +719,6 @@ int ObSSTableMeta::init_data_index_tree_info(
   return ret;
 }
 
-int ObSSTableMeta::prepare_tx_context(
-  const ObTxContext::ObTxDesc &tx_desc,
-  common::ObArenaAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObTxContext::ObTxDesc, 1> tx_desc_arr;
-  if (OB_FAIL(tx_desc_arr.push_back(tx_desc))) {
-    LOG_WARN("push back tx desc fail", K(ret), K(tx_desc));
-  } else if (OB_FAIL(tx_ctx_.init(tx_desc_arr, allocator))) {
-    LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(tx_desc));
-  }
-  return ret;
-}
-
 bool ObSSTableMeta::check_meta() const
 {
   return basic_meta_.is_valid()
@@ -766,9 +759,18 @@ int ObSSTableMeta::init(
     }
   }
 
-  if (OB_SUCC(ret) && transaction::ObTransID(param.uncommitted_tx_id_).is_valid()) {
-    if (OB_FAIL(prepare_tx_context(ObTxContext::ObTxDesc(param.uncommitted_tx_id_, 0), allocator))) {
-      LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(param));
+  if (OB_FAIL(ret)) {
+  } else if (param.table_key_.is_inc_major_sstable() || param.table_key_.is_inc_co_sstable()) {
+    // in phase 1, one inc major should only has one tx info. After inc major merge, the new inc major should only has one tx id, its seq no should be zero.
+    if (1 != param.uncommit_tx_info_.tx_infos_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get empty tx info for inc sstable", K(ret), K(param));
+    }
+  }
+
+  if (OB_SUCC(ret) && !param.uncommit_tx_info_.is_info_overflow()) {  //default status: info overflow, no need to init
+    if (OB_FAIL(uncommit_tx_info_.init(allocator, param.uncommit_tx_info_))) {
+      LOG_WARN("fail to init uncommit tx info", K(ret));
     }
   }
 
@@ -844,6 +846,8 @@ int ObSSTableMeta::serialize_(const uint64_t data_version, char *buf, const int6
     LOG_WARN("fail to serialize cg sstables", K(ret), K(buf_len), K(pos), K(cg_sstables_));
   } else if (OB_FAIL(tx_ctx_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize tx ids", K(ret), K(buf_len), K(pos), K(tx_ctx_));
+  } else if (OB_FAIL(uncommit_tx_info_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize uncommit tx info", K(ret), K(buf_len), K(pos), K(uncommit_tx_info_));
   }
   return ret;
 }
@@ -915,6 +919,8 @@ int ObSSTableMeta::deserialize_(
       LOG_WARN("fail to deserialize cg sstables", K(ret), K(data_len), K(pos));
     } else if (pos < data_len && OB_FAIL(tx_ctx_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("fail to deserialize tx ids", K(ret), K(data_len), K(pos));
+    } else if (pos < data_len && OB_FAIL(uncommit_tx_info_.deserialize(allocator, buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize uncommit tx infos", K(ret), K(data_len), K(pos));
     }
   }
   return ret;
@@ -939,6 +945,7 @@ int64_t ObSSTableMeta::get_serialize_size_(const uint64_t data_version) const
   len += macro_info_.get_serialize_size();
   len += cg_sstables_.get_serialize_size(data_version);
   len += tx_ctx_.get_serialize_size();
+  len += uncommit_tx_info_.get_serialize_size();
   return len;
 }
 
@@ -948,7 +955,8 @@ int64_t ObSSTableMeta::get_variable_size() const
        + data_root_info_.get_variable_size()
        + macro_info_.get_variable_size()
        + cg_sstables_.get_deep_copy_size()
-       + tx_ctx_.get_variable_size();
+       + tx_ctx_.get_variable_size()
+       + uncommit_tx_info_.get_deep_copy_size();
 }
 
 int ObSSTableMeta::deep_copy(
@@ -978,6 +986,8 @@ int ObSSTableMeta::deep_copy(
       LOG_WARN("fail to deep copy cg sstables", K(ret), KP(buf), K(buf_len), K(pos), K(cg_sstables_));
     } else if (OB_FAIL(tx_ctx_.deep_copy(buf, buf_len, pos, dest->tx_ctx_))) {
       LOG_WARN("fail to deep copy tx context", K(ret), K(tx_ctx_));
+    } else if (OB_FAIL(uncommit_tx_info_.deep_copy(buf, buf_len, pos, dest->uncommit_tx_info_))) {
+      LOG_WARN("fail to deep copy uncommit tx info", K(ret), K(uncommit_tx_info_));
     // TODO (jiahua.cjh): add defend code back
     // } else if (deep_size != pos - tmp_pos) {
     //  ret = OB_ERR_UNEXPECTED;
@@ -1012,7 +1022,7 @@ int64_t ObSSTableMeta::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(is_inited));
+    J_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(uncommit_tx_info), K_(is_inited));
     if (cg_sstables_.count() > 0) {
       J_COMMA();
       J_KV("cg_sstables", cg_sstables_);
@@ -1042,7 +1052,8 @@ ObMigrationSSTableParam::ObMigrationSSTableParam()
     root_block_buf_(nullptr),
     data_block_macro_meta_addr_(),
     data_block_macro_meta_buf_(nullptr),
-    is_meta_root_(false)
+    is_meta_root_(false),
+    uncommit_tx_info_()
 {
 }
 
@@ -1067,6 +1078,7 @@ void ObMigrationSSTableParam::reset()
   data_block_macro_meta_addr_.reset();
   data_block_macro_meta_buf_ = nullptr;
   is_meta_root_ =false;
+  uncommit_tx_info_.reset();
   allocator_.reset();
 }
 
@@ -1074,7 +1086,8 @@ bool ObMigrationSSTableParam::is_valid() const
 {
   return basic_meta_.is_valid() && table_key_.is_valid()
       && (root_block_addr_.is_memory() ? (root_block_buf_ != nullptr) : (root_block_buf_ == nullptr))
-      && (data_block_macro_meta_addr_.is_memory() ? (data_block_macro_meta_buf_ != nullptr) : (data_block_macro_meta_buf_ == nullptr));
+      && (data_block_macro_meta_addr_.is_memory() ? (data_block_macro_meta_buf_ != nullptr) : (data_block_macro_meta_buf_ == nullptr))
+      && (uncommit_tx_info_.is_valid());
 }
 
 int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
@@ -1097,6 +1110,8 @@ int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
     is_meta_root_ = param.is_meta_root_;
     if (OB_FAIL(column_checksums_.assign(param.column_checksums_))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(param));
+    } else if (OB_FAIL(uncommit_tx_info_.assign(param.uncommit_tx_info_))) {
+      LOG_WARN("fail to assign mem uncommit tx info", K(ret), K(param));
     } else if (OB_FAIL(column_default_checksums_.assign(param.column_default_checksums_))) {
       LOG_WARN("fail to assign default column checksum", K(ret), K(param));
     } else if (root_block_addr_.is_memory() && (OB_ISNULL(root_block_buf_ =
@@ -1232,6 +1247,9 @@ int ObMigrationSSTableParam::serialize_(char *buf, const int64_t buf_len, int64_
   }
 
   LST_DO_CODE(OB_UNIS_ENCODE, is_meta_root_);
+  if (FAILEDx(uncommit_tx_info_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize uncommit tx info", K(ret), KP(buf), K(buf_len), K(pos));
+  }
   return ret;
 }
 
@@ -1298,7 +1316,10 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
   }
 
   LST_DO_CODE(OB_UNIS_DECODE, is_meta_root_);
-
+  if (OB_FAIL(ret)) {
+  } else if (pos < data_len && OB_FAIL(uncommit_tx_info_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize uncommit tx info", K(ret), KP(buf), K(data_len), K(pos));
+  }
   return ret;
 }
 
@@ -1329,6 +1350,7 @@ int64_t ObMigrationSSTableParam::get_serialize_size_() const
   len += addr_get_serialize_size(data_block_macro_meta_addr_);
 
   LST_DO_CODE(OB_UNIS_ADD_LEN, is_meta_root_);
+  len += uncommit_tx_info_.get_serialize_size();
   return len;
 }
 

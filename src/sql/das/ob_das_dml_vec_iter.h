@@ -14,6 +14,8 @@
 #define OCEANBASE_DAS_DML_VEC_ITER_H
 
 #include "src/sql/das/ob_das_domain_utils.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_vector_embedding_handler.h"
 
 namespace oceanbase
 {
@@ -101,6 +103,65 @@ private:
     const ObDatum &docid,
     ObString &sparse_vec,
     ObDomainIndexRow &rows);
+};
+
+class ObHybridVecLogDMLIterator final : public ObDomainDMLIterator
+{
+public:
+  static constexpr char* VEC_DELTA_INSERT = const_cast<char*>("I");
+  static constexpr char* VEC_DELTA_DELETE = const_cast<char*>("D");
+  ObHybridVecLogDMLIterator(
+      common::ObIAllocator &allocator,
+      const IntFixedArray *row_projector,
+      ObDASWriteBuffer::Iterator &write_iter,
+      const ObDASDMLBaseCtDef *das_ctdef,
+      const ObDASDMLBaseCtDef *main_ctdef)
+    : ObDomainDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef),
+      is_old_row_(das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_UPDATE)
+  {}
+  virtual ~ObHybridVecLogDMLIterator() = default;
+  INHERIT_TO_STRING_KV("ObDomainDMLIterator", ObDomainDMLIterator, K_(is_old_row));
+protected:
+  int get_vec_id(const ObChunkDatumStore::StoredRow *store_row, const int64_t vec_id_idx, int64_t &vec_id);
+  int get_vec_data_for_update(const ObChunkDatumStore::StoredRow *store_row, const int64_t vec_id_idx, int64_t &vec_id);
+private:
+  virtual int generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row) override;
+  int generate_hybrid_vec_log_row(common::ObIAllocator &allocator,
+    const ObChunkDatumStore::StoredRow *store_row,
+    const int64_t vec_id_idx,
+    const int64_t type_idx,
+    const int64_t chunk_idx,
+    const int64_t &vec_id,
+    ObDomainIndexRow &rows);
+  int get_hybrid_vec_log_column_idxs(int64_t &vec_id_idx, int64_t &type_idx, int64_t &chunk_idx);
+  virtual int check_sync_interval(bool &is_sync_interval) const override;
+private:
+  bool is_old_row_;
+};
+
+class ObEmbeddedVecDMLIterator final : public ObDomainDMLIterator
+{
+public:
+  ObEmbeddedVecDMLIterator(
+      common::ObIAllocator &allocator,
+      const IntFixedArray *row_projector,
+      ObDASWriteBuffer::Iterator &write_iter,
+      const ObDASDMLBaseCtDef *das_ctdef,
+      const ObDASDMLBaseCtDef *main_ctdef)
+    : ObDomainDMLIterator(allocator, row_projector, write_iter, das_ctdef, main_ctdef),
+      is_old_row_(das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_UPDATE || das_ctdef_->op_type_ == ObDASOpType::DAS_OP_TABLE_DELETE)
+    {}
+  virtual ~ObEmbeddedVecDMLIterator() = default;
+protected:
+  int generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row) override;
+private:
+  int generate_embedded_vec_row(const ObChunkDatumStore::StoredRow *store_row);
+  int get_embedded_vec_column_idxs(int64_t &vid_idx, int64_t &embedded_vec_idx);
+  int get_vid(const ObChunkDatumStore::StoredRow *store_row, const int64_t vid_idx, int64_t &vid);
+  int get_chunk_data(const ObChunkDatumStore::StoredRow *store_row, const int64_t embedded_vec_idx, ObString &chunk);
+  virtual int check_sync_interval(bool &is_sync_interval) const override;
+public:
+  bool is_old_row_;
 };
 
 } // end namespace sql

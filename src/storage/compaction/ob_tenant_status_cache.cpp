@@ -18,17 +18,6 @@ using namespace share;
 namespace compaction
 {
 /********************************************ObTenantStatusCache impl******************************************/
-bool ObTenantStatusCache::is_skip_merge_tenant() const
-{
-  bool bret = true;
-  if (IS_INIT) {
-    const ObTenantRole::Role &role = MTL_GET_TENANT_ROLE_CACHE();
-    // remote tenant OR finish restore inner_table tenant
-    bret = is_remote_tenant_ || (during_restore_ && is_standby_tenant(role));
-  }
-  return bret;
-}
-
 int ObTenantStatusCache::during_restore(bool &during_restore) const
 {
   int ret = OB_SUCCESS;

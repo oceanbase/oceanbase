@@ -23,7 +23,7 @@ namespace share
 {
 // schedule vector tasks for a ls
 class ObPluginVectorIndexMgr;
-class ObVecAsyncTaskExector final : public ObVecITaskExecutor
+class ObVecAsyncTaskExector : public ObVecITaskExecutor
 {
 public:
   ObVecAsyncTaskExector()
@@ -34,6 +34,27 @@ public:
   int check_and_set_thread_pool() override;
 private:
   bool check_operation_allow() override;
+};
+
+class ObVecTaskManager
+{
+public:
+  ObVecTaskManager(uint64_t tenant_id, int64_t index_table_id, ObVecIndexAsyncTaskType task_type)
+      : tenant_id_(tenant_id),
+        index_table_id_(index_table_id),
+        task_type_(task_type),
+        task_ids_()
+  {}
+  ~ObVecTaskManager() {}
+  int process_task();
+  int create_task();
+  int check_task_status();
+  TO_STRING_KV(K_(tenant_id), K_(index_table_id), K_(task_type), K_(task_ids));
+private:
+  uint64_t tenant_id_;
+  int64_t index_table_id_;
+  ObVecIndexAsyncTaskType task_type_;
+  ObSEArray<int64_t, 4> task_ids_;
 };
 
 } // namespace share

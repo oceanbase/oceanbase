@@ -14,6 +14,8 @@
 
 #include "storage/column_store/ob_co_sstable_row_scanner.h"
 #include "storage/access/ob_vector_store.h"
+#include "storage/access/ob_aggregated_store.h"
+#include "storage/access/ob_aggregated_store_vec.h"
 #include "storage/column_store/ob_i_cg_iterator.h"
 #include "storage/column_store/ob_cg_scanner.h"
 #include "storage/column_store/ob_cg_tile_scanner.h"
@@ -183,7 +185,12 @@ int ObCOSSTableRowScanner::get_next_rows()
     switch(state_) {
       case BEGIN: {
         blockscan_state_ = BLOCKSCAN_RANGE;
-        if (OB_FAIL(row_scanner_->get_blockscan_start(current_, range_idx_, blockscan_state_))) {
+        if (iter_param_->enable_pd_aggregate() && iter_param_->plan_use_new_format()) {
+          if (OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->reset_agg_row_id())) {
+            LOG_WARN("Fail to reset agg row id", K(ret), KPC(block_row_store_));
+          }
+        }
+        if (FAILEDx(row_scanner_->get_blockscan_start(current_, range_idx_, blockscan_state_))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to get blockscan start", K(ret), KPC(this));
           } else {
@@ -1325,10 +1332,8 @@ int ObCOSSTableRowScanner::construct_cg_iter_params_for_rowkey(
   return ret;
 }
 
-int ObCOSSTableRowScanner::get_next_rowkey(const bool need_set_border_rowkey,
-                                           int64_t &curr_scan_index,
+int ObCOSSTableRowScanner::get_next_rowkey(int64_t &curr_scan_index,
                                            blocksstable::ObDatumRowkey& rowkey,
-                                           blocksstable::ObDatumRowkey &border_rowkey,
                                            common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -1338,7 +1343,6 @@ int ObCOSSTableRowScanner::get_next_rowkey(const bool need_set_border_rowkey,
   common::ObSEArray<ObTableIterParam*, 8> iter_params;
   ObDatumRowkey tmp_rowkey;
   rowkey.reset();
-  border_rowkey.reset();
 
   // get next row id
   if (OB_ISNULL(project_iter_) || OB_ISNULL(row_scanner_) || OB_ISNULL(iter_param_) ||
@@ -1421,11 +1425,6 @@ int ObCOSSTableRowScanner::get_next_rowkey(const bool need_set_border_rowkey,
         curr_scan_index = range_idx_;
       }
     }
-  }
-
-  // get di base border rowkey
-  if (OB_SUCC(ret) && need_set_border_rowkey) {
-    border_rowkey = row_scanner_->prefetcher_.get_border_rowkey();
   }
 
   if (OB_NOT_NULL(scanner)) {

@@ -50,7 +50,12 @@ int ObTabletMergeInfo::init(const ObMergeStaticInfo &static_history)
   } else {
     merge_history_.static_info_.shallow_copy(static_history);
     merge_history_.running_info_.merge_start_time_ = ObTimeUtility::fast_current_time();
-    is_inited_ = true;
+    if (OB_FAIL(ObSSTableMergeHistory::init_sstable_merge_block_info_array(
+        static_history.merge_sstable_count_, merge_history_.sstable_merge_block_info_array_))) {
+      LOG_WARN("failed to init sstable_merge_block_info_array", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
 
   return ret;

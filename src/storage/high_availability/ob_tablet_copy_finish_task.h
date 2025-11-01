@@ -98,6 +98,8 @@ private:
   common::ObArenaAllocator arena_allocator_;
   ObTablesHandleArray minor_tables_handle_;
   ObTablesHandleArray ddl_tables_handle_;
+  ObTablesHandleArray inc_major_ddl_tables_handle_;
+  ObTablesHandleArray inc_major_tables_handle_;
   ObTablesHandleArray major_tables_handle_;
   ObTablesHandleArray mds_tables_handle_;
   common::ObArray<std::pair<ObITable::TableKey, int64_t>> last_meta_seq_array_;

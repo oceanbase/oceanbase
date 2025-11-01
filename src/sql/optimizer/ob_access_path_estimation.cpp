@@ -1351,8 +1351,10 @@ int ObAccessPathEstimation::fill_cost_table_scan_info(ObOptimizerContext &ctx,
       }
     }
 
-    double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
-            0.01 * est_cost_info.sample_info_.percent_ : 1.0;
+    // block sampling
+    double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ||
+                                est_cost_info.sample_info_.is_ddl_block_sample() ?
+                                0.01 * est_cost_info.sample_info_.percent_ : 1.0;
     if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
                                                       COMPAT_VERSION_4_3_5_BP4, COMPAT_VERSION_4_4_0,
                                                       COMPAT_VERSION_4_4_1)) {
@@ -2883,7 +2885,8 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
     ObIArray<ObExprSelPair> &all_predicate_sel = paths.at(0)->parent_->get_plan()->get_predicate_selectivities();
     double output_total_sel = 1.0;
     double output_non_ds_sel = 1.0;
-    double block_sample_ratio = paths.at(0)->est_cost_info_.sample_info_.is_block_sample() ?
+    double block_sample_ratio = paths.at(0)->est_cost_info_.sample_info_.is_block_sample() ||
+                    paths.at(0)->est_cost_info_.sample_info_.is_ddl_block_sample() ?
                     0.01 * paths.at(0)->est_cost_info_.sample_info_.percent_ : 1.0;
     double row_sample_ratio = paths.at(0)->est_cost_info_.sample_info_.is_row_sample() ?
               0.01 * paths.at(0)->est_cost_info_.sample_info_.percent_ : 1.0;

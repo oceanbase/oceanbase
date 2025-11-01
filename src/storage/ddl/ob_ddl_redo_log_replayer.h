@@ -45,6 +45,20 @@ public:
   int replay_inc_commit(const ObDDLIncCommitLog &log, const share::SCN &scn);
 private:
   void destroy();
+  int do_replay_inc_minor_start(const common::ObTabletID &tablet_id, const SCN &scn);
+  int do_replay_inc_major_start(const common::ObTabletID &tablet_id,
+                                const share::SCN &scn,
+                                const bool has_cs_replica,
+                                const bool is_lob,
+                                const ObStorageSchema *storage_schema);
+  int do_replay_inc_minor_commit(const common::ObTabletID &tablet_id, const SCN &scn);
+  int do_replay_inc_major_commit(const common::ObTabletID &tablet_id,
+                                 const share::SCN &scn,
+                                 const transaction::ObTransID &trans_id,
+                                 const transaction::ObTxSEQ &seq_no,
+                                 const int64_t snapshot_version,
+                                 const uint64_t data_format_version,
+                                 const bool is_rollback);
 
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
@@ -57,6 +71,7 @@ private:
   common::ObConcurrentFIFOAllocator allocator_;
   common::ObBucketLock bucket_lock_;
 };
+
 
 }  // end namespace storage
 }  // end namespace oceanbase

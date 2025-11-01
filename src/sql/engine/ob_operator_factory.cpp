@@ -168,6 +168,7 @@
 #include "sql/engine/join/ob_nested_loop_join_vec_op.h"
 #include "sql/engine/subquery/ob_subplan_filter_vec_op.h"
 #include "sql/engine/direct_load/ob_table_direct_insert_op.h"
+#include "sql/engine/table/ob_ddl_block_sample_scan_op.h"
 
 namespace oceanbase
 {

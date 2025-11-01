@@ -17,6 +17,7 @@
 #include "share/vector/ob_discrete_base.h"
 #include "share/vector/ob_uniform_base.h"
 #include "storage/direct_load/ob_direct_load_vector.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase
 {
@@ -34,8 +35,27 @@ public:
   void sum_bytes_usage(int64_t *sum_bytes, const int64_t batch_size) const override
   {
     for (int64_t i = 0; i < batch_size; ++i) {
-      sum_bytes[i] += discrete_vector_->get_lens()[i];
+      sum_bytes[i] += lens_[i];
     }
+  }
+
+  int sum_lob_length(int64_t *sum_bytes, const int64_t batch_size) const override
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+      const char *data = ptrs_[i];
+      const int32_t len = lens_[i];
+      if (len > 0 && data != nullptr) {
+        ObLobLocatorV2 locator(ObString(len, data), true);
+        int64_t lob_length = 0;
+        if (OB_FAIL(locator.get_lob_data_byte_len(lob_length))) {
+          STORAGE_LOG(WARN, "fail to get lob data byte len", KR(ret), K(locator));
+        } else {
+          sum_bytes[i] += lob_length + sizeof(ObLobCommon);
+        }
+      }
+    }
+    return ret;
   }
 
   void reuse(const int64_t batch_size) override;

@@ -32,42 +32,70 @@ public:
   virtual ~ObMacroMetaTempStore() { reset(); }
 
   int init(const int64_t dir_id);
-  int append(
-      const char *block_buf,
-      const int64_t block_size,
-      const MacroBlockId &macro_id);
+  int append(const char *block_buf, const int64_t block_size, const MacroBlockId &macro_id);
+  int append(const ObDataMacroBlockMeta &macro_meta, const ObMicroBlockData *leaf_index_block);
   int wait();
   void reset();
-  TO_STRING_KV(K(is_inited_), K(count_));
+  bool is_valid() const;
+  bool is_empty() const;
+  TO_STRING_KV(K(io_), K(is_inited_), K(is_empty_));
+
 private:
   struct StoreItem
   {
-    OB_UNIS_VERSION(1);
+  public:
+    static const int64_t STORE_ITEM_VERSION = 1;
+
+  public:
+    struct StoreItemHeader
+    {
+    public:
+      StoreItemHeader() : version_(StoreItem::STORE_ITEM_VERSION), total_length_(0), checksum_(0) {}
+
+    public:
+      int32_t version_;
+      int32_t total_length_; // total length of StoreItem ( header + data ).
+      int64_t checksum_;
+    };
+
   public:
     StoreItem();
     virtual ~StoreItem() {}
     bool is_valid() const;
     void reset();
+    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+    int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
+    int64_t get_serialize_size() const;
 
   public:
-    MacroBlockId macro_id_;
-    ObSSTableMacroBlockHeader macro_header_;
+    StoreItemHeader header_;
     const char *index_block_buf_;
     int64_t index_block_buf_size_;
     const char *macro_meta_block_buf_;
     int64_t macro_meta_block_size_;
   };
+
 private:
   static int get_macro_block_header(const char *buf, const int64_t buf_size, ObSSTableMacroBlockHeader &macro_header);
+  int inner_append(const ObDataMacroBlockMeta &macro_meta, const ObMicroBlockData *leaf_index_block);
+  int get_macro_meta_from_block_buf(const ObSSTableMacroBlockHeader &macro_header,
+                                    const MacroBlockId &macro_id,
+                                    const char *buf,
+                                    const int64_t buf_size,
+                                    ObDataMacroBlockMeta &macro_meta);
+
 private:
-  int64_t count_;
   int64_t dir_id_;
   tmp_file::ObTmpFileIOInfo io_;
   tmp_file::ObTmpFileIOHandle io_handle_;
   ObSelfBufferWriter buffer_;
-  // write aggregated StoreItems as a self-explained block if memory consumption of this array turned out to be a bottle-neck
-  ObArray<int64_t> item_size_arr_;
+  ObArenaAllocator allocator_; // micro block reader, lifecycle in get_macro_meta_from_block_buf
+  ObArenaAllocator datum_allocator_; // io buffer to temp file, lifecycle in inner_append
+  ObArenaAllocator macro_meta_allocator_; // macro meta buffer, lifecycle according to datum_row_
+  ObMacroBlockReader macro_reader_;
+  ObDatumRow datum_row_;
   bool is_inited_;
+  bool is_empty_;
 };
 
 class ObMacroMetaTempStoreIter
@@ -79,19 +107,26 @@ public:
   void reset();
   int init(ObMacroMetaTempStore &temp_meta_store);
   int get_next(ObDataMacroBlockMeta &macro_meta, ObMicroBlockData &leaf_index_block);
+
 private:
-  int read_next_item();
-  int get_macro_meta_from_block_buf(ObDataMacroBlockMeta &macro_meta);
+  int try_submit_io();
+
 private:
-  ObMacroMetaTempStore *meta_store_;
+  typedef ObMacroMetaTempStore::StoreItem StoreItem;
+  typedef StoreItem::StoreItemHeader StoreItemHeader;
+  static const int64_t META_TEMP_STORE_INITIAL_READ_SIZE = 64 * 1024;
+
+private:
+  tmp_file::ObTmpFileIOInfo io_info_;
+  int64_t meta_store_file_length_;
   ObArenaAllocator io_allocator_;
-  ObArenaAllocator allocator_;
-  ObMicroBlockReaderHelper micro_reader_helper_;
-  ObMacroBlockReader macro_reader_;
   ObMacroMetaTempStore::StoreItem curr_read_item_;
-  ObDatumRow datum_row_;
-  int64_t curr_read_file_pos_;
-  int64_t read_item_cnt_;
+  int64_t submit_io_size_;
+  int64_t meta_store_read_offset_;
+  int64_t fragment_offset_;
+  int64_t fragment_size_;
+  char *meta_store_fragment_;
+  bool is_iter_end_;
 };
 
 

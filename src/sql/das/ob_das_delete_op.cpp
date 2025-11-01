@@ -14,6 +14,7 @@
 #include "sql/das/ob_das_delete_op.h"
 #include "sql/das/ob_das_domain_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#include "share/schema/ob_schema_struct.h"
 namespace oceanbase
 {
 namespace common
@@ -54,6 +55,24 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
                                 ctdef.column_ids_, &iter, affected_rows))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("insert rows to access service failed", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+  } else if (ctdef.table_param_.get_data_table().is_hybrid_vector_index() &&
+             !ctdef.is_access_mlog_as_master_table_) {
+    // For hybrid vector index, check if it's embedded table
+    if (share::schema::is_hybrid_vec_index_embedded_type(ctdef.table_param_.get_data_table().get_index_type())) {
+      // For embedded table, perform actual delete operation
+      if (OB_FAIL(as->delete_rows(ls_id, tablet_id, *tx_desc_, dml_param_, ctdef.column_ids_, &iter, affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("delete rows to access service failed", K(ret), K(ls_id), K(tablet_id));
+        }
+      }
+    } else if (share::schema::is_hybrid_vec_index_log_type(ctdef.table_param_.get_data_table().get_index_type())) {
+      // For other hybrid vector index tables (like log table), perform insert to record delete mark
+      if (OB_FAIL(as->insert_rows(ls_id, tablet_id, *tx_desc_, dml_param_, ctdef.column_ids_, &iter, affected_rows))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("insert rows to access service failed", K(ret), K(ls_id), K(tablet_id));
+        }
       }
     }
   } else if (ctdef.table_param_.get_data_table().is_mlog_table()

@@ -2376,7 +2376,6 @@ int ObCopySSTableInfoObProducer::init(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  bool is_ready_for_read = false;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -2395,22 +2394,13 @@ int ObCopySSTableInfoObProducer::init(
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_sstable_info));
-  } else if (!tablet_sstable_info.ddl_sstable_scn_range_.is_empty()) {
-    if (tablet->get_tablet_meta().get_ddl_sstable_start_scn() < tablet_sstable_info.ddl_sstable_scn_range_.start_scn_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ddl start scn fall back", K(ret), K(tablet->get_tablet_meta()), K(tablet_sstable_info));
-    } else if (tablet->get_tablet_meta().get_ddl_sstable_start_scn() == tablet_sstable_info.ddl_sstable_scn_range_.start_scn_) {
-      if (tablet->get_tablet_meta().ddl_checkpoint_scn_ < tablet_sstable_info.ddl_sstable_scn_range_.end_scn_) {
-        ret = OB_DDL_SSTABLE_RANGE_CROSS;
-        LOG_WARN("ddl sstable not exist", K(ret), K(tablet_sstable_info), KPC(tablet));
-      }
-    } else {
-      LOG_INFO("ddl start scn advanced, the expired ddl sstable has been cleaned", "tablet_id", tablet_sstable_info.tablet_id_,
-          K(tablet->get_tablet_meta().ddl_start_scn_), K(tablet_sstable_info.ddl_sstable_scn_range_));
-    }
+  } else if (OB_FAIL(check_ddl_sstable_scn_range_(*tablet, tablet_sstable_info.ddl_sstable_scn_range_))) {
+    LOG_WARN("failed to check ddl sstable scn range", KR(ret), K(tablet_sstable_info));
+  } else if (OB_FAIL(check_inc_major_ddl_sstable_end_scn_(*tablet, tablet_sstable_info.inc_major_ddl_sstable_end_scn_))) {
+    LOG_WARN("failed to check inc major ddl sstable end scn", KR(ret), K(tablet_sstable_info));
   }
   if (OB_SUCC(ret) && nullptr != tablet) {
-    if (OB_FAIL(tablet->get_ha_tables(iter_, is_ready_for_read))) {
+    if (OB_FAIL(tablet->get_ha_tables(iter_))) {
       LOG_WARN("failed to get read tables", K(ret));
     } else {
       status_ = ObCopyTabletStatus::TABLET_EXIST;
@@ -2493,30 +2483,18 @@ int ObCopySSTableInfoObProducer::check_need_copy_sstable_(
     if (sstable->is_major_sstable()) {
       need_copy_sstable = sstable->get_key().get_snapshot_version()
           > tablet_sstable_info_.max_major_sstable_snapshot_;
-    } else if (sstable->is_minor_sstable()) {
+    } else if (sstable->is_minor_sstable() || sstable->is_inc_major_type_sstable()) {
       need_copy_sstable = true;
     } else if (sstable->is_ddl_dump_sstable()) {
-      const SCN ddl_sstable_start_scn = tablet_sstable_info_.ddl_sstable_scn_range_.start_scn_;
-      const SCN ddl_sstable_end_scn = tablet_sstable_info_.ddl_sstable_scn_range_.end_scn_;
-      if (tablet_sstable_info_.ddl_sstable_scn_range_.is_empty()) {
-        need_copy_sstable = false;
-      } else if (sstable->get_key().scn_range_.start_scn_ >= ddl_sstable_end_scn) {
-        need_copy_sstable = false;
-      } else if (sstable->get_key().scn_range_.start_scn_ >= ddl_sstable_start_scn
-          && sstable->get_key().scn_range_.end_scn_ <= ddl_sstable_end_scn) {
-        need_copy_sstable = true;
-      } else {
-        ret = OB_DDL_SSTABLE_RANGE_CROSS;
-        LOG_WARN("ddl sstable version range across", K(ret), K(tablet_sstable_info_), KPC(sstable));
+      if (OB_FAIL(check_need_copy_ddl_sstable_(tablet_sstable_info_.tablet_id_,
+          *sstable, tablet_sstable_info_.ddl_sstable_scn_range_, need_copy_sstable))) {
+        LOG_WARN("failed to check need copy ddl sstable", K(ret), K(tablet_sstable_info_), KPC(sstable));
       }
-#ifdef ERRSIM
-      SERVER_EVENT_SYNC_ADD("storage_ha", "check_need_copy_ddl_sstable",
-                            "tablet_id", tablet_sstable_info_.tablet_id_.id(),
-                            "sstable_key", sstable->get_key(),
-                            "need_copy_sstable", need_copy_sstable,
-                            "need_copy_scn_range", tablet_sstable_info_.ddl_sstable_scn_range_);
-
-#endif
+    } else if (sstable->is_inc_major_ddl_dump_sstable()) {
+      if (OB_FAIL(check_need_copy_inc_major_ddl_sstable_(tablet_sstable_info_.tablet_id_,
+          *sstable, tablet_sstable_info_.inc_major_ddl_sstable_end_scn_, need_copy_sstable))) {
+        LOG_WARN("failed to check need copy inc major ddl sstable", K(ret), K(tablet_sstable_info_), KPC(sstable));
+      }
     } else if (sstable->is_mds_sstable()) {
       need_copy_sstable = true;
     } else {
@@ -2526,6 +2504,99 @@ int ObCopySSTableInfoObProducer::check_need_copy_sstable_(
           KPC(sstable), K(tablet_sstable_info_));
     }
   }
+  return ret;
+}
+
+int ObCopySSTableInfoObProducer::check_ddl_sstable_scn_range_(
+    const ObTablet &tablet,
+    const ObScnRange &ddl_sstable_scn_range)
+{
+  int ret = OB_SUCCESS;
+  if (ddl_sstable_scn_range.is_empty()) {
+    // do nothing
+  } else if (tablet.get_tablet_meta().get_ddl_sstable_start_scn() < ddl_sstable_scn_range.start_scn_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ddl start scn fall back", K(ret), K(tablet.get_tablet_meta()), K(ddl_sstable_scn_range));
+  } else if (tablet.get_tablet_meta().get_ddl_sstable_start_scn() == ddl_sstable_scn_range.start_scn_) {
+    if (OB_UNLIKELY(tablet.get_tablet_meta().ddl_checkpoint_scn_ < ddl_sstable_scn_range.end_scn_)) {
+      ret = OB_DDL_SSTABLE_RANGE_CROSS;
+      LOG_WARN("ddl sstable not exist", K(ret), K(ddl_sstable_scn_range), K(tablet));
+    }
+  } else {
+    LOG_INFO("ddl start scn advanced, the expired ddl sstable has been cleaned", "tablet_id", tablet.get_tablet_id(),
+        K(tablet.get_tablet_meta().ddl_start_scn_), K(ddl_sstable_scn_range));
+  }
+  return ret;
+}
+
+int ObCopySSTableInfoObProducer::check_inc_major_ddl_sstable_end_scn_(
+    const ObTablet &tablet,
+    const SCN &inc_major_ddl_sstable_end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (!inc_major_ddl_sstable_end_scn.is_valid_and_not_min()) {
+    // do nothing
+  } else if (OB_UNLIKELY(tablet.get_tablet_meta().ddl_checkpoint_scn_ < inc_major_ddl_sstable_end_scn)) {
+    ret = OB_DDL_SSTABLE_RANGE_CROSS;
+    LOG_WARN("inc major ddl sstable not exist", K(ret), K(inc_major_ddl_sstable_end_scn), K(tablet));
+  }
+  return ret;
+}
+
+int ObCopySSTableInfoObProducer::check_need_copy_ddl_sstable_(
+    const ObTabletID &tablet_id,
+    const ObSSTable &sstable,
+    const ObScnRange &ddl_sstable_scn_range,
+    bool &need_copy_sstable)
+{
+  int ret = OB_SUCCESS;
+  const SCN ddl_sstable_start_scn = ddl_sstable_scn_range.start_scn_;
+  const SCN ddl_sstable_end_scn = ddl_sstable_scn_range.end_scn_;
+  if (ddl_sstable_scn_range.is_empty()) {
+    need_copy_sstable = false;
+  } else if (sstable.get_key().scn_range_.start_scn_ >= ddl_sstable_end_scn) {
+    need_copy_sstable = false;
+  } else if (sstable.get_key().scn_range_.start_scn_ >= ddl_sstable_start_scn
+      && sstable.get_key().scn_range_.end_scn_ <= ddl_sstable_end_scn) {
+    need_copy_sstable = true;
+  } else {
+    ret = OB_DDL_SSTABLE_RANGE_CROSS;
+    LOG_WARN("ddl sstable version range across", K(ret), K(ddl_sstable_scn_range), K(sstable));
+  }
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("storage_ha", "check_need_copy_ddl_sstable",
+                        "tablet_id", tablet_id.id(),
+                        "sstable_key", sstable.get_key(),
+                        "need_copy_sstable", need_copy_sstable,
+                        "need_copy_scn_range", ddl_sstable_scn_range);
+#endif
+  return ret;
+}
+
+int ObCopySSTableInfoObProducer::check_need_copy_inc_major_ddl_sstable_(
+    const ObTabletID &tablet_id,
+    const ObSSTable &sstable,
+    const SCN &inc_major_ddl_sstable_end_scn,
+    bool &need_copy_sstable)
+{
+  int ret = OB_SUCCESS;
+  if (!inc_major_ddl_sstable_end_scn.is_valid_and_not_min()) {
+    need_copy_sstable = false;
+  } else if (sstable.get_key().scn_range_.start_scn_ >= inc_major_ddl_sstable_end_scn) {
+    need_copy_sstable = false;
+  } else if (sstable.get_key().scn_range_.end_scn_ <= inc_major_ddl_sstable_end_scn) {
+    need_copy_sstable = true;
+  } else {
+    ret = OB_DDL_SSTABLE_RANGE_CROSS;
+    LOG_WARN("ddl sstable version range across", K(ret), K(inc_major_ddl_sstable_end_scn), K(sstable));
+  }
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("storage_ha", "check_need_copy_inc_major_ddl_sstable",
+                        "tablet_id", tablet_id.id(),
+                        "sstable_key", sstable.get_key(),
+                        "need_copy_sstable", need_copy_sstable,
+                        "need_copy_end_scn", inc_major_ddl_sstable_end_scn);
+#endif
   return ret;
 }
 
@@ -3905,7 +3976,6 @@ int ObCopyRemoteSSTableInfoObProducer::init(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  bool is_ready_for_read = false;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -3919,7 +3989,7 @@ int ObCopyRemoteSSTableInfoObProducer::init(
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle_));
-  } else if (OB_FAIL(tablet->get_ha_tables(iter_, is_ready_for_read))) {
+  } else if (OB_FAIL(tablet->get_ha_tables(iter_))) {
     LOG_WARN("failed to get read tables", K(ret), KPC(tablet));
   } else {
     ls_id_ = ls->get_ls_id();
@@ -3935,9 +4005,6 @@ int ObCopyRemoteSSTableInfoObProducer::get_next_sstable_info(
 {
   int ret = OB_SUCCESS;
   sstable_info.reset();
-  ObLSTabletService *tablet_svr = nullptr;
-  ObITable *table = nullptr;
-  bool is_ready_for_read = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;

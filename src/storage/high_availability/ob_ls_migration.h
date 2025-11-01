@@ -366,6 +366,12 @@ private:
   int generate_ddl_copy_tasks_(
       ObTabletCopyFinishTask *tablet_copy_finish_task,
       share::ObITask *&parent_task);
+  int generate_inc_major_ddl_copy_tasks_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      share::ObITask *&parent_task);
+  int generate_inc_major_copy_tasks_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      share::ObITask *&parent_task);
   int generate_copy_tasks_(
       IsRightTypeSSTableFunc is_right_type_sstable,
       ObTabletCopyFinishTask *tablet_copy_finish_task,

@@ -128,7 +128,8 @@ public:
       compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
       online_sample_percent_(1.),
       load_level_(storage::ObDirectLoadLevel::INVALID_LEVEL),
-      task_need_sort_(false)
+      task_need_sort_(false),
+      enable_inc_major_(false)
   {
   }
 
@@ -189,7 +190,8 @@ public:
                K_(compressor_type),
                K_(online_sample_percent),
                "direct_load_level", storage::ObDirectLoadLevel::get_type_string(load_level_),
-               K_(task_need_sort));
+               K_(task_need_sort),
+               K_(enable_inc_major));
 
 public:
   uint64_t tenant_id_;
@@ -214,6 +216,7 @@ public:
   double online_sample_percent_;
   storage::ObDirectLoadLevel::Type load_level_;
   bool task_need_sort_; // 表示导入任务是否会走到排序流程
+  bool enable_inc_major_;
 };
 
 struct ObTableLoadDDLParam

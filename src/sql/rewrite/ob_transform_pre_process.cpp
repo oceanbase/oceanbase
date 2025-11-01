@@ -20,6 +20,7 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -97,6 +98,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         trans_happened |= is_happened;
         OPT_TRACE("transform for udt columns", is_happened);
         LOG_TRACE("succeed to transform for udt columns", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!stmt->has_vec_approx() && OB_FAIL(transform_semantic_vector_dis_expr(stmt, is_happened))) {
+        LOG_WARN("failed to transform hybrid semantic vector distance expr", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform hybrid semantic vector distance expr:", is_happened);
+        LOG_TRACE("succeed to transform hybrid semantic vector distance expr", K(is_happened));
       }
     }
     if (OB_SUCC(ret)) {
@@ -7816,6 +7826,252 @@ int ObTransformPreProcess::transform_json_object_expr_with_star(const ObIArray<O
     }
   }
 
+  return ret;
+}
+
+int ObTransformPreProcess::add_semantic_vector_dis_params_to_new_expr(ObDMLStmt *stmt, ObRawExpr *semantic_expr, ObRawExpr *&new_semantic_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *expr_0 = semantic_expr->get_param_expr(0);
+  ObRawExpr *expr_1 = semantic_expr->get_param_expr(1);
+
+  ObRawExpr *chunk_col_ref = nullptr;
+  ObRawExpr *query_vector = nullptr;
+
+  ObColumnRefRawExpr *vector_col_ref = nullptr;
+  ObRawExpr *cast_query_vector = nullptr;
+  ObRawExpr *dis_type = nullptr;
+
+  ObSchemaGetterGuard *schema_guard = nullptr;
+
+  if (OB_ISNULL(expr_0)
+      || OB_ISNULL(expr_1)
+      || OB_ISNULL(ctx_)
+      || OB_ISNULL(ctx_->session_info_)
+      || OB_ISNULL(ctx_->schema_checker_)
+      || OB_ISNULL(schema_guard = ctx_->schema_checker_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param of semantic_distance is null", KP(expr_0), KP(expr_1));
+  } else if (expr_0->get_expr_type() != T_REF_COLUMN && expr_1->get_expr_type() != T_REF_COLUMN) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("none param of semantic_distance is col ref", K(expr_0->get_expr_type()), K(expr_1->get_expr_type()));
+  } else {
+    chunk_col_ref = expr_0->get_expr_type() == T_REF_COLUMN ? expr_0 : expr_1;
+    query_vector = expr_0->get_expr_type() == T_REF_COLUMN ? expr_1 : expr_0;
+    ObColumnRefRawExpr *raw_chunk_col_ref = static_cast<ObColumnRefRawExpr*>(chunk_col_ref);
+
+    TableItem *table_item = NULL;
+    const share::schema::ObTableSchema *data_table_schema = nullptr;
+    uint64_t tenant_id = ctx_->session_info_->get_effective_tenant_id();
+    if (OB_ISNULL(table_item = stmt->get_table_item_by_id(raw_chunk_col_ref->get_table_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item is NULL", K(ret), K(raw_chunk_col_ref->get_table_id()));
+    } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_item->ref_id_, data_table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(table_item->ref_id_));
+    } else if (OB_FAIL(create_embedded_table_vector_col_ref(stmt, table_item, data_table_schema, raw_chunk_col_ref, vector_col_ref))) {
+      LOG_WARN("failed to create embedded table vector col ref", K(ret));
+    } else if (OB_FAIL(create_cast_query_vector_expr(query_vector, vector_col_ref, cast_query_vector))) {
+      LOG_WARN("failed to create cast query vector expr", K(ret));
+    } else if (OB_FAIL(create_distance_type_const_expr(stmt, data_table_schema, raw_chunk_col_ref, dis_type))) {
+      LOG_WARN("failed to create distance type const expr", K(ret));
+    } else {
+      ObSysFunRawExpr *temp_semantic_expr = nullptr;
+      if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE, temp_semantic_expr))) {
+        LOG_WARN("failed to create new semantic expr", K(ret));
+      } else if (OB_ISNULL(temp_semantic_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new semantic expr is null", K(ret));
+      } else if (OB_FAIL(temp_semantic_expr->init_param_exprs(3))) {
+        LOG_WARN("failed to init semantic param", K(ret));
+      } else if (OB_FAIL(temp_semantic_expr->add_param_expr(vector_col_ref))) {
+        LOG_WARN("failed to add param to semantic expr", K(ret));
+      } else if (OB_FAIL(temp_semantic_expr->add_param_expr(cast_query_vector))) {
+        LOG_WARN("failed to add param to semantic expr", K(ret));
+      } else if (OB_FAIL(temp_semantic_expr->add_param_expr(dis_type))) {
+        LOG_WARN("failed to add param to semantic expr", K(ret));
+      } else if (OB_FAIL(temp_semantic_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize failed", K(ret));
+      } else {
+        new_semantic_expr = temp_semantic_expr;
+        LOG_TRACE("successfully created new semantic vector distance expr with 3 params");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::create_embedded_table_vector_col_ref(
+    ObDMLStmt *stmt,
+    TableItem *table_item,
+    const share::schema::ObTableSchema *data_table_schema,
+    ObColumnRefRawExpr *chunk_col_ref,
+    ObColumnRefRawExpr *&vector_col_ref)
+{
+  int ret = OB_SUCCESS;
+  vector_col_ref = nullptr;
+  ColumnItem *exist_column_item = nullptr;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < data_table_schema->get_column_count() && OB_ISNULL(vector_col_ref); ++i) {
+    const ObColumnSchemaV2 *col_schema = data_table_schema->get_column_schema_by_idx(i);
+    if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null column schema ptr", K(ret));
+    } else if (col_schema->is_hybrid_embedded_vec_column()) { // only support one hybrid vector index to one table now
+      if (OB_NOT_NULL(exist_column_item = stmt->get_column_item(table_item->table_id_, col_schema->get_column_id()))) {
+        vector_col_ref = exist_column_item->expr_;
+      } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx_->expr_factory_, *col_schema,
+                                                    ctx_->session_info_, vector_col_ref))) {
+        LOG_WARN("failed to build target vector column expr", K(ret));
+      } else if (OB_ISNULL(vector_col_ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to build target vector column expr", K(ret));
+      } else {
+        vector_col_ref->set_ref_id(table_item->table_id_, col_schema->get_column_id());
+        vector_col_ref->set_column_attr(data_table_schema->get_table_name(), col_schema->get_column_name_str());
+        vector_col_ref->set_database_name(chunk_col_ref->get_database_name());
+        vector_col_ref->del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        ColumnItem column_item;
+        column_item.expr_ = vector_col_ref;
+        column_item.table_id_ = vector_col_ref->get_table_id();
+        column_item.column_id_ = vector_col_ref->get_column_id();
+        column_item.column_name_ = vector_col_ref->get_column_name();
+        if (OB_FAIL(stmt->add_column_item(column_item))) {
+          LOG_WARN("add column item to stmt failed", K(ret));
+        } else if (OB_FAIL(vector_col_ref->formalize(ctx_->session_info_))) {
+          LOG_WARN("formalize failed", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTransformPreProcess::create_cast_query_vector_expr(
+    ObRawExpr *query_vector,
+    ObRawExpr *vector_col_ref,
+    ObRawExpr *&cast_query_vector)
+{
+  int ret = OB_SUCCESS;
+  cast_query_vector = nullptr;
+
+  if (OB_ISNULL(vector_col_ref)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret));
+  } else {
+    ObExprResType dst_type = vector_col_ref->get_result_type();
+    ObSysFunRawExpr *cast_expr = nullptr;
+    if (OB_FAIL(ObRawExprUtils::create_cast_expr(
+        *ctx_->expr_factory_, query_vector, dst_type, cast_expr, ctx_->session_info_))) {
+      LOG_WARN("failed to create cast expr", K(ret));
+    } else if (OB_ISNULL(cast_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cast expr is null", K(ret));
+    } else {
+      cast_query_vector = cast_expr;
+      LOG_TRACE("created cast query vector expr", K(dst_type));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::create_distance_type_const_expr(
+    ObDMLStmt *stmt,
+    const share::schema::ObTableSchema *data_table_schema,
+    ObColumnRefRawExpr *chunk_col_ref,
+    ObRawExpr *&dis_type)
+{
+  int ret = OB_SUCCESS;
+  dis_type = nullptr;
+
+  uint64_t column_id = chunk_col_ref->get_column_id();
+  ObSchemaGetterGuard *schema_guard = ctx_->schema_checker_->get_schema_guard();
+  int64_t vec_dis_type = ObVectorIndexDistAlgorithm::VIDA_MAX;
+
+  share::ObVectorIndexParam vector_index_param;
+  bool param_filled = false;
+  if (OB_FAIL(share::ObVectorIndexUtil::get_vector_index_param(
+      schema_guard, *data_table_schema, column_id, vector_index_param, param_filled))) {
+    LOG_WARN("failed to get vector index param", K(ret), KPC(data_table_schema), K(column_id));
+  } else if (!param_filled) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index param not found", K(ret), KPC(data_table_schema), K(column_id));
+  } else if (OB_FAIL(share::ObVectorIndexUtil::get_vec_dis_type_from_dis_algorithm(vector_index_param.dist_algorithm_, vec_dis_type))) {
+    LOG_WARN("failed to get vec dis type", K(ret));
+  } else {
+    ObConstRawExpr *const_expr = nullptr;
+    if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_INT, const_expr))) {
+      LOG_WARN("failed to create const expr", K(ret));
+    } else if (OB_ISNULL(const_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("const expr is null", K(ret));
+    } else {
+      ObObj obj;
+      obj.set_int(static_cast<int64_t>(vec_dis_type));
+      const_expr->set_value(obj);
+
+      dis_type = const_expr;
+      LOG_TRACE("created distance type const expr", K(vector_index_param.dist_algorithm_));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_semantic_vector_dis_expr(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObSEArray<ObRawExpr*, 4> semantic_vec_dis_exprs;
+
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else {
+
+    SemanticVectorDistExprChecker expr_checker(semantic_vec_dis_exprs);
+    ObStmtExprGetter visitor;
+    visitor.checker_ = &expr_checker;
+    if (OB_FAIL(stmt->iterate_stmt_expr(visitor))) {
+      LOG_WARN("failed to iterate stmt expr", K(ret));
+    } else {
+      ObSEArray<ObRawExpr*, 4> old_exprs;
+      ObSEArray<ObRawExpr*, 4> new_exprs;
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < semantic_vec_dis_exprs.count(); ++i) {
+        ObRawExpr *semantic_expr = semantic_vec_dis_exprs.at(i);
+        if (OB_ISNULL(semantic_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("semantic_distance expr is null", K(ret));
+        } else if (semantic_expr->get_param_count() != 2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("semantic_distance expr should have 2 params", K(ret), K(semantic_expr->get_param_count()));
+        } else {
+          ObRawExpr *new_semantic_expr = nullptr;
+          if (OB_FAIL(add_semantic_vector_dis_params_to_new_expr(stmt, semantic_expr, new_semantic_expr))) {
+            LOG_WARN("failed to add hybrid vector params to expr", K(ret));
+          } else if (OB_ISNULL(new_semantic_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("new semantic_distance expr is null", K(ret));
+          } else {
+            if (OB_FAIL(old_exprs.push_back(semantic_expr))) {
+              LOG_WARN("failed to push back old expr", K(ret));
+            } else if (OB_FAIL(new_exprs.push_back(new_semantic_expr))) {
+              LOG_WARN("failed to push back new expr", K(ret));
+            } else {
+              trans_happened = true;
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && trans_happened && old_exprs.count() > 0) {
+        if (OB_FAIL(stmt->replace_relation_exprs(old_exprs, new_exprs))) {
+          LOG_WARN("failed to replace semantic_distance exprs in stmt", K(ret));
+        }
+      }
+    }
+
+  }
   return ret;
 }
 

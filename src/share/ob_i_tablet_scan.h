@@ -87,6 +87,7 @@ struct SampleInfo
   OB_INLINE bool is_block_sample() const { return BLOCK_SAMPLE == method_; }
   OB_INLINE bool is_no_sample() const { return NO_SAMPLE == method_; }
   OB_INLINE bool is_row_sample() const { return is_trival_sample() || is_hybrid_sample(); }
+  OB_INLINE bool is_ddl_block_sample() const { return DDL_BLOCK_SAMPLE == method_; }
   uint64_t hash(uint64_t seed) const;
   void reset()
   {

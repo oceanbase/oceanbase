@@ -364,7 +364,10 @@
 #include "ob_expr_vec_scn.h"
 #include "ob_expr_vec_vid.h"
 #include "ob_expr_vec_data.h"
+#include "ob_expr_vec_visible.h"
 #include "ob_expr_vec_type.h"
+#include "ob_expr_vec_chunk.h"
+#include "ob_expr_embedded_vec.h"
 #include "ob_expr_spiv_dim.h"
 #include "ob_expr_spiv_value.h"
 #include "ob_expr_vector.h"
@@ -458,6 +461,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "ob_expr_local_dynamic_filter.h"
+#include "ob_expr_semantic_distance.h"
 #include "ob_expr_format_profile.h"
 #include "ob_expr_bucket.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
@@ -1435,17 +1439,17 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprHiddenClusteringKey::eval_hidden_clustering_key,     /* 862 */
   ObExprFormatProfile::format_profile,                                /* 863 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
-  NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
-  NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
-  NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
+  ObExprVecChunk::generate_vec_chunk,                                 /* 865 */
+  ObExprEmbeddedVec::generate_embedded_vec,                           /* 866 */
+  ObExprSemanticDistance::calc_semantic_distance,                     /* 867 */
   ObExprBucket::calc_bucket_expr,                                     /* 868 */
-  NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
+  ObExprSemanticVectorDistance::calc_semantic_vector_distance,        /* 869 */
   ObExprAIPrompt::eval_ai_prompt,                                     /* 870 */
   ObExprVectorL2Similarity::calc_l2_similarity,                       /* 871 */
   ObExprVectorCosineSimilarity::calc_cosine_similarity,               /* 872 */
   ObExprVectorIPSimilarity::calc_ip_similarity,                       /* 873 */
   ObExprVectorSimilarity::calc_similarity,                            /* 874 */
-  NULL, // ObExprVecVisible::generate_vec_visible                     /* 875 */
+  ObExprVecVisible::generate_vec_visible,                             /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
   NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
 };

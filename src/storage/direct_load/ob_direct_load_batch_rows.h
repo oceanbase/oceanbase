@@ -14,6 +14,7 @@
 
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_vector.h"
+#include "share/ob_batch_selector.h"
 
 namespace oceanbase
 {
@@ -38,15 +39,24 @@ public:
   int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const sql::ObBitVector *col_nullables, const int64_t max_batch_size,
            const ObDirectLoadRowFlag &row_flag);
+  int init(const common::ObIArray<ObColumnSchemaItem> &column_schemas,
+           const int64_t max_batch_size,
+           const ObDirectLoadRowFlag &row_flag);
 
   // 深拷贝
   int append_row(const ObDirectLoadDatumRow &datum_row);
+  int append_row(const blocksstable::ObDatumRow &datum_row);
+  int append_row(const blocksstable::ObStorageDatum *datums, const int64_t column_count);
+  int append_row(const ObIArray<ObDatum *> &datums);
+  int append_batch(const ObDirectLoadBatchRows &vectors, const int64_t offset,
+                   const int64_t size);
   int append_batch(const IVectorPtrs &vectors, const int64_t offset, const int64_t size);
   int append_batch(const ObIArray<ObDatumVector> &datum_vectors, const int64_t offset,
                    const int64_t size);
   int append_selective(const ObDirectLoadBatchRows &src, const uint16_t *selector,
                        const int64_t size);
   int append_selective(const IVectorPtrs &vectors, const uint16_t *selector, int64_t size);
+  int append_selective(const IVectorPtrs &vectors, share::ObBatchSelector &selector);
   int append_selective(const ObIArray<ObDatumVector> &datum_vectors, const uint16_t *selector,
                        int64_t size);
 
@@ -70,6 +80,7 @@ public:
   inline int64_t remain_size() const { return max_batch_size_ - size_; }
   inline bool empty() const { return 0 == size_; }
   inline bool full() const { return size_ == max_batch_size_; }
+  inline bool is_inited() const { return is_inited_; }
 
   // Total memory usage
   int64_t memory_usage() const;
@@ -81,6 +92,7 @@ public:
 private:
   int init_vectors(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                    const sql::ObBitVector *col_nullables, int64_t max_batch_size);
+  int init_vectors(const common::ObIArray<ObColumnSchemaItem> &column_schemas, int64_t max_batch_size);
 
 private:
   common::ObArenaAllocator allocator_; // 常驻内存分配器

@@ -154,7 +154,7 @@ int ObDirectLoadOriginTable::prepare_tables()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected not sstable", KR(ret), KPC(table));
       }
-    } else if (table->is_ddl_sstable()) {
+    } else if (table->is_ddl_sstable()) { // ignore inc_major_ddl_sstables
       ObSSTable *ddl_sstable = nullptr;
       if (OB_ISNULL(ddl_sstable = dynamic_cast<ObSSTable *>(table))) {
         ret = OB_ERR_UNEXPECTED;
@@ -181,7 +181,8 @@ int ObDirectLoadOriginTable::scan(
     const ObDatumRange &key_range,
     ObIAllocator &allocator,
     ObDirectLoadOriginTableScanner *&row_iter,
-    bool skip_read_lob)
+    bool skip_read_lob,
+    bool skip_del_row)
 {
   int ret = OB_SUCCESS;
   row_iter = nullptr;
@@ -196,7 +197,7 @@ int ObDirectLoadOriginTable::scan(
     if (OB_ISNULL(row_scanner = OB_NEWx(ObDirectLoadOriginTableScanner, (&allocator)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadOriginTableScanner", KR(ret));
-    } else if (OB_FAIL(row_scanner->init(this, skip_read_lob))) {
+    } else if (OB_FAIL(row_scanner->init(this, skip_read_lob, skip_del_row))) {
       LOG_WARN("Fail to init row scanner", KR(ret), K(*this));
     } else if (OB_FAIL(row_scanner->open(key_range))) {
       LOG_WARN("Fail to open row scanner", KR(ret), K(key_range));
@@ -411,7 +412,7 @@ int ObDirectLoadOriginTableAccessor::init_get_table_param()
  * ObDirectLoadOriginTableScanner
  */
 
-int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table, bool skip_read_lob)
+int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table, bool skip_read_lob, bool skip_del_row)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -422,6 +423,9 @@ int ObDirectLoadOriginTableScanner::init(ObDirectLoadOriginTable *origin_table, 
   } else if (OB_FAIL(scan_merge_.init(table_access_param_, table_access_ctx_, get_table_param_))) {
     LOG_WARN("fail to init scan merge", KR(ret));
   } else {
+    if (!skip_del_row) {
+      scan_merge_.set_iter_del_row(true);
+    }
     datum_row_.seq_no_ = 0;
     is_inited_ = true;
   }
@@ -462,6 +466,7 @@ int ObDirectLoadOriginTableScanner::get_next_row(const ObDirectLoadDatumRow *&re
     } else {
       datum_row_.storage_datums_ = datum_row->storage_datums_;
       datum_row_.count_ = datum_row->count_;
+      datum_row_.is_delete_ = datum_row->row_flag_.is_delete();
       result_row = &datum_row_;
     }
   }

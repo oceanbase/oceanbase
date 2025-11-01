@@ -63,5 +63,23 @@ int ObBatchDatumRows::to_datum_row(int64_t idx, ObDatumRow &datum_row) const {
   return ret;
 }
 
+int ObBatchDatumRows::shadow_copy(const ObBatchDatumRows &other)
+{
+  int ret = OB_SUCCESS;
+  row_flag_ = other.row_flag_;
+  mvcc_row_flag_ = other.mvcc_row_flag_;
+  trans_id_ = other.trans_id_;
+  row_count_ = other.row_count_;
+  vectors_.reuse();
+  if (OB_FAIL(vectors_.prepare_allocate(other.vectors_.count()))) {
+    LOG_WARN("failed to prepare allocate", KR(ret));
+  } else {
+    for (int64_t i = 0; i < other.vectors_.count(); i++) {
+      vectors_.at(i) = other.vectors_.at(i);
+    }
+  }
+  return ret;
+}
+
 } // namespace blocksstable
 } // namespace oceanbase

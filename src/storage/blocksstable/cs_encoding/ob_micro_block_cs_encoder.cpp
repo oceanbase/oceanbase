@@ -114,7 +114,6 @@ ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
     encoders_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     stream_offsets_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     encoder_allocator_(cs_encoder_sizes, lib::ObMemAttr(MTL_ID(), "CSBlkEnc")),
-    hash_tables_unused_times_(0),
     hashtables_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     hashtable_factory_(),
     col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),

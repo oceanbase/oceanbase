@@ -121,12 +121,13 @@ public:
 
 enum ObVectorAuxTableIdx //FARM COMPAT WHITELIST
 {
-  VEC_FIRST_AUX_TBL_IDX = 0,  // HNSW_DELTA_BUF_TABLE  or  IVF_CENTROID_TABLE
+  VEC_FIRST_AUX_TBL_IDX = 0,  // HNSW_DELTA_BUF_TABLE  or  IVF_CENTROID_TABLE or HNSW_HYBRID_LOG_TABLE
   VEC_SECOND_AUX_TBL_IDX = 1, // HNSW_INDEX_ID_TABLE   or  IVF_CID_VEC_TABLE   or  IVF_PQ_CODE_TABLE
   VEC_THIRD_AUX_TBL_IDX = 2,  // HNSW_SNAPSHOT_DATA_TABLE  or  IVF_ROWKEY_CID_TABLE  or  IVF_PQ_ROWKEY_CID_TABLE
   VEC_FOURTH_AUX_TBL_IDX = 3, // HNSW_ROWKEY_VID_TABLE     or  IVF_SQ_META_TABLE     or  IVF_PQ_ID_TABLE
   VEC_FIFTH_AUX_TBL_IDX = 4,  // HNSW_VID_ROWKEY_TABLE
-  VEC_MAX_AUX_TBL_IDX = 5
+  VEC_SIXTH_AUX_TBL_IDX = 5,  // HNSW_HYBRID_EMBEDDED_TABLE
+  VEC_MAX_AUX_TBL_IDX = 6
 };
 
 enum ObVectorSPIVColumnIdx
@@ -138,19 +139,28 @@ enum ObVectorSPIVColumnIdx
   SPIV_MAX_COL_CNT = 3
 };
 
+/*
+ * hybrid log table reuse delta table col's enum
+ * hybrid embedded table has vid and vector col
+ */
+static const int HNSW_HYBRID_COL_CNT = 2;
+
 enum ObVectorHNSWColumnIdx
 {
   // for HNSW
   HNSW_DELTA_VID_COL = 0,
   HNSW_DELTA_TYPE_COL = 1,
-  HNSW_DELTA_VECTOR_COL = 2,
+  HNSW_DELTA_VECTOR_COL = 2, // chunk col when is hybrid index
   HNSW_INDEX_ID_VID_COL = 3,
   HNSW_INDEX_ID_TYPE_COL = 4,
   HNSW_INDEX_ID_VECTOR_COL = 5,
   HNSW_INDEX_ID_SCN_COL = 6,
   HNSW_SNAPSHOT_KEY_COL = 7,
   HNSW_SNAPSHOT_DATA_COL = 8,
-  HNSW_MAX_COL_CNT = 9,
+  HNSW_SNAPSHOT_VISIBLE_COL = 9, // FARM COMPAT WHITELIST
+  HNSW_HYBRID_EMDEDDED_VID_COL = 10, //FARM COMPAT WHITELIST
+  HNSW_HYBRID_EMDEDDED_VECTOR_COL = 11, //FARM COMPAT WHITELIST
+  HNSW_MAX_COL_CNT,
 };
 
 enum ObVectorIVFFlatColumnIdx
@@ -250,18 +260,22 @@ struct ObVecIndexInfo
     is_multi_value_index_(false),
     is_spatial_index_(false),
     can_extract_range_(false),
+    is_hybrid_index(false),
     vec_index_name_(),
+    has_get_visible_column_(false),
     all_filters_can_be_picked_out_(false)
   { }
   ~ObVecIndexInfo() {}
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
               KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
-              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name));
+              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name), K_(has_get_visible_column));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
+  inline void set_has_get_visible_column(bool value) { has_get_visible_column_ = value; }
   inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { vector_index_param_.type_ = type; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
+  bool has_get_visible_column() const { return has_get_visible_column_; }
   ObVectorIndexAlgorithmType get_vec_algorithm_type() const { return vector_index_param_.type_; }
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
   bool is_vec_aux_table_id(uint64_t tid) const;
@@ -312,8 +326,8 @@ struct ObVecIndexInfo
   ObColumnRefRawExpr *target_vec_column_;
   ObColumnRefRawExpr *vec_id_column_;
   // add all aux tid into array
-  common::ObSEArray<uint64_t, 5, common::ModulePageAllocator, true> aux_table_id_;
-  common::ObSEArray<ObColumnRefRawExpr*, 10, common::ModulePageAllocator, true> aux_table_column_;
+  common::ObSEArray<uint64_t, 6, common::ModulePageAllocator, true> aux_table_id_;
+  common::ObSEArray<ObColumnRefRawExpr*, 12, common::ModulePageAllocator, true> aux_table_column_;
   common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> extra_info_columns_;
 
   uint64_t main_table_tid_;
@@ -327,7 +341,9 @@ struct ObVecIndexInfo
   bool is_multi_value_index_;
   bool is_spatial_index_;
   bool can_extract_range_;
+  bool is_hybrid_index;
   ObString vec_index_name_;
+  bool has_get_visible_column_;
   bool all_filters_can_be_picked_out_;
 };
 
@@ -1010,7 +1026,14 @@ public:
                                             ObRawExprFactory *expr_factory,
                                             TableItem *table_item,
                                             ObColumnRefRawExpr *&snapshot_key_column,
-                                            ObColumnRefRawExpr *&snapshot_data_column);
+                                            ObColumnRefRawExpr *&snapshot_data_column,
+                                            ObColumnRefRawExpr *&snapshot_visible_column);
+  int prepare_hnsw_embedded_tbl_access_exprs(const ObTableSchema *embedded_table,
+                                             const ObTableSchema *table_schema,
+                                             ObRawExprFactory *expr_factory,
+                                             TableItem *table_item,
+                                             ObColumnRefRawExpr *&embedded_vid_column,
+                                             ObColumnRefRawExpr *&embedded_vector_column);
   int prepare_hnsw_index_id_col();
   inline bool need_doc_id_index_back() const
   {

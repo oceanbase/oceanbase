@@ -40,6 +40,8 @@ namespace observer
 class ObTableLoadParam;
 class ObTableLoadTransCtx;
 class ObTableLoadStoreCtx;
+class ObTableLoadStoreTrans;
+class ObTableLoadDagWriter;
 
 class ObTableLoadTransStore
 {
@@ -68,7 +70,7 @@ public:
 class ObTableLoadTransStoreWriter
 {
 public:
-  ObTableLoadTransStoreWriter(ObTableLoadTransStore *trans_store);
+  ObTableLoadTransStoreWriter(ObTableLoadStoreTrans *trans, ObTableLoadTransStore *trans_store);
   ~ObTableLoadTransStoreWriter();
   int init();
   int advance_sequence_no(int32_t session_id, uint64_t sequence_no, ObTableLoadMutexGuard &guard);
@@ -76,6 +78,8 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
+  int px_write(common::ObIVector *tablet_id_vector,
+               const storage::ObDirectLoadBatchRows &batch_rows);
   int px_write(const common::ObTabletID &tablet_id,
                const storage::ObDirectLoadBatchRows &batch_rows);
   int px_write(const common::ObTabletID &tablet_id,
@@ -222,6 +226,7 @@ private:
   };
 
 private:
+  ObTableLoadStoreTrans *const trans_;
   ObTableLoadTransStore *const trans_store_;
   ObTableLoadTransCtx *const trans_ctx_;
   ObTableLoadStoreCtx *const store_ctx_;
@@ -243,7 +248,9 @@ private:
     common::ObArenaAllocator cast_allocator_;
     ObDataTypeCastParams cast_params_;
     IWriter *writer_;
+    ObTableLoadDagWriter *dag_writer_;
     uint64_t last_receive_sequence_no_;
+    int64_t processed_rows_;
   };
   SessionContext *session_ctx_array_;
   int64_t lob_inrow_threshold_; // for incremental direct load

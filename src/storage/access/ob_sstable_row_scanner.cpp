@@ -144,7 +144,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
     sstable_ = static_cast<ObSSTable *>(table);
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
-    is_di_base_iter_ = iter_param.is_delete_insert_ && sstable_->is_major_sstable();
+    is_di_base_iter_ = iter_param.is_delete_insert_ && sstable_->is_major_type_sstable();
     ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(access_ctx.get_sample_executor());
     if (!prefetcher_.is_valid()) {
       if (OB_FAIL(prefetcher_.init(
@@ -425,7 +425,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
     if (OB_NOT_NULL(sstable_)) {
       if (sstable_->is_minor_sstable()) {
         ++access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_;
-      } else if (sstable_->is_major_sstable()) {
+      } else if (sstable_->is_major_type_sstable()) {
         ++access_ctx_->table_store_stat_.major_sstable_read_row_cnt_;
       }
     }
@@ -509,9 +509,12 @@ template<typename PrefetchType>
 int ObSSTableRowScanner<PrefetchType>::refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != block_row_store_ &&
-      OB_FAIL(prefetcher_.refresh_blockscan_checker(prefetcher_.cur_micro_data_fetch_idx_ + 1, rowkey))) {
-    LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
+  if (nullptr != block_row_store_) {
+    if (OB_FAIL(prefetcher_.refresh_blockscan_checker(prefetcher_.cur_micro_data_fetch_idx_ + 1, rowkey))) {
+      LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
+    } else {
+      LOG_DEBUG("refresh blockscan", K(ret), K(rowkey));
+    }
   }
   return ret;
 }
@@ -826,8 +829,12 @@ int ObSSTableRowScanner<PrefetcheType>::try_skip_deleted_row(ObCSRowId &co_curre
     } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get deleted row and get end row id", K(ret), K(co_current));
     }
-  } else if (OB_FAIL(micro_scanner_->check_and_revert_non_border_rowkey(co_prefetcher->get_border_rowkey(), *deleted_row, co_current))) {
+  } else if (OB_FAIL(micro_scanner_->check_and_revert_non_border_rowkey(co_prefetcher->get_border_rowkey(),
+                                                                        *deleted_row,
+                                                                        co_current))) {
     LOG_WARN("fail to check and revert non border rowkey", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
+  } else {
+    FLOG_INFO("co sstable try skip deleted row", K(ret), K(co_prefetcher->get_border_rowkey()), KPC(deleted_row), K(co_current));
   }
   return ret;
 }
@@ -1039,16 +1046,13 @@ int ObSSTableRowScanner<PrefetchType>::try_refreshing_blockscan_checker_for_colu
 }
 
 template<typename PrefetchType>
-int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_border_rowkey,
-                                                       int64_t &curr_scan_index,
+int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(int64_t &curr_scan_index,
                                                        blocksstable::ObDatumRowkey& rowkey,
-                                                       blocksstable::ObDatumRowkey &border_rowkey,
                                                        common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   const ObDatumRow *row = nullptr;
   ObDatumRowkey tmp_rowkey;
-  border_rowkey.reset();
   rowkey.reset();
   block_row_store_->disable();
   bool is_delete_insert = iter_param_->is_delete_insert_; // save is_delete_insert_
@@ -1079,10 +1083,6 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_borde
     curr_scan_index = cur_range_idx_;
   }
 
-  // get di base border rowkey
-  if (OB_SUCC(ret) && need_set_border_rowkey) {
-    border_rowkey = prefetcher_.get_border_rowkey();
-  }
   const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = is_delete_insert; // restore is_delete_insert_
   return ret;
 }

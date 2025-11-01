@@ -145,7 +145,9 @@ int ObTableEstimator::estimate_multi_scan_row_count(
       tmp_cost.logical_row_count_ = tmp_cost.physical_row_count_ = 1;
     } else if (current_table->is_sstable()) {
       ObSSTable *sstable = static_cast<ObSSTable *>(current_table);
-      if (OB_FAIL(estimate_sstable_scan_row_count(base_input, sstable, range, tmp_cost))) {
+      if (sstable->is_inc_major_ddl_aggregate_sstable()) {
+        // do nothing
+      } else if (OB_FAIL(estimate_sstable_scan_row_count(base_input, sstable, range, tmp_cost))) {
         LOG_WARN("failed to estimate sstable row count", K(ret), K(*current_table));
       }
     } else if (current_table->is_data_memtable()) {

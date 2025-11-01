@@ -12187,11 +12187,11 @@ public:
            const common::ObTabletID tablet_id,
            const common::ObTabletID lob_meta_tablet_id,
            transaction::ObTxDesc *tx_desc,
-           const ObDirectLoadType direct_load_type = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL,
-           const transaction::ObTransID &trans_id = transaction::ObTransID(),
-           const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ(),
-           const int64_t snapshot_version = 0,
-           const uint64_t data_format_version = 0);
+           const ObDirectLoadType direct_load_type,
+           const transaction::ObTransID &trans_id,
+           const transaction::ObTxSEQ &seq_no,
+           const int64_t snapshot_version,
+           const uint64_t data_format_version);
   int release();
   bool is_valid() const
   {

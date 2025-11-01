@@ -118,7 +118,8 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
       single_tablet_id_ = store_ctx_->write_ctx_.single_tablet_id_;
       single_tablet_id_vector_ = store_ctx_->write_ctx_.single_tablet_id_vector_;
     }
-    if (store_ctx_->write_ctx_.enable_pre_sort_) {
+    // dag路径统一通过store_writer写
+    if (!store_ctx_->enable_dag_ && store_ctx_->write_ctx_.enable_pre_sort_) {
       if (OB_ISNULL(pre_sort_writer_ = OB_NEWx(ObTableLoadPreSortWriter, &allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObTableLoadPreSortWriter", KR(ret));
@@ -216,11 +217,13 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
                                                   batch_ctx_->tablet_id_vector_))) {
       LOG_WARN("fail to create tablet id fixed vector", KR(ret));
    } else if (OB_FAIL(batch_ctx_->batch_rows_.init(store_ctx_->write_ctx_.px_column_descs_,
+                                                   store_ctx_->write_ctx_.px_column_accuracys_,
                                                    store_ctx_->write_ctx_.px_column_project_idxs_,
                                                    store_ctx_->ctx_->schema_.column_descs_,
                                                    store_ctx_->ctx_->schema_.col_nullables_,
                                                    row_flag,
-                                                   max_batch_size))) {
+                                                   max_batch_size,
+                                                   store_ctx_->enable_dag_))) {
       LOG_WARN("fail to init batch rows", KR(ret));
     } else if (OB_ISNULL(batch_ctx_->selector_ = static_cast<uint16_t *>(
                            allocator_.alloc(sizeof(uint16_t) * max_batch_size)))) {
@@ -269,40 +272,6 @@ inline void ObTableLoadStoreTransPXWriter::make_selector(const ObBatchRows &brs,
   }
 }
 
-int ObTableLoadStoreTransPXWriter::adapt_vectors(const ObIArray<ObIVector *> &vectors,
-                                                 const ObBatchRows &brs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < vectors.count(); ++i) {
-    ObIVector *vec = vectors.at(i);
-    const VectorFormat format = vec->get_format();
-    switch (format) {
-      case VEC_FIXED:
-      case VEC_CONTINUOUS:
-      case VEC_UNIFORM:
-      case VEC_UNIFORM_CONST:
-        break;
-      case VEC_DISCRETE: {
-        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vec);
-        if (discrete_vec->has_null()) {
-          // 将null对应的len设置为0
-          ObBitVector *nulls = discrete_vec->get_nulls();
-          ObLength *lens = discrete_vec->get_lens();
-          for (int64_t i = 0; i < brs.size_; ++i) {
-            lens[i] *= !nulls->at(i);
-          }
-        }
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected vector format", KR(ret), KPC(this), KPC(vec), K(format));
-        break;
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadStoreTransPXWriter::write_vector(ObIVector *tablet_id_vector,
                                                 const ObIArray<ObIVector *> &vectors,
                                                 const ObBatchRows &brs,
@@ -324,8 +293,6 @@ int ObTableLoadStoreTransPXWriter::write_vector(ObIVector *tablet_id_vector,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(is_single_part_), K(column_count_),
              K(batch_ctx_->max_batch_size_), KP(tablet_id_vector), K(vectors.count()), K(brs));
-  } else if (OB_FAIL(adapt_vectors(vectors, brs))) {
-    LOG_WARN("fail to adapt vectors", KR(ret));
   } else {
     const bool all_rows_active =
       (brs.all_rows_active_ || 0 == brs.skip_->accumulate_bit_cnt(brs.size_));
@@ -546,9 +513,19 @@ int ObTableLoadStoreTransPXWriter::flush_buffer()
   ObDirectLoadBatchRows &batch_rows = batch_ctx_->batch_rows_.get_batch_rows();
   if (store_ctx_->ctx_->schema_.has_lob_rowkey_ &&
       OB_FAIL(ObDirectLoadVectorUtils::check_rowkey_length(
-        batch_rows, store_ctx_->ctx_->schema_.rowkey_column_count_))) {
+        batch_rows, store_ctx_->ctx_->schema_.rowkey_column_count_,
+        store_ctx_->ctx_->schema_.column_descs_))) {
     LOG_WARN("fail to check rowkey length", KR(ret));
-  } else if (nullptr != pre_sort_writer_) { // pre_sort
+  } else if (store_ctx_->enable_dag_) {
+    ObIVector *tablet_id_vector =
+      is_single_part_ ? single_tablet_id_vector_ : batch_ctx_->tablet_id_vector_->get_vector();
+    if (!is_single_part_ &&
+        OB_FAIL(check_tablets(batch_ctx_->tablet_id_vector_, batch_rows.size()))) {
+      LOG_WARN("fail to check tablets", KR(ret));
+    } else if (OB_FAIL(writer_->px_write(tablet_id_vector, batch_rows))) {
+      LOG_WARN("fail to px write", KR(ret));
+    }
+  } else if (store_ctx_->write_ctx_.enable_pre_sort_) { // pre_sort
     ObIVector *tablet_id_vector =
       is_single_part_ ? single_tablet_id_vector_ : batch_ctx_->tablet_id_vector_->get_vector();
     if (!is_single_part_ &&

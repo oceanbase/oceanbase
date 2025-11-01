@@ -17,6 +17,7 @@
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/tx/ob_trans_define_v4.h"
+#include "storage/ddl/ob_direct_load_type.h"
 
 namespace oceanbase
 {
@@ -46,11 +47,19 @@ public:
   ~ObDDLIncRedoLogWriter();
   int init(
       const share::ObLSID &ls_id,
-      const ObTabletID &tablet_id);
+      const ObTabletID &tablet_id,
+      const ObDirectLoadType direct_load_type,
+      const transaction::ObTransID &trans_id = transaction::ObTransID(),
+      const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ(),
+      const bool is_inc_major_log = false);
   void reset();
   static bool need_retry(int ret_code, bool allow_remote_write);
   int write_inc_start_log_with_retry(
       const ObTabletID &lob_meta_tablet_id,
+      const bool has_cs_replica,
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      const ObStorageSchema *storage_schema,
       transaction::ObTxDesc *tx_desc,
       share::SCN &start_scn);
   int write_inc_redo_log_with_retry(
@@ -62,10 +71,17 @@ public:
   int write_inc_commit_log_with_retry(
       const bool allow_remote_write,
       const ObTabletID &lob_meta_tablet_id,
-      transaction::ObTxDesc *tx_desc);
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      transaction::ObTxDesc *tx_desc,
+      share::SCN &commit_scn);
 private:
   int write_inc_start_log(
       const ObTabletID &lob_meta_tablet_id,
+      const bool has_cs_replica,
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      const ObStorageSchema *storage_schema,
       transaction::ObTxDesc *tx_desc,
       share::SCN &start_scn);
   int write_inc_redo_log(
@@ -76,7 +92,10 @@ private:
   int write_inc_commit_log(
       const bool allow_remote_write,
       const ObTabletID &lob_meta_tablet_id,
-      transaction::ObTxDesc *tx_desc);
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      transaction::ObTxDesc *tx_desc,
+      share::SCN &commit_scn);
   int get_write_store_ctx_guard(
       transaction::ObTxDesc *tx_desc,
       ObStoreCtxGuard &ctx_guard,
@@ -93,13 +112,27 @@ private:
       transaction::ObTxDesc *tx_desc);
   int local_write_inc_commit_log(
       ObDDLIncCommitLog &log,
-      transaction::ObTxDesc *tx_desc);
+      transaction::ObTxDesc *tx_desc,
+      share::SCN &commit_scn);
   int retry_remote_write_inc_commit_log(
       const common::ObTabletID lob_meta_tablet_id,
-      transaction::ObTxDesc *tx_desc);
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      transaction::ObTxDesc *tx_desc,
+      share::SCN &commit_scn);
   int remote_write_inc_commit_log(
       const common::ObTabletID lob_meta_tablet_id,
-      transaction::ObTxDesc *tx_desc);
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      transaction::ObTxDesc *tx_desc,
+      share::SCN &commit_scn);
+  int freeze_inc_minor_ddl_kv(
+      ObLS *ls,
+      const common::ObTabletID &data_tablet_id,
+      const common::ObTabletID &lob_meta_tablet_id);
+  int freeze_inc_minor_tablet(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id);
 private:
   bool is_inited_;
   bool remote_write_;
@@ -109,6 +142,10 @@ private:
   ObAddr leader_addr_;
   share::ObLSID leader_ls_id_;
   char *buffer_;
+  ObDirectLoadType direct_load_type_;
+  transaction::ObTransID trans_id_;
+  transaction::ObTxSEQ seq_no_;
+  bool is_inc_major_log_;
 };
 
 class ObDDLIncRedoLogWriterCallback : public blocksstable::ObIMacroBlockFlushCallback
@@ -129,7 +166,10 @@ public:
       const transaction::ObTransID &trans_id,
       const int64_t parallel_cnt,
       const int64_t cg_cnt,
-      const transaction::ObTxSEQ seq_no);
+      const transaction::ObTxSEQ &seq_no,
+      const int64_t row_id_offset = -1,
+      blocksstable::ObMacroMetaTempStore *macro_meta_store = nullptr);
+  int init(ObDDLRedoLogWriterCallbackInitParam &init_param);
   void reset();
   int write(
       const blocksstable::ObStorageObjectHandle &macro_handle,
@@ -138,22 +178,15 @@ public:
       const int64_t buf_len,
       const int64_t row_count);
   int wait();
+  virtual int64_t get_ddl_start_row_offset() const override { return param_.row_id_offset_; }
+  void set_merge_slice_idx(const int64_t slice_idx) { param_.merge_slice_idx_ = slice_idx; }
+private:
+  bool is_column_group_info_valid() const;
 private:
   bool is_inited_;
+  ObDDLRedoLogWriterCallbackInitParam param_;
   storage::ObDDLMacroBlockRedoInfo redo_info_;
-  blocksstable::MacroBlockId macro_block_id_;
   ObDDLIncRedoLogWriter ddl_inc_writer_;
-  storage::ObDDLMacroBlockType block_type_;
-  ObITable::TableKey table_key_;
-  int64_t task_id_;
-  share::SCN start_scn_;
-  uint64_t data_format_version_;
-  storage::ObDirectLoadType direct_load_type_;
-  transaction::ObTxDesc *tx_desc_;
-  transaction::ObTransID trans_id_;
-  int64_t parallel_cnt_;
-  int64_t cg_cnt_;
-  transaction::ObTxSEQ seq_no_; // for incremental direct load
 };
 
 }  // end namespace storage

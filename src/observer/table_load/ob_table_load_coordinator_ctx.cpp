@@ -234,7 +234,7 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
       table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
-      add_to_all_server_event(error_code);
+      add_to_all_server_event(error_code_);
       FLOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code_), K(lbt()));
     }
   }
@@ -253,7 +253,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort(int error_code)
       error_code_ = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
     }
     table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
-    add_to_all_server_event(error_code);
+    add_to_all_server_event(error_code_);
     FLOG_INFO("LOAD DATA COORDINATOR status abort", KR(error_code_), K(lbt()));
   }
   return ret;

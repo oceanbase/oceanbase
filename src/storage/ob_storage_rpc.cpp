@@ -23,6 +23,7 @@
 #include "storage/high_availability/ob_ss_transfer_backfill_utils.h"
 #include "storage/shared_storage/ob_ss_local_cache_service.h"
 #endif
+#include "storage/ddl/ob_direct_load_mgr_utils.h"
 #include "lib/thread/thread.h"
 #include "lib/worker.h"
 
@@ -322,7 +323,7 @@ ObCopyTabletSSTableInfoArg::ObCopyTabletSSTableInfoArg()
     max_major_sstable_snapshot_(0),
     minor_sstable_scn_range_(),
     ddl_sstable_scn_range_(),
-    inc_major_ddl_sstable_end_scn_()
+    inc_major_ddl_sstable_end_scn_(SCN::min_scn())
 {
 }
 
@@ -336,7 +337,7 @@ void ObCopyTabletSSTableInfoArg::reset()
   max_major_sstable_snapshot_ = 0;
   minor_sstable_scn_range_.reset();
   ddl_sstable_scn_range_.reset();
-  inc_major_ddl_sstable_end_scn_.reset();
+  inc_major_ddl_sstable_end_scn_.set_min();
 }
 
 bool ObCopyTabletSSTableInfoArg::is_valid() const
@@ -344,7 +345,8 @@ bool ObCopyTabletSSTableInfoArg::is_valid() const
   return tablet_id_.is_valid()
       && max_major_sstable_snapshot_ >= 0
       && minor_sstable_scn_range_.is_valid()
-      && ddl_sstable_scn_range_.is_valid();
+      && ddl_sstable_scn_range_.is_valid()
+      && inc_major_ddl_sstable_end_scn_.is_valid();
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletSSTableInfoArg,
@@ -2972,26 +2974,17 @@ int ObCheckStartTransferTabletsDelegate::check_transfer_out_tablet_sstable_(cons
   ObTableStoreIterator ddl_iter;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   const int64_t emergency_sstable_count = ObTabletTableStore::EMERGENCY_SSTABLE_CNT;
-
   if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet is null", K(ret));
   } else if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
-  } else if (!wrapper.get_member()->get_major_sstables().empty()) {
-    // do nothing
   } else if (wrapper.get_member()->get_table_count() > emergency_sstable_count) {
     ret = OB_TOO_MANY_SSTABLE;
     LOG_WARN("transfer src tablet has too many sstable, cannot transfer, need retry", K(ret),
         "table_count", wrapper.get_member()->get_table_count(), "emergency sstable count", emergency_sstable_count);
-  } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
-    LOG_WARN("failed to get ddl sstable", K(ret));
-  } else if (ddl_iter.is_valid()) { // indicates the existence of ddl sstable
-    ret = OB_MAJOR_SSTABLE_NOT_EXIST;
-    LOG_WARN("major sstable do not exit, need to wait ddl merge", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
-  } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-    ret = OB_INVALID_TABLE_STORE;
-    LOG_WARN("neither major sstable nor ddl sstable exists", K(ret), K(ddl_iter));
+  } else if (OB_FAIL(ObTransferUtils::check_ddl_merge_finished(tablet))) {
+    LOG_WARN("failed to check ddl merge finished", K(ret), KPC(tablet));
   }
   return ret;
 }

@@ -232,6 +232,66 @@ int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
 }
 
 template<bool EnableNewFlatFormat>
+int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row_and_trans_version(
+    const ObMicroBlockAddr &block_addr,
+    const ObMicroBlockData &block_data,
+    const ObDatumRowkey &rowkey,
+    const storage::ObITableReadInfo &read_info,
+    ObDatumRow &row,
+    int64_t &trans_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_idx;
+  UNUSED(block_addr);
+
+  if (OB_UNLIKELY(!read_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid columns info ", K(ret), K(read_info));
+  } else if (OB_FAIL(inner_init(block_data, read_info, rowkey))) {
+    LOG_WARN("fail to inner init ", K(ret), K(block_data));
+  } else if (OB_FAIL(locate_rowkey(rowkey, row_idx))) {
+    if (OB_BEYOND_THE_RANGE != ret) {
+      LOG_WARN("failed to locate row, ", K(ret), K(rowkey));
+    }
+  } else if (OB_FAIL(flat_row_reader_.read_row(data_begin_ + index_data_[row_idx],
+                                               index_data_[row_idx + 1] - index_data_[row_idx],
+                                               &read_info,
+                                               row))) {
+    LOG_WARN("Fail to read row, ", K(ret), K(rowkey));
+  } else {
+    row.fast_filter_skipped_ = false;
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t trans_col_idx = read_info.get_trans_col_index();
+    const int64_t schema_rowkey_cnt = read_info.get_schema_rowkey_count();
+    const ObRowHeader *row_header = nullptr;
+    if (0 <= trans_col_idx) {
+      trans_version = -row.storage_datums_[trans_col_idx].get_int();
+    } else if (OB_FAIL(flat_row_reader_.read_row_header(data_begin_ + index_data_[row_idx],
+                                                        index_data_[row_idx + 1] - index_data_[row_idx],
+                                                        row_header))) {
+      LOG_WARN("failed to setup row", K(ret), K(row_idx));
+    } else if (OB_UNLIKELY(row_header->get_row_multi_version_flag().is_ghost_row())) {
+      trans_version = 0;
+    } else {
+      ObStorageDatum datum;
+      // read trans version col directly, which must be committed row in row getter
+      if (OB_FAIL(flat_row_reader_.read_column(
+                  data_begin_ + index_data_[row_idx],
+                  index_data_[row_idx + 1] - index_data_[row_idx],
+                  schema_rowkey_cnt,
+                  datum))) {
+        LOG_WARN("fail to read column", K(ret), K(schema_rowkey_cnt));
+      } else {
+        trans_version = -datum.get_int();
+      }
+    }
+  }
+  return ret;
+}
+
+template<bool EnableNewFlatFormat>
 int ObMicroBlockGetReader<EnableNewFlatFormat>::exist_row(
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,

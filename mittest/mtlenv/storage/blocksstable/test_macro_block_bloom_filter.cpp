@@ -372,6 +372,7 @@ void TestMacroBlockBloomFilter::prepare_data_store_desc(
                        DATA_CURRENT_VERSION,
                        table_schema_.get_micro_index_clustered(),
                        0 /*transfer_seq*/,
+                       0 /*concurrent_cnt*/,
                        reorganization_scn);
   data_desc.get_desc().sstable_index_builder_ = sstable_index_builder;
   ASSERT_EQ(OB_SUCCESS, ret);

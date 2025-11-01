@@ -2040,7 +2040,7 @@ int ObJoinOrder::init_sample_info_for_access_path(AccessPath *ap,
     } else if (get_plan()->get_optimizer_context().is_online_ddl() &&
                get_plan()->get_optimizer_context().get_root_stmt()->is_insert_stmt() &&
                !get_plan()->get_optimizer_context().is_heap_table_ddl()) {
-      ap->sample_info_.method_ = SampleInfo::SampleMethod::BLOCK_SAMPLE;
+      ap->sample_info_.method_ = SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE;
       ap->sample_info_.scope_ = SampleInfo::SAMPLE_ALL_DATA;
       ap->sample_info_.percent_ = (double)get_plan()->get_optimizer_context().get_px_object_sample_rate() / 1000;
       ap->sample_info_.table_id_ = ap->get_index_table_id();
@@ -20755,9 +20755,10 @@ int ObJoinOrder::get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
     for (int i = 0; i < vector_expr->get_param_count() && OB_SUCC(ret) && !vector_index_match; ++i) {
       const ObRawExpr *tmp_expr = vector_expr->get_param_expr(i);
       const ObColumnSchemaV2 *tmp_index_col = nullptr;
-      if (OB_NOT_NULL(tmp_expr) && tmp_expr->is_column_ref_expr()) {
+      const ObColumnRefRawExpr *col_ref = ObRawExprUtils::get_column_ref_expr_recursively(tmp_expr);
+      if (OB_NOT_NULL(col_ref)) {
         column_exist = true;
-        const ObColumnRefRawExpr *col_ref = ObRawExprUtils::get_column_ref_expr_recursively(tmp_expr);
+
         if (col_ref->get_table_id() == table_id
             && OB_NOT_NULL(tmp_index_col = table_schema->get_column_schema(col_ref->get_column_id()))) {
           if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema,

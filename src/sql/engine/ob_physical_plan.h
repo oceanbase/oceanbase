@@ -394,6 +394,11 @@ public:
   {
     enable_inc_direct_load_ = enable_inc_direct_load;
   }
+  inline void set_enable_inc_major(const bool enable_inc_major)
+  {
+    enable_inc_major_ = enable_inc_major;
+  }
+  inline bool get_enable_inc_major() const { return enable_inc_major_; }
   inline bool get_enable_replace() const { return enable_replace_; }
   inline void set_enable_replace(const bool enable_replace)
   {
@@ -795,6 +800,7 @@ public:
 private:
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   bool enable_inc_direct_load_; // for incremental direct load
+  bool enable_inc_major_; // for incremental direct load
   bool enable_replace_; // for incremental direct load
   bool insert_overwrite_; // for insert overwrite
   double online_sample_percent_; // for incremental direct load

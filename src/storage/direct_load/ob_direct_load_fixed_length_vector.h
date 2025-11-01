@@ -42,6 +42,11 @@ public:
     }
   }
 
+  int sum_lob_length(int64_t *sum_bytes, const int64_t batch_size) const override
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+
   void reuse(const int64_t batch_size) override
   {
     // shallow_copy可能会修改data_

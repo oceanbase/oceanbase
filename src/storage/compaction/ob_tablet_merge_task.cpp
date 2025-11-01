@@ -44,7 +44,8 @@ ObMergeParameter::ObMergeParameter(
   const ObStaticMergeParam &static_param)
   : static_param_(static_param),
     merge_range_(),
-    merge_rowid_range_(),
+    sstable_scn_range_array_(nullptr),
+    merge_rowid_range_array_(nullptr),
     cg_rowkey_read_info_(nullptr),
     trans_state_mgr_(nullptr),
     error_location_(nullptr),
@@ -61,9 +62,13 @@ bool ObMergeParameter::is_valid() const
 void ObMergeParameter::reset()
 {
   merge_range_.reset();
-  merge_rowid_range_.reset();
   trans_state_mgr_ = nullptr;
   error_location_ = nullptr;
+  if (nullptr != sstable_scn_range_array_) {
+    allocator_->free(sstable_scn_range_array_);
+    sstable_scn_range_array_ = nullptr;
+    merge_rowid_range_array_ = nullptr;
+  }
   if (nullptr != cg_rowkey_read_info_) {
     cg_rowkey_read_info_->~ObITableReadInfo();
     allocator_->free(cg_rowkey_read_info_);
@@ -137,7 +142,7 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), K_(merge_version_range), K_(merge_rowid_range));
+    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), KPC(this));
   }
   return ret;
 }
@@ -148,19 +153,57 @@ int ObMergeParameter::set_merge_rowid_range(ObIAllocator *allocator)
   ObITable *table = nullptr;
   ObSSTable *sstable = nullptr;
   const ObTablesHandleArray &tables_handle = get_tables_handle();
-  if (OB_UNLIKELY(tables_handle.empty() || nullptr == allocator)) {
+  void *buf = nullptr;
+  const int64_t alloc_size = static_param_.get_major_sstable_count() * (sizeof(ObScnRange) + sizeof(ObDatumRange));
+  if (OB_UNLIKELY(tables_handle.empty() || nullptr == allocator || static_param_.get_major_sstable_count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected null tables handle", K(ret), K(tables_handle), K(allocator));
-  } else if (OB_ISNULL(table = tables_handle.get_table(0)) || !table->is_sstable()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected null table", K(ret), KPC(table));
-  } else if (OB_ISNULL(sstable = static_cast<ObSSTable *>(table))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected null table", K(ret), KPC(sstable));
-  } else if (OB_FAIL(sstable->get_cs_range(merge_range_, *static_param_.rowkey_read_info_, *allocator, merge_rowid_range_))) {
-    STORAGE_LOG(WARN, "failed to get cs range", K(ret), K(merge_range_));
+    STORAGE_LOG(WARN, "unexpected null tables handle", K(ret), K(tables_handle), K(allocator), K_(static_param));
+  } else if (OB_ISNULL(buf = allocator->alloc(alloc_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(static_param_.get_major_sstable_count()));
+  } else {
+    sstable_scn_range_array_ = new (buf) ObScnRange[static_param_.get_major_sstable_count()];
+    buf = static_cast<char *>(buf) + static_param_.get_major_sstable_count() * sizeof(ObScnRange);
+    merge_rowid_range_array_ = new (buf) ObDatumRange[static_param_.get_major_sstable_count()];
+    for (int64_t i = 0; i < static_param_.get_major_sstable_count(); ++i) {
+      if (OB_ISNULL(table = tables_handle.get_table(i)) || !table->is_major_type_sstable()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected null table", K(ret), K(i), KPC(table));
+      } else if (OB_ISNULL(sstable = static_cast<ObSSTable *>(table))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected null table", K(ret), K(i), KPC(sstable));
+      } else if (OB_FAIL(sstable->get_cs_range(merge_range_, *static_param_.rowkey_read_info_, *allocator, merge_rowid_range_array_[i]))) {
+        STORAGE_LOG(WARN, "failed to get cs range", K(ret), K(merge_range_));
+      } else if (FALSE_IT(sstable_scn_range_array_[i] = sstable->get_key().scn_range_)) {
+      }
+    }
   }
 
+  return ret;
+}
+
+int ObMergeParameter::get_rowid_range_by_scn_range(const share::ObScnRange &scn_range, const blocksstable::ObDatumRange *&rowid_range) const
+{
+  int ret = OB_SUCCESS;
+  rowid_range = nullptr;
+  if (OB_UNLIKELY(!scn_range.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(scn_range));
+  } else if (OB_ISNULL(sstable_scn_range_array_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null sstable scn range array", K(ret));
+  } else {
+    for (int64_t i = 0; rowid_range == nullptr && i < static_param_.get_major_sstable_count(); ++i) {
+      if (sstable_scn_range_array_[i] == scn_range) {
+        rowid_range = &merge_rowid_range_array_[i];
+        break;
+      }
+    }
+    if (OB_UNLIKELY(nullptr == rowid_range || !rowid_range->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected rowid range", K(ret), K(scn_range), KPC(rowid_range));
+    }
+  }
   return ret;
 }
 
@@ -200,13 +243,39 @@ bool ObMergeParameter::is_ha_compeleted() const
   return static_param_.is_ha_compeleted_;
 }
 
+bool ObMergeParameter::is_empty_table(const ObITable &table) const
+{
+  int ret = OB_SUCCESS;
+  bool bret = table.is_empty();
+  if (!bret && table.is_sstable()) {
+    const ObSSTable *sstable = static_cast<const ObSSTable *>(&table);
+    if (sstable->is_column_store_sstable()) {
+      const ObDatumRange *merge_rowid_range = nullptr;
+      if (OB_FAIL(get_rowid_range_by_scn_range(sstable->get_key().scn_range_, merge_rowid_range))) { // empty sstable
+        LOG_ERROR("failed to get rowid range by scn range", K(ret), K(sstable->get_key().scn_range_));
+      } else if (merge_rowid_range->start_key_.is_min_rowkey() || merge_rowid_range->end_key_.is_max_rowkey()) {
+        bret = false;
+      } else {
+        const int64_t start_rowid = merge_rowid_range->start_key_.datums_[0].get_int(), end_rowid = merge_rowid_range->end_key_.datums_[0].get_int();
+        bret = end_rowid < start_rowid;
+      }
+    }
+  }
+  return bret;
+}
+
 int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(static_param), K_(merge_version_range), K_(merge_range), K_(merge_rowid_range));
+    J_KV(K_(static_param), K_(merge_version_range), K_(merge_range));
+    if (nullptr != merge_rowid_range_array_) {
+      for (int64_t i = 0; i < static_param_.get_major_sstable_count(); ++i) {
+        J_KV(K(i), K(merge_rowid_range_array_[i]));
+      }
+    }
     J_OBJ_END();
   }
   return pos;
@@ -810,7 +879,7 @@ int ObTabletMergeDag::alloc_merge_ctx()
     ctx_ = NEW_CTX(ObTabletMiniMergeCtx);
   } else if (is_meta_major_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
-  } else if (is_major_merge_type(merge_type)) {
+  } else if (is_major_merge_type(merge_type) || is_inc_major_merge(merge_type)) {
     if (is_local_exec_mode(param_.exec_mode_)) {
       ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -902,6 +971,8 @@ int ObTabletMergePrepareTask::process()
     LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(merge_dag_));
   } else if (finish_flag) {
     // do nothing
+  } else if (OB_FAIL(ctx->init_uncommit_tx_info())) {
+    STORAGE_LOG(WARN, "Failed to init uncommit tx info", K(ret), K(ctx));
   } else if (OB_FAIL(merge_dag_->generate_merge_task(*ctx, this/*prepare_task*/))) {
     LOG_WARN("failed to generate merge task", K(ret), KPC(ctx), KPC(merge_dag_));
   }
@@ -1155,9 +1226,6 @@ int ObTabletMergeTask::init(const int64_t idx, ObBasicTabletMergeCtx &ctx)
   } else if (OB_UNLIKELY(idx < 0 || !ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument is invalid", K(ret), K(idx), K(ctx));
-  } else if (OB_UNLIKELY(ctx.check_task_finish(idx))) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("cur parallel merge task has finished", K(ret), K(idx), K(ctx));
   } else if (FALSE_IT(allocator_.bind_mem_ctx(ctx.mem_ctx_))) { // maybe not bind mem ctx in constructor
   } else if (FALSE_IT(prepare_allocator(ctx.get_merge_type(), ctx.get_dag_param().is_reserve_mode_,
       allocator_, false/*is_global_mem*/))) {
@@ -1279,8 +1347,7 @@ int ObTabletMergeTask::process()
       }
     }
 
-    if (FAILEDx(ctx_->mark_task_finish(idx_))) {
-      LOG_WARN("failed to mark task finish", KR(ret), K_(idx));
+    if (OB_FAIL(ret)) {
     } else {
       ctx_->mem_ctx_.mem_click();
       FLOG_INFO("merge macro blocks ok", K(idx_), "task", *this);

@@ -1103,7 +1103,8 @@ inline bool is_built_in_vec_hnsw_index(const ObIndexType index_type)
   return is_vec_rowkey_vid_type(index_type) ||
          is_vec_vid_rowkey_type(index_type) ||
          is_vec_index_id_type(index_type) ||
-         is_vec_index_snapshot_data_type(index_type);
+         is_vec_index_snapshot_data_type(index_type) ||
+         is_hybrid_vec_index_embedded_type(index_type);
 }
 
 inline bool is_built_in_vec_spiv_index(const ObIndexType index_type)
@@ -1125,7 +1126,8 @@ inline bool is_vec_domain_index(const ObIndexType index_type)
          is_vec_ivfflat_centroid_index(index_type) ||
          is_vec_ivfsq8_centroid_index(index_type) ||
          is_vec_ivfpq_centroid_index(index_type) ||
-         is_vec_dim_docid_value_type(index_type);
+         is_vec_dim_docid_value_type(index_type) ||
+         is_hybrid_vec_index_log_type(index_type);
 }
 
 inline bool is_vec_index(const ObIndexType index_type)

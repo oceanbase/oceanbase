@@ -384,28 +384,12 @@ int ObVectorIndexRefresher::do_refresh() {
              K(domain_table_schema->get_table_name_str()));
   } else if (domain_table_row_cnt < refresh_ctx_->refresh_threshold_) {
     // refreshing is not triggered.
-  }
-#ifndef DBMS_VECTOR_MOCK_TEST
-  else if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
-                                              true,
-                                              col_ids,
-                                              domain_tb_col_names))) {
-    LOG_WARN("fail to get vid & type col names", KR(ret),
-             K(domain_table_schema->get_table_name_str()));
-  } else if (OB_FAIL(get_vector_index_col_names(index_id_tb_schema,
-                                                false,
-                                                col_ids,
-                                                index_id_tb_col_names))) {
-    LOG_WARN("fail to get vid & type col names", KR(ret),
-             K(index_id_tb_schema->get_table_name_str()));
-  }
-#endif
-  else if (OB_FAIL(
+  } else if (OB_FAIL(
                timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
     LOG_WARN("set trx timeout failed", K(ret));
   } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
     LOG_WARN("set timeout failed", K(ret));
-  } else {
+  } else if (domain_table_schema->is_vec_delta_buffer_type()) {
     // do refresh
     if (OB_SUCC(ret)) {
       int64_t affected_rows = 0;
@@ -429,7 +413,19 @@ int ObVectorIndexRefresher::do_refresh() {
                 domain_table_schema->get_table_name_str().ptr(),
                 refresh_ctx_->scn_.get_val_for_sql())))
 #else
-        if (OB_FAIL(insert_sel_sql.append_fmt(
+        if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
+                                                    true,
+                                                    col_ids,
+                                                    domain_tb_col_names))) {
+          LOG_WARN("fail to get vid & type col names", KR(ret),
+                   K(domain_table_schema->get_table_name_str()));
+        } else if (OB_FAIL(get_vector_index_col_names(index_id_tb_schema,
+                                                      false,
+                                                      col_ids,
+                                                      index_id_tb_col_names))) {
+          LOG_WARN("fail to get vid & type col names", KR(ret),
+                   K(index_id_tb_schema->get_table_name_str()));
+        } else if (OB_FAIL(insert_sel_sql.append_fmt(
                 "INSERT INTO `%.*s`.`%.*s` (%.*s) SELECT ora_rowscn, %.*s FROM "
                 "`%.*s`.`%.*s` WHERE ora_rowscn <= %lu",
                 static_cast<int>(db_schema->get_database_name_str().length()),
@@ -540,6 +536,14 @@ int ObVectorIndexRefresher::do_refresh() {
         }
       }
     }
+  } else if (domain_table_schema->is_hybrid_vec_index_log_type()) {
+    ObVecTaskManager manager(tenant_id, domain_table_schema->get_table_id(), ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_HYBRID_VECTOR_EMBEDDING);
+    if (OB_FAIL(manager.process_task())) {
+      LOG_WARN("failed to process rebuild task", K(ret), K(manager));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get domain index table schema unexpected", K(ret), K(domain_table_schema));
   }
   return ret;
 }
@@ -558,6 +562,8 @@ int ObVectorIndexRefresher::do_rebuild() {
   int64_t index_id_table_row_cnt = 0;
   bool triggered = true;
   bool rebuild_index_online = false;
+  bool is_hybrid_vector = false;
+  bool need_embedding_when_rebuild = false;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -610,6 +616,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   if (OB_FAIL(ret)) {
   } else if (domain_table_schema->is_vec_hnsw_index()) {
     bool is_valid = true;
+    is_hybrid_vector = domain_table_schema->is_hybrid_vec_index_log_type();
     if (!refresh_ctx_->idx_parameters_.empty() && OB_FAIL(ob_write_string(allocator, refresh_ctx_->idx_parameters_, idx_parameters))) {
       LOG_WARN("fail to write string", K(ret), K(refresh_ctx_->idx_parameters_));
     } else if (!idx_parameters.empty()
@@ -687,54 +694,71 @@ int ObVectorIndexRefresher::do_rebuild() {
     triggered = true;
   }
 
-  if (OB_SUCC(ret) && triggered) {
+  if (OB_FAIL(ret)) {
+  } else if (is_hybrid_vector &&
+             !idx_parameters.empty() &&
+             !domain_table_schema->get_index_params().empty() &&
+             OB_FAIL(ObVectorIndexUtil::check_need_embedding_when_rebuild(domain_table_schema->get_index_params(),
+                                                                        idx_parameters,
+                                                                        *domain_table_schema,
+                                                                        need_embedding_when_rebuild))) {
+    LOG_WARN("fail to check the rebuild index different", K(ret), K(idx_parameters));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (triggered && (!is_hybrid_vector || need_embedding_when_rebuild)) {
     LOG_INFO("start to rebuild vec index");
     const int64_t ddl_rpc_timeout = GCONF._ob_ddl_timeout;
     ObTimeoutCtx timeout_ctx;
     ObAddr rs_addr;
     obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
     SMART_VAR(ObRebuildIndexArg, rebuild_index_arg) {
-    obrpc::ObAlterTableRes rebuild_index_res;
-    const bool is_support_cancel = true;
-    rebuild_index_arg.tenant_id_ = tenant_id;
-    rebuild_index_arg.exec_tenant_id_ = tenant_id;
-    rebuild_index_arg.session_id_ = session_info->get_server_sid();
-    rebuild_index_arg.database_name_ = db_schema->get_database_name_str();
-    rebuild_index_arg.table_name_ = base_table_schema->get_table_name_str();
-    rebuild_index_arg.index_name_ = domain_table_schema->get_table_name_str();
-    rebuild_index_arg.index_table_id_ = domain_table_schema->get_table_id();
-    rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
-    rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
-    rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
-    rebuild_index_arg.rebuild_index_online_ = rebuild_index_online;
-    if (OB_ISNULL(GCTX.rs_mgr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("GCTX.rs_mgr is null", K(ret));
-    } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
-      LOG_WARN("fail to rootservice address", KR(ret));
-    } else if (OB_ISNULL(common_rpc_proxy)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected common_rpc_proxy nullptr", K(ret));
-    } else if (OB_FAIL(common_rpc_proxy->to(rs_addr).timeout(ddl_rpc_timeout).rebuild_vec_index(rebuild_index_arg, rebuild_index_res))) {
-      LOG_WARN("failed to post backup ls data res", K(ret), K(ddl_rpc_timeout), K(rebuild_index_arg));
-    } else {
-      LOG_INFO("succ to send rebuild vector index rpc", K(rs_addr), K(refresh_ctx_));
-    }
-    if (OB_SUCC(ret)) {
-      if (rebuild_index_online) {
-        LOG_INFO("succ to change vec index params", K(ret));
-      } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(rebuild_index_arg.tenant_id_,
-                                                            rebuild_index_res.task_id_,
-                                                            false/*do not retry at executor*/,
-                                                            session_info,
-                                                            common_rpc_proxy,
-                                                            is_support_cancel))) {
-        LOG_WARN("fail wait rebuild vec index finish", K(ret));
+      obrpc::ObAlterTableRes rebuild_index_res;
+      const bool is_support_cancel = true;
+      rebuild_index_arg.tenant_id_ = tenant_id;
+      rebuild_index_arg.exec_tenant_id_ = tenant_id;
+      rebuild_index_arg.session_id_ = session_info->get_server_sid();
+      rebuild_index_arg.database_name_ = db_schema->get_database_name_str();
+      rebuild_index_arg.table_name_ = base_table_schema->get_table_name_str();
+      rebuild_index_arg.index_name_ = domain_table_schema->get_table_name_str();
+      rebuild_index_arg.index_table_id_ = domain_table_schema->get_table_id();
+      rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
+      rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
+      rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
+      rebuild_index_arg.rebuild_index_online_ = rebuild_index_online;
+      if (OB_ISNULL(GCTX.rs_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("GCTX.rs_mgr is null", K(ret));
+      } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+        LOG_WARN("fail to rootservice address", KR(ret));
+      } else if (OB_ISNULL(common_rpc_proxy)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected common_rpc_proxy nullptr", K(ret));
+      } else if (OB_FAIL(common_rpc_proxy->to(rs_addr).timeout(ddl_rpc_timeout).rebuild_vec_index(rebuild_index_arg, rebuild_index_res))) {
+        LOG_WARN("failed to post backup ls data res", K(ret), K(ddl_rpc_timeout), K(rebuild_index_arg));
       } else {
-        LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
+        LOG_INFO("succ to send rebuild vector index rpc", K(rs_addr), K(refresh_ctx_));
+      }
+      if (OB_SUCC(ret)) {
+        if (rebuild_index_online) {
+          LOG_INFO("succ to change vec index params", K(ret));
+        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(rebuild_index_arg.tenant_id_,
+                                                              rebuild_index_res.task_id_,
+                                                              false/*do not retry at executor*/,
+                                                              session_info,
+                                                              common_rpc_proxy,
+                                                              is_support_cancel))) {
+          LOG_WARN("fail wait rebuild vec index finish", K(ret));
+        } else {
+          LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
+        }
       }
     }
-  }
+  } else if (is_hybrid_vector && !need_embedding_when_rebuild) {
+    ObVecTaskManager manager(tenant_id, domain_table_schema->get_table_id(), ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL);
+    if (OB_FAIL(manager.process_task())) {
+      LOG_WARN("failed to process rebuild task", K(ret), K(manager));
+    }
   }
   return ret;
 }

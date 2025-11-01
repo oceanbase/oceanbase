@@ -249,6 +249,11 @@ private:
       const ObMigrationSSTableParam &param,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
+
+  static int check_inc_major_ddl_sstable_need_copy_(
+      const ObMigrationSSTableParam &param,
+      ObTabletHandle &tablet_handle,
+      bool &need_copy);
 };
 
 class ObStorageHACancelDagNetUtils

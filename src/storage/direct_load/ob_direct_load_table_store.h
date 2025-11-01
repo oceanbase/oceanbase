@@ -30,8 +30,15 @@ public:
   ObDirectLoadTableStore();
   ~ObDirectLoadTableStore();
 
+  // 恢复到init前的状态
+  void reset();
+  // 恢复到刚init的状态
+  void reuse();
+  // 清空table
   void clear();
+
   int init();
+  bool is_inited() const { return tablet_table_map_.created(); }
   bool is_valid() const;
 
 #define DEFINE_TABLE_TYPE_INTERFACE(type, classType, name, shortName) \
@@ -41,7 +48,7 @@ public:
   OB_DIRECT_LOAD_TABLE_DEF(DEFINE_TABLE_TYPE_INTERFACE);
 
 #undef DEFINE_TABLE_TYPE_INTERFACE
-
+  void set_table_type(ObDirectLoadTableType::Type table_type) { table_type_ = table_type; }
   int get_tablet_tables(const ObTabletID &tablet_id,
                         ObDirectLoadTableHandleArray *&table_handle_array);
   // 添加table之前需要先设置 table_data_desc_, table_type_
@@ -54,6 +61,7 @@ public:
   {
     table_data_desc_ = table_data_desc;
   }
+  ObDirectLoadTableType::Type get_table_type() const { return table_type_; }
   const ObDirectLoadTableDataDesc &get_table_data_desc() const { return table_data_desc_; }
 
   bool empty() const { return tablet_table_map_.empty(); }

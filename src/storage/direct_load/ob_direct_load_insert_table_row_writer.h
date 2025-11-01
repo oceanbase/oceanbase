@@ -60,6 +60,7 @@ protected:
   ObDirectLoadBatchRows batch_rows_;
   blocksstable::ObBatchDatumRows datum_rows_;
   ObTabletID tablet_id_;
+  ObDirectLoadMgrAgent ddl_agent_;
   int64_t slice_id_;
   int64_t max_bytes_size_;
   int64_t row_count_;

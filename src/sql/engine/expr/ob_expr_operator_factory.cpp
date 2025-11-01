@@ -436,9 +436,13 @@
 #include "sql/engine/expr/ob_expr_vec_scn.h"
 #include "sql/engine/expr/ob_expr_vec_key.h"
 #include "sql/engine/expr/ob_expr_vec_data.h"
+#include "sql/engine/expr/ob_expr_vec_visible.h"
 #include "sql/engine/expr/ob_expr_spiv_dim.h"
 #include "sql/engine/expr/ob_expr_spiv_value.h"
 #include "sql/engine/expr/ob_expr_vector.h"
+#include "sql/engine/expr/ob_expr_semantic_distance.h"
+#include "sql/engine/expr/ob_expr_vec_chunk.h"
+#include "sql/engine/expr/ob_expr_embedded_vec.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 #include "sql/engine/expr/ob_expr_rb_build_empty.h"
 #include "sql/engine/expr/ob_expr_rb_is_empty.h"
@@ -519,6 +523,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_embed.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_rerank.h"
 #include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
+#include "sql/engine/expr/ob_expr_semantic_distance.h"
 #include "sql/engine/expr/ob_expr_bucket.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "sql/engine/expr/ob_expr_vector_similarity.h"
@@ -1195,6 +1200,9 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVecScn);
     REG_OP(ObExprVecKey);
     REG_OP(ObExprVecData);
+    REG_OP(ObExprVecChunk);
+    REG_OP(ObExprEmbeddedVec);
+    REG_OP(ObExprVecVisible);
     REG_OP(ObExprSpivDim);
     REG_OP(ObExprSpivValue);
     REG_OP(ObExprVectorL2Distance);
@@ -1205,6 +1213,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVectorDims);
     REG_OP(ObExprVectorNorm);
     REG_OP(ObExprVectorDistance);
+    REG_OP(ObExprSemanticDistance);
+    REG_OP(ObExprSemanticVectorDistance);
     REG_OP(ObExprVectorL2Similarity);
     REG_OP(ObExprVectorCosineSimilarity);
     REG_OP(ObExprVectorIPSimilarity);
@@ -1807,12 +1817,18 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       alias_name = ObString::make_string(N_VEC_TYPE);
     } else if (0 == origin_name.case_compare("VEC_VECTOR")) {
       alias_name = ObString::make_string(N_VEC_VECTOR);
+    } else if (0 == origin_name.case_compare("EMBEDDED_VEC")) {
+      alias_name = ObString::make_string(N_EMBEDDED_VEC);
     } else if (0 == origin_name.case_compare("VEC_SCN")) {
       alias_name = ObString::make_string(N_VEC_SCN);
     } else if (0 == origin_name.case_compare("VEC_KEY")) {
       alias_name = ObString::make_string(N_VEC_KEY);
     } else if (0 == origin_name.case_compare("VEC_DATA")) {
       alias_name = ObString::make_string(N_VEC_DATA);
+    } else if (0 == origin_name.case_compare("VEC_CHUNK")) {
+      alias_name = ObString::make_string(N_VEC_CHUNK);
+    } else if (0 == origin_name.case_compare("VEC_VISIBLE")) {
+      alias_name = ObString::make_string(N_VEC_VISIBLE);
     } else if (0 == origin_name.case_compare("SPIV_DIM")) {
       alias_name = ObString::make_string(N_SPIV_DIM);
     } else if (0 == origin_name.case_compare("SPIV_VALUE")) {
@@ -1841,6 +1857,8 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
     } else if (0 == origin_name.case_compare("centroid")) {
       // centroid is synonym for st_centroid
       alias_name = ObString::make_string(N_ST_CENTROID);
+    } else if (0 == origin_name.case_compare("semantic_distance")) {
+      alias_name = ObString::make_string(N_SEMANTIC_DISTANCE);
     } else {
       //do nothing
     }

@@ -198,6 +198,10 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
     adaptive_ctx_.is_primary_index_ = hnsw_scan_param.is_primary_index_;
     adaptive_ctx_.with_extra_info_ = extra_column_count_ > 0;
     adaptive_ctx_.only_rowkey_filter_ = is_primary_pre_with_rowkey_with_filter_;
+    is_hybrid_ = vec_aux_ctdef_->is_hybrid_;
+    if (is_hybrid_) {
+      embedded_table_iter_ = hnsw_scan_param.embedded_table_iter_;
+    }
     func_lookup_ctdef_ = hnsw_scan_param.func_lookup_ctdef_;
     func_lookup_rtdef_ = hnsw_scan_param.func_lookup_rtdef_;
     func_lookup_iter_ = hnsw_scan_param.func_lookup_iter_;
@@ -217,9 +221,11 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
       } else if (limit_param_.offset_ + limit_param_.limit_ > MAX_VSAG_QUERY_RES_SIZE) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_WARN(OB_NOT_SUPPORTED, "query size (limit + offset) is more than 16384");
-      } else if (OB_FAIL(ObDasVecScanUtils::init_sort(
+      } else if (!is_hybrid_ && OB_FAIL(ObDasVecScanUtils::init_sort(
                      vec_aux_ctdef_, vec_aux_rtdef_, sort_ctdef_, sort_rtdef_, limit_param_, search_vec_, distance_calc_))) {
         LOG_WARN("failed to init sort", K(ret), KPC(vec_aux_ctdef_), KPC(vec_aux_rtdef_));
+      } else if (is_hybrid_ && OB_FAIL(ObDasVecScanUtils::init_sort_of_hybrid_index(hnsw_iter_alloc_, vec_aux_ctdef_, sort_ctdef_, sort_rtdef_, hybrid_search_vec_, distance_calc_))) {
+        LOG_WARN("failed to init sort", K(ret), KPC(vec_aux_ctdef_), KPC(sort_ctdef_), KPC(sort_rtdef_));
       } else if (OB_FAIL(set_vec_index_param(vec_aux_ctdef_->vec_index_param_))) {
         LOG_WARN("failed to set vec index param", K(ret));
       }
@@ -321,6 +327,11 @@ int ObDASHNSWScanIter::inner_reuse()
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
     ret = OB_SUCCESS;
   }
+  if (is_hybrid_ && !embedded_table_iter_first_scan_ && OB_FAIL(reuse_embedded_table_iter())) {
+    LOG_WARN("failed to reuse embedded iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
   if (OB_NOT_NULL(rowkey_vid_iter_) && !rowkey_vid_iter_first_scan_ && OB_FAIL(reuse_rowkey_vid_iter())) {
     LOG_WARN("failed to reuse rowkey vid iter", K(ret));
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
@@ -410,6 +421,11 @@ int ObDASHNSWScanIter::inner_release()
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
     ret = OB_SUCCESS;
   }
+  if (is_hybrid_ && OB_NOT_NULL(embedded_table_iter_) && OB_FAIL(embedded_table_iter_->release())) {
+    LOG_WARN("failed to release embedded table iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
   if (OB_NOT_NULL(rowkey_vid_iter_) && OB_FAIL(rowkey_vid_iter_->release())) {
     LOG_WARN("failed to release rowkey vid iter", K(ret));
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
@@ -435,6 +451,7 @@ int ObDASHNSWScanIter::inner_release()
   snapshot_iter_ = nullptr;
   vid_rowkey_iter_ = nullptr;
   com_aux_vec_iter_ = nullptr;
+  embedded_table_iter_ = nullptr;
   rowkey_vid_iter_ = nullptr;
   data_filter_iter_ = nullptr;
 
@@ -451,6 +468,9 @@ int ObDASHNSWScanIter::inner_release()
   ObDasVecScanUtils::release_scan_param(snapshot_scan_param_);
   ObDasVecScanUtils::release_scan_param(vid_rowkey_scan_param_);
   ObDasVecScanUtils::release_scan_param(com_aux_vec_scan_param_);
+  if (is_hybrid_) {
+    ObDasVecScanUtils::release_scan_param(embedded_table_scan_param_);
+  }
   ObDasVecScanUtils::release_scan_param(rowkey_vid_scan_param_);
   ObDasVecScanUtils::release_scan_param(data_filter_scan_param_);
   ObDasVecScanUtils::release_scan_param(func_filter_scan_param_);
@@ -464,6 +484,7 @@ int ObDASHNSWScanIter::inner_release()
   sort_ctdef_ = nullptr;
   sort_rtdef_ = nullptr;
   search_vec_ = nullptr;
+  hybrid_search_vec_.reset();
   distance_calc_ = nullptr;
   query_cond_.reset();
 
@@ -474,6 +495,7 @@ int ObDASHNSWScanIter::inner_release()
   }
   extra_in_rowkey_idxs_.reset();
   vec_op_alloc_.reset();
+  hnsw_iter_alloc_.reset();
   adaptive_ctx_.reset();
   rel_map_.destroy();
   return ret;
@@ -492,16 +514,70 @@ uint64_t ObDASHNSWScanIter::adjust_batch_count(bool is_vectored, uint64_t batch_
   return ret_count;
 }
 
-int ObDASHNSWScanIter::save_distance_expr_result(const ObObj& dist_obj)
+int ObDASHNSWScanIter::calc_dis_by_vid(const ObObj& vid_obj, double &dis_value)
+{
+  int ret = OB_SUCCESS;
+
+  ObRowkey vid_rowkey(&const_cast<ObObj&>(vid_obj), 1);
+
+  ObRowkey *rowkey = nullptr;
+  ObString embedded_vector;
+  if (use_vid_ && OB_FAIL(get_rowkey_from_vid_rowkey_table(mem_context_->get_arena_allocator(), vid_rowkey, rowkey))) {
+    LOG_WARN("failed to get rowkey from vid rowkey table", K(ret), K(vid_rowkey));
+  } else if (OB_FAIL(get_vector_from_embedded_table(mem_context_->get_arena_allocator(), rowkey, &vid_rowkey, embedded_vector))) {
+      LOG_WARN("failed to get vector from embedded table", K(ret), KPC(rowkey), K(vid_rowkey));
+  } else {
+    const ObString &query_vector = query_cond_.query_vector_;
+    if (query_vector.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query vector is empty", K(ret));
+    } else {
+      const float *embedded_data = reinterpret_cast<const float*>(embedded_vector.ptr());
+      const float *query_data = reinterpret_cast<const float*>(query_vector.ptr());
+      const int64_t embedded_size = embedded_vector.length() / sizeof(float);
+      const int64_t query_size = query_vector.length() / sizeof(float);
+      int64_t vec_dis_type = ObVectorIndexDistAlgorithm::VIDA_MAX;
+      ObVectorIndexParam index_param;
+
+      if (embedded_size != query_size) {
+        ret = OB_ERR_INVALID_VECTOR_DIM;
+        LOG_WARN("vector dimensions do not match", K(ret), K(embedded_size), K(query_size));
+      } else if (embedded_size != dim_) {
+        ret = OB_ERR_INVALID_VECTOR_DIM;
+        LOG_WARN("vector dimension does not match expected dim", K(ret), K(embedded_size), K(dim_));
+      } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_param_, ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
+        LOG_WARN("failed to parse params.", K(ret));
+      } else if (OB_FAIL(share::ObVectorIndexUtil::get_vec_dis_type_from_dis_algorithm(index_param.dist_algorithm_, vec_dis_type))) {
+        LOG_WARN("failed to get vec dis type", K(ret));
+      } else if (OB_FAIL(ObExprVectorDistance::DisFunc<float>::distance_funcs[vec_dis_type](embedded_data, query_data, embedded_size, dis_value))) {
+        LOG_WARN("failed to calculate distance", K(ret), K(vec_dis_type));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row)
 {
   int ret = OB_SUCCESS;
   if (need_save_distance_result()) {
     ObDatum &distance = distance_calc_->locate_datum_for_write(*sort_rtdef_->eval_ctx_);
     ObEvalInfo &eval_info = distance_calc_->get_eval_info(*sort_rtdef_->eval_ctx_);
 
-    distance.set_double(dist_obj.get_float());
-    eval_info.evaluated_ = true;
-    eval_info.projected_ = true;
+    double dis_value = 0;
+    if (is_hybrid_ && is_hnsw_bq()) {
+      if (OB_FAIL(calc_dis_by_vid(row->get_cell(1), dis_value))) {
+        LOG_WARN("failed to process adaptor state", K(ret));
+      }
+    } else {
+      dis_value = row->get_cell(0).get_float();
+    }
+    if (OB_SUCC(ret)) {
+      distance.set_double(dis_value);
+      eval_info.evaluated_ = true;
+      eval_info.projected_ = true;
+    }
   }
   return ret;
 }
@@ -536,7 +612,7 @@ int ObDASHNSWScanIter::inner_get_next_row()
     LOG_WARN("should not be one row", K(row->get_count()), K(extra_column_count_), K(ret));
   } else {
     if (need_save_distance_result()
-      && OB_FAIL(save_distance_expr_result(row->get_cell(0)))) {
+      && OB_FAIL(save_distance_expr_result(row))) {
       LOG_WARN("failed to set distance", K(ret));
     } else {
       ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
@@ -646,15 +722,27 @@ int ObDASHNSWScanIter::save_distance_expr_result(ObNewRow *row, int64_t size)
     batch_info_guard.set_batch_size(size);
 
     for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-      ObObj& dist_obj = row->get_cell(i * a_batch_obj_cnt);
       batch_info_guard.set_batch_idx(i);
 
-      ObDatum& wr_datum = distance_calc_->locate_datum_for_write(*sort_rtdef_->eval_ctx_);
-      wr_datum.set_double(dist_obj.get_float());
+      double dis_value = 0;
+      if (is_hybrid_ && is_hnsw_bq()) {
+        ObObj& vid_obj = row->get_cell(i * a_batch_obj_cnt + 1);
+        if (OB_FAIL(calc_dis_by_vid(vid_obj, dis_value))) {
+          LOG_WARN("failed to calc distance by vid", K(ret));
+        }
+      } else {
+        ObObj& dist_obj = row->get_cell(i * a_batch_obj_cnt);
+        dis_value = dist_obj.get_float();
+      }
 
-      ObEvalInfo &eval_info = distance_calc_->get_eval_info(*sort_rtdef_->eval_ctx_);
-      eval_info.evaluated_ = true;
-      eval_info.projected_ = true;
+      if (OB_SUCC(ret)) {
+        ObDatum& wr_datum = distance_calc_->locate_datum_for_write(*sort_rtdef_->eval_ctx_);
+        wr_datum.set_double(dis_value);
+
+        ObEvalInfo &eval_info = distance_calc_->get_eval_info(*sort_rtdef_->eval_ctx_);
+        eval_info.evaluated_ = true;
+        eval_info.projected_ = true;
+      }
     }
   }
 
@@ -836,6 +924,7 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
   index_ctx.inc_tablet_id_ = delta_buf_tablet_id_;
   index_ctx.vbitmap_tablet_id_ = index_id_tablet_id_;
   index_ctx.snapshot_tablet_id_ = snapshot_tablet_id_;
+  index_ctx.embedded_tablet_id_ = embedded_tablet_id_;
   index_ctx.data_tablet_id_ = com_aux_vec_tablet_id_;
   bool ls_leader = true;
 
@@ -991,14 +1080,13 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
                         bool check_need_complete_data)
 {
   INIT_SUCC(ret);
-  ObString search_vec;
+  ObString search_vec = query_cond_.query_vector_;
   need_complete_data = false;
   const float* distances_inc = nullptr;
   const float* distances_snap = nullptr;
   uint64_t limit = limit_param_.limit_ + limit_param_.offset_;
   uint64_t capaticy = limit > brute_cnt ? brute_cnt : limit;
   ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
-  ObExprVectorDistance::ObVecDisType dis_type = ObExprVectorDistance::ObVecDisType::MAX_TYPE;
   ObSimpleMaxHeap max_heap(&allocator, capaticy);
   // query brute distances
   if (capaticy == 0) {
@@ -1007,10 +1095,6 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
   } else if (OB_ISNULL(adaptor)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("shouldn't be null.", K(ret));
-  } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_, search_vec_, search_vec))) {
-    LOG_WARN("failed to get real search vec", K(ret));
-  } else if (OB_FAIL(ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0], *sort_rtdef_->eval_ctx_, dis_type))) {
-    LOG_WARN("failed to get distance type.", K(ret));
   } else if (OB_FAIL(max_heap.init())) {
     LOG_WARN("failed to init max heap.", K(ret));
   } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(search_vec.ptr()), brute_vids, brute_cnt, distances_inc, false, search_vec.length()))) {
@@ -1137,14 +1221,7 @@ int ObDASHNSWScanIter::init_brute_force_params(ObVectorQueryAdaptorResultContext
   } else {
     ctx.limit = limit_param_.limit_ + limit_param_.offset_;
     ctx.limit = get_reorder_count_for_brute_force(query_cond_.ef_search_, ctx.limit, search_param_);
-
-    if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(),
-                                                       sort_rtdef_, search_vec_, ctx.search_vec))) {
-      LOG_WARN("failed to get real search vec", K(ret));
-    } else if (OB_FAIL(ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0],
-                                                                 *sort_rtdef_->eval_ctx_, ctx.dis_type))) {
-      LOG_WARN("failed to get distance type", K(ret));
-    }
+    ctx.search_vec = query_cond_.query_vector_;
   }
 
   return ret;
@@ -1736,6 +1813,105 @@ int ObDASHNSWScanIter::get_from_vid_rowkey(ObIAllocator &allocator, ObRowkey *&r
   return ret;
 }
 
+int ObDASHNSWScanIter::get_from_embedded_table(ObIAllocator &allocator, ObString &vector)
+{
+  int ret = OB_SUCCESS;
+
+  const ObDASScanCtDef *embedded_table_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_embedded_tbl_idx(), ObTSCIRScanType::OB_VEC_EMBEDDED_SCAN);
+  ObDASScanRtDef *embedded_table_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_embedded_tbl_idx());
+
+  if (OB_ISNULL(embedded_table_ctdef) || OB_ISNULL(embedded_table_rtdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("embedded table ctdef or rtdef is null", K(ret), KP(embedded_table_ctdef), KP(embedded_table_rtdef));
+  } else {
+    int output_row_cnt = embedded_table_ctdef->pd_expr_spec_.access_exprs_.count();
+
+    if (OB_UNLIKELY(output_row_cnt <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid output row cnt", K(ret), K(output_row_cnt));
+    } else {
+      bool found_vector_column = false;
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < output_row_cnt; i++) {
+        ObExpr *expr = embedded_table_ctdef->pd_expr_spec_.access_exprs_.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr is null", K(ret), K(i));
+        } else if (T_REF_COLUMN == expr->type_) {
+          if (found_vector_column) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("found multiple vector columns", K(ret), K(i));
+          } else {
+            found_vector_column = true;
+            ObDatum &datum = expr->locate_expr_datum(*embedded_table_rtdef->eval_ctx_);
+            vector = datum.get_string();
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator,
+                                                                  ObLongTextType,
+                                                                  CS_TYPE_BINARY,
+                                                                  embedded_table_ctdef->result_output_.at(0)->obj_meta_.has_lob_header(),
+                                                                  vector))) {
+              LOG_WARN("failed to get real data.", K(ret));
+            }
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && !found_vector_column) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no vector column found", K(ret), K(output_row_cnt));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDASHNSWScanIter::build_embedded_table_rowkey(ObIAllocator &allocator, const ObRowkey *main_rowkey, const ObRowkey *vid, ObRowkey &embedded_rowkey)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(main_rowkey) || OB_ISNULL(vid)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input parameters are null", K(ret), KP(main_rowkey), KP(vid));
+  } else {
+    int64_t main_rowkey_cnt = main_rowkey->get_obj_cnt();
+    int64_t vid_cnt = vid->get_obj_cnt();
+    int64_t total_cnt = main_rowkey_cnt + vid_cnt;
+
+    if (OB_UNLIKELY(total_cnt <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid total rowkey cnt", K(ret), K(main_rowkey_cnt), K(vid_cnt));
+    } else {
+      void *buf = nullptr;
+      ObObj *obj_ptr = nullptr;
+
+      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObObj) * total_cnt))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(total_cnt));
+      } else if (OB_FALSE_IT(obj_ptr = new (buf) ObObj[total_cnt])) {
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < main_rowkey_cnt; ++i) {
+          if (OB_FAIL(ob_write_obj(allocator, main_rowkey->get_obj_ptr()[i], obj_ptr[i]))) {
+            LOG_WARN("deep copy main rowkey value failed", K(ret), K(i));
+          }
+        }
+
+        for (int64_t i = 0; OB_SUCC(ret) && i < vid_cnt; ++i) {
+          if (OB_FAIL(ob_write_obj(allocator, vid->get_obj_ptr()[i], obj_ptr[main_rowkey_cnt + i]))) {
+            LOG_WARN("deep copy vid value failed", K(ret), K(i));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          embedded_rowkey.assign(obj_ptr, total_cnt);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDASHNSWScanIter::get_ctdef_with_rowkey_exprs(const ObDASScanCtDef *&ctdef, ObDASScanRtDef *&rtdef)
 {
   int ret = OB_SUCCESS;
@@ -2302,7 +2478,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   while (OB_SUCC(ret) && !end_search) {
     ++adaptive_ctx_.iter_times_;
     if (first_search && OB_FAIL(process_adaptor_state_post_filter_once(ada_ctx, adaptor))) {
-      LOG_WARN("failed to process adaptor state post filter once.", K(ret), K(vec_index_type_), K(vec_idx_try_path_), K(query_cond_));
+      LOG_WARN("failed to process adaptor state post filter once.", K(ret), K(vec_index_type_), K(vec_idx_try_path_));
     } else if (!first_search && !is_ipivf() && OB_FAIL(adaptor->query_next_result(ada_ctx, &query_cond_, tmp_adaptor_vid_iter_))) {
     } else if (first_search && OB_FALSE_IT(first_search = false)) {
     } else if (!is_iter_filter() && !is_ipivf()) {
@@ -3079,7 +3255,7 @@ int64_t ObDASHNSWScanIter::get_reorder_count(const int64_t ef_search, const int6
 int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query_cond)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(search_vec_) || OB_ISNULL(sort_rtdef_) || OB_ISNULL(sort_rtdef_->eval_ctx_)) {
+  if ((OB_ISNULL(search_vec_) && hybrid_search_vec_.empty()) || OB_ISNULL(sort_rtdef_) || OB_ISNULL(sort_rtdef_->eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null.", K(ret));
   } else {
@@ -3114,18 +3290,15 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
 
     ObDatum *vec_datum = NULL;
     LOG_DEBUG("print_vector_query_condition", K(query_cond.query_limit_), K(query_cond.ef_search_));
+    query_cond.extra_column_count_ = extra_column_count_;
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(OB_FAIL(search_vec_->eval(*(sort_rtdef_->eval_ctx_), vec_datum)))) {
-      LOG_WARN("eval vec arg failed", K(ret));
-    } else if (OB_FALSE_IT(query_cond.query_vector_ = vec_datum->get_string())) {
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&mem_context_->get_arena_allocator(),
-                                                                 ObLongTextType,
-                                                                 CS_TYPE_BINARY,
-                                                                 search_vec_->obj_meta_.has_lob_header(),
-                                                                 query_cond.query_vector_))) {
-      LOG_WARN("failed to get real data.", K(ret));
+    } else if (!OB_ISNULL(search_vec_)) {
+      if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_, search_vec_,
+                                                        query_cond.query_vector_))) {
+        LOG_WARN("failed to get real search vec", K(ret));
+      }
     } else {
-      query_cond.extra_column_count_ = extra_column_count_;
+      query_cond.query_vector_ = hybrid_search_vec_;
     }
     LOG_TRACE("vector index show basic hnsw query cond", K(query_cond.only_complete_data_), K(query_cond.ef_search_), K(query_cond.query_limit_),
                                             K(query_cond.extra_column_count_), K(query_cond.query_vector_));
@@ -3286,19 +3459,27 @@ int ObDASHNSWScanIter::prepare_complete_vector_data(ObVectorQueryAdaptorResultCo
       rowkey = &vid;
     }
 
-    if (OB_FAIL(ret)) {
-      if (OB_ITER_END == ret) {
-        ada_ctx.set_vector(i, nullptr, 0);
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(get_vector_from_com_aux_vec_table(mem_context_->get_arena_allocator(), rowkey, vector))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("failed to get vector from com aux vec table.", K(ret));
+    if (OB_SUCC(ret)) {
+      if (is_hybrid_) {
+      // For hybrid index, use embedded table to get vector data
+        if (OB_FAIL(get_vector_from_embedded_table(mem_context_->get_arena_allocator(), rowkey, &vid, vector))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to get vector from embedded table.", K(ret));
+          }
+        }
       } else {
-        ada_ctx.set_vector(i, nullptr, 0);
-        ret = OB_SUCCESS;
+        if (OB_FAIL(get_vector_from_com_aux_vec_table(mem_context_->get_arena_allocator(), rowkey, vector))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to get vector from com aux vec table.", K(ret));
+          }
+        }
       }
-    } else {
+    }
+
+    if (ret == OB_ITER_END) {
+      ada_ctx.set_vector(i, nullptr, 0);
+      ret = OB_SUCCESS;
+    } else if (OB_SUCC(ret)) {
       ada_ctx.set_vector(i, vector.ptr(), vector.length());
       if (extra_column_count_ > 0) {
         // Note: extra_colunm is rowkey + partition_key, rowkey must must include all partition columns
@@ -3364,6 +3545,37 @@ int ObDASHNSWScanIter::get_rowkey_from_vid_rowkey_table(ObIAllocator &allocator,
     LOG_WARN("failed to reuse vid rowkey iter.", K(ret));
   } else {
     ret = tmp_ret;
+  }
+
+  return ret;
+}
+
+int ObDASHNSWScanIter::get_vector_from_embedded_table(ObIAllocator &allocator, ObRowkey *rowkey, ObRowkey *vid, ObString &vector)
+{
+  int ret = OB_SUCCESS;
+
+  const ObDASScanCtDef *embedded_table_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_embedded_tbl_idx(), ObTSCIRScanType::OB_VEC_EMBEDDED_SCAN);
+  if (!use_vid_) {
+    // pk is uint64
+    vid->get_obj_ptr()->meta_.set_uint64();
+  }
+  // Build embedded table rowkey: main_table_rowkey + vid when use vid
+  ObRowkey embedded_tab_rowkey;
+  if (OB_FAIL(use_vid_ && build_embedded_table_rowkey(allocator, rowkey, vid, embedded_tab_rowkey))) {
+    LOG_WARN("failed to build embedded table rowkey", K(ret));
+  } else if (!embedded_table_iter_first_scan_ && OB_FAIL(reuse_embedded_table_iter())) {
+    LOG_WARN("failed to reuse embedded table iter.", K(ret));
+  } else if (OB_FAIL(ObDasVecScanUtils::set_lookup_key(use_vid_ ? embedded_tab_rowkey : *vid, embedded_table_scan_param_, embedded_table_ctdef->ref_table_id_))) {
+    LOG_WARN("failed to set lookup key", K(ret));
+  } else if (OB_FAIL(do_embedded_table_scan())) {
+    LOG_WARN("failed to do embedded table scan", K(ret));
+  } else if (OB_FALSE_IT(embedded_table_iter_->clear_evaluated_flag())) {
+  } else if (OB_FAIL(embedded_table_iter_->get_next_row())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failed to scan embedded table iter", K(ret));
+    }
+  } else if (OB_FAIL(get_from_embedded_table(allocator, vector))) {
+    LOG_WARN("failed to get vector from embedded table", K(ret));
   }
 
   return ret;
@@ -3472,12 +3684,12 @@ int ObDASHNSWScanIter::do_snapshot_table_scan()
   const ObDASScanCtDef *snapshot_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_snapshot_tbl_idx(), ObTSCIRScanType::OB_VEC_SNAPSHOT_SCAN);
   ObDASScanRtDef *snapshot_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_snapshot_tbl_idx());
 
-  return do_aux_table_scan_need_reuse(snapshot_iter_first_scan_,
-                                      snapshot_scan_param_,
-                                      snapshot_ctdef,
-                                      snapshot_rtdef,
-                                      snapshot_iter_,
-                                      snapshot_tablet_id_);
+  return do_snapshot_table_scan_need_reuse(snapshot_iter_first_scan_,
+                                           snapshot_scan_param_,
+                                           snapshot_ctdef,
+                                           snapshot_rtdef,
+                                           snapshot_iter_,
+                                           snapshot_tablet_id_);
 }
 
 int ObDASHNSWScanIter::do_com_aux_vec_table_scan()
@@ -3509,6 +3721,20 @@ int ObDASHNSWScanIter::do_com_aux_vec_table_scan()
     }
   }
   return ret;
+}
+
+int ObDASHNSWScanIter::do_embedded_table_scan()
+{
+  int ret = OB_SUCCESS;
+  const ObDASScanCtDef *embedded_tbl_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
+        vec_aux_ctdef_->get_embedded_tbl_idx(), ObTSCIRScanType::OB_VEC_EMBEDDED_SCAN);
+    ObDASScanRtDef *embedded_tbl_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_embedded_tbl_idx());
+return do_aux_table_scan(embedded_table_iter_first_scan_,
+                           embedded_table_scan_param_,
+                           embedded_tbl_ctdef,
+                           embedded_tbl_rtdef,
+                           embedded_table_iter_,
+                           embedded_tablet_id_);
 }
 
 int ObDASHNSWScanIter::do_vid_rowkey_table_scan()
@@ -3556,13 +3782,43 @@ int ObDASHNSWScanIter::do_rowkey_vid_table_scan()
   return ret;
 }
 
+int ObDASHNSWScanIter::do_snapshot_table_scan_need_reuse(bool &first_scan,
+                                                         ObTableScanParam &scan_param,
+                                                         const ObDASScanCtDef *ctdef,
+                                                         ObDASScanRtDef *rtdef,
+                                                         ObDASScanIter *iter,
+                                                         ObTabletID &tablet_id,
+                                                         bool is_get)
+{
+  int ret = OB_SUCCESS;
+  bool need_reverse = false;
+  blocksstable::ObDatumRow *unused_row = nullptr;
+  if (OB_FAIL(do_aux_table_scan_need_reuse(first_scan, scan_param, ctdef, rtdef, iter, tablet_id, is_get))) {
+    LOG_WARN("fail to do aux table scan", K(ret));
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::check_snapshot_iter_need_rescan(iter->get_output_result_iter(), need_reverse, unused_row))) {
+    LOG_WARN("fail to check snapshot iter need rescan", K(ret));
+  } else if (need_reverse) {
+    LOG_DEBUG("do snapshot table scan need rescan", K(scan_param.scan_flag_.scan_order_));
+    if (OB_FAIL(iter->release())) {
+      LOG_WARN("fail to release snapshot iter", K(ret));
+    } else if (FALSE_IT(first_scan = true)) {
+    } else if (OB_FAIL(do_aux_table_scan_need_reuse(first_scan, scan_param, ctdef, rtdef, iter, tablet_id, is_get, need_reverse))) {
+      LOG_WARN("fail to do aux table scan", K(ret));
+    }
+  } else if (OB_FAIL(do_aux_table_scan_need_reuse(first_scan, scan_param, ctdef, rtdef, iter, tablet_id, is_get, need_reverse))) {
+    LOG_WARN("fail to do aux table scan", K(ret));
+  }
+  return ret;
+}
+
 int ObDASHNSWScanIter::do_aux_table_scan_need_reuse(bool &first_scan,
                                                     ObTableScanParam &scan_param,
                                                     const ObDASScanCtDef *ctdef,
                                                     ObDASScanRtDef *rtdef,
                                                     ObDASScanIter *iter,
                                                     ObTabletID &tablet_id,
-                                                    bool is_get)
+                                                    bool is_get,
+                                                    bool need_reverse)
 {
   int ret = OB_SUCCESS;
 
@@ -3574,6 +3830,7 @@ int ObDASHNSWScanIter::do_aux_table_scan_need_reuse(bool &first_scan,
       LOG_WARN("failed to generate init scan range", K(ret));
     } else if (OB_FAIL(scan_param.key_ranges_.push_back(scan_range))) {
       LOG_WARN("failed to append scan range", K(ret));
+    } else if (need_reverse && FALSE_IT(scan_param.scan_flag_.scan_order_ = ObQueryFlag::Reverse)) {
     } else if (OB_FALSE_IT(iter->set_scan_param(scan_param))) {
     } else if (OB_FAIL(iter->do_table_scan())) {
       LOG_WARN("failed to do scan", K(ret));

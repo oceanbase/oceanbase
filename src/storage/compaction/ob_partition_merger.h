@@ -33,6 +33,8 @@
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/compaction/ob_tablet_merge_info.h"
 #include "storage/compaction/ob_progressive_merge_helper.h"
+#include "storage/compaction/ob_uncommit_tx_info.h"
+#include "storage/column_store/ob_co_merge_ctx.h"
 
 namespace oceanbase
 {
@@ -79,19 +81,68 @@ public:
       blocksstable::ObDataStoreDesc &data_store_desc);
 };
 
-class ObMerger
+struct ObMergerBasic
 {
 public:
-  ObMerger(
+  ObMergerBasic(compaction::ObLocalArena &allocator, const ObStaticMergeParam &static_param)
+    : merger_arena_(allocator),
+      merge_ctx_(nullptr),
+      task_idx_(0),
+      merge_param_(static_param)
+  {}
+  virtual ~ObMergerBasic() { reset(); }
+  virtual void reset();
+  virtual int basic_prepare(ObBasicTabletMergeCtx &ctx, const int64_t idx);
+  int get_all_majors(ObIArray<ObITable*> &tables);
+  // for co merge
+  template <typename T>
+  int alloc_row_writer(
+    const int64_t cg_idx,
+    const blocksstable::ObDatumRow &default_row,
+    ObIArray<ObITable*> &tables,
+    T *&writer);
+  static const int64_t CACHED_TRANS_STATE_MAX_CNT = 10 * 1024l;
+  VIRTUAL_TO_STRING_KV(K_(task_idx), K_(merge_param));
+public:
+  compaction::ObLocalArena &merger_arena_;
+  ObBasicTabletMergeCtx *merge_ctx_;
+  int64_t task_idx_;
+  ObMergeParameter merge_param_;
+};
+
+struct ObMerger : public ObMergerBasic
+{
+public:
+  ObMerger(compaction::ObLocalArena &allocator, const ObStaticMergeParam &static_param)
+    : ObMergerBasic(allocator, static_param),
+      partition_fuser_(nullptr),
+      merge_helper_(nullptr),
+      filter_statistics_()
+  {}
+  virtual ~ObMerger() { reset(); }
+  virtual void reset();
+  virtual int basic_prepare(ObBasicTabletMergeCtx &ctx, const int64_t idx);
+protected:
+  int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
+public:
+  ObIPartitionMergeFuser *partition_fuser_;
+  ObPartitionMergeHelper *merge_helper_;
+  ObICompactionFilter::ObFilterStatistics filter_statistics_;
+};
+
+class ObRowStoreMerger : public ObMerger
+{
+public:
+  ObRowStoreMerger(
     compaction::ObLocalArena &allocator,
     const ObStaticMergeParam &static_param);
-  virtual ~ObMerger() { reset(); }
+  virtual ~ObRowStoreMerger() { reset(); }
   void virtual reset();
   virtual int merge_partition(
       ObBasicTabletMergeCtx &ctx,
       const int64_t idx) = 0;
   void force_flat_format() { force_flat_format_ = true; }
-  VIRTUAL_TO_STRING_KV(K_(task_idx), K_(merge_param));
+  INHERIT_TO_STRING_KV("ObMergerBasic", ObMergerBasic, K_(start_time), K_(force_flat_format));
 protected:
   int prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx);
   int get_base_iter_curr_macro_block(const blocksstable::ObMacroBlockDesc *&macro_desc);
@@ -104,27 +155,19 @@ protected:
       base_iter_ = nullptr;
     }
   }
-  int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
   static const int64_t CACHED_TRANS_STATE_MAX_CNT = 10 * 1024l;
 protected:
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) = 0;
   int close();
   virtual int inner_close() = 0;
 protected:
-  compaction::ObLocalArena &merger_arena_;
-  ObBasicTabletMergeCtx *merge_ctx_;
-  int64_t task_idx_;
-  ObMergeParameter merge_param_;
-  ObIPartitionMergeFuser *partition_fuser_;
-  ObPartitionMergeHelper *merge_helper_;
   ObPartitionMergeIter *base_iter_;
   ObCachedTransStateMgr trans_state_mgr_;
-  ObICompactionFilter::ObFilterStatistics filter_statistics_;
   int64_t start_time_;
   bool force_flat_format_;
 };
 
-class ObPartitionMerger : public ObMerger
+class ObPartitionMerger : public ObRowStoreMerger
 {
 public:
   ObPartitionMerger(
@@ -132,20 +175,24 @@ public:
     const ObStaticMergeParam &static_param);
   virtual ~ObPartitionMerger();
   virtual void reset();
-  INHERIT_TO_STRING_KV("ObPartitionMerger", ObMerger, KPC_(merge_progress), K_(data_store_desc),
+  ObUncommitTxInfoCollector &get_uncommit_tx_info_collector() { return uncommit_tx_info_collector_; }
+  ObMemUncommitTxInfo &get_uncommit_tx_info() { return uncommit_tx_info_collector_.uncommit_tx_info_; }
+  INHERIT_TO_STRING_KV("ObPartitionMerger", ObRowStoreMerger, KPC_(merge_progress), K_(data_store_desc),
     K_(minimum_iters), KP_(validator));
 protected:
   virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) = 0;
   virtual int inner_close() override;
-  virtual int process(const blocksstable::ObMicroBlock &micro_block);
-  virtual int process(
-      const blocksstable::ObMacroBlockDesc &macro_meta,
-      const ObMicroBlockData *micro_block_data);
-  virtual int process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true);
   virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) = 0;
-  virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
-  virtual int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) = 0;
+
+  int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx);
+  int process(
+      const blocksstable::ObMacroBlockDesc &macro_meta,
+      const ObMicroBlockData *micro_block_data,
+      const int64_t sstable_idx);
+  int process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true);
+  int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
+  int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
   int check_row_columns(const blocksstable::ObDatumRow &row);
 
 private:
@@ -161,6 +208,8 @@ protected:
   MERGE_ITER_ARRAY minimum_iters_;
   ObProgressiveMergeHelper progressive_merge_helper_;
   ObIMacroBlockValidator *validator_;
+  ObUncommitTxInfoCollector uncommit_tx_info_collector_;
+  ObSEArray<ObSSTableMergeBlockInfo, 1> sstable_merge_block_info_array_;
 };
 
 class ObPartitionMajorMerger : public ObPartitionMerger
@@ -263,7 +312,42 @@ private:
   static bool need_dump_table(int err_no);
 };
 
-
+template <typename T>
+int ObMergerBasic::alloc_row_writer(
+    const int64_t cg_idx,
+    const blocksstable::ObDatumRow &default_row,
+    ObIArray<ObITable*> &tables,
+    T *&writer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(merge_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "merge_ctx_ is null", K(ret));
+  } else {
+    writer = nullptr;
+    ObCOTabletMergeCtx *ctx = static_cast<ObCOTabletMergeCtx *>(merge_ctx_);
+    ObTabletMergeInfo **merge_infos = ctx->cg_merge_info_array_;
+    const bool need_co_scan = ctx->is_build_row_store_from_rowkey_cg()
+        || (ctx->is_build_redundant_row_store_from_rowkey_cg() && 0 == cg_idx);
+    if (OB_UNLIKELY(nullptr == merge_infos || nullptr == merge_infos[cg_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected nullptr merge info", K(ret), K(merge_infos), K(cg_idx));
+    } else if (OB_ISNULL(writer = OB_NEWx(T, &merger_arena_, need_co_scan))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to allocate memory for ObCOMergeWriter", K(ret));
+    } else if (OB_FAIL(writer->init(*ctx, default_row, merge_param_, task_idx_,
+                                    ctx->get_full_read_info(), cg_idx, *merge_infos[cg_idx], tables))) {
+      // table->old major, read_info used to read old major
+      STORAGE_LOG(WARN, "failed to init writer", K(ret), K(cg_idx), K(default_row), KPC(this));
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(writer)) {
+      writer->~T();
+      merger_arena_.free(writer);
+      writer = nullptr;
+    }
+  }
+  return ret;
+}
 } //compaction
 } //oceanbase
 

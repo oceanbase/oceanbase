@@ -254,7 +254,7 @@ int ObIndexTreePrefetcher::lookup_in_index_tree(ObSSTableReadHandle &read_handle
       LOG_WARN("Fail to open index block scanner", K(ret), K(cur_level_), K(index_block_), K(index_tree_height_), KPC(sstable_), KP(sstable_));
     } else if (OB_FAIL(index_scanner_.get_next(index_block_info))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Fail to get index block row", K(ret), K_(index_scanner));
+        LOG_WARN("Fail to get index block row", K(ret), K(index_scanner_), KPC(sstable_));
       }
     } else if (index_block_info.is_macro_node() &&
                !sstable_->is_normal_cg_sstable() &&
@@ -504,7 +504,7 @@ int ObIndexTreeMultiPrefetcher::init(
     is_rowkey_sorted_ = access_ctx.query_flag_.is_ordered_scan() &&
                         !access_ctx.query_flag_.is_reverse_scan() &&
                         ObStoreRowIterator::IteratorMultiGet == iter_type_ &&
-                        !sstable.is_ddl_sstable();;
+                        !sstable.is_ddl_type_sstable() && !sstable.is_ddl_merge_sstable();
     ext_read_handles_.set_allocator(long_life_allocator_);
     rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
     const int32_t range_count = rowkeys_->count();
@@ -550,7 +550,7 @@ int ObIndexTreeMultiPrefetcher::switch_context(
     is_rowkey_sorted_ = access_ctx.query_flag_.is_ordered_scan() &&
                         !access_ctx.query_flag_.is_reverse_scan() &&
                         ObStoreRowIterator::IteratorMultiGet == iter_type_ &&
-                        !sstable.is_ddl_sstable();
+                        !sstable.is_ddl_type_sstable() && !sstable.is_ddl_merge_sstable();
     rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
     max_handle_prefetching_cnt_ = min(rowkeys_->count(), MAX_MULTIGET_MICRO_DATA_HANDLE_CNT);
     max_rescan_range_cnt_ = max_handle_prefetching_cnt_ > max_rescan_range_cnt_ ? max_handle_prefetching_cnt_ : max_rescan_range_cnt_;
@@ -739,20 +739,20 @@ int ObIndexTreeMultiPrefetcher::drill_down(
                                                               read_handle.rowkeys_info_,
                                                               index_block_info.rowkey_begin_idx_,
                                                               index_block_info.rowkey_end_idx_))) {
-    LOG_WARN("Fail to open index block scanner", K(ret), K(index_block_), K(read_handle));
+    LOG_WARN("Fail to open index block scanner", K(ret), K(index_block_), K(read_handle), KPC(sstable_));
   } else if (!is_rowkey_sorted_ && OB_FAIL(index_scanner_.open(macro_id,
                                                                index_block_,
                                                                *read_handle.rowkey_,
                                                                read_handle.range_idx_,
                                                                &index_block_info))) {
-    LOG_WARN("Fail to open index block scanner", K(ret), K(index_block_), K(read_handle));
+    LOG_WARN("Fail to open index block scanner", K(ret), K(index_block_), K(read_handle), KPC(sstable_));
   } else if (cur_level_is_leaf && read_handle.cur_level_ != index_tree_height_ - 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Fail to prefetch, unexpected level", K(ret), K(cur_level_is_leaf),
              K(read_handle.cur_level_), K(index_tree_height_));
   } else if (OB_FAIL(index_scanner_.get_next(index_block_info, false, pre_locate))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("Fail to get index block row", K(ret), K_(index_scanner));
+      LOG_WARN("Fail to get index block row", K(ret), K(index_scanner_), KPC(sstable_));
     } else {
       mark_cur_rowkey_prefetched(read_handle);
       read_handle.row_state_ = ObSSTableRowState::NOT_EXIST;
@@ -912,6 +912,34 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
       reset_tree_handles();
       tree_handles_ = new (buf) ObIndexTreeLevelHandle [count];
       tree_handle_cap_ = count;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_index_prefetch_depth(count))) {
+      LOG_WARN("init index prefetch depth failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::init_index_prefetch_depth(const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sstable_) || tree_handle_cap_ <= 0) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("sstable_ is null", K(ret), KP(sstable_), K(tree_handle_cap_));
+  } else if (OB_UNLIKELY(count <= 0 || count > tree_handle_cap_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tree_handle_cap_), K(count));
+  } else if (OB_UNLIKELY(sstable_->is_ddl_merge_sstable())) {
+    // ddl index block row iter may free last item after get next
+    for (int64_t i = 0; i < count; ++i) {
+      tree_handles_[i].max_index_prefetch_cnt_ = 1;
+    }
+  } else {
+    for (int64_t i = 0; i < count; ++i) {
+      tree_handles_[i].max_index_prefetch_cnt_ = MAX_INDEX_PREFETCH_DEPTH;
     }
   }
   return ret;
@@ -1225,7 +1253,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::t
             index_block_,
             *read_handle.rowkey_,
             read_handle.range_idx_))) {
-          LOG_WARN("Fail to open index block scanner", K(ret), K(read_handle));
+          LOG_WARN("Fail to open index block scanner", K(ret), K(read_handle), KPC(sstable_));
         }
       }
     } else if (!is_multi_check()) {
@@ -1243,7 +1271,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::t
           true, /* is_left_border */
           true /* is_right_border */))) {
         if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-          LOG_WARN("Fail to open index scanner", K(ret), K(read_handle));
+          LOG_WARN("Fail to open index scanner", K(ret), K(read_handle), KPC(sstable_));
         } else {
           ret = OB_SUCCESS;
         }
@@ -1260,7 +1288,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::t
                                                          0,
                                                          read_handle.rows_info_->get_rowkey_cnt()))) {
         if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-          LOG_WARN("Fail to open index scanner", K(ret), K(read_handle));
+          LOG_WARN("Fail to open index scanner", K(ret), K(read_handle), KPC(sstable_));
         } else {
           ret = OB_SUCCESS;
         }
@@ -1855,19 +1883,17 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
     // nothing to do
   } else {
     // update read index by the fetch_idx of next level
-    int32_t child_fetch_idx = (level == prefetcher.index_tree_height_ - 1) ?
-        prefetcher.cur_micro_data_fetch_idx_ : prefetcher.tree_handles_[level + 1].fetch_idx_;
     for (; read_idx_ < fetch_idx_; read_idx_++) {
-      if (index_block_read_handles_[read_idx_ % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_ > child_fetch_idx) {
+      if (is_curr_read_handle_consumed(level, prefetcher)) {
         break;
       }
     }
 
-    if (MAX_INDEX_PREFETCH_DEPTH == (prefetch_idx_ - read_idx_ + 1)) {
+    if (is_prefetch_full(level, prefetcher)) {
       // suspend current prefetch when no handle can be freed
     } else {
       ObIndexTreeLevelHandle &parent = prefetcher.tree_handles_[level - 1];
-      int8_t prefetch_idx = (prefetch_idx_ + 1) % MAX_INDEX_PREFETCH_DEPTH;
+      int8_t prefetch_idx = (prefetch_idx_ + 1) % max_index_prefetch_cnt_;
       ObMicroIndexInfo &index_info = index_block_read_handles_[prefetch_idx].index_info_;
       ObSSTableIndexFilter *sstable_index_filter = prefetcher.iter_param_->sstable_index_filter_;
       ObSampleFilterExecutor *sample_executor = prefetcher.sstable_->is_major_sstable() ?
@@ -1946,7 +1972,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
   } else {
     fetch_idx_++;
     index_scanner_.reuse();
-    int8_t fetch_idx = fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH;
+    int8_t fetch_idx = fetch_idx_ % max_index_prefetch_cnt_;
     ObMicroIndexInfo &index_info = index_block_read_handles_[fetch_idx].index_info_;
     if (OB_FAIL(index_block_read_handles_[fetch_idx].data_handle_.get_micro_block_data(nullptr, index_block_, false))) {
       LOG_WARN("Fail to get index block data", K(ret), KPC(this));
@@ -1993,7 +2019,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
 
     if (OB_SUCC(ret) && 0 < fetch_idx_) {
       index_block_read_handles_[fetch_idx].end_prefetched_row_idx_ =
-          index_block_read_handles_[(fetch_idx_ - 1) % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_;
+          index_block_read_handles_[(fetch_idx_ - 1) % max_index_prefetch_cnt_].end_prefetched_row_idx_;
     }
   }
   return ret;

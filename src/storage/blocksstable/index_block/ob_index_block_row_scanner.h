@@ -433,6 +433,7 @@ private:
       ObCSRange &cs_range);
   int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
   int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
+  bool is_inc_major_ddl_aggregate_type() const;
 private:
   union {
     const ObDatumRowkey *rowkey_;

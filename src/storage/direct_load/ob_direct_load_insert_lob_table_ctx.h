@@ -38,24 +38,33 @@ public:
 public:
   int open_sstable_slice(const blocksstable::ObMacroDataSeq &start_seq,
                          const int64_t slice_idx,
-                         int64_t &slice_id) override;
+                         int64_t &slice_id,
+                         ObDirectLoadMgrAgent &ddl_agent) override;
   int fill_sstable_slice(const int64_t &slice_id, ObIStoreRowIterator &iter,
+                         ObDirectLoadMgrAgent &ddl_agent,
                          int64_t &affected_rows) override;
   int fill_sstable_slice(const int64_t &slice_id,
-                         const blocksstable::ObBatchDatumRows &datum_rows) override;
-  int close_sstable_slice(const int64_t slice_id, const int64_t slice_idx) override;
+                         const blocksstable::ObBatchDatumRows &datum_rows,
+                         ObDirectLoadMgrAgent &ddl_agent) override;
+  int close_sstable_slice(const int64_t slice_id,
+                          const int64_t slice_idx,
+                          ObDirectLoadMgrAgent &ddl_agent) override;
+  int get_ddl_agent(ObDirectLoadMgrAgent &ddl_agent) override;
   // 特殊写lob接口, datum_row是主表数据
   int fill_lob_sstable_slice(ObIAllocator &allocator, const int64_t &lob_slice_id,
                              share::ObTabletCacheInterval &pk_interval,
-                             blocksstable::ObDatumRow &datum_row);
+                             blocksstable::ObDatumRow &datum_row,
+                             ObDirectLoadMgrAgent &ddl_agent);
   int fill_lob_sstable_slice(ObIAllocator &allocator, const int64_t &lob_slice_id,
                              share::ObTabletCacheInterval &pk_interval,
-                             blocksstable::ObBatchDatumRows &datum_rows);
+                             blocksstable::ObBatchDatumRows &datum_rows,
+                             ObDirectLoadMgrAgent &ddl_agent);
   const ObLobId &get_min_insert_lob_id() const { return min_insert_lob_id_; }
 
 private:
   int get_pk_interval(uint64_t count, share::ObTabletCacheInterval &pk_interval) override;
-
+public:
+  int get_direct_load_type(ObDirectLoadType &direct_load_type) const override;
   //////////////////////// members ////////////////////////
 public:
   INHERIT_TO_STRING_KV("ObDirectLoadInsertTabletContext", ObDirectLoadInsertTabletContext,
@@ -80,12 +89,21 @@ public:
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids,
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &data_ls_partition_ids);
 
+  void set_data_table_ctx(ObDirectLoadInsertTableContext *data_table_ctx)
+  {
+    data_table_ctx_ = data_table_ctx;
+  }
+  ObDirectLoadInsertTableContext *get_data_table_ctx() { return data_table_ctx_; }
+
 private:
   int create_all_tablet_contexts(
     ObDirectLoadInsertDataTableContext *data_table_ctx,
     const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids,
     const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids,
     const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &data_ls_partition_ids);
+
+private:
+  ObDirectLoadInsertTableContext *data_table_ctx_;
 };
 
 } // namespace storage

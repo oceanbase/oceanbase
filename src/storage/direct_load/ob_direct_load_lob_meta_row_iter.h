@@ -86,6 +86,15 @@ public:
     return OB_ERR_UNEXPECTED;
   }
 
+  /**
+   * handle insert row conflict with delete row
+   */
+  int handle_insert_delete_conflict(const ObTabletID &tablet_id,
+                                   const ObDirectLoadDatumRow &datum_row) override
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+
   TO_STRING_EMPTY();
 };
 

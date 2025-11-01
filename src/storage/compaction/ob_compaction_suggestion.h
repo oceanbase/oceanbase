@@ -183,14 +183,8 @@ struct ObCompactionDagStatus final
 
   DECLARE_TO_STRING;
 
-  // max COMPACTION mode dag is DAG_TYPE_MDS_MINI_MERGE, which is 9
-  static const int64_t COMPACTION_DAG_MAX = 10;
-  // max COMPACTION prio DAG_PRIO_COMPACTION_LOW = 4
-  static const int64_t COMPACTION_PRIORITY_MAX = 5;
-  // for mini/minor/major merge
-  static constexpr int64_t COST_LONG_TIME[COMPACTION_PRIORITY_MAX] = {
-    10 * 60 * 1000 * 1000L, INT64_MAX, 20 * 60 * 1000 * 1000L, INT64_MAX, 60 * 60 * 1000 * 1000L}; // 10m,30m,60m
-  static int64_t get_cost_long_time(const int64_t prio);
+  // count of dag whose DAG_MODULE_STR="COMPACTION"
+  static const int64_t COMPACTION_DAG_MAX = 12;
   ObCompactionHistogramStat histogram_stat_[COMPACTION_DAG_MAX];
 };
 
@@ -253,8 +247,10 @@ public:
 
   static const char *ObCompactionSuggestionReasonStr[];
   static const char* get_suggestion_reason(const int64_t reason);
-  static const char *ObAddWorkerThreadSuggestion[share::ObDagPrio::DAG_PRIO_MAX];
+  static const char *ObAddWorkerThreadSuggestion[];
   static const char* get_add_thread_suggestion(const int64_t priority);
+  static const int64_t ObCompactionLongTimeThreshold[];
+  static int64_t get_long_time_threshold(const int64_t priority);
 private:
   int64_t calc_variance(
       const int64_t count,

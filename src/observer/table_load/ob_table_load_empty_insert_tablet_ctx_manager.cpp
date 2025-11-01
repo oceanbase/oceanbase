@@ -13,10 +13,14 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
+#include "observer/table_load/dag/ob_table_load_empty_insert_dag.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_insert_data_table_ctx.h"
+#include "storage/ddl/ob_direct_load_mgr_agent.h"
+#include "storage/ddl/ob_ddl_merge_helper.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -174,17 +178,73 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
     int64_t slice_id = 0;
     ObMacroDataSeq block_start_seq;
     ObDirectLoadInsertTabletContext *insert_tablet_ctx = it->second;
+    ObDirectLoadMgrAgent tmp_agent;
     if (OB_ISNULL(insert_tablet_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert tablet ctx is nullptr", KR(ret));
+    } else if (OB_FAIL(insert_tablet_ctx->get_ddl_agent(tmp_agent))) {
+      LOG_WARN("failed to get direct load mgr agent", K(ret));
+    } else if (!tmp_agent.is_inited()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl agent should not be invalid", K(ret), K(tmp_agent));
     } else if (OB_FAIL(insert_tablet_ctx->open())) {
       LOG_WARN("fail to open tablet ctx", KR(ret));
-    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, 0/*slice_idx*/, slice_id))) {
+    } else if (OB_FAIL(insert_tablet_ctx->open_sstable_slice(block_start_seq, 0/*slice_idx*/, slice_id, tmp_agent))) {
       LOG_WARN("fail to open sstable slice", KR(ret), K(block_start_seq), K(slice_id));
-    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/))) {
+    } else if (OB_FAIL(insert_tablet_ctx->close_sstable_slice(slice_id, 0/*slice_idx*/, tmp_agent))) {
       LOG_WARN("fail to close sstable slice", KR(ret), K(slice_id));
     } else if (OB_FAIL(insert_tablet_ctx->close())) {
       LOG_WARN("fail to close tablet ctx", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadEmptyInsertTabletCtxManager::execute_for_dag(
+  const uint64_t &table_id,
+  const ObTableLoadDDLParam &ddl_param,
+  const ObIArray<ObTableLoadLSIdAndPartitionId> &ls_part_ids,
+  const ObIArray<ObTableLoadLSIdAndPartitionId> &target_ls_part_ids)
+{
+  int ret = OB_SUCCESS;
+  ObDirectLoadType direct_load_type = ObDirectLoadMgrAgent::load_data_get_direct_load_type(
+    false /*is_incremental*/, ddl_param.data_version_, GCTX.is_shared_storage_mode(),
+    false /*is_inc_major*/);
+  ObTableLoadEmptyInsertDagInitParam dag_init_param;
+  dag_init_param.direct_load_type_ = direct_load_type;
+  dag_init_param.ddl_thread_count_ = 1;
+  dag_init_param.ddl_task_param_.ddl_task_id_ = ddl_param.task_id_;
+  dag_init_param.ddl_task_param_.execution_id_ = 1; // unused
+  dag_init_param.ddl_task_param_.tenant_data_version_ = ddl_param.data_version_;
+  dag_init_param.ddl_task_param_.target_table_id_ = ddl_param.dest_table_id_;
+  dag_init_param.ddl_task_param_.schema_version_ = ddl_param.schema_version_;
+  dag_init_param.ddl_task_param_.is_no_logging_ = ddl_param.is_no_logging_;
+  dag_init_param.ddl_task_param_.snapshot_version_ = ddl_param.snapshot_version_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < target_ls_part_ids.count(); i++) {
+    if (OB_FAIL(add_var_to_array_no_dup(
+          dag_init_param.ls_tablet_ids_,
+          std::make_pair(target_ls_part_ids.at(i).ls_id_,
+                         target_ls_part_ids.at(i).part_tablet_id_.tablet_id_)))) {
+      LOG_WARN("add var to array no dup failed", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObTableLoadEmptyInsertDag *dag = nullptr;
+    const ObDagId *cur_dag_id = ObCurTraceId::get_trace_id();
+    ObArenaAllocator allocator;
+    allocator.set_attr(ObMemAttr(MTL_ID(), "TLD_EI_Dag"));
+    if (OB_FAIL(ObTenantDagScheduler::alloc_dag(allocator, false /*is_ha_dag*/, dag))) {
+      LOG_WARN("alloc ddl dag failed", KR(ret));
+    } else if (OB_FAIL(dag->init(&dag_init_param, cur_dag_id))) {
+      LOG_WARN("fail to init dag", KR(ret));
+    } else if (OB_FAIL(dag->process())) {
+      LOG_WARN("fail to process dag", KR(ret));
+    } else {
+      ret = dag->get_dag_ret();
+    }
+    if (OB_NOT_NULL(dag)) {
+      dag->~ObTableLoadEmptyInsertDag();
+      dag = nullptr;
     }
   }
   return ret;

@@ -1385,6 +1385,94 @@ int ObAIFuncUtils::get_ai_func_info(ObIAllocator &allocator, const ObString &mod
   return ret;
 }
 
+bool ObAIFuncUtils::is_provider_support_base64(const ObString &provider)
+{
+  return ob_provider_check(provider, ObAIFuncProviderUtils::OPENAI)
+      || ob_provider_check(provider, ObAIFuncProviderUtils::SILICONFLOW);
+}
+
+int ObAIFuncUtils::decode_base64_embedding_array(const ObIJsonBase &embedding_jbase,
+                                                 ObIAllocator &allocator,
+                                                 const int64_t dimension,
+                                                 float *&vector)
+{
+  int ret = OB_SUCCESS;
+  if (embedding_jbase.json_type() != ObJsonNodeType::J_STRING) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("embedding_jbase is not a string", K(ret));
+  } else {
+    const char *encoded_embedding = embedding_jbase.get_data();
+    uint64_t encoded_embedding_len = embedding_jbase.get_data_length();
+    uint64_t decoded_buf_len = ObBase64Encoder::needed_decoded_length(encoded_embedding_len);
+    uint8_t *decoded_buf = nullptr;
+    int64_t pos = 0;
+    if (decoded_buf_len <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("decoded_buf_len is not valid", K(ret), K(decoded_buf_len));
+    } else if (OB_ISNULL(decoded_buf = static_cast<uint8_t *>(allocator.alloc(decoded_buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(decoded_buf_len));
+    } else if (OB_FAIL(ObBase64Encoder::decode(encoded_embedding, encoded_embedding_len,
+                                               decoded_buf, decoded_buf_len, pos))) {
+      LOG_WARN("failed to decode encoded_embedding", K(ret));
+    } else if (pos != dimension * sizeof(float)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("decode result length mismatch", K(ret), K(pos), K(dimension));
+    } else {
+      vector = reinterpret_cast<float *>(decoded_buf);
+    }
+  }
+  return ret;
+}
+
+int ObAIFuncUtils::decode_float_embedding_array(const ObIJsonBase &embedding_jbase,
+                                                ObIAllocator &allocator,
+                                                ObJsonReaderHelper &json_reader,
+                                                const int64_t dimension,
+                                                float *&vector)
+{
+  int ret = OB_SUCCESS;
+  float *tmp_vector = nullptr;
+  if (!ObJsonHelper::is_array_type(&embedding_jbase)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("embedding field is not an array", K(ret));
+  } else {
+    uint64_t embedding_size = json_reader.get_array_size(&embedding_jbase);
+    if (embedding_size != dimension) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("embedding size mismatch", K(ret), K(embedding_size), K(dimension));
+    } else {
+      tmp_vector = static_cast<float*>(allocator.alloc(dimension * sizeof(float)));
+      if (OB_ISNULL(tmp_vector)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else {
+        for (uint64_t i = 0; i < dimension && OB_SUCC(ret); i++) {
+          ObIJsonBase *value = nullptr;
+          if (OB_FAIL(json_reader.get_array_element(&embedding_jbase, i, value))) {
+            LOG_WARN("failed to get array element", K(ret), K(i));
+          } else if (!ObJsonHelper::is_number_type(value)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("value is not a number", K(ret), K(i));
+          } else {
+            float f_value = 0.0;
+            if (OB_FAIL(json_reader.get_float_value(value, f_value))) {
+              LOG_WARN("failed to get float value", K(ret), K(i));
+            } else {
+              tmp_vector[i] = f_value;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    vector = tmp_vector;
+  }
+  return ret;
+}
+
 int ObAIFuncUtils::get_ai_func_info(ObIAllocator &allocator, const ObString &model_id, ObAIFuncExprInfo *&info)
 {
   int ret = OB_SUCCESS;

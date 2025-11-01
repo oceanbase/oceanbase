@@ -152,7 +152,11 @@ int ObCOSSTableRowsFilter::switch_context(
     access_ctx_ = &context;
     batch_size_ = param.get_storage_rowsets_size();
     common::ObSEArray<ObTableIterParam*, 8> iter_params;
-    for (int64_t i = 0; i < iter_filter_node_.count(); i++) {
+    int64_t cg_iter_idx = 0;
+    if (nullptr != param.pushdown_filter_ && OB_FAIL(rewrite_cg_iter_idx(filter_, cg_iter_idx))) {
+      LOG_WARN("Failed to rewrite cg iter idx", K(ret), KPC(filter_));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < iter_filter_node_.count(); i++) {
       sql::ObPushdownFilterExecutor *filter = iter_filter_node_.at(i);
       ObICGIterator *&cg_iter = filter_iters_.at(i);
       iter_params.reuse();
@@ -431,6 +435,41 @@ int ObCOSSTableRowsFilter::rewrite_filter_tree(
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Unspported executor type", K(ret), K(filter->get_type()));
+  }
+  return ret;
+}
+
+int ObCOSSTableRowsFilter::rewrite_cg_iter_idx(
+    sql::ObPushdownFilterExecutor *filter,
+    int64_t &cg_iter_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(cg_iter_idx >= filter_iters_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected cg iter idx", K(ret), K(cg_iter_idx), K(filter_iters_.count()));
+  } else if (filter->is_sample_node())  {
+    // skip sample node
+  } else if (filter->is_filter_node()) {
+    filter->set_cg_iter_idx(cg_iter_idx);
+    cg_iter_idx++;
+  } else if (filter->is_logic_op_node()) {
+    if (OB_UNLIKELY(filter->get_child_count() < 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected number of child in filter executor", K(ret), K(filter->get_child_count()), KP(filter));
+    } else if (!filter->get_cg_idxs().empty()) {
+      filter->set_cg_iter_idx(cg_iter_idx);
+      cg_iter_idx++;
+    } else {
+      sql::ObPushdownFilterExecutor **children = filter->get_childs();
+      for (uint32_t i = 0; OB_SUCC(ret) && i < filter->get_child_count(); ++i) {
+        if (OB_FAIL(rewrite_cg_iter_idx(children[i], cg_iter_idx))) {
+          LOG_WARN("Failed to rewrite cg iter idx", K(ret), K(i), KPC(children[i]));
+        }
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Unsupproted executor type", K(ret), K(filter->get_type()));
   }
   return ret;
 }

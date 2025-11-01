@@ -29,6 +29,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc()
     schema_version_(0),
     master_key_id_(0),
     encrypt_id_(0),
+    major_working_cluster_version_(0),
     encrypt_key_(),
     end_scn_(),
     merge_type_(compaction::ObMergeType::INVALID_MERGE_TYPE),
@@ -105,6 +106,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc)
   MEMCPY(encrypt_key_, data_store_desc.get_encrypt_key(), sizeof(encrypt_key_));
   end_scn_ = data_store_desc.get_end_scn();
   merge_type_ = data_store_desc.get_merge_type();
+  major_working_cluster_version_ = data_store_desc.get_major_working_cluster_version();
 }
 
 int ObIndexBlockRowDesc::set_end_scn_by_snapshot_version(const int64_t snapshot_version)
@@ -146,6 +148,7 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
   } else {
     set_merge_type(data_store_desc.get_merge_type());
     set_end_scn(data_store_desc.get_end_scn());
+    set_major_working_cluster_version(data_store_desc.get_major_working_cluster_version());
     set_row_store_type(index_row_header->get_row_store_type());
     set_compressor_type(index_row_header->get_compressor_type());
     set_master_key_id(index_row_header->get_encrypt_id());
@@ -172,20 +175,17 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
 
     const char *agg_row_buf = nullptr;
     int64_t agg_buf_size = 0;
-    if (!data_store_desc.is_major_or_meta_merge_type()) {
-      if (OB_FAIL(idx_row_parser.get_minor_meta(index_row_meta))) {
-        STORAGE_LOG(WARN, "fail to get minor meta", K(ret), K(idx_row_parser));
-      } else {
+    if (OB_FAIL(idx_row_parser.parse_minor_meta_and_agg_row(index_row_meta, agg_row_buf, agg_buf_size))) {
+      STORAGE_LOG(WARN, "fail to parse minor meta and agg row", K(ret), K(idx_row_parser));
+    } else {
+      if (nullptr != index_row_meta) {
         max_merged_trans_version_ = index_row_meta->max_merged_trans_version_;
         row_count_delta_ = index_row_meta->row_count_delta_;
       }
-    } else if (!index_row_header->is_pre_aggregated()) {
-      // Do not have aggregate data
-    } else if (OB_FAIL(idx_row_parser.get_agg_row(agg_row_buf, agg_buf_size))) {
-      STORAGE_LOG(WARN, "Fail to get aggregate", K(ret));
-    } else {
-      serialized_agg_row_buf_ = agg_row_buf;
-      is_serialized_agg_row_ = true;
+      if (nullptr != agg_row_buf) {
+        serialized_agg_row_buf_ = agg_row_buf;
+        is_serialized_agg_row_ = true;
+      }
     }
   }
   return ret;
@@ -202,21 +202,21 @@ ObIndexBlockRowHeader::ObIndexBlockRowHeader()
     macro_block_count_(0), micro_block_count_(0),
     macro_id_fourth_id_(0), logic_micro_id_(), data_checksum_(0)
 {
-  version_ = INDEX_BLOCK_HEADER_V2;
+  version_ = INDEX_BLOCK_HEADER_V3;
   set_has_logic_micro_id();
 }
 
 void ObIndexBlockRowHeader::reset()
 {
   MEMSET(this, 0, sizeof(*this));
-  version_ = INDEX_BLOCK_HEADER_V2;
+  version_ = INDEX_BLOCK_HEADER_V3;
   set_has_logic_micro_id();
 }
 
 int ObIndexBlockRowHeader::set_macro_id(const MacroBlockId &macro_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(version_ != INDEX_BLOCK_HEADER_V2)) {
+  if (OB_UNLIKELY(version_ != INDEX_BLOCK_HEADER_V2 && version_ != INDEX_BLOCK_HEADER_V3)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected index row header version", K(ret), KPC(this), K(macro_id));
   } else {
@@ -400,14 +400,15 @@ int ObIndexBlockRowBuilder::calc_data_size(
     if (desc.is_major_or_meta_merge_type()) {
       size += sizeof(int64_t); // add row offset for major sstable
     }
-  } else if (desc.is_major_or_meta_merge_type()) {
-    size = sizeof(ObIndexBlockRowHeader);
-    size += sizeof(int64_t); // add row offset for major sstable
   } else {
-    size = sizeof(ObIndexBlockRowHeader) + sizeof(ObIndexBlockRowMinorMetaInfo);
-  }
-
-  if (OB_SUCC(ret)) {
+    if (desc.get_major_working_cluster_version() >= DATA_VERSION_4_4_1_0 || !desc.is_major_or_meta_merge_type()) {
+      size = sizeof(ObIndexBlockRowHeader) + sizeof(ObIndexBlockRowMinorMetaInfo);
+    } else {
+      size = sizeof(ObIndexBlockRowHeader);
+    }
+    if (desc.is_major_or_meta_merge_type()) {
+      size += sizeof(int64_t); // add row offset for major sstable
+    }
     if (nullptr != desc.aggregated_row_) {
       if (desc.is_serialized_agg_row_) {
         const ObAggRowHeader *agg_header = reinterpret_cast<const ObAggRowHeader *>(desc.serialized_agg_row_buf_);
@@ -433,7 +434,8 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     LOG_WARN("write pos for buffer should be zero when write header", K(ret), K_(write_pos));
   } else {
     header_ = reinterpret_cast<ObIndexBlockRowHeader *>(data_buf_);
-    header_->version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
+    header_->version_ =
+      desc.get_major_working_cluster_version() >= DATA_VERSION_4_4_1_0 ? ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
     header_->row_store_type_ = static_cast<uint8_t>(desc.get_row_store_type());
     header_->compressor_type_ = static_cast<uint8_t>(desc.get_compressor_type());
     // This micro block is a index tree micro block or a meta tree micro block
@@ -473,24 +475,32 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
         LOG_WARN("fail to set macro id to DEFAULT", K(ret), K(desc), K(buf_size));
       }
     } else {
-      if (OB_FAIL(header_->set_macro_id(desc.macro_id_))) {
+      if (!desc.macro_id_.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("macro id should be valid", K(ret), K(desc.macro_id_), K(desc.is_secondary_meta_),
+                                            K(desc.is_clustered_index_), K(lbt()));
+      } else if (OB_FAIL(header_->set_macro_id(desc.macro_id_))) {
         LOG_WARN("fail to set macro id", K(ret), K(desc), K(buf_size));
       }
     }
 
     if (OB_FAIL(ret)) {
-    } else if (header_->is_data_index() && !header_->is_major_node()) {
-      ObIndexBlockRowMinorMetaInfo *minor_meta
-          = reinterpret_cast<ObIndexBlockRowMinorMetaInfo *>(data_buf_ + write_pos_);
-      minor_meta->snapshot_version_ = desc.get_end_scn().get_val_for_tx();
-      header_->contain_uncommitted_row_ = desc.contain_uncommitted_row_;
-      minor_meta->max_merged_trans_version_ = desc.max_merged_trans_version_;
-      minor_meta->row_count_delta_ = desc.row_count_delta_;
-      write_pos_ += sizeof(ObIndexBlockRowMinorMetaInfo);
-    } else if (header_->is_major_node()) {
-      // we add row_offset for index rows of all major sstables(including secondary meta tree)
-      if (OB_FAIL(serialization::encode_i64(data_buf_, buf_size, write_pos_, desc.row_offset_))) {
-        LOG_WARN("fail to encode row offset", K(ret), K(buf_size), K_(write_pos));
+    } else {
+      if (header_->is_data_index() &&
+          (ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 == header_->version_ || !header_->is_major_node())) {
+        ObIndexBlockRowMinorMetaInfo *minor_meta
+            = reinterpret_cast<ObIndexBlockRowMinorMetaInfo *>(data_buf_ + write_pos_);
+        minor_meta->snapshot_version_ = desc.get_end_scn().get_val_for_tx();
+        header_->contain_uncommitted_row_ = desc.contain_uncommitted_row_;
+        minor_meta->max_merged_trans_version_ = desc.max_merged_trans_version_;
+        minor_meta->row_count_delta_ = desc.row_count_delta_;
+        write_pos_ += sizeof(ObIndexBlockRowMinorMetaInfo);
+      }
+      if (header_->is_major_node()) {
+        // we add row_offset for index rows of all major sstables(including secondary meta tree)
+        if (OB_FAIL(serialization::encode_i64(data_buf_, buf_size, write_pos_, desc.row_offset_))) {
+          LOG_WARN("fail to encode row offset", K(ret), K(buf_size), K_(write_pos));
+        }
       }
     }
 
@@ -580,27 +590,28 @@ int ObIndexBlockRowParser::init(const char *data_buf, const int64_t data_len)
       LOG_WARN("data_len less than header size", K(ret), KP(data_buf), K(data_len), K(header_size));
     } else if (!header_->is_data_index()) {
       // Init finished
-    } else if (!header_->is_major_node()) {
-      const int64_t minor_meta_offset = header_size;
-      minor_meta_info_ = reinterpret_cast<const ObIndexBlockRowMinorMetaInfo *>(
-          data_buf + minor_meta_offset);
-      pos = minor_meta_offset + sizeof(ObIndexBlockRowMinorMetaInfo);
     } else {
-      // Major node
-      pos = header_size;
-      if (data_len > pos && OB_FAIL(serialization::decode_i64(data_buf, data_len, pos, &row_offset_))) {
-        LOG_WARN("Fail to decode row offset column", K(ret), K(data_len), K(pos));
+      int64_t pos = header_size;
+      if (header_->is_minor_meta_info_valid()) {
+        minor_meta_info_ = reinterpret_cast<const ObIndexBlockRowMinorMetaInfo *>(
+            data_buf + pos);
+        pos += sizeof(ObIndexBlockRowMinorMetaInfo);
       }
-    }
-
-    if (OB_FAIL(ret)){
-    } else if (header_->is_pre_aggregated()) {
-      const ObAggRowHeader *agg_row_header = reinterpret_cast<const ObAggRowHeader *>(data_buf + pos);
-      if (OB_UNLIKELY(!agg_row_header->is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Invalid pre aggregate row header", K(ret), KPC(agg_row_header), KPC(header_));
-      } else {
-        pre_agg_row_buf_ = data_buf + pos;
+      if (header_->is_major_node()) {
+        // Major node
+        if (data_len > pos && OB_FAIL(serialization::decode_i64(data_buf, data_len, pos, &row_offset_))) {
+          LOG_WARN("Fail to decode row offset column", K(ret), K(data_len), K(pos));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (header_->is_pre_aggregated()) {
+        const ObAggRowHeader *agg_row_header = reinterpret_cast<const ObAggRowHeader *>(data_buf + pos);
+        if (OB_UNLIKELY(!agg_row_header->is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Invalid pre aggregate row header", K(ret), KPC(agg_row_header), KPC(header_));
+        } else {
+          pre_agg_row_buf_ = data_buf + pos;
+        }
       }
     }
   }
@@ -628,9 +639,9 @@ int ObIndexBlockRowParser::get_minor_meta(const ObIndexBlockRowMinorMetaInfo *&m
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
-  } else if (OB_UNLIKELY(!header_->is_data_index() || header_->is_major_node())) {
+  } else if (OB_UNLIKELY(!header_->is_minor_meta_info_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("This is not a row for minor sstable data", K(ret), KP_(header));
+    LOG_WARN("This is not a row for minor sstable data", K(ret), KPC(header_));
   } else {
     meta = minor_meta_info_;
   }
@@ -649,6 +660,28 @@ int ObIndexBlockRowParser::get_agg_row(const char *&row_buf, int64_t &buf_size) 
   } else {
     row_buf = pre_agg_row_buf_;
     buf_size = reinterpret_cast<const ObAggRowHeader *>(row_buf)->length_;
+  }
+  return ret;
+}
+
+int ObIndexBlockRowParser::parse_minor_meta_and_agg_row(
+    const ObIndexBlockRowMinorMetaInfo *&meta,
+    const char *&agg_row_buf,
+    int64_t &agg_buf_size) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (header_->is_minor_meta_info_valid()) {
+    meta = minor_meta_info_;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!header_->is_pre_aggregated()) {
+    // Do not have aggregate data
+  } else {
+    agg_row_buf = pre_agg_row_buf_;
+    agg_buf_size = reinterpret_cast<const ObAggRowHeader *>(agg_row_buf)->length_;
   }
   return ret;
 }
@@ -682,19 +715,19 @@ int ObIndexBlockRowParser::is_macro_node(bool &is_macro_node) const
 int64_t ObIndexBlockRowParser::get_snapshot_version() const
 {
   OB_ASSERT(is_inited_);
-  return header_->is_major_node() ? 0 : minor_meta_info_->snapshot_version_;
+  return nullptr == minor_meta_info_ ? 0 : minor_meta_info_->snapshot_version_;
 }
 
 int64_t ObIndexBlockRowParser::get_max_merged_trans_version() const
 {
   OB_ASSERT(is_inited_);
-  return header_->is_major_node() ? 0 : minor_meta_info_->max_merged_trans_version_;
+  return nullptr == minor_meta_info_ ? 0 : minor_meta_info_->max_merged_trans_version_;
 }
 
 int64_t ObIndexBlockRowParser::get_row_count_delta() const
 {
   OB_ASSERT(is_inited_);
-  return header_->is_major_node() ? 0 : minor_meta_info_->row_count_delta_;
+  return nullptr == minor_meta_info_ ? 0 : minor_meta_info_->row_count_delta_;
 }
 
 }//end namespace blocksstable

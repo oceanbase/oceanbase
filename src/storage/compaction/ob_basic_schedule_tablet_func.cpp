@@ -30,7 +30,6 @@ ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
     freeze_param_(),
     ls_could_schedule_new_round_(false),
     ls_could_schedule_merge_(false),
-    is_skip_merge_tenant_(false),
     loop_cnt_(loop_cnt)
 {
 }
@@ -72,8 +71,8 @@ void ObBasicScheduleTabletFunc::update_tenant_cached_status()
 {
   const ObBasicMergeScheduler * scheduler = ObBasicMergeScheduler::get_merge_scheduler();
   if (OB_NOT_NULL(scheduler)) {
-    is_skip_merge_tenant_ = scheduler->get_tenant_status().is_skip_merge_tenant();
     ls_could_schedule_merge_ = scheduler->could_major_merge_start() && ls_status_.can_merge();
+
     // can only schedule new round on ls leader
     ls_could_schedule_new_round_ = ls_could_schedule_merge_ && ls_status_.is_leader_;
 
@@ -136,25 +135,28 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
   can_merge = false;
   int ret = OB_SUCCESS;
   bool need_force_freeze = false;
+  bool exist_unfinished_inc_major = false;
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   const bool need_merge = tablet.get_last_major_snapshot_version() < schedule_scn;
   const bool weak_read_ts_ready = ls_status_.weak_read_ts_.get_val_for_tx() >= schedule_scn;
 
-  if (need_merge) {
-    const bool tablet_and_weak_read_ts_ready = (tablet_status.can_merge() && weak_read_ts_ready);
-    if (tablet_and_weak_read_ts_ready) {
-      if (tablet.get_snapshot_version() >= schedule_scn) {
-        can_merge = true;
-      } else { // only check force freeze when snapshot version is less than schedule scn
-        if (OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
-          LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(schedule_scn));
-        } else if (need_force_freeze) {
-          tablet_cnt_.force_freeze_cnt_++;
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_type)))) {
-            LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
-          }
-        }
+  if (!need_merge) {
+    // do nothing
+  } else if (OB_FAIL(tablet_status.check_unfinished_inc_major(ls_status_.get_ls(), schedule_scn, tablet, exist_unfinished_inc_major))) {
+    LOG_WARN("failed to check unfinished inc major", K(ret), K(tablet_id));
+  } else if (exist_unfinished_inc_major) {
+    can_merge = false;
+    ret = OB_EAGAIN;
+    LOG_WARN("cannot schedule dag, exists unfinished inc major, try later", K(ret), K(tablet_id), K(schedule_scn));
+  } else {
+    can_merge = (tablet_status.can_merge() && weak_read_ts_ready && tablet.get_snapshot_version() >= schedule_scn);
+    if (!can_merge && OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
+      LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(schedule_scn));
+    } else if (need_force_freeze) {
+      tablet_cnt_.force_freeze_cnt_++;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_type)))) {
+        LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
       }
     }
   }
@@ -180,6 +182,7 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
                     tablet.get_snapshot_version(),
                     static_cast<int64_t>(need_force_freeze),
                     static_cast<int64_t>(weak_read_ts_ready),
+                    static_cast<int64_t>(exist_unfinished_inc_major),
                     tablet.get_tablet_meta().max_serialized_medium_scn_);
   }
   return ret;

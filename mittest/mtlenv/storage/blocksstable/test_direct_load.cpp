@@ -72,7 +72,7 @@ TEST_F(TestDirectLoad, init_ddl_table_store)
   ASSERT_EQ(OB_SUCCESS, ddl_start_scn.convert_from_ts(ObTimeUtility::current_time()));
   ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.update(nullptr, build_param));
   tablet_dl_mgr.start_scn_ = ddl_start_scn;
-  tablet_dl_mgr.data_format_version_ = DATA_VERSION_4_0_0_0;
+  tablet_dl_mgr.tenant_data_version_ = DATA_VERSION_4_0_0_0;
   ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.init_ddl_table_store(ddl_start_scn, SNAPSHOT_VERSION, ddl_start_scn));
 
 }
@@ -93,7 +93,7 @@ TEST_F(TestDirectLoad, test_cg_aggregate)
   ASSERT_EQ(OB_SUCCESS, ddl_start_scn.convert_from_ts(ObTimeUtility::current_time()));
   ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.update(nullptr, build_param));
   tablet_dl_mgr.start_scn_ = ddl_start_scn;
-  tablet_dl_mgr.data_format_version_ = DATA_VERSION_4_0_0_0;
+  tablet_dl_mgr.tenant_data_version_ = DATA_VERSION_4_0_0_0;
   ASSERT_EQ(OB_SUCCESS, tablet_dl_mgr.init_ddl_table_store(ddl_start_scn, SNAPSHOT_VERSION, ddl_start_scn));
 
   common::ObArenaAllocator allocator;

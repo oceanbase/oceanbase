@@ -64,10 +64,8 @@ public:
             iter_param_->enable_pd_filter();
   }
   virtual int get_next_rows() override;
-  virtual int get_next_rowkey(const bool need_set_border_rowkey,
-                              int64_t &curr_scan_index,
+  virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
-                              blocksstable::ObDatumRowkey &border_rowkey,
                               common::ObIAllocator &allocator) final;
   TO_STRING_KV(K_(range_idx),
                K_(is_new_group),
@@ -98,6 +96,14 @@ public:
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&store_row) override;
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey) override;
+  virtual int get_blockscan_border_rowkey(blocksstable::ObDatumRowkey &border_rowkey) override final
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(row_scanner_->get_blockscan_border_rowkey(border_rowkey))) {
+      STORAGE_LOG(WARN, "fail to get blockscan border rowkey", K(ret));
+    }
+    return ret;
+  }
 private:
   static const ScanState STATE_TRANSITION[BlockScanState::MAX_STATE];
   virtual int init_row_scanner(

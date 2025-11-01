@@ -77,7 +77,8 @@ public:
       const bool micro_index_clustered,
       const bool has_cs_replica,
       const bool need_generate_cs_replica_cg_array,
-      const bool has_truncate_info);
+      const bool has_truncate_info,
+      const uint64_t ddl_data_format_version);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const int64_t snapshot_version,
@@ -251,7 +252,8 @@ public:
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
-      const int64_t finish_medium_scn);
+      const int64_t finish_medium_scn,
+      const bool need_wait_check_flag);
   void update_extra_medium_info(
       const compaction::ObExtraMediumInfo &src_addr_extra_info,
       const compaction::ObExtraMediumInfo &src_data_extra_info,

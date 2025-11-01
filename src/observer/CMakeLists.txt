@@ -285,12 +285,52 @@ ob_set_subtarget(ob_server table_load
   table_load/control/ob_table_load_control_rpc_executor.cpp
   table_load/control/ob_table_load_control_rpc_proxy.cpp
   table_load/control/ob_table_load_control_rpc_struct.cpp
+  table_load/dag/ob_table_load_dag_compact_table_task.cpp
+  table_load/dag/ob_table_load_dag_direct_write_channel.cpp
+  table_load/dag/ob_table_load_dag_direct_write.cpp
+  table_load/dag/ob_table_load_dag_generator.cpp
+  table_load/dag/ob_table_load_dag_heap_mem_sort.cpp
+  table_load/dag/ob_table_load_dag_insert_sstable_task.cpp
+  table_load/dag/ob_table_load_dag_mem_compact.cpp
+  table_load/dag/ob_table_load_dag_mem_sort.cpp
+  table_load/dag/ob_table_load_dag_parallel_heap_table_compactor.cpp
+  table_load/dag/ob_table_load_dag_parallel_merger.cpp
+  table_load/dag/ob_table_load_dag_parallel_sstable_compactor.cpp
+  table_load/dag/ob_table_load_dag_pk_mem_sort.cpp
+  table_load/dag/ob_table_load_dag_pre_sort_write_channel.cpp
+  table_load/dag/ob_table_load_dag_pre_sort_write.cpp
+  table_load/dag/ob_table_load_dag_store_write_channel.cpp
+  table_load/dag/ob_table_load_dag_store_write.cpp
+  table_load/dag/ob_table_load_dag_task.cpp
+  table_load/dag/ob_table_load_dag_write_channel.cpp
+  table_load/dag/ob_table_load_dag.cpp
+  table_load/dag/ob_table_load_empty_insert_dag.cpp
   table_load/resource/ob_table_load_resource_manager.cpp
   table_load/resource/ob_table_load_resource_processor.cpp
   table_load/resource/ob_table_load_resource_rpc_executor.cpp
   table_load/resource/ob_table_load_resource_rpc_proxy.cpp
   table_load/resource/ob_table_load_resource_rpc_struct.cpp
   table_load/resource/ob_table_load_resource_service.cpp
+  table_load/plan/ob_table_load_data_channel.cpp
+  table_load/plan/ob_table_load_data_table_row_handler.cpp
+  table_load/plan/ob_table_load_data_to_delete_data_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_insert_data_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_index_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_lob_table_channel.cpp
+  table_load/plan/ob_table_load_dml_row_handler.cpp
+  table_load/plan/ob_table_load_full_plan.cpp
+  table_load/plan/ob_table_load_inc_plan.cpp
+  table_load/plan/ob_table_load_unique_index_to_ack_data_table_channel.cpp
+  table_load/plan/ob_table_load_unique_index_to_delete_data_table_channel.cpp
+  table_load/plan/ob_table_load_merge_op.cpp
+  table_load/plan/ob_table_load_normal_row_handler.cpp
+  table_load/plan/ob_table_load_op.cpp
+  table_load/plan/ob_table_load_plan_common.cpp
+  table_load/plan/ob_table_load_plan.cpp
+  table_load/plan/ob_table_load_table_builder.cpp
+  table_load/plan/ob_table_load_table_op.cpp
+  table_load/plan/ob_table_load_unique_index_table_row_handler.cpp
+  table_load/plan/ob_table_load_write_op.cpp
   table_load/ob_table_load_assigned_memory_manager.cpp
   table_load/ob_table_load_assigned_task_manager.cpp
   table_load/ob_table_load_autoinc_nextval.cpp

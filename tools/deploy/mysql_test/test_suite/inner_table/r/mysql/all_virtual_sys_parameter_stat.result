@@ -80,6 +80,7 @@ data_disk_usage_limit_percentage
 data_disk_write_limit_percentage
 data_storage_error_tolerance_time
 data_storage_warning_tolerance_time
+ddl_high_thread_score
 ddl_thread_score
 dead_socket_detection_timeout
 debug_sync_timeout
@@ -119,6 +120,7 @@ enable_manual_storage_cache_policy
 enable_monotonic_weak_read
 enable_ob_error_msg_style
 enable_ob_ratelimit
+enable_parallel_vector_index_optimization
 enable_perf_event
 enable_ps_parameterize
 enable_rebalance
@@ -339,6 +341,7 @@ use_ipv6
 use_large_pages
 utl_file_open_max
 vector_index_memory_saving_mode
+vector_index_optimization_concurrency
 vector_index_optimize_duty_time
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval
@@ -419,6 +422,8 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
+_enable_hybrid_vector_index
+_enable_inc_major_direct_load
 _enable_index_merge
 _enable_inner_session_mgr
 _enable_insertup_column_store_opt
@@ -620,6 +625,7 @@ _recyclebin_object_purge_frequency
 _regex_engine
 _resource_limit_max_session_num
 _resource_limit_spec
+_restore_emergency_inc_major_sstable_threshold
 _restore_idle_time
 _restore_io_max_retry_count
 _rowsets_enabled
@@ -702,6 +708,8 @@ select section,info from oceanbase.__all_virtual_sys_parameter_stat where name l
 section	info
 DAILY_MERGE	the start time of system daily merge procedure. Range: [00:00, 24:00)
 ROOT_SERVICE	specifies whether major_freeze function is turned on. Value:  True:turned on;  False: turned off
+TENANT	Inc Major SSTable count threshold to trigger emergency compaction during restore. When restore tenant's Inc Major SSTable count reaches this threshold, system will prioritize inc major compaction to prevent restore from hanging due to too many Inc Major SSTables. Range: [2,64] in integer
+TENANT	Specifies whether enable inc major direct load
 TENANT	specifies how many minor freeze should be triggered between two major freeze, Range: [0,65535] in integer
 TENANT	the level of major compaction prewarm in shared storage mode. Range: [0, 2] 0: prewarm both meta and data, 1: only prewarm meta, 2: prewarm none of meta and data. this prewarm level should be set before one round of major compaction.
 show parameters;

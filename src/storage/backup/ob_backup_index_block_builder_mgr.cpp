@@ -877,9 +877,13 @@ int ObBackupTabletSSTableIndexBuilderMgr::get_merge_type_(
     LOG_WARN("table key is not valid", K(ret), K(table_key));
   } else if (table_key.is_major_sstable()) {
     merge_type = compaction::ObMergeType::MAJOR_MERGE;
+  } else if (table_key.is_inc_major_type_sstable()) {
+    merge_type = compaction::ObMergeType::MAJOR_MERGE;
   } else if (table_key.is_minor_sstable()) {
     merge_type = compaction::ObMergeType::MINOR_MERGE;
   } else if (table_key.is_ddl_dump_sstable()) {
+    merge_type = compaction::ObMergeType::MAJOR_MERGE;
+  } else if (table_key.is_inc_major_ddl_dump_sstable()) {
     merge_type = compaction::ObMergeType::MAJOR_MERGE;
   } else if (table_key.is_mds_mini_sstable()) {
     merge_type = compaction::ObMergeType::MDS_MINI_MERGE;
@@ -929,6 +933,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                               0/*cluster_version*/,
                                               false/*micro_index_clustered*/,
                                               transfer_epoch,
+                                              0/*concurrent_cnt*/,
                                               tablet->get_reorganization_scn(),
                                               table_key.get_end_scn()))) {
         LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema));
@@ -961,6 +966,7 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
                                         0/*cluster_version*/,
                                         false/*micro_index_clustered*/,
                                         transfer_epoch,
+                                        0/*concurrent_cnt*/,
                                         tablet->get_reorganization_scn(),
                                         table_key.get_end_scn(),
                                         cg_schema,

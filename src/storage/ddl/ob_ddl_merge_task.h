@@ -32,12 +32,17 @@ namespace share
 {
 struct ObDDLChecksumItem;
 }
+namespace transaction
+{
+class ObTransID;
+}
 
 namespace storage
 {
 
 class ObLS;
 class ObCOSSTableV2;
+class ObDDLTableMergeTask;
 
 class ObDDLTableMergeDag : public share::ObIDag
 {
@@ -46,6 +51,8 @@ public:
   virtual ~ObDDLTableMergeDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int create_first_task() override;
+  virtual int inner_reset_status_for_retry() override;
+  static const int64_t DDL_MGR_RETRY_TIMES = 3;
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(ddl_param));
 public:
   virtual bool operator == (const ObIDag &other) const override;
@@ -60,12 +67,19 @@ public:
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
 private:
+  int check_allow_major_merge();
+  void reset_tablet_ctx();
+  int init_tablet_ctx();
+  int get_storage_schema_for_inc_major(ObTabletHandle &tablet_handle);
   int prepare_ddl_kvs(ObTablet &tablet, ObIArray<ObDDLKVHandle> &ddl_kvs_handle);
   int prepare_full_direct_load_ddl_kvs(ObTablet &tablet, ObIArray<ObDDLKVHandle> &ddl_kvs_handle);
   int prepare_incremental_direct_load_ddl_kvs(ObTablet &tablet, ObIArray<ObDDLKVHandle> &ddl_kvs_handle);
 private:
   bool is_inited_;
+  ObArenaAllocator arena_;
   ObDDLTableMergeDagParam ddl_param_;
+  /* used for direct load merge task */
+  ObDDLTabletContext *tablet_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLTableMergeDag);
 };
 
@@ -85,13 +99,29 @@ public:
 private:
   int dump_in_shared_storage_mode(
     const ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle,
+    ObTablet &tablet_handle,
     ObTableStoreIterator &ddl_table_iter,
     const ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     common::ObArenaAllocator &allocator,
     ObTableHandleV2 &compacted_sstable_handle);
 #endif
 private:
+  int merge_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
+  int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
+  int merge_full_direct_load_ddl_kvs_for_ss(ObLSHandle &ls_handle, ObTablet &tablet);
+  int merge_full_direct_load_ddl_kvs_for_sn(ObLSHandle &ls_handle, ObTablet &tablet);
+
+  int merge_incremental_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
+
+
+  int check_macro_intergrate_for_sn(const ObTabletDDLParam &ddl_param,
+                                    ObTablet &tablet,
+                                    SCN &compact_start_scn,
+                                    SCN &compact_end_scn);
+  int check_macro_intergrate_for_nidem_sn(ObTabletDDLParam &ddl_param,
+                                         ObTablet &tablet,
+                                         SCN &compact_start_scn,
+                                         SCN &compact_end_scn);
   int merge_ddl_kvs(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
   int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
   int merge_incremental_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
@@ -123,8 +153,9 @@ private:
 class ObTabletDDLUtil
 {
 public:
+  static int check_tablet_need_merge(ObTablet &tablet, ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool &need_schedule_merge, ObDDLKVType &ddl_kv_type);
   static int prepare_index_data_desc(
-      ObTablet &tablet,
+      const ObTablet &tablet,
       const ObITable::TableKey &table_key,
       const int64_t snapshot_version,
       const uint64_t data_format_version,
@@ -141,6 +172,13 @@ public:
       const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
       ObArray<ObDDLBlockMeta> &sorted_metas);
+  static int create_ddl_empty_co_sstable(
+      const ObTabletID &tablet_id,
+      const share::SCN &ddl_start_scn,
+      const int64_t snapshot_version,
+      const ObStorageSchema *storage_schema,
+      common::ObArenaAllocator &allocator,
+      ObTableHandleV2 &table_handle);
   static int create_ddl_sstable(
       ObTablet &tablet,
       const ObTabletDDLParam &ddl_param,
@@ -148,6 +186,7 @@ public:
       const ObIArray<blocksstable::MacroBlockId> &macro_id_array,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const ObStorageSchema *storage_schema,
+      lib::ObMutex *alloc_mutex,
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &sstable_handle);
 
@@ -163,7 +202,7 @@ public:
 
   static int compact_ddl_kv(
       ObLS &ls,
-      ObTabletHandle &tablet_handle,
+      ObTablet &tablet,
       ObTableStoreIterator &ddl_sstable_iter,
       const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
       const ObTabletDDLParam &ddl_param,
@@ -209,10 +248,10 @@ public:
       share::SCN &compact_end_scn,
       share::SCN &rec_scn);
 
-  static int schedule_ddl_minor_merge_on_demand(
-      const bool need_freeze,
-      const share::ObLSID &ls_id,
-      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+
+
+  static int check_need_replay_column_store(const ObStorageSchema &storage_schema,
+                                          bool &need_replay_column_store);
 
 private:
 
@@ -233,7 +272,22 @@ private:
       share::SCN &compact_start_scn,
       share::SCN &compact_end_scn,
       share::SCN &rec_scn);
-
+  static int check_need_merge_for_ss(ObTablet &tablet,
+                                     ObArray<ObDDLKVHandle> &ddl_kvs,
+                                     bool &need_schedule_merge,
+                                     ObDDLKVType &ddl_kv_type);
+  static int check_need_merge_for_idem_sn(ObTablet &tablet,
+                                          ObArray<ObDDLKVHandle> &ddl_kvs,
+                                          bool &need_schedule_merge,
+                                          ObDDLKVType &ddl_kv_type);
+  static int check_need_merge_for_nidem_sn(ObTablet &tablet,
+                                           ObArray<ObDDLKVHandle> &ddl_kvs,
+                                           bool &need_schedule_merge,
+                                           ObDDLKVType &ddl_kv_type);
+  static int check_need_merge_for_inc_major(ObTablet &tablet,
+                                            ObArray<ObDDLKVHandle> &ddl_kvs,
+                                            bool &need_schedule_merge,
+                                            ObDDLKVType &ddl_kv_type);
 };
 
 } // namespace storage

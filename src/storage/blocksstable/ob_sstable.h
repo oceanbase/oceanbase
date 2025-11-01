@@ -79,6 +79,7 @@ public:
   void reset();
   int init(const blocksstable::ObSSTableMeta *meta, const bool has_multi_version_row = false);
   void set_upper_trans_version(const int64_t upper_trans_version);
+  void set_filled_tx_scn(const share::SCN &filled_tx_scn);
   bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION_1; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
@@ -202,6 +203,11 @@ public:
   int set_upper_trans_version(
       common::ObArenaAllocator &allocator,
       const int64_t upper_trans_version);
+  // for inc major sstable that needs update upper trans version && filled tx scn at same time
+  int backfill_commit_version(
+      common::ObArenaAllocator &allocator,
+      const int64_t commit_version,
+      const share::SCN &filled_tx_scn);
   virtual int64_t get_upper_trans_version() const override
   {
     return meta_cache_.upper_trans_version_;
@@ -238,6 +244,10 @@ public:
   virtual bool is_ddl_merge_empty_sstable() const override
   {
     return is_empty() && is_ddl_merge_sstable();
+  }
+  OB_INLINE bool need_check_inc_major_can_access() const
+  {
+    return is_inc_major_type_sstable() || is_inc_major_ddl_sstable() || is_inc_major_ddl_aggregate_co_sstable();
   }
   int set_addr(const ObMetaDiskAddr &addr);
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return addr_; }
@@ -293,7 +303,7 @@ public:
   int set_status_for_read(const ObSSTableStatus status);
 
   // TODO: get_index_tree_root and get_last_rowkey now required sstable to be loaded
-  int get_index_tree_root(
+  virtual int get_index_tree_root(
       blocksstable::ObMicroBlockData &index_data,
       const bool need_transform = true);
   int get_last_rowkey(

@@ -785,6 +785,9 @@ int ObAutoincrementService::calculate_idempotent_autoinc_val_for_ddl(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(autoinc_param),
              K(table_all_slice_count), K(table_level_slice_idx), K(slice_row_idx));
+  } else if (autoinc_param->global_value_to_sync_ >= UINT64_MAX) {
+    ret = OB_ERR_REACH_AUTOINC_MAX;
+    LOG_WARN("autoinc reach max", K(ret), K(autoinc_param->global_value_to_sync_));
   } else {
     const int64_t range_id = slice_row_idx / autoinc_range_interval;
     const int64_t row_id_in_range = slice_row_idx % autoinc_range_interval;
@@ -792,11 +795,19 @@ int ObAutoincrementService::calculate_idempotent_autoinc_val_for_ddl(
     // for now, only `offset` param is supported, `increment` param is not supported
     const uint64_t offset = autoinc_param->autoinc_offset_;
     const uint64_t max_value = get_max_value(column_type);
-    autoinc_value =
+    if (1 == table_all_slice_count) {
+      // if generate in only one thread, calc next value by prev value and increment step to compat MySQL
+      autoinc_value = OB_UNLIKELY(0 == slice_row_idx) ? offset : min(autoinc_param->global_value_to_sync_ + autoinc_param->autoinc_increment_, max_value);
+    } else {
+      autoinc_value =
         min(offset + table_level_slice_idx * autoinc_range_interval +
                 (table_all_slice_count * range_id * autoinc_range_interval) + row_id_in_range,
             max_value);
+    }
     autoinc_param->global_value_to_sync_ = max(autoinc_param->global_value_to_sync_, autoinc_value);
+    LOG_TRACE("ddl calc idem autoinc value", K(ret), K(autoinc_value),
+        K(table_all_slice_count), K(table_level_slice_idx), K(slice_row_idx), K(autoinc_range_interval),
+        K(autoinc_param->value_to_sync_), K(autoinc_param->global_value_to_sync_), K(autoinc_param->autoinc_increment_), K(offset));
   }
 
   return ret;

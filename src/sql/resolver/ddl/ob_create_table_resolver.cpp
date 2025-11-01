@@ -3156,7 +3156,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("index column is vector column, but is not vector index is not supported", K(ret));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column index but not vector index is");
-              } else if (column_schema->is_key_forbid_lob() && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
+              } else if (column_schema->is_key_forbid_lob() && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_ && static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY) != node->value_) {
                 if (column_schema->is_hidden()) {
                   //functional index in mysql mode
                   ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
@@ -3190,7 +3190,9 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
 
                 if (OB_SUCC(ret)) {
                   if ((index_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH
-                      && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
+                      && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_
+                      && static_cast<int64_t>(INDEX_KEYNAME::VEC_KEY) != node->value_) {
+                    // text or varchar column is bigger than 16k will be blocked
                     ret = OB_ERR_TOO_LONG_KEY_LENGTH;
                     LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
                   } else if (length <= 0) {

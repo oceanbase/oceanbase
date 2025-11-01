@@ -48,6 +48,12 @@ public:
                        const common::ObLimitParam &limit_param,
                        ObExpr *&search_vec,
                        ObExpr *&distance_calc);
+  static int init_sort_of_hybrid_index(ObIAllocator &allocator,
+                                       const ObDASVecAuxScanCtDef *ir_ctdef,
+                                       const ObDASSortCtDef *sort_ctdef,
+                                       ObDASSortRtDef *sort_rtdef,
+                                       ObString &hybrid_search_vec,
+                                       ObExpr *&distance_calc);
   static int reuse_iter(const share::ObLSID &ls_id,
                         ObDASScanIter *iter,
                         ObTableScanParam &scan_param,

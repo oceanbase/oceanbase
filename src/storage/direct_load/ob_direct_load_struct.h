@@ -28,7 +28,7 @@ struct ObDirectLoadMode
   DEF(LOAD_DATA, = 1)                \
   DEF(INSERT_INTO, = 2)              \
   DEF(TABLE_LOAD, = 3)               \
-  DEF(INSERT_OVERWRITE,  = 4)        \
+  DEF(INSERT_OVERWRITE, = 4)         \
   DEF(MAX_MODE, )
 
   DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_MODE_DEF, static);
@@ -85,6 +85,20 @@ struct ObDirectLoadLevel
   DEF(MAX_LEVEL, )
 
   DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_LEVEL_DEF, static);
+
+  static bool is_type_valid(const Type type);
+};
+
+struct ObDirectLoadInsertSSTableType
+{
+#define OB_DIRECT_LOAD_INSERT_SSTABLE_TYPE_DEF(DEF) \
+  DEF(INVALID_INSERT_SSTABLE_TYPE, = 0)             \
+  DEF(MAJOR, = 1)                                   \
+  DEF(INC, = 2)                                     \
+  DEF(INC_MAJOR, = 3)                               \
+  DEF(MAX_INSERT_SSTABLE_TYPE, )
+
+  DECLARE_ENUM(Type, type, OB_DIRECT_LOAD_INSERT_SSTABLE_TYPE_DEF, static);
 
   static bool is_type_valid(const Type type);
 };

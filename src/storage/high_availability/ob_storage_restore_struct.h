@@ -98,6 +98,8 @@ struct ObTabletRestoreAction
   static bool need_restore_mds_sstable(const ACTION &action);
   static bool need_restore_minor_sstable(const ACTION &action);
   static bool need_restore_ddl_sstable(const ACTION &action);
+  static bool need_restore_inc_major_ddl_sstable(const ACTION &action);
+  static bool need_restore_inc_major_sstable(const ACTION &action);
   static bool need_restore_major_sstable(const ACTION &action);
   static bool need_verify_table_store(const ACTION &action);
   static bool disallow_remote_table_exist(const ACTION &action);

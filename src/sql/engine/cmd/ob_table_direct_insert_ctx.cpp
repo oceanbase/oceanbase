@@ -125,6 +125,7 @@ int ObTableDirectInsertCtx::init(
         param.compressor_type_ = compressor_type;
         param.online_sample_percent_ = online_sample_percent;
         param.load_level_ = tablet_ids.empty() ? ObDirectLoadLevel::TABLE : ObDirectLoadLevel::PARTITION;
+        param.enable_inc_major_ = phy_plan.get_enable_inc_major();
         if (OB_FAIL(table_load_instance_->init(param, column_ids, tablet_ids, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret), K(param), K(column_ids), K(tablet_ids));
         } else {

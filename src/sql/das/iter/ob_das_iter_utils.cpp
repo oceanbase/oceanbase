@@ -4386,6 +4386,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
     ObDASScanIter *index_id_table_iter = nullptr;
     ObDASScanIter *snapshot_table_iter = nullptr;
     ObDASScanIter *com_aux_vec_iter = nullptr;
+    ObDASScanIter *embedded_table_iter = nullptr;
     ObDASScanIter *data_filter_iter = nullptr;
     ObDASScanIter *vid_rowkey_table_iter = nullptr;
     ObDASScanIter *rowkey_vid_table_iter = nullptr;
@@ -4440,6 +4441,11 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       LOG_WARN("failed to create snapshot table iter", K(ret));
     } else if (OB_FAIL(create_das_scan_iter(alloc, com_aux_tbl_ctdef, com_aux_tbl_rtdef, com_aux_vec_iter))) {
       LOG_WARN("failed to create data table iter", K(ret));
+    } else if (vec_aux_ctdef->is_hybrid_ && OB_FAIL(create_das_scan_iter(alloc,
+                                                           vec_aux_ctdef->get_vec_aux_tbl_ctdef(vec_aux_ctdef->get_embedded_tbl_idx(), ObTSCIRScanType::OB_VEC_EMBEDDED_SCAN),
+                                                           vec_aux_rtdef->get_vec_aux_tbl_rtdef(vec_aux_ctdef->get_embedded_tbl_idx()),
+                                                           embedded_table_iter))) {
+      LOG_WARN("failed to create embedded table iter", K(ret));
     } else if ((vec_aux_ctdef->is_iter_filter() || can_use_adaptive_path)
       && OB_FAIL(create_das_scan_iter(alloc, data_table_ctdef, data_table_rtdef, data_filter_iter))) {
       LOG_WARN("failed to create data filter scan iter", K(ret));
@@ -4481,6 +4487,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       hnsw_scan_param.vid_rowkey_iter_ = vid_rowkey_table_iter;
       hnsw_scan_param.com_aux_vec_iter_ = com_aux_vec_iter;
       hnsw_scan_param.rowkey_vid_iter_ = rowkey_vid_table_iter;
+      hnsw_scan_param.embedded_table_iter_ = embedded_table_iter;
       hnsw_scan_param.vec_aux_ctdef_ = vec_aux_ctdef;
       hnsw_scan_param.vec_aux_rtdef_ = vec_aux_rtdef;
       hnsw_scan_param.vid_rowkey_ctdef_ = vid_rowkey_ctdef;

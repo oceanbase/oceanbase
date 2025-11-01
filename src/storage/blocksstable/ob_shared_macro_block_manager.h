@@ -41,10 +41,21 @@ public:
     : nested_size_(OB_DEFAULT_MACRO_BLOCK_SIZE), nested_offset_(0), macro_id_()
   {
   }
+  ObBlockInfo(const ObBlockInfo &other)
+    : nested_size_(other.nested_size_), nested_offset_(other.nested_offset_), macro_id_(other.macro_id_)
+  {
+  }
   ~ObBlockInfo();
   void reset();
   bool is_valid() const;
   bool is_small_sstable() const;
+  ObBlockInfo& operator =(const ObBlockInfo &other)
+  {
+    nested_size_ = other.nested_size_;
+    nested_offset_ = other.nested_offset_;
+    macro_id_ = other.macro_id_;
+    return *this;
+  }
   TO_STRING_KV(K_(nested_size), K_(nested_offset), K_(macro_id));
 public:
   int64_t nested_size_;

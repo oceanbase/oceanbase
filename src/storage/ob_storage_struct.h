@@ -371,24 +371,18 @@ public:
   ObHATableStoreParam();
   ObHATableStoreParam(
     const int64_t transfer_seq,
-    const bool need_check_sstable,
-    const bool need_check_transfer_seq);
-  ObHATableStoreParam(
-    const int64_t transfer_seq,
-    const bool need_check_sstable,
     const bool need_check_transfer_seq,
-    const bool need_replace_remote_sstable,
-    const bool is_only_replace_major);
+    const bool need_replace_remote_sstable = false,
+    const bool is_only_replace_major = false);
   ~ObHATableStoreParam() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(transfer_seq), K_(need_check_sstable), K_(need_check_transfer_seq), K_(need_replace_remote_sstable), K_(is_only_replace_major));
+  TO_STRING_KV(K_(transfer_seq), K_(need_check_transfer_seq), K_(need_replace_remote_sstable), K_(is_only_replace_major));
 public:
   /// NOTE: transfer_seq_ here to be used for
   /// validation only and doesn't affect the private data's storage path.
   /// DON'T USE IT to generate private data's storage path in SS mode.
   /// For more detail please see:
   int64_t transfer_seq_;
-  bool need_check_sstable_;
   bool need_check_transfer_seq_;
   bool need_replace_remote_sstable_; // only true for restore replace sstable.
   bool is_only_replace_major_;
@@ -432,11 +426,12 @@ public:
   UpdateUpperTransParam();
   ~UpdateUpperTransParam();
   void reset();
-  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn), KPC_(ss_new_upper_trans));
+  TO_STRING_KV(K_(new_upper_trans), K_(last_minor_end_scn), KPC_(ss_new_upper_trans), K_(gc_inc_major_ddl_scns));
 public:
   ObIArray<int64_t> *new_upper_trans_;
   share::SCN last_minor_end_scn_;
   ObIArray<SCNAndVersion> *ss_new_upper_trans_;
+  ObIArray<int64_t> *gc_inc_major_ddl_scns_; // record the end scn of inc major ddl sstables which should be recycled
 };
 
 struct ObUpdateTableStoreParam
@@ -448,7 +443,8 @@ struct ObUpdateTableStoreParam
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const blocksstable::ObSSTable *sstable = NULL,
-    const bool allow_duplicate_sstable = false);
+    const bool allow_duplicate_sstable = false,
+    const bool need_wait_check_flag = true);
   ObUpdateTableStoreParam(
     const int64_t snapshot_version,
     const int64_t multi_version_start,
@@ -459,16 +455,18 @@ struct ObUpdateTableStoreParam
     const ObCompactionTableStoreParam &comp_param,
     ObArenaAllocator *allocator = NULL);
   int init_with_ha_info(const ObHATableStoreParam &ha_param);
+  void set_upper_trans_param(const UpdateUpperTransParam upper_trans_param) { upper_trans_param_ = upper_trans_param; }
   bool is_valid() const;
   bool need_report_major() const;
   int64_t get_report_scn() const;
+  bool is_ha_replace_table() const { return ha_info_.is_only_replace_major_ || ha_info_.need_replace_remote_sstable_; }
+  bool get_need_check_sstable() const { return is_minor_merge_type(compaction_info_.merge_type_); }
   #define PARAM_DEFINE_FUNC(var_type, param, var_name) \
     OB_INLINE var_type get_##var_name() const { return param. var_name##_; }
   #define HA_PARAM_FUNC(var_type, var_name) \
     PARAM_DEFINE_FUNC(var_type, ha_info_, var_name)
   #define COMP_PARAM_FUNC(var_type, var_name) \
     PARAM_DEFINE_FUNC(var_type, compaction_info_, var_name)
-  HA_PARAM_FUNC(bool, need_check_sstable);
   HA_PARAM_FUNC(bool, need_check_transfer_seq);
   HA_PARAM_FUNC(int64_t, transfer_seq);
   COMP_PARAM_FUNC(compaction::ObMergeType, merge_type);
@@ -485,7 +483,8 @@ struct ObUpdateTableStoreParam
                K_(allow_adjust_next_start_scn),
                K_(update_tablet_ss_change_version),
                K_(tablet_ss_change_fully_applied),
-               K_(upper_trans_param));
+               K_(upper_trans_param),
+               K_(need_wait_check_flag));
   ObCompactionTableStoreParam compaction_info_;
   ObDDLTableStoreParam ddl_info_;
   ObHATableStoreParam ha_info_;
@@ -500,6 +499,7 @@ struct ObUpdateTableStoreParam
   share::SCN update_tablet_ss_change_version_; // for shared storage tablet change sync
   bool tablet_ss_change_fully_applied_;        // wheter the specified version is fully applied
   UpdateUpperTransParam upper_trans_param_;    // set upper_trans_param_ only when update upper_trans_version
+  bool need_wait_check_flag_;                  // A flag used to skip the checksum verification between replicas
 };
 
 struct ObSplitTableStoreParam final

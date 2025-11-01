@@ -95,7 +95,6 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
-  virtual int is_range_valid() const override;
 protected:
   virtual int prepare() override;
   virtual int calc_scan_range() override;

@@ -103,6 +103,68 @@ private:
   blocksstable::ObDatumRowkey *parallel_datum_rowkey_list_;
 };
 
+
+struct ObIncMajorSSTableInfo
+{
+public:
+  struct IncMajorInfo {
+  public:
+    IncMajorInfo() { reset(); }
+    IncMajorInfo(const int64_t start_scn, const int64_t end_scn, const int64_t data_checksum, const int64_t row_count)
+      : start_scn_(start_scn),
+        end_scn_(end_scn),
+        data_checksum_(data_checksum),
+        row_count_(row_count)
+    {}
+    ~IncMajorInfo() { reset(); }
+    void reset() { start_scn_ = 0; end_scn_ = 0; data_checksum_ = 0; row_count_ = 0; }
+    bool is_valid() const { return start_scn_ >= 0 && start_scn_ < end_scn_; }
+    bool operator==(const IncMajorInfo &other) const {
+      return start_scn_ == other.start_scn_
+          && end_scn_ == other.end_scn_
+          && data_checksum_ == other.data_checksum_
+          && row_count_ == other.row_count_;
+    }
+    bool operator!=(const IncMajorInfo &other) const { return !(*this == other); }
+    TO_STRING_KV(K_(start_scn), K_(end_scn), K_(data_checksum), K_(row_count));
+    int64_t start_scn_;
+    int64_t end_scn_;
+    int64_t data_checksum_;
+    int64_t row_count_; // for cs replica validation
+    OB_UNIS_VERSION(1);
+  };
+
+  ObIncMajorSSTableInfo();
+  ~ObIncMajorSSTableInfo();
+  int init(common::ObIAllocator &allocator, const int64_t boundary_snapshot, const common::ObIArray<ObITable *> &tables);
+  int assign(common::ObIAllocator &allocator, const ObIncMajorSSTableInfo &other);
+  void destroy(common::ObIAllocator &allocator);
+  int64_t get_size() const { return list_size_; }
+  bool is_valid() const { return list_size_ > 0 && nullptr != info_list_; }
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(
+      common::ObIAllocator &allocator,
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos);
+  int64_t get_serialize_size() const;
+  int64_t to_string(char* buf, const int64_t buf_len) const;
+private:
+  int alloc_list(common::ObIAllocator &allocator, const int64_t list_size);
+public:
+  static const int64_t INC_MAJOR_INFO_VERSION_V0 = 0;
+  union {
+    uint32_t inc_major_info_;
+    struct {
+      uint32_t version_         : 8;
+      uint32_t reserved_        : 24;
+    };
+  };
+  int64_t list_size_;
+  IncMajorInfo *info_list_;
+};
+
+
 struct ObMediumCompactionInfoKey final
 {
 public:
@@ -200,13 +262,15 @@ public:
     medium_merge_reason_ = merge_reason;
     medium_snapshot_ = medium_snapshot;
   }
-  int gene_parallel_info(
-      common::ObArrayArray<ObStoreRange> &paral_range);
+  int gene_parallel_info(common::ObArrayArray<ObStoreRange> &paral_range);
+  int try_gene_inc_major_info(const storage::ObTablesHandleArray &table_array);
   static inline bool is_valid_compaction_type(const ObCompactionType type) { return MEDIUM_COMPACTION <= type && type < COMPACTION_TYPE_MAX; }
   static inline bool is_medium_compaction(const ObCompactionType type) { return MEDIUM_COMPACTION == type; }
   static inline bool is_major_compaction(const ObCompactionType type) { return MAJOR_COMPACTION == type; }
+  static inline bool is_inc_major_compaction(const ObCompactionType type) { return INC_MAJOR_COMPACTION == type; }
   inline bool is_major_compaction() const { return is_major_compaction((ObCompactionType)compaction_type_); }
   inline bool is_medium_compaction() const { return is_medium_compaction((ObCompactionType)compaction_type_); }
+  inline bool is_inc_major_compaction() const { return is_inc_major_compaction((ObCompactionType)compaction_type_); }
   inline bool is_invalid_mview_compaction() const { return storage_schema_.is_mv_major_refresh_table() && medium_merge_reason_ != ObAdaptiveMergePolicy::TENANT_MAJOR; }
   void clear_parallel_range()
   {
@@ -265,9 +329,10 @@ public:
   int64_t medium_snapshot_;
   int64_t last_medium_snapshot_;
   storage::ObStorageSchema storage_schema_;
-  ObParallelMergeInfo parallel_merge_info_;
+  ObParallelMergeInfo parallel_merge_info_; // not used for inc major merge
   uint64_t encoding_granularity_;
   ObMdsFilterInfo mds_filter_info_;
+  ObIncMajorSSTableInfo inc_major_info_; // store inc major sstable checksum and end scn
   ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);

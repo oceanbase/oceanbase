@@ -823,7 +823,16 @@ int ObMemtable::get(
         } else if (OB_FAIL(ObReadRow::iterate_row(*read_info, *store_rowkey, value_iter, row, bitmap, row_scn))) {
           TRANS_LOG(WARN, "Failed to iterate row, ", K(ret), K(rowkey));
         } else {
-          if (param.need_scn_) {
+          /* get should not return rows with row_scn <= base_version,
+          *  rows in memtable which have row_scn <= base_version may overwrite rows in inc major sstables with greater row_scn
+          *  MAJOR      EMPTY    (version 100)
+          *  INC_MAJOR  INSERT 1 (version 110)
+          *  MEMTABLE   DELETE 1 (version 90)
+          */
+          if (context.is_inc_major_query_ && row_scn <= context.trans_version_range_.base_version_) {
+            row.row_flag_.reset();
+            row.row_flag_.set_flag(DF_NOT_EXIST);
+          } else if (param.need_scn_) {
             if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
               // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
               TRANS_LOG(INFO, "use max row scn", K(context.store_ctx_->mvcc_acc_ctx_));

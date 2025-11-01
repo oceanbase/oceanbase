@@ -1456,8 +1456,7 @@ int ObStorageSchema::transform_from_row_to_columnar()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (!is_row_store()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "only row store schema can be transformed", K(ret), KPC(this));
+    // do nothing
   } else {
     is_inited_ = false;
     (void) reset_column_group_array();

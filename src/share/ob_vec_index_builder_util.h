@@ -28,10 +28,12 @@ namespace share
 class ObVecIndexBuilderUtil
 {
 public:
-  static const int64_t OB_VEC_DELTA_BUFFER_TABLE_INDEX_COL_CNT = 2;         // 辅助表的主键列数
-  static const int64_t OB_VEC_INDEX_ID_TABLE_INDEX_COL_CNT = 3;             // 辅助表的主键列数
-  static const int64_t OB_VEC_INDEX_SNAPSHOT_DATA_TABLE_INDEX_COL_CNT = 1;  // 辅助表的主键列数
-  static const int64_t OB_VEC_DIM_DOCID_VALUE_TABLE_INDEX_COL_CNT = 2;      // 辅助表的主键列数
+  static const int64_t OB_VEC_DELTA_BUFFER_TABLE_INDEX_PK_COL_CNT = 2;         // aux table pk count
+  static const int64_t OB_VEC_INDEX_ID_TABLE_INDEX_PK_COL_CNT = 3;
+  static const int64_t OB_VEC_INDEX_SNAPSHOT_DATA_TABLE_INDEX_PK_COL_CNT = 1;
+  static const int64_t OB_VEC_DIM_DOCID_VALUE_TABLE_INDEX_PK_COL_CNT = 2;
+  static const int64_t OB_HYBRID_VEC_LOG_TABLE_INDEX_PK_COL_CNT = 2;
+  static const int64_t OB_HYBRID_VEC_EMBEDDED_TABLE_INDEX_PK_COL_CNT = 2;
 
   // hnsw
   static const char * ROWKEY_VID_TABLE_NAME;
@@ -39,6 +41,8 @@ public:
   static const char * DELTA_BUFFER_TABLE_NAME_SUFFIX;
   static const char * INDEX_ID_TABLE_NAME_SUFFIX;
   static const char * SNAPSHOT_DATA_TABLE_NAME_SUFFIX;
+  static const char * HYBRID_LOG_TABLE_NAME_SUFFIX;
+  static const char * HYBRID_EMBEDDED_VEC_TABLE_NAME_SUFFIX;
   // ivf
   static const char * IVF_CENTROID_TABLE_NAME_SUFFIX;
   static const char * IVF_ROWKEY_CID_TABLE_NAME_SUFFIX;
@@ -101,6 +105,16 @@ public:
       const share::schema::ObTableSchema &data_schema,
       ObVectorIndexParam& index_param,
       share::schema::ObTableSchema &index_schema);
+  static int set_hybrid_vec_log_table_columns(
+      const ObCreateIndexArg &arg,
+      const ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
+      ObTableSchema &index_schema);
+  static int set_hybrid_vec_embedded_vec_table_columns(
+      const ObCreateIndexArg &arg,
+      const ObTableSchema &data_schema,
+      ObVectorIndexParam& index_param,
+      ObTableSchema &index_schema);
   static int generate_vec_index_name(
       common::ObIAllocator *allocator,
       const share::schema::ObIndexType type,
@@ -118,6 +132,7 @@ public:
       const ObTableSchema &index_schema,
       ObString &prefix);
   static int generate_vec_index_aux_columns(
+      ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &index_table_schema,
       ObTableSchema &new_table_schema,
@@ -194,6 +209,15 @@ private:
       ObIArray<sql::ObPartitionResolveResult> &resolve_results,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
       ObIAllocator *allocator);
+  static int append_hybrid_vec_hnsw_args(
+      const share::schema::ObTableSchema &data_schema,
+      const sql::ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &vec_common_aux_table_exist,
+      ObIArray<sql::ObPartitionResolveResult> &resolve_results,
+      ObIArray<ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator,
+      const sql::ObSQLSessionInfo *session_info);
   static int append_vec_ivfsq8_args(
       const sql::ObPartitionResolveResult &resolve_result,
       const obrpc::ObCreateIndexArg &index_arg,
@@ -234,6 +258,14 @@ private:
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
   static int append_vec_index_snapshot_data_arg(
       const obrpc::ObCreateIndexArg &arg,
+      ObIAllocator *allocator,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+  static int append_hybrid_vec_log_table_arg(
+      const obrpc::ObCreateIndexArg &index_arg,
+      ObIAllocator *allocator,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
+  static int append_hybrid_vec_index_embedded_vec_arg(
+      const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
   static int adjust_vec_spiv_arg(
@@ -375,6 +407,14 @@ private:
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg *index_arg,
       const ObColumnSchemaV2 *&data_col);
+  static int get_vec_visible_col(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObColumnSchemaV2 *&visible_col);
+  static int get_chunk_col(
+      const ObTableSchema &data_schema,
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObColumnSchemaV2 *&chunk_col);
   static int push_back_gen_col(
       ObIArray<const ObColumnSchemaV2 *> &cols,
       const ObColumnSchemaV2 *existing_col,
@@ -419,6 +459,22 @@ private:
       const uint64_t col_id,
       ObTableSchema &data_schema,
       ObColumnSchemaV2 *&data_col);
+  static int generate_visible_column(
+      const ObCreateIndexArg *index_arg,
+      const uint64_t col_id,
+      ObTableSchema &data_schema,
+      ObColumnSchemaV2 *&visible_col);
+  static int generate_chunk_column(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const uint64_t col_id,
+      ObTableSchema &data_schema,
+      ObColumnSchemaV2 *&chunk_col);
+  static int generate_embedded_vec_column(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const uint64_t col_id,
+      ObTableSchema &data_schema,
+      ObColumnSchemaV2 *&embedded_vec_col,
+      ObIAllocator &allocator);
   static int generate_ivf_col_name_prefix(
       const VecColType col_type,
       char *col_name_buf,
@@ -461,6 +517,24 @@ private:
       int64_t &name_pos);
   static int construct_data_col_name(
       const obrpc::ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos);
+  static int construct_visible_col_name(
+      const obrpc::ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos);
+  static int construct_chunk_col_name(
+      const ObCreateIndexArg *index_arg,
+      const ObTableSchema &data_schema,
+      char *col_name_buf,
+      const int64_t buf_len,
+      int64_t &name_pos);
+  static int construct_embedded_vector_col_name(
+      const ObCreateIndexArg *index_arg,
       const ObTableSchema &data_schema,
       char *col_name_buf,
       const int64_t buf_len,

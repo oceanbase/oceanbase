@@ -738,12 +738,22 @@ int ObOptimizer::check_is_heap_table(const ObDMLStmt &stmt)
   return ret;
 }
 
+ERRSIM_POINT_DEF(FORCE_INC_DIRECT_WRITE);
 int ObOptimizer::init_env_info(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   int64_t rowgoal_type = -1;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
+  if (OB_UNLIKELY(FORCE_INC_DIRECT_WRITE)) {
+    if (stmt::T_INSERT == stmt.get_stmt_type()) {
+      ObGlobalHint *global_hint_for_update = const_cast<ObGlobalHint *>(&(ctx_.get_global_hint()));
+      global_hint_for_update->pdml_option_ = ObPDMLOption::ENABLE;
+      global_hint_for_update->parallel_ =
+        global_hint_for_update->parallel_ == 0 ? 2 : global_hint_for_update->parallel_;
+      ctx_.get_exec_ctx()->get_table_direct_insert_ctx().set_force_inc_direct_write(true);
+    }
+  }
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));

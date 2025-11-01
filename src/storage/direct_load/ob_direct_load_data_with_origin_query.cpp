@@ -150,7 +150,7 @@ int ObDirectLoadDataWithOriginQuery::query_full_row(const ObDirectLoadDatumRow &
       LOG_WARN("fail to get next row", KR(ret));
       if (OB_ITER_END == ret) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected full row not found", KR(ret), K(rowkey_row));
+        LOG_WARN("unexpected full row not found", KR(ret), K(param_), K(rowkey_row));
       }
     }
   }

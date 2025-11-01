@@ -1093,7 +1093,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg);
   int build_aux_lob_table_schema_if_need(
       ObTableSchema &data_table_schema,
-      ObIArray<ObTableSchema> &table_schemas);
+      ObIArray<ObTableSchema> &table_schemas,
+      const bool force_generate_lob=false);
   int rename_dropping_index_name(
       const share::schema::ObTableSchema &orig_index_schema,
       const bool is_inner_and_fts_index,
@@ -2103,7 +2104,8 @@ int check_will_be_having_domain_index_operation(
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const bool need_sync_schema_version,
-      bool &is_add_lob);
+      bool &is_add_lob,
+      const bool is_hybrid_vector_column=false);
   int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
                               ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,

@@ -38,12 +38,12 @@ class ObTableLoadCoordinatorTrans;
 
 class ObTableLoadCoordinator
 {
-  static const int64_t WAIT_INTERVAL_US = 3 * 1000 * 1000; // 3s
+  static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000; // 1s
   static const int64_t DEFAULT_TIMEOUT_US = 10LL * 1000 * 1000; // 10s
   static const int64_t HEART_BEAT_RPC_TIMEOUT_US = 1LL * 1000 * 1000; // 1s
   // 申请和释放资源失败等待间隔时间
   static const int64_t RESOURCE_OP_WAIT_INTERVAL_US = 5 * 1000LL * 1000LL; // 5s
-  static const int64_t SSTABLE_BUFFER_SIZE = 20 * 1024LL;;  // 20KB
+  static const int64_t SSTABLE_BUFFER_SIZE = 68 * 1024LL;;  // 64K + 4K
   static const int64_t MACROBLOCK_BUFFER_SIZE = 10 * 1024LL * 1024LL;  // 10MB
   static const int64_t CG_BUFFER_SIZE = 64LL * 1024; // 64K
   static const int64_t MIN_THREAD_COUNT = 2;

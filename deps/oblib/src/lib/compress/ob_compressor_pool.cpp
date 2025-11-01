@@ -25,10 +25,12 @@ ObCompressorPool::ObCompressorPool()
      zlib_compressor(),
      zstd_compressor(allocator_),
      zstd_compressor_1_3_8(allocator_),
+     zstd_compressor_1_5_7(allocator_),
      zlib_lite_compressor(),
      lz4_stream_compressor(),
      zstd_stream_compressor(allocator_),
-     zstd_stream_compressor_1_3_8(allocator_)
+     zstd_stream_compressor_1_3_8(allocator_),
+     zstd_stream_compressor_1_5_7(allocator_)
 {
   allocator_.set_nway(32);
 }
@@ -81,6 +83,9 @@ int ObCompressorPool::get_compressor(const ObCompressorType &compressor_type,
     case ZSTD_1_3_8_COMPRESSOR:
       compressor = &zstd_compressor_1_3_8;
       break;
+    case ZSTD_1_5_7_COMPRESSOR:
+      compressor = &zstd_compressor_1_5_7;
+      break;
     case ZLIB_LITE_COMPRESSOR:
       compressor = &zlib_lite_compressor;
       break;
@@ -111,6 +116,8 @@ int ObCompressorPool::get_compressor_type(const char *compressor_name,
     compressor_type = ZSTD_COMPRESSOR;
   } else if (!STRCASECMP(compressor_name, "zstd_1.3.8")) {
     compressor_type = ZSTD_1_3_8_COMPRESSOR;
+  } else if (!STRCASECMP(compressor_name, "zstd_1.5.7")) {
+    compressor_type = ZSTD_1_5_7_COMPRESSOR;
   } else if (!STRCASECMP(compressor_name, "lz4_1.9.1")) {
     compressor_type = LZ4_191_COMPRESSOR;
   } else if (!STRCASECMP(compressor_name, "stream_lz4_1.0")) {
@@ -119,6 +126,8 @@ int ObCompressorPool::get_compressor_type(const char *compressor_name,
     compressor_type = STREAM_ZSTD_COMPRESSOR;
   } else if (!STRCASECMP(compressor_name, "stream_zstd_1.3.8")) {
     compressor_type = STREAM_ZSTD_1_3_8_COMPRESSOR;
+  } else if (!STRCASECMP(compressor_name, "stream_zstd_1.5.7")) {
+    compressor_type = STREAM_ZSTD_1_5_7_COMPRESSOR;
   } else if (!strcmp(compressor_name, "zlib_lite_1.0")) {
     compressor_type = ZLIB_LITE_COMPRESSOR;
   }
@@ -178,6 +187,9 @@ int ObCompressorPool::get_stream_compressor(const ObCompressorType &compressor_t
     case STREAM_ZSTD_1_3_8_COMPRESSOR:
       stream_compressor = &zstd_stream_compressor_1_3_8;
       break;
+    case STREAM_ZSTD_1_5_7_COMPRESSOR:
+      stream_compressor = &zstd_stream_compressor_1_5_7;
+      break;
     default:
       stream_compressor = NULL;
       ret = OB_NOT_SUPPORTED;
@@ -195,6 +207,7 @@ int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t
   int64_t zlib_overflow_size = 0;
   int64_t zstd_overflow_size = 0;
   int64_t zstd_138_overflow_size = 0;
+  int64_t zstd_157_overflow_size = 0;
   int64_t zlib_lite_overflow_size = 0;
 
   if (OB_FAIL(lz4_compressor.get_max_overflow_size(src_data_size, lz4_overflow_size))) {
@@ -209,6 +222,8 @@ int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t
       LIB_LOG(WARN, "failed to get_max_overflow_size of zstd", K(ret), K(src_data_size));
   } else if (OB_FAIL(zstd_compressor_1_3_8.get_max_overflow_size(src_data_size, zstd_138_overflow_size))) {
     LIB_LOG(WARN, "failed to get_max_overflow_size of zstd_138", K(ret), K(src_data_size));
+  } else if (OB_FAIL(zstd_compressor_1_5_7.get_max_overflow_size(src_data_size, zstd_157_overflow_size))) {
+    LIB_LOG(WARN, "failed to get_max_overflow_size of zstd_157", K(ret), K(src_data_size));
   } else if (OB_FAIL(zlib_lite_compressor.get_max_overflow_size(src_data_size, zlib_lite_overflow_size))) {
     LIB_LOG(WARN, "failed to get_max_overflow_size of zlib_lite", K(ret), K(src_data_size));
   }
@@ -218,6 +233,7 @@ int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t
     max_overflow_size = std::max(max_overflow_size, zlib_overflow_size);
     max_overflow_size = std::max(max_overflow_size, zstd_overflow_size);
     max_overflow_size = std::max(max_overflow_size, zstd_138_overflow_size);
+    max_overflow_size = std::max(max_overflow_size, zstd_157_overflow_size);
     max_overflow_size = std::max(max_overflow_size, zlib_lite_overflow_size);
   }
   return ret;

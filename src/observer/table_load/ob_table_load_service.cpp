@@ -398,7 +398,8 @@ int ObTableLoadService::check_support_direct_load(
     const ObDirectLoadInsertMode::Type insert_mode,
     const ObDirectLoadMode::Type load_mode,
     const ObDirectLoadLevel::Type load_level,
-    const ObIArray<uint64_t> &column_ids)
+    const ObIArray<uint64_t> &column_ids,
+    bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -412,7 +413,7 @@ int ObTableLoadService::check_support_direct_load(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, column_ids);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, column_ids, enable_inc_major);
     }
   }
   return ret;
@@ -424,7 +425,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObDirectLoadInsertMode::Type insert_mode,
                                                   const ObDirectLoadMode::Type load_mode,
                                                   const ObDirectLoadLevel::Type load_level,
-                                                  const ObIArray<uint64_t> &column_ids)
+                                                  const ObIArray<uint64_t> &column_ids,
+                                                  bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -439,7 +441,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", KR(ret));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, column_ids);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, load_level, column_ids, enable_inc_major);
     }
   }
   return ret;
@@ -453,7 +455,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObDirectLoadInsertMode::Type insert_mode,
                                                   const ObDirectLoadMode::Type load_mode,
                                                   const ObDirectLoadLevel::Type load_level,
-                                                  const ObIArray<uint64_t> &column_ids)
+                                                  const ObIArray<uint64_t> &column_ids,
+                                                  bool enable_inc_major)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == table_schema ||
@@ -474,6 +477,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     bool has_fts_index = false;
     bool has_non_normal_local_index = false;
     bool is_heap_table_with_single_unique_index = false;
+    bool has_delete_insert_engine_index = false;
+    bool has_column_store_replica = false;
     // check if it is a user table
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
 
@@ -572,8 +577,18 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("version lower than 4.3.1.0 does not support incremental direct-load", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support incremental direct-load");
-      } else if (table_schema->is_delete_insert_merge_engine() &&
-                 ObDirectLoadInsertMode::INC_REPLACE == insert_mode) {
+      } else if (OB_FAIL(ObTableLoadSchema::check_has_delete_insert_engine_index(
+                   schema_guard, table_schema, has_delete_insert_engine_index))) {
+        LOG_WARN("fail to check has delete insert engine index", KR(ret));
+      } else if (has_delete_insert_engine_index) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("incremental direct-load does not support table with delete insert engine index",
+                   KR(ret));
+          FORWARD_USER_ERROR_MSG(
+            ret, "incremental direct-load does not support table with delete insert engine index");
+      } else if (compat_version < DATA_VERSION_4_4_0_0 &&
+               table_schema->is_delete_insert_merge_engine() &&
+               ObDirectLoadInsertMode::INC_REPLACE == insert_mode) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
           "incremental direct-load does not support delete insert merge table with replace "
@@ -590,7 +605,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                  OB_FAIL(ObTableLoadSchema::check_is_heap_table_with_single_unique_index(
                    schema_guard, table_schema, is_heap_table_with_single_unique_index))) {
         LOG_WARN("fail to check support direct load for heap table with single local unique index", KR(ret));
-      } else if (table_schema->get_simple_index_infos().count() > 0 && compat_version < DATA_VERSION_4_3_4_0) {
+      } else if (table_schema->get_simple_index_infos().count() > 0 &&
+                 compat_version < DATA_VERSION_4_3_4_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
           "version lower than 4.3.4.0 incremental direct-load does not support table with index",

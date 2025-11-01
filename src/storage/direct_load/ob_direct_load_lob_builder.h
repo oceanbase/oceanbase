@@ -75,6 +75,7 @@ private:
   ObDirectLoadInsertTabletWriteCtx write_ctx_;
   int64_t current_lob_slice_id_;
   blocksstable::ObDatumRow datum_row_;
+  ObDirectLoadMgrAgent tmp_ddl_agent_;
   bool is_closed_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObDirectLoadLobBuilder);

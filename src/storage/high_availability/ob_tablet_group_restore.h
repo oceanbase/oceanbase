@@ -408,6 +408,12 @@ private:
   int generate_ddl_restore_tasks_(
       ObTabletCopyFinishTask *tablet_copy_finish_task,
       share::ObITask *&parent_task);
+  int generate_inc_major_ddl_restore_tasks_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      share::ObITask *&parent_task);
+  int generate_inc_major_restore_tasks_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      share::ObITask *&parent_task);
   int generate_physical_restore_task_(
       const ObITable::TableKey &copy_table_key,
       ObTabletCopyFinishTask *tablet_copy_finish_task,
@@ -467,7 +473,6 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletRestoreTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
 private:
-  int verify_table_store_();
   int update_restore_status_();
   int record_server_event_();
   int report_restore_stat_();

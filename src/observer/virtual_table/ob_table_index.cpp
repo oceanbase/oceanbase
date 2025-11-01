@@ -643,7 +643,9 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
             uint64_t vec_column_id = OB_INVALID_ID;
             if (index_schema->is_vec_spiv_index() && OB_FAIL(index_schema->get_sparse_vec_index_column_id(vec_column_id))) {
               LOG_WARN("get generated column id failed", K(ret));
-            } else if (!index_schema->is_vec_spiv_index() && OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
+            } else if (!index_schema->is_vec_spiv_index() && !is_hybrid_vec_index(index_schema->get_index_type()) && OB_FAIL(index_schema->get_vec_index_column_id(vec_column_id))) {
+              LOG_WARN("get generated column id failed", K(ret));
+            } else if (is_hybrid_vec_index(index_schema->get_index_type()) && OB_FAIL(index_schema->get_hybrid_vec_chunk_column_id(vec_column_id))) {
               LOG_WARN("get generated column id failed", K(ret));
             } else {
               if (OB_INVALID_ID == static_cast<uint64_t>(vec_dep_col_idx_)) {

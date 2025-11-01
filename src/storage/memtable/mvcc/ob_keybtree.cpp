@@ -1514,10 +1514,8 @@ int ObKeyBtree<BtreeKey, BtreeVal>::insert(const BtreeKey key, BtreeVal &value)
   handle.retire(ret);
   if (OB_SUCC(ret)) {
     size_.inc(1);
-  } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-    OB_LOG(WARN, "btree.set(key) error", KR(ret), K(key), K(value));
   } else {
-    OB_LOG(ERROR, "btree.set(key) error", KR(ret), K(key), K(value));
+    OB_LOG(WARN, "btree.set(key) error", KR(ret), K(key), K(value));
   }
   return ret;
 }

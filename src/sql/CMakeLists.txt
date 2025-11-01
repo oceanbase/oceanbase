@@ -610,6 +610,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_vec_scn.cpp
   engine/expr/ob_expr_vec_key.cpp
   engine/expr/ob_expr_vec_data.cpp
+  engine/expr/ob_expr_vec_chunk.cpp
+  engine/expr/ob_expr_embedded_vec.cpp
+  engine/expr/ob_expr_vec_visible.cpp
   engine/expr/ob_expr_topn_filter.cpp
   engine/expr/ob_expr_priv_st_makeenvelope.cpp
   engine/expr/ob_expr_priv_st_clipbybox2d.cpp
@@ -918,6 +921,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_ai/ob_expr_ai_embed.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_rerank.cpp
   engine/expr/ob_expr_local_dynamic_filter.cpp
+  engine/expr/ob_expr_semantic_distance.cpp
   engine/expr/ob_expr_format_profile.cpp
   engine/expr/ob_expr_bucket.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_prompt.cpp
@@ -1113,6 +1117,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_odps_jni_table_row_iter.cpp
   engine/table/ob_odps_table_utils.cpp
   engine/table/ob_file_prebuffer.cpp
+  engine/table/ob_ddl_block_sample_scan_op.cpp
 )
 
 ob_set_subtarget(ob_sql executor

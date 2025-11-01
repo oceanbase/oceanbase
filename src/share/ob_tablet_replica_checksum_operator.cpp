@@ -1534,8 +1534,12 @@ int ObTabletReplicaChecksumOperator::batch_check_tablet_checksum_in_range_(
       } else if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       } else {
+        int64_t err_tablet_id = 0;
+        int64_t err_row_count = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", err_tablet_id, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "row_count", err_row_count, int64_t);
         ret = OB_CHECKSUM_ERROR; // we expect the sql to return an empty result
-        LOG_WARN("tablet replicas checksum error", K(ret), K(tenant_id), K(meta_tenant_id));
+        LOG_WARN("tablet replicas checksum error", K(ret), K(tenant_id), K(meta_tenant_id), K(err_tablet_id), K(err_row_count));
       }
     }
   }

@@ -152,7 +152,9 @@ static const ObTxLogType TX_LOG_TYPE_MASK = (ObTxLogType::TX_REDO_LOG |
                                              ObTxLogType::TX_COMMIT_LOG |
                                              ObTxLogType::TX_ABORT_LOG |
                                              ObTxLogType::TX_CLEAR_LOG |
-                                             ObTxLogType::TX_START_WORKING_LOG);
+                                             ObTxLogType::TX_START_WORKING_LOG |
+                                             ObTxLogType::TX_BIG_SEGMENT_LOG |
+                                             ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG);
 
 class ObTxLogTypeChecker {
 public:
@@ -161,7 +163,8 @@ public:
     return ObTxLogType::TX_REDO_LOG == log_type || ObTxLogType::TX_RECORD_LOG == log_type
            || ObTxLogType::TX_ROLLBACK_TO_LOG == log_type
            || ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type
-           || ObTxLogType::TX_DIRECT_LOAD_INC_LOG == log_type;
+           || ObTxLogType::TX_DIRECT_LOAD_INC_LOG == log_type
+           || ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG == log_type;
   }
   static bool is_state_log(const ObTxLogType log_type)
   {
@@ -639,7 +642,7 @@ public:
 
 #endif
 
-private:
+protected:
   ObTxSerCompatByte compat_bytes_;
 
   DirectLoadIncLogType ddl_log_type_;
@@ -647,6 +650,15 @@ private:
   ObTxDLIncLogBuf &log_buf_;
   // ObDDLRedoLog &ddl_redo_log_;
   ObDDLIncLogBasic batch_key_;
+};
+
+class ObTxDirectLoadIncMajorLog : public ObTxDirectLoadIncLog
+{
+public:
+  static const ObTxLogType LOG_TYPE;
+  ObTxDirectLoadIncMajorLog(const ObTxDirectLoadIncLog::ConstructArg &arg)
+      : ObTxDirectLoadIncLog(arg)
+  {}
 };
 
 class ObTxActiveInfoLogTempRef {

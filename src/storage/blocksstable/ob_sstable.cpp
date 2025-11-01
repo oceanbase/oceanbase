@@ -17,6 +17,7 @@
 #include "storage/access/ob_sstable_row_lock_checker.h"
 #include "storage/access/ob_sstable_row_whole_scanner.h"
 #include "storage/ob_micro_block_index_iterator.h"
+#include "storage/access/ob_sstable_empty_row_iterator.h"
 #include "storage/access/ob_sstable_row_getter.h"
 #include "storage/access/ob_sstable_row_multi_getter.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
@@ -126,6 +127,11 @@ void ObSSTableMetaCache::set_upper_trans_version(const int64_t upper_trans_versi
   } else {
     upper_trans_version_ = std::max(upper_trans_version, max_merged_trans_version_);
   }
+}
+
+void ObSSTableMetaCache::set_filled_tx_scn(const share::SCN &filled_tx_scn)
+{
+  filled_tx_scn_ = std::max(filled_tx_scn, filled_tx_scn_);
 }
 
 OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
@@ -336,7 +342,7 @@ int ObSSTable::copy_from_old_sstable(const ObSSTable &src, common::ObArenaAlloca
         LOG_WARN("unexpected error, cg table is nullptr", K(ret), K(i), KPC(table), KPC(sstable));
       } else if (table->is_loaded()) {
         loaded_table = table;
-      } else if (OB_FAIL(ObTabletTableStore::load_sstable(table->get_addr(), false/*is_co_sstable*/, handle))) {
+      } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(table->get_addr(), false/*is_co_sstable*/, handle))) {
         LOG_WARN("fail to load cg sstable", K(ret), KPC(table));
       } else if (OB_FAIL(handle.get_sstable(loaded_table))) {
         LOG_WARN("fail to get sstable", K(ret), K(handle));
@@ -398,6 +404,7 @@ int ObSSTable::scan(
     ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  bool can_access = true;
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -408,9 +415,16 @@ int ObSSTable::scan(
       || !key_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(key_range));
+  } else if (need_check_inc_major_can_access()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
+    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
     ObStoreRowIterator *row_scanner = nullptr;
-    if (context.query_flag_.is_whole_macro_scan()) {
+    if (!can_access) {
+      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
+          ObSSTableEmptyRowScanner,
+          row_scanner);
+    } else if (context.query_flag_.is_whole_macro_scan()) {
       ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
           ObSSTableRowWholeScanner,
           row_scanner);
@@ -454,6 +468,7 @@ int ObSSTable::get(
     ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  bool can_access = true;
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -464,9 +479,16 @@ int ObSSTable::get(
       || !rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkey));
+  } else if (need_check_inc_major_can_access()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
+    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
     ObStoreRowIterator *row_getter = nullptr;
-    if (is_multi_version_minor_sstable()
+    if (!can_access) {
+      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
+          ObSSTableEmptyRowGetter,
+          row_getter);
+    } else if (is_multi_version_minor_sstable()
         && (context.is_multi_version_read(get_upper_trans_version())
           || contain_uncommitted_row())) {
       ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
@@ -508,6 +530,7 @@ int ObSSTable::multi_scan(
     ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  bool can_access = true;
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -518,10 +541,17 @@ int ObSSTable::multi_scan(
       || 0 >= ranges.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(ranges));
+  } else if (need_check_inc_major_can_access()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
+    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
     void *buf = nullptr;
     ObStoreRowIterator *row_scanner = nullptr;
-    if (is_multi_version_minor_sstable()) {
+    if (!can_access) {
+      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
+          ObSSTableEmptyRowScanner,
+          row_scanner);
+    } else if (is_multi_version_minor_sstable()) {
       ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
           ObSSTableMultiVersionRowMultiScanner,
           row_scanner);
@@ -561,6 +591,7 @@ int ObSSTable::multi_get(
     ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  bool can_access = true;
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -571,6 +602,9 @@ int ObSSTable::multi_get(
       || 0 >= rowkeys.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkeys));
+  } else if (need_check_inc_major_can_access()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
+    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkeys.count(); ++i) {
       if (OB_UNLIKELY(!rowkeys.at(i).is_valid())) {
@@ -581,7 +615,11 @@ int ObSSTable::multi_get(
     if (OB_SUCC(ret)) {
       void *buf = nullptr;
       ObStoreRowIterator *row_getter = nullptr;
-      if (is_multi_version_minor_sstable()
+      if (!can_access) {
+        ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
+            ObSSTableEmptyRowMultiGetter,
+            row_getter);
+      } else if (is_multi_version_minor_sstable()
           && (context.is_multi_version_read(get_upper_trans_version())
             || contain_uncommitted_row())) {
         ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
@@ -810,6 +848,7 @@ int ObSSTable::check_rows_locked(
   int ret = OB_SUCCESS;
   const ObDatumRowkey *sstable_endkey = nullptr;
   ObSSTableRowLockMultiChecker *multi_checker = nullptr;
+  bool can_access = true;
   bool may_exist = true;
   const share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
   if (OB_UNLIKELY(rows_info.all_rows_found())) {
@@ -818,7 +857,10 @@ int ObSSTable::check_rows_locked(
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), KP_(meta));
-  } else if (no_data_to_read() || (is_major_sstable() && !check_exist)) {
+  } else if (need_check_inc_major_can_access()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
+    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
+  } else if (no_data_to_read() || !can_access || (is_major_sstable() && !check_exist)) {
   } else if (!check_exist && get_upper_trans_version() <= snapshot_version.get_val_for_tx()) {
     if (max_trans_version.get_val_for_tx() < get_upper_trans_version()) {
       if (OB_FAIL(max_trans_version.convert_for_tx(get_upper_trans_version()))) {
@@ -865,6 +907,7 @@ int ObSSTable::check_row_locked(
   void *buf = nullptr;
   ObSSTableRowLockChecker *row_checker = nullptr;
   const ObDatumRowkey *sstable_endkey = nullptr;
+  bool can_access = true;
   const blocksstable::ObStorageDatumUtils &datum_utils = param.get_read_info()->get_datum_utils();
   int cmp_ret = 0;
   lock_state.trans_version_ = SCN::min_scn();
@@ -874,6 +917,10 @@ int ObSSTable::check_row_locked(
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
   } else if (no_data_to_read()) {
+  } else if (need_check_inc_major_can_access()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
+    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
+  } else if (!can_access) {
   } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
     LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
   } else if (OB_ISNULL(sstable_endkey)) {
@@ -919,6 +966,34 @@ int ObSSTable::set_upper_trans_version(
 
   LOG_INFO("finish set upper trans version", K(ret), K(key_), K_(meta),
       K(old_val), K(upper_trans_version), K_(meta_cache));
+  return ret;
+}
+
+int ObSSTable::backfill_commit_version(
+    common::ObArenaAllocator &allocator,
+    const int64_t commit_version,
+    const share::SCN &filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  const int64_t old_upper_trans_version = meta_cache_.upper_trans_version_;
+  const SCN &old_filled_tx_scn = meta_cache_.filled_tx_scn_;
+
+  if (OB_UNLIKELY(!is_inc_major_type_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected table type", K(ret), KPC(this));
+  } else if (!is_loaded() && OB_FAIL(bypass_load_meta(allocator))) {
+    LOG_WARN("failed to load sstable meta", K(ret), K(key_));
+  }
+  if (OB_SUCC(ret) && is_loaded()) {
+    (void) meta_->basic_meta_.set_upper_trans_version(commit_version);
+    (void) meta_cache_.set_upper_trans_version(commit_version);
+
+    (void) meta_->basic_meta_.set_filled_tx_scn(filled_tx_scn);
+    (void) meta_cache_.set_filled_tx_scn(filled_tx_scn);
+  }
+
+  LOG_INFO("finish backfill commit version", K(ret), K(key_), K_(meta),
+            K(old_upper_trans_version), K(old_filled_tx_scn), K(commit_version), K_(meta_cache));
   return ret;
 }
 
@@ -1761,7 +1836,7 @@ int ObSSTable::get_cs_range(
   if (OB_UNLIKELY(!rowkey_read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid rowkey read info", K(ret), K(rowkey_read_info));
-  } else if (OB_UNLIKELY(!is_major_sstable() || !range.is_valid())) {
+  } else if (OB_UNLIKELY(!is_major_type_sstable() || !range.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected sstable", K(ret), K(range), KPC(this));
   } else if (range.is_whole_range() || is_empty()) {

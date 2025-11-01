@@ -599,6 +599,7 @@ private:
       const share::schema::ObTableSchema *domain_index_schema,
       const share::schema::ObTableSchema *delta_buffer_schema_,
       const share::schema::ObTableSchema *index_snapshot_data_schema_,
+      const share::schema::ObTableSchema *embedded_vec_schema_,
       const uint64_t tenant_data_version,
       const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,

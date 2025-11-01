@@ -515,7 +515,7 @@ int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(palf_handle_->locate_by_lsn_coarsely(lsn, result_scn))) {
-    CLOG_LOG(WARN, "locate_by_scn_coarsely from palf failed", KR(ret), K(id_), K(lsn));
+    CLOG_LOG(WARN, "locate_by_lsn_coarsely from palf failed", KR(ret), K(id_), K(lsn));
   }
   return ret;
 }

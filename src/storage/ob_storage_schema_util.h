@@ -53,6 +53,10 @@ public:
   static void free_storage_schema(
       common::ObIAllocator &allocator,
       ObStorageSchema *&new_storage_schema);
+  static int alloc_cs_replica_storage_schema(
+      common::ObIAllocator &allocator,
+      const ObStorageSchema *storage_schema,
+      ObStorageSchema *&new_storage_schema);
 private:
   static int get_schema_info_from_memtables_(
     const ObTablet &tablet,

@@ -60,7 +60,7 @@ public:
 private:
   void enable_by_direct_load_hint(const ObDirectLoadHint &hint);
   void enable_by_append_hint();
-  void enable_by_config();
+  void enable_by_config(ObExecContext *exec_ctx);
   void enable_by_overwrite();
   int check_semantics();
   int check_support_insert_overwrite(const ObGlobalHint &global_hint);
@@ -77,6 +77,7 @@ public:
   bool can_use_direct_load_;
   bool use_direct_load_;
   bool is_optimized_by_default_load_mode_;  // optimized by default load mode
+  bool enable_inc_major_;
   bool is_online_gather_statistics_;
   double online_sample_percent_;
 };

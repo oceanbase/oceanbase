@@ -270,9 +270,6 @@ private:
       const ObTablet *tablet,
       ObTabletHandle &src_tablet_handle,
       ObMigrationTabletParam &param);
-  int check_major_sstable_(
-      const ObTablet *tablet,
-      const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
   int get_transfer_sstables_info_(
       const ObTablesHandleArray &table_handle_array,
       const share::SCN &tablet_clog_checkpoint_scn,
@@ -283,6 +280,10 @@ private:
       const common::ObTabletID &tablet_id,
       const ObTabletMemberWrapper<ObTabletTableStore> &src_wrapper,
       ObTablesHandleArray &filled_table_handle_array);
+  int check_source_inc_major_filled_scn_(
+      const ObTabletBackfillInfo &tablet_info,
+      const ObTablesHandleArray &tables_handle,
+      const ObTablet *dest_tablet);
 
   void process_transfer_perf_diagnose_(
       const int64_t timestamp,

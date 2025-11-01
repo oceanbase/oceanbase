@@ -16,6 +16,8 @@
 #include "src/sql/engine/px/ob_dfo.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "storage/blocksstable/ob_datum_row_utils.h"
+#include "sql/das/ob_das_dml_vec_iter.h"
+
 namespace oceanbase
 {
 namespace common
@@ -323,6 +325,10 @@ int ObDASUpdIterator::get_next_domain_index_row(ObDatumRow *&row)
         iter_has_built_ = false;
         got_old_row_ = true;
         domain_iter_->set_row_projector(&(das_ctdef_->new_row_projector_));
+        sql::ObEmbeddedVecDMLIterator* tmp_iter = dynamic_cast<sql::ObEmbeddedVecDMLIterator *>(domain_iter_);
+        if (OB_NOT_NULL(tmp_iter)) {
+          tmp_iter->is_old_row_ = false;
+        }
         if (OB_FAIL(domain_iter_->change_domain_dml_mode(ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT))) {
           LOG_WARN("fail to change domain dml mode", K(ret));
         } else {
@@ -366,6 +372,10 @@ int ObDASUpdIterator::get_next_domain_index_rows(ObDatumRow *&rows, int64_t &row
         iter_has_built_ = false;
         got_old_row_ = true;
         domain_iter_->set_row_projector(&(das_ctdef_->new_row_projector_));
+        sql::ObEmbeddedVecDMLIterator* tmp_iter = dynamic_cast<sql::ObEmbeddedVecDMLIterator *>(domain_iter_);
+        if (OB_NOT_NULL(tmp_iter)) {
+          tmp_iter->is_old_row_ = false;
+        }
         if (OB_FAIL(domain_iter_->change_domain_dml_mode(ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT))) {
           LOG_WARN("fail to change domain dml mode", K(ret));
         } else {
@@ -389,9 +399,10 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
-  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_vector_delta_buffer() &&
+  if (OB_UNLIKELY((ctdef.table_param_.get_data_table().is_vector_delta_buffer() ||
+                  ctdef.table_param_.get_data_table().is_hybrid_vector_index_log()) &&
                   !ctdef.is_access_mlog_as_master_table_)) {
-    // for vector delta buffer, only do insert when DML with main table
+    // for vector delta buffer/hybrid log table, only do insert when DML with main table
     if (OB_FAIL(as->insert_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
                                 ctdef.column_ids_, &iter, affected_rows))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {

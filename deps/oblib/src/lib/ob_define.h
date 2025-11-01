@@ -737,6 +737,9 @@ const char *const OB_VEC_KEY_COLUMN_NAME_PREFIX = "__key";
 const char *const OB_VEC_DATA_COLUMN_NAME_PREFIX = "__data";
 const char *const OB_VEC_SPIV_DIM_COLUMN_NAME_PREFIX = "__spiv_dim";
 const char *const OB_VEC_SPIV_VALUE_COLUMN_NAME_PREFIX = "__spiv_value";
+const char *const OB_VEC_VISIBLE_COLUMN_NAME_PREFIX = "__visible";
+const char *const OB_HYBRID_VEC_CHUNK_VALUE_COLUMN_NAME_PREFIX = "__chunk";
+const char *const OB_HYBRID_VEC_EMBEDDED_VECTOR_COLUMN_NAME_PREFIX = "__embedded_vector";
 
 const char *const OB_VEC_IVF_CENTER_ID_COLUMN_NAME_PREFIX = "__ivf_center_id";
 const char *const OB_VEC_IVF_CENTER_VECTOR_COLUMN_NAME_PREFIX = "__ivf_center_vector";
@@ -2024,6 +2027,7 @@ const int64_t OB_DEFAULT_BITSET_SIZE_FOR_DFM = 64;
 // which contains ssstore, memstore and frozen stores
 const int64_t DEFAULT_STORE_CNT_IN_STORAGE = 8;
 const int64_t MAX_SSTABLE_CNT_IN_STORAGE = 64;
+const int64_t MAX_INC_MAJOR_SSTABLE_CNT = 64; // changing this should also consider _restore_emergency_inc_major_sstable_threshold tenant parameter
 const int64_t RESERVED_STORE_CNT_IN_STORAGE = 8; // Avoid mistakenly triggering minor or major freeze to cause the problem of unsuccessful merge.
 const int64_t DIAGNOSE_TABLE_CNT_IN_STORAGE = 12;
 const int64_t MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE = 7;
@@ -2037,6 +2041,7 @@ const int64_t MAX_TX_DATA_STATE_LENGTH = 16;
 const int64_t MAX_UNDO_LIST_CHAR_LENGTH = 4096;
 const int64_t MAX_TX_OP_CHAR_LENGTH = 4096;
 const int64_t MAX_TABLE_CNT_IN_STORAGE = MAX_SSTABLE_CNT_IN_STORAGE + MAX_MEMSTORE_CNT;
+const int64_t MAX_QUERY_TABLE_CNT = 2 * (MAX_TABLE_CNT_IN_STORAGE + MAX_INC_MAJOR_SSTABLE_CNT);
 const int64_t OB_MAX_PARTITION_NUM_MYSQL = 8192;
 const int64_t OB_MAX_PARTITION_NUM_ORACLE = 65536;
 

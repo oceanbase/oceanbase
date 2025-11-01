@@ -62,14 +62,12 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MERGE_EXECUTE, ObDagPrio::DAG_PRIO_COMPACTIO
     true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAJOR_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "MAJOR_MERGE/MEDIUM_MERGE", "COMPACTION",
     true, 3, {"ls_id", "tablet_id", "compaction_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_BATCH_EXECUTE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_BATCH_EXECUTE", "COMPACTION",
-    false, 5, {"ls_id", "tablet_id", "compaction_scn", "start_cg_idx", "end_cg_idx"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_EXECUTE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_EXECUTE", "COMPACTION",
+    true, 5, {"ls_id", "tablet_id", "compaction_scn", "range_count", "persisted_range_count"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_PREPARE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_PREPARE", "COMPACTION",
-    false, 3, {"ls_id", "tablet_id", "compaction_scn"})
+    true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_SCHEDULE, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_SCHEDULE", "COMPACTION",
-    false, 3, {"ls_id", "tablet_id", "compaction_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_FINISH, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "CO_MERGE_FINISH", "COMPACTION",
-    false, 3, {"ls_id", "tablet_id", "compaction_scn"})
+    true, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TX_TABLE_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::SPECIAL_TABLE_MERGE_TASK, "TX_TABLE_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINI_MERGE, ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH, ObSysTaskType::MDS_MINI_MERGE_TASK, "MDS_MINI_MERGE", "COMPACTION",
@@ -271,6 +269,10 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_REFRESH_TABLE, ObDagPrio::DAG_PRIO
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_UPDATE_INFO, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_UPDATE_INFO", "TRANSFER",
     true, 3, {"ls_id", "tablet_id", "backfill_scn"})
 // DAG_TYPE_SS_TRANSFER END
+
+// inc major direct load
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_UPDATE_INC_MAJOR, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::UPDATE_SS_INC_MAJOR_TASK, "SS_TABLET_UPDATE_INFO", "DIRECT_LOAD",
+    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
 #endif
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, 0, {})
 #endif
@@ -379,8 +381,7 @@ inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
 {
   return ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type ||
          ObDagType::DAG_TYPE_CO_MERGE_SCHEDULE == dag_type ||
-         ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE == dag_type ||
-         ObDagType::DAG_TYPE_CO_MERGE_FINISH == dag_type ||
+         ObDagType::DAG_TYPE_CO_MERGE_EXECUTE == dag_type ||
          ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MINI_MERGE == dag_type ||
          ObDagType::DAG_TYPE_MERGE_EXECUTE == dag_type ||

@@ -2023,11 +2023,12 @@ bool ObOperator::enable_get_next_row() const
     ret = true;
   } else {
     // if new operator is registered, please update this check and phy operator lists below
-    static_assert(PHY_END == PHY_UNPIVOT_V2 + 1, "");
+    static_assert(PHY_END == PHY_VEC_PX_MULTI_PART_SSTABLE_INSERT + 1, "");
     switch (spec_.type_) {
     case PHY_TABLE_SCAN: // table scan with multi value index/geometry type
     case PHY_BLOCK_SAMPLE_SCAN: // sample scan with geometry type
     case PHY_ROW_SAMPLE_SCAN:
+    case PHY_DDL_BLOCK_SAMPLE_SCAN:
     case PHY_SUBPLAN_FILTER: // subplan filter with update set
     case PHY_COUNT: // count with rownum expr
     case PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX:

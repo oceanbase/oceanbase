@@ -74,6 +74,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.compressor_type_ = arg_.compressor_type_;
     param.online_sample_percent_ = arg_.online_sample_percent_;
     param.load_level_ = ObDirectLoadLevel::TABLE;
+    param.enable_inc_major_ = arg_.enable_inc_major_;
     if (OB_FAIL(create_table_ctx(param, arg_.ddl_param_, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }
@@ -708,12 +709,14 @@ int ObDirectLoadControlInitEmptyTabletsExecutor::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(ObTableLoadEmptyInsertTabletCtxManager::execute(
+  } else {
+    if (OB_FAIL(ObTableLoadEmptyInsertTabletCtxManager::execute_for_dag(
                                                     arg_.table_id_,
                                                     arg_.ddl_param_,
                                                     arg_.partition_id_array_,
                                                     arg_.target_partition_id_array_))) {
-    LOG_WARN("fail to execute init empty tablet", KR(ret));
+      LOG_WARN("fail to execute init empty tablet", KR(ret));
+    }
   }
   return ret;
 }

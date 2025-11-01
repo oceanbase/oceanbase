@@ -420,7 +420,7 @@ void TestIndexTree::prepare_data()
 
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, share::SCN::min_scn()/*reorganization_scn*/);
+                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, 0/*concurrent_cnt*/, share::SCN::min_scn()/*reorganization_scn*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
@@ -588,7 +588,7 @@ void TestIndexTree::prepare_data_desc(ObWholeDataStoreDesc &data_desc,
   int ret = OB_SUCCESS;
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time()/*snapshot_version*/, DATA_CURRENT_VERSION,
-                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, share::SCN::min_scn() /*reorganization_scn*/);
+                       table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, 0/*concurrent_cnt*/, share::SCN::min_scn() /*reorganization_scn*/);
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -602,8 +602,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
   scn.convert_for_tx(SNAPSHOT_VERSION);
   const bool is_ddl = false;
   ASSERT_EQ(OB_SUCCESS, desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
-  MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/,
-  0/*transfer_seq*/, share::SCN::min_scn() /*reorganization_scn*/));
+      MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/, 0/*transfer_seq*/, 0/*concurrent_cnt*/, share::SCN::min_scn() /*reorganization_scn*/));
   ObIArray<ObColDesc> &col_descs = desc.get_desc().col_desc_->col_desc_array_;
   for (int64_t i = 0; i < col_descs.count(); ++i) {
     if (col_descs.at(i).col_type_.type_ == ObIntType) {
@@ -622,7 +621,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
 
   ASSERT_EQ(OB_SUCCESS, data_desc.init(is_ddl, table_schema_, ObLSID(1), ObTabletID(1),
                     MAJOR_MERGE, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, false/*micro_index_clustered*/, 0/*transfer_seq*/,
-                    share::SCN::min_scn() /*reorganization_scn*/, scn, &cg_schema, 0));
+                    0/*concurrent_cnt*/, share::SCN::min_scn() /*reorganization_scn*/, scn, &cg_schema, 0));
   data_desc.get_desc().static_desc_->schema_version_ = 10;
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
 }
@@ -702,7 +701,7 @@ int TestIndexTree::mock_init_backup_rebuilder(ObIndexBlockRebuilder &rebuilder, 
     STORAGE_LOG(WARN, "ObIndexBlockRebuilder has been inited", K(ret));
   } else if (OB_FAIL(sstable_builder.init_builder_ptrs(rebuilder.sstable_builder_, data_store_desc, rebuilder.index_store_desc_,
       leaf_store_desc, container_store_desc, rebuilder.index_tree_root_ctx_))) {
-    STORAGE_LOG(WARN, "fail to init referemce pointer members", K(ret));
+    STORAGE_LOG(WARN, "fail to init reference pointer members", K(ret));
   } else if (OB_FAIL(rebuilder.meta_store_desc_.shallow_copy(*rebuilder.index_store_desc_))) {
     STORAGE_LOG(WARN, "fail to assign leaf store desc", K(ret), KPC(rebuilder.index_store_desc_));
   } else if (rebuilder.meta_row_.init(rebuilder.task_allocator_, container_store_desc->get_row_column_count())) {
@@ -879,7 +878,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   ASSERT_EQ(OB_SUCCESS, data_writer.append_row(multi_row));
   ASSERT_EQ(OB_SUCCESS, data_writer.build_micro_block());
   const MacroBlockId first_macro_id = data_writer.macro_handles_[0].get_macro_id();
-  ASSERT_TRUE(first_macro_id.is_valid());
+  ASSERT_FALSE(first_macro_id.is_valid());
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
 
   ObDataMacroBlockMeta macro_meta;
@@ -890,13 +889,14 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   OK(meta_row.init(allocator_, sstable_builder.container_store_desc_.get_row_column_count()));
   OK(index_block_loader.get_next_row(meta_row));
   OK(macro_meta.parse_row(meta_row));
-  ASSERT_EQ(macro_meta.val_.macro_id_, first_macro_id);
+  ASSERT_NE(macro_meta.val_.macro_id_, first_macro_id);
+  ASSERT_TRUE(macro_meta.val_.macro_id_.is_valid());
 
   // read macro block
   ObMacroBlockReadInfo read_info;
   ObMacroBlockHandle macro_handle;
   const int64_t macro_block_size = 2 * 1024 * 1024;
-  read_info.macro_block_id_ = first_macro_id;
+  read_info.macro_block_id_ = macro_meta.val_.macro_id_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.offset_ = 0;
   read_info.size_ = macro_block_size;
@@ -1129,6 +1129,7 @@ TEST_F(TestIndexTree, test_accumulative_info)
   index_row.micro_block_count_ = 1;
   index_row.macro_block_count_ = 1;
   index_row.row_key_ = row_key;
+  index_row.macro_id_ = MacroBlockId::mock_valid_macro_id();
   for(int64_t i = 0; i < test_row_num; ++i) {
     ASSERT_EQ(OB_SUCCESS, builder.append_row(index_row));
     if (micro_writer->get_row_count() == round_row_num) {
@@ -2182,7 +2183,11 @@ TEST_F(TestIndexTree, test_estimate_meta_block_size)
   ObMacroBlock &macro_block = data_writer.macro_blocks_[0];
   ObStorageObjectHandle &macro_handle = data_writer.macro_handles_[0];
   OK(data_writer.build_micro_block());
-  OK(data_writer.builder_->generate_macro_row(macro_block, macro_handle.get_macro_id(), -1/*ddl_start_row_offset*/));
+  if (!data_writer.is_pre_alloc()) {
+    OK(data_writer.alloc_block());
+  }
+  OK(data_writer.builder_->generate_macro_row(macro_block, -1/*ddl_start_row_offset*/, true/*need_write_macro_meta*/));
+  OK(data_writer.builder_->append_meta_row_to_dumper(macro_handle.get_macro_id()));
   const ObSSTableMacroBlockHeader &macro_header_ = macro_block.macro_header_;
   ASSERT_EQ(macro_header_.fixed_header_.idx_block_offset_ + macro_header_.fixed_header_.idx_block_size_,
             macro_header_.fixed_header_.meta_block_offset_);
@@ -2340,7 +2345,7 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
   ObWholeDataStoreDesc index_desc;
   OK(index_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE,
                      ObTimeUtility::fast_current_time()/*snapshot*/, 0/*cluster_version*/,
-                     table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, share::SCN::min_scn()/*reorganization_scn*/));
+                     table_schema_.get_micro_index_clustered(), 0/*transfer_seq*/, 0/*concurrent_cnt*/, share::SCN::min_scn()/*reorganization_scn*/));
   index_desc.static_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   --index_desc.get_desc().col_desc_->full_stored_col_cnt_;
   index_desc.get_desc().col_desc_->col_default_checksum_array_.pop_back();
@@ -2979,7 +2984,7 @@ TEST_F(TestIndexTree, test_cg_compaction_mem_and_disk)
   ASSERT_EQ(data_block_ids.count(), test_num);
   // rebuild index tree
   int64_t absolute_row_offset = -1;
-  for (int64_t i = 0; i < 100; ++i) {
+  for (int64_t i = 0; i < 50; ++i) {
     MacroBlockId &cur_id = data_block_ids.at(i);
     info.macro_block_id_ = cur_id;
     macro_handle.reset();
@@ -2994,7 +2999,7 @@ TEST_F(TestIndexTree, test_cg_compaction_mem_and_disk)
   ASSERT_EQ(true, rebuilder_mem.index_tree_root_ctx_->index_tree_info_.in_mem());
   rebuilder_mem.~ObIndexBlockRebuilder();
 
-  for (int64_t i = 100; i < data_block_ids.count(); ++i) {
+  for (int64_t i = 50; i < data_block_ids.count(); ++i) {
     MacroBlockId &cur_id = data_block_ids.at(i);
     info.macro_block_id_ = cur_id;
     macro_handle.reset();

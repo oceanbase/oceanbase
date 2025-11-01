@@ -964,6 +964,20 @@ private:
   int64_t init_size_;
 };
 
+class SemanticVectorDistExprChecker : public RelExprCheckerBase
+{
+public:
+  SemanticVectorDistExprChecker(common::ObIArray<ObRawExpr *> &rel_array)
+      : RelExprCheckerBase(), rel_array_(rel_array), init_size_(rel_array.count())
+  {
+  }
+  virtual ~SemanticVectorDistExprChecker() {}
+  int add_expr(ObRawExpr *&expr);
+private:
+  common::ObIArray<ObRawExpr *> &rel_array_;
+  int64_t init_size_;
+};
+
 struct ObSqlTraits
 {
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];// sql id //最后一个字节存放'\0'

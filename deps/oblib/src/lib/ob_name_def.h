@@ -403,6 +403,8 @@
 #define N_VECTOR_INNER_PRODUCT "inner_product"
 #define N_VECTOR_NEGATIVE_INNER_PRODUCT "negative_inner_product"
 #define N_VECTOR_COS_DISTANCE "cosine_distance"
+#define N_SEMANTIC_DISTANCE "semantic_distance"
+#define N_SEMANTIC_VECTOR_DISTANCE "semantic_vector_distance"
 #define N_VECTOR_DIMS "vector_dims"
 #define N_VECTOR_NORM "vector_norm"
 #define N_VECTOR_DISTANCE "vector_distance"
@@ -818,6 +820,9 @@
 #define N_VEC_SCN "vec_scn"
 #define N_VEC_KEY "vec_key"
 #define N_VEC_DATA "vec_data"
+#define N_VEC_VISIBLE "vec_visible"
+#define N_VEC_CHUNK "vec_chunk"
+#define N_EMBEDDED_VEC "embedded_vec"
 
 #define N_SPIV_DIM "spiv_dim"
 #define N_SPIV_VALUE "spiv_value"

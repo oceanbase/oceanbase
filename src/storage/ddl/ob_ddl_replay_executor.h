@@ -49,9 +49,10 @@ protected:
       const uint64_t data_format_version,
       bool &need_replay);
   static int check_need_replay_ddl_inc_log_(
-      const ObLS *ls,
+      ObLS *ls,
       const ObTabletHandle &tablet_handle,
       const share::SCN &scn,
+      const ObDirectLoadType direct_load_type,
       bool &need_replay);
 
   static int get_lob_meta_tablet_id(
@@ -132,7 +133,8 @@ private:
   int do_inc_replay_(
       ObTabletHandle &tablet_handle,
       blocksstable::ObMacroBlockWriteInfo &write_info,
-      storage::ObDDLMacroBlock &macro_block);
+      storage::ObDDLMacroBlock &macro_block,
+      const ObDirectLoadType direct_load_type);
   int do_full_replay_(
       ObTabletHandle &tablet_handle,
       blocksstable::ObMacroBlockWriteInfo &write_info,
@@ -198,10 +200,10 @@ private:
 };
 #endif
 
-class ObDDLIncStartReplayExecutor final : public ObDDLReplayExecutor
+class ObDDLIncMinorStartReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
-  ObDDLIncStartReplayExecutor();
+  ObDDLIncMinorStartReplayExecutor();
 
   int init(ObLS *ls, const common::ObTabletID &tablet_id, const share::SCN &scn);
 
@@ -217,10 +219,10 @@ private:
   common::ObTabletID tablet_id_;
 };
 
-class ObDDLIncCommitReplayExecutor final : public ObDDLReplayExecutor
+class ObDDLIncMinorCommitReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
-  ObDDLIncCommitReplayExecutor();
+  ObDDLIncMinorCommitReplayExecutor();
 
   int init(ObLS *ls, const common::ObTabletID &tablet_id, const share::SCN &scn);
 
@@ -234,6 +236,67 @@ protected:
 
 private:
   common::ObTabletID tablet_id_;
+};
+
+class ObDDLIncMajorStartReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObDDLIncMajorStartReplayExecutor();
+
+  int init(ObLS *ls,
+          const common::ObTabletID &tablet_id,
+          const share::SCN &scn,
+          const bool has_cs_replica,
+          const bool is_lob,
+          const ObStorageSchema *storage_schema);
+
+protected:
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  int do_replay_(ObTabletHandle &handle) override;
+private:
+  int update_tablet_meta_for_cs_replica_(ObTabletHandle &tablet_handle);
+  int update_storage_schema_to_tablet(ObTabletHandle &tablet_handle);
+
+private:
+  common::ObTabletID tablet_id_;
+  bool has_cs_replica_;
+  bool is_lob_;
+  const ObStorageSchema *storage_schema_;
+};
+
+class ObDDLIncMajorCommitReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObDDLIncMajorCommitReplayExecutor();
+
+  int init(ObLS *ls,
+           const common::ObTabletID &tablet_id,
+           const share::SCN &scn,
+           const transaction::ObTransID &trans_id,
+           const transaction::ObTxSEQ &seq_no,
+           const int64_t snapshot_version,
+           const uint64_t data_format_version,
+           const bool is_rollback);
+
+protected:
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  int do_replay_(ObTabletHandle &handle) override;
+
+private:
+  common::ObTabletID tablet_id_;
+  transaction::ObTransID trans_id_;
+  transaction::ObTxSEQ seq_no_;
+  int64_t snapshot_version_;
+  uint64_t data_format_version_;
+  bool is_rollback_;
 };
 
 class ObSplitStartReplayExecutor final : public ObDDLReplayExecutor

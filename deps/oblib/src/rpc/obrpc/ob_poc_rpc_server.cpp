@@ -465,7 +465,7 @@ bool server_in_black(struct sockaddr* sa) {
 
 #ifdef ERRSIM
 bool trigger_rpc_socket_errsim() {
-  bool bool_ret = false;;
+  bool bool_ret = false;
   int tmp_ret = OB_E(EventTable::EN_RPC_SOCKET_ERROR) OB_SUCCESS;
   if (OB_SUCCESS != tmp_ret) {
     bool_ret = true;

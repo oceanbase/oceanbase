@@ -243,12 +243,9 @@ int ObMicroBlockIndexIterator::get_next(ObMicroIndexInfo &micro_index_info)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid micro index info", K(ret), K(micro_index_info.endkey_));
     } else if (FALSE_IT(micro_index_info.row_header_ = idx_row_header)) {
-    } else if (idx_row_header->is_data_index() && !idx_row_header->is_major_node()
-        && OB_FAIL(idx_row_parser->get_minor_meta(micro_index_info.minor_meta_info_))) {
-      LOG_WARN("Fail to get minor meta info", K(ret));
-    } else if (idx_row_header->is_pre_aggregated() &&
-        OB_FAIL(idx_row_parser->get_agg_row(micro_index_info.agg_row_buf_, micro_index_info.agg_buf_size_))) {
-      LOG_WARN("Fail to get aggregated row", K(ret), K(micro_index_info));
+    } else if (OB_FAIL(idx_row_parser->parse_minor_meta_and_agg_row(
+        micro_index_info.minor_meta_info_, micro_index_info.agg_row_buf_, micro_index_info.agg_buf_size_))) {
+      LOG_WARN("Fail to parse minor meta and agg row", K(ret));
     } else {
       has_fetched_micro_info_ = true;
     }

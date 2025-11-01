@@ -126,7 +126,6 @@ public:
   HashBucket *buckets_;
   HashNode *nodes_;
   int32_t *row_refs_;
-  int32_t *refs_permutation_;
   HashNode null_node_;
   HashNode nop_node_;
   common::ObArenaAllocator alloc_;

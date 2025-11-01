@@ -199,7 +199,7 @@ int ObStorageEstimator::storage_estimate_block_count_and_row_count(
                               || cg_micro_cnt_arr.count() > cg_count
                               || cg_macro_cnt_arr.count() != cg_micro_cnt_arr.count()))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected cg count", K(ret), K(cg_macro_cnt_arr.count()), K(cg_micro_cnt_arr.count()), K(arg.column_group_ids_.count()));
+        LOG_WARN("unexpected cg count", K(ret), K(cg_macro_cnt_arr.count()), K(cg_micro_cnt_arr.count()), K(arg.column_group_ids_.count()), K(arg));
       } else {
         LOG_TRACE("storage estimate block count and row count result", K(macro_block_count),
                 K(micro_block_count), K(sstable_row_count), K(memtable_row_count), K(ret));

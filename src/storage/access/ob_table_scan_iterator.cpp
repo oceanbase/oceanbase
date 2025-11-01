@@ -49,7 +49,8 @@ ObTableScanIterator::ObTableScanIterator()
       main_iter_(NULL),
       sample_ranges_(),
       cached_iter_node_(NULL),
-      cached_iter_(NULL)
+      cached_iter_(NULL),
+      ddl_block_sample_iterator_(NULL)
 {
 }
 
@@ -68,6 +69,7 @@ void ObTableScanIterator::reset()
   reset_scan_iter(memtable_row_sample_iterator_);
   reset_scan_iter(block_sample_iterator_);
   reset_scan_iter(mview_merge_wrapper_);
+  reset_scan_iter(ddl_block_sample_iterator_);
   // reset_scan_iter(i_sample_iter_);
   if (nullptr != cached_iter_node_) {
     ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
@@ -112,6 +114,7 @@ void ObTableScanIterator::reuse_row_iters()
   REUSE_SCAN_ITER(multi_scan_merge_);
   REUSE_SCAN_ITER(memtable_row_sample_iterator_);
   REUSE_SCAN_ITER(block_sample_iterator_);
+  REUSE_SCAN_ITER(ddl_block_sample_iterator_);
   // REUSE_SCAN_ITER(i_sample_iter_);
   REUSE_SCAN_ITER(mview_merge_wrapper_);
 
@@ -424,6 +427,7 @@ int ObTableScanIterator::rescan_for_iter()
     RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, memtable_row_sample_iterator_);
     RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, block_sample_iterator_);
     RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, mview_merge_wrapper_);
+    RESET_NOT_REFRESHED_ITER(get_table_param_.refreshed_merge_, ddl_block_sample_iterator_);
     get_table_param_.refreshed_merge_ = nullptr;
   }
 #undef RESET_NOT_REFRESHED_ITER
@@ -592,7 +596,9 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
   int ret = OB_SUCCESS;
 
   if (table_scan_range_.get_ranges().count() == 1) {
-    if (scan_param_->sample_info_.is_row_sample() || scan_param_->sample_info_.is_block_sample()) {
+    if (scan_param_->sample_info_.is_row_sample() ||
+        scan_param_->sample_info_.is_block_sample() ||
+        scan_param_->sample_info_.is_ddl_block_sample()) {
       bool need_scan_multiple_range = false;
       STORAGE_LOG(INFO, "start init sample iterator", K(scan_param_->sample_info_));
       ObGetSampleIterHelper sample_iter_helper(table_scan_range_, main_table_ctx_, *scan_param_, get_table_param_);
@@ -618,7 +624,7 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
                 INFO, "finish init memtable row sample iter", KP(memtable_row_sample_iterator_), KP(main_iter_));
           }
         }
-      } else {
+      } else if (scan_param_->sample_info_.is_block_sample()) {
         // this branch means the sample is block sample
         // TODO : @yuanzhe block sample uses a different initialization logic and different open interface
         if (nullptr == scan_merge_ && OB_FAIL(init_scan_iter(scan_merge_))) {
@@ -628,6 +634,18 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
         } else {
           STORAGE_LOG(INFO, "finish init block row sample iter", KP(block_sample_iterator_), KP(main_iter_));
         }
+      } else if (scan_param_->sample_info_.is_ddl_block_sample()) {
+        // this branch means the sample is ddl block sample
+        if (nullptr == scan_merge_ && OB_FAIL(init_scan_iter(scan_merge_))) {
+          STORAGE_LOG(WARN, "Failed to init scanmerge", K(ret));
+        } else if (OB_FAIL(sample_iter_helper.get_sample_iter(ddl_block_sample_iterator_, main_iter_, scan_merge_))) {
+          STORAGE_LOG(WARN, "get ddl block sample iter failed", KR(ret), K(scan_param_));
+        } else {
+          STORAGE_LOG(INFO, "finish init ddl block block sample iter", KP(ddl_block_sample_iterator_), KP(main_iter_));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error caused by unknown reasons", K(ret));
       }
     } else {
       INIT_AND_OPEN_ITER(scan_merge_, table_scan_range_.get_ranges().at(0), false);

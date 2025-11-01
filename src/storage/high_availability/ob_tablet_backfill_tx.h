@@ -160,10 +160,8 @@ private:
       common::ObIArray<ObTableHandleV2> &table_array);
   int get_all_sstable_handles_(
       const ObTablet *tablet,
-      ObTablesHandleArray &sstable_handles);
-  int check_major_sstable_(
-      const ObTablet *tablet,
-      const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
+      ObTablesHandleArray &sstable_handles,
+      bool &inc_major_exist);
   int init_tablet_table_mgr_();
   int split_sstable_array_by_backfill_(
       const ObTablesHandleArray &sstable_handles,
@@ -181,6 +179,9 @@ private:
   int generate_mds_table_backfill_task_(
       share::ObITask *finish_task,
       share::ObITask *&child);
+  int generate_inc_major_table_backfill_task_(
+      share::ObITask *finish_task,
+      share::ObITask *pre_task);
   int wait_memtable_frozen_();
   int init_tablet_handle_();
 
@@ -380,6 +381,31 @@ private:
   ObBackfillTabletsTableMgr *tablets_table_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletMdsTableBackfillTXTask);
 };
+
+
+class ObTabletIncMajorTableBackfillTXTask : public share::ObITask
+{
+public:
+  ObTabletIncMajorTableBackfillTXTask();
+  virtual ~ObTabletIncMajorTableBackfillTXTask();
+  int init(
+    const share::ObLSID &ls_id,
+    const ObTabletBackfillInfo &tablet_info,
+    ObTabletHandle &tablet_handle);
+  virtual int process() override;
+  VIRTUAL_TO_STRING_KV(K("ObTabletIncMajorTableBackfillTxTask"), KP(this));
+private:
+  bool is_inited_;
+  ObBackfillTXCtx *backfill_tx_ctx_;
+  share::ObLSID ls_id_;
+  ObTabletBackfillInfo tablet_info_;
+  ObTabletHandle tablet_handle_;
+  common::ObArenaAllocator allocator_;
+  ObBackfillTabletsTableMgr *tablets_table_mgr_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletIncMajorTableBackfillTXTask);
+};
+
+
 
 }
 }

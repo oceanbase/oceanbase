@@ -23,6 +23,13 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+// index number for args_ in ObExpr
+const int64_t ARGS_IDX_ZERO  = 0;
+const int64_t ARGS_IDX_ONE   = 1;
+const int64_t ARGS_IDX_TWO   = 2;
+const int64_t ARGS_IDX_THREE = 3;
+const int64_t ARGS_IDX_FOUE  = 4;
+const int64_t ARGS_IDX_FIVE  = 5;
 
 // ObPrecision and ObLengthSemantics are union field in ObDatumMeta,
 // need to be same size to make sure serialization works.

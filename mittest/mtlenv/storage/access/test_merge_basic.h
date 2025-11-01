@@ -59,6 +59,7 @@ public:
     static_param.scn_range_.end_scn_ = static_param.tables_handle_.get_table(tables_count - 1)->get_end_scn();
     static_param.merge_scn_ = static_param.scn_range_.end_scn_;
     static_param.rec_scn_.set_min();
+    ASSERT_EQ(OB_SUCCESS, static_param.init_major_sstable_count());
   }
   ObStorageSchema table_merge_schema_;
 };

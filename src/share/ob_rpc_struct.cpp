@@ -3314,7 +3314,10 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(index_cgs),
        K_(vidx_refresh_info),
        K_(is_rebuild_index),
-       K_(is_index_scope_specified));
+       K_(is_index_scope_specified),
+       K_(is_offline_rebuild),
+       K_(index_key),
+       K_(data_version));
   J_OBJ_END();
   return pos;
 }
@@ -3971,7 +3974,7 @@ bool ObCalcColumnChecksumRequestArg::is_valid() const
   bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
       && OB_INVALID_VERSION != schema_version_ && execution_id_ >= 0
       && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_
-      && task_id_ > 0;
+      && task_id_ > 0 && user_parallelism_ > 0;
   for (int64_t i = 0; bret && i < calc_items_.count(); ++i) {
     bret = calc_items_.at(i).is_valid();
   }
@@ -11980,6 +11983,14 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(!is_incremental_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support incremental direct load type", KR(ret), K(direct_load_type));
+  } else if (is_incremental_major_direct_load(direct_load_type)
+      && OB_UNLIKELY(!trans_id.is_valid()
+                  || !seq_no.is_valid()
+                  || (snapshot_version <= 0)
+                  || (data_format_version < DATA_VERSION_4_4_1_0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments for incremental major direct load", KR(ret),
+        K(direct_load_type), K(trans_id), K(seq_no), K(snapshot_version), K(data_format_version));
   } else if (OB_FAIL(release())) {
     LOG_WARN("fail to release tx_desc", K(ret));
   } else {

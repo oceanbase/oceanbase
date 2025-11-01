@@ -34,7 +34,8 @@ public:
       const blocksstable::ObDatumRange &range,
       const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
-      const bool is_reverse_scan);
+      const bool is_reverse_scan,
+      const SampleInfo::SampleMethod sample_method);
   int upgrade_to_macro(const blocksstable::ObDatumRange &range);
   int move_forward();
   OB_INLINE const blocksstable::ObDatumRowkey &get_endkey() const { return curr_key_;}
@@ -51,6 +52,11 @@ private:
       blocksstable::ObMicroBlockId &bound_block,
       bool &is_beyond_range);
   int get_current_block_id(blocksstable::ObMicroBlockId &micro_block_id);
+  OB_INLINE bool is_valid_sample_method(const SampleInfo::SampleMethod sample_method) const
+  {
+    return SampleInfo::SampleMethod::DDL_BLOCK_SAMPLE == sample_method ||
+           SampleInfo::SampleMethod::BLOCK_SAMPLE == sample_method;
+  }
 
 private:
   int64_t macro_count_;
@@ -77,11 +83,15 @@ public:
     const blocksstable::ObDatumRange &range,
     ObIAllocator &allocator,
     const double percent,
-    const bool is_reverse_scan);
+    const bool is_reverse_scan,
+    const SampleInfo::SampleMethod sample_method);
   int get_next_range(const blocksstable::ObDatumRange *&range);
   TO_STRING_KV(K_(is_inited), K_(is_range_iter_end), K_(is_reverse_scan), K_(batch_size), K_(schema_rowkey_column_count),
       K_(curr_key), K_(prev_key), K_(curr_range), KP_(allocator), KP_(sample_range), KP_(datum_utils),
       K_(endkey_comparor), K_(endkey_heap), K_(endkey_iters));
+
+public:
+  static const int64_t EXPECTED_OPEN_RANGE_NUM = 8;
 
 private:
   struct ObBlockSampleSSTableEndkeyComparor
@@ -117,8 +127,10 @@ private:
   };
 
 private:
-  int init_and_push_endkey_iterator(ObGetTableParam &get_table_param);
-  int calculate_level_and_batch_size(const double percent);
+  int init_and_push_endkey_iterator(ObGetTableParam &get_table_param,
+                                    const SampleInfo::SampleMethod sample_method);
+  int calculate_level_and_batch_size(const double percent,
+                                     const SampleInfo::SampleMethod sample_method);
   int get_next_batch(ObBlockSampleSSTableEndkeyIterator *&iter);
   void generate_cur_range(const blocksstable::ObDatumRowkey &curr_bound_key);
   int deep_copy_rowkey(const blocksstable::ObDatumRowkey &src_key, ObBlockSampleEndkey &dest);
@@ -127,7 +139,6 @@ private:
 private:
   static const int64_t DEFAULT_SSTABLE_CNT = 9;
   static const int64_t EXPECTED_MIN_MACRO_SAMPLE_BLOCK_COUNT = 2;
-  static const int64_t EXPECTED_OPEN_RANGE_NUM = 8;
   const blocksstable::ObDatumRange *sample_range_;
   ObIAllocator *allocator_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
@@ -149,7 +160,7 @@ class ObBlockSampleIterator : public ObISampleIterator
 public:
   explicit ObBlockSampleIterator(const common::SampleInfo &sample_info);
   virtual ~ObBlockSampleIterator();
-  virtual void reuse();
+  virtual void reuse() override;
   virtual void reset() override;
   int open(ObMultipleScanMerge &scan_merge,
            ObTableAccessContext &access_ctx,
@@ -158,10 +169,13 @@ public:
            const bool is_reverse_scan);
   virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
-private:
-  int open_range(blocksstable::ObDatumRange &range);
+
+protected:
+  virtual int open_range(blocksstable::ObDatumRange &range);
   int inner_get_next_rows(int64_t &count, int64_t capacity);
-private:
+  int inner_open_range(blocksstable::ObDatumRange &range);
+
+protected:
   ObTableAccessContext *access_ctx_;
   const ObITableReadInfo *read_info_;
   ObMultipleScanMerge *scan_merge_;

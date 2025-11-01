@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_table_load_store_ctx.h"
+#include "observer/table_load/dag/ob_table_load_dag.h"
+#include "observer/table_load/dag/ob_table_load_dag_generator.h"
 #include "observer/table_load/ob_table_load_data_row_insert_handler.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_merge_op.h"
@@ -24,6 +26,7 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_trans_store.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "observer/table_load/plan/ob_table_load_plan.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
@@ -53,21 +56,24 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     allocator_("TLD_StoreCtx"),
     thread_cnt_(0),
     task_scheduler_(nullptr),
+    dag_task_scheduler_(nullptr),
     error_row_handler_(nullptr),
     data_store_table_ctx_(nullptr),
     tmp_file_mgr_(nullptr),
     table_mgr_(nullptr),
     sequence_schema_(&allocator_),
     next_session_id_(0),
+    session_ctx_array_(nullptr),
     basic_table_data_desc_(),
     merge_count_per_round_(0),
     max_mem_chunk_count_(0),
     mem_chunk_size_(0),
     heap_table_mem_chunk_size_(0),
+    dag_exec_ctx_(),
+    enable_dag_(true),
     write_ctx_(),
     merge_op_allocator_("TLD_MergeOp"),
     merge_root_op_(nullptr),
-    status_lock_(common::ObLatchIds::TABLE_LOAD_STORE_STATUS_LOCK),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
     rwlock_(common::ObLatchIds::TABLE_LOAD_STORE_RW_LOCK),
@@ -94,13 +100,37 @@ void ObTableLoadStoreCtx::destroy()
   if (OB_NOT_NULL(task_scheduler_)) {
     task_scheduler_->stop();
   }
+  if (OB_NOT_NULL(dag_task_scheduler_)) {
+    dag_task_scheduler_->stop();
+  }
   if (nullptr != write_ctx_.pre_sorter_) {
     write_ctx_.pre_sorter_->wait();
   }
   if (OB_NOT_NULL(task_scheduler_)) {
     task_scheduler_->wait();
   }
+  if (OB_NOT_NULL(dag_task_scheduler_)) {
+    dag_task_scheduler_->wait();
+  }
+  if (OB_NOT_NULL(dag_exec_ctx_.dag_)) {
+    dag_exec_ctx_.dag_->clear_task();
+  }
+  for (TransMap::const_iterator iter = trans_map_.begin(); iter != trans_map_.end(); ++iter) {
+    ObTableLoadStoreTrans *trans = iter->second;
+    abort_unless(0 == trans->get_ref_count());
+    trans_allocator_.free(trans);
+  }
   // 按顺序析构对象, 被依赖的最后析构
+  if (nullptr != dag_exec_ctx_.dag_) {
+    dag_exec_ctx_.dag_->~ObTableLoadDag();
+    allocator_.free(dag_exec_ctx_.dag_);
+    dag_exec_ctx_.dag_ = nullptr;
+  }
+  if (nullptr != dag_exec_ctx_.plan_) {
+    dag_exec_ctx_.plan_->~ObTableLoadPlan();
+    allocator_.free(dag_exec_ctx_.plan_);
+    dag_exec_ctx_.plan_ = nullptr;
+  }
   if (nullptr != write_ctx_.pre_sorter_) {
     write_ctx_.pre_sorter_->~ObTableLoadPreSorter();
     allocator_.free(write_ctx_.pre_sorter_);
@@ -122,10 +152,10 @@ void ObTableLoadStoreCtx::destroy()
     allocator_.free(task_scheduler_);
     task_scheduler_ = nullptr;
   }
-  for (TransMap::const_iterator iter = trans_map_.begin(); iter != trans_map_.end(); ++iter) {
-    ObTableLoadStoreTrans *trans = iter->second;
-    abort_unless(0 == trans->get_ref_count());
-    trans_allocator_.free(trans);
+  if (OB_NOT_NULL(dag_task_scheduler_)) {
+    dag_task_scheduler_->~ObITableLoadTaskScheduler();
+    allocator_.free(dag_task_scheduler_);
+    dag_task_scheduler_ = nullptr;
   }
   trans_map_.reuse();
   for (int64_t i = 0; i < committed_trans_store_array_.count(); ++i) {
@@ -167,6 +197,14 @@ void ObTableLoadStoreCtx::destroy()
     allocator_.free(table_mgr_);
     table_mgr_ = nullptr;
   }
+  if (OB_NOT_NULL(session_ctx_array_)) {
+    for (int64_t i = 0; i < ctx_->param_.write_session_count_; ++i) {
+      SessionContext *session_ctx = session_ctx_array_ + i;
+      session_ctx->~SessionContext();
+      allocator_.free(session_ctx);
+    }
+    session_ctx_array_ = nullptr;
+  }
 }
 
 int ObTableLoadStoreCtx::init(
@@ -199,8 +237,8 @@ int ObTableLoadStoreCtx::init(
   else if (OB_FAIL(segment_ctx_map_.init("TLD_SegCtxMap", ctx_->param_.tenant_id_))) {
     LOG_WARN("fail to init segment ctx map", KR(ret));
   }
-  // init task_scheduler_
   else if (FALSE_IT(thread_cnt_ = ctx_->param_.session_count_)) {
+  // init task_scheduler_
   } else if (OB_ISNULL(task_scheduler_ =
                          OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), thread_cnt_,
                                  ctx_->param_.table_id_, "Store", ctx_->session_info_))) {
@@ -210,6 +248,16 @@ int ObTableLoadStoreCtx::init(
     LOG_WARN("fail to init task scheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->start())) {
     LOG_WARN("fail to start task scheduler", KR(ret));
+  // init dag_task_scheduler_
+  } else if (OB_ISNULL(dag_task_scheduler_ =
+                         OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), thread_cnt_,
+                                 ctx_->param_.table_id_, "DagStore", ctx_->session_info_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
+  } else if (OB_FAIL(dag_task_scheduler_->init())) {
+    LOG_WARN("fail to init dag task scheduler", KR(ret));
+  } else if (OB_FAIL(dag_task_scheduler_->start())) {
+    LOG_WARN("fail to start dag task scheduler", KR(ret));
   }
   // init error_row_handler_
   else if (OB_ISNULL(error_row_handler_ = OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
@@ -250,6 +298,13 @@ int ObTableLoadStoreCtx::init(
   } else if (OB_FAIL(init_collection_subschema())) {
     LOG_WARN("fail to init subschema for collection type", KR(ret));
   }
+  else if (enable_dag_) {
+    if (OB_FAIL(init_write_ctx_for_dag())) {
+      LOG_WARN("fail to init write ctx", KR(ret));
+    } else if (OB_FAIL(init_dag())) {
+      LOG_WARN("fail to init dag", KR(ret));
+    }
+  }
   if (OB_SUCC(ret)) {
     is_inited_ = true;
   } else {
@@ -270,11 +325,15 @@ void ObTableLoadStoreCtx::stop()
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
   }
+  if (nullptr != dag_task_scheduler_) {
+    dag_task_scheduler_->stop();
+  }
 }
 
 bool ObTableLoadStoreCtx::is_stopped() const
 {
   return (nullptr == task_scheduler_ || task_scheduler_->is_stopped()) &&
+         (nullptr == dag_task_scheduler_ || dag_task_scheduler_->is_stopped()) &&
          (nullptr == write_ctx_.pre_sorter_ || write_ctx_.pre_sorter_->is_stopped()) &&
          (0 == ATOMIC_LOAD(&write_ctx_.px_writer_cnt_));
 }
@@ -317,14 +376,20 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
-    obsys::ObWLockGuard<> guard(status_lock_);
-    if (static_cast<int64_t>(status_) >= static_cast<int64_t>(ObTableLoadStatusType::ERROR)) {
-      // ignore
-    } else {
-      status_ = ObTableLoadStatusType::ERROR;
-      error_code_ = error_code;
-      table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
-      FLOG_INFO("LOAD DATA STORE status error", KR(error_code_), K(lbt()));
+    {
+      obsys::ObWLockGuard<> guard(status_lock_);
+      if (static_cast<int64_t>(status_) >= static_cast<int64_t>(ObTableLoadStatusType::ERROR)) {
+        // ignore
+      } else {
+        status_ = ObTableLoadStatusType::ERROR;
+        error_code_ = error_code;
+        table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
+        FLOG_INFO("LOAD DATA STORE status error", KR(error_code_), K(lbt()));
+      }
+    }
+    if (enable_dag_ && dag_exec_ctx_.dag_ != nullptr) {
+      dag_exec_ctx_.dag_->set_ret_code(error_code_);
+      dag_exec_ctx_.dag_->simply_set_stop();
     }
   }
   return ret;
@@ -333,16 +398,22 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
 int ObTableLoadStoreCtx::set_status_abort(int error_code)
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard<> guard(status_lock_);
-  if (ObTableLoadStatusType::ABORT == status_) {
-    LOG_INFO("LOAD DATA STORE already abort");
-  } else {
-    status_ = ObTableLoadStatusType::ABORT;
-    if (OB_SUCCESS == error_code_) {
-      error_code_ = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
+  {
+    obsys::ObWLockGuard<> guard(status_lock_);
+    if (ObTableLoadStatusType::ABORT == status_) {
+      LOG_INFO("LOAD DATA STORE already abort");
+    } else {
+      status_ = ObTableLoadStatusType::ABORT;
+      if (OB_SUCCESS == error_code_) {
+        error_code_ = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
+      }
+      table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
+      FLOG_INFO("LOAD DATA STORE status abort", KR(error_code_), K(lbt()));
     }
-    table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
-    FLOG_INFO("LOAD DATA STORE status abort", KR(error_code_), K(lbt()));
+  }
+  if (enable_dag_ && dag_exec_ctx_.dag_ != nullptr) {
+    dag_exec_ctx_.dag_->set_ret_code(error_code_);
+    dag_exec_ctx_.dag_->simply_set_stop();
   }
   return ret;
 }
@@ -503,7 +574,6 @@ int ObTableLoadStoreCtx::init_write_ctx()
   } else {
     static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
     static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
-    write_ctx_.schema_ = data_store_table_ctx_->schema_;
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =
@@ -618,6 +688,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
         const bool is_table_without_pk = data_store_table_ctx_->schema_->is_table_without_pk_;
         const ObColumnSchemaV2 *col_schema = nullptr;
         write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.px_column_accuracys_.set_block_allocator(ModulePageAllocator(allocator_));
         write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
         int64_t project_idx = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
@@ -628,6 +699,8 @@ int ObTableLoadStoreCtx::init_write_ctx()
           }
           // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
           else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
+            LOG_WARN("fail to push back", KR(ret));
+          } else if (OB_FAIL(write_ctx_.px_column_accuracys_.push_back(col_schema->get_accuracy()))) {
             LOG_WARN("fail to push back", KR(ret));
           }
           // 存储层不写虚拟生成列
@@ -698,6 +771,181 @@ int ObTableLoadStoreCtx::init_write_ctx()
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::init_write_ctx_for_dag()
+{
+  int ret = OB_SUCCESS;
+  static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
+  static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
+  // is_fast_heap_table_, is_multiple_mode_
+  switch (ctx_->param_.exe_mode_) {
+    // 堆表快速写入
+    case ObTableLoadExeMode::FAST_HEAP_TABLE:
+      write_ctx_.is_fast_heap_table_ = true;
+      break;
+    // 有主键表不排序
+    case ObTableLoadExeMode::GENERAL_TABLE_COMPACT:
+      break;
+    // 堆表排序
+    case ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT:
+    // 有主键表排序
+    case ObTableLoadExeMode::MEM_COMPACT:
+      write_ctx_.is_multiple_mode_ = true;
+      break;
+    // 无资源控制
+    case ObTableLoadExeMode::MAX_TYPE: {
+      const int64_t part_cnt = data_store_table_ctx_->ls_partition_ids_.count();
+      int64_t wa_mem_limit = 0;
+      if (OB_FAIL(ObTableLoadService::get_memory_limit(wa_mem_limit))) {
+        LOG_WARN("fail to get memory limit", KR(ret));
+      } else if (wa_mem_limit < ObDirectLoadMemContext::MIN_MEM_LIMIT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("wa_mem_limit is too small", KR(ret), K(wa_mem_limit));
+      } else if (data_store_table_ctx_->schema_->is_table_without_pk_) {
+        int64_t part_mem_size = 0;
+        if (!data_store_table_ctx_->schema_->is_column_store() ||
+            ObDirectLoadMethod::is_incremental(ctx_->param_.method_)) {
+          // 行存
+          part_mem_size = MACRO_BLOCK_WRITER_MEM_SIZE;
+        } else {
+          // 列存
+          part_mem_size = data_store_table_ctx_->schema_->cg_cnt_ * cg_chunk_mem_limit * 10;
+        }
+        const int64_t bucket_cnt = MAX(1, wa_mem_limit / (thread_cnt_ * part_mem_size));
+        if (part_cnt <= bucket_cnt || !ctx_->param_.need_sort_) {
+          // 堆表快速写入
+          write_ctx_.is_fast_heap_table_ = true;
+        } else {
+          // 堆表排序
+          write_ctx_.is_multiple_mode_ = true;
+        }
+      } else {
+        const int64_t part_mem_size = write_ctx_.table_data_desc_.sstable_index_block_size_ +
+                                      write_ctx_.table_data_desc_.sstable_data_block_size_;
+        const int64_t bucket_cnt = MAX(1, wa_mem_limit / (thread_cnt_ * part_mem_size));
+        write_ctx_.is_multiple_mode_ = (ctx_->param_.need_sort_ || part_cnt > bucket_cnt);
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected exe mode", KR(ret), K(ctx_->param_.exe_mode_));
+      break;
+  }
+  // enable_pre_sort_
+  if (OB_SUCC(ret)) {
+    write_ctx_.enable_pre_sort_ =
+      (write_ctx_.is_multiple_mode_ && !data_store_table_ctx_->schema_->is_table_without_pk_);
+  }
+  // px mode
+  if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *table_schema = nullptr;
+    ObArray<ObColDesc> col_descs;
+    if (OB_FAIL(ObTableLoadSchema::get_table_schema(ctx_->param_.tenant_id_, ctx_->param_.table_id_,
+                                                    schema_guard, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(ctx_->param_));
+    }
+    // mysql模式下SQL执行计划会包含虚拟生成列
+    else if (OB_FAIL(
+               table_schema->get_column_ids(col_descs, lib::is_oracle_mode() /*no_virtual*/))) {
+      LOG_WARN("fail to get column ids", KR(ret));
+    } else if (OB_FAIL(ObTableLoadSchema::prepare_col_descs(table_schema, col_descs))) {
+      LOG_WARN("fail to prepare col descs", KR(ret), KPC(table_schema), K(col_descs));
+   } else {
+      const bool is_table_without_pk = data_store_table_ctx_->schema_->is_table_without_pk_;
+      const ObColumnSchemaV2 *col_schema = nullptr;
+      write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
+      write_ctx_.px_column_accuracys_.set_block_allocator(ModulePageAllocator(allocator_));
+      write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
+      int64_t project_idx = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+        const ObColDesc &col_desc = col_descs.at(i);
+        if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
+        }
+        // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
+        else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
+          LOG_WARN("fail to push back", KR(ret));
+        } else if (OB_FAIL(write_ctx_.px_column_accuracys_.push_back(col_schema->get_accuracy()))) {
+          LOG_WARN("fail to push back", KR(ret));
+        }
+        // 存储层不写虚拟生成列
+        else if (col_schema->is_virtual_generated_column()) {
+          if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
+        } else {
+          // 旁路不接收隐藏主键列
+          if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
+              LOG_WARN("fail to push back", KR(ret));
+            }
+          } else {
+            if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx))) {
+              LOG_WARN("fail to push back", KR(ret));
+            }
+          }
+          ++project_idx;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
+    const ObArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =
+      data_store_table_ctx_->ls_partition_ids_;
+    write_ctx_.is_single_part_ = (1 == ls_partition_ids.count());
+    if (write_ctx_.is_single_part_) {
+      write_ctx_.single_tablet_id_ = ls_partition_ids[0].part_tablet_id_.tablet_id_;
+      if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(
+            write_ctx_.single_tablet_id_, allocator_, write_ctx_.single_tablet_id_vector_))) {
+        LOG_WARN("fail to make const tablet id vector", KR(ret), K(write_ctx_.single_tablet_id_));
+      }
+    } else {
+      if (OB_FAIL(
+            write_ctx_.tablet_idx_map_.create(1024, "TLD_TbtIdxMap", "TLD_TbtIdxMap", MTL_ID()))) {
+        LOG_WARN("fail to create hashmap", KR(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
+          const ObTabletID &tablet_id = ls_partition_ids[i].part_tablet_id_.tablet_id_;
+          if (OB_FAIL(write_ctx_.tablet_idx_map_.set_refactored(tablet_id.id(), i))) {
+            LOG_WARN("fail to set refactored", KR(ret), K(tablet_id));
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected duplicate tablet id", KR(ret), K(tablet_id));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::init_dag()
+{
+  int ret = OB_SUCCESS;
+  // generate plan
+  if (OB_FAIL(ObTableLoadPlan::create_plan(this, allocator_, dag_exec_ctx_.plan_))) {
+    LOG_WARN("fail to create plan", KR(ret));
+  }
+  // 依赖write_ctx_里的信息
+  else if (OB_FAIL(dag_exec_ctx_.plan_->generate())) {
+    LOG_WARN("fail to generate plan", KR(ret));
+  }
+  // generate dag
+  else if (OB_FAIL(ObTenantDagScheduler::alloc_dag(allocator_, false /*is_ha_dag*/, dag_exec_ctx_.dag_))) {
+    LOG_WARN("fail to alloc dag", K(ret));
+  } else if (OB_FAIL(dag_exec_ctx_.dag_->init(this))) {
+    LOG_WARN("fail to init dag", KR(ret));
+  } else if (OB_FAIL(ObTableLoadDagGenerator::generate(dag_exec_ctx_))) {
+    LOG_WARN("fail to generate dag", KR(ret));
+  } else if (OB_FAIL(dag_exec_ctx_.dag_->start())) {
+    LOG_WARN("fail to start dag", KR(ret));
   }
   return ret;
 }
@@ -888,10 +1136,10 @@ int ObTableLoadStoreCtx::alloc_trans(const ObTableLoadTransId &trans_id,
   else if (OB_ISNULL(trans = trans_allocator_.alloc(trans_ctx))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc ObTableLoadStoreTrans", KR(ret));
-  } else if (OB_FAIL(trans->init())) {
-    LOG_WARN("fail to init trans", KR(ret), K(trans_id));
   } else if (OB_FAIL(trans_map_.set_refactored(trans_id, trans))) {
     LOG_WARN("fail to set_refactored", KR(ret), K(trans_id));
+  } else {
+    trans->inc_ref_count();
   }
   if (OB_FAIL(ret)) {
     if (nullptr != trans) {
@@ -934,9 +1182,13 @@ int ObTableLoadStoreCtx::start_trans(const ObTableLoadTransId &trans_id,
       } else {
         if (OB_FAIL(alloc_trans(trans_id, trans))) {
           LOG_WARN("fail to alloc trans", KR(ret));
+        }
+        // trans初始化会创建后台pipeline, pipeline通过持有trans的引用计数来保证channel的生命周期
+        // 初始化失败场景, pipeline可能被创建出来, trans不能立即释放
+        else if (OB_FAIL(trans->init())) {
+          LOG_WARN("fail to init trans", KR(ret), K(trans_id));
         } else {
           segment_ctx->current_trans_ = trans;
-          trans->inc_ref_count();
         }
       }
     }
@@ -1216,6 +1468,31 @@ int ObTableLoadStoreCtx::get_table_store_from_committed_trans_stores(ObDirectLoa
     table_store.set_multiple_sstable();
   }
   obsys::ObRLockGuard<> guard(rwlock_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < committed_trans_store_array_.count(); ++i) {
+    ObTableLoadTransStore *trans_store = committed_trans_store_array_.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {
+      const ObTableLoadTransStore::SessionStore *session_store =
+        trans_store->session_store_array_.at(j);
+      if (OB_FAIL(table_store.add_tables(session_store->tables_handle_))) {
+        LOG_WARN("fail to add tables", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadStoreCtx::get_table_store_for_store_write(ObDirectLoadTableStore &table_store)
+{
+  int ret = OB_SUCCESS;
+  table_store.clear();
+  if (write_ctx_.is_multiple_mode_) {
+    // 排序路径, 写出的是未排序数据
+    table_store.set_external_table();
+  } else {
+    // 有主键表不排序路径
+    table_store.set_multiple_sstable();
+  }
+  obsys::ObRLockGuard guard(rwlock_);
   for (int64_t i = 0; OB_SUCC(ret) && i < committed_trans_store_array_.count(); ++i) {
     ObTableLoadTransStore *trans_store = committed_trans_store_array_.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < trans_store->session_store_array_.count(); ++j) {

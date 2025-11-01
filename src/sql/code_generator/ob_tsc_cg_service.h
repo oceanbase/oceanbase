@@ -183,7 +183,8 @@ private:
                                     ObDASScanCtDef *&first_aux_ctdef,
                                     ObDASScanCtDef *&second_aux_ctdef,
                                     ObDASScanCtDef *&third_aux_ctdef,
-                                    ObDASScanCtDef *&forth_aux_ctdef);
+                                    ObDASScanCtDef *&forth_aux_ctdef,
+                                    ObDASScanCtDef *&fifth_aux_ctdef);
   int generate_vec_aux_table_ctdef(const ObLogTableScan &op,
                                   ObTSCIRScanType ir_scan_type,
                                   uint64_t table_id,

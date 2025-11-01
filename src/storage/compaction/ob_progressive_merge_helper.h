@@ -11,6 +11,7 @@
 #define OB_STORAGE_COMPACTION_PROGRESSIVE_MERGE_HELPER_H_
 #include "/usr/include/stdint.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_iarray.h"
 namespace oceanbase
 {
 namespace blocksstable
@@ -22,6 +23,7 @@ struct ObSSTableBasicMeta;
 }
 namespace storage
 {
+class ObITable;
 class ObStorageSchema;
 }
 namespace common
@@ -82,7 +84,8 @@ public:
       is_inited_(false)
     {}
   ~ObProgressiveMergeHelper() = default;
-  int init(const blocksstable::ObSSTable &sstable, const ObMergeParameter &merge_param, ObProgressiveMergeMgr *mgr);
+  int init(ObIArray<storage::ObITable*> &tables, const ObMergeParameter &merge_param, ObProgressiveMergeMgr *mgr);
+
   void reset();
   inline bool is_valid() const { return is_inited_; }
   int check_macro_block_op(const blocksstable::ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);

@@ -21,6 +21,7 @@
 #include "ob_imicro_block_reader.h"
 #include "ob_micro_block_encryption.h"
 #include "storage/blocksstable/ob_sstable_printer.h"
+#include "storage/blocksstable/ob_simplified_sstable_macro_block_header.h"
 namespace oceanbase
 {
 namespace common
@@ -85,6 +86,15 @@ public:
       const ObSSTableMacroBlockHeader &block_header,
       const char *buf,
       const int64_t size,
+      const bool need_deep_copy,
+      const char *&uncomp_buf,
+      int64_t &uncomp_size,
+      bool &is_compressed);
+  int decrypt_and_decompress_data(
+      const ObSimplifiedSSTableMacroBlockHeader &block_header,
+      const char *buf,
+      const int64_t size,
+      const bool need_deep_copy,
       const char *&uncomp_buf,
       int64_t &uncomp_size,
       bool &is_compressed);

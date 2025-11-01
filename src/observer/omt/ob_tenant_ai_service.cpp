@@ -87,8 +87,7 @@ int ObAiServiceGuard::check_access_privilege()
 
   ObSQLSessionInfo *session = nullptr;
   if (OB_ISNULL(session = THIS_WORKER.get_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is null", K(ret));
+    // system background task thread do not have session, skip check
   } else {
     ObArenaAllocator tmp_allocator;
     share::schema::ObSchemaGetterGuard *schema_guard = session->get_cur_exec_ctx()->get_sql_ctx()->schema_guard_;
@@ -98,8 +97,12 @@ int ObAiServiceGuard::check_access_privilege()
     } else {
       sql::ObAIServiceEndpointPrivUtil priv_util(*schema_guard);
       share::schema::ObSessionPrivInfo session_priv;
+      uint64_t user_id = session->get_priv_user_id();
+      if (user_id == OB_INVALID_ID && session->get_priv_tenant_id() == OB_SYS_TENANT_ID) {
+        user_id = OB_SYS_USER_ID;
+      }
       if (OB_FAIL(schema_guard->get_session_priv_info(session->get_priv_tenant_id(),
-                                                    session->get_priv_user_id(),
+                                                    user_id,
                                                     session->get_database_name(),
                                                     session_priv))) {
         LOG_WARN("failed to get session priv info", K(ret));
@@ -134,12 +137,12 @@ int ObAiServiceGuard::get_ai_endpoint(const common::ObString &name, const share:
   return ret;
 }
 
-int ObAiServiceGuard::get_ai_endpoint_by_ai_model_name(const common::ObString &ai_model_name, const share::ObAiModelEndpointInfo *&endpoint_info)
+int ObAiServiceGuard::get_ai_endpoint_by_ai_model_name(const common::ObString &ai_model_name, const share::ObAiModelEndpointInfo *&endpoint_info, bool need_check)
 {
   int ret = OB_SUCCESS;
   ObAiModelEndpointInfo *tmp_endpoint_info = nullptr;
 
-  if (OB_FAIL(check_access_privilege())) {
+  if (need_check && OB_FAIL(check_access_privilege())) {
     LOG_WARN("failed to check access privilege", K(ret));
   } else if (OB_ISNULL(tmp_endpoint_info = OB_NEWx(ObAiModelEndpointInfo, &local_allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

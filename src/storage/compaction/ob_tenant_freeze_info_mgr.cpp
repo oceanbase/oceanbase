@@ -621,11 +621,9 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
           LOG_WARN("tenant is unexpected virtual tenant", KR(ret), K(tenant_id));
         } else {
           const ObTenantRole::Role &role = MTL_GET_TENANT_ROLE_CACHE();
-          if (is_primary_tenant(role) || is_standby_tenant(role)) {
+          if (is_primary_tenant(role) || is_standby_tenant(role) || is_restore_tenant(role)) {
             check_tenant_status_ = false;
             LOG_INFO("finish check tenant restore", K(tenant_id), K(role));
-          } else if (REACH_THREAD_TIME_INTERVAL(10L * 1000L * 1000L)) {
-            LOG_INFO("skip restoring tenant to schedule major merge", K(tenant_id), K(role));
           }
         }
       }

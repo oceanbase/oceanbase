@@ -450,7 +450,8 @@ bool ObTabletPointer::get_initial_state() const
 int ObTabletPointer::create_ddl_kv_mgr(
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+    ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+    bool &is_created)
 {
   int ret = OB_SUCCESS;
   ddl_kv_mgr_handle.reset();
@@ -462,6 +463,7 @@ int ObTabletPointer::create_ddl_kv_mgr(
     ObByteLockGuard guard(ddl_kv_mgr_lock_);
     if (ddl_kv_mgr_handle_.is_valid()) {
       // do nothing
+      is_created = false;
     } else {
       ObDDLKvMgrHandle tmp_handle;
       if (OB_FAIL(t3m->acquire_tablet_ddl_kv_mgr(tmp_handle))) {
@@ -470,6 +472,7 @@ int ObTabletPointer::create_ddl_kv_mgr(
         LOG_WARN("init ddl kv mgr failed", K(ret), K(ls_id),K(tablet_id));
       } else {
         ddl_kv_mgr_handle_ = tmp_handle;
+        is_created = true;
       }
     }
     if (OB_SUCC(ret)) {
@@ -609,6 +612,14 @@ int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline(const ObTable
     }
   } else if (OB_FAIL(mds_table.forcely_remove_nodes("OFFLINE", share::SCN::max_scn()))) {
     LOG_WARN("fail to release mds nodes in mds table", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObByteLockGuard guard(ddl_kv_mgr_lock_);
+    if (ddl_kv_mgr_handle_.is_valid() && OB_FAIL(ddl_kv_mgr_handle_.get_obj()->cleanup())) {
+        LOG_WARN("failed to cleanup ddl kv mgr", K(ret));
+    }
+    ddl_kv_mgr_handle_.reset();
+    LOG_INFO("ddl kv mgr reset", K(ret), KPC(this));
   }
 
   return ret;

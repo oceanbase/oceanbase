@@ -17,7 +17,10 @@
 #define private public
 #define protected public
 
+#include "share/datum/ob_datum.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
+#include "storage/blocksstable/ob_datum_rowkey.h"
+#include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/blocksstable/index_block/ob_macro_meta_temp_store.h"
 #include "storage/blocksstable/ob_object_manager.h"
 #include "ob_index_block_data_prepare.h"
@@ -61,7 +64,7 @@ void TestMacroMetaTempStore::prepare_macro_writer()
   share::SCN scn;
   scn.convert_for_tx(SNAPSHOT_VERSION);
   ASSERT_EQ(OB_SUCCESS, desc_.init(false, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_),
-      merge_type_, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0, scn));
+      merge_type_, SNAPSHOT_VERSION, DATA_CURRENT_VERSION, table_schema_.get_micro_index_clustered(), 0, 0/*concurrent_cnt*/, scn));
   desc_.get_desc().static_desc_->schema_version_ = 10;
   desc_.get_desc().sstable_index_builder_ = &root_index_builder_;
   ASSERT_TRUE(desc_.is_valid());
@@ -85,6 +88,111 @@ void TestMacroMetaTempStore::write_one_macro_block()
   ASSERT_EQ(OB_SUCCESS, macro_writer_.append_row(mv_row_));
   ASSERT_EQ(OB_SUCCESS, macro_writer_.build_micro_block());
   ASSERT_EQ(OB_SUCCESS, macro_writer_.try_switch_macro_block());
+}
+
+TEST_F(TestMacroMetaTempStore, test_macro_meta_serialize)
+{
+  char buf[2 * 1024 * 1024]; // 2MB
+  ObDataMacroBlockMeta macro_meta;
+
+  const int64_t test_macro_block_cnt = 1;
+  prepare_macro_writer();
+  for (int64_t i = 0; i < test_macro_block_cnt; ++i) {
+    write_one_macro_block();
+  }
+  ObSEArray<MacroBlockId, 10> write_macro_ids;
+  ASSERT_EQ(OB_SUCCESS, write_macro_ids.assign(macro_writer_.get_macro_block_write_ctx().get_macro_block_list()));
+  ASSERT_EQ(OB_SUCCESS, macro_writer_.close());
+  ObMacroMetaTempStore macro_meta_temp_store;
+  int64_t dir_id = 0;
+  ASSERT_EQ(OB_SUCCESS, FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id));
+  ASSERT_EQ(OB_SUCCESS, macro_meta_temp_store.init(dir_id));
+  for (int64_t i = 0; i < write_macro_ids.count(); ++i) {
+    ObStorageObjectHandle obj_handle;
+    ObStorageObjectReadInfo read_info;
+    read_info.offset_ = 0;
+    read_info.size_ = DEFAULT_MACRO_BLOCK_SIZE;
+    read_info.io_timeout_ms_ = 5000;
+    read_info.macro_block_id_ = write_macro_ids.at(i);
+    read_info.mtl_tenant_id_ = MTL_ID();
+    read_info.buf_ = static_cast<char *>(allocator_.alloc(read_info.size_));
+    read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    ASSERT_TRUE(nullptr != read_info.buf_);
+    ASSERT_EQ(OB_SUCCESS, ObObjectManager::async_read_object(read_info, obj_handle));
+    ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
+
+    ObSSTableMacroBlockHeader macro_header;
+    ASSERT_EQ(OB_SUCCESS,
+              macro_meta_temp_store.get_macro_block_header(obj_handle.get_buffer(),
+                                                           obj_handle.get_data_size(),
+                                                           macro_header));
+    ASSERT_EQ(OB_SUCCESS,
+              macro_meta_temp_store.get_macro_meta_from_block_buf(macro_header,
+                                                                  write_macro_ids.at(i),
+                                                                  obj_handle.get_buffer() + macro_header.fixed_header_.meta_block_offset_,
+                                                                  macro_header.fixed_header_.meta_block_size_,
+                                                                  macro_meta));
+  }
+
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, macro_meta.serialize(buf, 2 * 1024 * 1024, pos, CLUSTER_CURRENT_VERSION));
+  ObDataMacroBlockMeta deserialized_macro_meta;
+  ASSERT_EQ(deserialized_macro_meta.end_key_.datums_, nullptr);
+  int64_t deserialize_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, deserialized_macro_meta.deserialize(buf, 2 * 1024 * 1024, allocator_, deserialize_pos));
+  ASSERT_EQ(pos, deserialize_pos);
+  ASSERT_EQ(macro_meta.end_key_, deserialized_macro_meta.end_key_);
+}
+
+TEST_F(TestMacroMetaTempStore, test_reuse_macro_meta)
+{
+  ObDataMacroBlockMeta macro_meta;
+  {
+    const int64_t test_macro_block_cnt = 1;
+    prepare_macro_writer();
+    for (int64_t i = 0; i < test_macro_block_cnt; ++i) {
+      write_one_macro_block();
+    }
+    ObSEArray<MacroBlockId, 10> write_macro_ids;
+    ASSERT_EQ(OB_SUCCESS, write_macro_ids.assign(macro_writer_.get_macro_block_write_ctx().get_macro_block_list()));
+    ASSERT_EQ(OB_SUCCESS, macro_writer_.close());
+    ObMacroMetaTempStore macro_meta_temp_store;
+    int64_t dir_id = 0;
+    ASSERT_EQ(OB_SUCCESS, FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id));
+    ASSERT_EQ(OB_SUCCESS, macro_meta_temp_store.init(dir_id));
+    for (int64_t i = 0; i < write_macro_ids.count(); ++i) {
+      ObStorageObjectHandle obj_handle;
+      ObStorageObjectReadInfo read_info;
+      read_info.offset_ = 0;
+      read_info.size_ = DEFAULT_MACRO_BLOCK_SIZE;
+      read_info.io_timeout_ms_ = 5000;
+      read_info.macro_block_id_ = write_macro_ids.at(i);
+      read_info.mtl_tenant_id_ = MTL_ID();
+      read_info.buf_ = static_cast<char *>(allocator_.alloc(read_info.size_));
+      read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+      ASSERT_TRUE(nullptr != read_info.buf_);
+      ASSERT_EQ(OB_SUCCESS, ObObjectManager::async_read_object(read_info, obj_handle));
+      ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
+
+      ObSSTableMacroBlockHeader macro_header;
+      ASSERT_EQ(OB_SUCCESS,
+                macro_meta_temp_store.get_macro_block_header(obj_handle.get_buffer(),
+                                                             obj_handle.get_data_size(),
+                                                             macro_header));
+      ASSERT_EQ(OB_SUCCESS,
+                macro_meta_temp_store.get_macro_meta_from_block_buf(macro_header,
+                                                                    write_macro_ids.at(i),
+                                                                    obj_handle.get_buffer()
+                                                                        + macro_header.fixed_header_.meta_block_offset_,
+                                                                    macro_header.fixed_header_.meta_block_size_,
+                                                                    macro_meta));
+    }
+  }
+  ObMacroMetaTempStore macro_meta_temp_store;
+  int64_t dir_id = 0;
+  ASSERT_EQ(OB_SUCCESS, FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(MTL_ID(), dir_id));
+  ASSERT_EQ(OB_SUCCESS, macro_meta_temp_store.init(dir_id));
+  ASSERT_EQ(OB_SUCCESS, macro_meta_temp_store.append(macro_meta, nullptr));
 }
 
 TEST_F(TestMacroMetaTempStore, test_macro_meta_temp_store)

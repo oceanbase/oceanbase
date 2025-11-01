@@ -67,6 +67,8 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     arena_allocator_("TabCopyFinish"),
     minor_tables_handle_(),
     ddl_tables_handle_(),
+    inc_major_ddl_tables_handle_(),
+    inc_major_tables_handle_(),
     major_tables_handle_(),
     mds_tables_handle_(),
     last_meta_seq_array_(),
@@ -155,6 +157,8 @@ int ObTabletCopyFinishTask::process()
   int64_t sstable_count = mds_tables_handle_.get_count()
                           + minor_tables_handle_.get_count()
                           + ddl_tables_handle_.get_count()
+                          + inc_major_ddl_tables_handle_.get_count()
+                          + inc_major_tables_handle_.get_count()
                           + major_tables_handle_.get_count();
 
   int tmp_ret = OB_SUCCESS;
@@ -263,7 +267,7 @@ int ObTabletCopyFinishTask::get_sstable(
     if (OB_SUCC(ret) && !found) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("can not get sstable, unexected", K(ret), K(table_key), K(major_tables_handle_),
-          K(minor_tables_handle_), K(ddl_tables_handle_));
+          K(minor_tables_handle_), K(ddl_tables_handle_), K(inc_major_ddl_tables_handle_), K(inc_major_tables_handle_));
     }
   }
   return ret;
@@ -309,12 +313,18 @@ int ObTabletCopyFinishTask::create_new_table_store_with_minor_()
     param.src_tablet_meta_ = param_.src_tablet_meta_;
     param.restore_action_ = param_.restore_action_;
     param.release_mds_scn_ = mds_max_end_scn;
-
-    if (OB_FAIL(param.assign_sstables(mds_tables_handle_, minor_tables_handle_, ddl_tables_handle_))) {
+#ifdef ERRSIM
+    if (ObTabletRestoreAction::is_restore_replace_remote_sstable(param_.restore_action_)) {
+      if (inc_major_ddl_tables_handle_.get_count() > 0) {
+        DEBUG_SYNC(BEFORE_REPLACE_REMOTE_INC_MAJOR_DDL);
+      }
+    }
+#endif
+    if (OB_FAIL(param.assign_sstables(mds_tables_handle_, minor_tables_handle_, ddl_tables_handle_, inc_major_tables_handle_, inc_major_ddl_tables_handle_))) {
       LOG_WARN("failed to assign sstables", K(ret), KPC(param_.ls_), "tablet_id", param_.tablet_id_);
     } else if (OB_FAIL(ObStorageHATabletBuilderUtil::build_table_with_minor_tables(param))) {
       LOG_WARN("failed to build table with minor tables", K(ret), K(mds_tables_handle_),
-        K(minor_tables_handle_), K(ddl_tables_handle_), K(param_.restore_action_));
+        K(minor_tables_handle_), K(ddl_tables_handle_), K(inc_major_ddl_tables_handle_), K(inc_major_tables_handle_), K(param_.restore_action_));
       if (OB_RELEASE_MDS_NODE_ERROR == ret) {
         //Release mds node failed must do dag net retry.
         //Because ls still replay and mds may has residue node which makes data incorrect.
@@ -397,6 +407,10 @@ int ObTabletCopyFinishTask::get_tables_handle_ptr_(
     tables_handle_ptr = &minor_tables_handle_;
   } else if (table_key.is_ddl_sstable()) {
     tables_handle_ptr = &ddl_tables_handle_;
+  } else if (table_key.is_inc_major_ddl_sstable()) {
+    tables_handle_ptr = &inc_major_ddl_tables_handle_;
+  } else if (table_key.is_inc_major_type_sstable()) {
+    tables_handle_ptr = &inc_major_tables_handle_;
   } else if (table_key.is_mds_sstable()) {
     tables_handle_ptr = &mds_tables_handle_;
   } else {

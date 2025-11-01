@@ -12,6 +12,7 @@
 
 #include "ob_macro_block_checker.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -80,6 +81,140 @@ int ObSSTableMacroBlockChecker::check(
   return ret;
 }
 
+int ObSSTableMacroBlockChecker::check_macro_block(
+    const char *macro_block_buf,
+    const int64_t macro_block_buf_size,
+    const ObMacroBlockCheckLevel check_level)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(macro_block_buf_size <= 0) || OB_ISNULL(macro_block_buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(macro_block_buf), K(macro_block_buf_size));
+  } else if (ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL == check_level) {
+    ObMacroBlockCommonHeader common_header;
+    int64_t pos = 0;
+    if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
+      STORAGE_LOG(WARN, "Failed to deserialize common header", K(ret), KP(macro_block_buf), K(macro_block_buf_size), K(pos));
+    } else if (ObMacroBlockCommonHeader::SSTableData == common_header.get_type()) {
+      if (OB_FAIL(check_sstable_macro_block(macro_block_buf, macro_block_buf_size, common_header))) {
+        STORAGE_LOG(WARN, "Failed to check sstable macro block", K(ret), KP(macro_block_buf), K(macro_block_buf_size));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSSTableMacroBlockChecker::check_sstable_macro_block(
+    const char *macro_block_buf,
+    const int64_t macro_block_buf_size,
+    const ObMacroBlockCommonHeader &common_header)
+{
+  int ret = OB_SUCCESS;
+  compaction::ObLocalArena iter_allocator_temp("MaBlkChecker");
+  ObMacroBlockRowBareIterator macro_iter(iter_allocator_temp);
+  if (OB_FAIL(macro_iter.open(macro_block_buf, macro_block_buf_size))) {
+    STORAGE_LOG(WARN, "Fail to init bare macro block row iterator", K(ret));
+  } else {
+    int64_t micro_idx = 0;
+    do {
+      if (OB_FAIL(check_data_micro_block(macro_iter))) {
+        STORAGE_LOG(WARN, "Fail to check sstable micro block", K(ret));
+      } else {
+        ++micro_idx;
+      }
+    } while (OB_SUCC(ret) && OB_SUCC(macro_iter.open_next_micro_block()));
+
+    if (OB_FAIL(ret) && OB_ITER_END != ret) {
+      STORAGE_LOG(WARN, "Fail to iterate all micro blocks in macro block", K(ret));
+    } else if (FALSE_IT(ret = OB_SUCCESS)) {
+    } else if (ObMacroBlockCommonHeader::SSTableData == common_header.get_type()) {
+      // dump leaf index block
+      if (OB_FAIL(macro_iter.open_leaf_index_micro_block())) {
+        STORAGE_LOG(WARN, "Fail to open leaf index micro block", K(ret));
+      } else if (OB_FAIL(check_index_micro_block(macro_iter))) {
+        STORAGE_LOG(WARN, "Fail to check sstable micro block", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      STORAGE_LOG(INFO, "Successfully check sstable macro block", K(ret), K(common_header), K(micro_idx));
+    }
+  }
+  return ret;
+}
+
+int ObSSTableMacroBlockChecker::check_data_micro_block(ObMacroBlockRowBareIterator &macro_iter)
+{
+  int ret = OB_SUCCESS;
+  const ObMicroBlockData *micro_data = nullptr;
+  ObMicroBlockHeader micro_block_header;
+  int64_t pos = 0;
+  int64_t row_cnt = 0;
+  if (OB_FAIL(macro_iter.get_curr_micro_block_data(micro_data))) {
+    STORAGE_LOG(WARN, "Fail to get curr micro block data", K(ret));
+  } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected invalid micro block data", K(ret), KPC(micro_data));
+  } else if (OB_FAIL(micro_block_header.deserialize(micro_data->get_buf(), micro_data->get_buf_size(), pos))) {
+    STORAGE_LOG(ERROR, "Failed to deserialize sstable micro block header", K(ret), K(micro_data));
+  } else if (OB_FAIL(macro_iter.get_curr_micro_block_row_cnt(row_cnt))) {
+    STORAGE_LOG(WARN, "Fail to get row count of current micro block", K(ret));
+  }
+  const ObDatumRow *row = nullptr;
+  for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_cnt; ++row_idx) {
+    if (OB_FAIL(macro_iter.get_next_row(row))) {
+      STORAGE_LOG(WARN, "Fail to get next row from iter", K(ret), K(row_idx), K(row_cnt));
+    }
+  }
+  return ret;
+}
+
+int ObSSTableMacroBlockChecker::check_index_micro_block(ObMacroBlockRowBareIterator &macro_iter)
+{
+  int ret = OB_SUCCESS;
+  // for index micro block, we need to check the logic micro id is unique
+  ObIndexBlockRowParser idx_row_parser;
+  int64_t row_cnt = 0;
+  hash::ObHashSet<ObLogicMicroBlockId> unique_logic_micro_ids;
+  ObMicroBlockHeader micro_block_header;
+  const ObMicroBlockData *micro_data = nullptr;
+  int64_t pos = 0;
+  if (OB_FAIL(macro_iter.get_curr_micro_block_data(micro_data))) {
+    STORAGE_LOG(WARN, "Fail to get curr micro block data", K(ret));
+  } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected invalid micro block data", K(ret), KPC(micro_data));
+  } else if (OB_FAIL(micro_block_header.deserialize(micro_data->get_buf(), micro_data->get_buf_size(), pos))) {
+    STORAGE_LOG(ERROR, "Failed to deserialize sstable micro block header", K(ret), K(micro_data));
+  } else if (OB_FAIL(macro_iter.get_curr_micro_block_row_cnt(row_cnt))) {
+    STORAGE_LOG(WARN, "Fail to get row count of current micro block", K(ret));
+  } else if (OB_FAIL(unique_logic_micro_ids.create(row_cnt))) {
+    STORAGE_LOG(WARN, "Fail to create unique logic micro ids", K(ret), K(row_cnt));
+  }
+  const ObDatumRow *row = nullptr;
+  const ObIndexBlockRowHeader *idx_row_header = nullptr;
+  for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_cnt; ++row_idx) {
+    if (OB_FAIL(macro_iter.get_next_row(row))) {
+      STORAGE_LOG(WARN, "Fail to get next row from iter", K(ret), K(row_idx), K(row_cnt));
+    } else {
+      idx_row_parser.reset();
+      if (OB_FAIL(idx_row_parser.init(micro_block_header.rowkey_column_count_, *row))) {
+        STORAGE_LOG(WARN, "Fail to init idx row parser", K(ret));
+      } else if (OB_FAIL(idx_row_parser.get_header(idx_row_header))) {
+        STORAGE_LOG(WARN, "Fail to get index block row header", K(ret));
+      } else if (OB_ISNULL(idx_row_header)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Null pointer to index block row header", K(ret));
+      } else if (idx_row_header->has_valid_logic_micro_id()) {
+        ObLogicMicroBlockId logic_micro_id = idx_row_header->get_logic_micro_id();
+        if (OB_FAIL(unique_logic_micro_ids.set_refactored(logic_micro_id, 0))) {
+          STORAGE_LOG(WARN, "Fail to add logic micro id to set", K(ret), K(logic_micro_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSSTableMacroBlockChecker::check_logical_checksum(
     const ObMacroBlockCommonHeader &common_header,
     const char *buf,
@@ -127,7 +262,7 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
           raw_micro_data.get_buf_size(), MICRO_BLOCK_HEADER_MAGIC))) {
         STORAGE_LOG(ERROR, "micro block data is corrupted", K(ret), K(raw_micro_data));
       } else if (OB_FAIL(reader.decrypt_and_decompress_data(sstable_header,
-          raw_micro_data.get_buf(), raw_micro_data.get_buf_size(),
+          raw_micro_data.get_buf(), raw_micro_data.get_buf_size(), false,
           micro_data.get_buf(), micro_data.get_buf_size(), is_compressed))) {
         STORAGE_LOG(ERROR, "fail to get micro block data", K(ret), K(sstable_header),
             K(raw_micro_data));

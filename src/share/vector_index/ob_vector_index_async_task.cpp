@@ -134,7 +134,6 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
           task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO;
           task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
           task_ctx->task_status_.trace_id_ = new_trace_id;
-          task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
           task_ctx->allocator_.set_tenant_id(tenant_id_);
           if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
             LOG_WARN("fail to add task ctx", K(ret));
@@ -142,7 +141,7 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
             LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
           }
         }
-        if (OB_FAIL(ret)) { // release memory when fail
+        if (OB_FAIL(ret) || !inc_new_task) { // release memory when fail
           if (OB_NOT_NULL(task_ctx)) {
             task_ctx->~ObVecIndexAsyncTaskCtx();
             allocator->free(task_ctx); // arena need free
@@ -166,7 +165,135 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
   return ret;
 }
 
+int ObVecTaskManager::process_task()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(create_task())) {
+    LOG_WARN("fail to create task", K(ret));
+  }
+  while (OB_SUCC(ret) && !task_ids_.empty()) {
+    if (OB_FAIL(check_task_status())) {
+      LOG_WARN("fail to check task status", K(ret));
+    } else {
+      ob_usleep(1LL * 1000 * 1000);
+    }
+  }
+  return ret;
+}
 
+int ObVecTaskManager::create_task()
+{
+  int ret = OB_SUCCESS;
+  uint64_t trace_base_num = 0;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
+  ObArenaAllocator allocator("VecTaskCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, index_table_id_, tablet_ids))) {
+    LOG_WARN("failed to get tablet ids", K(ret));
+  } else {
+    for (int i = 0; i < tablet_ids.count() && OB_SUCC(ret); i++) {
+      int64_t new_task_id = OB_INVALID_ID;
+      ObTabletID tablet_id = tablet_ids.at(i);
+      ObVecIndexAsyncTaskCtx* task_ctx = nullptr;
+      common::ObCurTraceId::TraceId new_trace_id;
+      char *task_ctx_buf = static_cast<char *>(allocator.alloc(sizeof(ObVecIndexAsyncTaskCtx)));
+      if (OB_ISNULL(task_ctx_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("async task ctx is null", K(ret));
+      } else if (FALSE_IT(task_ctx = new(task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
+        LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++trace_base_num, &allocator, new_trace_id))) {
+        LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+      } else {
+        task_ctx->tenant_id_ = tenant_id_;
+        task_ctx->task_status_.tablet_id_ = tablet_id.id();
+        task_ctx->task_status_.tenant_id_ = tenant_id_;
+        task_ctx->task_status_.table_id_ = index_table_id_;
+        task_ctx->task_status_.task_id_ = new_task_id;
+        task_ctx->task_status_.task_type_ = task_type_;
+        task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL;
+        task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+        task_ctx->task_status_.trace_id_ = new_trace_id;
+        task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
+        if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
+          LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
+        } else if (OB_FAIL(task_ids_.push_back(new_task_id))) {
+          LOG_WARN("fail to push back task -id", K(ret), K(new_task_id));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::insert_new_task(tenant_id_, task_ctx_array))) {
+    LOG_WARN("fail to insert new tasks", K(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+int ObVecTaskManager::check_task_status()
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObSEArray<int64_t, 4> finished_task;
+  ObSEArray<int64_t, 4> tmp_task;
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(sql_proxy));
+  } else {
+    for (int i = 0; i < task_ids_.count() && OB_SUCC(ret); i++) {
+      ObSqlString sql;
+      ObVecIndexFieldArray filters;
+      ObVecIndexTaskStatusField field;
+      field.field_name_ = "task_id";
+      field.data_.uint_ = task_ids_.at(i);
+      if (OB_FAIL(filters.push_back(field))) {
+        LOG_WARN("fail to push back field", K(ret));
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::construct_read_task_sql(tenant_id_, OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
+          false, false, filters, *sql_proxy, sql))) {
+        LOG_WARN("fail to construct read task sql", K(ret));
+      } else {
+        SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+          ObVecIndexTaskStatus task_result;
+          sqlclient::ObMySQLResult* result = nullptr;
+          if (OB_FAIL(sql_proxy->read(res, tenant_id_, sql.ptr()))) {
+            LOG_WARN("fail to execute sql", KR(ret), K(sql));
+          } else if (OB_ISNULL(result = res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+          } else if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to get next row", K(ret));
+            }
+          } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::extract_one_task_sql_result(result, task_result))) {
+            LOG_WARN("fail to extrace one result", K(ret));
+          } else if (OB_FAIL(task_result.ret_code_)) {
+            LOG_WARN("task exec failed", K(ret), K(task_result));
+          } else if (OB_FAIL(finished_task.push_back(task_result.task_id_))) {
+            LOG_WARN("fail to push back task id", K(ret));
+          }
+        } // end smart var.
+      }
+    } // end loop: for i in task_ids_.
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_EAGAIN == ret) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "call dbms_vector.refresh_index/rebuild_index before vector index adapter ready is");
+      LOG_INFO("call dbms_vector.refresh_index/rebuild_index before vector index adapter ready is not supported, please try again", K(ret));
+    }
+  } else if (finished_task.empty()) {
+  } else if (OB_FAIL(get_difference(finished_task, task_ids_, tmp_task))) {
+    LOG_WARN("failed to get difference", K(ret), K(finished_task), K(task_ids_));
+  } else if (FALSE_IT(task_ids_.reuse())) {
+  } else if (OB_FAIL(task_ids_.assign(tmp_task))) {
+    LOG_WARN("failed to assign task id", K(ret), K(tmp_task));
+  }
+  return ret;
+}
 
 }
 }

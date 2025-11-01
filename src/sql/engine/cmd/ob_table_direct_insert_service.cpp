@@ -43,9 +43,9 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
   } else if (is_insert_overwrite && (!auto_commit || session->is_in_transaction())) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "using insert overwrite within a transaction is");
-  } else if (!is_inc_direct_load && (!auto_commit || session->is_in_transaction())) {
+  } else if (!auto_commit || session->is_in_transaction()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full direct-insert within a transaction is");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full or inc direct-insert within a transaction is");
   } else {
     uint64_t table_id = phy_plan.get_append_table_id();
     int64_t parallel = phy_plan.get_px_dop();

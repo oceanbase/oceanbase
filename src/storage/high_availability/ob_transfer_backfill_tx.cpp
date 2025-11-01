@@ -17,6 +17,7 @@
 #include "ob_transfer_service.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/ddl/ob_direct_load_mgr_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
 #endif
@@ -1540,27 +1541,42 @@ int ObTransferReplaceTableTask::check_source_minor_end_scn_(
   return ret;
 }
 
-int ObTransferReplaceTableTask::check_major_sstable_(
-    const ObTablet *tablet,
-    const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper)
+int ObTransferReplaceTableTask::check_source_inc_major_filled_scn_(
+    const ObTabletBackfillInfo &tablet_info,
+    const ObTablesHandleArray &tables_handle,
+    const ObTablet *dest_tablet)
 {
   int ret = OB_SUCCESS;
-  ObTableStoreIterator ddl_iter;
-  if (OB_ISNULL(tablet) || !table_store_wrapper.is_valid()) {
+  ObSEArray<ObITable *, 4> inc_major_tables;
+
+  if (OB_ISNULL(dest_tablet)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("argumemt is invalid", K(ret), KP(tablet), K(table_store_wrapper));
-  } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
-    // do nothing
-  } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
-    LOG_WARN("failed to get ddl sstable", K(ret));
-  } else if (ddl_iter.is_valid()) {
-    ret = OB_EAGAIN;
-    LOG_WARN("wait for ddl sstable to merge to generate major sstable", K(ret), K(ddl_iter));
-  } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-    ret = OB_INVALID_TABLE_STORE;
-    LOG_ERROR("neither major sstable nor ddl sstable exists", K(ret), K(ddl_iter));
+    LOG_WARN("check source inc major filled tx scn get invalid argument", KR(ret), KP(dest_tablet), KPC(this));
+  } else if (OB_FAIL(tables_handle.get_inc_major_tables(inc_major_tables))) {
+    LOG_WARN("failed to get all inc major sstables", K(ret), KPC(dest_tablet));
+  } else if (inc_major_tables.empty()) {
+    LOG_INFO("[TRANSFER_BACKFILL]inc major sstable no exists", K(ret), KPC(this), K(inc_major_tables));
   }
 
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < inc_major_tables.count(); ++idx) {
+    ObSSTable *inc_major = static_cast<ObSSTable *>(inc_major_tables.at(idx));
+    if (OB_UNLIKELY(nullptr == inc_major || !inc_major->is_inc_major_type_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null inc major", K(ret), K(inc_major_tables));
+    } else if (INT64_MAX == inc_major->get_upper_trans_version()) {
+      // deal with cur inc at dest
+    } else if (inc_major->get_filled_tx_scn() > dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
+      if (tablet_info.is_committed_) {
+        ret = OB_TRANSFER_SYS_ERROR;
+        LOG_ERROR("inc major's filled tx scn is bigger than transfer start scn", K(ret), KPC(inc_major),
+              "transfer info", dest_tablet->get_tablet_meta().transfer_info_);
+      } else {
+        ret = OB_EAGAIN;
+        LOG_WARN("transfer src inc table filled tx scn is bigger than transfer start scn, maybe transfer transaction rollback, need retry",
+            K(ret), KPC(inc_major), K(tablet_info), "dest tablet meta", dest_tablet->get_tablet_meta());
+      }
+    }
+  }
   return ret;
 }
 
@@ -1737,6 +1753,8 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
     LOG_WARN("failed to check src memtable", K(ret), KPC(tablet));
   } else if (OB_FAIL(check_source_minor_end_scn_(tablet_info, filled_table_handle_array, dest_tablet, need_backill))) {
     LOG_WARN("fail to check source max end scn from tablet", K(ret), KPC(tablet));
+  } else if (OB_FAIL(check_source_inc_major_filled_scn_(tablet_info, filled_table_handle_array, dest_tablet))) {
+    LOG_WARN("fail to check source inc major filled scn", K(ret), KPC(tablet));
   } else if (OB_FAIL(get_all_sstable_handles_(tablet, filled_table_handle_array, tables_handle))) {
     LOG_WARN("failed to get all sstable handles", K(ret), KPC(tablet));
   } else if (OB_FAIL(fill_empty_minor_sstable(tablet, need_backill,
@@ -1767,6 +1785,21 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
         LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
       } else if (table->is_major_sstable()) {
         has_major_sstable = true;
+      } else if (table->is_inc_major_type_sstable()) {
+        sstable = static_cast<ObSSTable *>(table);
+        if (sstable->get_filled_tx_scn() > ctx_->backfill_scn_) {
+          if (tablet_info.is_committed_) {
+            ret = OB_TRANSFER_SYS_ERROR;
+            LOG_ERROR("src sstable filled_tx_scn bigger than transfer_scn, unexpected", K(ret), KPC(sstable), KPC(ctx_),
+                      "sstable filled tx scn", sstable->get_filled_tx_scn(), "backfill scn", ctx_->backfill_scn_);
+          } else {
+            ret = OB_EAGAIN;
+            LOG_WARN("src sstable filled tx scn bigger than transfer scn, may transaction rollback",
+                K(ret), K(tablet_info), "sstable filled tx scn", sstable->get_filled_tx_scn(), "backfill scn", ctx_->backfill_scn_);
+          }
+        } else if (sstable->get_filled_tx_scn() == ctx_->backfill_scn_) {
+          LOG_INFO("src inc major has backfill to transfer_scn, when new transfer active tx has move to dest_ls", KPC(sstable), KPC(ctx_));
+        }
       } else if (!table->is_minor_sstable() && !table->is_mds_sstable()) {
         //do nothing
       } else {
@@ -2068,7 +2101,7 @@ int ObTransferReplaceTableTask::get_transfer_sstables_info_(
       if (OB_ISNULL(table = table_handle_array.get_table(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should not be NULL", K(ret), KP(table));
-      } else if (table->is_major_sstable() || table->is_mds_sstable()) {
+      } else if (table->is_major_sstable() || table->is_mds_sstable() || table->is_inc_major_type_sstable()) {
         //do nothing
       } else if (table->is_minor_sstable()) {
         has_minor_sstable = true;
@@ -2280,7 +2313,6 @@ int ObTransferReplaceTableTask::put_sstables_to_shared_tablet_(ObBatchUpdateTabl
                                 true/*allow_duplicate_sstable*/);
   if (OB_FAIL(param.init_with_ha_info(
             ObHATableStoreParam(mig_param->transfer_info_.transfer_seq_,
-                                true /*need_check_sstable*/,
                                 true /*need_check_transfer_seq*/,
                                 false,
                                 false)))) {

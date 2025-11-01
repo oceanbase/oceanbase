@@ -596,7 +596,7 @@ int ObCOSSTableV2::fetch_cg_sstable(
     LOG_WARN("get unexpected null cg table", K(ret), K(cg_wrapper));
   } else if (cg_wrapper.sstable_->is_cg_sstable() || cg_wrapper.sstable_->is_loaded()) {
     // do nothing
-  } else if (OB_FAIL(ObTabletTableStore::load_sstable(cg_wrapper.sstable_->get_addr(),
+  } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(cg_wrapper.sstable_->get_addr(),
                                                       true/*load_co_sstable*/,
                                                       cg_wrapper.meta_handle_))) {
     LOG_WARN("failed to load sstable", K(ret), K(cg_wrapper));
@@ -645,7 +645,7 @@ int ObCOSSTableV2::get_cg_sstable(
     } else {
       // co sstable and cg sstable is all loaded, no need to store meta handle
     }
-  } else if (OB_FAIL(ObTabletTableStore::load_sstable(cg_wrapper.sstable_->get_addr(),
+  } else if (OB_FAIL(ObCacheSSTableHelper::load_sstable(cg_wrapper.sstable_->get_addr(),
                                                       false/*load_co_sstable*/,
                                                       cg_wrapper.meta_handle_))) {
     LOG_WARN("failed to load sstable", K(ret), K(cg_wrapper));

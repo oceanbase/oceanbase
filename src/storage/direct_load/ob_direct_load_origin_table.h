@@ -73,7 +73,8 @@ public:
   int scan(const blocksstable::ObDatumRange &key_range,
            common::ObIAllocator &allocator,
            ObDirectLoadOriginTableScanner *&row_iter,
-           bool skip_read_lob);
+           bool skip_read_lob,
+           bool skip_del_row);
   int get(const blocksstable::ObDatumRowkey &key,
           common::ObIAllocator &allocator,
           ObDirectLoadOriginTableGetter *&row_iter,
@@ -125,7 +126,7 @@ class ObDirectLoadOriginTableScanner final : public ObDirectLoadOriginTableAcces
 public:
   ObDirectLoadOriginTableScanner() = default;
   virtual ~ObDirectLoadOriginTableScanner() = default;
-  int init(ObDirectLoadOriginTable *table, bool skip_read_lob);
+  int init(ObDirectLoadOriginTable *table, bool skip_read_lob, bool skip_del_row);
   int open(const blocksstable::ObDatumRange &query_range);
   int get_next_row(const ObDirectLoadDatumRow *&datum_row) override;
 private:

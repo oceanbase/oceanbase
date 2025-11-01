@@ -220,5 +220,28 @@ void ObStorageSchemaUtil::free_storage_schema(
   }
 }
 
+int ObStorageSchemaUtil::alloc_cs_replica_storage_schema(
+    common::ObIAllocator &allocator,
+    const ObStorageSchema *storage_schema,
+    ObStorageSchema *&cs_replica_storage_schema)
+{
+  int ret = OB_SUCCESS;
+  cs_replica_storage_schema = nullptr;
+  if (OB_UNLIKELY(nullptr == storage_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("input storage schema is null", K(ret));
+  } else if (OB_FAIL(alloc_storage_schema(allocator,
+                                          cs_replica_storage_schema))) {
+    LOG_WARN("fail to allocate cs replica storage schema", K(ret));
+  } else if (OB_FAIL(cs_replica_storage_schema->init(allocator,
+                                                     *storage_schema,
+                                                     false/*skip_column_info*/,
+                                                     nullptr/*column_group_schema*/,
+                                                     true/*generate_cs_replica_cg_array*/))) {
+    LOG_WARN("fail to initialize cs replica storage schema", K(ret));
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

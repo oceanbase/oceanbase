@@ -45,6 +45,7 @@ public:
   virtual ~ObTableLoadRowProjector();
   int init(const share::schema::ObTableSchema *src_table_schema,
            const share::schema::ObTableSchema *dest_table_schema);
+  int init(const uint64_t src_table_id, const uint64_t dest_table_id);
   virtual int projector(const ObTabletID &src_tablet_id,
                         const storage::ObDirectLoadDatumRow &src_datum_row,
                         ObTabletID &dest_tablet_id,
@@ -94,6 +95,7 @@ protected:
   ObSEArray<bool, 16> main_table_rowkey_col_flag_;
   int64_t src_column_num_;
   int64_t dest_column_num_;
+  int64_t dest_rowkey_column_num_;
   int64_t lob_inrow_threshold_;
   bool index_has_lob_;
   bool is_inited_;

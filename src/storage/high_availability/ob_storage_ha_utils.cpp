@@ -21,6 +21,9 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "share/ob_io_device_helper.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/ddl/ob_direct_load_mgr_utils.h"
+#include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 
 using namespace oceanbase::share;
 
@@ -31,6 +34,7 @@ namespace storage
 
 ERRSIM_POINT_DEF(EN_TRANSFER_ALLOW_RETRY);
 ERRSIM_POINT_DEF(EN_CHECK_LOG_NEED_REBUILD);
+ERRSIM_POINT_DEF(EN_TRANSFER_INC_MAJOR_BACKFILL);
 
 int ObStorageHAUtils::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
@@ -1817,6 +1821,115 @@ int ObTransferUtils::get_ls_member_list(const share::ObLSID &ls_id, common::ObMe
     LOG_WARN("member list number is unexpected", K(ret), K(member_info), K(ls_id));
   } else if (OB_FAIL(member_list.deep_copy(member_info.member_list_))) {
     LOG_WARN("failed to copy member list", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ObTransferUtils::check_inc_major_backfill(
+    const share::ObLSID &ls_id,
+    const share::SCN &backfill_scn,
+    ObTableHandleV2 &table_handle,
+    bool &need_backfill,
+    bool &is_trans_abort)
+{
+  int ret = OB_SUCCESS;
+  need_backfill = true;
+  is_trans_abort = false;
+  ObSSTable *sstable = nullptr;
+  ObLSService *ls_svr = NULL;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  int64_t trans_state = ObTxData::MAX_STATE_CNT;
+  int64_t commit_version = -1;
+
+  if (!ls_id.is_valid() || !backfill_scn.is_valid() ||!table_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check inc major backfill get invalid argument", K(ret), K(ls_id), K(backfill_scn), K(table_handle));
+  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("ls_srv->get_ls() fail", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), K(ls_id));
+  } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
+    LOG_WARN("failed to get sstable", K(ret), K(table_handle));
+  } else if (!sstable->is_inc_major_type_sstable()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sstable is not inc major type sstable, unexpected", K(ret), K(table_handle), KPC(sstable));
+  } else if (INT64_MAX != sstable->get_upper_trans_version()) {
+    need_backfill = false;
+  } else if (OB_UNLIKELY(!sstable->is_loaded())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get tiny inc major unexpectedlly from iter", K(ret), KPC(sstable));
+  } else if (OB_FAIL(compaction::ObIncMajorTxHelper::get_inc_major_commit_version(*ls, *sstable, backfill_scn, trans_state, commit_version))) {
+    LOG_WARN("failed to get inc major's commit version", K(ret), KPC(sstable));
+  } else if (ObTxData::ABORT == trans_state) {
+    need_backfill = false;
+    is_trans_abort = true;
+    FLOG_INFO("meet abort inc major, ignore it", K(ret), K(commit_version), KPC(sstable));
+  } else if (ObTxData::COMMIT != trans_state) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc major trans state is not commit, unexpected", K(ret), K(trans_state));
+  } else {
+    need_backfill = true;
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = EN_TRANSFER_INC_MAJOR_BACKFILL ? : OB_SUCCESS;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      need_backfill = true;
+    }
+  }
+#endif
+
+  return ret;
+}
+
+int ObTransferUtils::check_ddl_merge_finished(
+    const ObTablet *tablet)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  bool ddl_need_merge = false;
+
+  // check major sstable exist
+  if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check ddl dump exist get invalid argument", K(ret), KP(tablet));
+  } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fetch table store fail", K(ret), KPC(tablet));
+  } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
+    //do nothing
+  } else if (OB_FAIL(ObDirectLoadMgrUtil::is_ddl_need_major_merge(*tablet, ddl_need_merge))) {
+    LOG_WARN("failed to check ddl need major merge", K(ret), K(tablet));
+  } else if (ddl_need_merge) {
+    ret = OB_MAJOR_SSTABLE_NOT_EXIST;
+    LOG_WARN("major sstable do not exit, need to wait ddl merge", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+  } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+    ret = OB_INVALID_TABLE_STORE;
+    LOG_WARN("neither major sstable nor ddl sstable exists", K(ret), KPC(tablet));
+  }
+
+  // check inc major merge finished
+  if (OB_SUCC(ret)) {
+    ObArray<ObDDLKVHandle> ddl_kvs;
+    if (!table_store_wrapper.get_member()->get_inc_major_ddl_sstables().empty()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tablet still has inc major ddl sstable, cannot transfer", K(ret), KPC(tablet));
+#ifdef OB_BUILD_SHARED_STORAGE
+    } else if (tablet->is_ss_tablet()) {
+      // do nothing
+#endif
+    } else if (OB_FAIL(ObIncDDLMergeTaskUtils::get_all_inc_major_ddl_kvs(tablet, ddl_kvs))) {
+      LOG_WARN("failed to get all inc major ddl kvs", K(ret), KPC(tablet));
+    } else if (!ddl_kvs.empty()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tablet still has inc major ddl kv, cannot transfer", K(ret), KPC(tablet), K(ddl_kvs));
+    }
   }
   return ret;
 }

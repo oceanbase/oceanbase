@@ -39,7 +39,7 @@ void FakeAllocatorForLobExtInfoLog::init_throttle_config(int64_t &resource_limit
   if (tenant_config.is_valid()) {
     resource_limit = total_memory * LIMIT_PERCENTAGE / 100;
     trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
-    max_duration = tenant_config->writing_throttling_maximum_duration;;
+    max_duration = tenant_config->writing_throttling_maximum_duration;
   } else {
     resource_limit = total_memory * LIMIT_PERCENTAGE / 100;
     trigger_percentage = THROTTLE_TRIGGER_PERCENTAGE;
@@ -73,7 +73,7 @@ void ObLobExtInfoLogAllocator::init_throttle_config(int64_t &resource_limit, int
   if (tenant_config.is_valid()) {
     resource_limit = total_memory * LIMIT_PERCENTAGE / 100;
     trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
-    max_duration = tenant_config->writing_throttling_maximum_duration;;
+    max_duration = tenant_config->writing_throttling_maximum_duration;
   } else {
     resource_limit = total_memory * LIMIT_PERCENTAGE / 100;
     trigger_percentage = THROTTLE_TRIGGER_PERCENTAGE;

@@ -64,6 +64,11 @@ int ObCGPrefetcher::init_tree_handles(const int64_t count)
       tree_handle_cap_ = count;
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_index_prefetch_depth(count))) {
+      LOG_WARN("init index prefetch depth failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -618,16 +623,16 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
     int32_t child_fetch_idx = (level == prefetcher.index_tree_height_ - 1) ?
         prefetcher.cur_micro_data_fetch_idx_ : prefetcher.tree_handles_[level + 1].fetch_idx_;
     for (; read_idx_ < fetch_idx_; read_idx_++) {
-      if (index_block_read_handles_[read_idx_ % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_ > child_fetch_idx) {
+      if (index_block_read_handles_[read_idx_ % max_index_prefetch_cnt_].end_prefetched_row_idx_ > child_fetch_idx) {
         break;
       }
     }
 
-    if (MAX_INDEX_PREFETCH_DEPTH == (prefetch_idx_ - read_idx_ + 1)) {
+    if (is_prefetch_full(level, prefetcher)) {
       // suspend current prefetch when no handle can be freed
     } else {
       ObIndexTreeLevelHandle &parent = prefetcher.tree_handles_[level - 1];
-      int8_t prefetch_idx = (prefetch_idx_ + 1) % MAX_INDEX_PREFETCH_DEPTH;
+      int8_t prefetch_idx = (prefetch_idx_ + 1) % max_index_prefetch_cnt_;
       ObMicroIndexInfo &index_info = index_block_read_handles_[prefetch_idx].index_info_;
       bool can_agg = false;
       if (OB_FAIL(parent.get_next_index_row(index_info, prefetcher))) {
@@ -694,7 +699,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::forward(
   } else {
     fetch_idx_++;
     index_scanner_.reuse();
-    int8_t fetch_idx = fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH;
+    int8_t fetch_idx = fetch_idx_ % max_index_prefetch_cnt_;
     ObMicroIndexInfo &index_info = index_block_read_handles_[fetch_idx].index_info_;
     ObCGPrefetcher &cg_prefetcher = static_cast<ObCGPrefetcher &>(prefetcher);
     ObDatumRange *query_range = &cg_prefetcher.query_range_;
@@ -723,7 +728,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::forward(
 
     if (OB_SUCC(ret) && 0 < fetch_idx_) {
       index_block_read_handles_[fetch_idx].end_prefetched_row_idx_ =
-          index_block_read_handles_[(fetch_idx_ - 1) % MAX_INDEX_PREFETCH_DEPTH].end_prefetched_row_idx_;
+          index_block_read_handles_[(fetch_idx_ - 1) % max_index_prefetch_cnt_].end_prefetched_row_idx_;
     }
   }
   return ret;
@@ -750,7 +755,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::locate_row_index(
     }
   } else {
     for (int32_t block_idx = read_idx_; block_idx <= prefetch_idx_; block_idx++) {
-      ObIndexBlockReadHandle &index_read_handle = index_block_read_handles_[block_idx % MAX_INDEX_PREFETCH_DEPTH];
+      ObIndexBlockReadHandle &index_read_handle = index_block_read_handles_[block_idx % max_index_prefetch_cnt_];
       index_read_handle.reuse();
       if (0 == index_read_handle.index_info_.get_row_range().compare(row_idx)) {
         read_idx_ = fetch_idx_ = block_idx;
@@ -761,7 +766,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::locate_row_index(
 
     if (found) {
       index_scanner_.reuse();
-      int8_t fetch_idx = fetch_idx_ % MAX_INDEX_PREFETCH_DEPTH;
+      int8_t fetch_idx = fetch_idx_ % max_index_prefetch_cnt_;
       ObMicroIndexInfo &index_info = index_block_read_handles_[fetch_idx].index_info_;
       ObDatumRange *query_range = &prefetcher.query_range_;
       if (index_info.is_leaf_block()) {

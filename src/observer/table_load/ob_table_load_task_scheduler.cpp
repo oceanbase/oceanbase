@@ -27,6 +27,15 @@ using namespace share;
 using namespace sql;
 using namespace storage;
 
+int ObTableLoadTaskThreadPoolScheduler::MyThreadPool::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pool_cond_.init(1/*default_event_id*/))) {
+    LOG_WARN("init pool condition failed", K(ret));
+  }
+  return ret;
+}
+
 void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
 {
   OB_ASSERT(OB_NOT_NULL(scheduler_));
@@ -35,11 +44,17 @@ void ObTableLoadTaskThreadPoolScheduler::MyThreadPool::run1()
   // 启动成功的线程数+1
   if (thread_count == ATOMIC_AAF(&running_thread_count_, 1)) {
     scheduler_->before_running();
+    ObThreadCondGuard guard(pool_cond_);
+    (void) pool_cond_.broadcast();
+  } else {
+    const int64_t DEFAULT_TIMEOUT_MS = 5000L; // 5s
+    ObThreadCondGuard guard(pool_cond_);
+    (void) pool_cond_.wait(DEFAULT_TIMEOUT_MS);
   }
   while (!has_set_stop()) {
     // 等待所有线程起来
     if (!scheduler_->is_running()) {
-      PAUSE();
+      usleep(100);
     } else {
       scheduler_->run(get_thread_idx());
       break;
@@ -110,6 +125,8 @@ int ObTableLoadTaskThreadPoolScheduler::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTaskThreadPoolScheduler init twice", KR(ret), KP(this));
+  } else if (OB_FAIL(thread_pool_.init())) {
+    LOG_WARN("init thread pool failed", K(ret));
   } else {
     thread_pool_.set_thread_count(thread_count_);
     thread_pool_.set_run_wrapper(MTL_CTX());

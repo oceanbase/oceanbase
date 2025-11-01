@@ -871,6 +871,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
         0/*cluster_version*/,
         tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
         transfer_epoch,
+        0/*concurrent_cnt*/,
         tablet->get_reorganization_scn(),
         sstable_param->table_key_.get_end_scn(),
         cg_schema,
@@ -981,7 +982,11 @@ int ObSSTableCopyFinishTask::get_merge_type_(
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (sstable_param->table_key_.is_minor_sstable()) {
     merge_type = ObMergeType::MINOR_MERGE;
+  } else if (sstable_param->table_key_.is_inc_major_type_sstable()) {
+    merge_type = ObMergeType::MAJOR_MERGE; // inc major and major has the same format, we should use major merge to init data store desc and index builder
   } else if (sstable_param->table_key_.is_ddl_dump_sstable()) {
+    merge_type = ObMergeType::MAJOR_MERGE;
+  } else if (sstable_param->table_key_.is_inc_major_ddl_dump_sstable()) {
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (sstable_param->table_key_.is_mds_sstable()) {
     merge_type = ObMergeType::MDS_MINI_MERGE;
@@ -1182,7 +1187,7 @@ int ObSSTableCopyFinishTask::get_space_optimization_mode_(
   if (OB_ISNULL(sstable_param)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sstable_param is null", K(ret));
-  } else if (sstable_param->table_key_.is_ddl_sstable()) {
+  } else if (sstable_param->table_key_.is_ddl_sstable() || sstable_param->table_key_.is_inc_major_ddl_sstable()) {
     mode = ObSSTableIndexBuilder::DISABLE;
   } else if (ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_)) {
     mode = ObSSTableIndexBuilder::DISABLE;

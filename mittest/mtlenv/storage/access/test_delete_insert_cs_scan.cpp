@@ -403,67 +403,47 @@ public:
   virtual int construct_iters() override
   {
     int ret = OB_SUCCESS;
-    if (OB_ISNULL(range_) || OB_ISNULL(di_base_range_)) {
+    if (OB_UNLIKELY((iters_.count() > 0 || get_di_base_iter_cnt() > 0)
+        && (iters_.count() + get_di_base_iter_cnt() != tables_.count()))) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "range or di_base_range is NULL", K(ret), KP(range_), KP(di_base_range_));
-    } else if (OB_UNLIKELY(iters_.count() > 0 && iters_.count() + di_base_iters_.count() != tables_.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
-          "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
-    } else if (tables_.count() > 0) {
-      STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                  K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(tables), KPC_(access_param));
-      ObITable *table = NULL;
-      ObStoreRowIterator *iter = NULL;
-      const ObTableIterParam *iter_param = NULL;
-      const bool use_cache_iter = iters_.count() > 0 || di_base_iters_.count() > 0; // rescan with the same iters and different range
+      STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret),
+          K(iters_.count()), K(get_di_base_iter_cnt()), K(tables_), KPC(di_base_sstable_row_scanner_));
+    }
 
-      if (access_param_->iter_param_.is_delete_insert_) {
-        if (OB_FAIL(tables_.at(0, table))) {  // only one di base iter currently
-          STORAGE_LOG(WARN, "Fail to get 0th store, ", K(ret), K_(tables));
-        } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Fail to get 0th access param", K(ret), KPC(table));
-        } else if (table->is_major_sstable()) {
-          if (!use_cache_iter) {
-            if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *di_base_range_, iter))) {
-              STORAGE_LOG(WARN, "Fail to get di base iterator", K(ret), KPC(table), K(*iter_param));
-            } else if (OB_FAIL(di_base_iters_.push_back(iter))) {
-              iter->~ObStoreRowIterator();
-              STORAGE_LOG(WARN, "Fail to push di base iter to di base iterator array", K(ret));
+    if (OB_SUCC(ret) && get_di_base_table_cnt() > 0) {
+      if (OB_FAIL(di_base_sstable_row_scanner_->construct_iters(false/*is_multi_scan*/))) {
+        STORAGE_LOG(WARN, "fail to construct di base iters", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < get_di_base_iter_cnt(); ++i) {
+          // suppose only row store
+          ObStoreRowIterator *iter = di_base_sstable_row_scanner_->get_di_base_iter(i);
+          ObCOSSTableRowScanner *sstable_scanner = static_cast<ObCOSSTableRowScanner *>(iter);
+          FOREACH_CNT_X(cg_iter, sstable_scanner->rows_filter_->filter_iters_, OB_SUCC(ret)) {
+            ObCGScanner *cg_scanner = static_cast<ObCGScanner *>(*cg_iter);
+            ObIMicroBlockRowScanner *micro_scanner = nullptr;
+            if (OB_FAIL(init_micro_scanner(cg_scanner->sstable_, micro_scanner))) {
+              STORAGE_LOG(WARN, "Failed to init micro scanner", K(ret));
+            } else {
+              cg_scanner->micro_scanner_ = micro_scanner;
             }
-          } else if (OB_ISNULL(iter = di_base_iters_.at(0))) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "Unexpected null di_base_iters_", K(ret), "idx", 0, K(di_base_iters_));
-          } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, di_base_range_))) {
-            STORAGE_LOG(WARN, "failed to init scan di_base_iters_", K(ret), "idx", 0);
-          }
-          if OB_SUCC(ret) {
-            ObCOSSTableRowScanner *sstable_scanner = static_cast<ObCOSSTableRowScanner *>(iter);
-            FOREACH_CNT_X(cg_iter, sstable_scanner->rows_filter_->filter_iters_, OB_SUCC(ret)) {
-              ObCGScanner *cg_scanner = static_cast<ObCGScanner *>(*cg_iter);
-              ObIMicroBlockRowScanner *micro_scanner = nullptr;
-              if (OB_FAIL(init_micro_scanner(cg_scanner->sstable_, micro_scanner))) {
-                STORAGE_LOG(WARN, "Failed to init micro scanner", K(ret));
-              } else {
-                cg_scanner->micro_scanner_ = micro_scanner;
-              }
-            }
-          }
-          if (OB_SUCC(ret)) {
-            STORAGE_LOG(DEBUG, "add di base iter for consumer", KPC(table));
           }
         }
       }
+    }
 
+    if (tables_.count() > get_di_base_table_cnt()) {
+      STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), KPC_(range),
+          K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param), KPC_(di_base_sstable_row_scanner));
+      ObITable *table = NULL;
+      ObStoreRowIterator *iter = NULL;
+      const ObTableIterParam *iter_param = NULL;
+      const bool use_cache_iter = iters_.count() > 0; // rescan with the same iters and different range
       consumer_cnt_ = 0;
-      int32_t di_base_cnt = di_base_iters_.count();
-      if (OB_FAIL(ret) || di_base_cnt == tables_.count()) {
-      } else if (OB_FAIL(set_rows_merger(tables_.count() - di_base_cnt))) {
-        STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(di_base_cnt), K(tables_));
+      if (OB_FAIL(set_rows_merger(tables_.count() - get_di_base_table_cnt()))) {
+        STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(get_di_base_table_cnt()), K(tables_));
       } else {
         const int64_t table_cnt = tables_.count() - 1;
-        for (int64_t i = table_cnt; OB_SUCC(ret) && i >= di_base_cnt; --i) {
+        for (int64_t i = table_cnt; OB_SUCC(ret) && i >= get_di_base_table_cnt(); --i) {
           if (OB_FAIL(tables_.at(i, table))) {
             STORAGE_LOG(WARN, "Fail to get ith store, ", K(ret), K(i), K_(tables));
           } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
@@ -483,7 +463,7 @@ public:
             STORAGE_LOG(WARN, "failed to init scan iter", K(ret), "idx", table_cnt - i);
           }
 
-          if OB_SUCC(ret) {
+          if (OB_SUCC(ret)) {
             ObIMicroBlockRowScanner *micro_scanner = nullptr;
             if (OB_FAIL(init_micro_scanner(static_cast<ObSSTable *>(table), micro_scanner))) {
               STORAGE_LOG(WARN, "Failed to init micro scanner", K(ret));
@@ -492,31 +472,17 @@ public:
               sstable_scanner->micro_scanner_ = micro_scanner;
             }
           }
+
           if (OB_SUCC(ret)) {
-            consumers_[consumer_cnt_++] = i - di_base_cnt;
+            consumers_[consumer_cnt_++] = i - get_di_base_table_cnt();
             STORAGE_LOG(DEBUG, "add iter for consumer", K(i), KPC(table));
           }
         }
       }
-
-      if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan()) {
-        if (ScanState::DI_BASE == scan_state_) {
-          if (OB_FAIL(get_di_base_iter()->refresh_blockscan_checker(curr_rowkey_))) {
-            STORAGE_LOG(WARN, "Failed to refresh di base blockscan checker", K(ret), K(curr_rowkey_));
-          }
-        } else if (0 == consumer_cnt_ && 0 < di_base_iters_.count()) {
-          if (OB_FAIL(prepare_di_base_blockscan(true))) {
-            STORAGE_LOG(WARN, "Failed to prepare di base blockscan", K(ret));
-          } else {
-            scan_state_ = ScanState::DI_BASE;
-          }
-        } else if (consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter()) {
-          if (OB_FAIL(locate_blockscan_border())) {
-            STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(iters_.count()), K(di_base_iters_.count()), K_(tables));
-          }
-        }
-      }
-      STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(di_base_iters_.count()));
+      STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(get_di_base_table_cnt()));
+    }
+    if (FAILEDx(prepare_blockscan_after_construct_iters())) {
+      STORAGE_LOG(WARN, "failed to prepare blockscan after construct iters", K(ret));
     }
     return ret;
   }
@@ -899,6 +865,17 @@ void TestDeleteInsertCSScan::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
 }
 
+int create_cg_sstables(ObCOTabletMergeCtx &ctx, const int64_t start_cg_idx, const int64_t end_cg_idx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = start_cg_idx; OB_SUCC(ret) && i < end_cg_idx; ++i) {
+    if (OB_FAIL(ctx.create_cg_sstable(i))) {
+      LOG_WARN("failed to create cg sstable", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
 int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, ObTableHandleV2 &co_store)
 {
   int ret = OB_SUCCESS;
@@ -917,9 +894,10 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
   trans_version_range.base_version_ = 1;
   //prepare merge_ctx
   TestMergeBasic::prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
-  merge_context.static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_COLUMN_STORE_MERGE;
+  merge_context.static_param_.co_static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
   merge_context.static_param_.data_version_ = DATA_VERSION_4_3_0_0;
   merge_context.static_param_.dag_param_.merge_version_ = trans_version_range.snapshot_version_;
+  int32_t base_cg_idx = -1;
   if (OB_FAIL(merge_context.cal_merge_param())) {
     STORAGE_LOG(WARN, "Fail to cal merge param", K(ret));
   } else if (OB_FAIL(merge_context.init_parallel_merge_ctx())) {
@@ -935,15 +913,20 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
     STORAGE_LOG(WARN, "Fail to init tablet merge info", K(ret));
   } else if (OB_FAIL(merge_context.prepare_index_builder(0, cg_cnt))) {
     STORAGE_LOG(WARN, "Fail to prepare index builder", K(ret));
+  } else if (OB_FAIL(merge_context.get_schema()->get_base_rowkey_column_group_index(base_cg_idx))) {
+    STORAGE_LOG(WARN, "Fail to get base rowkey column group index", K(ret));
+  } else if (OB_FAIL(merge_context.static_param_.init_co_merge_flags())) {
+    STORAGE_LOG(WARN, "Fail to init co merge flags", K(ret));
   } else {
+    merge_context.base_rowkey_cg_idx_ = base_cg_idx;
     ObCOMergeDagParam *dag_param = static_cast<ObCOMergeDagParam *>(&merge_context.static_param_.dag_param_);
-    dag_param->start_cg_idx_ = 0;
-    dag_param->end_cg_idx_ = cg_cnt;
     dag_param->compat_mode_ = lib::Worker::CompatMode::MYSQL;
-    ObCOMerger merger(local_arena_, merge_context.static_param_, 0, cg_cnt);
-    if (OB_FAIL(merger.merge_partition(merge_context, 0))) {
-      STORAGE_LOG(WARN, "Fail to merge partition", K(ret));
-    } else if (OB_FAIL(merge_context.create_sstables(0, cg_cnt))) {
+    ObCOMergeLogReplayer replayer(local_arena_, merge_context.static_param_, 0, cg_cnt, true);
+    if (OB_FAIL(replayer.init(merge_context, 0))) {
+      STORAGE_LOG(WARN, "Fail to init replayer", K(ret));
+    } else if (OB_FAIL(replayer.replay_merge_log())) {
+      STORAGE_LOG(WARN, "Fail to replay merge log", K(ret));
+    } else if (OB_FAIL(create_cg_sstables(merge_context, 0, cg_cnt))) {
       STORAGE_LOG(WARN, "Fail to create sstable", K(ret));
     } else if (OB_UNLIKELY(cg_cnt != merge_context.merged_cg_tables_handle_.get_count())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2332,14 +2315,11 @@ TEST_F(TestDeleteInsertCSScan, test_refresh_table)
       total_count += count;
       STORAGE_LOG(INFO, "get next rows", K(count), K(total_count));
 
-      ObStoreRowIterator *iter = scan_merge.get_di_base_iter();
+      ObStoreRowIterator *iter = scan_merge.di_base_sstable_row_scanner_->di_base_iters_.at(0);
       int64_t di_base_curr_scan_index = -1;
       blocksstable::ObDatumRowkey di_base_curr_rowkey;
-      blocksstable::ObDatumRowkey di_base_border_rowkey;
-      if (OB_FAIL(iter->get_next_rowkey(false,
-                                        di_base_curr_scan_index,
+      if (OB_FAIL(iter->get_next_rowkey(di_base_curr_scan_index,
                                         di_base_curr_rowkey,
-                                        di_base_border_rowkey,
                                         *context_.allocator_))) {
         LOG_WARN("Failed to get di base rowkey", K(ret));
         ret = OB_SUCCESS;
@@ -2535,7 +2515,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
 int main(int argc, char **argv)
 {
   system("rm -rf test_delete_insert_cs_scan.log*");
-  OB_LOGGER.set_file_name("test_delete_insert_cs_scan.log");
+  OB_LOGGER.set_file_name("test_delete_insert_cs_scan.log", true);
   OB_LOGGER.set_log_level("INFO");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

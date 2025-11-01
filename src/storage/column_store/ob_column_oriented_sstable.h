@@ -53,6 +53,7 @@ public:
   TO_STRING_KV(KPC_(sstable), K_(meta_handle));
 private:
   friend class ObCOSSTableV2;
+  friend class ObIncMajorDDLAggregateCOSSTable;
   ObStorageMetaHandle meta_handle_; // keep the lifetime of cg sstable
   blocksstable::ObSSTable *sstable_;
 };
@@ -181,11 +182,11 @@ public:
         && key_.column_group_idx_ < cs_meta_.column_group_cnt_;
   }
   int64_t get_data_checksum() const override;
-  int fetch_cg_sstable(
+  virtual int fetch_cg_sstable(
       const uint32_t cg_idx,
       ObSSTableWrapper &cg_wrapper) const;
-  int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
-  int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
+  virtual int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
+  virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
 
   virtual int64_t get_serialize_size(const uint64_t data_version) const override;
   virtual int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const override;

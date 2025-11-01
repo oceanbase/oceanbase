@@ -124,6 +124,7 @@ public:
   void set_retryable_ddl(const bool flag) { ddl_info_.set_retryable_ddl(flag); }
   void set_is_dummy_ddl_for_inner_visibility(const bool flag) { ddl_info_.set_is_dummy_ddl_for_inner_visibility(flag); }
   void set_major_refreshing_mview(const bool flag) { ddl_info_.set_major_refreshing_mview(flag); }
+  void set_is_vec_tablet_rebuild(const bool flag) { ddl_info_.set_is_vec_tablet_rebuild(flag); }
 
   bool is_ddl() const { return ddl_info_.is_ddl(); }
   bool is_source_table_hidden() const { return ddl_info_.is_source_table_hidden(); }
@@ -135,6 +136,7 @@ public:
   bool is_retryable_ddl() const { return ddl_info_.is_retryable_ddl(); }
   bool is_dummy_ddl_for_inner_visibility() const { return ddl_info_.is_dummy_ddl_for_inner_visibility(); }
   bool is_major_refreshing_mview() const { return ddl_info_.is_major_refreshing_mview(); }
+  bool is_vec_tablet_rebuild() const { return ddl_info_.is_vec_tablet_rebuild(); }
   inline uint64_t get_session_id() const { return session_id_;}
   inline void reset() { session_id_ = OB_INVALID_ID;
                         ddl_info_.reset();}

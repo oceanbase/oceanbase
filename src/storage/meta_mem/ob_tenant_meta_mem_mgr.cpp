@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/slog_ckpt/ob_tenant_slog_checkpoint_util.h"
+#include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 
 namespace oceanbase
 {
@@ -1052,6 +1053,10 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
         cur_recycle_end_scn = MIN(cur_recycle_end_scn, minor_sstables.at(i)->get_end_scn());
         break;
       }
+    }
+    if (OB_FAIL(storage::ObIncDDLMergeTaskUtils::calculate_tx_data_recycle_scn(
+                table_store_wrapper, contain_uncommitted_row, cur_recycle_end_scn))) {
+      LOG_WARN("fail to calculate tx data recycle scn", KR(ret), K(table_store_wrapper));
     }
 
     if (contain_uncommitted_row) {

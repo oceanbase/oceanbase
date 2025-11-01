@@ -422,8 +422,9 @@ int ObDDLServerClient::wait_task_reach_pending(
         uint64_t unused_target_object_id = 0;
         int64_t unused_schema_version = 0;
         share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
+        bool unused_is_offline_index_rebuild = false;
         if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, data_format_version,
-            snapshot_version, task_status, unused_target_object_id, unused_schema_version, is_no_logging))) {
+            snapshot_version, task_status, unused_target_object_id, unused_schema_version, is_no_logging, unused_is_offline_index_rebuild))) {
           if (OB_LIKELY(OB_ENTRY_NOT_EXIST == ret)) {
             ret = OB_ENTRY_NOT_EXIST;
             ObAddr unused_addr;

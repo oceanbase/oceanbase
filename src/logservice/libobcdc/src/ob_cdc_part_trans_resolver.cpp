@@ -509,6 +509,13 @@ int ObCDCPartTransResolver::read_trans_log_(
       }
       break;
     }
+    case transaction::ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG:
+    {
+      if (OB_FAIL(handle_direct_log_inc_major_log_(tx_id, lsn, handling_miss_log))) {
+        LOG_ERROR("handle_direct_log_inc_major_log_ failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(tx_log_header));
+      }
+      break;
+    }
     case transaction::ObTxLogType::TX_ABORT_LOG:
     {
       if (OB_FAIL(handle_abort_(tx_id, handling_miss_log, tx_log_block))) {
@@ -666,6 +673,24 @@ int ObCDCPartTransResolver::handle_direct_load_inc_log_(
     }
   }
 
+  return ret;
+}
+
+int ObCDCPartTransResolver::handle_direct_log_inc_major_log_(
+    const transaction::ObTransID &tx_id,
+    const palf::LSN &lsn,
+    const bool handling_miss_log)
+{
+  int ret = OB_SUCCESS;
+  PartTransTask *task = NULL;
+  if (OB_FAIL(obtain_task_(tx_id, task, handling_miss_log))) {
+    LOG_ERROR("obtain_task_ fail", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(handling_miss_log));
+  } else if (OB_FAIL(push_fetched_log_entry_(lsn, *task))) {
+    LOG_ERROR("push_fetched_log_entry into part_trans_task failed", KR(ret), K_(tls_id), K(tx_id), K(lsn),
+        K(handling_miss_log), KPC(task));
+  } else {
+    LOG_DEBUG("handle_direct_log_inc_major_log", K_(tls_id), K(tx_id), K(lsn), K(handling_miss_log), KPC(task));
+  }
   return ret;
 }
 

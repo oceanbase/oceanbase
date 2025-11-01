@@ -64,9 +64,11 @@ public:
     const int64_t cluster_version,
     const compaction::ObExecMode exec_mode,
     const bool micro_index_clustered,
+    const int64_t concurrent_cnt,
     const share::SCN &reorganization_scn,
     const bool need_submit_io = true,
-    const uint64_t encoding_granularity = 0);
+    const uint64_t encoding_granularity = 0,
+    const bool is_inc_major = false);
   bool is_valid() const;
   void reset();
   int assign(const ObStaticDataStoreDesc &desc);
@@ -74,11 +76,13 @@ public:
       K_(ls_id),
       K_(tablet_id),
       K_(private_transfer_epoch),
+      K_(concurrent_cnt),
       "merge_type", merge_type_to_str(merge_type_),
       K_(snapshot_version),
       K_(end_scn),
       "exec_mode", exec_mode_to_str(exec_mode_),
       K_(is_ddl),
+      K_(is_inc_major),
       K_(compressor_type),
       K_(macro_block_size),
       K_(macro_store_size),
@@ -106,11 +110,13 @@ private:
   bool operator==(const ObStaticDataStoreDesc &other) const; // for unittest
 public:
   bool is_ddl_; // only used to print ERROR or WARN log
+  bool is_inc_major_;
   compaction::ObMergeType merge_type_;
   ObCompressorType compressor_type_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int32_t private_transfer_epoch_;
+  int64_t concurrent_cnt_;
   int64_t macro_block_size_;
   int64_t macro_store_size_; //macro_block_size_ * reserved_percent
   int64_t micro_block_size_limit_;
@@ -227,6 +233,10 @@ public:
     is_force_flat_store_type_ = true;
   }
   bool is_store_type_valid() const;
+  OB_INLINE bool is_for_sstable_data() const
+  {
+    return ObMacroBlockCommonHeader::SSTableData == data_store_type_;
+  }
   OB_INLINE bool is_for_index_or_meta() const
   {
     return data_store_type_ == ObMacroBlockCommonHeader::SSTableIndex ||
@@ -306,11 +316,13 @@ public:
   STATIC_DESC_FUNC(int64_t, master_key_id);
   STATIC_DESC_FUNC(share::SCN, end_scn);
   STATIC_DESC_FUNC(bool, is_ddl);
+  STATIC_DESC_FUNC(bool, is_inc_major);
   STATIC_DESC_FUNC(ObCompressorType, compressor_type);
   STATIC_DESC_FUNC(int64_t, major_working_cluster_version);
   STATIC_DESC_FUNC(const char *, encrypt_key);
   STATIC_DESC_FUNC(compaction::ObExecMode, exec_mode);
   STATIC_DESC_FUNC(bool, need_submit_io);
+  STATIC_DESC_FUNC(int64_t, concurrent_cnt);
   STATIC_DESC_FUNC(share::SCN, reorganization_scn);
   STATIC_DESC_FUNC(bool, is_delete_insert_table);
   COL_DESC_FUNC(bool, is_row_store);
@@ -401,13 +413,15 @@ struct ObWholeDataStoreDesc
     const int64_t snapshot_version,
     const int64_t cluster_version,
     const bool micro_index_clustered,
-    const int32_t tablet_transfer_epoch,
+    const int32_t private_transfer_epoch,
+    const int64_t concurrent_cnt,
     const share::SCN &reorganization_scn,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0,
     const compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL,
-    const bool need_submit_io = true);
+    const bool need_submit_io = true,
+    const bool is_inc_major = false);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);
   int assign(const ObWholeDataStoreDesc &desc);

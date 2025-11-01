@@ -27,6 +27,7 @@
 #include "ob_table_access_context.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/lob/ob_lob_data_reader.h"
+#include "storage/access/ob_di_base_sstable_row_scanner.h"
 
 namespace oceanbase
 {
@@ -70,14 +71,12 @@ public:
   OB_INLINE bool is_read_memtable_only() const { return read_memtable_only_; }
   OB_INLINE const common::ObIArray<share::schema::ObColDesc> &get_out_project_cells() { return out_project_cols_; }
   OB_INLINE ObNopPos &get_nop_pos() { return nop_pos_; }
-  OB_INLINE bool use_di_merge_scan() const { return di_base_iters_.count() > 0; }
   OB_INLINE void set_iter_del_row(const bool iter_del_row) { iter_del_row_ = iter_del_row; }
-  OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || use_di_merge_scan(); }
+  OB_INLINE bool need_iter_del_row() const { return iter_del_row_ || get_di_base_table_cnt() > 0; }
   OB_INLINE blocksstable::ObDatumRow &get_unprojected_row() { return unprojected_row_; }
 
   INHERIT_TO_STRING_KV("ObQueryRowIterator", ObQueryRowIterator, K_(scan_cnt),
-                       K_(range_idx_delta), K_(curr_scan_index),
-                       K_(di_base_curr_scan_index), K_(major_table_version),
+                       K_(range_idx_delta), K_(curr_scan_index), K_(major_table_version),
                        K_(need_padding), K_(need_fill_default),
                        K_(need_output_row_with_nop), K_(inited),
                        K_(iter_del_row), K_(read_memtable_only),
@@ -87,13 +86,12 @@ protected:
   int open();
   virtual int calc_scan_range() = 0;
   virtual int construct_iters() = 0;
-  virtual int is_range_valid() const = 0;
   virtual OB_INLINE int prepare() { return common::OB_SUCCESS; }
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row) = 0;
   virtual int inner_get_next_rows() { return OB_SUCCESS; };
   virtual int can_batch_scan(bool &can_batch) { can_batch = false; return OB_SUCCESS; }
   virtual int64_t generate_read_tables_version() const;
-  virtual bool check_table_need_read(const ObITable &table, int64_t &major_version) const;
+  virtual int check_table_need_read(const ObITable *table, bool &need_table) const;
   virtual int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param);
   int add_iterator(ObStoreRowIterator &iter); // for unit test
   const ObTableIterParam * get_actual_iter_param(const ObITable *table) const;
@@ -107,11 +105,12 @@ protected:
   int handle_4377(const char* func);
   void dump_tx_statistic_for_4377(ObStoreCtx *store_ctx);
   void dump_table_statistic_for_4377();
-  void set_base_version() const;
-  ObStoreRowIterator *get_di_base_iter() { return di_base_iters_.count() > 0 ? di_base_iters_[0] : nullptr; }
-  int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
+  OB_INLINE void set_base_version() const;
   virtual int get_range_count() const { return 1; }
   int check_final_result(const ObNopPos &nop_pos, bool &final_result);
+  OB_INLINE bool use_di_merge_scan() const { return nullptr != di_base_sstable_row_scanner_ && access_param_->iter_param_.is_delete_insert_; }
+  OB_INLINE int64_t get_di_base_iter_cnt() const { return use_di_merge_scan() ? di_base_sstable_row_scanner_->get_di_base_iter_cnt() : 0; }
+  OB_INLINE int64_t get_di_base_table_cnt() const { return use_di_merge_scan() ? di_base_sstable_row_scanner_->get_di_base_table_cnt() : 0; }
 private:
   int get_next_normal_row(blocksstable::ObDatumRow *&row);
   int get_next_normal_rows(int64_t &count, int64_t capacity);
@@ -129,10 +128,9 @@ private:
   int prepare_tables_from_iterator(ObTableStoreIterator &table_iter, const bool has_split_extra_tables, const common::SampleInfo *sample_info = nullptr);
   int refresh_table_on_demand();
   int refresh_tablet_iter();
-  OB_INLINE int check_need_refresh_table(bool &need_refresh);
+  OB_INLINE int check_need_refresh_table(bool &need_refresh, bool &need_retry);
   int save_curr_rowkey();
   int reset_tables();
-  int check_base_version(const bool is_di_merge_scan) const;
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
   int process_fuse_row(const bool not_using_static_engine,
                        blocksstable::ObDatumRow &in_row,
@@ -141,31 +139,32 @@ private:
   int init_lob_reader(const ObTableIterParam &iter_param,
                      ObTableAccessContext &access_ctx);
   int read_lob_columns_full_data(blocksstable::ObDatumRow &row);
-  bool need_handle_lob_columns(const blocksstable::ObDatumRow &row);
+  OB_INLINE bool need_handle_lob_columns(const blocksstable::ObDatumRow &row);
   int handle_lob_before_fuse_row();
-  void reuse_lob_locator();
+  OB_INLINE void reuse_lob_locator();
   void report_tablet_stat();
   int update_and_report_tablet_stat();
   void inner_reset();
   int refresh_filter_params_on_demand(const bool is_open);
   int prepare_truncate_filter();
+  int init_di_base_sstable_row_scanner();
+
+public:
+  const static int64_t RETRY_QUERY_THRESHOLD_NS = 1 * 1000 * 1000 * 1000L; // 1s
 
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
-  MergeIterators di_base_iters_;
   ObTableAccessParam *access_param_;
   ObTableAccessContext *access_ctx_;
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
   blocksstable::ObDatumRow cur_row_;
   blocksstable::ObDatumRow unprojected_row_;
   blocksstable::ObDatumRowkey curr_rowkey_;
-  blocksstable::ObDatumRowkey di_base_curr_rowkey_;
   ObNopPos nop_pos_;
   int64_t scan_cnt_;
   int64_t range_idx_delta_;
   int64_t curr_scan_index_;
-  int64_t di_base_curr_scan_index_;
   int64_t major_table_version_;
   bool need_padding_;
   bool need_fill_default_; // disabled by join mv scan
@@ -191,27 +190,57 @@ protected:
     DI_BASE,
   };
   ScanState scan_state_;
+  ObDIBaseSSTableRowScanner *di_base_sstable_row_scanner_;
+  int64_t start_time_ns_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleMerge);
 };
 
-OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
+OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh, bool &need_retry)
 {
   int ret = OB_SUCCESS;
-
-  if (access_param_->iter_param_.is_mds_query_) {
-    need_refresh = false;
-  } else {
-    need_refresh = get_table_param_->tablet_iter_.table_iter()->check_store_expire();
-  }
+  int tmp_ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
-  if (OB_FAIL(ret)) {
-    ret = OB_SUCCESS;
-    need_refresh = true;
-  }
+  tmp_ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) OB_SUCCESS;
 #endif
+  need_refresh = false;
+  need_retry = false;
+  if (get_table_param_->sample_info_.is_block_sample() ||
+      get_table_param_->sample_info_.is_ddl_block_sample() ||
+      (nullptr != block_row_store_ && !block_row_store_->can_refresh())) {
+    // TODO : @yuanzhe refactor block sample for table refresh
+    STORAGE_LOG(DEBUG, "skip refresh table for block sample, aggregated in prefetch or group by pushdown",
+        K(get_table_param_->sample_info_.is_block_sample()), K(get_table_param_->sample_info_.is_ddl_block_sample()), KPC(block_row_store_));
+  } else if (access_param_->iter_param_.is_mds_query_) {
+    // skip refresh table for mds query
+  } else if (get_table_param_->tablet_iter_.table_iter()->check_store_expire() || OB_SUCCESS != tmp_ret) {
+    if (get_di_base_iter_cnt() > 1) {
+      // TODO: zhanghuidong.zhd, support refresh table for multiple di base tables
+      if (0 == start_time_ns_) {
+        start_time_ns_ = common::ObTimeUtility::current_time_ns();
+      } else if (common::ObTimeUtility::current_time_ns() - start_time_ns_ > RETRY_QUERY_THRESHOLD_NS) {
+        need_retry = true;
+      }
+    } else if (ScanState::NONE == scan_state_) {
+      STORAGE_LOG(DEBUG, "skip refresh table");
+    } else if (ScanState::SINGLE_ROW == scan_state_) {
+      if (is_unprojected_row_valid_) {
+        need_refresh = true;
+      }
+    } else if (ScanState::BATCH == scan_state_) {
+      STORAGE_LOG(TRACE, "in vectorize batch scan, do refresh at next time",
+                  "tablet_id", access_param_->iter_param_.tablet_id_);
+      if (OB_NOT_NULL(block_row_store_)) {
+        block_row_store_->disable();
+      }
+    } else if (ScanState::DI_BASE == scan_state_) {
+      need_refresh = true;
+    } else {
+      ret = OB_ERR_UNSUPPORTED_TYPE;
+      STORAGE_LOG(WARN, "unsupported scan state", K(ret), K(scan_state_));
+    }
+  }
 
   return ret;
 }

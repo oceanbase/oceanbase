@@ -446,6 +446,7 @@ public:
       common::ObTabletID &delta_buf_tid,
       common::ObTabletID &index_id_tid,
       common::ObTabletID &snapshot_tid,
+      common::ObTabletID &embedded_tid,
       common::ObTabletID &com_aux_vec_tid,
       common::ObTabletID &rowkey_vid_tid,
       common::ObTabletID &vid_rowkey_tid);

@@ -2661,6 +2661,11 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
       if (OB_FAIL(dli_log_op(ObTxLogOpType::APPLY_SUCC))) {
         TRANS_LOG(WARN, "try to apply direct load inc log failed", K(ret), KPC(this));
       }
+    } else if (ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG == log_type) {
+      ObTxCtxLogOperator<ObTxDirectLoadIncMajorLog> dli_log_op(this, log_cb);
+      if (OB_FAIL(dli_log_op(ObTxLogOpType::APPLY_SUCC))) {
+        TRANS_LOG(WARN, "try to apply direct load inc major log failed", K(ret), KPC(this));
+      }
     } else if (ObTxLogType::TX_BIG_SEGMENT_LOG == log_type) {
       remove_unsynced_segment_cb_(log_cb->get_log_ts());
     } else if (ObTxLogType::TX_ACTIVE_INFO_LOG == log_type) {
@@ -2988,6 +2993,12 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
       }
       if (ObTxLogType::TX_DIRECT_LOAD_INC_LOG == log_type) {
         ObTxCtxLogOperator<ObTxDirectLoadIncLog> dli_log_op(this, log_cb);
+        if (OB_FAIL(dli_log_op(ObTxLogOpType::APPLY_FAIL))) {
+          TRANS_LOG(WARN, "try to apply direct load inc log failed", K(ret), KPC(this));
+        }
+      }
+      if (ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG == log_type) {
+        ObTxCtxLogOperator<ObTxDirectLoadIncMajorLog> dli_log_op(this, log_cb);
         if (OB_FAIL(dli_log_op(ObTxLogOpType::APPLY_FAIL))) {
           TRANS_LOG(WARN, "try to apply direct load inc log failed", K(ret), KPC(this));
         }
@@ -4188,9 +4199,9 @@ int ObPartTransCtx::submit_record_log_()
   return ret;
 }
 
-template <typename DLI_LOG>
+template <typename DLI_INC_TX_LOG_TYPE, typename DDL_LOG_TYPE>
 int ObPartTransCtx::submit_direct_load_inc_log_(
-    DLI_LOG &dli_log,
+    DDL_LOG_TYPE &dli_log,
     const ObTxDirectLoadIncLog::DirectLoadIncLogType dli_log_type,
     const ObDDLIncLogBasic &batch_key,
     logservice::AppendCb *extra_cb,
@@ -4217,7 +4228,7 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
   submit_arg.base_scn_ = share::SCN::min_scn();
   submit_arg.suggested_buf_size_ = dli_log.get_serialize_size() + 200;
 
-  ObTxCtxLogOperator<ObTxDirectLoadIncLog> dli_log_op(this, &log_block, &construct_arg, submit_arg);
+  ObTxCtxLogOperator<DLI_INC_TX_LOG_TYPE> dli_log_op(this, &log_block, &construct_arg, submit_arg);
   if (OB_FAIL(dli_buf.serialize_log_object(&dli_log))) {
     TRANS_LOG(WARN, "serialize direct load log failed", K(ret), K(dli_log), K(replay_hint),
               KPC(this));
@@ -4243,7 +4254,8 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
 int ObPartTransCtx::submit_direct_load_inc_redo_log(storage::ObDDLRedoLog &ddl_redo_log,
                                                     logservice::AppendCb *extra_cb,
                                                     const int64_t replay_hint,
-                                                    share::SCN &scn)
+                                                    share::SCN &scn,
+                                                    bool is_major)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("ObPartTransCtx::submit_direct_load_inc_redo_log",
@@ -4252,8 +4264,12 @@ int ObPartTransCtx::submit_direct_load_inc_redo_log(storage::ObDDLRedoLog &ddl_r
   if (OB_FAIL(check_status_())) {
     TRANS_LOG(WARN, "check tx status before submitting dli log", K(ret), K(ddl_redo_log),
               KPC(this));
+  } else if (is_major) {
+    ret = submit_direct_load_inc_log_<ObTxDirectLoadIncMajorLog, storage::ObDDLRedoLog>(
+        ddl_redo_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO, inc_log_basic, extra_cb,
+        logservice::ObReplayBarrierType::NO_NEED_BARRIER, replay_hint, scn);
   } else {
-    ret = submit_direct_load_inc_log_(
+    ret = submit_direct_load_inc_log_<ObTxDirectLoadIncLog, storage::ObDDLRedoLog>(
         ddl_redo_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO, inc_log_basic, extra_cb,
         logservice::ObReplayBarrierType::NO_NEED_BARRIER, replay_hint, scn);
   }
@@ -4262,7 +4278,8 @@ int ObPartTransCtx::submit_direct_load_inc_redo_log(storage::ObDDLRedoLog &ddl_r
 
 int ObPartTransCtx::submit_direct_load_inc_start_log(storage::ObDDLIncStartLog &ddl_start_log,
                                                      logservice::AppendCb *extra_cb,
-                                                     share::SCN &scn)
+                                                     share::SCN &scn,
+                                                     bool is_major)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("ObPartTransCtx::submit_direct_load_inc_start_log",
@@ -4271,8 +4288,12 @@ int ObPartTransCtx::submit_direct_load_inc_start_log(storage::ObDDLIncStartLog &
   if (OB_FAIL(check_status_())) {
     TRANS_LOG(WARN, "check tx status before submitting dli log", K(ret), K(ddl_start_log),
               KPC(this));
+  } else if (is_major) {
+      ret = submit_direct_load_inc_log_<ObTxDirectLoadIncMajorLog, storage::ObDDLIncStartLog>(
+          ddl_start_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_START, inc_log_basic,
+        extra_cb, logservice::ObReplayBarrierType::STRICT_BARRIER, get_trans_id().get_id(), scn);
   } else {
-    ret = submit_direct_load_inc_log_(
+    ret = submit_direct_load_inc_log_<ObTxDirectLoadIncLog, storage::ObDDLIncStartLog>(
         ddl_start_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_START, inc_log_basic,
         extra_cb, logservice::ObReplayBarrierType::STRICT_BARRIER, get_trans_id().get_id(), scn);
   }
@@ -4282,7 +4303,8 @@ int ObPartTransCtx::submit_direct_load_inc_start_log(storage::ObDDLIncStartLog &
 int ObPartTransCtx::submit_direct_load_inc_commit_log(storage::ObDDLIncCommitLog &ddl_commit_log,
                                                       logservice::AppendCb *extra_cb,
                                                       share::SCN &scn,
-                                                      bool need_free_extra_cb)
+                                                      bool need_free_extra_cb,
+                                                      bool is_major)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("ObPartTransCtx::submit_direct_load_inc_commit_log",
@@ -4291,8 +4313,13 @@ int ObPartTransCtx::submit_direct_load_inc_commit_log(storage::ObDDLIncCommitLog
   if (OB_FAIL(check_status_())) {
     TRANS_LOG(WARN, "check tx status before submitting dli log", K(ret), K(ddl_commit_log),
               KPC(this));
+  } else if (is_major) {
+    ret = submit_direct_load_inc_log_<ObTxDirectLoadIncMajorLog, storage::ObDDLIncCommitLog>(
+        ddl_commit_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END, inc_log_basic,
+        extra_cb, logservice::ObReplayBarrierType::STRICT_BARRIER, get_trans_id().get_id(), scn,
+        need_free_extra_cb);
   } else {
-    ret = submit_direct_load_inc_log_(
+    ret = submit_direct_load_inc_log_<ObTxDirectLoadIncLog, storage::ObDDLIncCommitLog>(
         ddl_commit_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END, inc_log_basic,
         extra_cb, logservice::ObReplayBarrierType::STRICT_BARRIER, get_trans_id().get_id(), scn,
         need_free_extra_cb);
@@ -4313,7 +4340,8 @@ int ObPartTransCtx::check_dli_batch_completed_(ObTxLogType submit_log_type)
 
     ObTxDirectLoadBatchKeyArray unused_batch_key_array;
     for (ObDLIBatchSet::iterator iter = exec_info_.dli_batch_set_.begin();
-         iter != exec_info_.dli_batch_set_.end(); iter++) {
+         iter != exec_info_.dli_batch_set_.end() && OB_SUCC(ret); iter++) {
+      tmp_ret = OB_SUCCESS;
       if (iter->first.need_compensate_ddl_end()) {
         TRANS_LOG(DEBUG, "<ObTxDirectLoadIncLog> need compensate ddl end log", K(ret), K(tmp_ret),
                   K(submit_log_type), K(trans_id_), K(ls_id_), K(iter->first));
@@ -4326,41 +4354,68 @@ int ObPartTransCtx::check_dli_batch_completed_(ObTxLogType submit_log_type)
 
           share::SCN submitted_scn;
           if (OB_ISNULL(extra_cb)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            TRANS_LOG(WARN, "alloc memory failed", K(ret), K(ls_id_), K(trans_id_),
+            tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
+            TRANS_LOG(WARN, "alloc memory failed", K(ret), K(tmp_ret), K(ls_id_), K(trans_id_),
                       K(submit_log_type));
           } else {
             new (extra_cb) ObDDLIncCommitClogCb();
           }
 
-          if (OB_TMP_FAIL(ret)) {
+          if (OB_TMP_FAIL(tmp_ret)) {
             // do nothing
-          } else if (OB_TMP_FAIL(extra_cb->init(ls_id_, iter->first.get_batch_key()))) {
-            TRANS_LOG(WARN, "init extra cb failed", K(ret), K(iter->first), K(trans_id_),
-                      K(ls_id_));
-            extra_cb->~ObDDLIncCommitClogCb();
-            mtl_free(extra_cb);
-          } else if (OB_TMP_FAIL(inc_commit_log.init(iter->first.get_batch_key()))) {
+          } else if (OB_TMP_FAIL(inc_commit_log.init(iter->first.get_batch_key(), true /*is_rollback*/))) {
             TRANS_LOG(WARN, "init inc commit log failed", K(ret), K(inc_commit_log), K(iter->first),
                       K(trans_id_), K(ls_id_));
             extra_cb->~ObDDLIncCommitClogCb();
             mtl_free(extra_cb);
-          } else if (OB_TMP_FAIL(
-                       submit_direct_load_inc_log_(inc_commit_log,
-                                                   ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END,
-                                                   iter->first.get_batch_key(),
-                                                   extra_cb,
-                                                   logservice::ObReplayBarrierType::STRICT_BARRIER,
-                                                   get_trans_id().get_id(),
-                                                   submitted_scn,
-                                                   true))) {
-            if (tmp_ret != OB_TX_NOLOGCB) {
-              TRANS_LOG(WARN, "submit direct load inc commit log failed", K(ret), K(inc_commit_log),
-                        KPC(extra_cb), K(submitted_scn), K(trans_id_), K(ls_id_));
-            }
+          } else if (OB_TMP_FAIL(extra_cb->init(ls_id_, inc_commit_log))) {
+            TRANS_LOG(WARN, "init extra cb failed", K(ret), K(iter->first), K(trans_id_),
+                      K(ls_id_), K(inc_commit_log));
             extra_cb->~ObDDLIncCommitClogCb();
             mtl_free(extra_cb);
-          } else {}
+          } else if (iter->first.is_major()) {
+            tmp_ret =
+                submit_direct_load_inc_log_<ObTxDirectLoadIncMajorLog, storage::ObDDLIncCommitLog>(
+                    inc_commit_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END,
+                    iter->first.get_batch_key(), extra_cb,
+                    logservice::ObReplayBarrierType::STRICT_BARRIER, trans_id_.get_id(),
+                    submitted_scn, true);
+            if (OB_TMP_FAIL(tmp_ret)) {
+              if (tmp_ret != OB_TX_NOLOGCB) {
+                TRANS_LOG(WARN, "submit direct load inc major commit log failed", K(ret),
+                          K(inc_commit_log), KPC(extra_cb), K(submitted_scn), K(trans_id_),
+                          K(ls_id_), K(iter->first));
+              }
+              extra_cb->~ObDDLIncCommitClogCb();
+              mtl_free(extra_cb);
+            }
+          } else {
+            tmp_ret = submit_direct_load_inc_log_<ObTxDirectLoadIncLog, storage::ObDDLIncCommitLog>(
+                inc_commit_log, ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_END,
+                iter->first.get_batch_key(), extra_cb,
+                logservice::ObReplayBarrierType::STRICT_BARRIER, trans_id_.get_id(), submitted_scn,
+                true);
+            if (OB_TMP_FAIL(tmp_ret)) {
+              if (tmp_ret != OB_TX_NOLOGCB) {
+                TRANS_LOG(WARN, "submit direct load inc commit log failed", K(ret),
+                          K(inc_commit_log), KPC(extra_cb), K(submitted_scn), K(trans_id_),
+                          K(ls_id_), K(iter->first));
+              }
+              extra_cb->~ObDDLIncCommitClogCb();
+              mtl_free(extra_cb);
+            }
+          }
+
+          // } else if (OB_TMP_FAIL(submit_direct_load_inc_commit_log(
+          //                inc_commit_log, extra_cb, submitted_scn, true, iter->first.is_major()))) {
+          //   if (tmp_ret != OB_TX_NOLOGCB) {
+          //     TRANS_LOG(WARN, "submit direct load inc commit log failed", K(ret), K(inc_commit_log),
+          //               KPC(extra_cb), K(submitted_scn), K(trans_id_), K(ls_id_), K(iter->first));
+          //   }
+          //   extra_cb->~ObDDLIncCommitClogCb();
+          //   mtl_free(extra_cb);
+          // } else {
+          // }
         }
 
         if (OB_TMP_FAIL(tmp_ret)) {
@@ -4377,7 +4432,7 @@ int ObPartTransCtx::check_dli_batch_completed_(ObTxLogType submit_log_type)
       } else if (iter->first.is_ddl_end_logging()) {
         TRANS_LOG(INFO, "the DDL inc end is logging", K(ret), K(tmp_ret), K(iter->first),
                   K(trans_id_), K(ls_id_));
-      } else if (OB_TMP_FAIL(unused_batch_key_array.push_back(iter->first.get_batch_key()))) {
+      } else if (OB_TMP_FAIL(unused_batch_key_array.push_back(iter->first))) {
         TRANS_LOG(WARN, "push back unused batch key failed", K(ret), K(tmp_ret), K(submit_log_type),
                   K(trans_id_), K(ls_id_), K(iter->first));
       } else {

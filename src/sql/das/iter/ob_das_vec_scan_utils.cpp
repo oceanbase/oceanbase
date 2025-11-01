@@ -241,6 +241,53 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
   return ret;
 }
 
+int ObDasVecScanUtils::init_sort_of_hybrid_index(ObIAllocator &allocator,
+                                                 const ObDASVecAuxScanCtDef *ir_ctdef,
+                                                 const ObDASSortCtDef *sort_ctdef,
+                                                 ObDASSortRtDef *sort_rtdef,
+                                                 ObString &hybrid_search_vec,
+                                                 ObExpr *&distance_calc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sort_ctdef) || OB_ISNULL(sort_rtdef) || OB_ISNULL(ir_ctdef) || OB_ISNULL(sort_rtdef->eval_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null sort def", K(ret), KPC(sort_rtdef), KPC(sort_ctdef), KPC(ir_ctdef));
+  } else {
+    for (int i = 0; i < sort_ctdef->sort_exprs_.count() && OB_SUCC(ret) && hybrid_search_vec.empty(); ++i) {
+      ObExpr *expr = sort_ctdef->sort_exprs_.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr ptr", K(ret));
+      } else if (expr->is_semantic_distance_expr()) {
+        distance_calc = expr;
+        ObString query_str;
+        ObExpr *query_str_expr = nullptr;
+        if (expr->arg_cnt_ != 2) {
+          ret = OB_ERR_PARAM_SIZE;
+          LOG_WARN("unexpected arg num", K(ret), K(expr->arg_cnt_));
+        } else if (!expr->args_[ARGS_IDX_ZERO]->is_const_expr() && !expr->args_[ARGS_IDX_ONE]->is_const_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("semantic_distance expr args are not string type", K(ret), KPC(expr->args_[ARGS_IDX_ZERO]), KPC(expr->args_[ARGS_IDX_ONE]));
+        } else if (FALSE_IT(query_str_expr = expr->args_[ARGS_IDX_ZERO]->is_const_expr() ? expr->args_[ARGS_IDX_ZERO] : expr->args_[ARGS_IDX_ONE])) {
+        } else if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(allocator, sort_rtdef, query_str_expr, query_str))) {
+          LOG_WARN("failed to get real search vec", K(ret));
+        } else {
+          if (expr->is_semantic_vector_distance_expr()) {
+            if (OB_FAIL(ObVectorIndexUtil::get_vector_from_vector_array_string(allocator, query_str, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
+              LOG_WARN("failed to get vector from query text", K(ret), KPC(expr));
+            }
+          } else {
+            if (OB_FAIL(ObVectorIndexUtil::get_vector_from_text_by_embedding(allocator, query_str, ir_ctdef->vec_index_param_, hybrid_search_vec))) {
+              LOG_WARN("failed to get vector from query text", K(ret), KPC(expr));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDasVecScanUtils::init_sort(const ObDASVecAuxScanCtDef *ir_ctdef,
                                  ObDASVecAuxScanRtDef *ir_rtdef,
                                  const ObDASSortCtDef *sort_ctdef,

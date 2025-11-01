@@ -52,10 +52,8 @@ public:
   virtual bool can_blockscan() const override;
   virtual bool can_batch_scan() const override;
   OB_INLINE bool is_di_base_iter() { return is_di_base_iter_; }
-  virtual int get_next_rowkey(const bool need_set_border_rowkey,
-                              int64_t &curr_scan_index,
+  virtual int get_next_rowkey(int64_t &curr_scan_index,
                               blocksstable::ObDatumRowkey& rowkey,
-                              blocksstable::ObDatumRowkey &border_rowkey,
                               common::ObIAllocator &allocator) final;
   OB_INLINE bool is_end_of_scan() const
   {
@@ -75,6 +73,12 @@ protected:
   virtual int inner_get_next_row(const ObDatumRow *&store_row) override;
   virtual int fetch_row(ObSSTableReadHandle &read_handle, const ObDatumRow *&store_row);
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey) override final;
+  virtual int get_blockscan_border_rowkey(blocksstable::ObDatumRowkey &border_rowkey) override final
+  {
+    int ret = OB_SUCCESS;
+    border_rowkey = prefetcher_.get_border_rowkey();
+    return ret;
+  }
   virtual int get_next_rows() override;
   // for column store
   int get_blockscan_start(ObCSRowId &start, int32_t &range_idx, BlockScanState &block_scan_state);

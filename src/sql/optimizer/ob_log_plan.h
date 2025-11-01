@@ -1813,7 +1813,8 @@ public:
   int prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                     const ObTableSchema &table_schema,
                                     const uint64_t& vec_col_id,
-                                    ObLogTableScan *table_scan);
+                                    ObLogTableScan *table_scan,
+                                    bool is_hybrid);
 
   int prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                     const ObTableSchema &table_schema,

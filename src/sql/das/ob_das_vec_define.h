@@ -96,7 +96,9 @@ public:
   int64_t get_snapshot_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
   int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
   int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
+  int64_t get_embedded_tbl_idx() const { return use_rowkey_vid_tbl_ ? ObVecAuxTableIdx::SIXTH_VEC_AUX_TBL_IDX : ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
   const ObVectorIndexParam& get_vec_index_param() const { return vector_index_param_; }
+
   int64_t get_functial_lookup_idx() const { return children_cnt_ - 1; }
 
   // IVF
@@ -158,7 +160,8 @@ public:
                        K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count),
                        K_(extra_column_count), K_(vector_index_param), K_(vec_query_param),
                        K_(vector_index_param), K_(adaptive_try_path), K_(is_multi_value_index),
-                       K_(is_spatial_index), K_(can_extract_range));
+                       K_(is_spatial_index), K_(can_extract_range), K_(is_hybrid),
+                       K_(all_filters_can_be_picked_out), K_(use_rowkey_vid_tbl));
 
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;

@@ -66,7 +66,7 @@ int64_t ObLogicMacroBlockId::hash() const
   hash_val = common::murmurhash(&macro_data_seq, sizeof(macro_data_seq), hash_val);
   hash_val = common::murmurhash(&logic_version_, sizeof(logic_version_), hash_val);
   hash_val = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_val);
-  hash_val = common::murmurhash(&info_, sizeof(uint16_t), hash_val);
+  hash_val = common::murmurhash(&info_, sizeof(info_), hash_val);
   return hash_val;
 }
 

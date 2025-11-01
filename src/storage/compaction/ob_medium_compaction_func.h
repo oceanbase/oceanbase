@@ -95,6 +95,14 @@ public:
     const ObStorageSchema &storage_schema,
     const uint64_t data_version,
     bool &is_schema_changed);
+  static int check_if_table_schema_changed(
+    const ObSSTable &major_sstable,
+    const int64_t major_column_count,
+    const common::ObRowStoreType major_row_store_type,
+    const common::ObCompressorType major_compressor_type,
+    const ObStorageSchema &storage_schema,
+    const uint64_t data_version,
+    bool &is_schema_changed);
 #ifdef OB_BUILD_SHARED_STORAGE
   // medium compaction is not considered
   int try_skip_merge_for_ss(
@@ -193,7 +201,7 @@ protected:
     int64_t &schema_version);
   int get_adaptive_reason(const int64_t schedule_major_snapshot);
   int fill_mds_filter_info(ObMediumCompactionInfo &medium_info);
-  static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60L * 1000L * 1000L; // 60s
+  static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60_s;
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w
   static const int64_t RECYCLE_TRUNCATE_INFO_INTERVAL = 2 * 60 * 1000L * 1000L * 1000L;

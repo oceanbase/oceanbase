@@ -14,6 +14,7 @@
 
 #include "storage/direct_load/ob_direct_load_i_merge_task.h"
 #include "storage/direct_load/ob_direct_load_lob_meta_row_iter.h"
+#include "storage/ddl/ob_tablet_slice_row_iterator.h"
 
 namespace oceanbase
 {
@@ -34,11 +35,12 @@ public:
            const int64_t parallel_idx);
   int process() override;
   void stop() override;
+  int init_iterator(ObITabletSliceRowIterator *&row_iterator) override;
   ObDirectLoadTabletMergeCtx *get_merge_ctx() override { return merge_ctx_; }
   TO_STRING_KV(KP_(merge_ctx), K_(sstable_array), KPC_(range), K_(data_seq), K_(parallel_idx));
 
 private:
-  class RowIterator : public ObIStoreRowIterator
+  class RowIterator : public ObITabletSliceRowIterator
   {
   public:
     RowIterator();
@@ -47,9 +49,17 @@ private:
              const ObDirectLoadTableDataDesc &table_data_desc,
              const ObDirectLoadTableHandleArray &sstable_array,
              const blocksstable::ObDatumRange &range, int64_t parallel_idx);
-    int get_next_row(const blocksstable::ObDatumRow *&result_row) override;
+    int get_next_row(const blocksstable::ObDatumRow *&row) override;
+    int get_next_batch(const blocksstable::ObBatchDatumRows *&datum_rows) override
+    {
+      return OB_NOT_SUPPORTED;
+    }
+    int64_t get_slice_idx() const override { return parallel_idx_; }
+    ObTabletID get_tablet_id() const override { return tablet_id_; }
 
   private:
+    ObTabletID tablet_id_;
+    int64_t parallel_idx_;
     ObDirectLoadLobMetaRowIter lob_iter_;
     blocksstable::ObDatumRow datum_row_;
     bool is_inited_;

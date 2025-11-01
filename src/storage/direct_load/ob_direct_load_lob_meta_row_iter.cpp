@@ -192,7 +192,7 @@ int ObDirectLoadLobMetaRowIter::switch_next_lob_id()
       LOG_WARN("fail to prepare memtable readable", KR(ret), K(range_));
     } else {
       if (nullptr == origin_scanner_) {
-        if (OB_FAIL(origin_table_->scan(range_, allocator_, origin_scanner_, true /*skip_read_lob*/))) {
+        if (OB_FAIL(origin_table_->scan(range_, allocator_, origin_scanner_, true /*skip_read_lob*/, true /*skip_del_row*/))) {
           LOG_WARN("fail to scan origin table", KR(ret));
         }
       } else {

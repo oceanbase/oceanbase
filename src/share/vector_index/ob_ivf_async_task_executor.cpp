@@ -102,7 +102,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
       }
     }
     // release memory when fail
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || !inc_new_task) {
       if (OB_NOT_NULL(task_ctx)) {
         task_ctx->~ObVecIndexAsyncTaskCtx();
         allocator->free(task_ctx);  // arena need free

@@ -33,6 +33,7 @@ struct ObTableLoadStoreTrans
   {
     return trans_ctx_->trans_id_;
   }
+  ObTableLoadTransStore *get_trans_store() { return trans_store_; }
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }

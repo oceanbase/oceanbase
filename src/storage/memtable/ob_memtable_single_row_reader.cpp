@@ -358,6 +358,16 @@ int ObMemtableSingleRowReader::fill_in_next_row_by_value_iter_(const ObMemtableK
     if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *value_iter, next_row, bitmap_, next_row_scn))) {
       STORAGE_LOG(WARN, "iterate_row fail", K(ret), K(*rowkey), KP(value_iter));
     } else {
+      /* scan should not return rows with row_scn <= base_version,
+      *  rows in memtable which have row_scn <= base_version may overwrite rows in inc major sstables with greater row_scn
+      *  MAJOR      EMPTY    (version 100)
+      *  INC_MAJOR  INSERT 1 (version 110)
+      *  MEMTABLE   DELETE 1 (version 90)
+      */
+      if (context_->is_inc_major_query_ && next_row_scn <= context_->trans_version_range_.base_version_) {
+        next_row.row_flag_.reset();
+        next_row.row_flag_.set_flag(DF_NOT_EXIST);
+      }
       acquired_row_cnt = 1;
     }
   }

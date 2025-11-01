@@ -33,6 +33,7 @@ ObDirectLoadInsertTableRowIterator::ObDirectLoadInsertTableRowIterator()
     row_iters_(nullptr),
     dml_row_handler_(nullptr),
     job_stat_(nullptr),
+    is_delete_full_row_(false),
     rowkey_column_count_(0),
     column_count_(0),
     pos_(0),
@@ -47,7 +48,8 @@ int ObDirectLoadInsertTableRowIterator::init(
   ObDirectLoadInsertTabletContext *insert_tablet_ctx,
   const ObIArray<ObDirectLoadIStoreRowIterator *> &row_iters,
   ObDirectLoadDMLRowHandler *dml_row_handler,
-  ObLoadDataStat *job_stat)
+  ObLoadDataStat *job_stat,
+  bool is_delete_full_row)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -84,6 +86,7 @@ int ObDirectLoadInsertTableRowIterator::init(
       job_stat_ = job_stat;
       rowkey_column_count_ = insert_tablet_ctx->get_rowkey_column_count();
       column_count_ = insert_tablet_ctx->get_column_count();
+      is_delete_full_row_ = is_delete_full_row;
       is_inited_ = true;
     }
   }
@@ -162,7 +165,8 @@ int ObDirectLoadInsertTableRowIterator::inner_get_next_row(ObDatumRow *&result_r
           }
         }
         // normal cols
-        if (OB_SUCC(ret) && !datum_row->is_delete_) {
+        if (OB_SUCC(ret) &&
+            (is_delete_full_row_ || !datum_row->is_delete_)) {
           for (int64_t
                  i = row_iter->get_row_flag().uncontain_hidden_pk_ ? 0 : rowkey_column_count_,
                  j = rowkey_column_count_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();

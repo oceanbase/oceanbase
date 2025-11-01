@@ -11013,6 +11013,18 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     }
   }
 
+  // fill embedded_vec expr
+  if (OB_SUCC(ret) && OB_NOT_NULL(column_schema) && column_schema->is_hybrid_embedded_vec_column()) {
+    bool need_fill = false;
+    if (OB_FAIL(check_need_fill_embedded_vec_expr_param(*stmt, *column_schema, need_fill))) {
+      LOG_WARN("fail to check need fill embedded_vec expr param", K(ret), KPC(column_schema), KPC(ref_expr));
+    } else if (need_fill) {
+      if (OB_FAIL(fill_embedded_vec_expr_param(table_item.table_id_, table_item.ref_id_, basic_column_item->column_id_, table_schema, ref_expr, stmt))) {
+        LOG_WARN("fail to fill embedded vec expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
+      }
+    }
+  }
+
   int64_t var_array_idx = OB_INVALID_INDEX_INT64;
   ObLocalSessionVar local_vars(allocator_);
   if (OB_SUCC(ret)) {
@@ -13807,6 +13819,8 @@ int ObDMLResolver::resolve_sample_clause(const ParseNode *sample_node,
         sample_info.method_ = SampleInfo::BLOCK_SAMPLE;
       } else if (sample_node->children_[METHOD]->value_ == 3) {
         sample_info.method_ = SampleInfo::HYBRID_SAMPLE;
+      } else if (4 == sample_node->children_[METHOD]->value_) {
+        sample_info.method_ = SampleInfo::DDL_BLOCK_SAMPLE;
       } else {
         sample_info.method_ = SampleInfo::ROW_SAMPLE;
       }
@@ -20517,6 +20531,92 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   return ret;
 }
 
+int ObDMLResolver::fill_embedded_vec_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const uint64_t column_id,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&embedded_vec_expr,
+    ObDMLStmt *stmt /* = NULL */)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == stmt) {
+    stmt = get_stmt();
+  }
+  uint64_t embedded_vec_tid = index_tid;
+  ObVectorIndexParam param;
+  bool param_filled = false;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(embedded_vec_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(embedded_vec_expr));
+  } else if (OB_UNLIKELY(index_tid != table_schema->get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index table id", K(ret), K(index_tid), K(table_schema->get_table_id()));
+  } else if (OB_UNLIKELY(T_FUN_SYS_EMBEDDED_VEC != embedded_vec_expr->get_expr_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not embedded vec expr", K(ret), "expr type", embedded_vec_expr->get_expr_type());
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", KP_(session_info), KP_(params_.expr_factory), KP(stmt));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_param(schema_checker_->get_schema_guard(),
+                                                               *table_schema,
+                                                               column_id,
+                                                               param,
+                                                               param_filled))) {
+    LOG_WARN("failed to get vector index param", K(ret));
+  } else if (table_schema->is_user_table() && OB_FAIL(ObVectorIndexUtil::check_hybrid_embedded_vec_table_readable(schema_checker_->get_schema_guard(), *table_schema, embedded_vec_tid, true))) {
+    LOG_WARN("not embedded vec expr", K(ret), "expr type", embedded_vec_expr->get_expr_type());
+  } else if (OB_INVALID_ID == embedded_vec_tid) {
+    // do nothing, skip the embedded vec column
+  } else {
+    ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(embedded_vec_expr);
+    ObConstRawExpr *data_expr = nullptr;
+    ObConstRawExpr *model_expr = nullptr;
+    ObConstRawExpr *url_expr = nullptr;
+    ObConstRawExpr *user_key_expr = nullptr;
+    ObConstRawExpr *sync_mode_expr = nullptr;
+    ObConstRawExpr *calc_dim_expr = nullptr;
+    ObString data_str = "data";
+    ObString model_name = param.endpoint_;
+    ObString url_str = "url_str";
+    ObString user_key = "user_key";
+    ObString sync_model = param.sync_interval_type_ == ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE ? "IMMEDIATE" : "";
+    if (OB_FAIL(expr->extend_param_exprs(6))) {
+      LOG_WARN("failed to extend param exprs", K(ret));
+    } else {
+      // TODO(shancai): constuct expr params, when ai function is ready
+    }
+    // add params
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_, ObVarcharType, model_name, ObCharset::get_default_collation(ObCharset::get_default_charset()), model_expr))) {
+      LOG_WARN("failed to build const table_id expr", K(ret), K(model_expr));
+    } else if (OB_FAIL(expr->add_param_expr(model_expr))) {
+      LOG_WARN("fail to replace param expr", K(ret), KP(model_expr));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_, ObVarcharType, url_str, ObCharset::get_default_collation(ObCharset::get_default_charset()), url_expr))) {
+      LOG_WARN("failed to build const table_id expr", K(ret), K(url_expr));
+    } else if (OB_FAIL(expr->add_param_expr(url_expr))) {
+      LOG_WARN("fail to replace param expr", K(ret), KP(url_expr));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_, ObVarcharType, user_key, ObCharset::get_default_collation(ObCharset::get_default_charset()), user_key_expr))) {
+      LOG_WARN("failed to build const table_id expr", K(ret), K(user_key_expr));
+    } else if (OB_FAIL(expr->add_param_expr(user_key_expr))) {
+      LOG_WARN("fail to replace param expr", K(ret), KP(user_key_expr));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_, ObVarcharType, sync_model, ObCharset::get_default_collation(ObCharset::get_default_charset()), sync_mode_expr))) {
+      LOG_WARN("failed to build const table_id expr", K(ret), K(sync_mode_expr));
+    } else if (OB_FAIL(expr->add_param_expr(sync_mode_expr))) {
+      LOG_WARN("fail to replace param expr", K(ret), KP(sync_mode_expr));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*params_.expr_factory_, ObIntType, param.dim_, calc_dim_expr))) {
+      LOG_WARN("failed to build const table_id expr", K(ret), K(calc_dim_expr));
+    } else if (OB_FAIL(expr->add_param_expr(calc_dim_expr))) {
+      LOG_WARN("fail to replace param expr", K(ret), KP(calc_dim_expr));
+    } else if (OB_FAIL(expr->formalize(session_info_))) {
+      LOG_WARN("fail to formalize", K(ret), KP(session_info_));
+    }
+  }
+  LOG_DEBUG("The dml resolver fills embedded vec expr parameter", K(ret), K(table_id), K(index_tid), K(embedded_vec_tid),
+      KPC(embedded_vec_expr), KPC(table_schema));
+  return ret;
+}
+
 int ObDMLResolver::fill_hidden_clustering_key_expr_param(
   const uint64_t table_id,
   const uint64_t index_tid,
@@ -21488,7 +21588,7 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
       } else if (OB_ISNULL(ddl_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl table schema is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_));
-      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(ddl_table_schema)) {
+      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(ddl_table_schema, col_schema)) {
         need_column_ref_expr = false;
       }
     }
@@ -21568,6 +21668,27 @@ int ObDMLResolver::get_ivf_index_type_if_ddl(const ObDMLStmt &stmt, bool &is_ddl
         LOG_WARN("ddl table schema is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_));
       } else {
         index_type = ddl_table_schema->get_index_type();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_need_fill_embedded_vec_expr_param(const ObDMLStmt &stmt,
+                                                           const ObColumnSchemaV2 &column_schema,
+                                                           bool &need_fill)
+{
+  int ret = OB_SUCCESS;
+  need_fill = false;
+  if (column_schema.is_hybrid_embedded_vec_column()) {
+    need_fill = true;
+    // is ddl task, need_fill set false
+    if (stmt.is_insert_stmt()) {
+      if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is nullptr", K(ret));
+      } else if (session_info_->get_ddl_info().is_ddl()) {
+        need_fill = false;
       }
     }
   }

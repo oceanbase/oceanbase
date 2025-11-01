@@ -2336,7 +2336,9 @@ public:
            get_expr_type() == T_FUN_SYS_L2_SQUARED ||
            get_expr_type() == T_FUN_SYS_INNER_PRODUCT ||
            get_expr_type() == T_FUN_SYS_NEGATIVE_INNER_PRODUCT ||
-           get_expr_type() == T_FUN_SYS_COSINE_DISTANCE; }
+           get_expr_type() == T_FUN_SYS_COSINE_DISTANCE ||
+           get_expr_type() == T_FUN_SYS_SEMANTIC_DISTANCE ||
+           get_expr_type() == T_FUN_SYS_SEMANTIC_VECTOR_DISTANCE; }
   PartitionIdCalcType get_partition_id_calc_type() const { return partition_id_calc_type_; }
   void set_may_add_interval_part(MayAddIntervalPart flag) {
     may_add_interval_part_ = flag;
@@ -3284,12 +3286,17 @@ public:
   inline bool is_vec_index_column() const {return share::schema::ObSchemaUtils::is_vec_index_column(column_flags_);}
   inline bool is_vec_cid_column() const { return share::schema::ObSchemaUtils::is_vec_ivf_center_id_column(column_flags_); }
   inline bool is_vec_pq_cids_column() const { return share::schema::ObSchemaUtils::is_vec_ivf_pq_center_ids_column(column_flags_); }
+  inline bool is_hybrid_embedded_vec_column() const {
+    return get_column_name().prefix_match(OB_HYBRID_VEC_EMBEDDED_VECTOR_COLUMN_NAME_PREFIX) &&
+           share::schema::ObSchemaUtils::is_vec_hnsw_vector_column(column_flags_);
+  }
   inline bool is_domain_id_column() const
   {
     return share::schema::ObSchemaUtils::is_doc_id_column(column_flags_) ||
            share::schema::ObSchemaUtils::is_vec_hnsw_vid_column(column_flags_) ||
            share::schema::ObSchemaUtils::is_vec_ivf_center_id_column(column_flags_) ||
-           share::schema::ObSchemaUtils::is_vec_ivf_pq_center_ids_column(column_flags_);
+           share::schema::ObSchemaUtils::is_vec_ivf_pq_center_ids_column(column_flags_) ||
+           is_hybrid_embedded_vec_column();
   }
   inline bool is_word_segment_column() const { return column_name_.prefix_match(OB_WORD_SEGMENT_COLUMN_NAME_PREFIX); }
   inline bool is_word_count_column() const { return column_name_.prefix_match(OB_WORD_COUNT_COLUMN_NAME_PREFIX); }

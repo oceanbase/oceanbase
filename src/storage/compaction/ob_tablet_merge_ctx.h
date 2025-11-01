@@ -58,9 +58,8 @@ public:
   virtual int create_sstable(const blocksstable::ObSSTable *&new_sstable) override;
   virtual int collect_running_info() override;
   const ObSSTableMergeHistory &get_merge_history() { return merge_info_.get_merge_history(); }
-  virtual int update_block_info(
-    const ObMergeBlockInfo &block_info,
-    const int64_t cost_time) override;
+  void update_block_info(const ObMergeBlockInfo &block_info, const int64_t cost_time);
+  void update_block_info_with_sstable_block_info(const ObMergeBlockInfo &block_info, const int64_t cost_time, ObIArray<ObSSTableMergeBlockInfo> &array);
   INHERIT_TO_STRING_KV("ObBasicTabletMergeCtx", ObBasicTabletMergeCtx, K_(merge_info));
   storage::ObTableHandleV2 merged_table_handle_;
   ObTabletMergeInfo merge_info_;

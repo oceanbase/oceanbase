@@ -76,13 +76,16 @@ private:
       const common::ObIArray<storage::ObSSTableWrapper> &minor_sstable_array);
   static int check_tablet_ddl_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
       const common::ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array);
+  static int check_tablet_inc_major_ddl_sstable_validity_(
+      const storage::ObTabletHandle &tablet_handle,
+      const common::ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array);
   static int get_ls_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
   static int fetch_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &leader_addr, common::ObIArray<common::ObAddr> &addr_list);
 private:
   static int fetch_sys_tablet_sstables_(const storage::ObTabletHandle &tablet_handle,
       const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
-  static int fetch_minor_and_ddl_sstables_(const storage::ObTabletHandle &tablet_handle,
+  static int fetch_incremental_sstables_(const storage::ObTabletHandle &tablet_handle,
       const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   static int fetch_major_sstables_(const storage::ObTabletHandle &tablet_handle,
       const storage::ObTabletTableStore &tablet_table_store, const bool is_major_compaction_mview_dep_tablet,

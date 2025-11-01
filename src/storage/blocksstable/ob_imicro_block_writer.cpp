@@ -55,6 +55,25 @@ void ObMicroBlockDesc::reset()
   is_first_row_first_flag_ = false;
 }
 
+/**
+ * Check if the header in ObMicroBlockDesc points to a complete micro block memory
+ * @param micro_block_desc The micro block descriptor to check
+ * @return true if the header points to complete micro block memory, false otherwise
+ */
+bool ObMicroBlockDesc::is_complete_micro_block_memory() const
+{
+  bool is_complete = false;
+  const char *header_buf = get_block_buf();
+  const char *micro_data_buf = nullptr;
+  if (OB_ISNULL(header_buf) || OB_ISNULL(buf_)) {
+    is_complete = false;
+  } else if (FALSE_IT(micro_data_buf = header_buf + header_->header_size_)) {
+  } else if (micro_data_buf == buf_) {
+    is_complete = true;
+  }
+  return is_complete;
+}
+
 int ObMicroBlockDesc::deep_copy(
     common::ObIAllocator& allocator,
     ObMicroBlockDesc& dst) const

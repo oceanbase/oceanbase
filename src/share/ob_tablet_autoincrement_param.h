@@ -102,6 +102,7 @@ public:
   : tablet_id_(tablet_id), cache_size_(cache_size), task_id_(-1), next_value_(0), start_(0), end_(0)
   {}
   ~ObTabletCacheInterval() {}
+  void reset();
 
   TO_STRING_KV(K_(tablet_id), K_(start), K_(end), K_(cache_size), K_(next_value), K_(task_id));
   void set(uint64_t start, uint64_t end);

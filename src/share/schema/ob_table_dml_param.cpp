@@ -189,7 +189,11 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
           multivalue_arr_col_id_ = column_schema->get_column_id();
         }
       }
-    } else if (schema->is_vec_delta_buffer_type() || schema->is_vec_rowkey_vid_type() || schema->is_vec_vid_rowkey_type()) {
+    } else if (schema->is_vec_delta_buffer_type()
+              || schema->is_vec_rowkey_vid_type()
+              || schema->is_vec_vid_rowkey_type()
+              || schema->is_hybrid_vec_index_log_type()
+              || schema->is_hybrid_vec_index_embedded_type()) {
       if (schema->is_vec_delta_buffer_type()) {
         if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
           LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
@@ -199,6 +203,19 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(vec_dim_), KPC(schema));
         }
+      } else if (schema->is_hybrid_vec_index_embedded_type()) {
+        if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
+          LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
+        } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*schema, vec_dim_))) {
+          LOG_WARN("fail to get vector col dim", K(ret));
+        } else if (vec_dim_ == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(vec_dim_), KPC(schema));
+        }
+      } else if (schema->is_hybrid_vec_index_log_type()) {
+        if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
+          LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
+        }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
         const ObColumnSchemaV2 *column_schema = schema->get_column_schema_by_idx(i);
@@ -207,11 +224,21 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
         } else if (column_schema->is_vec_hnsw_vid_column()) {
-          vec_id_col_id_ = col_id;
+          vec_id_col_id_ = column_schema->get_column_id();
+        } else if (column_schema->is_hybrid_embedded_vec_column()) {
+          vec_embedded_col_id_ = column_schema->get_column_id();
         } else if (schema->is_vec_delta_buffer_type()) {
           if (column_schema->is_vec_hnsw_vector_column()) {
             vec_vector_col_id_ = col_id;
-          } else if (column_schema->is_hidden_pk_column_id(col_id)) {
+          }
+        } else if (schema->is_hybrid_vec_index_log_type()) {
+          if (column_schema->get_column_name_str().prefix_match(OB_HYBRID_VEC_CHUNK_VALUE_COLUMN_NAME_PREFIX)) {
+            vec_chunk_col_id_ = column_schema->get_column_id();
+          }
+        }
+        if (OB_SUCC(ret) && (schema->is_vec_delta_buffer_type() || schema->is_hybrid_vec_index_log_type()
+                              || schema->is_hybrid_vec_index_embedded_type())) {
+          if (column_schema->is_hidden_pk_column_id(col_id)) {
             if (vec_id_col_id_ == OB_INVALID_ID) {
               vec_id_col_id_ = col_id;
             } else {

@@ -128,6 +128,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     udf_has_dml_stmt_(false),
     mview_ids_(&allocator_),
     enable_inc_direct_load_(false),
+    enable_inc_major_(false),
     enable_replace_(false),
     insert_overwrite_(false),
     online_sample_percent_(1.),

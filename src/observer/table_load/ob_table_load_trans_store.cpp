@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_trans_store.h"
+#include "observer/table_load/dag/ob_table_load_dag_write_channel.h"
 #include "observer/table_load/ob_table_load_autoinc_nextval.h"
 #include "observer/table_load/ob_table_load_data_row_insert_handler.h"
 #include "observer/table_load/ob_table_load_error_row_handler.h"
@@ -22,6 +23,7 @@
 #include "observer/table_load/ob_table_load_trans_ctx.h"
 #include "src/pl/ob_pl.h"
 #include "share/sequence/ob_sequence_cache.h"
+#include "sql/das/ob_das_utils.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -646,7 +648,9 @@ ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, 
     cast_allocator_("TLD_TS_Caster"),
     cast_params_(cast_params),
     writer_(nullptr),
-    last_receive_sequence_no_(0)
+    dag_writer_(nullptr),
+    last_receive_sequence_no_(0),
+    processed_rows_(0)
 {
   cast_allocator_.set_tenant_id(MTL_ID());
 }
@@ -658,10 +662,16 @@ ObTableLoadTransStoreWriter::SessionContext::~SessionContext()
     writer_->~IWriter();
     writer_ = nullptr;
   }
+  if (nullptr != dag_writer_) {
+    dag_writer_->~ObTableLoadDagWriter();
+    dag_writer_ = nullptr;
+  }
 }
 
-ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *trans_store)
-  : trans_store_(trans_store),
+ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadStoreTrans *trans,
+                                                         ObTableLoadTransStore *trans_store)
+  : trans_(trans),
+    trans_store_(trans_store),
     trans_ctx_(trans_store->trans_ctx_),
     store_ctx_(trans_ctx_->ctx_->store_ctx_),
     param_(trans_ctx_->ctx_->param_),
@@ -759,7 +769,12 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
     // init writer_
-    if (store_ctx_->write_ctx_.is_fast_heap_table_) {
+    if (store_ctx_->enable_dag_) {
+      if (OB_FAIL(store_ctx_->write_ctx_.write_channel_->create_writer(
+            trans_, this, session_ctx->session_id_, session_ctx->dag_writer_, allocator_))) {
+        LOG_WARN("fail to create writer", KR(ret));
+      }
+    } else if (store_ctx_->write_ctx_.is_fast_heap_table_) {
       DirectWriter *direct_writer = nullptr;
       if (OB_ISNULL(session_ctx->writer_ = direct_writer = OB_NEWx(DirectWriter, &allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -825,6 +840,14 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
              row_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(row_array.empty()));
+  } else if (store_ctx_->enable_dag_) {
+    SessionContext &session_ctx = session_ctx_array_[session_id - 1];
+    if (OB_FAIL(session_ctx.dag_writer_->write(row_array))) {
+      LOG_WARN("fail to write rows", KR(ret));
+    } else {
+      session_ctx.processed_rows_ += row_array.count();
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
+    }
   } else {
     const ObDirectLoadRowFlag &row_flag = store_ctx_->write_ctx_.table_data_desc_.row_flag_;
     SessionContext &session_ctx = session_ctx_array_[session_id - 1];
@@ -846,9 +869,32 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
       }
     }
     if (OB_SUCC(ret)) {
+      session_ctx.processed_rows_ += row_array.count();
       ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, row_array.count());
     }
     session_ctx.cast_allocator_.reuse();
+  }
+  return ret;
+}
+
+int ObTableLoadTransStoreWriter::px_write(ObIVector *tablet_id_vector,
+                                          const ObDirectLoadBatchRows &batch_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
+  } else if (OB_UNLIKELY(!store_ctx_->enable_dag_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected disable dag", KR(ret));
+  } else {
+    SessionContext &session_ctx = session_ctx_array_[0];
+    if (OB_FAIL(session_ctx.dag_writer_->px_write(tablet_id_vector, batch_rows))) {
+      LOG_WARN("fail to write batch", KR(ret));
+    } else {
+      session_ctx.processed_rows_ += batch_rows.size();
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, batch_rows.size());
+    }
   }
   return ret;
 }
@@ -860,11 +906,15 @@ int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
+  } else if (OB_UNLIKELY(store_ctx_->enable_dag_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected enable dag", KR(ret));
   } else {
     SessionContext &session_ctx = session_ctx_array_[0];
     if (OB_FAIL(session_ctx.writer_->append_batch(tablet_id, batch_rows))) {
       LOG_WARN("fail to append batch", KR(ret));
     } else {
+      session_ctx.processed_rows_ += batch_rows.size();
       ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, batch_rows.size());
     }
   }
@@ -880,11 +930,15 @@ int ObTableLoadTransStoreWriter::px_write(const ObTabletID &tablet_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
+  } else if (OB_UNLIKELY(store_ctx_->enable_dag_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected enable dag", KR(ret));
   } else {
     SessionContext &session_ctx = session_ctx_array_[0];
     if (OB_FAIL(session_ctx.writer_->append_selective(tablet_id, batch_rows, selector, size))) {
       LOG_WARN("fail to append selective", KR(ret));
     } else {
+      session_ctx.processed_rows_ += batch_rows.size();
       ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->store_.processed_rows_, size);
     }
   }
@@ -901,10 +955,19 @@ int ObTableLoadTransStoreWriter::flush(int32_t session_id)
   } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id));
+  } else if (store_ctx_->enable_dag_) {
+    SessionContext &session_ctx = session_ctx_array_[session_id - 1];
+    if (OB_FAIL(session_ctx.dag_writer_->close())) {
+      LOG_WARN("fail to close writer", KR(ret), K(session_id));
+    } else {
+      FLOG_INFO("trans write finish", "trans_id", trans_ctx_->trans_id_, K(session_id), "processed_rows", session_ctx.processed_rows_);
+    }
   } else {
     SessionContext &session_ctx = session_ctx_array_[session_id - 1];
     if (OB_FAIL(session_ctx.writer_->close())) {
       LOG_WARN("fail to close writer", KR(ret), K(session_id));
+    } else {
+      FLOG_INFO("trans write finish", "trans_id", trans_ctx_->trans_id_, K(session_id), "processed_rows", session_ctx.processed_rows_);
     }
   }
   return ret;
@@ -920,6 +983,9 @@ int ObTableLoadTransStoreWriter::clean_up(int32_t session_id)
   } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id));
+  } else if (OB_UNLIKELY(store_ctx_->enable_dag_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected enable dag", KR(ret));
   } else {
     SessionContext &session_ctx = session_ctx_array_[session_id - 1];
     session_ctx.writer_->reset();
@@ -1039,6 +1105,14 @@ int ObTableLoadTransStoreWriter::cast_column(
       LOG_WARN("fail to cast obj and check", KR(ret), K(obj));
     } else if (OB_FAIL(datum.from_obj_enhance(out_obj))) {
       LOG_WARN("fail to from obj enhance", KR(ret), K(out_obj));
+    } else if (!store_ctx_->enable_dag_) {
+    } else if (datum.is_null()) {
+    } else if (OB_FAIL(ObDASUtils::reshape_datum_value(column_schema->get_meta_type(),
+                                                       column_schema->get_accuracy(),
+                                                       false /*enable_oracle_empty_char_reshape_to_null*/,
+                                                       cast_allocator,
+                                                       datum))) {
+      LOG_WARN("fail to reshape datum value", KR(ret));
     }
   }
   return ret;
@@ -1108,10 +1182,26 @@ int ObTableLoadTransStoreWriter::check_rowkey_length(const ObDirectLoadDatumRow 
     OB_LOG(WARN, "invalid argument", KR(ret), K(datum_row), K(rowkey_column_count));
   } else {
     int64_t rowkey_len = 0;
-    for (int64_t i = 0; i < rowkey_column_count; i++) {
-      rowkey_len += datum_row.storage_datums_[i].len_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_count; i++) {
+      const ObStorageDatum &datum = datum_row.storage_datums_[i];
+      if (!datum.is_null() && !datum.is_nop()) {
+        if (column_schemas_.at(i)->get_meta_type().is_lob_storage()) {
+          // For LOB columns, get the actual LOB data length
+          const ObString &data = datum.get_string();
+          ObLobLocatorV2 locator(data, true);
+          int64_t lob_length = 0;
+          if (OB_FAIL(locator.get_lob_data_byte_len(lob_length))) {
+            LOG_WARN("fail to get lob data byte len", KR(ret), K(locator));
+          } else {
+            rowkey_len = rowkey_len + lob_length + sizeof(ObLobCommon);
+          }
+        } else {
+          // For non-LOB columns, use the datum length directly
+          rowkey_len = rowkey_len + datum.len_;
+        }
+      }
     }
-    if (rowkey_len > OB_MAX_VARCHAR_LENGTH_KEY) {
+    if (OB_SUCC(ret) && rowkey_len > OB_MAX_VARCHAR_LENGTH_KEY) {
       ret = OB_ERR_TOO_LONG_KEY_LENGTH;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
       OB_LOG(WARN, "rowkey is too long", KR(ret), K(rowkey_len));

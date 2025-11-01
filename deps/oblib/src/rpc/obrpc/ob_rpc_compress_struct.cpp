@@ -30,6 +30,8 @@ oceanbase::common::ObCompressorType ObRpcCompressCtx::get_compress_type(ObRpcCom
     type = STREAM_ZSTD_COMPRESSOR;
   } else if (RPC_STREAM_COMPRESS_ZSTD_138 == mode) {
     type = STREAM_ZSTD_1_3_8_COMPRESSOR;
+  } else if (RPC_STREAM_COMPRESS_ZSTD_157 == mode) {
+    type = STREAM_ZSTD_1_5_7_COMPRESSOR;
   } else {
     type = NONE_COMPRESSOR;
   }
@@ -259,6 +261,8 @@ int ObCompressPacketHeader::init_magic(ObRpcCompressMode compress_mode, bool is_
     magic_ |= COMPRESS_ZSTD_MASK;
   } else if (RPC_STREAM_COMPRESS_ZSTD_138 == compress_mode) {
     magic_ |= COMPRESS_ZSTD_138_MASK;
+  } else if (RPC_STREAM_COMPRESS_ZSTD_157 == compress_mode) {
+    magic_ |= COMPRESS_ZSTD_157_MASK;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid compress_mode", K(compress_mode), K(ret));

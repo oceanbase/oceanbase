@@ -22,6 +22,7 @@
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_def_reg.h"
+#include "share/ob_batch_selector.h"
 namespace oceanbase
 {
 namespace sql
@@ -63,11 +64,17 @@ public:
                                  const bool enable_oracle_empty_char_reshape_to_null,
                                  ObIAllocator &allocator,
                                  blocksstable::ObStorageDatum &datum_value);
+  static int reshape_datum_vector_value(const ObObjMeta &col_type,
+                                        const ObAccuracy &col_accuracy,
+                                        ObIAllocator &allocator,
+                                        const common::ObDatumVector &datum_vector,
+                                        share::ObBatchSelector &selector);
   static int reshape_vector_value(const ObObjMeta &col_type,
                                   const ObAccuracy &col_accuracy,
+                                  const bool enable_oracle_empty_char_reshape_to_null,
                                   ObIAllocator &allocator,
                                   common::ObIVector *&vector,
-                                  const int64_t size);
+                                  share::ObBatchSelector &selector);
   static int padding_fixed_string_value(int64_t max_len, ObIAllocator &alloc, ObObj &value);
   static int wait_das_retry(int64_t retry_cnt);
   static int find_child_das_def(const ObDASBaseCtDef *root_ctdef,

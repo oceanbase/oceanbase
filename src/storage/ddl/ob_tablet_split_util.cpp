@@ -19,11 +19,11 @@
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/compaction/ob_shared_storage_compaction_util.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "close_modules/shared_storage/share/compaction/ob_shared_storage_compaction_util.h"
 #include "close_modules/shared_storage/storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
@@ -246,11 +246,11 @@ int ObTabletSplitUtil::split_task_ranges(
   ObSEArray<ObITable::TableKey, 1> empty_skipped_keys;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  ObTableStoreIterator table_store_iterator;
   ObSEArray<ObStoreRange, 32> store_ranges;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> tables;
   const bool is_table_restore = ObDDLType::DDL_TABLE_RESTORE == ddl_type;
   common::ObArenaAllocator tmp_arena("SplitRange", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  SMART_VAR(ObTableStoreIterator, table_store_iterator) {
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id));
@@ -339,6 +339,7 @@ int ObTabletSplitUtil::split_task_ranges(
              K(parallel_datum_rowkey_list),
              K(multi_range_split_array));
   }
+  } // end SMART_VAR
   tmp_arena.reset();
   return ret;
 }

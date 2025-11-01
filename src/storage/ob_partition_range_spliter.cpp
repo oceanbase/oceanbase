@@ -1053,9 +1053,22 @@ int ObPartitionMultiRangeSpliter::get_tables(ObTableStoreIterator &table_iter,
       }
       major_row_count = static_cast<ObSSTable *>(table)->get_row_count();
       last_major_sstable = table;
-    } else if (table->is_minor_sstable()) {
-      if (static_cast<ObSSTable *>(table)->get_occupy_size() <= MIN_SPLIT_TABLE_SIZE
-          && static_cast<ObSSTable *>(table)->get_row_count() <= MIN_SPLIT_TABLE_ROW_COUNT) {
+    } else if (table->is_minor_sstable() || table->is_inc_major_type_sstable() || table->is_inc_major_ddl_dump_sstable()) {
+      int64_t occupy_size = 0;
+      int64_t row_count = 0;
+      if (table->is_co_sstable()) {
+        ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
+        if (co_sstable->is_rowkey_cg_base() && !co_sstable->is_cgs_empty_co_table()) {
+          occupy_size = co_sstable->get_cs_meta().occupy_size_;
+        } else {
+          occupy_size = co_sstable->get_occupy_size();
+        }
+        row_count = co_sstable->get_row_count();
+      } else {
+        occupy_size = static_cast<ObSSTable *>(table)->get_occupy_size();
+        row_count = static_cast<ObSSTable *>(table)->get_row_count();
+      }
+      if (occupy_size <= MIN_SPLIT_TABLE_SIZE && row_count <= MIN_SPLIT_TABLE_ROW_COUNT) {
         // very small table, skip
       } else if (OB_FAIL(tables.push_back(table))) {
         LOG_WARN("Fail to add minor sstable", KR(ret), KPC(table));

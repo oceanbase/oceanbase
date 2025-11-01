@@ -138,7 +138,7 @@ public:
   int get_next_schedule_info(
     const int64_t last_major_snapshot,
     const int64_t major_frozen_snapshot,
-    const bool is_mv_refresh_tablet,
+    const bool is_mv_refresh_or_restore_remote_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
     ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,

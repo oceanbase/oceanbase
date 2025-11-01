@@ -24,6 +24,7 @@ class SCN;
 namespace blocksstable
 {
 class ObSSTable;
+class ObSSTableMetaHandle;
 }
 namespace storage
 {
@@ -258,6 +259,55 @@ struct ObTableStoreUtil
   static bool check_intersect_by_scn_range(const ObITable &ltable, const ObITable &rtable);
 
   static int check_has_backup_macro_block(const ObITable *table, bool &has_backup_macro);
+};
+
+
+// load sstable on demand
+struct ObCacheSSTableHelper
+{
+public:
+  // Load sstable with @addr, loaded object lifetime guaranteed by @handle
+  static int load_sstable(
+    const ObMetaDiskAddr &addr,
+    const bool load_co_sstable,
+    ObStorageMetaHandle &handle);
+  // load sstable from cache with @addr, cache miss is allowed, loaded object lifetime guaranteed by @handle
+  static int load_sstable_from_cache(
+    const ObMetaDiskAddr &addr,
+    const bool load_co_sstable,
+    ObStorageMetaHandle &handle);
+  // load @orig_sstable on demand, return @loaded_sstable.
+  // Lifetime guaranteed by loaded_sstable_handle if is loaded.
+  static int load_sstable_on_demand(
+      const ObStorageMetaHandle &table_store_handle,
+      blocksstable::ObSSTable &orig_sstable,
+      ObStorageMetaHandle &loaded_sstable_handle,
+      blocksstable::ObSSTable *&loaded_sstable);
+  static int try_cache_local_sstable_meta(
+      ObArenaAllocator &allocator,
+      ObSSTableArray &sstable_array,
+      const int64_t local_sstable_size_limit,
+      int64_t &local_sstable_meta_size);
+  static int cache_local_sstable_meta(
+      ObArenaAllocator &allocator,
+      blocksstable::ObSSTable *array_sstable,
+      const blocksstable::ObSSTable *loaded_sstable,
+      const int64_t local_sstable_size_limit,
+      int64_t &local_sstable_meta_size);
+  // Asynchronously batch cache sstable meta according to the specified memory size.
+  //  - Here remain_size doesn't include the size of the table store itself.
+  //  - Taking the bypass don't pollute the meta cache.
+  //  - Asynchronously batch performance is better.
+  static int batch_cache_sstable_meta(
+      common::ObArenaAllocator &allocator,
+      const int64_t remain_size,
+      ObTabletTableStore *table_store);
+private:
+  static int batch_cache_sstable_meta_(
+      common::ObArenaAllocator &allocator,
+      const int64_t limit_size,
+      common::ObIArray<blocksstable::ObSSTable *> &sstables,
+      common::ObIArray<ObStorageMetaHandle> &handles);
 };
 
 } // storage

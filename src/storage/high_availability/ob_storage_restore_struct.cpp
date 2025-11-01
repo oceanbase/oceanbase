@@ -365,6 +365,22 @@ bool ObTabletRestoreAction::need_restore_ddl_sstable(const ACTION &action)
          || ACTION::RESTORE_REPLACE_REMOTE_SSTABLE == action;
 }
 
+bool ObTabletRestoreAction::need_restore_inc_major_ddl_sstable(const ACTION &action)
+{
+  return ACTION::RESTORE_MINOR == action
+         || ACTION::RESTORE_ALL == action
+         || ACTION::RESTORE_REMOTE_SSTABLE == action
+         || ACTION::RESTORE_REPLACE_REMOTE_SSTABLE == action;
+}
+
+bool ObTabletRestoreAction::need_restore_inc_major_sstable(const ACTION &action)
+{
+  return ACTION::RESTORE_MINOR == action
+         || ACTION::RESTORE_ALL == action
+         || ACTION::RESTORE_REMOTE_SSTABLE == action
+         || ACTION::RESTORE_REPLACE_REMOTE_SSTABLE == action;
+}
+
 bool ObTabletRestoreAction::need_restore_major_sstable(const ACTION &action)
 {
   return ACTION::RESTORE_MAJOR == action
@@ -399,11 +415,13 @@ int ObRestoreUtils::get_backup_data_type(
     data_type.set_sys_data_backup();
   } else if (table_key.is_minor_sstable()) {
     data_type.set_minor_data_backup();
-  } else if (table_key.is_major_sstable()) {
+  } else if (table_key.is_major_sstable() || table_key.is_inc_major_type_sstable()) {
     data_type.set_major_data_backup();
   } else if (table_key.is_ddl_dump_sstable()) {
     data_type.set_minor_data_backup();
   } else if (table_key.is_mds_sstable()) {
+    data_type.set_minor_data_backup();
+  } else if (table_key.is_inc_major_ddl_sstable()) {
     data_type.set_minor_data_backup();
   } else {
     ret = OB_ERR_UNEXPECTED;

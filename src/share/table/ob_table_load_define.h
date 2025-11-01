@@ -21,6 +21,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 
+
 namespace oceanbase
 {
 namespace table

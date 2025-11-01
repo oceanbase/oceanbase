@@ -63,6 +63,9 @@ public:
   static int check_is_heap_table_with_single_unique_index(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema *table_schema,
                                        bool &bret);
+  static int check_has_delete_insert_engine_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                  const share::schema::ObTableSchema *table_schema,
+                                                  bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
   static int get_tablet_ids_by_part_ids(const ObTableSchema *table_schema,
                                         const ObIArray<ObObjectID> &part_ids,
@@ -74,8 +77,13 @@ public:
   ~ObTableLoadSchema();
   void reset();
   int init(uint64_t tenant_id, uint64_t table_id, const int64_t schema_version);
+  bool is_delete_insert_merge_engine() const
+  {
+    return is_delete_insert_engine_;
+  }
   bool is_valid() const { return is_inited_; }
   bool is_column_store() const { return cg_cnt_ > 1; }
+  bool is_local_unique_index() const { return is_local_unique_index_table(index_type_); }
   TO_STRING_KV(K_(table_name), K_(is_partitioned_table), K_(is_table_without_pk), K_(is_table_with_hidden_pk_column),
                K_(has_autoinc_column), K_(has_identity_column), K_(has_lob_rowkey), K_(rowkey_column_count), K_(store_column_count),
                K_(cg_cnt), K_(collation_type), K_(column_descs), K_(is_inited));
@@ -94,6 +102,7 @@ public:
   bool is_partitioned_table_;
   bool is_table_without_pk_;
   bool is_table_with_hidden_pk_column_;
+  bool is_delete_insert_engine_;
   share::schema::ObIndexType index_type_;
   bool has_autoinc_column_;
   bool has_identity_column_;

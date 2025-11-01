@@ -139,8 +139,8 @@ int ObExprAIEmbed::eval_ai_embed(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       ObString result;
       if (OB_FAIL(model.call_dense_embedding(content, config, result))) {
         LOG_WARN("fail to call dense embedding", K(ret));
-      } else {
-        res.set_string(result);
+      } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
+        LOG_WARN("fail to set string result", K(ret));
       }
     }
   }

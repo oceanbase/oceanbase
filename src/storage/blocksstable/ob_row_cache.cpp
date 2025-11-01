@@ -138,8 +138,9 @@ bool ObRowCacheKey::is_valid() const
   return OB_LIKELY(0 != tenant_id_ && tablet_id_.is_valid() && rowkey_size_ > 0
       && data_version_ > -1 && (ObITable::is_minor_sstable(table_type_)
                                 || ObITable::is_major_sstable(table_type_)
-                                || ObITable::is_ddl_sstable(table_type_)
-                                || ObITable::is_meta_major_sstable(table_type_))
+                                || ObITable::is_ddl_type_sstable(table_type_)
+                                || ObITable::is_meta_major_sstable(table_type_)
+                                || ObITable::is_inc_major_type_sstable(table_type_))
       && rowkey_.is_valid());
 }
 

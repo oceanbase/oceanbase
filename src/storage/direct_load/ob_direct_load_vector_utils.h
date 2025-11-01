@@ -46,6 +46,9 @@ public:
 
   static int check_rowkey_length(const ObDirectLoadBatchRows &batch_rows,
                                  const int64_t rowkey_column_count);
+  static int check_rowkey_length(const ObDirectLoadBatchRows &batch_rows,
+                                 const int64_t rowkey_column_count,
+                                 const common::ObIArray<share::schema::ObColDesc> &col_descs);
 
   // tablet id vector, ginore null value
   static const VecValueTypeClass tablet_id_value_tc = VEC_TC_INTEGER;
@@ -67,6 +70,8 @@ public:
   // hidden pk vector
   static int batch_fill_hidden_pk(common::ObIVector *vector, const int64_t start,
                                   const int64_t size, share::ObTabletCacheInterval &pk_interval);
+  static int batch_fill_value(common::ObIVector *vector, const int64_t start,
+                              const int64_t size, const int64_t value);
 
   // multi version vector
   static const VecValueTypeClass multi_version_value_tc = VEC_TC_INTEGER;

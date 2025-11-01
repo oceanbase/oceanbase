@@ -40,6 +40,7 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
         || data_source_type == ObTxDataSourceType::TABLET_BINDING
         || data_source_type == ObTxDataSourceType::MV_NOTICE_SAFE
         || data_source_type == ObTxDataSourceType::UNBIND_LOB_TABLET
+        || data_source_type == ObTxDataSourceType::DDL_COMPLETE_MDS
         || data_source_type == ObTxDataSourceType::TABLET_SPLIT_INFO) {
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
@@ -648,6 +649,7 @@ const ObTxLogType ObTxStartWorkingLog::LOG_TYPE = ObTxLogType::TX_START_WORKING_
 const ObTxLogType ObTxRollbackToLog::LOG_TYPE = ObTxLogType::TX_ROLLBACK_TO_LOG;
 const ObTxLogType ObTxMultiDataSourceLog::LOG_TYPE = ObTxLogType::TX_MULTI_DATA_SOURCE_LOG;
 const ObTxLogType ObTxDirectLoadIncLog::LOG_TYPE = ObTxLogType::TX_DIRECT_LOAD_INC_LOG;
+const ObTxLogType ObTxDirectLoadIncMajorLog::LOG_TYPE = ObTxLogType::TX_DIRECT_LOAD_INC_MAJOR_LOG;
 
 int ObTxRedoLog::set_mutator_buf(char *buf)
 {

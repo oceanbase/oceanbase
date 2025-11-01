@@ -96,7 +96,7 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
       LOG_WARN("failed to fetch sys tablet sstable", K(ret), K(tablet_handle), K(tablet_table_store));
     }
   } else {
-    if (OB_FAIL(fetch_minor_and_ddl_sstables_(tablet_handle, tablet_table_store, sstable_array))) {
+    if (OB_FAIL(fetch_incremental_sstables_(tablet_handle, tablet_table_store, sstable_array))) {
       LOG_WARN("failed to fetch minor and ddl sstables", K(ret), K(tablet_handle), K(tablet_table_store));
     } else if (OB_FAIL(fetch_major_sstables_(tablet_handle, tablet_table_store, is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
       LOG_WARN("failed to fetch major sstables", K(ret), K(tablet_handle), K(tablet_table_store));
@@ -129,35 +129,51 @@ int ObBackupUtils::fetch_sys_tablet_sstables_(const storage::ObTabletHandle &tab
   return ret;
 }
 
-int ObBackupUtils::fetch_minor_and_ddl_sstables_(const storage::ObTabletHandle &tablet_handle,
+int ObBackupUtils::fetch_incremental_sstables_(const storage::ObTabletHandle &tablet_handle,
     const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   const storage::ObSSTableArray *minor_sstable_array_ptr = NULL;
   const storage::ObSSTableArray *ddl_sstable_array_ptr = NULL;
+  const storage::ObSSTableArray *inc_major_ddl_sstable_array_ptr = NULL;
   const storage::ObSSTableArray *mds_sstable_array_ptr = NULL;
+  const storage::ObSSTableArray *inc_major_sstable_array_ptr = NULL;
   minor_sstable_array_ptr = &tablet_table_store.get_minor_sstables();
   ddl_sstable_array_ptr = &tablet_table_store.get_ddl_sstables();
+  inc_major_ddl_sstable_array_ptr = &tablet_table_store.get_inc_major_ddl_sstables();
   mds_sstable_array_ptr = &tablet_table_store.get_mds_sstables();
+  inc_major_sstable_array_ptr = &tablet_table_store.get_inc_major_sstables();
   ObArray<storage::ObSSTableWrapper> minor_sstable_array;
   ObArray<storage::ObSSTableWrapper> ddl_sstable_array;
+  ObArray<storage::ObSSTableWrapper> inc_major_ddl_sstable_array;
   ObArray<storage::ObSSTableWrapper> mds_sstable_array;
+  ObArray<storage::ObSSTableWrapper> inc_major_sstable_array;
   if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
     LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
   } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array, true/*unpack_table*/))) {
     LOG_WARN("failed to get all tables", K(ret), KPC(ddl_sstable_array_ptr));
+  } else if (OB_FAIL(inc_major_ddl_sstable_array_ptr->get_all_table_wrappers(inc_major_ddl_sstable_array, true/*unpack_table*/))) {
+    LOG_WARN("failed to get all tables", K(ret), KPC(inc_major_ddl_sstable_array_ptr));
   } else if (OB_FAIL(mds_sstable_array_ptr->get_all_table_wrappers(mds_sstable_array, true/*unpack_table*/))) {
     LOG_WARN("failed to get all tables", K(ret), KPC(mds_sstable_array_ptr));
+  } else if (OB_FAIL(inc_major_sstable_array_ptr->get_all_table_wrappers(inc_major_sstable_array, true/*unpack_table*/))) {
+    LOG_WARN("failed to get all tables", K(ret), KPC(inc_major_sstable_array_ptr));
   } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
     LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
   } else if (OB_FAIL(check_tablet_ddl_sstable_validity_(tablet_handle, ddl_sstable_array))) {
     LOG_WARN("failed to check tablet ddl sstable validity", K(ret), K(tablet_handle), K(ddl_sstable_array));
+  } else if (OB_FAIL(check_tablet_inc_major_ddl_sstable_validity_(tablet_handle, inc_major_ddl_sstable_array))) {
+    LOG_WARN("failed to check tablet inc major ddl sstable validity", K(ret), K(tablet_handle), K(inc_major_ddl_sstable_array));
   } else if (OB_FAIL(append(sstable_array, minor_sstable_array))) {
     LOG_WARN("failed to append", K(ret), K(minor_sstable_array));
   } else if (OB_FAIL(append(sstable_array, ddl_sstable_array))) {
     LOG_WARN("failed to append", K(ret), K(ddl_sstable_array));
+  } else if (OB_FAIL(append(sstable_array, inc_major_ddl_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(inc_major_ddl_sstable_array));
   } else if (OB_FAIL(append(sstable_array, mds_sstable_array))) {
     LOG_WARN("failed to append", K(ret), K(mds_sstable_array));
+  } else if (OB_FAIL(append(sstable_array, inc_major_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(inc_major_sstable_array));
   }
   return ret;
 }
@@ -503,6 +519,47 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_sstables(ddl_table_iter))) {
     LOG_WARN("failed to get ddl sstables", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter,
+                                                          is_data_complete,
+                                                          compact_start_scn,
+                                                          compact_end_scn,
+                                                          rec_scn))) {
+    LOG_WARN("failed to check data integrity", K(ret), K(ddl_table_iter));
+  } else if (!is_data_complete) {
+    ret = OB_INVALID_TABLE_STORE;
+    LOG_WARN("get invalid ddl table store", K(ret), K(tablet_handle), K(ddl_sstable_array), K(ddl_table_iter));
+  } else {
+    LOG_INFO("check data intergirty", K(tablet_handle), K(compact_start_scn),
+        K(compact_end_scn), K(ddl_table_iter), K(is_data_complete));
+  }
+  return ret;
+}
+
+int ObBackupUtils::check_tablet_inc_major_ddl_sstable_validity_(
+    const storage::ObTabletHandle &tablet_handle,
+    const common::ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = NULL;
+  ObITable *last_table_ptr = NULL;
+  SCN compact_start_scn = SCN::min_scn();
+  SCN compact_end_scn = SCN::min_scn();
+  SCN rec_scn = SCN::min_scn();
+  ObTableStoreIterator ddl_table_iter;
+  bool is_data_complete = false;
+  if (ddl_sstable_array.empty()) {
+    // do nothing
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+  } else if (OB_ISNULL(last_table_ptr = ddl_sstable_array.at(ddl_sstable_array.count() - 1).get_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid table ptr", K(ret), K(ddl_sstable_array));
+  } else if (!last_table_ptr->is_inc_major_ddl_dump_sstable()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_ddl_sstables(ddl_table_iter))) {
+    LOG_WARN("failed to get inc major ddl sstables", K(ret), K(tablet_handle));
   } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter,
                                                           is_data_complete,
                                                           compact_start_scn,
@@ -2581,7 +2638,7 @@ int ObBackupTabletProvider::get_backup_data_type_(
     backup_data_type.set_sys_data_backup();
   } else if (table_key.is_minor_sstable() || table_key.is_ddl_sstable() || table_key.is_mds_sstable()) {
     backup_data_type.set_minor_data_backup();
-  } else if (table_key.is_major_sstable()) {
+  } else if (table_key.is_major_sstable() || table_key.is_inc_major_ddl_sstable() || table_key.is_inc_major_type_sstable()) {
     backup_data_type.set_major_data_backup();
   } else {
     ret = OB_ERR_UNEXPECTED;

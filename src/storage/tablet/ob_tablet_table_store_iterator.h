@@ -15,6 +15,7 @@
 
 #include "storage/meta_mem/ob_storage_meta_cache.h"
 #include "share/cache/ob_kv_storecache.h"
+#include "storage/ob_i_table.h"
 
 namespace oceanbase
 {
@@ -76,6 +77,8 @@ public:
   int set_retire_check();
 
   int add_table(ObITable *table);
+  int add_ddl_agg_table(ObTableHandleV2 &ddl_agg_sstable_handle);
+  int add_ddl_co_table(ObTableHandleV2 &ddl_co_sstable_handle, ObITable *co_table);
   int add_tables(
       const ObSSTableArray &sstable_array,
       const int64_t start_pos = 0,
@@ -113,6 +116,8 @@ private:
   bool * memstore_retired_;
   ObStorageMetaHandle *transfer_src_table_store_handle_;
   ObSEArray<ObStorageMetaHandle, 1> split_extra_table_store_handles_;
+  ObArray<ObTableHandleV2> *ddl_agg_sstable_handles_;
+  ObTableHandleV2 *ddl_co_sstable_handle_;
   bool aggregated_guard_created_;
   DISALLOW_COPY_AND_ASSIGN(ObTableStoreIterator);
 };

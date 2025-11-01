@@ -45,23 +45,24 @@ namespace storage
 class ObBlockMetaTreeValue final
 {
 public:
-  ObBlockMetaTreeValue() : co_sstable_row_offset_(0), block_meta_(nullptr), rowkey_(nullptr), header_() {}
+  ObBlockMetaTreeValue() : co_sstable_row_offset_(0), block_meta_(nullptr), rowkey_(nullptr), header_(), minor_meta_info_() {}
   ObBlockMetaTreeValue(const blocksstable::ObDataMacroBlockMeta *block_meta,
                        const blocksstable::ObDatumRowkey *rowkey)
-    : co_sstable_row_offset_(0), block_meta_(block_meta), rowkey_(rowkey), header_(){}
+    : co_sstable_row_offset_(0), block_meta_(block_meta), rowkey_(rowkey), header_(), minor_meta_info_(){}
   ~ObBlockMetaTreeValue()
   {
     co_sstable_row_offset_ = 0;
     block_meta_ = nullptr;
     rowkey_ = nullptr;
   }
-  TO_STRING_KV(K_(co_sstable_row_offset), KPC_(block_meta), KPC_(rowkey), K_(header));
+  TO_STRING_KV(K_(co_sstable_row_offset), KPC_(block_meta), KPC_(rowkey), K_(header), K_(minor_meta_info));
 
 public:
   int64_t co_sstable_row_offset_;
   const blocksstable::ObDataMacroBlockMeta *block_meta_;
   const blocksstable::ObDatumRowkey *rowkey_;
   blocksstable::ObIndexBlockRowHeader header_;
+  ObIndexBlockRowMinorMetaInfo minor_meta_info_;
 };
 
 struct ObDDLBlockMeta
@@ -82,11 +83,12 @@ class ObBlockMetaTree
 public:
   ObBlockMetaTree();
   virtual ~ObBlockMetaTree();
-  int init(ObTablet &tablet,
+  int init(const ObTablet &tablet,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
            const uint64_t data_format_version,
-           const ObStorageSchema *storage_schema);
+           const ObStorageSchema *storage_schema,
+           const ObSSTable *first_ddl_sstable);
   void destroy();
   void destroy_tree_value();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
@@ -178,7 +180,10 @@ public:
       const ObITable::TableKey &table_key,
       const share::SCN &ddl_start_scn,
       const uint64_t data_format_version,
-      const bool is_inc_direct_load = false);
+      const ObStorageSchema *storage_schema,
+      const ObDDLKVType ddl_kv_type = ObDDLKVType::DDL_KV_FULL,
+      const transaction::ObTransID &trans_id = transaction::ObTransID(),
+      const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ());
   void reset();
   int insert_block_meta_tree(
       const ObDDLMacroHandle &macro_handle,
@@ -195,13 +200,15 @@ public:
   INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, K(is_inited_), K(block_meta_tree_));
 private:
   int init_sstable_param(
-      ObTablet &tablet,
+      const ObStorageSchema &storage_schema,
       const ObITable::TableKey &table_key,
       const share::SCN &ddl_start_scn,
+      const transaction::ObTransID &trans_id,
+      const transaction::ObTxSEQ &seq_no,
       ObTabletCreateSSTableParam &sstable_param);
 private:
   bool is_inited_;
-  bool is_inc_direct_load_;
+  ObDDLKVType ddl_kv_type_;
   ObBlockMetaTree block_meta_tree_;
 };
 
@@ -216,7 +223,11 @@ public:
            const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
-           const uint64_t data_format_version);
+           const uint64_t data_format_version,
+           const ObDDLKVType ddl_kv_type = ObDDLKVType::DDL_KV_FULL,
+           const transaction::ObTransID &trans_id = transaction::ObTransID(),
+           const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ(),
+           const ObITable::TableType table_type = ObITable::TableType::MAX_TABLE_TYPE);
 
 public: // derived from ObIMemtable
   // for read_barrier, it needs to be always false
@@ -256,6 +267,7 @@ public:  // derived from ObITable
       const blocksstable::ObDatumRowkey &rowkey,
       ObStoreRowIterator *&row_iter) override;
 
+  // 正常情况不会被调到, 调用多了可能会爆内存
   virtual int get(const storage::ObTableIterParam &param,
                   storage::ObTableAccessContext &context,
                   const blocksstable::ObDatumRowkey &rowkey,
@@ -301,6 +313,7 @@ public:
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       const bool can_freeze);
+  int idem_update_max_scn(const share::SCN &max_scn, const ObDirectLoadType direct_load_type);
 
   int freeze(const share::SCN &freeze_scn = share::SCN::min_scn());
   bool is_freezed();
@@ -309,12 +322,15 @@ public:
   int decide_right_boundary();
   bool is_closed() const { return is_closed_; }
   share::SCN get_min_scn() const { return min_scn_; }
+  share::SCN get_max_scn() const { return max_scn_; }
   share::SCN get_freeze_scn() const { return freeze_scn_; }
   share::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
+  int64_t get_ddl_snapshot_version() const { return ddl_snapshot_version_; }
   int64_t get_macro_block_cnt() const { return macro_block_count_; }
   // not thread safe, external call are limited to ddl merge task
   int get_ddl_memtable(const int64_t slice_idx, const int64_t cg_idx, ObDDLMemtable *&ddl_memtable);
   ObIArray<ObDDLMemtable *> &get_ddl_memtables() { return ddl_memtables_; }
+  ObIArray<ObArenaAllocator *> &get_ddl_memtable_allocators() { return ddl_memtable_arena_allocators_; }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();
   // const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
@@ -322,7 +338,9 @@ public:
   const transaction::ObTransID &get_trans_id() const { return trans_id_; }
   const transaction::ObTxSEQ &get_seq_no() const { return seq_no_; }
   int64_t get_memory_used() const;
-  OB_INLINE bool is_inc_ddl_kv() const { return is_inc_ddl_kv_; }
+  OB_INLINE bool is_inc_minor_ddl_kv() const { return storage::is_inc_minor_ddl_kv(ddl_kv_type_); }
+  OB_INLINE bool is_inc_major_ddl_kv() const { return storage::is_inc_major_ddl_kv(ddl_kv_type_); }
+  OB_INLINE const ObDDLKVType &get_ddl_kv_type() const { return ddl_kv_type_; }
 
   int64_t get_row_count() const;
   int get_block_count_and_row_count(
@@ -331,6 +349,9 @@ public:
     int64_t &row_count) const;
 
   int64_t get_merge_slice_idx() const { return merge_slice_idx_; }
+  OB_INLINE int64_t get_column_group_cnt() const { return column_group_cnt_; }
+  OB_INLINE int64_t get_column_cnt() const { return full_column_cnt_; }
+  OB_INLINE ObCOSSTableBaseType get_co_base_type() const { return co_base_type_; }
 
   // for inc_ddl_kv only
   template<class _callback>
@@ -341,7 +362,6 @@ public:
                        ObITabletMemtable,
                        K_(is_inited),
                        K_(is_closed),
-                       K_(is_inc_ddl_kv),
                        K_(is_independent_freezed),
                        K_(ls_id),
                        K_(tablet_id),
@@ -349,6 +369,7 @@ public:
                        K_(snapshot_version),
                        K_(data_format_version),
                        K_(trans_id),
+                       K_(seq_no),
                        K_(data_schema_version),
                        K_(column_count),
                        K_(min_scn),
@@ -357,7 +378,12 @@ public:
                        K_(pending_cnt),
                        K_(macro_block_count),
                        K(ddl_memtables_.count()),
-                       K_(merge_slice_idx));
+                       K_(merge_slice_idx),
+                       K_(seq_no),
+                       K_(ddl_kv_type),
+                       K_(column_group_cnt),
+                       K_(full_column_cnt),
+                       K_(co_base_type));
 
 private:
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }
@@ -376,16 +402,16 @@ private:
   static const int64_t HOLD_LIMIT = 10 * 1024 * 1024 * 1024L;
   bool is_inited_;
   bool is_closed_;
-  bool is_inc_ddl_kv_;
   bool is_independent_freezed_;
   common::TCRWLock lock_; // lock for block_meta_tree_ and freeze_log_ts_
   common::ObArenaAllocator arena_allocator_;
+  common::ObLfFIFOAllocator ddl_memtable_allocator_;
   common::ObTabletID tablet_id_;
   share::SCN ddl_start_scn_; // the log ts of ddl start log
   int64_t ddl_snapshot_version_; // the snapshot version for major sstable which is completed by ddl
   uint64_t data_format_version_;
-  transaction::ObTransID trans_id_; // for incremental direct load only
-  transaction::ObTxSEQ seq_no_; // for incremental direct load only
+  transaction::ObTransID trans_id_; // for incremental (minor & major) direct load only
+  transaction::ObTxSEQ seq_no_; // for incremental (minor & major) direct load only
   int64_t data_schema_version_;
   int64_t column_count_;
 
@@ -396,7 +422,12 @@ private:
 
   int64_t macro_block_count_;
   ObArray<ObDDLMemtable *> ddl_memtables_;
+  ObArray<common::ObArenaAllocator *> ddl_memtable_arena_allocators_;
   int64_t merge_slice_idx_; // record max slice idx can be merged, require all data begin from start_scn
+  ObDDLKVType ddl_kv_type_;
+  int64_t column_group_cnt_;
+  int64_t full_column_cnt_;
+  ObCOSSTableBaseType co_base_type_;
 };
 
 template<class _callback>
@@ -407,7 +438,7 @@ int ObDDLKV::access_first_ddl_memtable(_callback &callback) const
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
+  } else if (OB_UNLIKELY(!is_inc_minor_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(WARN, "not support get for full direct load", K(ret));
   } else if (ddl_memtables_.count() == 0) {
