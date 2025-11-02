@@ -40,6 +40,7 @@ public:
     ODPS_TYPE,
     FILESYSTEM_TYPE,
     HMS_TYPE,
+    REST_TYPE,
     MAX_TYPE
   };
   ObCatalogProperties() : type_(CatalogType::INVALID_TYPE) {}

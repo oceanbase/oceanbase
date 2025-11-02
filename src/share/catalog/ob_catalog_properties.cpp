@@ -33,6 +33,7 @@ const char *ObCatalogProperties::CATALOG_TYPE_STR[] = {
     "ODPS",
     "FILESYSTEM",
     "HMS",
+    "REST"
 };
 static_assert(array_elements(ObCatalogProperties::CATALOG_TYPE_STR) == static_cast<size_t>(ObCatalogProperties::CatalogType::MAX_TYPE), "Not enough initializer for ObCatalogProperties");
 static_assert(array_elements(ObODPSCatalogProperties::OPTION_NAMES) == static_cast<size_t>(ObODPSCatalogProperties::ObOdpsCatalogOptions::MAX_OPTIONS), "Not enough initializer for ObODPSCatalogProperties");

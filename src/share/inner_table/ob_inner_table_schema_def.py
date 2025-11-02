@@ -44293,8 +44293,8 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21695: GV$OB_CATALOG_CLIENT_POOL_STAT
-# 21696: V$OB_CATALOG_CLIENT_POOL_STAT
+# 21695: GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
+# 21696: V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
