@@ -501,14 +501,15 @@ TEST_F(TestSSReorganizePhyBlock, test_delete_block_from_sparse_blk_map)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_delete_block_from_sparse_blk_map");
-  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
-  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
-  ObSSARCInfo &arc_info = micro_cache->micro_meta_mgr_.arc_info_;
-  ObSSReleaseCacheTask &release_cache_task = micro_cache->task_runner_.release_cache_task_;
-  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache_->phy_blk_mgr_;
+  ObSSARCInfo &arc_info = micro_cache_->micro_meta_mgr_.arc_info_;
+  ObSSReleaseCacheTask &release_cache_task = micro_cache_->task_runner_.release_cache_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache_->task_runner_.blk_ckpt_task_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache_->task_runner_.persist_meta_task_;
   release_cache_task.evict_op_.is_enabled_ = false;
   release_cache_task.reorganize_op_.is_enabled_ = false;
   blk_ckpt_task.is_inited_ = false;
+  persist_meta_task.is_inited_ = false;
   ob_usleep(1000 * 1000);
 
   int64_t start_macro_id = 1;
@@ -558,11 +559,13 @@ TEST_F(TestSSReorganizePhyBlock, test_evict_and_reorganize_parallel)
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache_->micro_meta_mgr_;
   ObSSReleaseCacheTask &release_cache_task = micro_cache_->task_runner_.release_cache_task_;
   ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache_->task_runner_.blk_ckpt_task_;
+  ObSSPersistMicroMetaTask &persist_meta_task = micro_cache_->task_runner_.persist_meta_task_;
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
   const int32_t block_size = phy_blk_mgr.get_block_size();
 
   release_cache_task.is_inited_ = false;
   blk_ckpt_task.is_inited_ = false;
+  persist_meta_task.is_inited_ = false;
   usleep(1000 * 1000);
 
   const int64_t available_block_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt();
