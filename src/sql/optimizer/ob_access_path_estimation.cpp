@@ -2912,7 +2912,7 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
         output_rowcnt = output_rowcnt != 0 ? output_rowcnt : static_cast<int64_t>(100.0 / sample_ratio);
         output_rowcnt *= output_non_ds_sel;
       }
-      output_rowcnt *= block_sample_ratio * row_sample_ratio;
+      output_rowcnt *= block_sample_ratio;
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
       if (OB_ISNULL(paths.at(i))) {
@@ -2973,8 +2973,8 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
           LOG_WARN("failed to process postfix filter ds result", K(ret));
         } else {
           physical_row_count = logical_row_count;
-          est_cost_info.output_row_count_ = output_rowcnt;
           est_cost_info.table_filter_sel_ = 0 == index_back_row_count ? 0.0 : output_rowcnt * 1.0 / index_back_row_count;
+          est_cost_info.output_row_count_ = output_rowcnt * row_sample_ratio;
           LOG_TRACE("OPT:[DYNAMIC SAMPLING EST ROW COUNT]", K(logical_row_count), K(physical_row_count), K(est_cost_info), K(output_rowcnt));
         }
       }
