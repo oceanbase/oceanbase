@@ -3102,8 +3102,9 @@ struct MergeKeyInfoHelper
                                  const ObIArray<ObRawExpr*> &pushdown_quals);
     int compute_valid_inner_path(Path *inner_path,
                                  const ObIArray<ObRawExpr*> &pushdown_quals);
-    int extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters);
-    int extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_valid_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_valid_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_valid_range_filters(ObIArray<ObRawExpr*> &candi_filters, ObIArray<ObRawExpr*> &all_range_filters);
 
     int check_and_fill_inner_path_info(PathHelper &helper,
                                        const ObDMLStmt &stmt,
