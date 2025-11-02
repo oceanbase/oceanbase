@@ -316,7 +316,8 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
                   K(access_ctx_->use_fuse_row_cache_),
                   K(read_snapshot_version),
                   KPC(read_info),
-                  K(tables_));
+                  K(tables_),
+                  KPC(rowkey_));
     }
     rowkey_ = NULL;
   } else {
