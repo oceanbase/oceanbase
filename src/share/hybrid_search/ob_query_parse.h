@@ -200,7 +200,6 @@ private:
   ObEsQueryInfo(ObQueryReqFromJson *query_req, ObEsQueryInfo *parent_query_info, ObEsQueryItem outer_query_item, bool need_cal_score)
     : query_req_(query_req),
       need_cal_score_(need_cal_score),
-      total_depth_(1),
       parent_query_info_(parent_query_info),
       outer_query_item_(outer_query_item),
       query_item_(QUERY_ITEM_UNKNOWN),
@@ -227,7 +226,16 @@ private:
       keyword_exprs_(),
       sub_query_infos_(),
       match_exprs_matrix_(),
-      apply_es_mode_(false) {}
+      apply_es_mode_(false)
+  {
+    if (outer_query_item_ == QUERY_ITEM_QUERY) {
+      total_depth_ = 1;
+    } else if (outer_query_item_ == QUERY_ITEM_UNKNOWN) {
+      total_depth_ = 2;
+    } else {
+      total_depth_ = get_total_depth();
+    }
+  }
   bool apply_es_mode_;
   inline void set_es_mode_(bool value) {
     apply_es_mode_ = value;

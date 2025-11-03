@@ -3916,8 +3916,6 @@ int ObEsQueryInfo::init_query_info(ObEsQueryInfo *&query_info, ObIAllocator &all
   if (OB_ISNULL(query_info = OB_NEWx(ObEsQueryInfo, &alloc, query_req, parent_query_info, outer_query_item, need_cal_score))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create query info", K(ret));
-  } else {
-    query_info->total_depth_ = query_info->get_total_depth();
   }
   return ret;
 }
