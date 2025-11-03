@@ -829,13 +829,24 @@ int ObTenant::init(const ObTenantMeta &meta)
   }
 
   if (OB_SUCC(ret)) {
+    const int64_t init_cnt = priority_worker_cnt();
     int64_t succ_cnt = 0L;
-    if (OB_FAIL(acquire_more_worker(2, succ_cnt))) {
+    if (OB_FAIL(acquire_more_worker(init_cnt, succ_cnt))) {
       LOG_WARN("create worker in init failed", K(ret), K(succ_cnt));
     } else {
-      // there must be 2 workers.
-      static_cast<ObThWorker*>(workers_.get_first()->get_data())->set_priority_limit(QQ_HIGH);
-      static_cast<ObThWorker*>(workers_.get_last()->get_data())->set_priority_limit(QQ_NORMAL);
+      // the cnt of workers must be priority_worker_cnt.
+      int64_t high_priority_cnt = init_cnt / 2;
+      int64_t normal_priority_cnt = init_cnt - high_priority_cnt;
+      int64_t idx = 0;
+      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+        ObThWorker* w = static_cast<ObThWorker*>(wnode->get_data());
+        if (idx < high_priority_cnt) {
+          w->set_priority_limit(QQ_HIGH);
+        } else {
+          w->set_priority_limit(QQ_NORMAL);
+        }
+        idx ++;
+      }
       for (int level = MULTI_LEVEL_THRESHOLD; OB_SUCC(ret) && level < MAX_REQUEST_LEVEL; level++) {
         if (OB_SUCC(acquire_level_worker(1, succ_cnt, level))) {
           succ_cnt = 0L;
@@ -1215,9 +1226,10 @@ int64_t ObTenant::min_active_worker_cnt() const
 {
   ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
   bool enable_more_aggressive_dynamic_worker = tenant_config.is_valid() ? tenant_config->_enable_more_aggressive_dynamic_worker : false;
-  int64_t cnt = 3;
+  // assume that high priority workers were busy.
+  int64_t cnt = priority_worker_cnt() + 1;
   if (is_user_tenant(id()) && enable_more_aggressive_dynamic_worker) {
-    cnt = std::max(3L, 2 + static_cast<int64_t>(unit_max_cpu()));
+    cnt = std::max(cnt, priority_worker_cnt() + static_cast<int64_t>(unit_max_cpu()));
   }
   return cnt;
 }
@@ -1225,7 +1237,8 @@ int64_t ObTenant::min_active_worker_cnt() const
 int64_t ObTenant::min_worker_cnt() const
 {
   ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
-  int64_t cnt =  2 + std::max(1L, static_cast<int64_t>(unit_min_cpu() * (tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4)));
+  int64_t cnt =  priority_worker_cnt()
+                  + std::max(1L, static_cast<int64_t>(unit_min_cpu() * (tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4)));
   if (GCONF._enable_numa_aware) {
     int numa_node_count = AFFINITY_CTRL.get_num_nodes();
     if (cnt < numa_node_count) {
@@ -1245,6 +1258,13 @@ int64_t ObTenant::max_worker_cnt() const
       cnt = common::upper_align(cnt, numa_node_count);
     }
   }
+  return cnt;
+}
+
+int64_t ObTenant::priority_worker_cnt() const
+{
+  // the count of ObThWorker that is_normal_priority() or is_high_priority()
+  int64_t cnt = std::max(2L, static_cast<int64_t>(unit_min_cpu() / 10));
   return cnt;
 }
 
@@ -1850,6 +1870,27 @@ void ObTenant::check_worker_count()
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, true);
       LOG_INFO("worker thread began to shrink", K(id_), K(token));
+    }
+
+    if (OB_LIKELY(workers_.get_size() > min_worker_cnt())) {
+      // reset priority worker
+      int64_t priority_cnt = priority_worker_cnt();
+      int64_t high_priority_cnt = priority_cnt / 2;
+      int64_t idx = 0;
+      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+        ObThWorker* w = static_cast<ObThWorker*>(wnode->get_data());
+        if (idx < high_priority_cnt) {
+          // 0 to (high_priority_cnt - 1) are high priority workers
+          w->set_priority_limit(QQ_HIGH);
+        } else if (idx < priority_cnt) {
+          // high_priority_cnt to (priority_cnt - 1) are normal priority workers
+          w->set_priority_limit(QQ_NORMAL);
+        } else {
+          // other default workers
+          w->set_priority_limit(QQ_LOW);
+        }
+        idx ++;
+      }
     }
 
     int64_t stream_limit = 0;
