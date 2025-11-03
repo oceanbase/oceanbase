@@ -2001,6 +2001,7 @@ default_expr:
 return_expr:
     {
       do_parse_sql_expr_rule($$, parse_ctx, 1, ';');
+      obpl_mysql_wrap_get_user_var_into_subquery(parse_ctx, $$);
     }
 ;
 
