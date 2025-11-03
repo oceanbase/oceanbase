@@ -3174,9 +3174,9 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
     if (OB_SUCC(ret)) {
       ObDASIndexMergeIter *merge_iter = nullptr;
 
+      bool pushdown_topk_mode = false;
       if (limit != -1) {
         // FTS optimization path
-        ObDASIndexMergeFTSAndIterParam merge_param;
         ObDASIndexMergeFTSAndIter *merge_and_iter = nullptr;
 
         ObDASIter *child_iter = nullptr;
@@ -3203,7 +3203,15 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
         } else if (OB_ISNULL(child_iter) || OB_ISNULL(pushdown_topk_iter)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected nullptr", K(ret));
+        } else if (!(static_cast<ObDASTRMergeIter*>(pushdown_topk_iter))->is_topk_mode()) {
+          // do nothing, use normal index merge path.
+          if (OB_FAIL(child_iter->release())) {
+            LOG_WARN("failed to reset child iter", K(ret));
+          }
         } else {
+          pushdown_topk_mode = true;
+
+          ObDASIndexMergeFTSAndIterParam merge_param;
           merge_param.max_size_ = merge_rtdef->eval_ctx_->is_vectorized() ? merge_rtdef->eval_ctx_->max_batch_size_ : 1;
           merge_param.eval_ctx_ = merge_rtdef->eval_ctx_;
           merge_param.exec_ctx_ = &merge_rtdef->eval_ctx_->exec_ctx_;
@@ -3223,11 +3231,6 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
           merge_param.pushdown_topk_iter_ = static_cast<ObDASTRMergeIter*>(pushdown_topk_iter);
           merge_param.pushdown_topk_iter_tree_ = child_iter;
           merge_param.first_fts_idx_ = first_fts_idx;
-
-          if (!merge_param.pushdown_topk_iter_->is_topk_mode()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected topk mode", K(ret));
-          }
 
           for (int64_t i = 0; OB_SUCC(ret) && i < children_cnt; ++i) {
             if (merge_ctdef->merge_node_types_.at(i) == INDEX_MERGE_SCAN) {
@@ -3259,7 +3262,9 @@ int ObDASIterUtils::create_index_merge_tree_common(ObTableScanParam &scan_param,
             merge_iter = static_cast<ObDASIndexMergeIter*>(merge_and_iter);
           }
         }
-      } else {
+      }
+
+      if (OB_SUCC(ret) && !pushdown_topk_mode){
         // Regular index merge path
         ObDASIndexMergeIterParam merge_param;
         ObDASIndexMergeAndIter *merge_and_iter = nullptr;

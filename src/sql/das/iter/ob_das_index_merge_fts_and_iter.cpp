@@ -79,10 +79,58 @@ int ObDASIndexMergeFTSAndIter::do_table_scan()
   } else if (OB_FAIL(determine_execute_strategy())) {
     LOG_WARN("failed to determine execute strategy", K(ret));
   } else if (SECOND_PHASE_ONLY == execute_strategy_) {
-    if (pushdown_topk_iter_first_scan_) {
+    pushdown_topk_iter_->set_topk_limit(pushdown_topk_);
+    if (OB_FAIL(pushdown_topk_iter_tree_->do_table_scan())) {
+      LOG_WARN("failed to do table scan", K(ret));
+    } else {
+      pushdown_topk_iter_first_scan_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObDASIndexMergeFTSAndIter::inner_reuse()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObDASIndexMergeAndIter::inner_reuse())) {
+    LOG_WARN("failed to reuse index merge and iter", K(ret));
+  } else if (OB_FAIL(result_buffer_.reuse())) {
+    LOG_WARN("failed to reuse result buffer", K(ret));
+  } else if (SECOND_PHASE_ONLY == execute_strategy_) {
+    if (OB_FAIL(pushdown_topk_iter_tree_->reuse())) {
+      LOG_WARN("failed to reuse pushdown topk iter tree", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ready_to_output_ = false;
+    cur_result_item_idx_ = 0;
+    result_item_size_ = 0;
+  }
+  result_items_ = nullptr;
+
+  return ret;
+}
+
+int ObDASIndexMergeFTSAndIter::rescan()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDASIndexMergeAndIter::rescan())) {
+    LOG_WARN("failed to rescan index merge and iter", K(ret));
+  } else if (OB_FAIL(determine_execute_strategy())) {
+    LOG_WARN("failed to determine execute strategy", K(ret));
+  } else if (SECOND_PHASE_ONLY == execute_strategy_) {
+    if (!pushdown_topk_iter_first_scan_) {
+      if (OB_FAIL(pushdown_topk_iter_->adjust_topk_limit(pushdown_topk_))) {
+        LOG_WARN("failed to reprepare pushdown topk", K(ret));
+      } else if (OB_FAIL(pushdown_topk_iter_tree_->rescan())) {
+        LOG_WARN("failed to rescan pushdown topk iter tree", K(ret));
+      }
+    } else {
       pushdown_topk_iter_->set_topk_limit(pushdown_topk_);
       if (OB_FAIL(pushdown_topk_iter_tree_->do_table_scan())) {
-        LOG_WARN("failed to do table scan", K(ret));
+        LOG_WARN("failed to rescan pushdown topk iter tree", K(ret));
       } else {
         pushdown_topk_iter_first_scan_ = false;
       }
@@ -196,39 +244,11 @@ int ObDASIndexMergeFTSAndIter::determine_execute_strategy()
     }
   }
 
-  if (execute_strategy_ == SECOND_PHASE_ONLY) {
+  if (SECOND_PHASE_ONLY == execute_strategy_) {
     pushdown_topk_ = (limit_ + offset_) / min_selectivity;
   }
 
   LOG_DEBUG("two phase fts index merge execute strategy", K(ret), K(execute_strategy_), K(min_selectivity), K(pushdown_topk_));
-  return ret;
-}
-
-int ObDASIndexMergeFTSAndIter::inner_reuse()
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(ObDASIndexMergeAndIter::inner_reuse())) {
-    LOG_WARN("failed to reuse index merge and iter", K(ret));
-  } else if (OB_FAIL(result_buffer_.reuse())) {
-    LOG_WARN("failed to reuse result buffer", K(ret));
-  } else if (OB_FAIL(determine_execute_strategy())) {
-    LOG_WARN("failed to determine execute strategy", K(ret));
-  } else if (SECOND_PHASE_ONLY == execute_strategy_) {
-    if (OB_FAIL(pushdown_topk_iter_tree_->reuse())) {
-      LOG_WARN("failed to reuse pushdown topk iter tree", K(ret));
-    } else if (OB_FAIL(pushdown_topk_iter_->adjust_topk_limit(pushdown_topk_))) {
-      LOG_WARN("failed to reprepare pushdown topk", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    ready_to_output_ = false;
-    cur_result_item_idx_ = 0;
-    result_item_size_ = 0;
-  }
-  result_items_ = nullptr;
-
   return ret;
 }
 

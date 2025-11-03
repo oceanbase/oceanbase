@@ -168,6 +168,7 @@ public:
 
 protected:
   virtual int do_table_scan() override;
+  virtual int rescan() override;
   virtual int inner_init(ObDASIterParam &param) override;
   virtual int inner_reuse() override;
   virtual int inner_release() override;

@@ -120,6 +120,11 @@ public:
   static bool is_vec_ivf_scan(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *attach_rtdef);
   static bool is_vec_spiv_scan(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *attach_rtdef);
   static bool is_vec_hnsw_scan(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *attach_rtdef);
+  static int check_fts_index_merge_and_opt(const ObDASScanCtDef *scan_ctdef,
+                                           ObDASScanRtDef *scan_rtdef,
+                                           const ObDASBaseCtDef *index_merge_ctdef,
+                                           ObDASBaseRtDef *index_merge_rtdef,
+                                           bool &enable_opt);
 
 private:
   static int create_das_scan_iter(common::ObIAllocator &alloc,
@@ -419,12 +424,6 @@ private:
                                                  const int64_t limit,
                                                  const int64_t offset,
                                                  ObDASIter *&index_merge_root);
-
-  static int check_fts_index_merge_and_opt(const ObDASScanCtDef *scan_ctdef,
-                                           ObDASScanRtDef *scan_rtdef,
-                                           const ObDASBaseCtDef *index_merge_ctdef,
-                                           ObDASBaseRtDef *index_merge_rtdef,
-                                           bool &enable_opt);
 
   static int create_index_merge_sub_tree(ObTableScanParam &scan_param,
                                          common::ObIAllocator &alloc,
