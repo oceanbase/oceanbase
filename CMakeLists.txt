@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
-set(OB_BUILD_VERSION "4.2.5.7")
+set(OB_BUILD_VERSION "4.2.5.8")
 
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"

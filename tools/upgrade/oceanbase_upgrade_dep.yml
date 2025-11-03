@@ -160,3 +160,7 @@
       - 4.2.5.7
 
 - version: 4.2.5.7
+  can_be_upgraded_to:
+      - 4.2.5.8
+
+- version: 4.2.5.8
