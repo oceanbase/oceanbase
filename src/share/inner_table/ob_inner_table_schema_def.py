@@ -7625,7 +7625,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'tushicheng.tsc',
   table_name = '__all_storage_io_usage',
   table_id = '517',
 
@@ -14823,7 +14823,7 @@ def_table_schema(
 )
 # 12375: __all_virtual_time_guard_slow_history
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_lease_mgr',
   table_id = '12376',
   table_type = 'VIRTUAL_TABLE',
@@ -14857,7 +14857,7 @@ def_table_schema(
 # 12377: __all_virtual_dup_ls_follower_lease_info
 
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_tablet_set',
   table_id = '12378',
   table_type = 'VIRTUAL_TABLE',
@@ -14886,7 +14886,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 def_table_schema(
-  owner = 'wyh329796',
+  owner = 'weixiaoxian.wxx',
   table_name = '__all_virtual_dup_ls_tablets',
   table_id = '12379',
   table_type = 'VIRTUAL_TABLE',
@@ -16135,7 +16135,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner      = 'wyh329796',
+  owner      = 'tushicheng.tsc',
   table_name = '__all_virtual_group_io_stat',
   table_id = '12483',
   table_type = 'VIRTUAL_TABLE',
@@ -40125,7 +40125,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_RSRC_DIRECTIVES',
   table_id        = '21546',
   table_type      = 'SYSTEM_VIEW',
@@ -40151,7 +40151,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'CDB_OB_RSRC_DIRECTIVES',
   table_id        = '21547',
   table_type      = 'SYSTEM_VIEW',
@@ -40409,7 +40409,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'V$OB_GROUP_IO_STAT',
   table_id        = '21558',
   table_type      = 'SYSTEM_VIEW',
@@ -40443,7 +40443,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'GV$OB_GROUP_IO_STAT',
   table_id        = '21559',
   table_type      = 'SYSTEM_VIEW',
@@ -40473,7 +40473,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_STORAGE_IO_USAGE',
   table_id        = '21560',
   table_type      = 'SYSTEM_VIEW',
@@ -40525,7 +40525,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'CDB_OB_STORAGE_IO_USAGE',
   table_id        = '21561',
   table_type      = 'SYSTEM_VIEW',
@@ -66134,7 +66134,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_STORAGE_IO_USAGE',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -75026,7 +75026,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'DBA_OB_RSRC_DIRECTIVES',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -75153,7 +75153,7 @@ AND
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'V$OB_GROUP_IO_STAT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -75189,7 +75189,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'wyh329796',
+  owner           = 'tushicheng.tsc',
   table_name      = 'GV$OB_GROUP_IO_STAT',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
