@@ -192,6 +192,7 @@ TEST_F(TestAtomicFileMgr, test_atomic_file_mgr_gc)
     GET_LS_META_HANLDE(ls_meta_handle, 8, 8);
     ls_meta_handle8.reset();
 
+    MTL(ObAtomicFileMgr*)->gc_task_.start_task_();
     ASSERT_EQ(OB_SUCCESS, MTL(ObAtomicFileMgr*)->gc_task_.process_());
 
     ObAtomicFileType type = ObAtomicFileType::MINI_SSTABLE_LIST;
