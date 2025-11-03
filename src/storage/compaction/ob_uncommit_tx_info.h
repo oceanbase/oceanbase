@@ -109,7 +109,7 @@ public:
   void set_info_status_overflow() { info_status_ = INFO_OVERFLOW; }
   void set_info_status_only_tx_id() { info_status_ = ONLY_TXID; }
   void set_info_status_record_seq() { info_status_ = RECORD_SEQ; }
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
+  virtual int64_t to_string(char *buf, const int64_t buf_len, const bool is_simplified = false) const = 0;
   virtual int64_t get_info_count() const = 0;
   virtual bool is_empty() const  { return info_status_ == RECORD_SEQ && get_info_count() ==  0;}
   virtual bool is_info_overflow() const  { return info_status_ == INFO_OVERFLOW && get_info_count() ==  0;}
@@ -146,7 +146,7 @@ public:
   virtual ~ObMetaUncommitTxInfo() = default;
   int init(common::ObArenaAllocator &allocator, const ObBasicUncommitTxInfo &tmp_uncommit_info);
   virtual int push_back(const ObUncommitTxDesc &tx_seq_key) override;
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+  virtual int64_t to_string(char *buf, const int64_t buf_len, const bool is_simplified = false) const override;
   void reset();
   int64_t get_deep_copy_size() const;
   int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObMetaUncommitTxInfo &dest) const;
@@ -168,7 +168,7 @@ public:
   ObMemUncommitTxInfo() : ObBasicUncommitTxInfo() {}
   virtual ~ObMemUncommitTxInfo() = default;
   virtual int push_back(const ObUncommitTxDesc &tx_seq_key) override;
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+  virtual int64_t to_string(char *buf, const int64_t buf_len, const bool is_simplified = false) const override;
   int assign(const ObBasicUncommitTxInfo &uncommit_tx_info);
   void reuse();
   void reset();

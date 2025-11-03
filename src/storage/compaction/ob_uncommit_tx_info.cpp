@@ -24,13 +24,17 @@
 #include  "storage/compaction/ob_partition_merge_iter.h"
 
 # define TOSTRING(CLS, COUNT) \
-int64_t CLS::to_string(char *buf, const int64_t buf_len) const \
+int64_t CLS::to_string(char *buf, const int64_t buf_len, const bool is_simplified) const \
 {  \
   int64_t pos = 0;\
   if (OB_ISNULL(buf) || buf_len <= 0) { \
   } else {   \
     J_OBJ_START(); \
-    J_KV(KP(this), K_(version), K_(info_status), K_(total_uncommit_row_count), K(COUNT));\
+    if (is_simplified) { \
+      J_KV(K_(info_status), K_(total_uncommit_row_count), K(COUNT));\
+    } else { \
+      J_KV(KP(this), K_(version), K_(info_status), K_(total_uncommit_row_count), K(COUNT));\
+    } \
     if (COUNT > 0) { \
       J_COMMA(); \
       J_ARRAY_START();\
@@ -191,7 +195,6 @@ int64_t ObMetaUncommitTxInfo::get_serialize_size() const
 }
 
 TOSTRING(ObMetaUncommitTxInfo, uncommit_tx_desc_count_);
-
 
 void ObMetaUncommitTxInfo::reset()
 {
