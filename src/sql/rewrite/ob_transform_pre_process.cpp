@@ -7944,6 +7944,12 @@ int ObTransformPreProcess::create_embedded_table_vector_col_ref(
     }
   }
 
+  if (OB_SUCC(ret) && OB_ISNULL(vector_col_ref)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use semantic_vector_distance without hybrid vector index");
+    LOG_WARN("not find hybrid vector index", K(ret));
+  }
+
   return ret;
 }
 
@@ -8043,7 +8049,7 @@ int ObTransformPreProcess::transform_semantic_vector_dis_expr(ObDMLStmt *stmt, b
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("semantic_distance expr is null", K(ret));
         } else if (semantic_expr->get_param_count() != 2) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_PARAM_SIZE;
           LOG_WARN("semantic_distance expr should have 2 params", K(ret), K(semantic_expr->get_param_count()));
         } else {
           ObRawExpr *new_semantic_expr = nullptr;

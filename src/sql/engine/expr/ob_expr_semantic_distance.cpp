@@ -42,12 +42,17 @@
 
    UNUSED(type1);
    UNUSED(type2);
-   UNUSED(type_ctx);
 
-   type.set_double();
-   type.set_precision(PRECISION_UNKNOWN_YET);
-   type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
-
+   const ObRawExpr *raw_expr = type_ctx.get_raw_expr();
+   if (raw_expr->get_param_expr(0)->get_expr_type() != T_REF_COLUMN && raw_expr->get_param_expr(1)->get_expr_type() != T_REF_COLUMN) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("none param of semantic_distance is col ref",
+      K(raw_expr->get_param_expr(0)->get_expr_type()), K(raw_expr->get_param_expr(1)->get_expr_type()));
+   } else {
+    type.set_double();
+    type.set_precision(PRECISION_UNKNOWN_YET);
+    type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+   }
    return ret;
  }
 
@@ -81,10 +86,19 @@
      ObString func_name_(get_name());
      ret = OB_ERR_PARAM_SIZE;
      LOG_USER_ERROR(OB_ERR_PARAM_SIZE, func_name_.length(), func_name_.ptr());
+   } else if (param_num == 2) {
+     const ObRawExpr *raw_expr = type_ctx.get_raw_expr();
+     if (raw_expr->get_param_expr(0)->get_expr_type() != T_REF_COLUMN && raw_expr->get_param_expr(1)->get_expr_type() != T_REF_COLUMN) {
+       ret = OB_INVALID_ARGUMENT;
+       LOG_WARN("none param of semantic_distance is col ref",
+        K(raw_expr->get_param_expr(0)->get_expr_type()), K(raw_expr->get_param_expr(1)->get_expr_type()));
+     } else {
+       type.set_type(ObDoubleType);
+       type.set_calc_type(ObDoubleType);
+     }
    } else {
-
-    type.set_type(ObDoubleType);
-    type.set_calc_type(ObDoubleType);
+     type.set_type(ObDoubleType);
+     type.set_calc_type(ObDoubleType);
    }
    return ret;
  }
