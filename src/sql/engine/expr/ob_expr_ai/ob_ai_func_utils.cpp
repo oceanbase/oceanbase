@@ -1675,6 +1675,19 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
   ObAIFuncClient client;
   ObString unencrypted_access_key;
   ObString request_model_name = get_request_model_name();
+  int64_t dimension = 0;
+  if (OB_NOT_NULL(config)) {
+    ObJsonNode *dimension_node = config->get_value("dimensions");
+    if (OB_ISNULL(dimension_node)) {
+      // do nothing
+    } else if (dimension_node->json_type() != ObJsonNodeType::J_INT) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dimension is not int", K(ret));
+    } else {
+      dimension = static_cast<ObJsonInt *>(dimension_node)->get_int();
+    }
+  }
+
   if (!is_dense_embedding_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("info type is not dense embedding", K(ret));
@@ -1703,6 +1716,10 @@ int ObAIFuncModel::call_dense_embedding_vector_v2(ObArray<ObString> &content, Ob
         if (OB_ISNULL(j_base)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("j_base is null", K(ret));
+        } else if (dimension > 0 && static_cast<ObJsonArray *>(j_base)->element_count() != dimension) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("result array is not equal to dimension", K(ret), K(dimension), K(static_cast<ObJsonArray *>(j_base)->element_count()));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "result dimension is not equal to dimension");
         } else if (OB_FAIL(ObAIFuncJsonUtils::print_json_to_str(*allocator_, j_base, result_str))) {
           LOG_WARN("Failed to print json to string", K(ret));
         } else {

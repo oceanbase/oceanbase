@@ -482,7 +482,7 @@ int ObExprAIEmbed::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
   if (OB_SUCC(ret)) {
     rt_expr.eval_func_ = ObExprAIEmbed::eval_ai_embed;
-    rt_expr.eval_vector_func_ = ObExprAIEmbed::eval_ai_embed_vector;
+    //rt_expr.eval_vector_func_ = ObExprAIEmbed::eval_ai_embed_vector;
   }
   return ret;
 }
