@@ -976,6 +976,8 @@ int ObBackupTabletSSTableIndexBuilderMgr::prepare_data_store_desc_(const share::
           int64_t column_cnt = sstable_meta_handle.get_sstable_meta().get_basic_meta().column_cnt_;
           if (OB_FAIL(data_store_desc.get_col_desc().mock_valid_col_default_checksum_array(column_cnt))) {
             LOG_WARN("fail to mock valid col default checksum array", K(ret));
+          } else if (OB_FAIL(data_store_desc.get_desc().update_basic_info_from_macro_meta(sstable_meta_handle.get_sstable_meta().get_basic_meta()))) {
+            LOG_WARN("failed to update basic info from macro meta", K(ret));
           }
         }
       }
