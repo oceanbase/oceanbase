@@ -437,7 +437,7 @@ static void ob_hash_sort_latin1_de(const struct ObCharsetInfo *cs,
     length = (int)((unsigned char*)end - key) > HASH_BUFFER_LENGTH ?
                 HASH_BUFFER_LENGTH : (int)((unsigned char*)end - key);
     int j = 0;
-    for (int i = 0; i < length; i++, key++) {
+    for (int i = 0; i < length && j < HASH_BUFFER_LENGTH; i++, key++) {
       unsigned X = (unsigned)combo2map[(unsigned)*key];
       data[j++] = combo1map[(unsigned int) *key];
       if (X) {
