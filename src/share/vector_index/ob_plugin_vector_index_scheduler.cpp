@@ -146,29 +146,58 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
     }
 
     delete_tablet_id_array.reset();
-
-    FOREACH_X(iter, index_ls_mgr->get_partial_adapter_map(), OB_SUCC(ret)) {
-      ObPluginVectorIndexAdaptor *adapter = iter->second;
-      ObTabletID tablet_id = iter->first;
-      ObTabletHandle tablet_handle;
-      if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
-        if (OB_TABLET_NOT_EXIST != ret) {
-          LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
-        } else {
-          ret = OB_SUCCESS; // not found, moved from this ls
-          if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
-            LOG_WARN("push back table id failed",
-              K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
-          }
-        }
-      } else {
-        // tablet exist, but it may in recyclebin, cannot check schema if it is partial adapter from dml
-        // add count here if more then 3 loops not merged, remove them.
-        adapter->inc_idle();
-        if (adapter->is_deprecated()) {
-          if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
-            LOG_WARN("push back table id failed",
-              K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+    common::hash::ObHashSet<uintptr_t> full_partial_adaptor_hash_set;
+    if (index_ls_mgr->get_partial_adapter_map().size() > 0) {
+      if (OB_FAIL(full_partial_adaptor_hash_set.create(index_ls_mgr->get_partial_adapter_map().size()))){
+        LOG_WARN("fail to create full partial adaptor set failed", KR(ret), K(index_ls_mgr->get_partial_adapter_map().size()));
+      } else  {
+        FOREACH_X(iter, index_ls_mgr->get_partial_adapter_map(), OB_SUCC(ret)) {
+          ObPluginVectorIndexAdaptor *adapter = iter->second;
+          ObTabletID tablet_id = iter->first;
+          ObTabletHandle tablet_handle;
+          if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
+            if (OB_TABLET_NOT_EXIST != ret) {
+              LOG_WARN("fail to get tablet", K(ret), K(tablet_id));
+            } else {
+              ret = OB_SUCCESS; // not found, moved from this ls
+              if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
+                LOG_WARN("push back table id failed",
+                  K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+              }
+            }
+          } else if (adapter->get_create_type() == CreateTypeFullPartial) {
+            uintptr_t adapter_addr = reinterpret_cast<uintptr_t>(adapter);
+            ret = full_partial_adaptor_hash_set.exist_refactored(adapter_addr);
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+              if (OB_FAIL(full_partial_adaptor_hash_set.set_refactored(adapter_addr))) {
+                LOG_WARN("fail to set adapter address to hashset", K(adapter_addr));
+              } else {
+                // tablet exist, but it may in recyclebin, cannot check schema if it is partial adapter from dml
+                // add count here if more then 3 loops not merged, remove them.
+                adapter->inc_idle();
+                if (adapter->is_deprecated()) {
+                  if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
+                    LOG_WARN("push back table id failed",
+                      K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+                  }
+                }
+              }
+            } else {
+              LOG_WARN("fail to check exist refactored", K(ret));
+            }
+          } else {
+            // tablet exist, but it may in recyclebin, cannot check schema if it is partial adapter from dml
+            // add count here if more then 3 loops not merged, remove them.
+            adapter->inc_idle();
+            if (adapter->is_deprecated()) {
+              if (OB_FAIL(delete_tablet_id_array.push_back(tablet_id))) {
+                LOG_WARN("push back table id failed",
+                  K(delete_tablet_id_array.count()), K(adapter->get_inc_tablet_id()), KR(ret));
+              }
+            }
           }
         }
       }
