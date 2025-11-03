@@ -252,7 +252,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
                                        OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
                                        !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                        !tablet_meta.has_transfer_table() && // The query in the transfer scenario does not enable fuse row cache
-                                       !(access_ctx_->is_inc_major_query_ && table->is_column_store_sstable()) && // inc major query with co sstables does not use fuse row cache
+                                       !(access_ctx_->is_inc_major_query_ && access_param_->iter_param_.is_use_column_store()) && // inc major query with co sstables does not use fuse row cache
                                        !is_fuse_row_cache_force_disable();
     bool need_update_fuse_cache = false;
     access_ctx_->query_flag_.set_not_use_row_cache();

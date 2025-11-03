@@ -247,7 +247,7 @@ int ObMultipleGetMerge::init_resource()
                                     OB_ISNULL(get_table_param_->tablet_iter_.get_split_extra_tablet_handles_ptr()) &&
                                     !(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid()) && // not split dst tablet
                                     !tablet_meta.has_transfer_table() &&
-                                    !(access_ctx_->is_inc_major_query_ && table->is_column_store_sstable()) && // inc major query with co sstables does not use fuse row cache
+                                    !(access_ctx_->is_inc_major_query_ && access_param_->iter_param_.is_use_column_store()) && // inc major query with co sstables does not use fuse row cache
                                     !is_fuse_row_cache_force_disable();
   access_ctx_->query_flag_.set_not_use_row_cache();
   STORAGE_LOG(DEBUG, "multiple get merge start", K(rowkeys_->count()), K(tables_.count()), K(iters_.count()), K(access_ctx_->use_fuse_row_cache_),
@@ -523,7 +523,7 @@ int ObMultipleGetMerge::project_final_row(const ObDatumRow &fuse_row, ObDatumRow
   STORAGE_LOG(DEBUG, "try to project row", K(ret), K(get_row_range_idx_), K(cols_index), K(access_ctx_->use_fuse_row_cache_),
                                           KPC(projector), K(rowkeys_->at(get_row_range_idx_)), K(fuse_row), K(row.count_));
   if (OB_FAIL(project_row(fuse_row, projector, 0/*range idx delta*/, row))) {
-    STORAGE_LOG(WARN, "fail to project row", K(ret), K(fuse_row), K(cols_index));
+    STORAGE_LOG(WARN, "fail to project row", K(ret), K(fuse_row), K(cols_index), KPC(access_ctx_), K(access_param_->iter_param_));
   } else {
     row.trans_info_ = fuse_row.trans_info_;
   }
