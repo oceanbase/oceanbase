@@ -76,6 +76,7 @@ private:
   static int schedule_task_if_split_src(ObTabletHandle &tablet_handle);
 #endif
 
+  static int check_ddl_kv_dump_delay(ObDDLKV &ddl_kv);
   static int check_inc_major_merge_delay(
       const ObTabletHandle &tablet_handle,
       const transaction::ObTransID &cur_trans_id,

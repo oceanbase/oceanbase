@@ -231,7 +231,9 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
     ObDDLKV *ddl_kv_ptr = frozen_ddl_kvs.at(0).get_obj();
     cur_trans_id = ddl_kv_ptr->get_trans_id();
     cur_seq_no = ddl_kv_ptr->get_seq_no();
-    if (OB_UNLIKELY(!ddl_kv_ptr->is_inc_major_ddl_kv())) {
+    if (OB_FAIL(check_ddl_kv_dump_delay(*ddl_kv_ptr))) {
+      LOG_WARN("failed to check ddl kv dump delay", KR(ret), K(tablet_id), KPC(ddl_kv_ptr));
+    } else if (OB_UNLIKELY(!ddl_kv_ptr->is_inc_major_ddl_kv())) {
       ret = OB_NO_NEED_MERGE;
       LOG_INFO("first ddl kv is not inc major, no need to merge", KR(ret), K(tablet_id), KPC(ddl_kv_ptr));
     } else if ((ddl_table_iter.count() == 0) && OB_FAIL(ObIncMajorTxHelper::check_inc_major_trans_can_read(ls,
@@ -313,6 +315,25 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
   return ret;
 }
 
+int ObDDLMergeScheduler::check_ddl_kv_dump_delay(ObDDLKV &ddl_kv)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ddl_kv.is_freezed())) {
+    // do nothing
+  } else {
+    const SCN &freeze_scn = ddl_kv.get_freeze_scn();
+    const int64_t warn_time_interval = 60 * 60 * 1000 * 1000L; // 1 hour
+    const int64_t freeze_time_us = freeze_scn.convert_to_ts();
+    const int64_t current_time_us = ObTimeUtility::current_time();
+    const int64_t time_interval = current_time_us - freeze_time_us;
+    if (OB_UNLIKELY(time_interval > warn_time_interval)) {
+      LOG_ERROR("ddl kv dump is delayed more than 1 hour", K(ddl_kv), K(freeze_scn),
+          K(freeze_time_us), K(current_time_us), K(time_interval), K(warn_time_interval));
+    }
+  }
+  return ret;
+}
+
 int ObDDLMergeScheduler::check_inc_major_merge_delay(
     const ObTabletHandle &tablet_handle,
     const ObTransID &cur_trans_id,
@@ -327,13 +348,13 @@ int ObDDLMergeScheduler::check_inc_major_merge_delay(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tablet_handle), K(cur_trans_id), K(cur_seq_no), K(trans_version));
   } else {
-    const int64_t warn_time_interval = 10 * 60 * 1000 * 1000L; // 10 minutes
+    const int64_t warn_time_interval = 60 * 60 * 1000 * 1000L; // 1 hour
     const int64_t commit_time_us = trans_version.convert_to_ts();
     const int64_t current_time_us = ObTimeUtility::current_time();
     const int64_t time_interval = current_time_us - commit_time_us;
     if (OB_UNLIKELY(time_interval > warn_time_interval)) {
       const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
-      LOG_WARN("inc major merge is delayed more than 10 minutes", K(tablet_id), K(cur_trans_id), K(cur_seq_no),
+      LOG_ERROR("inc major merge is delayed more than 1 hour", K(tablet_id), K(cur_trans_id), K(cur_seq_no),
           K(trans_version), K(commit_time_us), K(current_time_us), K(time_interval), K(warn_time_interval));
     }
   }
