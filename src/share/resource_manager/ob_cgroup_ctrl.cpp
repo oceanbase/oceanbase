@@ -37,7 +37,7 @@ int SET_GROUP_ID(uint64_t group_id, bool is_background)
   THIS_WORKER.set_group_id(static_cast<int32_t>(group_id));
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_)
-      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id))) {
+      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id, is_background))) {
     LOG_WARN("add self to cgroup fail", K(ret), K(MTL_ID()), K(group_id));
   }
   return ret;
@@ -46,6 +46,12 @@ int SET_GROUP_ID(uint64_t group_id, bool is_background)
 int CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &group_id)
 {
   return G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type, group_id);
+}
+
+bool is_global_background_resource_isolation_enabled()
+{
+  // Check the GCONF configuration
+  return GCONF.enable_global_background_resource_isolation;
 }
 
 }  // namespace lib
