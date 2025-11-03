@@ -51,16 +51,29 @@ def get_tenant_ids(cur):
   return [_[0] for _ in query(cur, 'select tenant_id from oceanbase.__all_tenant')]
 
 def run_root_inspection(cur, timeout):
-
-  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
-
-  actions.set_session_timeout(cur, query_timeout)
-
-  sql = "alter system run job 'root_inspection'"
-  logging.info(sql)
-  cur.execute(sql)
-
-  actions.set_session_timeout(cur, 10)
+  sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
+  results = query(cur, sql)
+  if len(results) != 1 or len(results[0]) != 1:
+    warn_text = 'result not match, sql:"{}", results:{}'.format(sql, results)
+    logging.warn(warn_text)
+    raise MyError(warn_text)
+  elif results[0][0] != 0:
+    sql = "select @@session.ob_query_timeout"
+    result = query(cur, sql)
+    if len(result) != 1 or len(result[0]) != 1:
+      warn_text = 'result not match, sql:"{}", results:{}'.format(sql, result)
+      logging.warn(warn_text)
+      raise MyError(warn_text)
+    else:
+      prev_timeout = int(result[0][0]) // 1000 // 1000
+    query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
+    actions.set_session_timeout(cur, query_timeout)
+    sql = "alter system run job 'root_inspection'"
+    logging.info(sql)
+    cur.execute(sql)
+    actions.set_session_timeout(cur, prev_timeout)
+  else:
+    logging.info("skip run 'root_inspection', results:{}".format(results))
 
 def upgrade_across_version(cur):
   current_data_version = actions.get_current_data_version()
