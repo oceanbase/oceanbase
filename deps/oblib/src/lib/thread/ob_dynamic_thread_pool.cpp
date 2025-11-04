@@ -476,12 +476,7 @@ void ObSimpleDynamicThreadPool::try_expand_thread_count()
     // unneed to expand thread count
   } else if (OB_SUCC(update_threads_lock_.trylock())) {
     int64_t cur_thread_count = get_thread_count();
-    int inc_cnt = 0;
-    if (cur_thread_count > 0) {
-      inc_cnt = queue_size / cur_thread_count;
-    } else {
-      inc_cnt = queue_size;
-    }
+    int inc_cnt = queue_size;
     inc_cnt = min(inc_cnt, max_thread_cnt_ - cur_thread_count);
     if (inc_cnt > 0) {
       DISABLE_SQL_MEMLEAK_GUARD;
