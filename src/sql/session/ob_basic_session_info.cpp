@@ -4369,6 +4369,7 @@ int ObBasicSessionInfo::deserialize_sync_sys_vars(int64_t &deserialize_sys_var_c
       } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
         LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
       } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+        sys_var->clean_inc_value();
         LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
       } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
                                                   check_timezone_valid))) {
