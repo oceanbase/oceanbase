@@ -147,7 +147,13 @@ int ObDasVecScanUtils::get_real_search_vec(common::ObIAllocator &allocator,
     LOG_WARN("ptr is null", K(ret), K(sort_rtdef), K(origin_vec));
   } else if (OB_FAIL(origin_vec->eval(*(sort_rtdef->eval_ctx_), search_vec_datum))) {
     LOG_WARN("eval vec arg failed", K(ret));
+  } else if (search_vec_datum->is_null()) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("search vector is null", K(ret));
   } else if (OB_FALSE_IT(real_search_vec = search_vec_datum->get_string())) {
+  } else if (0 == real_search_vec.length()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("search vector is empty string", K(ret));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator,
                                                                ObLongTextType,
                                                                CS_TYPE_BINARY,
