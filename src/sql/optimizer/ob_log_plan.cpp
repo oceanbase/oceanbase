@@ -415,7 +415,7 @@ int ObLogPlan::pre_process_push_subq(ObIArray<ObRawExpr*> &quals)
       LOG_WARN("get unexpected null qual", K(ret), K(i));
     } else if (!expr->has_flag(CNT_SUB_QUERY)) {
       // do nothing
-    } else if (OB_FAIL(check_push_subq_hint(expr, force_push_subq, force_no_push_subq))) {
+    } else if (OB_FAIL(check_push_subq_validity(expr, force_push_subq, force_no_push_subq))) {
       LOG_WARN("failed to check one push subq hint", K(ret), K(i), KPC(expr));
     } else if (force_push_subq || force_no_push_subq || has_outline_data) {
       // handle hint or outline
@@ -469,9 +469,9 @@ int ObLogPlan::get_connected_table_ids(const ObIArray<ObRawExpr*> &quals,
   return ret; 
 }
 
-int ObLogPlan::check_push_subq_hint(const ObRawExpr *expr,
-                                    bool &force_push,
-                                    bool &force_no_push)
+int ObLogPlan::check_push_subq_validity(const ObRawExpr *expr,
+                                        bool &force_push,
+                                        bool &force_no_push)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -479,7 +479,9 @@ int ObLogPlan::check_push_subq_hint(const ObRawExpr *expr,
     LOG_WARN("get unexpected null expr", K(ret), K(expr));
   } else if (expr->is_query_ref_expr()) {
     const ObSelectStmt *ref_stmt = static_cast<const ObQueryRefRawExpr*>(expr)->get_ref_stmt();
-    if (OB_ISNULL(ref_stmt)) {
+    if (expr->is_shared_reference()) {
+      force_no_push = true;
+    } else if (OB_ISNULL(ref_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(ref_stmt));
     } else {
@@ -493,7 +495,7 @@ int ObLogPlan::check_push_subq_hint(const ObRawExpr *expr,
     // do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !(force_push || force_no_push) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(check_push_subq_hint(expr->get_param_expr(i), force_push, force_no_push)))) {
+      if (OB_FAIL(SMART_CALL(check_push_subq_validity(expr->get_param_expr(i), force_push, force_no_push)))) {
         LOG_WARN("failed to check param expr push subq hint", K(ret), K(i), KPC(expr));
       }
     }
@@ -821,7 +823,7 @@ int ObLogPlan::pre_process_quals(SemiInfo* semi_info)
       bool force_push_subq = false;
       bool force_no_push_subq = false;
       if (expr->has_flag(CNT_SUB_QUERY)
-          && OB_FAIL(check_push_subq_hint(expr, force_push_subq, force_no_push_subq))) {
+          && OB_FAIL(check_push_subq_validity(expr, force_push_subq, force_no_push_subq))) {
         LOG_WARN("failed to check one push subq hint", K(ret), K(i), KPC(expr));
       } else if (force_push_subq && OB_FAIL(push_subq_exprs_.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -864,7 +866,7 @@ int ObLogPlan::pre_process_quals(TableItem *table_item)
         bool force_push_subq = false;
         bool force_no_push_subq = false;
         if (expr->has_flag(CNT_SUB_QUERY)
-            && OB_FAIL(check_push_subq_hint(expr, force_push_subq, force_no_push_subq))) {
+            && OB_FAIL(check_push_subq_validity(expr, force_push_subq, force_no_push_subq))) {
           LOG_WARN("failed to check one push subq hint", K(ret), K(i), KPC(expr));
         } else if (force_push_subq && OB_FAIL(push_subq_exprs_.push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));

@@ -1152,6 +1152,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr *, 4> post_join_exprs;
   ObSEArray<ObRawExpr *, 4> select_exprs;
   ObSEArray<ObQueryRefRawExpr*, 4> transformed_subqueries;
+  bool is_nested_subq_cond = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
@@ -1189,6 +1190,12 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
                  !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (subquery->get_select_item_size() >= 2) {
+        // do nothing
+      } else if (OB_FAIL(check_nested_subquery_cond(*query_expr, is_nested_subq_cond))) {
+        LOG_WARN("failed to check contain nested subquery condition", KPC(query_expr));
+      } else if (is_nested_subq_cond &&
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) &&
+                 !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (has_exist_in_array(transformed_subqueries, query_expr)) {
         //do nothing
@@ -1237,6 +1244,12 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
       } else if (has_exist_in_array(transformed_subqueries, query_expr) ||
                  (subquery->get_select_item_size() > 1 && !is_vector_assign)) {
         //do nothing
+      } else if (OB_FAIL(check_nested_subquery_cond(*query_expr, is_nested_subq_cond))) {
+        LOG_WARN("failed to check contain nested subquery condition", KPC(query_expr));
+      } else if (is_nested_subq_cond &&
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) &&
+                 !ctx_->force_subquery_unnest_) {
+        // do nothing
       } else if (OB_FAIL(transformed_subqueries.push_back(query_expr))) {
         LOG_WARN("fail to push back", K(ret));
       } else if (OB_FAIL(unnest_single_set_subquery(stmt,
@@ -1248,6 +1261,29 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
       } else {
         trans_happened = true;
       }
+    }
+  }
+  return ret;
+}
+
+// It is difficult to generate an optimized plan if we rewrite a nested condition that contains subqueries to join conditions.
+// e.g. select (...) subq1, (select c1 from t2 where pk = subq1) subq2 from t1 having subq2 > 0;
+//   => select (...) subq1, c1 from t1 join t2 on t2.pk = (...) subq1 where t2.c1 > 0;
+// Remove this check after we can generate a better plan for subqueries in join conditions.
+int ObWhereSubQueryPullup::check_nested_subquery_cond(const ObQueryRefRawExpr &query_expr,
+                                                      bool &is_nested_subq_cond)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObExecParamRawExpr *> &exec_params = query_expr.get_exec_params();
+  is_nested_subq_cond = !exec_params.empty();
+  for (int64_t i = 0; OB_SUCC(ret) && is_nested_subq_cond && i < exec_params.count(); i ++) {
+    const ObExecParamRawExpr *exec_param = exec_params.at(i);
+    const ObRawExpr *ref_expr = nullptr;
+    if (OB_ISNULL(exec_param) || OB_ISNULL(ref_expr = exec_param->get_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", K(ret), KPC(ref_expr));
+    } else {
+      is_nested_subq_cond &= ref_expr->has_flag(CNT_SUB_QUERY);
     }
   }
   return ret;
