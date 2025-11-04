@@ -2282,21 +2282,23 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &is_valid)
   } else {
     null_param_contained_ = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < filter_.expr_->arg_cnt_; i++) {
-      if (OB_ISNULL(filter_.expr_->args_[i])) {
+      ObExpr *cur_arg = filter_.expr_->args_[i];
+      if (OB_ISNULL(cur_arg)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null expr arguments", K(ret), K(i));
-      } else if (filter_.expr_->args_[i]->type_ == T_REF_COLUMN) {
+      } else if (cur_arg->type_ == T_REF_COLUMN) {
         is_ref_column_found = true;
-        col_obj_meta_ = filter_.expr_->args_[i]->obj_meta_;
+        col_obj_meta_ = cur_arg->obj_meta_;
         // skip column reference expr
         continue;
-      } else if (is_support_pushdown_json_expr(filter_.expr_->args_[i]->type_)) {
+      } else if (is_support_pushdown_json_expr(cur_arg->type_)) {
         is_ref_column_found = true;
-        col_obj_meta_ = filter_.expr_->args_[i]->obj_meta_;
+        col_obj_meta_ = cur_arg->obj_meta_;
         continue;
       } else {
         ObDatum *datum = NULL;
-        if (OB_FAIL(filter_.expr_->args_[i]->eval(eval_ctx, datum))) {
+        cur_arg->get_eval_info(eval_ctx).clear_evaluated_flag();
+        if (OB_FAIL(cur_arg->eval(eval_ctx, datum))) {
           if (lib::is_oracle_mode()) {
             is_valid = false;
           } else {
@@ -2305,7 +2307,7 @@ int ObWhiteFilterExecutor::init_compare_eval_datums(bool &is_valid)
         } else if (OB_FAIL(datum_params_.push_back(*datum))) {
           LOG_WARN("Failed to push back datum", K(ret));
         } else {
-          param_obj_meta_ = filter_.expr_->args_[i]->obj_meta_;
+          param_obj_meta_ = cur_arg->obj_meta_;
           if (is_null_param(*datum, param_obj_meta_)) {
             null_param_contained_ = true;
           }
@@ -2357,6 +2359,7 @@ int ObWhiteFilterExecutor::init_in_eval_datums(bool &is_valid)
         param_obj_meta_ = cur_arg->obj_meta_;
       }
       if (OB_SUCC(ret)) {
+        cur_arg->get_eval_info(eval_ctx).clear_evaluated_flag();
         if (OB_FAIL(cur_arg->eval(eval_ctx, datum))) {
           if (lib::is_oracle_mode()) {
             is_valid = false;
