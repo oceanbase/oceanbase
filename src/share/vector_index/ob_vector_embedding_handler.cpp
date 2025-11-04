@@ -85,7 +85,7 @@ const int64_t ObEmbeddingTask::CALLBACK_BATCH_SIZE = 64;
 // Each array contains valid transitions FROM that phase
 // Note: DONE is allowed from any state for failure handling
 const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_INIT[] = {OB_EMBEDDING_TASK_HTTP_SENT, OB_EMBEDDING_TASK_DONE};
-const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_SENT[] = {OB_EMBEDDING_TASK_HTTP_COMPLETED, OB_EMBEDDING_TASK_DONE};
+const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_SENT[] = {OB_EMBEDDING_TASK_INIT, OB_EMBEDDING_TASK_HTTP_COMPLETED, OB_EMBEDDING_TASK_DONE};// add OB_EMBEDDING_TASK_INIT to support retry from sent state
 const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_HTTP_COMPLETED[] = {OB_EMBEDDING_TASK_PARSED, OB_EMBEDDING_TASK_DONE};
 const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_PARSED[] = {OB_EMBEDDING_TASK_INIT, OB_EMBEDDING_TASK_DONE};
 const ObEmbeddingTaskPhase ObEmbeddingTaskPhaseManager::VALID_TRANSITIONS_FROM_DONE[] = {}; // No valid transitions from DONE (terminal state)
@@ -182,6 +182,7 @@ ObEmbeddingTask::ObEmbeddingTask() : local_allocator_("EmbeddingTask", OB_MALLOC
                                     http_total_retry_count_(0),
                                     http_retry_start_time_us_(0),
                                     http_last_retry_time_us_(0),
+                                    need_retry_flag_(false),
                                     original_batch_size_(batch_size_),
                                     batch_size_adjusted_(false),
                                     current_batch_size_(10),
@@ -227,6 +228,7 @@ ObEmbeddingTask::ObEmbeddingTask(ObArenaAllocator &allocator) : local_allocator_
                                      http_total_retry_count_(0),
                                      http_retry_start_time_us_(0),
                                      http_last_retry_time_us_(0),
+                                     need_retry_flag_(false),
                                      original_batch_size_(batch_size_),
                                      batch_size_adjusted_(false),
                                      current_batch_size_(10),
@@ -570,7 +572,9 @@ int ObEmbeddingTask::check_async_progress()
           http_response_data_ = nullptr;
           http_response_data_size_ = 0;
 
-          if (OB_FAIL(start_async_work())) {
+          if (OB_FAIL(set_phase(OB_EMBEDDING_TASK_INIT))) {
+            LOG_WARN("failed to reset phase for retry", K(ret));
+          } else if (OB_FAIL(start_async_work())) {
             LOG_WARN("failed to retry HTTP request", K(ret));
             if (OB_FAIL(complete_task(OB_EMBEDDING_TASK_DONE, ret, true))) {
               LOG_WARN("failed to handle retry failure", K(ret));
@@ -708,8 +712,10 @@ int ObEmbeddingTask::init_http_request(const char *json_data, int64_t json_len)
 int ObEmbeddingTask::check_http_progress()
 {
   int ret = OB_SUCCESS;
-
-  if (!curl_request_in_progress_ || OB_ISNULL(curl_multi_handle_) || OB_ISNULL(curl_easy_handle_)) {
+  if (need_retry_flag_ && !curl_request_in_progress_ && http_response_data_ == nullptr) {
+    ret = OB_NEED_RETRY;
+    LOG_DEBUG("in retry backoff state, signaling retry", K(http_retry_count_), K(http_error_code_));
+  } else if (!curl_request_in_progress_ || OB_ISNULL(curl_multi_handle_) || OB_ISNULL(curl_easy_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no async HTTP request in progress or handles are null", K(ret),
             K(curl_request_in_progress_), KP(curl_multi_handle_), KP(curl_easy_handle_));
@@ -724,7 +730,7 @@ int ObEmbeddingTask::check_http_progress()
       LOG_WARN("curl_multi_perform failed", K(ret), K(multi_res));
     } else if (running_handles == 0) {
       curl_request_in_progress_ = false;
-
+      need_retry_flag_ = false;
       CURLMsg *msg = nullptr;
       int msgs_in_queue = 0;
       while (OB_SUCC(ret) && (msg = curl_multi_info_read(curl_multi_handle_, &msgs_in_queue))) {
@@ -761,9 +767,9 @@ int ObEmbeddingTask::check_http_progress()
                   http_error_message_ = ObString(curl_response_data_->size, curl_response_data_->data);
                 }
                 http_error_code_ = response_code;
-
+                need_retry_flag_ = should_retry_http_request(response_code);
                 // Check if we should retry this http request
-                if (should_retry_http_request(response_code)) {
+                if (need_retry_flag_) {
                   http_retry_count_++;
                   http_total_retry_count_++;
 
@@ -783,7 +789,7 @@ int ObEmbeddingTask::check_http_progress()
                 }
               }
 
-              if (should_retry_http_request(response_code)) {
+              if (need_retry_flag_) {
                 if (http_retry_count_ == 1) { // 第一次重试
                   http_retry_start_time_us_ = ObTimeUtility::current_time();
                 }
@@ -1462,7 +1468,7 @@ void ObEmbeddingTask::reset_retry_state()
   http_retry_count_ = 0;
   http_retry_start_time_us_ = 0;
   http_last_retry_time_us_ = 0;
-
+  need_retry_flag_ = false;
   // Try to increase batch size after successful request
   try_increase_batch_size();
 }

@@ -354,6 +354,7 @@ private:
   int64_t http_total_retry_count_;
   int64_t http_retry_start_time_us_;
   int64_t http_last_retry_time_us_;
+  bool need_retry_flag_;
 
   // Batch size adjustment for retry
   uint32_t original_batch_size_;

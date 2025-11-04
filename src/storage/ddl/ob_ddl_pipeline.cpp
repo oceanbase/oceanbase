@@ -1861,6 +1861,11 @@ int ObHNSWEmbeddingOperator::execute(const ObChunk &input_chunk,
     }
   }
 
+  if (OB_SUCC(ret) && embedmgr_->get_failed()) {
+    ret = error_ret_code_;
+    LOG_WARN("fail to embedding", K(ret));
+  }
+
   if (OB_SUCC(ret) && !input_chunk.is_end_chunk() && is_chunk_exhausted()) {
     reset_chunk_exhausted();
     reset_scan_state();
