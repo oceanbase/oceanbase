@@ -2112,7 +2112,8 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
 {
   int ret = OB_SUCCESS;
   pl::ObPLGetCursorAttrInfo info;
-  ObRawExpr *child_expr = NULL;
+  ObRawExpr *child_expr1 = NULL;
+  ObRawExpr *child_expr2 = NULL;
   ObPLGetCursorAttrRawExpr *c_expr = NULL;
   int64_t child_start = ctx_.columns_->count();
   CK (node.type_ == T_SP_EXPLICIT_CURSOR_ATTR || node.type_ == T_SP_IMPLICIT_CURSOR_ATTR);
@@ -2127,43 +2128,52 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
         OB_ERR_UNEXPECTED, node.children_[0]->type_);
     OX (info.set_is_explicit(true));
     OX (info.set_type(node.value_));
-    OZ (process_obj_access_node(*(node.children_[0]), child_expr));
-    if (OB_SUCC(ret) && T_SP_CURSOR_ROWID == node.value_ && NULL != child_expr) {
-      // in current of
-      // 1. the value must to be a cursor name
-      // 2. the cursor must to be a for update cursor
-      const pl::ObPLCursor *cursor = NULL;
-      const ObQualifiedName &col = ctx_.columns_->at(ctx_.columns_->count()-1);
-      ctx_.secondary_namespace_->get_cursor_by_name(ctx_, col.database_name_,
-        col.tbl_name_, col.col_name_, cursor);
-      if (NULL == cursor) {
-        ret = OB_ERR_NOT_CURSOR_NAME_IN_CURRENT_OF;
-        LOG_WARN(" not a cursor name", K(col.col_name_), K(col.tbl_name_), K(col.database_name_), K(ret));
-      } else if (!cursor->is_for_update()) {
-        ret = OB_ERR_NOT_FOR_UPDATE_CURSOR_IN_CURRENT_OF;
-        LOG_USER_ERROR(OB_ERR_NOT_FOR_UPDATE_CURSOR_IN_CURRENT_OF, 
-          col.col_name_.length(), col.col_name_.ptr());
-        LOG_WARN("current of only support for update select.", K(ret), K(col.col_name_));
-      } else if (cursor->has_hidden_rowid()) {
-        if (OB_ISNULL(ctx_.stmt_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("stmt is NULL", K(ret));
-        } else if (ObStmt::is_dml_write_stmt(ctx_.stmt_->stmt_type_)) {
-          ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(ctx_.stmt_);
-          if (OB_ISNULL(del_upd_stmt)) {
+    OZ (process_obj_access_node(*(node.children_[0]), child_expr1));
+    if (OB_SUCC(ret)) {
+      if (T_SP_CURSOR_ROWID == node.value_ && NULL != child_expr1) {
+        // in current of
+        // 1. the value must to be a cursor name
+        // 2. the cursor must to be a for update cursor
+        const pl::ObPLCursor *cursor = NULL;
+        const ObQualifiedName &col = ctx_.columns_->at(ctx_.columns_->count()-1);
+        ctx_.secondary_namespace_->get_cursor_by_name(ctx_, col.database_name_,
+          col.tbl_name_, col.col_name_, cursor);
+        if (NULL == cursor) {
+          ret = OB_ERR_NOT_CURSOR_NAME_IN_CURRENT_OF;
+          LOG_WARN(" not a cursor name", K(col.col_name_), K(col.tbl_name_), K(col.database_name_), K(ret));
+        } else if (!cursor->is_for_update()) {
+          ret = OB_ERR_NOT_FOR_UPDATE_CURSOR_IN_CURRENT_OF;
+          LOG_USER_ERROR(OB_ERR_NOT_FOR_UPDATE_CURSOR_IN_CURRENT_OF, 
+            col.col_name_.length(), col.col_name_.ptr());
+          LOG_WARN("current of only support for update select.", K(ret), K(col.col_name_));
+        } else if (cursor->has_hidden_rowid()) {
+          if (OB_ISNULL(ctx_.stmt_)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("del_upd_stmt is NULL", K(ret));
-          } else if (1 == del_upd_stmt->get_table_items().count()) {
-            if (OB_ISNULL(del_upd_stmt->get_table_items().at(0))) {
+            LOG_WARN("stmt is NULL", K(ret));
+          } else if (ObStmt::is_dml_write_stmt(ctx_.stmt_->stmt_type_)) {
+            ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(ctx_.stmt_);
+            if (OB_ISNULL(del_upd_stmt)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("table item is NULL", K(ret));
-            } else if (del_upd_stmt->get_table_items().at(0)->ref_id_ != cursor->get_rowid_table_id()) {
-              ret = OB_INVALID_ROWID;
-              LOG_WARN("invalid ROWID", K(del_upd_stmt->get_table_items().at(0)->ref_id_),
-                       K(cursor->get_rowid_table_id()), K(ret));
+              LOG_WARN("del_upd_stmt is NULL", K(ret));
+            } else if (1 == del_upd_stmt->get_table_items().count()) {
+              if (OB_ISNULL(del_upd_stmt->get_table_items().at(0))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("table item is NULL", K(ret));
+              } else if (del_upd_stmt->get_table_items().at(0)->ref_id_ != cursor->get_rowid_table_id()) {
+                ret = OB_INVALID_ROWID;
+                LOG_WARN("invalid ROWID", K(del_upd_stmt->get_table_items().at(0)->ref_id_),
+                        K(cursor->get_rowid_table_id()), K(ret));
+              }
             }
           }
         }
+      } else if (T_SP_CURSOR_BULK_ROWCOUNT == node.value_) {
+        ParseNode *bulk_node = node.children_[1];
+        CK (OB_NOT_NULL(bulk_node));
+        CK (OB_LIKELY(1 == bulk_node->num_child_));
+        CK (OB_NOT_NULL(bulk_node->children_[0]));
+        OZ (SMART_CALL(recursive_resolve(bulk_node->children_[0], child_expr2)));
+
       }
     }
   } else { // implicit cursor attribute node
@@ -2181,7 +2191,7 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
             ParseNode* bulk_node = node.children_[0];
             CK (OB_LIKELY(1 == bulk_node->num_child_));
             CK (OB_NOT_NULL(bulk_node->children_[0]));
-            OZ (SMART_CALL(recursive_resolve(bulk_node->children_[0], child_expr)));
+            OZ (SMART_CALL(recursive_resolve(bulk_node->children_[0], child_expr1)));
             if (OB_SUCC(ret) && T_SP_CURSOR_BULK_EXCEPTIONS == type) {
               info.set_bulk_exceptions_code_or_idx(bulk_node->value_);
             }
@@ -2201,8 +2211,12 @@ int ObRawExprResolverImpl::process_cursor_attr_node(const ParseNode &node, ObRaw
   OX (c_expr->set_pl_get_cursor_attr_info(info));
   // 注意: 在添加Child之前做一次formalize仅仅是为了推导出ROWID属性的类型
   OZ (c_expr->formalize(ctx_.session_info_));
-  if (OB_SUCC(ret) && OB_NOT_NULL(child_expr)) {
-    OZ (c_expr->set_param_expr(child_expr));
+  if (OB_SUCC(ret) && OB_NOT_NULL(child_expr1)) {
+    if (OB_NOT_NULL(child_expr2)) { //explicit cursor %bulk_rowcount
+      OZ (c_expr->set_param_exprs(child_expr1, child_expr2));
+    } else {
+      OZ (c_expr->set_param_expr(child_expr1));
+    }
   }
   if (OB_SUCC(ret)) {
     if (T_FUN_PL_GET_CURSOR_ATTR == c_expr->get_expr_type()) {
