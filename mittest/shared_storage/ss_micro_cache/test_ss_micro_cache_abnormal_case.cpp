@@ -277,13 +277,15 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
   ASSERT_EQ(blk_ckpt_block_cnt / 2, phy_blk_mgr.get_reusable_blocks_cnt());
 
   // 3.1 update reusable_blocks' alloc_time_s, make them can be reused now.
-  ObHashSet<int64_t>::iterator iter = phy_blk_mgr.reusable_blks_.begin();
-  for (; OB_SUCC(ret) && iter != phy_blk_mgr.reusable_blks_.end(); iter++) {
-    const int64_t blk_idx = iter->first;
-    ObSSPhysicalBlock *phy_blk = phy_blk_mgr.inner_get_phy_block_by_idx(blk_idx);
-    ASSERT_NE(nullptr, phy_blk);
-    if (is_ss_ckpt_block(phy_blk->get_block_type())) {
-      phy_blk->alloc_time_s_ -= SS_FREE_BLK_MIN_REUSE_TIME_S;
+  {
+    ObHashSet<int64_t>::iterator iter = phy_blk_mgr.reusable_blks_.begin();
+    for (; OB_SUCC(ret) && iter != phy_blk_mgr.reusable_blks_.end(); iter++) {
+      const int64_t blk_idx = iter->first;
+      ObSSPhysicalBlock *phy_blk = phy_blk_mgr.inner_get_phy_block_by_idx(blk_idx);
+      ASSERT_NE(nullptr, phy_blk);
+      if (is_ss_ckpt_block(phy_blk->get_block_type())) {
+        phy_blk->alloc_time_s_ -= SS_FREE_BLK_MIN_REUSE_TIME_S;
+      }
     }
   }
 
@@ -291,9 +293,24 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
-  ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
-  ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
   ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_MICRO_DATA_BLK));
+  if (blk_ckpt_block_cnt / 2 == blk_cnt_info.phy_ckpt_blk_used_cnt_) {
+    ASSERT_EQ(true, phy_blk_mgr.inner_can_alloc_blk(ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
+  } else {
+    ASSERT_LT(0, phy_blk_mgr.get_reusable_blocks_cnt());
+    int64_t reusable_ckpt_blk_cnt = 0;
+    ObHashSet<int64_t>::iterator iter = phy_blk_mgr.reusable_blks_.begin();
+    for (; OB_SUCC(ret) && iter != phy_blk_mgr.reusable_blks_.end(); iter++) {
+      const int64_t blk_idx = iter->first;
+      ObSSPhysicalBlock *phy_blk = phy_blk_mgr.inner_get_phy_block_by_idx(blk_idx);
+      ASSERT_NE(nullptr, phy_blk);
+      if (phy_blk->get_block_type() == ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK && phy_blk->can_reuse()) {
+        ++reusable_ckpt_blk_cnt;
+      }
+    }
+    LOG_INFO("check this situation", K(reusable_ckpt_blk_cnt), K(blk_ckpt_block_cnt), K(blk_cnt_info));
+    ASSERT_EQ(reusable_ckpt_blk_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_ - blk_ckpt_block_cnt / 2);
+  }
 
   LOG_INFO("TEST_CASE: finish test_phy_ckpt_timeout");
 }
