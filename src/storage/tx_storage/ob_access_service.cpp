@@ -558,8 +558,8 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet in transfer but user data is uncommit, unexpected", K(ret), K(trans_stat), K(user_data));
   } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ || !user_data.transfer_ls_id_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet status is unexpected", K(ret), K(user_data));
+    ret = OB_TABLET_NOT_EXIST;
+    LOG_WARN("tablet status is not match with tablet, need retry", K(ret), K(user_data));
   } else if (ctx_guard.get_store_ctx().mvcc_acc_ctx_.get_tx_table_guards().is_src_valid()) {
     // The main tablet and local index tablets use the same mvcc_acc_ctx, if the src_tx_table_guard
     // has been set, you do not need to set it again and must skip start_request_for_transfer,
