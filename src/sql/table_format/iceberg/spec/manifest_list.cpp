@@ -162,10 +162,18 @@ int ManifestFile::decode_field(const FieldProjection &field_projection, avro::De
       break;
     }
     case ADDED_SNAPSHOT_ID_FIELD_ID: {
+      // 虽然 v1/v2/v3 标准里面这个字段是 required 的，但是在 v1 里面存在一种情况，
+      // 即字段类型是 AVRO_UNION，而不是直接是 AVRO_INT，当然 AVRO_UNION 其是一定有值的(不会是 AVRO_NULL)
+      // 所以我们要按照 AVRO_UNION 类型去 decode 字段，且要检查其必须是含有有效值。
+      std::optional<int64_t> tmp_added_snapshot_id;
       if (OB_FAIL(AvroUtils::decode_primitive(field_projection.avro_node_,
                                               decoder,
-                                              added_snapshot_id))) {
+                                              tmp_added_snapshot_id))) {
         LOG_WARN("failed to get added_snapshot_id", K(ret));
+      } else if (!tmp_added_snapshot_id.has_value()) {
+        LOG_WARN("added_snapshot_id must existed", K(ret));
+      } else {
+        added_snapshot_id = tmp_added_snapshot_id.value();
       }
       break;
     }
@@ -410,8 +418,6 @@ int ManifestFile::get_manifest_entries_(const ObString &access_info,
           if (OB_ISNULL(manifest_entry_datum.manifest_entry_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to read manifest entry", K(ret));
-          } else if (OB_FAIL(manifest_entry_datum.manifest_entry_->apply(*manifest_metadata))) {
-            LOG_WARN("failed to apply manifest entry", K(ret));
           } else if (OB_FAIL(tmp_manifest_entries.push_back(manifest_entry_datum.manifest_entry_))) {
             LOG_WARN("failed to add manifest entry", K(ret));
           }

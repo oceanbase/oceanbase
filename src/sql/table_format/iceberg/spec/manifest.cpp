@@ -669,7 +669,7 @@ int DataFile::get_read_expected_schema(ObIAllocator &allocator,
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(struct_type = OB_NEWx(StructType,
                                         &allocator,
-                                        {&CONTENT_FIELD,
+                                        {&OPTIONAL_CONTENT_FIELD,
                                          &FILE_PATH_FIELD,
                                          &FILE_FORMAT_FIELD,
                                          partition_schema_field,
@@ -710,6 +710,13 @@ int ManifestEntry::apply(const ManifestMetadata &manifest_metadata)
     // 的(v1的PartitionSpec标准)，所以这里需要重新 reassign() reassign partition_spec's spec_id to
     // correct value
     partition_spec.spec_id = partition_spec_id;
+
+    if (FormatVersion::V1 == manifest_metadata.format_version) {
+      // v1 里面下面这三个字段不存在，需要 reset 一下默认值
+      data_file.content = DataFileContent::DATA;
+      sequence_number = 0L;
+      file_sequence_number = 0L;
+    }
   }
   return ret;
 }
@@ -947,6 +954,12 @@ void codec_traits<ManifestEntryDatum>::decode(Decoder &d, ManifestEntryDatum &v)
                                                        *field_projection,
                                                        d))) {
       LOG_WARN("failed to set manifest entry", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(v.manifest_entry_->apply(v.manifest_metadata_))) {
+      LOG_WARN("failed to apply manifest metadata", K(ret));
     }
   }
 

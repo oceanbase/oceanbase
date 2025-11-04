@@ -131,7 +131,12 @@ public:
 
   static constexpr const char *CONTENT = "content";
   static constexpr const int32_t CONTENT_FIELD_ID = 134;
-  inline static const SchemaField CONTENT_FIELD = SchemaField::make_required(
+  inline static const SchemaField REQUIRED_CONTENT_FIELD = SchemaField::make_required(
+      CONTENT_FIELD_ID,
+      CONTENT,
+      IntType::get_instance(),
+      "Contents of the file: 0=data, 1=position deletes, 2=equality deletes");
+  inline static const SchemaField OPTIONAL_CONTENT_FIELD = SchemaField::make_optional(
       CONTENT_FIELD_ID,
       CONTENT,
       IntType::get_instance(),
