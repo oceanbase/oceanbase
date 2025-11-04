@@ -277,11 +277,11 @@ int ObColumnRedefinitionTask::copy_table_indexes()
             } else if (OB_ISNULL(index_schema)) {
               ret = OB_ERR_SYS;
               LOG_WARN("error sys, index schema must not be nullptr", K(ret), K(tenant_id_), K(index_ids.at(i)));
-            } else if (is_final_index_status(index_schema->get_index_status()) && !index_schema->is_vec_delta_buffer_type() && !index_schema->is_hybrid_vec_index_log_type()) {
+            } else if (is_final_index_status(index_schema->get_index_status())) {
               // index status is final
               need_rebuild_index = false;
               LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
-            } else if (index_schema->is_built_in_index()) {
+            } else if (index_schema->is_no_need_rebuild_index()) {
               // Only domain index need rebuild, while rebuilding vector/fulltext/multivalue index.
               need_rebuild_index = false;
             } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {

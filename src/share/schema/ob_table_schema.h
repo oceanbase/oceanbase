@@ -1221,6 +1221,7 @@ public:
   inline bool is_built_in_fts_index() const;
   inline bool is_built_in_multivalue_index() const;
   inline bool is_built_in_index() const;  // fts / vector index
+  inline bool is_no_need_rebuild_index() const;  // for offline ddl.
   inline bool is_rowkey_doc_id() const;
   inline bool is_doc_id_rowkey() const;
   inline bool is_fts_index_aux() const;
@@ -2744,6 +2745,11 @@ inline bool ObSimpleTableSchemaV2::is_built_in_multivalue_index() const
 inline bool ObSimpleTableSchemaV2::is_built_in_index() const
 {
   return share::schema::is_built_in_index(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_no_need_rebuild_index() const
+{
+  return (is_built_in_index() && !is_vec_index_snapshot_data_type()) || is_vec_delta_buffer_type() || is_hybrid_vec_index_log_type();
 }
 
 inline bool ObSimpleTableSchemaV2::is_rowkey_doc_id() const

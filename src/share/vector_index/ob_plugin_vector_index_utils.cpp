@@ -2036,7 +2036,8 @@ ObAdapterCreateType ObPluginVectorIndexUtils::index_type_to_create_type(schema::
   return create_type;
 }
 
-int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index_schema,
+int ObPluginVectorIndexUtils::get_vector_index_prefix_inner(const ObTableSchema &index_schema,
+                                                      const ObString index_name,
                                                       ObString &prefix)
 {
   int ret = OB_SUCCESS;
@@ -2049,8 +2050,7 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index
     LOG_WARN("unexpected vector index type, only support get none share table prefix",
       K(ret), K(index_schema));
   } else {
-    ObString tmp_table_name = index_schema.get_table_name();
-    const int64_t table_name_len = tmp_table_name.length();
+    const int64_t table_name_len = index_name.length();
 
     const char* delta_buffer_table = ObVecIndexBuilderUtil::DELTA_BUFFER_TABLE_NAME_SUFFIX;
     const char* index_id_table = ObVecIndexBuilderUtil::INDEX_ID_TABLE_NAME_SUFFIX;
@@ -2074,9 +2074,33 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index
       LOG_WARN("unexpected vector index type", K(ret), K(index_schema));
     }
     if (OB_SUCC(ret)) {
-      prefix.assign_ptr(tmp_table_name.ptr(), prefix_len);
-      LOG_INFO("get_index_prefix", K(prefix), K(tmp_table_name));
+      prefix.assign_ptr(index_name.ptr(), prefix_len);
+      LOG_INFO("get_index_prefix", K(prefix), K(index_name));
     }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index_schema,
+                                                      ObString &prefix)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_table_name = index_schema.get_table_name();
+  if (OB_FAIL(get_vector_index_prefix_inner(index_schema, tmp_table_name, prefix))) {
+    LOG_WARN("failed to get_vector_index_prefix_inner", K(ret), K(tmp_table_name));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::get_vector_index_name_prefix(const ObTableSchema &index_schema,
+                                                      ObString &prefix)
+{
+  int ret = OB_SUCCESS;
+  ObString index_name;
+  if (OB_FAIL(index_schema.get_index_name(index_name))) {
+    LOG_WARN("failed to get index name", K(ret), K(index_schema));
+  } else if (OB_FAIL(get_vector_index_prefix_inner(index_schema, index_name, prefix))) {
+    LOG_WARN("failed to get_vector_index_prefix_inner", K(ret), K(index_name));
   }
   return ret;
 }
