@@ -603,7 +603,7 @@ int ObWrCollector::collect_ash()
             }
             if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_ASH_INSERT_BATCH_SIZE) {
               collected_ash_row_count += dml_splicer.get_row_count();
-              if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
+              if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_V2_TNAME, tenant_id))) {
                 if (OB_FAIL(check_if_ignore_errorcode(ret))) {
                   LOG_WARN("failed to batch write to wr", KR(ret));
                 } else {
@@ -616,7 +616,7 @@ int ObWrCollector::collect_ash()
           }
           if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0) {
             collected_ash_row_count += dml_splicer.get_row_count();
-            if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
+            if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_V2_TNAME, tenant_id))) {
               if (OB_FAIL(check_if_ignore_errorcode(ret))) {
                 LOG_WARN("failed to batch write remaining part to wr", KR(ret));
               } else {
@@ -1806,7 +1806,12 @@ int ObWrDeleter::do_delete()
                    OB_WR_SYSSTAT_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
       LOG_WARN(
           "failed to delete __wr_sysstat data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
+    //delete expired data from __wr_active_session_history which will never be used
     } else if (OB_FAIL(delete_expired_data_from_wr_table(OB_WR_ACTIVE_SESSION_HISTORY_TNAME,
+          tenant_id, cluster_id, snap_id, query_timeout))) {
+      LOG_WARN("failed to delete __wr_acitve_session_history data ", K(ret), K(tenant_id),
+          K(cluster_id), K(snap_id));
+    } else if (OB_FAIL(delete_expired_data_from_wr_table(OB_WR_ACTIVE_SESSION_HISTORY_V2_TNAME,
                    tenant_id, cluster_id, snap_id, query_timeout))) {
       LOG_WARN("failed to delete __wr_acitve_session_history data ", K(ret), K(tenant_id),
           K(cluster_id), K(snap_id));
@@ -1854,10 +1859,13 @@ int ObWrDeleter::delete_expired_data_from_wr_table(const char *const table_name,
 {
   int ret = OB_SUCCESS;
   int64_t start = ObTimeUtility::current_time();
+  int64_t min_sample_time = 0;
+  int64_t max_sample_time = 0;
 
   ObSqlString sql;
   int64_t affected_rows = 0;
   uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+  bool is_wr_active_session_history = strncmp(table_name, OB_WR_ACTIVE_SESSION_HISTORY_V2_TNAME, strlen(OB_WR_ACTIVE_SESSION_HISTORY_V2_TNAME)) == 0;
   if (OB_UNLIKELY(query_timeout <= 0)) {
     ret = OB_TIMEOUT;
     LOG_WARN("timeout on wr data deletion", KR(ret), K(query_timeout));
@@ -1869,6 +1877,13 @@ int ObWrDeleter::delete_expired_data_from_wr_table(const char *const table_name,
     LOG_WARN("sql assign failed", K(ret));
   } else if (OB_FAIL(sql.append_fmt("tenant_id='%lu' and cluster_id='%lu' and snap_id='%ld'",
                  tenant_id, cluster_id, snap_id))) {
+    LOG_WARN("sql append failed", K(ret));
+  } else if (is_wr_active_session_history && OB_FAIL(get_sample_time_by_snap_id(min_sample_time, max_sample_time, snap_id, cluster_id, query_timeout))) {
+    LOG_WARN("failed to get sample time by snap id", K(ret), K(tenant_id), K(cluster_id));
+  } else if (is_wr_active_session_history &&
+             OB_FAIL(sql.append_fmt(" and sample_time between usec_to_time('%ld') and usec_to_time('%ld')",
+                 min_sample_time,
+                 max_sample_time))) {
     LOG_WARN("sql append failed", K(ret));
   } else if (OB_FAIL(ObWrCollector::exec_write_sql_with_retry(meta_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
@@ -1960,6 +1975,57 @@ int ObWrDeleter::modify_snapshot_status(const uint64_t tenant_id, const int64_t 
   return ret;
 }
 
+int ObWrDeleter::get_sample_time_by_snap_id(int64_t &min_sample_time, int64_t &max_sample_time, const int64_t snap_id, const int64_t cluster_id, const int64_t query_timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+
+  ObSqlString sql;
+  int64_t tenant_id = MTL_ID();
+  int64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_UNLIKELY(query_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("timeout on wr data deletion", KR(ret), K(query_timeout));
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql_proxy_ nullptr", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY_PURGE QUERY_TIMEOUT(%ld) */ time_to_usec(begin_interval_time) as min_sample_time, "
+                                      "time_to_usec(end_interval_time) as max_sample_time FROM %s WHERE ",
+                   query_timeout,
+                   OB_WR_SNAPSHOT_TNAME))) {
+      LOG_WARN("sql assign failed", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(
+                   "tenant_id='%lu' and cluster_id='%lu' and snap_id = '%ld' ", tenant_id, cluster_id, snap_id))) {
+      LOG_WARN("sql append failed", K(ret));
+    } else if (OB_FAIL(ObWrCollector::exec_read_sql_with_retry(res, meta_tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(meta_tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get mysql result", KR(ret), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        LOG_WARN("no result in __wr_snapshot table", KR(ret), K(sql));
+      } else {
+        LOG_WARN("get next result failed", KR(ret), K(sql));
+      }
+    } else if (OB_FAIL(result->get_int(0L, min_sample_time))) {
+      LOG_WARN("get column fail", KR(ret), K(sql));
+    } else if (OB_FAIL(result->get_int(1L, max_sample_time))) {
+      LOG_WARN("get column fail", KR(ret), K(sql));
+    } else {
+      if (min_sample_time == max_sample_time) {
+        min_sample_time = 0;
+      }
+    }
+    LOG_TRACE("get wr sample time by snap id ", K(ret), K(tenant_id), K(snap_id), "time_consumed",
+    ObTimeUtility::current_time() - start);
+  }
+  return ret;
+}
 
 int ObUpdateSqlStatOp::operator()(common::hash::HashMapPair<sql::ObCacheObjID, sql::ObILibCacheObject *> &entry)
 {

@@ -347,6 +347,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 570	__all_ai_model	0	201001	1
 571	__all_ai_model_history	0	201001	1
 572	__all_ai_model_endpoint	0	201001	1
+573	__wr_active_session_history_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -887,6 +888,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12573	__all_virtual_ai_model_history	2	201001	1
 12574	__all_virtual_ai_model_endpoint	2	201001	1
 12575	__all_virtual_ss_object_type_io_stat	2	201001	1
+12576	__all_virtual_wr_active_session_history_v2	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1

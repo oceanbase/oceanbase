@@ -1452,6 +1452,12 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);
       sqlstat_record.set_is_plan_cache_hit(ctx_.plan_cache_hit_);
       ObString sql_id = ObString::make_string(ctx_.sql_id_);
+      sqlstat_record.set_is_muti_query(session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS);
+      sqlstat_record.set_is_muti_query_batch(ctx_.multi_stmt_item_.is_batched_multi_stmt());
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        sqlstat_record.set_is_full_table_scan(result.get_physical_plan()->contain_table_scan());
+      }
+      sqlstat_record.set_is_failed(0 != ret && OB_ITER_END != ret);
       sqlstat_record.move_to_sqlstat_cache(result.get_session(),
                                                  ctx_.cur_sql_,
                                                  result.get_physical_plan());

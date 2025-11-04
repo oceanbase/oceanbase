@@ -8431,6 +8431,69 @@ all_ai_model_endpoint_def = dict(
 def_table_schema(**all_ai_model_endpoint_def)
 
 # 573 : __wr_active_session_history_v2
+
+def_table_schema(
+  owner = 'zhangyiqiang.zyq',
+  table_id      = '573',
+  table_name    = '__wr_active_session_history_v2',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [
+    ('sample_time', 'timestamp'),
+    ('tenant_id', 'int'),
+    ('cluster_id', 'int'),
+    ('snap_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('sample_id', 'int'),
+    ('session_id', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('user_id', 'int', 'true'),
+    ('session_type', 'bool', 'true'),
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('event_no', 'int', 'true'),
+    ('time_waited', 'int', 'true'),
+    ('p1', 'int', 'true'),
+    ('p2', 'int', 'true'),
+    ('p3', 'int', 'true'),
+    ('sql_plan_line_id', 'int', 'true'),
+    ('time_model', 'uint', 'true'),
+    ('module', 'varchar:64', 'true'),
+    ('action', 'varchar:64', 'true'),
+    ('client_id', 'varchar:64', 'true'),
+    ('backtrace', 'varchar:512', 'true'),
+    ('plan_id', 'int', 'true'),
+    ('program', 'varchar:64', 'true'),
+    ('tm_delta_time', 'int', 'true'),
+    ('tm_delta_cpu_time', 'int', 'true'),
+    ('tm_delta_db_time', 'int', 'true'),
+    ('top_level_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('plsql_entry_object_id', 'int', 'true'),
+    ('plsql_entry_subprogram_id', 'int', 'true'),
+    ('plsql_entry_subprogram_name', 'varchar:32', 'true'),
+    ('plsql_object_id', 'int', 'true'),
+    ('plsql_subprogram_id', 'int', 'true'),
+    ('plsql_subprogram_name', 'varchar:32', 'true'),
+    ('event_id', 'int', 'true'),
+    ('group_id', 'int', 'true'),
+    ('tx_id', 'int', 'true'),
+    ('blocking_session_id', 'int', 'true'),
+    ('plan_hash', 'uint', 'true'),
+    ('thread_id', 'int', 'true'),
+    ('stmt_type', 'int', 'true'),
+    ('tablet_id', 'int', 'true'),
+    ('proxy_sid', 'int', 'true'),
+    ('delta_read_io_requests', 'int', 'true', '0'),
+    ('delta_read_io_bytes', 'int', 'true', '0'),
+    ('delta_write_io_requests', 'int', 'true', '0'),
+    ('delta_write_io_bytes', 'int', 'true', '0')
+  ],
+)
 # 574: __all_tenant_macro_block_copy_task
 # 575: __all_tenant_macro_block_copy_task_progress
 # 576: __all_tenant_macro_block_copy_task_history
@@ -17188,7 +17251,12 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12576: __all_virtual_wr_active_session_history_v2
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12576',
+  table_name = '__all_virtual_wr_active_session_history_v2',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_active_session_history_v2']))
+
 # 12577: __all_virtual_macro_block_copy_task
 # 12578: __all_virtual_macro_block_copy_task_progress
 # 12579: __all_virtual_macro_block_copy_task_history
@@ -17767,6 +17835,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 # 15534: __all_virtual_ss_diagnose_info
 # 15535: __all_virtual_wr_active_session_history_v2
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -35103,15 +35172,10 @@ def_table_schema(
       ASH.PROXY_SID AS PROXY_SID
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
-      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND ASH.TENANT_ID = SNAP.TENANT_ID
-      AND ASH.SNAP_ID = SNAP.SNAP_ID
+      oceanbase.__all_virtual_wr_active_session_history_v2 ASH
     )
   WHERE
-    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND SNAP.STATUS = 0;
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
 # 21390: CDB_WR_ACTIVE_SESSION_HISTORY
@@ -35194,14 +35258,8 @@ def_table_schema(
       ASH.PROXY_SID AS PROXY_SID
   FROM
     (
-      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
-      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
-      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-      AND ASH.TENANT_ID = SNAP.TENANT_ID
-      AND ASH.SNAP_ID = SNAP.SNAP_ID
-    )
-  WHERE
-    SNAP.STATUS = 0;
+      oceanbase.__all_virtual_wr_active_session_history_v2 ASH
+    );
   """.replace("\n", " ")
 )
 # 21391: DBA_WR_SNAPSHOT
@@ -63396,14 +63454,9 @@ def_table_schema(
       ASH.TABLET_ID AS TABLET_ID,
       ASH.PROXY_SID AS PROXY_SID
   FROM
-    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
-    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2 ASH
   WHERE
-    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND ASH.CLUSTER_ID = SNAP.CLUSTER_ID
-    AND ASH.TENANT_ID = SNAP.TENANT_ID
-    AND ASH.SNAP_ID = SNAP.SNAP_ID
-    AND SNAP.STATUS = 0;
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
 # 25230: DBA_WR_SNAPSHOT

@@ -11891,3 +11891,57 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_ss_object_type_io_stat limit 1;
+desc oceanbase.__all_virtual_wr_active_session_history_v2;
+Field	Type	Null	Key	Default	Extra
+sample_time	timestamp(6)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+cluster_id	bigint(20)	NO	PRI	NULL	
+snap_id	bigint(20)	NO	PRI	NULL	
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+sample_id	bigint(20)	NO	PRI	NULL	
+session_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	YES		NULL	
+session_type	tinyint(4)	YES		NULL	
+sql_id	varchar(32)	YES		NULL	
+trace_id	varchar(64)	YES		NULL	
+event_no	bigint(20)	YES		NULL	
+time_waited	bigint(20)	YES		NULL	
+p1	bigint(20)	YES		NULL	
+p2	bigint(20)	YES		NULL	
+p3	bigint(20)	YES		NULL	
+sql_plan_line_id	bigint(20)	YES		NULL	
+time_model	bigint(20) unsigned	YES		NULL	
+module	varchar(64)	YES		NULL	
+action	varchar(64)	YES		NULL	
+client_id	varchar(64)	YES		NULL	
+backtrace	varchar(512)	YES		NULL	
+plan_id	bigint(20)	YES		NULL	
+program	varchar(64)	YES		NULL	
+tm_delta_time	bigint(20)	YES		NULL	
+tm_delta_cpu_time	bigint(20)	YES		NULL	
+tm_delta_db_time	bigint(20)	YES		NULL	
+top_level_sql_id	varchar(32)	YES		NULL	
+plsql_entry_object_id	bigint(20)	YES		NULL	
+plsql_entry_subprogram_id	bigint(20)	YES		NULL	
+plsql_entry_subprogram_name	varchar(32)	YES		NULL	
+plsql_object_id	bigint(20)	YES		NULL	
+plsql_subprogram_id	bigint(20)	YES		NULL	
+plsql_subprogram_name	varchar(32)	YES		NULL	
+event_id	bigint(20)	YES		NULL	
+group_id	bigint(20)	YES		NULL	
+tx_id	bigint(20)	YES		NULL	
+blocking_session_id	bigint(20)	YES		NULL	
+plan_hash	bigint(20) unsigned	YES		NULL	
+thread_id	bigint(20)	YES		NULL	
+stmt_type	bigint(20)	YES		NULL	
+tablet_id	bigint(20)	YES		NULL	
+proxy_sid	bigint(20)	YES		NULL	
+delta_read_io_requests	bigint(20)	YES		0	
+delta_read_io_bytes	bigint(20)	YES		0	
+delta_write_io_requests	bigint(20)	YES		0	
+delta_write_io_bytes	bigint(20)	YES		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history_v2;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_wr_active_session_history_v2 limit 1;
