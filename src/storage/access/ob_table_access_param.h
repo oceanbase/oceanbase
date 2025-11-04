@@ -164,8 +164,10 @@ public:
   { return pd_storage_flag_.is_group_by_pushdown(); }
   OB_INLINE bool enable_pd_filter_reorder() const
   { return pd_storage_flag_.is_filter_reorder(); }
-  OB_INLINE bool enable_skip_index() const
-  { return pd_storage_flag_.is_apply_skip_index(); }
+  OB_INLINE bool enable_base_skip_index() const
+  { return pd_storage_flag_.is_apply_base_skip_index(); }
+  OB_INLINE bool enable_inc_skip_index() const
+  { return pd_storage_flag_.is_apply_inc_skip_index(); }
   OB_INLINE bool is_use_stmt_iter_pool() const
   { return pd_storage_flag_.is_use_stmt_iter_pool(); }
   OB_INLINE void set_use_stmt_iter_pool()

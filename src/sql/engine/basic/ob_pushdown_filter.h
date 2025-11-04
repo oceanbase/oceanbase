@@ -204,18 +204,21 @@ public:
   OB_INLINE void set_aggregate_pushdown(const bool aggregate) { pd_aggregate_ = aggregate; }
   OB_INLINE void set_group_by_pushdown(const bool groupby) { pd_group_by_ = groupby; }
   OB_INLINE void set_filter_reorder(const bool filter_reorder) { pd_filter_reorder_ = filter_reorder; }
-  OB_INLINE void set_enable_skip_index(const bool skip_index) { enable_skip_index_ = skip_index; }
+  OB_INLINE void set_enable_base_skip_index(const bool skip_index) { enable_skip_index_ = skip_index; }
+  OB_INLINE void set_enable_inc_skip_index(const bool skip_index) { enable_inc_skip_index_ = skip_index; }
   OB_INLINE void set_use_stmt_iter_pool(const bool use_pool) { use_stmt_iter_pool_ = use_pool; }
   OB_INLINE void set_use_column_store(const bool use_cs) { use_column_store_ = use_cs; }
   OB_INLINE void set_enable_prefetch_limiting(const bool enable_limit) { enable_prefetch_limiting_ = enable_limit; }
   OB_INLINE void set_use_global_iter_pool(const bool use_iter_mgr) { use_global_iter_pool_ = use_iter_mgr; }
-  OB_INLINE void set_flags(const bool block_scan, const bool filter, const bool skip_index,
-                           const bool use_cs, const bool enable_limit, const bool filter_reorder = false)
+  OB_INLINE void set_flags(const bool block_scan, const bool filter, const bool base_skip_index,
+                           const bool use_cs, const bool enable_limit, const bool filter_reorder = false,
+                           const bool inc_skip_index = false)
   {
     set_blockscan_pushdown(block_scan);
     set_filter_pushdown(filter);
     set_filter_reorder(filter_reorder);
-    set_enable_skip_index(skip_index);
+    set_enable_base_skip_index(base_skip_index);
+    set_enable_inc_skip_index(inc_skip_index);
     set_use_column_store(use_cs);
     set_enable_prefetch_limiting(enable_limit);
   }
@@ -225,7 +228,8 @@ public:
   OB_INLINE bool is_aggregate_pushdown() const { return pd_aggregate_; }
   OB_INLINE bool is_group_by_pushdown() const { return pd_group_by_; }
   OB_INLINE bool is_filter_reorder() const { return pd_filter_reorder_; }
-  OB_INLINE bool is_apply_skip_index() const { return enable_skip_index_; }
+  OB_INLINE bool is_apply_base_skip_index() const { return enable_skip_index_; }
+  OB_INLINE bool is_apply_inc_skip_index() const { return enable_inc_skip_index_; }
   OB_INLINE bool is_use_stmt_iter_pool() const { return use_stmt_iter_pool_; }
   OB_INLINE bool is_use_column_store() const { return use_column_store_; }
   OB_INLINE bool is_enable_prefetch_limiting() const { return enable_prefetch_limiting_; }
@@ -244,7 +248,8 @@ public:
       int32_t use_column_store_:1;
       int32_t enable_prefetch_limiting_ : 1;
       int32_t use_global_iter_pool_:1;
-      int32_t reserved_ : 22;
+      int32_t enable_inc_skip_index_ : 1;
+      int32_t reserved_ : 21;
     };
     int32_t pd_flag_;
   };

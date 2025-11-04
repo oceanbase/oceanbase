@@ -577,6 +577,7 @@ public:
   {
     return (nullptr == sample_executor || is_not_border(index_info))
         && index_info.has_agg_data()
+        && (sstable_->is_major_sstable() || iter_param_->enable_inc_skip_index())
         && (index_info.can_blockscan() || iter_param_->is_delete_insert_)
         && (!iter_param_->has_lob_column_out() || !index_info.has_lob_out_row())
         && index_info.is_filter_uncertain();
