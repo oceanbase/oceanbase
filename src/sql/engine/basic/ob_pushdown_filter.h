@@ -246,7 +246,8 @@ public:
       int32_t use_column_store_:1;
       int32_t enable_prefetch_limiting_ : 1;
       int32_t use_global_iter_pool_:1;
-      int32_t reserved_ : 22;
+      int32_t enable_inc_skip_index_ : 1;
+      int32_t reserved_ : 21;
     };
     int32_t pd_flag_;
   };
