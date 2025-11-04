@@ -654,7 +654,7 @@ int ObRecoverTableInitiator::check_remap_table_target_(const share::ObImportTabl
   ARRAY_FOREACH(remap_table_array.get_remap_items(), i) {
     const share::ObRemapTableItem &remap_table_item = remap_table_array.get_remap_items().at(i);
     const ObString &target_database = remap_table_item.target_.database_name_;
-    const ObString &target_table = remap_table_item.target_.database_name_;
+    const ObString &target_table = remap_table_item.target_.table_name_;
     bool is_exist = false;
     if (OB_FAIL(ObImportTableUtil::check_database_schema_exist(*schema_service_,
                                                                target_tenant_id,
