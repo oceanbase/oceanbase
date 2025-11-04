@@ -311,11 +311,6 @@ public:
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
-  int sync_aux_schema_version_for_history(const uint64_t tenant_id,
-        const uint64_t table_id,
-        ObSchemaGetterGuard &schema_guard,
-        common::ObMySQLTransaction &trans,
-        ObDDLOperator &ddl_operator);
   int redistribute_column_ids(
       ObTableSchema &new_table_schema);
   int add_new_column_to_table_schema(
@@ -1969,9 +1964,7 @@ int check_will_be_having_domain_index_operation(
     const AlterColumnSchema *alter_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObDDLOperator &ddl_operator,
-    ObSchemaGetterGuard &schema_guard,
-    common::ObMySQLTransaction &trans,
-    ObIArray<ObTableSchema> *globla_idx_schema_array);
+    common::ObMySQLTransaction &trans);
 
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
@@ -1985,14 +1978,14 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
-      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_table_update_aux_column(
       const share::schema::ObTableSchema &new_table_schema,
       const share::schema::ObColumnSchemaV2 &new_column_schema,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableType table_type,
-      common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
+      const common::ObIArray<share::schema::ObTableSchema> *global_idx_schema_array = NULL);
   int alter_sequence_in_alter_column(const share::schema::ObTableSchema &table_schema,
                                      share::schema::ObColumnSchemaV2 &column_schema,
                                      common::ObMySQLTransaction &trans,
