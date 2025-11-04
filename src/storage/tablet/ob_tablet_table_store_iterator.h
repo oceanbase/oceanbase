@@ -131,14 +131,10 @@ public:
   explicit AggregatedIOGuard(ObTableStoreIterator &iterator) : iterator_(&iterator) {
     iterator_->aggregated_guard_created_ = true;
   }
-  ~AggregatedIOGuard() {
-    if (nullptr != iterator_ && iterator_->is_valid()) {
-      iterator_->load_sstable_meta_with_aggregate_io();
-      iterator_->set_retire_check();
-      iterator_->aggregated_guard_created_ = false;
-    }
-  }
-
+  // It will load the sstable meta into memory.
+  // This function must be called with aggregated I/O.
+  int finish();
+  ~AggregatedIOGuard() {}
 private:
   ObTableStoreIterator *iterator_;
   DISALLOW_COPY_AND_ASSIGN(AggregatedIOGuard);

@@ -1736,7 +1736,9 @@ int ObTabletTableStore::get_read_tables(
   } else if (OB_FAIL(calculate_read_tables(snapshot_version, tablet, iterator, allow_no_ready_read, skip_major))) {
     LOG_WARN("failed to get read tables", K(ret));
   }
-  if (FAILEDx(iterator.set_retire_check())) {
+  if (FAILEDx(io_guard.finish())) {
+    LOG_WARN("failed to finish aggregated io guard", K(ret));
+  } else if (OB_FAIL(iterator.set_retire_check())) {
     LOG_WARN("failed to set retire check to iterator", K(ret));
   }
   return ret;

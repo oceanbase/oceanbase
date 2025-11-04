@@ -645,5 +645,19 @@ int ObTableStoreIterator::load_sstable_meta_with_aggregate_io()
   return ret;
 }
 
+int AggregatedIOGuard::finish()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == iterator_ || !iterator_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(iterator_));
+  } else if (OB_FAIL(iterator_->load_sstable_meta_with_aggregate_io())) {
+    LOG_WARN("failed to load sstable meta with aggregate io", K(ret));
+  } else {
+    iterator_->aggregated_guard_created_ = false;
+  }
+  return ret;
+}
+
 } // storage
 } // blocksstable
