@@ -74,6 +74,10 @@ namespace sql
 class ObDASDMLIterator;
 class ObDASUpdIterator;
 }
+namespace rootserver
+{
+struct ObTruncateTabletArg;
+}
 
 namespace storage
 {
@@ -361,6 +365,15 @@ public:
       const ObDirectLoadAutoIncSeqData &data,
       mds::MdsCtx &ctx,
       const share::SCN &scn);
+  int set_truncate_info(
+      const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_truncate_info(
+      const share::SCN &scn,
+      const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx);
+
   // DAS interface
   int table_scan(
       ObTabletHandle &tablet_handle,

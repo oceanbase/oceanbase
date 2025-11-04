@@ -65,13 +65,8 @@ int ObTruncateInfoMdsHelper::on_register(
     LOG_WARN("arg is invalid", K(ret), K(arg));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(arg));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(arg.index_tablet_id_, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(arg.ls_id_), K(arg.index_tablet_id_));
-  } else if (OB_FAIL(tablet_handle.get_obj()->set_truncate_info(
-      arg.truncate_info_.key_,
-      arg.truncate_info_,
-      user_ctx,
-      0/*lock_timeout_us*/))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->set_truncate_info(arg, user_ctx, 0/*lock_timeout_us*/))) {
+    LOG_WARN("failed to set truncate info", K(ret), K(arg.ls_id_), K(arg.index_tablet_id_));
   } else {
     LOG_INFO("[TRUNCATE INFO] on_register for ObTruncateTabletArg", K(ret), K(arg), K(user_ctx.get_writer()));
   }
@@ -142,12 +137,8 @@ int ObTruncateInfoClogReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(*user_ctx_);
-  if (OB_FAIL(tablet_handle.get_obj()->replay_set_truncate_info(
-      scn_,
-      truncate_arg_.truncate_info_.key_,
-      truncate_arg_.truncate_info_,
-      user_ctx))) {
-    LOG_WARN("failed to replay to tablet", K(ret));
+  if (OB_FAIL(replay_to_mds_table_(tablet_handle, truncate_arg_, user_ctx, scn_))) {
+    LOG_WARN("failed to replay to truncate info", K(ret));
   }
   return ret;
 }
