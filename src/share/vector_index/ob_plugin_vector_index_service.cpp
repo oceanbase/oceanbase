@@ -1078,12 +1078,6 @@ void ObPluginVectorIndexService::destroy()
     FOREACH(iter, vec_idx_tmp_map_) {
       ObVectorIndexTmpInfo *tmp_info = iter->second;
       if (OB_NOT_NULL(tmp_info)) {
-        ObPluginVectorIndexAdaptor *adapter = tmp_info->adapter_;
-        if (OB_NOT_NULL(adapter)) {
-          adapter->~ObPluginVectorIndexAdaptor();
-          allocator_.free(adapter);
-          adapter = nullptr;
-        }
         tmp_info->~ObVectorIndexTmpInfo();
         allocator_.free(tmp_info);
         tmp_info = nullptr;

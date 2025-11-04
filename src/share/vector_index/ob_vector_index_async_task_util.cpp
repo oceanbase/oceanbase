@@ -2126,11 +2126,19 @@ int ObVecIndexAsyncTask::parallel_optimize_vec_index()
       LOG_WARN("fail to execute exchange", K(ret), K(ctx_));
     } else {
       DEBUG_SYNC(PARALLEL_VEC_TASK_EXECUTE_EXCHANGE);
-      has_replace_old_adapter_ = true;
-      common::ObSpinLockGuard ctx_guard(ctx_->lock_);
-      ctx_->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN;
-      if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(ctx_))) {
-        LOG_WARN("fail to update task status to inner table", K(ret), K(tenant_id_), KPC(ctx_));
+      if (!need_redo_current_status) {
+        RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+        if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(new_adapter_))) {
+          LOG_WARN("failed to replace old adapter", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        has_replace_old_adapter_ = true;
+        common::ObSpinLockGuard ctx_guard(ctx_->lock_);
+        ctx_->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_CLEAN;
+        if (OB_FAIL(ObVecIndexAsyncTaskUtil::update_status_and_ret_code(ctx_))) {
+          LOG_WARN("fail to update task status to inner table", K(ret), K(tenant_id_), KPC(ctx_));
+        }
       }
     }
   }
