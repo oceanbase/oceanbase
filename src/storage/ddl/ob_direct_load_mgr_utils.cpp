@@ -84,6 +84,7 @@ int ObDirectLoadMgrUtil::is_ddl_need_major_merge(const ObTablet &tablet, bool &d
   int ret = OB_SUCCESS;
   ddl_need_merging = false;
   ObTableStoreIterator ddl_iter;
+  ObArenaAllocator arena(ObMemAttr(MTL_ID(), "Ddl_Com_MgrU"));
   ObTabletDDLCompleteMdsUserData ddl_complete;
   if (!tablet.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -95,7 +96,7 @@ int ObDirectLoadMgrUtil::is_ddl_need_major_merge(const ObTablet &tablet, bool &d
   } else if (ddl_iter.is_valid()) { // indicates the existence of ddl sstable
     ddl_need_merging = true;
     LOG_WARN("major sstable do not exit, need to wait ddl merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
-  } else if (OB_FAIL(tablet.get_ddl_complete(SCN::max_scn(), ddl_complete))) {
+  } else if (OB_FAIL(tablet.get_ddl_complete(SCN::max_scn(), arena, ddl_complete))) {
     LOG_WARN("failed to check ddl complete", K(ret), K(tablet.get_tablet_meta()));
   } else if (ddl_complete.has_complete_) {
     ddl_need_merging = true;
@@ -372,7 +373,7 @@ int ObDirectLoadMgrUtil::generate_merge_param(const ObTabletDDLCompleteMdsUserDa
     merge_param.table_key_ = data.table_key_;
     merge_param.is_commit_ = true;
 
-    if (OB_FAIL(merge_param.user_data_.assign(data))) {
+    if (OB_FAIL(merge_param.user_data_.assign(merge_param.arena_, data))) {
       LOG_WARN("failed to assgin value", K(ret));
     }
   } else {  /* generate param for freeze */

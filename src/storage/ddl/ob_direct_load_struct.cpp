@@ -5084,7 +5084,7 @@ int ObDDLTableMergeDagParam::assign(const ObDDLTableMergeDagParam &merge_param)
     seq_no_           = merge_param.seq_no_;
     table_type_       = merge_param.table_type_;
     if (is_commit_ && is_idem_type(direct_load_type_) &&
-        OB_FAIL(user_data_.assign(merge_param.user_data_))) {
+        OB_FAIL(user_data_.assign(arena_, merge_param.user_data_))) {
       LOG_WARN("failed to assign user data", K(ret));
     }
   }

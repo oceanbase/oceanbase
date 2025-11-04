@@ -682,7 +682,6 @@ int ObIncMajorDDLMergeHelper::merge_cg_slice(ObIDag *dag,
   ObArray<ObDDLBlockMeta> sorted_metas;
   ObArray<ObDDLBlockMeta> tmp_metas;
   ObArray<ObStorageMetaHandle> meta_handles;
-  ObTabletDDLCompleteMdsUserData ddl_data;
   ObDDLWriteStat write_stat;
 
   ObLSID target_ls_id;
@@ -693,6 +692,8 @@ int ObIncMajorDDLMergeHelper::merge_cg_slice(ObIDag *dag,
   ObTabletDDLParam ddl_param;
 
   ObArenaAllocator arena(ObMemAttr(MTL_ID(), "merge_cg_slice"));
+  ObTabletDDLCompleteMdsUserData ddl_data;
+
 
   if (OB_ISNULL(dag) || cg_idx < 0 || start_slice_idx < 0 || end_slice_idx < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -1028,9 +1029,11 @@ int ObIncMajorDDLMergeHelper::verify_inc_major_sstable(
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
-  ObTabletDDLCompleteMdsUserData user_data;
   ObTransID trans_id;
   ObTxSEQ seq_no;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "VerifyInc"));
+  ObTabletDDLCompleteMdsUserData user_data;
+
   if (OB_UNLIKELY(!inc_major_sstable.is_inc_major_type_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table type", KR(ret), K(inc_major_sstable));
@@ -1042,7 +1045,7 @@ int ObIncMajorDDLMergeHelper::verify_inc_major_sstable(
   } else if (OB_FAIL(ObIncMajorTxHelper::get_trans_id_and_seq_no_from_sstable(&inc_major_sstable, trans_id, seq_no))) {
     LOG_WARN("failed to get trans id and seq no from sstable", KR(ret), K(inc_major_sstable));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
-      SCN::max_scn(), ObTabletDDLCompleteMdsUserDataKey(trans_id), user_data))) {
+      SCN::max_scn(), allocator, ObTabletDDLCompleteMdsUserDataKey(trans_id), user_data))) {
     LOG_WARN("failed to get inc major direct load info", KR(ret), K(trans_id));
   } else if (OB_UNLIKELY(inc_major_sstable.get_key().get_start_scn() != user_data.start_scn_)) {
     ret = OB_ERR_UNEXPECTED;

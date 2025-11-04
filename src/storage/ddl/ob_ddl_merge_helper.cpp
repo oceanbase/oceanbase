@@ -282,8 +282,9 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
   if (OB_FAIL(ret)) {
   } else if (nullptr != first_major_sstable) {          /* if major exist, do nothing */
   } else if (for_major) {
+    ObArenaAllocator arena(ObMemAttr(MTL_ID(), "DDL_Mrg_Pre"));
     ObTabletDDLCompleteMdsUserData user_data;
-    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), user_data))) {
+    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, user_data))) {
       if (OB_EMPTY_RESULT == ret) {
         /* for ddl execute node, should wait take effect */
         ret = ddl_merge_param.for_replay_ ? OB_EAGAIN : OB_DAG_TASK_IS_SUSPENDED;
@@ -424,7 +425,6 @@ int ObSNDDLMergeHelperV2::merge_cg_slice(ObIDag *dag,
   ObArray<ObDDLBlockMeta> sorted_metas;
   ObArray<ObDDLBlockMeta> tmp_metas;
   ObArray<ObStorageMetaHandle> meta_handles;
-  ObTabletDDLCompleteMdsUserData ddl_data;
   ObDDLWriteStat write_stat;
 
   ObLSID ls_id;
@@ -435,6 +435,7 @@ int ObSNDDLMergeHelperV2::merge_cg_slice(ObIDag *dag,
   ObTabletDDLParam ddl_param;
 
   ObArenaAllocator arena(ObMemAttr(MTL_ID(), "merge_cg_slice"));
+  ObTabletDDLCompleteMdsUserData ddl_data;
 
   if (OB_ISNULL(dag) || cg_idx < 0 || start_slice_idx < 0 || end_slice_idx < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -490,7 +491,7 @@ int ObSNDDLMergeHelperV2::merge_cg_slice(ObIDag *dag,
     } else if (OB_FAIL(ObDDLMergeTaskUtils::check_idempodency(tmp_metas, sorted_metas, &write_stat))) {
       LOG_WARN("failed to check idempodency", K(ret));
     } else if (merge_param.for_major_) {
-      if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), ddl_data))) {
+      if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, ddl_data))) {
         if (OB_EMPTY_RESULT == ret) {
           /* may read mds failed when tablet is deleted*/
           ret = OB_TASK_EXPIRED;

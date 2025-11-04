@@ -86,6 +86,8 @@ public:
 protected:
   virtual bool is_supported_direct_load_type(const ObDirectLoadType direct_load_type)
   { return OB_NOT_SUPPORTED; }
+public:
+    TO_STRING_KV(KP(this));
 };
 
 class ObSNDDLMergeHelperV2: public ObIDDLMergeHelper

@@ -171,13 +171,16 @@ int ObDDLTableMergeDag::get_storage_schema_for_inc_major(ObTabletHandle &tablet_
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *new_storage_schema = nullptr;
-  ObTabletDDLCompleteMdsUserData user_data;
+
   const ObITable::TableType table_type = ddl_param_.table_type_;
+  ObArenaAllocator arena(ObMemAttr(MTL_ID(), "ddl_mrg_dag"));
+  ObTabletDDLCompleteMdsUserData user_data;
 
   if (OB_UNLIKELY(ObITable::MAX_TABLE_TYPE == table_type || !ddl_param_.trans_id_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid ddl param", K(ret), K(ddl_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(share::SCN::max_scn(),
+                                                                             arena,
                                                                              ObTabletDDLCompleteMdsUserDataKey(ddl_param_.trans_id_),
                                                                              user_data))) {
     LOG_WARN("failed to get inc major direct load info", KR(ret), K(ddl_param_));
@@ -482,6 +485,7 @@ int wait_lob_tablet_major_exist(const ObDirectLoadType &direct_load_type, ObLSHa
   ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
   ObDDLTableMergeDagParam param;
   bool is_major_sstable_exist = false;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "Ddl_Com_WMaj"));
   ObTabletDDLCompleteMdsUserData ddl_complete;
   if (OB_FAIL(tablet.ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
     LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_meta));
@@ -491,7 +495,7 @@ int wait_lob_tablet_major_exist(const ObDirectLoadType &direct_load_type, ObLSHa
     if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, lob_tablet_id, lob_tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
       LOG_WARN("get lob tablet handle failed", K(ret), K(lob_tablet_id));
     } else if (is_idem_type(direct_load_type)) {
-      if (OB_FAIL(lob_tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), ddl_complete))) {
+      if (OB_FAIL(lob_tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), allocator, ddl_complete))) {
         LOG_WARN("failed to get ddl complete");
       } else if (!ddl_complete.has_complete_) {
         ret = OB_EAGAIN;
@@ -2080,7 +2084,7 @@ int get_storage_schema_sn_idem(const ObTabletDDLParam &ddl_param,
   if (!ddl_param.is_valid() || !tablet.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param), K(tablet));
-  } else if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), data))) {
+  } else if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), allocator, data))) {
     LOG_WARN("failed to get ddl complete mds", K(ret));
   } else if (!data.has_complete_ || !data.is_valid()) {
     if (OB_FAIL(tablet.load_storage_schema(allocator, storage_schema))) {

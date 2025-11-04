@@ -621,9 +621,10 @@ int ObIncDDLMergeTaskUtils::check_inc_major_write_stat(
   } else {
     const ObLSID &ls_id = tablet_handle.get_obj()->get_ls_id();
     const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
+    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlIncCmtCb"));
     ObTabletDDLCompleteMdsUserData user_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
-        SCN::max_scn(), ObTabletDDLCompleteMdsUserDataKey(merge_param.trans_id_), user_data))) {
+        SCN::max_scn(), allocator, ObTabletDDLCompleteMdsUserDataKey(merge_param.trans_id_), user_data))) {
       LOG_WARN("failed to get inc major direct load info", KR(ret), K(ls_id), K(tablet_id), K(merge_param));
     } else if (OB_LIKELY(!user_data.inc_major_commit_scn_.is_valid_and_not_min())) {
       // ignore error

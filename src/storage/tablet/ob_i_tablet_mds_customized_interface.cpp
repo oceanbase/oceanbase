@@ -121,6 +121,7 @@ int ObITabletMdsCustomizedInterface::get_latest_autoinc_seq(
 }
 
 int ObITabletMdsCustomizedInterface::get_ddl_complete(const share::SCN &snapshot,
+                                                      ObIAllocator &allocator,
                                                       ObTabletDDLCompleteMdsUserData &data,
                                                       const int64_t timeout) const
 {
@@ -129,7 +130,7 @@ int ObITabletMdsCustomizedInterface::get_ddl_complete(const share::SCN &snapshot
   int ret = OB_SUCCESS;
   if (CLICK_FAIL((get_snapshot<ObTabletDDLCompleteMdsUserDataKey, ObTabletDDLCompleteMdsUserData>(
       ObTabletDDLCompleteMdsUserDataKey(ObTabletDDLCompleteMdsUserDataKey::DDL_COMPLETE_TX_ID),
-      ReadDDLCompleteOp(data),
+      ReadDDLCompleteOp(allocator, data),
       snapshot,
       timeout)))) {
     if (OB_EMPTY_RESULT != ret) {
@@ -142,6 +143,7 @@ int ObITabletMdsCustomizedInterface::get_ddl_complete(const share::SCN &snapshot
 
 int ObITabletMdsCustomizedInterface::get_inc_major_direct_load_info(
     const share::SCN &snapshot,
+    ObIAllocator &allocator,
     const ObTabletDDLCompleteMdsUserDataKey &key,
     ObTabletDDLCompleteMdsUserData &data,
     const int64_t timeout) const
@@ -151,7 +153,7 @@ int ObITabletMdsCustomizedInterface::get_inc_major_direct_load_info(
   int ret = OB_SUCCESS;
   if (CLICK_FAIL((get_snapshot<ObTabletDDLCompleteMdsUserDataKey, ObTabletDDLCompleteMdsUserData>(
       key,
-      ReadDDLCompleteOp(data),
+      ReadDDLCompleteOp(allocator, data),
       snapshot,
       timeout)))) {
     if (OB_EMPTY_RESULT != ret) {

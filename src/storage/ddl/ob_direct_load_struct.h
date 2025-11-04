@@ -406,6 +406,7 @@ public:
       data_format_version_(0),
       snapshot_version_(0),
       table_key_(),
+      arena_(ObMemAttr(MTL_ID(), "DDL_Mrg_Par")),
       user_data_(),
       trans_id_(),
       seq_no_(),
@@ -437,6 +438,7 @@ public:
   ObITable::TableKey table_key_; // table key is only used in idem type direct load mgr
 
   /* optional val */
+  ObArenaAllocator arena_; // for user_data_
   ObTabletDDLCompleteMdsUserData user_data_;
   transaction::ObTransID trans_id_; // for inc-major direct load only
   transaction::ObTxSEQ seq_no_; // for inc-major direct load only
