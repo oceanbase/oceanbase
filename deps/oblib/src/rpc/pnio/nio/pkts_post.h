@@ -43,7 +43,7 @@ static int pkts_handle_req_queue(pkts_t* io) {
   int cnt = 0;
   int64_t sz = 0;
   int64_t sc_queue_time = 0;
-  while(cnt < 128 && (l = sc_queue_pop(&io->req_queue))) {
+  while((l = sc_queue_pop(&io->req_queue))) {
     pkts_req_t* req = structof(l, pkts_req_t, link);
     int64_t cur_time = rk_get_corse_us();
     int64_t delay_time = cur_time - req->ctime_us;
