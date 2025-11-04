@@ -424,7 +424,11 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("hybrid vector index should have sync interval type", K(ret), K(scan_param.index_id_), K(sync_interval_type));
             } else {
-              is_need_multi_get_ = sync_interval_type != ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
+              is_need_multi_get_ = is_need_multi_get_ == true ? true : sync_interval_type != ObVectorIndexSyncIntervalType::VSIT_IMMEDIATE;
+              const ObExprPtrIArray *op_filters = data_table_iter_->get_scan_param().op_filters_;
+              if (OB_NOT_NULL(op_filters) && !op_filters->empty()) {
+                is_need_multi_get_ = true;
+              }
             }
           }
         }
@@ -456,7 +460,6 @@ int ObDASDomainIdMergeIter::build_rowkey_domain_range()
       need_filter_rowkey_domain_ = false;
     } else {
       need_filter_rowkey_domain_ = true;
-      is_need_multi_get_ = true;
     }
   }
   LOG_INFO("finish build rowkey domain ranges", K(ret), K(need_filter_rowkey_domain_), K(is_no_sample_), K(is_need_multi_get_));
