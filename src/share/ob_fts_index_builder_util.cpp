@@ -60,6 +60,21 @@ int ObFtsIndexBuilderUtil::determine_docid_type(const ObTableSchema &table_schem
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::check_need_doc_id(
+    const ObTableSchema &table_schema,
+    bool &need_doc_id)
+{
+  int ret = OB_SUCCESS;
+  need_doc_id = false;
+  ObDocIDType doc_id_type = ObDocIDType::INVALID;
+  if (OB_FAIL(determine_docid_type(table_schema, doc_id_type))) {
+    LOG_WARN("fail to determine docid type", K(ret), K((table_schema)));
+  } else {
+    need_doc_id = doc_id_type == ObDocIDType::TABLET_SEQUENCE;
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::check_fts_aux_index_schema_exist(
     const ObTableSchema &data_schema,
     const obrpc::ObCreateIndexArg &arg,

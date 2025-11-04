@@ -54,7 +54,9 @@ public:
                                             const ObIArray<ObTableSchema> &aux_schema_array,
                                             ObArenaAllocator &allocator,
                                             const uint64_t new_data_table_id,
-                                            ObIArray<ObTableSchema> &rebuid_index_schemas);
+                                            ObIArray<ObTableSchema> &rebuid_index_schemas,
+                                            const bool need_doc_id,
+                                            const bool need_vid);
 
 private:
   static int locate_aux_index_schema_by_name(const ObString &inner_index_name,

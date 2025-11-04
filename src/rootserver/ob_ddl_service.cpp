@@ -27064,7 +27064,8 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
               } else if (share::schema::is_fts_doc_word_aux(index_type) ||
                          share::schema::is_vec_index_id_type(index_type) ||
                          share::schema::is_vec_index_snapshot_data_type(index_type) ||
-                         share::schema::is_built_in_vec_ivf_index(index_type)) {
+                         share::schema::is_built_in_vec_ivf_index(index_type) ||
+                         share::schema::is_hybrid_vec_index_embedded_type(index_type)) {
                 if (OB_FAIL(aux_schema_array.push_back(new_index_schema))) {
                   LOG_WARN("fail to add aux schema", K(ret));
                 }
@@ -27077,15 +27078,23 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
       }
     } //end for
 
-    if (OB_SUCC(ret) &&
-        !domain_schema_array.empty() &&
-        OB_FAIL(ObDomainIndexBuilderUtil::retrieve_complete_domain_index(shared_schema_array,
-                                                                         domain_schema_array,
-                                                                         aux_schema_array,
-                                                                         allocator,
-                                                                         new_table_id,
-                                                                         new_schemas))) {
-      LOG_WARN("fail to retrieve complete index", K(ret));
+    if (OB_SUCC(ret) && !domain_schema_array.empty()) {
+      bool need_doc_id = false;
+      bool need_vid = false;
+      if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_doc_id(new_table_schema, need_doc_id))) {
+        LOG_WARN("fail to check need doc id", K(ret));
+      } else if (OB_FAIL(ObVectorIndexUtil::check_need_vid(new_table_schema, need_vid))) {
+        LOG_WARN("fail to check need vid", K(ret));
+      } else if (OB_FAIL(ObDomainIndexBuilderUtil::retrieve_complete_domain_index(shared_schema_array,
+                                                                                  domain_schema_array,
+                                                                                  aux_schema_array,
+                                                                                  allocator,
+                                                                                  new_table_id,
+                                                                                  new_schemas,
+                                                                                  need_doc_id,
+                                                                                  need_vid))) {
+        LOG_WARN("fail to retrieve complete index", K(ret));
+      }
     }
 
     if (OB_FAIL(ret)) {

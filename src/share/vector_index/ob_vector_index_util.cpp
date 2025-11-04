@@ -1459,6 +1459,21 @@ int ObVectorIndexUtil::determine_vid_type(const ObTableSchema &table_schema, ObD
   return ret;
 }
 
+int ObVectorIndexUtil::check_need_vid(
+  const ObTableSchema &table_schema,
+  bool &need_vid)
+{
+  int ret = OB_SUCCESS;
+  need_vid = false;
+  ObDocIDType vid_type = ObDocIDType::INVALID;
+  if (OB_FAIL(determine_vid_type(table_schema, vid_type))) {
+    LOG_WARN("fail to determine vid type", K(ret), K(table_schema));
+  } else {
+    need_vid = vid_type == ObDocIDType::TABLET_SEQUENCE;
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::check_column_has_vector_index(
     const ObTableSchema &data_table_schema, ObSchemaGetterGuard &schema_guard, const int64_t col_id, bool &is_column_has_vector_index, ObIndexType& index_type)
 {

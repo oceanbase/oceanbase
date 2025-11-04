@@ -418,6 +418,9 @@ public:
   static int determine_vid_type(
       const ObTableSchema &table_schema,
       ObDocIDType &vid_type);
+  static int check_need_vid(
+      const ObTableSchema &table_schema,
+      bool &need_vid);
   static int construct_rebuild_index_param(
       const ObTableSchema &data_table_schema,
       const ObString &old_index_params,

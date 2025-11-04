@@ -128,7 +128,9 @@ int ObDomainIndexBuilderUtil::retrieve_complete_domain_index(
     const ObIArray<ObTableSchema> &aux_schema_array,
     ObArenaAllocator &allocator,
     const uint64_t new_data_table_id,
-    ObIArray<ObTableSchema> &rebuid_index_schemas)
+    ObIArray<ObTableSchema> &rebuid_index_schemas,
+    const bool need_doc_id,
+    const bool need_vid)
 {
   int ret = OB_SUCCESS;
   bool has_complete_fts = false;
@@ -162,7 +164,7 @@ int ObDomainIndexBuilderUtil::retrieve_complete_domain_index(
       const ObString &domain_index_name = domain_index_schema.get_table_name_str();
       if (domain_index_schema.is_multivalue_index_aux() ||
           domain_index_schema.is_fts_index_aux()) {
-        if (rowkey_doc_idx >= 0 && doc_rowkey_idx >= 0) {
+        if (!need_doc_id || (rowkey_doc_idx >= 0 && doc_rowkey_idx >= 0)) {
           if (domain_index_schema.is_fts_index_aux()) {
             int64_t index_aux_schema_idx = -1;
             LOCATE_INDEX_IDX(INDEX_TYPE_FTS_DOC_WORD_LOCAL, index_aux_schema_idx);
@@ -182,7 +184,7 @@ int ObDomainIndexBuilderUtil::retrieve_complete_domain_index(
         }
       } else if (domain_index_schema.is_vec_domain_index()) {
         if (domain_index_schema.is_vec_delta_buffer_type()) {
-          if (rowkey_vid_idx >= 0 && vid_rowkey_idx >= 0) {
+          if (!need_vid || (rowkey_vid_idx >= 0 && vid_rowkey_idx >= 0)) {
             int64_t vec_index_id_idx = -1;
             int64_t vec_index_snapshot_data_idx = -1;
             LOCATE_INDEX_IDX(INDEX_TYPE_VEC_INDEX_ID_LOCAL, vec_index_id_idx);
@@ -243,6 +245,27 @@ int ObDomainIndexBuilderUtil::retrieve_complete_domain_index(
               LOG_WARN("fail to push back domain index schemas", K(ret));
             }
           }
+        } else if (domain_index_schema.is_hybrid_vec_index_log_type()) {
+          if (!need_vid || (rowkey_vid_idx >= 0 && vid_rowkey_idx >= 0)) {
+            int64_t vec_index_id_idx = -1;
+            int64_t vec_index_snapshot_data_idx = -1;
+            int64_t hybrid_vec_index_embedded_idx = -1;
+            LOCATE_INDEX_IDX(INDEX_TYPE_VEC_INDEX_ID_LOCAL, vec_index_id_idx);
+            LOCATE_INDEX_IDX(INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL, vec_index_snapshot_data_idx);
+            LOCATE_INDEX_IDX(INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL, hybrid_vec_index_embedded_idx);
+            if (OB_FAIL(ret)) {
+            } else if (vec_index_id_idx >= 0 && vec_index_snapshot_data_idx >= 0 && hybrid_vec_index_embedded_idx >= 0) {
+              if (OB_FAIL(complete_index_schemas.push_back(domain_index_schema))) {
+                LOG_WARN("fail to push back domain index schema", K(ret));
+              } else if (OB_FAIL(complete_index_schemas.push_back(aux_schema_array.at(vec_index_id_idx)))) {
+                LOG_WARN("fail to push back aux index schema", K(ret));
+              } else if (OB_FAIL(complete_index_schemas.push_back(aux_schema_array.at(vec_index_snapshot_data_idx)))) {
+                LOG_WARN("fail to push back aux index schema", K(ret));
+              } else if (OB_FAIL(complete_index_schemas.push_back(aux_schema_array.at(hybrid_vec_index_embedded_idx)))) {
+                LOG_WARN("fail to push back aux index schema", K(ret));
+              }
+            }
+          }
         }
       }
     }
@@ -250,19 +273,19 @@ int ObDomainIndexBuilderUtil::retrieve_complete_domain_index(
       const ObTableSchema &aux_index_schema = complete_index_schemas.at(i);
       if (aux_index_schema.is_fts_index_aux() || aux_index_schema.is_multivalue_index_aux()) {
         has_complete_fts = true;
-      } else if (aux_index_schema.is_vec_delta_buffer_type()) {
+      } else if (aux_index_schema.is_vec_delta_buffer_type() || aux_index_schema.is_hybrid_vec_index_log_type()) {
         has_complete_nhsw_vec = true;
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (has_complete_fts) {
+    } else if (has_complete_fts && need_doc_id) {
       if (OB_FAIL(rebuid_index_schemas.push_back(shared_schema_array.at(rowkey_doc_idx))) ||
           OB_FAIL(rebuid_index_schemas.push_back(shared_schema_array.at(doc_rowkey_idx)))) {
         LOG_WARN("fail to push back rowkey doc/doc rowkey schema", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (has_complete_nhsw_vec) {
+    } else if (has_complete_nhsw_vec && need_vid) {
       if (OB_FAIL(rebuid_index_schemas.push_back(shared_schema_array.at(rowkey_vid_idx))) ||
           OB_FAIL(rebuid_index_schemas.push_back(shared_schema_array.at(vid_rowkey_idx)))) {
         LOG_WARN("fail to push back rowkey vid/vid rowkey schema", K(ret));
