@@ -203,15 +203,20 @@ protected:
                 const int64_t row_size, ObEvalCtx &ctx, ObCompactRow *&stored_row);
   bool need_dump()
   {
-    return sql_mem_processor_.get_data_size() > get_tmp_buffer_mem_bound()
+    return sql_mem_processor_.get_data_size() + get_ht_bucket_size() > get_tmp_buffer_mem_bound()
            || get_total_used_size() >= profile_.get_global_bound_size();
+  }
+
+  int64_t get_ht_bucket_size() // calculate partition sort hash table needed size
+  {
+    int64_t row_cnt = sk_store_.get_row_cnt();
+    return ((part_cnt_ == 0) ? 0 :
+          (row_cnt * FIXED_PART_NODE_SIZE * 2) +                          // size of(part_hash_nodes_)
+          (next_pow2(std::max(16L, row_cnt)) * FIXED_PART_BKT_SIZE * 2)); // size of(buckets_)
   }
   int64_t get_total_used_size()
   {
-    int64_t row_cnt = sk_store_.get_row_cnt();
-    return mem_context_->used() + ((part_cnt_ == 0) ? 0 :
-          ((row_cnt * FIXED_PART_NODE_SIZE * 2) +                         // size of(part_hash_nodes_)
-          (next_pow2(std::max(16L, row_cnt)) * FIXED_PART_BKT_SIZE * 2))); // size of(buckets_)
+    return mem_context_->used() + get_ht_bucket_size();
   }
   inline int64_t get_tmp_buffer_mem_bound() {
     // The memory reserved for ObSortVecOpEagerFilter should be deducted when topn filter is enabled.
