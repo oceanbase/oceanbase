@@ -17040,6 +17040,8 @@ def_table_schema(
   ('tx_share_limit', 'int'),
   ('vector_mem_detail_info', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH')
   ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
 )
 
 def_table_schema(
