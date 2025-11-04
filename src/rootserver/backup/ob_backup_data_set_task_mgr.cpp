@@ -680,7 +680,7 @@ int ObBackupSetTaskMgr::change_meta_turn_(const share::ObBackupLSTaskAttr &sys_l
     if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans_,
             job_attr_->job_id_, job_attr_->tenant_id_, /*for update*/true, lock_set_task_attr))) {
       LOG_WARN("failed to lock backup set task row for update", K(ret), KPC(job_attr_));
-    } else if (lock_set_task_attr.status_.status_ != ObBackupStatus::Status::DOING) {
+    } else if (ObBackupStatus::Status::BACKUP_USER_META != lock_set_task_attr.status_.status_) {
       ret = OB_STATE_NOT_MATCH;
       LOG_WARN("backup set task status not allow", K(ret), K(lock_set_task_attr));
     } else if (OB_FAIL(ObBackupLSTaskOperator::delete_ls_task_without_sys(trans_, set_task_attr_.tenant_id_,
@@ -2413,8 +2413,7 @@ int ObBackupSetTaskMgr::do_clean_up()
   } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans,
       set_task_attr_.job_id_, set_task_attr_.tenant_id_,  /*for update*/true, lock_set_task_attr))) {
     LOG_WARN("failed to lock backup set task row for update", K(ret), K_(set_task_attr));
-  } else if (lock_set_task_attr.status_.status_ != ObBackupStatus::Status::COMPLETED
-      && lock_set_task_attr.status_.status_ != ObBackupStatus::Status::FAILED) {
+  } else if (!lock_set_task_attr.status_.is_backup_finish()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("backup set task status not allow", K(ret), K(lock_set_task_attr));
   } else if (OB_FAIL(ObBackupLSTaskInfoOperator::move_ls_task_info_to_his(trans, set_task_attr_.task_id_, 

@@ -1403,7 +1403,7 @@ public:
   ObBackupStatus &operator=(const Status &status);
   operator Status() const { return status_; }
   bool is_valid() const;
-
+  bool is_task_doing_status() const;
   bool is_backup_meta() const { return BACKUP_SYS_META == status_ || BACKUP_USER_META == status_; }
   bool is_backup_user() const { return BACKUP_USER_DATA == status_; }
   bool is_backup_log() const { return BEFORE_BACKUP_LOG == status_ || BACKUP_LOG == status_; }

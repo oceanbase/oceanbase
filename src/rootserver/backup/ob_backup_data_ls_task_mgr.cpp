@@ -464,7 +464,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
         if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans,
                 job_attr_->job_id_, ls_attr_->tenant_id_, /*for update*/true, lock_set_task_attr))) {
           LOG_WARN("failed to lock backup set task row for update", K(ret), KPC(job_attr_), KPC(ls_attr_));
-        } else if (lock_set_task_attr.status_.status_ != ObBackupStatus::Status::DOING) {
+        } else if (!lock_set_task_attr.status_.is_task_doing_status()) {
           ret = OB_STATE_NOT_MATCH;
           LOG_WARN("backup set task status not allow retry, expect DOING", K(ret), K(lock_set_task_attr));
         } else if (OB_FAIL(redo_ls_task(*backup_service_, trans, *ls_attr_, ls_attr_->start_turn_id_,

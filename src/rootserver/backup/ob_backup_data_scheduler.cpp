@@ -1079,7 +1079,7 @@ int ObUserTenantBackupJobMgr::deal_non_reentrant_job(const int err)
       if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans,
               job_attr_->job_id_, tenant_id_, /*for update*/true, lock_set_task_attr))) {
         LOG_WARN("failed to lock backup set task row for update", K(ret), K_(tenant_id), KPC(job_attr_));
-      } else if (lock_set_task_attr.status_.status_ != ObBackupStatus::Status::DOING) {
+      } else if (lock_set_task_attr.status_.is_backup_finish()) {
         ret = OB_STATE_NOT_MATCH;
         LOG_WARN("backup set task status not allow failure handling, expect DOING", K(ret), K(lock_set_task_attr));
       } else if (OB_FAIL(set_task_mgr.deal_failed_set_task(trans))) {
