@@ -9789,6 +9789,8 @@ int ObTablet::check_new_sstable_can_be_acccepted_(const ObTablet &old_tablet, co
     LOG_WARN("fail to get tables", K(ret), K(param));
   } else if (tables.empty()) {
     // do nothing
+  } else if (param.is_transfer_replace_) {
+    // do nothing
   } else if (OB_FAIL(sstable_array.init(allocator,tables))) {
     LOG_WARN("fail to init sstable array", K(ret), K(tables));
   } else if (OB_FAIL(check_sstable_array_without_backup_table_(sstable_array, has_backup_macro))) {
