@@ -143,6 +143,9 @@ struct SingleSetParam {
                                  ObIArray<ObSelectStmt*> &unnest_stmts,
                                  bool &trans_happened);
 
+  int check_nested_subquery_cond(const ObQueryRefRawExpr &query_expr,
+                                 bool &is_nested_subq_cond);
+
   int transform_one_expr(ObDMLStmt *stmt,
                          ObRawExpr *expr,
                          ObIArray<ObSelectStmt*> &unnest_stmts,
