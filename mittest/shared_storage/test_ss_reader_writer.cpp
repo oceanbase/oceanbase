@@ -1656,6 +1656,117 @@ TEST_F(TestSSReaderWriter, performance_comparison_write_through_vs_write_dual)
   LOG_INFO("=== Performance Comparison Test Passed ===");
 }
 
+TEST_F(TestSSReaderWriter, test_batch_delete_tmp_files)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+
+  const int64_t write_size = 8192; // 8KB
+
+  // ======== Scenario 1: Test batch delete local tmp files ========
+  LOG_INFO("=== Test batch delete local tmp files ===");
+  check_tmp_file_disk_size_enough(write_size * 6);
+
+  const int64_t local_file_count = 3;
+  ObSEArray<MacroBlockId, local_file_count> local_file_ids;
+  ObSEArray<int64_t, local_file_count> local_lengths;
+
+  // Create and write local tmp files (100, 101, 102)
+  for (int64_t i = 0; i < local_file_count; i++) {
+    MacroBlockId file_id;
+    int64_t tmp_file_id = 100 + i;
+    file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    file_id.set_second_id(tmp_file_id);
+    file_id.set_third_id(0);   // segment_id
+
+    // Write first segment
+    write_tmp_file_data(file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+    // Append more data for file 0 and 2
+    if (i == 0 || i == 2) {
+      write_tmp_file_data(file_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+    }
+
+    ASSERT_EQ(OB_SUCCESS, local_file_ids.push_back(file_id));
+    int64_t length = (i == 0 || i == 2) ? 2 * write_size : write_size;
+    ASSERT_EQ(OB_SUCCESS, local_lengths.push_back(length));
+  }
+
+  // Verify local files exist using segment metadata and read
+  for (int64_t i = 0; i < local_file_count; i++) {
+    check_tmp_file_seg_meta(local_file_ids.at(i), true/*is_meta_exist*/, true/*is_in_local*/, local_lengths.at(i)/*valid_length*/);
+    read_and_compare_tmp_file_data(local_file_ids.at(i), 0/*offset*/, write_size/*size*/);
+  }
+
+  // Batch delete local tmp files
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(local_file_ids, local_lengths));
+
+   // Verify local files are deleted - check segment metadata no longer exists
+  for (int64_t i = 0; i < local_file_count; i++) {
+    check_tmp_file_seg_meta(local_file_ids.at(i), false/*is_meta_exist*/);
+  }
+  LOG_INFO("=== Local tmp files batch delete test passed ===");
+
+  // ======== Scenario 2: Test invalid arguments ========
+  ObSEArray<MacroBlockId, 1> empty_file_ids;
+  ObSEArray<int64_t, 1> empty_lengths;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(empty_file_ids, empty_lengths));
+
+  ObSEArray<MacroBlockId, 2> mismatch_file_ids;
+  ObSEArray<int64_t, 1> mismatch_lengths;
+  MacroBlockId dummy_file_id;
+  dummy_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  dummy_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  dummy_file_id.set_second_id(200);
+  dummy_file_id.set_third_id(0);
+  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
+  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
+  ASSERT_EQ(OB_SUCCESS, mismatch_lengths.push_back(write_size));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(mismatch_file_ids, mismatch_lengths));
+
+  // ======== Scenario 3: Test batch delete remote tmp files ========
+  LOG_INFO("=== Test batch delete remote tmp files ===");
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+
+  const int64_t remote_file_count = 2;
+  ObSEArray<MacroBlockId, remote_file_count> remote_file_ids;
+  ObSEArray<int64_t, remote_file_count> remote_lengths;
+
+  // Create remote tmp files (300, 301) with disk exhausted
+  for (int64_t i = 0; i < remote_file_count; i++) {
+    MacroBlockId remote_file_id;
+    int64_t tmp_file_id = 300 + i;
+    remote_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    remote_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    remote_file_id.set_second_id(tmp_file_id);
+    remote_file_id.set_third_id(0);   // segment_id
+
+    // Write to remote (disk exhausted forces write through)
+    write_tmp_file_data(remote_file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+    // Verify segment metadata exists (in remote)
+    check_tmp_file_seg_meta(remote_file_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    ASSERT_EQ(OB_SUCCESS, remote_file_ids.push_back(remote_file_id));
+    ASSERT_EQ(OB_SUCCESS, remote_lengths.push_back(write_size));
+  }
+
+  // Batch delete remote tmp files from object storage
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(remote_file_ids, remote_lengths));
+
+  // Verify remote files are deleted - check segment metadata no longer exists
+  for (int64_t i = 0; i < remote_file_count; i++) {
+    check_tmp_file_seg_meta(remote_file_ids.at(i), false/*is_meta_exist*/);
+  }
+
+  // Release disk space for next test
+  release_tmp_file_disk_size(avail_size);
+  LOG_INFO("=== Remote tmp files batch delete test passed ===");
+}
+
 TEST_F(TestSSReaderWriter, IOFaultDetector)
 {
   ObIOFaultDetector &detector = OB_IO_MANAGER.get_device_health_detector();
