@@ -155,7 +155,7 @@ public:
 protected:
   int generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row) override;
 private:
-  int generate_embedded_vec_row(const ObChunkDatumStore::StoredRow *store_row);
+  int generate_embedded_vec_row(const ObChunkDatumStore::StoredRow *store_row, bool is_sync);
   int get_embedded_vec_column_idxs(int64_t &vid_idx, int64_t &embedded_vec_idx);
   int get_vid(const ObChunkDatumStore::StoredRow *store_row, const int64_t vid_idx, int64_t &vid);
   int get_chunk_data(const ObChunkDatumStore::StoredRow *store_row, const int64_t embedded_vec_idx, ObString &chunk);

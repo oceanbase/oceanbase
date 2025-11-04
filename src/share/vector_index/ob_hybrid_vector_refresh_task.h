@@ -68,6 +68,7 @@ public:
         embedding_task_(nullptr),
         index_id_column_ids_(),
         embedded_table_column_ids_(),
+        embedded_table_update_ids_(),
         ai_service_(),
         endpoint_(),
         adp_guard_(),
@@ -93,6 +94,7 @@ public:
   ObEmbeddingTask *embedding_task_;
   ObSEArray<uint64_t, 4> index_id_column_ids_;
   ObSEArray<uint64_t, 4> embedded_table_column_ids_;
+  ObSEArray<uint64_t, 4> embedded_table_update_ids_;
   omt::ObAiServiceGuard ai_service_;
   const ObAiModelEndpointInfo *endpoint_;
   ObPluginVectorIndexAdapterGuard adp_guard_;

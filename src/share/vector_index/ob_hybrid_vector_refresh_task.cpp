@@ -421,7 +421,10 @@ int ObHybridVectorRefreshTask::get_embedded_table_column_ids(ObPluginVectorIndex
     }
   }
   task_ctx->part_key_num_ = part_key_column_ids.count();
-  if (OB_SUCC(ret) && OB_FAIL(task_ctx->embedded_table_column_ids_.push_back(vector_column_id))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(task_ctx->embedded_table_column_ids_.push_back(vector_column_id))) {
+    LOG_WARN("failed to push vector column id.", K(ret));
+  } else if (OB_FAIL(task_ctx->embedded_table_update_ids_.push_back(vector_column_id))) {
     LOG_WARN("failed to push vector column id.", K(ret));
   }
 
@@ -884,7 +887,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   ObArray<float*> output_vector;
   float *vector_buf = nullptr;
   ObHybridVectorRefreshTaskCtx *task_ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(get_task_ctx());
-  storage::ObValueRowIterator embedded_iter;
+  ObVecIndexATaskUpdIterator embedded_iter;
   storage::ObValueRowIterator index_id_iter;
   storage::ObValueRowIterator delta_delete_iter;
   embedded_iter.init();
@@ -926,13 +929,15 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc mem.", K(ret), K(dim));
   } else {
-    HEAP_VARS_3((blocksstable::ObDatumRow, datum_row, tenant_id_), (storage::ObTableScanParam, vid_rowkey_scan_param), (schema::ObTableParam, vid_rowkey_table_param, allocator_)) {
+    HEAP_VARS_4((blocksstable::ObDatumRow, datum_row, tenant_id_), (blocksstable::ObDatumRow, new_row, tenant_id_), (storage::ObTableScanParam, vid_rowkey_scan_param), (schema::ObTableParam, vid_rowkey_table_param, allocator_)) {
       ObArenaAllocator scan_allocator("VecEmbedding", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       common::ObNewRowIterator *vid_rowkey_iter = nullptr;
       ObTableScanIterator *table_scan_iter = nullptr;
       int64_t loop_cnt = 0;
       if (OB_FAIL(datum_row.init(task_ctx->embedded_table_column_ids_.count()))) {
         LOG_WARN("fail to init datum row", K(ret), K(task_ctx->embedded_table_column_ids_), K(datum_row));
+      } else if (OB_FAIL(new_row.init(task_ctx->embedded_table_column_ids_.count()))) {
+        LOG_WARN("fail to init datum row", K(ret), K(task_ctx->embedded_table_column_ids_), K(new_row));
       } else if (adaptor.get_is_need_vid() && OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
               &adaptor,
               ctx_->task_status_.target_scn_,
@@ -950,7 +955,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
         for (int64_t i = 0; i < dim; i++) {
           vector_buf[i] = output_vector.at(row_id)[i];
         }
-        datum_row.storage_datums_[task_ctx->embedded_table_column_ids_.count() - 1].set_string(reinterpret_cast<char *>(vector_buf), dim * sizeof(float));
+        datum_row.storage_datums_[task_ctx->embedded_table_column_ids_.count() - 1].set_null();
         for (int i = task_ctx->embedded_table_column_ids_.count() - 2; i > task_ctx->embedded_table_column_ids_.count() - 2 - task_ctx->part_key_num_; i--) {
           datum_row.storage_datums_[i].set_null();
         }
@@ -987,11 +992,13 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(embedded_iter.add_row(datum_row))) {
+          if (OB_FAIL(new_row.deep_copy(datum_row, allocator_))) {
+            LOG_WARN("failed to copy row", K(ret), K(datum_row));
+          } else if (FALSE_IT(new_row.storage_datums_[task_ctx->embedded_table_column_ids_.count() - 1].set_string(reinterpret_cast<char *>(vector_buf), dim * sizeof(float)))) {
+          } else if (OB_FAIL(embedded_iter.add_row(datum_row, new_row))) {
             LOG_WARN("failed to add row to index id iter", K(ret));
           }
           datum_row.reuse();
-
         }
 
         CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
@@ -1009,7 +1016,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
       LOG_WARN("unexpected error", K(ret), KPC(task_ctx), K(oas));
     } else if (OB_FAIL(init_dml_param(adaptor.get_embedded_table_id(), dml_param, table_dml_param, task_ctx->embedded_table_column_ids_, tx_desc, snapshot, store_ctx_guard))) {
       LOG_WARN("failed to init dml param", K(ret), K(dml_param), K(table_dml_param));
-    } else if (OB_FAIL(oas->insert_rows(ls_id_, adaptor.get_embedded_tablet_id(), *tx_desc, dml_param, task_ctx->embedded_table_column_ids_, &embedded_iter, affected_rows))) {
+    } else if (OB_FAIL(oas->update_rows(ls_id_, adaptor.get_embedded_tablet_id(), *tx_desc, dml_param, task_ctx->embedded_table_column_ids_, task_ctx->embedded_table_update_ids_, &embedded_iter, affected_rows))) {
       LOG_WARN("failed to insert rows to embedded table", K(ret), K(adaptor.get_embedded_tablet_id()));
     }
     store_ctx_guard.reset();
