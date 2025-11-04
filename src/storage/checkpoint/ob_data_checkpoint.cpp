@@ -14,6 +14,8 @@
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "storage/ls/ob_ls.h"
 
+#define USING_LOG_PREFIX STORAGE
+
 namespace oceanbase
 {
 using namespace share;

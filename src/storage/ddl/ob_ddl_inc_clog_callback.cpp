@@ -221,13 +221,13 @@ int ObDDLIncCommitClogCb::on_success()
                             is_sync,
                             0, /*timeout, useless for async one*/
                             false, /*need_rewrite_meta*/
-                            ObFreezeSourceFlag::DIRECT_INC_START);
+                            ObFreezeSourceFlag::DIRECT_INC_END);
     if (log_basic_.get_lob_meta_tablet_id().is_valid()) {
       (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(),
                               is_sync,
                               0, /*timeout, useless for async one*/
                               false, /*need_rewrite_meta*/
-                              ObFreezeSourceFlag::DIRECT_INC_START);
+                              ObFreezeSourceFlag::DIRECT_INC_END);
     }
     FLOG_INFO("write ddl inc commit log success", K(ls_id_), K(scn_), K(log_basic_));
   }
