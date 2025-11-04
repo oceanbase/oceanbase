@@ -1913,6 +1913,10 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprIsIpv4Compat::calc_is_ipv4_compat_vector,               /* 271 */
   NULL, // ObExprInet6Ntoa::calc_inet6_ntoa_vector,                      /* 272 */
   NULL, // ObExprInet6Aton::calc_inet6_aton_vector,                      /* 273 */
+  NULL, // ObExprAtan::eval_number_atan_vector,                          /* 274 */
+  NULL, // ObExprAtan::eval_double_atan_vector,                          /* 275 */
+  NULL, // ObExprAtan2::eval_number_atan2_vector,                        /* 276 */
+  NULL, // ObExprAtan2::eval_double_atan2_vector,                        /* 277 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
