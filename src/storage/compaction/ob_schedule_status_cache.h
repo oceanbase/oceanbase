@@ -33,6 +33,7 @@ struct ObLSStatusCache final
     OFFLINE_OR_DELETED,
     RESTORE_NOT_READY,     //FARM COMPAT WHITELIST
     ALLOW_EMERGENCY_MERGE, //FARM COMPAT WHITELIST
+    LOOP_NOT_READY_LS,
     STATE_MAX,
   };
   static const char *ls_state_to_str(const LSState &state);
@@ -48,8 +49,8 @@ struct ObLSStatusCache final
       state_(STATE_MAX)
   {}
   ~ObLSStatusCache() {}
-  int init_for_major(const int64_t merge_version, storage::ObLSHandle &ls_handle);
-  bool can_merge() const { return CAN_MERGE == state_ || ALLOW_EMERGENCY_MERGE == state_; }
+  int init_for_major(const int64_t merge_version, const int64_t loop_cnt, storage::ObLSHandle &ls_handle);
+  bool can_merge() const { return CAN_MERGE == state_ || ALLOW_EMERGENCY_MERGE == state_ || LOOP_NOT_READY_LS == state_; }
   void reset();
   static void check_ls_state(storage::ObLS &ls, LSState &state);
   static bool is_restore_ready_for_merge(storage::ObLS &ls);

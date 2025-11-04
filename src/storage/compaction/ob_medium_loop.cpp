@@ -143,6 +143,7 @@ int ObMediumLoop::loop_in_ls(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
+
   if (OB_FAIL(func.switch_ls(ls_handle))) {
     if (OB_STATE_NOT_MATCH != ret) {
       LOG_WARN("failed to switch ls", KR(ret), K(ls_id), K(func));

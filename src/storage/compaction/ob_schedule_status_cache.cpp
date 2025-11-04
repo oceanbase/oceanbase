@@ -27,6 +27,7 @@ const static char * ObLSStateStr[] = {
     "OFFLINE_OR_DELETED",
     "RESTORE_NOT_READY",
     "ALLOW_EMERGENCY_MERGE",
+    "LOOP_NOT_READY_LS",
     "STATE_MAX"
 };
 
@@ -47,8 +48,9 @@ const char * ObLSStatusCache::ls_state_to_str(const ObLSStatusCache::LSState &st
 * weak_read_ts
 */
 int ObLSStatusCache::init_for_major(
-  const int64_t merge_version,
-  ObLSHandle &ls_handle)
+    const int64_t merge_version,
+    const int64_t loop_cnt,
+    ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
   reset(); // reset before init
@@ -65,7 +67,13 @@ int ObLSStatusCache::init_for_major(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid weak read ts", KR(ret), K_(weak_read_ts));
   } else if (merge_version > 0 && weak_read_ts_.get_val_for_tx() < merge_version) {
-    state_ = WEAK_READ_TS_NOT_READY;
+    if (loop_cnt % 50 == 0) {
+      state_ = LOOP_NOT_READY_LS;
+      is_leader_ = false; // only schedule unfinished medium merge, not launch new medium merge
+      LOG_INFO("start loop weak read ts not ready ls", K(ls_id_), K(loop_cnt), K(merge_version), KPC(this));
+    } else {
+      state_ = WEAK_READ_TS_NOT_READY;
+    }
   } else if (can_merge() && OB_FAIL(ObMediumCompactionScheduleFunc::is_election_leader(ls_id_, is_leader_))) {
     is_leader_ = false;
     if (OB_LS_NOT_EXIST != ret) {

@@ -43,7 +43,7 @@ int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
 
-  if (OB_FAIL(ls_status_.init_for_major(merge_version_, ls_handle))) {
+  if (OB_FAIL(ls_status_.init_for_major(merge_version_, loop_cnt_, ls_handle))) {
     if (OB_LS_NOT_EXIST != ret) {
       LOG_WARN("failed to init ls status", KR(ret), K_(merge_version), K(ls_id));
     }
@@ -111,7 +111,7 @@ int ObBasicScheduleTabletFunc::diagnose_switch_ls(
   ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_status_.init_for_major(merge_version_, ls_handle))) {
+  if (OB_FAIL(ls_status_.init_for_major(merge_version_, loop_cnt_, ls_handle))) {
     if (OB_LS_NOT_EXIST != ret) {
       LOG_WARN("failed to init ls status", KR(ret), K_(merge_version), K(ls_handle));
     }
@@ -150,7 +150,10 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
     LOG_WARN("cannot schedule dag, exists unfinished inc major, try later", K(ret), K(tablet_id), K(schedule_scn));
   } else {
     can_merge = (tablet_status.can_merge() && weak_read_ts_ready && tablet.get_snapshot_version() >= schedule_scn);
-    if (!can_merge && OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
+
+    if (can_merge || ls_status_.state_ == ObLSStatusCache::LOOP_NOT_READY_LS) {
+      // do nothing
+    } else if (OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
       LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(schedule_scn));
     } else if (need_force_freeze) {
       tablet_cnt_.force_freeze_cnt_++;
