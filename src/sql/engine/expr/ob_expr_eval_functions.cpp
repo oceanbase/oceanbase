@@ -1917,6 +1917,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprAtan::eval_double_atan_vector,                          /* 275 */
   NULL, // ObExprAtan2::eval_number_atan2_vector,                        /* 276 */
   NULL, // ObExprAtan2::eval_double_atan2_vector,                        /* 277 */
+  NULL, // ObExprDegrees::calc_degrees_vector_expr,                      /* 278 */
+  NULL, // ObExprRadians::calc_radians_vector_expr,                      /* 279 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
