@@ -215,6 +215,12 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
       }
 
       OZ (static_cast<ObPLFunction &>(unit).gen_action_from_precompiled(static_cast<ObPLCompileUnitAST &>(unit_ast).get_name(), length, copy_buf));
+      if (OB_SUCC(ret) && session_info.is_pl_debug_on()) {
+        ObPLFunctionAST &func_ast = static_cast<ObPLFunctionAST&>(unit_ast);
+        ObPLFunction &pl_func = static_cast<ObPLFunction &>(unit);
+        OZ (pl_func.set_variables_debuginfo(func_ast.get_symbol_debuginfo_table()));
+        OZ (pl_func.set_name_debuginfo(func_ast));
+      }
     }
     if (OB_SUCC(ret) && nums > 0) {
       ObPLRoutineTable &routine_table = unit_ast.get_routine_table();
