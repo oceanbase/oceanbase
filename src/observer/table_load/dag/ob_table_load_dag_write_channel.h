@@ -120,11 +120,12 @@ public:
   int px_write(common::ObIVector *tablet_id_vector,
                const storage::ObDirectLoadBatchRows &batch_rows) override;
   int close() override { return close(trans_, session_id_); }
+
+protected:
   virtual int append_row(const ObTabletID &tablet_id, const ObDirectLoadDatumRow &datum_row) = 0;
   virtual int append_batch(common::ObIVector *tablet_id_vector,
-                           const storage::ObDirectLoadBatchRows &batch_rows, int64_t &start) = 0;
+                           const storage::ObDirectLoadBatchRows &batch_rows) = 0;
   virtual int close(ObTableLoadStoreTrans *trans, const int32_t session_id) = 0;
-  virtual int finish_chunk() { return OB_SUCCESS; }
 
 protected:
   ObTableLoadDag *dag_;

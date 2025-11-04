@@ -157,30 +157,17 @@ int ObTableLoadDagChunkWriter::write(const ObTableLoadTabletObjRowArray &row_arr
     const ObDirectLoadDatumRow *datum_row = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < row_array.count(); ++i) {
       const ObTableLoadTabletObjRow &obj_row = row_array.at(i);
-      if (OB_FAIL(store_writer_->cast_row(session_id_, obj_row.obj_row_, datum_row, obj_row.tablet_id_))) {
+      if (OB_FAIL(store_writer_->cast_row(session_id_, obj_row.obj_row_, datum_row,
+                                          obj_row.tablet_id_))) {
         ObTableLoadErrorRowHandler *error_row_handler = dag_->store_ctx_->error_row_handler_;
         LOG_INFO("write row error", K(ret), K(obj_row));
         if (OB_FAIL(error_row_handler->handle_error_row(ret))) {
           LOG_WARN("fail to handle error row", K(ret), K(obj_row));
         } else {
           ret = OB_SUCCESS;
-          continue;
         }
-      }
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(append_row(obj_row.tablet_id_, *datum_row))) {
-          if (OB_UNLIKELY(OB_EAGAIN != ret)) {
-            LOG_WARN("fail to append row", KR(ret));
-          } else {
-            ret = OB_SUCCESS;
-            ob_usleep(50 * 1000);
-            if (OB_FAIL(dag_->check_status())) {
-              LOG_WARN("fail to check status", KR(ret));
-            }
-          }
-        } else {
-          break;
-        }
+      } else if (OB_FAIL(append_row(obj_row.tablet_id_, *datum_row))) {
+        LOG_WARN("fail to append row", KR(ret));
       }
     }
   }
@@ -194,21 +181,8 @@ int ObTableLoadDagChunkWriter::px_write(ObIVector *tablet_id_vector,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadDagPXWriter not init", KR(ret), KP(this));
-  } else {
-    int64_t start = 0;
-    while (OB_SUCC(ret) && start < batch_rows.size()) {
-      if (OB_FAIL(append_batch(tablet_id_vector, batch_rows, start))) {
-        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
-          LOG_WARN("fail to append batch", KR(ret));
-        } else {
-          ret = OB_SUCCESS;
-          ob_usleep(50 * 1000);
-          if (OB_FAIL(dag_->check_status())) {
-            LOG_WARN("fail to check status", KR(ret));
-          }
-        }
-      }
-    }
+  } else if (OB_FAIL(append_batch(tablet_id_vector, batch_rows))) {
+    LOG_WARN("fail to append batch", KR(ret));
   }
   return ret;
 }

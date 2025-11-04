@@ -240,8 +240,7 @@ int ObTableLoadDagDirectChunkWriter::append_row(const ObTabletID &tablet_id,
 }
 
 int ObTableLoadDagDirectChunkWriter::append_batch(ObIVector *tablet_id_vector,
-                                                  const ObDirectLoadBatchRows &batch_rows,
-                                                  int64_t &start)
+                                                  const ObDirectLoadBatchRows &batch_rows)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -250,9 +249,9 @@ int ObTableLoadDagDirectChunkWriter::append_batch(ObIVector *tablet_id_vector,
   } else if (OB_UNLIKELY(is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected is closed", KR(ret));
-  } else if (OB_UNLIKELY(nullptr == tablet_id_vector || batch_rows.empty() || 0 != start)) {
+  } else if (OB_UNLIKELY(nullptr == tablet_id_vector || batch_rows.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(batch_rows), K(start));
+    LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(batch_rows));
   } else if (is_single_part_) { // 单分区场景
     BatchWriter *batch_writer = nullptr;
     if (OB_FAIL(get_batch_writer(single_tablet_id_, batch_writer))) {
@@ -312,9 +311,6 @@ int ObTableLoadDagDirectChunkWriter::append_batch(ObIVector *tablet_id_vector,
         }
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    start = batch_rows.size();
   }
   return ret;
 }

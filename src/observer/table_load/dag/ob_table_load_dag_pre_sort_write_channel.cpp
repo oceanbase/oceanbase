@@ -448,17 +448,28 @@ int ObTableLoadDagPreSortChunkWriter::append_row(const ObTabletID &tablet_id,
   } else if (OB_UNLIKELY(is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected is closed", KR(ret));
-  } else if (OB_FAIL(inner_append_row(tablet_id, datum_row))) {
-    if (OB_UNLIKELY(OB_EAGAIN != ret)) {
-      LOG_WARN("fail to append row", KR(ret));
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(inner_append_row(tablet_id, datum_row))) {
+        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
+          LOG_WARN("fail to append row", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          ob_usleep(50 * 1000);
+          if (OB_FAIL(dag_->check_status())) {
+            LOG_WARN("fail to check status", KR(ret));
+          }
+        }
+      } else {
+        break;
+      }
     }
   }
   return ret;
 }
 
 int ObTableLoadDagPreSortChunkWriter::append_batch(ObIVector *tablet_id_vector,
-                                                   const ObDirectLoadBatchRows &batch_rows,
-                                                   int64_t &start)
+                                                   const ObDirectLoadBatchRows &batch_rows)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -472,6 +483,7 @@ int ObTableLoadDagPreSortChunkWriter::append_batch(ObIVector *tablet_id_vector,
     LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(batch_rows));
   } else {
     datum_row_.seq_no_ = 0;
+    int64_t start = 0;
     while (OB_SUCC(ret) && start < batch_rows.size()) {
       const ObTabletID tablet_id = ObDirectLoadVectorUtils::get_tablet_id(tablet_id_vector, start);
       if (OB_FAIL(batch_rows.get_datum_row(start, datum_row_))) {
@@ -480,7 +492,11 @@ int ObTableLoadDagPreSortChunkWriter::append_batch(ObIVector *tablet_id_vector,
         if (OB_UNLIKELY(OB_EAGAIN != ret)) {
           LOG_WARN("fail to append row", KR(ret));
         } else {
-          break;
+          ret = OB_SUCCESS;
+          ob_usleep(50 * 1000);
+          if (OB_FAIL(dag_->check_status())) {
+            LOG_WARN("fail to check status", KR(ret));
+          }
         }
       } else {
         ++start;

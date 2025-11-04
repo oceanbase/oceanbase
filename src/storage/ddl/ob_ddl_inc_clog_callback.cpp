@@ -206,10 +206,22 @@ int ObDDLIncRedoClogCb::set_macro_block(
 {
   int ret = OB_SUCCESS;
   if (is_incremental_minor_direct_load(direct_load_type_)) {
-    if (OB_FAIL(tablet_handle_.get_obj()->set_macro_block(macro_block, snapshot_version, data_format_version))) {
-      LOG_WARN("failed to set macro block", KR(ret));
-    }
+    // 普通增量
+    static const int64_t MAX_RETRY_COUNT = 10;
+    int64_t retry_cnt = 0;
+    do {
+      if (OB_FAIL(tablet_handle_.get_obj()->set_macro_block(macro_block, snapshot_version, data_format_version))) {
+        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
+          LOG_WARN("failed to set macro block", KR(ret), KPC(tablet_handle_.get_obj()), K(macro_block));
+        } else {
+          ++retry_cnt;
+        }
+      } else {
+        break;
+      }
+    } while (OB_EAGAIN == ret && retry_cnt < MAX_RETRY_COUNT);
   } else {
+    // 增量基线
     ObTabletDirectLoadMgrHandle mock_mgr_handle;
     if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(
         tablet_handle_.get_obj(), macro_block, snapshot_version, data_format_version, mock_mgr_handle, direct_load_type_))) {
@@ -282,8 +294,10 @@ int ObDDLIncCommitClogCb::on_success()
   FLOG_INFO("write ddl inc commit log end", KR(ret), K(ls_id_), K(log_basic_), K(is_rollback_), K(scn));
   if (OB_FAIL(ret)) {
     LOG_ERROR("write ddl inc commit log failed", KR(ret), K(ls_id_), K(log_basic_), K(is_rollback_), K(scn));
-    // 无法处理callback失败的情况, 修改错误码防止走到重试逻辑
-    ret = OB_ERR_UNEXPECTED;
+    // callback失败无法重试
+    if (OB_EAGAIN == ret) {
+      ret = OB_ERR_UNEXPECTED;
+    }
   }
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);

@@ -51,7 +51,7 @@ public:
            ObTableLoadTransStoreWriter *store_writer, const int32_t session_id) override;
   int append_row(const ObTabletID &tablet_id, const ObDirectLoadDatumRow &datum_row) override;
   int append_batch(common::ObIVector *tablet_id_vector,
-                   const storage::ObDirectLoadBatchRows &batch_rows, int64_t &start) override;
+                   const storage::ObDirectLoadBatchRows &batch_rows) override;
   int close(ObTableLoadStoreTrans *trans, const int32_t session_id) override;
 
 private:

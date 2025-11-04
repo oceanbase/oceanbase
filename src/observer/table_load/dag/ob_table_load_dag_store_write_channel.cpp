@@ -277,8 +277,7 @@ int ObTableLoadDagStoreChunkWriter::append_row(const ObTabletID &tablet_id,
 }
 
 int ObTableLoadDagStoreChunkWriter::append_batch(ObIVector *tablet_id_vector,
-                                                 const ObDirectLoadBatchRows &batch_rows,
-                                                 int64_t &start)
+                                                 const ObDirectLoadBatchRows &batch_rows)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -287,9 +286,9 @@ int ObTableLoadDagStoreChunkWriter::append_batch(ObIVector *tablet_id_vector,
   } else if (OB_UNLIKELY(is_closed_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected is closed", KR(ret));
-  } else if (OB_UNLIKELY(nullptr == tablet_id_vector || batch_rows.empty() || 0 != start)) {
+  } else if (OB_UNLIKELY(nullptr == tablet_id_vector || batch_rows.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(batch_rows), K(start));
+    LOG_WARN("invalid args", KR(ret), KP(tablet_id_vector), K(batch_rows));
   } else {
     datum_row_.seq_no_ = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_rows.size(); ++i) {
@@ -299,9 +298,6 @@ int ObTableLoadDagStoreChunkWriter::append_batch(ObIVector *tablet_id_vector,
       } else if (OB_FAIL(inner_append_row(tablet_id, datum_row_))) {
         LOG_WARN("fail to append row", KR(ret));
       }
-    }
-    if (OB_SUCC(ret)) {
-      start = batch_rows.size();
     }
   }
   return ret;
