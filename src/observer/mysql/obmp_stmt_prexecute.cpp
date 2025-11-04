@@ -233,8 +233,7 @@ int ObMPStmtPrexecute::before_process()
 
 bool ObMPStmtPrexecute::check_cluster_version_for_prepare_with_params()
 {
-  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_6 &&
-         GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0;
+  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_6;
 }
 
 int ObMPStmtPrexecute::prepare_session_info(sql::ObSQLSessionInfo &session,
