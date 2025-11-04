@@ -194,10 +194,26 @@ int ObESQueryParser::add_pk_to_sort(ObQueryReqFromJson *query_req, const ObEsQue
   }
 
   // add __pk_increment to order by
-  if (OB_SUCC(ret) && query_item != QUERY_ITEM_KNN) {
-    ObString table_name = (query_item == QUERY_ITEM_HYBRID) ? VS_ALIAS : "";
-    if (OB_FAIL(set_order_by_column(query_req, rowkey, table_name))) {
+  if (OB_FAIL(ret)) {
+  } else if (QUERY_ITEM_QUERY == query_item) {
+    if (OB_FAIL(set_order_by_column(query_req, rowkey, "", true))) {
       LOG_WARN("fail to set order by column", K(ret));
+    }
+  } else if (QUERY_ITEM_HYBRID == query_item) {
+    ObReqColumnExpr *vs_pk = NULL;
+    ObReqColumnExpr *fts_pk = NULL;
+    ObReqExpr *if_null = NULL;
+    OrderInfo *order_info = NULL;
+    if (OB_FAIL(ObReqColumnExpr::construct_column_expr(vs_pk, alloc_, rowkey, VS_ALIAS))) {
+      LOG_WARN("fail to create column expr", K(ret));
+    } else if (OB_FAIL(ObReqColumnExpr::construct_column_expr(fts_pk, alloc_, rowkey, FTS_ALIAS))) {
+      LOG_WARN("fail to create column expr", K(ret));
+    } else if (OB_FAIL(ObReqExpr::construct_expr(if_null, alloc_, N_IFNULL, vs_pk, fts_pk))) {
+      LOG_WARN("fail to create ifnull expr", K(ret));
+    } else if (OB_FAIL(construct_order_by_item(if_null, true, order_info))) {
+      LOG_WARN("fail to construct order by item", K(ret));
+    } else if (OB_FAIL(query_req->order_items_.push_back(order_info))) {
+      LOG_WARN("fail to push query order item", K(ret));
     }
   }
   return ret;
