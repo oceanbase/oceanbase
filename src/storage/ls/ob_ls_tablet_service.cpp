@@ -5400,39 +5400,42 @@ int ObLSTabletService::insert_vector_index_rows(
     }
   } else if (table_param.is_hybrid_vector_index_log()) {
     const blocksstable::ObDmlFlag dml_flag = run_ctx.dml_flag_;
-    if (dml_flag == ObDmlFlag::DF_DELETE) {
-      ObString vec_idx_param = run_ctx.dml_param_.table_param_->get_data_table().get_vec_index_param();
-      int64_t vec_dim = run_ctx.dml_param_.table_param_->get_data_table().get_vec_dim();
-      const uint64_t vec_id_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_id_col_id();
-      const uint64_t vec_vector_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_vector_col_id();
-      // get vector col idx
-      int64_t vec_id_idx = OB_INVALID_INDEX;
-      int64_t vector_idx = OB_INVALID_INDEX;
-      for (int64_t i = 0; OB_SUCC(ret) && i < run_ctx.dml_param_.table_param_->get_col_descs().count(); i++) {
-        uint64_t col_id = run_ctx.dml_param_.table_param_->get_col_descs().at(i).col_id_;
-        if (col_id == vec_id_col_id) {
-          vec_id_idx = i;
-        } else if (col_id == vec_vector_col_id) {
-          vector_idx = i;
+    ObString vec_idx_param = run_ctx.dml_param_.table_param_->get_data_table().get_vec_index_param();
+    int64_t vec_dim = run_ctx.dml_param_.table_param_->get_data_table().get_vec_dim();
+    ObPluginVectorIndexAdapterGuard adaptor_guard;
+    ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+    if (OB_FAIL(vec_index_service->acquire_adapter_guard(run_ctx.store_ctx_.ls_id_,
+                                                        run_ctx.relative_table_.get_tablet_id(),
+                                                        ObIndexType::INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL,
+                                                        adaptor_guard,
+                                                        &vec_idx_param,
+                                                        vec_dim))) {
+      LOG_WARN("fail to get ObPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
+    } else {
+      if (dml_flag == ObDmlFlag::DF_DELETE) {
+        const uint64_t vec_id_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_id_col_id();
+        const uint64_t vec_vector_col_id = run_ctx.dml_param_.table_param_->get_data_table().get_vec_vector_col_id();
+        // get vector col idx
+        int64_t vec_id_idx = OB_INVALID_INDEX;
+        int64_t vector_idx = OB_INVALID_INDEX;
+        for (int64_t i = 0; OB_SUCC(ret) && i < run_ctx.dml_param_.table_param_->get_col_descs().count(); i++) {
+          uint64_t col_id = run_ctx.dml_param_.table_param_->get_col_descs().at(i).col_id_;
+          if (col_id == vec_id_col_id) {
+            vec_id_idx = i;
+          } else if (col_id == vec_vector_col_id) {
+            vector_idx = i;
+          }
+        }
+        if (vec_id_idx == OB_INVALID_INDEX || vector_idx == OB_INVALID_INDEX) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get vec index column idxs", K(ret), K(vec_id_col_id), K(vec_vector_col_id),
+              K(vec_id_idx), K(vector_idx));
+        } else if (OB_FAIL(adaptor_guard.get_adatper()->handle_insert_incr_table_rows(rows, vec_id_idx, vector_idx, row_count))) {
+            LOG_WARN("fail to handle delete hybrid vec index log table rows", K(ret), KP(rows), K(row_count));
         }
       }
-      if (vec_id_idx == OB_INVALID_INDEX || vector_idx == OB_INVALID_INDEX) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get vec index column idxs", K(ret), K(vec_id_col_id), K(vec_vector_col_id),
-            K(vec_id_idx), K(vector_idx));
-      } else {
-        ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
-        ObPluginVectorIndexAdapterGuard adaptor_guard;
-        if (OB_FAIL(vec_index_service->acquire_adapter_guard(run_ctx.store_ctx_.ls_id_,
-                                                            run_ctx.relative_table_.get_tablet_id(),
-                                                            ObIndexType::INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL,
-                                                            adaptor_guard,
-                                                            &vec_idx_param,
-                                                            vec_dim))) {
-          LOG_WARN("fail to get ObPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
-        } else if (OB_FAIL(adaptor_guard.get_adatper()->handle_insert_incr_table_rows(rows, vec_id_idx, vector_idx, row_count))) {
-          LOG_WARN("fail to handle delete hybrid vec index log table rows", K(ret), KP(rows), K(row_count));
-        }
+      if (OB_SUCC(ret)) {
+        adaptor_guard.get_adatper()->update_can_skip(NOT_SKIP);
       }
     }
   } else if (table_param.is_hybrid_vector_index_embedded()) {

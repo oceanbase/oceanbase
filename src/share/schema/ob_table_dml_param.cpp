@@ -194,27 +194,16 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
               || schema->is_vec_vid_rowkey_type()
               || schema->is_hybrid_vec_index_log_type()
               || schema->is_hybrid_vec_index_embedded_type()) {
-      if (schema->is_vec_delta_buffer_type()) {
+      if (schema->is_vec_delta_buffer_type()
+        || schema->is_hybrid_vec_index_embedded_type()
+        || schema->is_hybrid_vec_index_log_type()) {
         if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
-          LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
+          LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()), K(schema->get_index_type()));
         } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*schema, vec_dim_))) {
-          LOG_WARN("fail to get vector col dim", K(ret));
+          LOG_WARN("fail to get vector col dim", K(ret), K(schema->get_index_type()));
         } else if (vec_dim_ == 0) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(vec_dim_), KPC(schema));
-        }
-      } else if (schema->is_hybrid_vec_index_embedded_type()) {
-        if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
-          LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
-        } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(*schema, vec_dim_))) {
-          LOG_WARN("fail to get vector col dim", K(ret));
-        } else if (vec_dim_ == 0) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(vec_dim_), KPC(schema));
-        }
-      } else if (schema->is_hybrid_vec_index_log_type()) {
-        if (OB_FAIL(ob_write_string(allocator_, schema->get_index_params(), vec_index_param_))) {
-          LOG_WARN("fail to copy vec index param", K(ret), K(schema->get_index_params()));
+          LOG_WARN("get vector dim is zero, fail to calc", K(ret), K(vec_dim_), KPC(schema), K(schema->get_index_type()));
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
