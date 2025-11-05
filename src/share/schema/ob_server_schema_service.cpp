@@ -6504,9 +6504,23 @@ int ObServerSchemaService::refresh_full_schema(
         } else if (OB_ISNULL(schema_mgr_for_cache)) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("schema mgr for cache is null", KR(ret), K(tmp_ret), K(schema_status));
-        } else if (FALSE_IT(schema_mgr_for_cache->reset())) {
-        } else if (OB_SUCCESS != (tmp_ret = init_tenant_basic_schema(tenant_id))) {
-          LOG_ERROR("init basic schema failed", KR(ret), K(tmp_ret), K(schema_status));
+        } else {
+          bool reset_schema_mgr_for_cache = true;
+          // When creating a new tenant, heartbeat may trigger schema refresh after broadcasting schema version 2.
+          // If we do not ignore reset schema_mgr_for_cache, we will lose schema version 2's sys table schemas.
+          // With small sys tenant memory and multiple tenants, refresh schema will trigger to read __all_aux_stat table
+          // rather than read from kv cache. Reading __all_aux_stat table will raise table not exist
+          // error, creating tenant will fail.
+          if (OB_CORE_SCHEMA_VERSION + 1 == core_schema_version) {
+            reset_schema_mgr_for_cache = false;
+            LOG_WARN("ignore reset schema_mgr_for_cache", KR(ret), K(schema_status), K(core_schema_version));
+          }
+          if (reset_schema_mgr_for_cache) {
+            schema_mgr_for_cache->reset();
+            if (OB_SUCCESS != (tmp_ret = init_tenant_basic_schema(tenant_id))) {
+              LOG_ERROR("init basic schema failed", KR(ret), K(tmp_ret), K(schema_status));
+            }
+          }
         }
       }
     }
