@@ -43,9 +43,17 @@ int ObExprUserCanAccessObj::calc_result_type3(ObExprResType &type,
   type.set_int();
   type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
-  type1.set_calc_type(ObUInt64Type);
-  type2.set_calc_type(ObUInt64Type);
-  type3.set_calc_type(ObUInt64Type);
+  if ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_3_5_5 &&
+       GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) ||
+      GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_4_2_0) {
+    type1.set_calc_type(ObIntType);
+    type2.set_calc_type(ObIntType);
+    type3.set_calc_type(ObIntType);
+  } else {
+    type1.set_calc_type(ObUInt64Type);
+    type2.set_calc_type(ObUInt64Type);
+    type3.set_calc_type(ObUInt64Type);
+  }
   ObExprOperator::calc_result_flag3(type, type1, type2, type3);
   return ret;
 }
@@ -346,14 +354,18 @@ int ObExprUserCanAccessObj::eval_user_can_access_obj(const ObExpr &expr,
           } else if (OB_INVALID_ID == owner_id) {
             LOG_TRACE("user not exist", KR(ret), K(tenant_id), K(user_name));
           } else {
-            bool can_access;
-            OZ (check_user_access_obj(schema_guard,
-                                      session,
-                                      obj_type->get_uint64(),
-                                      obj_id->get_uint64(),
-                                      owner_id,
-                                      can_access));
-            OX (res_datum.set_int(static_cast<int64_t>(can_access)));
+            bool can_access = false;
+            if (obj_id->get_int() > 0 &&
+                OB_FAIL(check_user_access_obj(schema_guard,
+                                              session,
+                                              obj_type->get_uint64(),
+                                              obj_id->get_uint64(),
+                                              owner_id,
+                                              can_access))) {
+              LOG_WARN("fail to check user access obj", KR(ret));
+            } else {
+              res_datum.set_int(static_cast<int64_t>(can_access));
+            }
           }
         }
       }
