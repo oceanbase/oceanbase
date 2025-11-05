@@ -6068,7 +6068,7 @@ int ObStaticEngineCG::get_pushdown_storage_level(ObOptimizerContext &optimizer_c
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_DISABLE_INC_SKIP_INDEX_SCAN);
+ERRSIM_POINT_DEF(EN_DISABLE_INC_SKIP_INDEX_SCAN);
 int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec)
 {
   int ret = OB_SUCCESS;
@@ -6130,7 +6130,7 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
       enable_base_skip_index = tenant_config->_enable_skip_index;
       enable_inc_skip_index = tenant_config->_enable_skip_index;
-      if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_DISABLE_INC_SKIP_INDEX_SCAN)) {
+      if (OB_UNLIKELY(OB_SUCCESS != EN_DISABLE_INC_SKIP_INDEX_SCAN)) {
         enable_inc_skip_index = false;
       }
       enable_prefetch_limit = tenant_config->_enable_prefetch_limiting;

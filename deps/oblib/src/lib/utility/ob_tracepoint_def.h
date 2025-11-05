@@ -649,5 +649,6 @@ GLOBAL_ERRSIM_POINT_DEF(2652, EN_DDL_SCAN_TASK_PERIOD, "ddl scan task timer thre
 
 // DDL end
 GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump thread-level memory context");
+GLOBAL_ERRSIM_POINT_DEF(2702, EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY, "Whether to generate skip index adaptively for row store delta sstable");
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
 

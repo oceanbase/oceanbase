@@ -995,7 +995,6 @@ int ObTableParam::deserialize_columns(const char *buf, const int64_t data_len,
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_SET_SKIP_INDEX_ROW_STORE);
 int ObTableParam::construct_columns_and_projector(
     const ObTableSchema &table_schema,
     const common::ObIArray<uint64_t> & output_column_ids,
@@ -1072,11 +1071,12 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
         tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+        int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
         if (!tmp_col_extend.skip_index_attr_.has_skip_index() && is_delete_insert &&
             (column->get_meta_type().is_temporal_type() || column->get_meta_type().is_integer_type())) {
           if (is_cs) {
             tmp_col_extend.skip_index_attr_.set_min_max();
-          } else if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_SET_SKIP_INDEX_ROW_STORE)) {
+          } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
             tmp_col_extend.skip_index_attr_.set_min_max();
           }
         }
@@ -1181,11 +1181,12 @@ int ObTableParam::construct_columns_and_projector(
           }
           col_index = idx;
           tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+          int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
           if (!tmp_col_extend.skip_index_attr_.has_skip_index() && is_delete_insert &&
               (column->get_meta_type().is_temporal_type() || column->get_meta_type().is_integer_type())) {
             if (is_cs) {
               tmp_col_extend.skip_index_attr_.set_min_max();
-            } else if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_SET_SKIP_INDEX_ROW_STORE)) {
+            } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
               tmp_col_extend.skip_index_attr_.set_min_max();
             }
           }

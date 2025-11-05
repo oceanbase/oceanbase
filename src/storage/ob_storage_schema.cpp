@@ -1857,7 +1857,6 @@ int ObStorageSchema::get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_i
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_SET_SKIP_INDEX_ROW_STORE);
 int ObStorageSchema::get_skip_index_col_attr(
     const bool is_major,
     ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_attrs) const
@@ -1945,11 +1944,12 @@ int ObStorageSchema::get_skip_index_col_attr(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tenant config", K(ret), K(tenant_id));
     } else if (tenant_config->default_skip_index_level == 1) {
+      int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
       if (!is_row_store()) {
         if (OB_FAIL(set_skip_index_adaptively(column_types, skip_idx_attrs))) {
           LOG_WARN("fail to set skip index adaptively", K(ret), K(column_types), K(skip_idx_attrs));
         }
-      } else if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_SET_SKIP_INDEX_ROW_STORE)) {
+      } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
         if (OB_FAIL(set_skip_index_adaptively(column_types, skip_idx_attrs))) {
           LOG_WARN("fail to set skip index adaptively", K(ret), K(column_types), K(skip_idx_attrs));
         }

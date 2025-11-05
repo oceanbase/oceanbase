@@ -6667,7 +6667,6 @@ int ObTableSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> &c
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_SET_SKIP_INDEX_ROW_STORE);
 int ObTableSchema::get_skip_index_col_attr(const bool is_major, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
 {
   int ret = OB_SUCCESS;
@@ -6736,11 +6735,12 @@ int ObTableSchema::get_skip_index_col_attr(const bool is_major, common::ObIArray
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected tenant config", K(ret), K_(tenant_id));
     } else if (1 == tenant_config->default_skip_index_level) {
+      int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
       if (is_column_store) {
         if (OB_FAIL(set_skip_index_adaptively(column_types, skip_idx_attrs))) {
           LOG_WARN("fail to set skip index attrs", K(ret), K(column_types), K(skip_idx_attrs));
         }
-      } else if (OB_UNLIKELY(OB_SUCCESS != ERRSIM_SET_SKIP_INDEX_ROW_STORE)) {
+      } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
         if (OB_FAIL(set_skip_index_adaptively(column_types, skip_idx_attrs))) {
           LOG_WARN("fail to set skip index adaptively", K(ret), K(column_types), K(skip_idx_attrs));
         }
