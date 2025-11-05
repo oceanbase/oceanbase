@@ -485,10 +485,12 @@ int ObServerAutoSplitScheduler::cal_real_auto_split_size(const double base_ratio
   int ret = OB_SUCCESS;
   int64_t tablet_limit_penalty = 1;
   real_split_size = 0;
+  const int64_t skip_tablet_num_limit_check = std::abs(OB_E(EventTable::EN_SKIP_TABLET_NUM_LIMIT_CHECK) 0);
+  const bool skip_check = skip_tablet_num_limit_check > 0;
   if (OB_UNLIKELY(base_ratio < 0 || base_ratio > 1.0 || cur_ratio < 0 || cur_ratio > 1.0 || split_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(base_ratio), K(cur_ratio), K(split_size));
-  } else if (cur_ratio > base_ratio) {
+  } else if (cur_ratio > base_ratio && !skip_check) {
     // the tablet_limit_penalty is designed to fit large table(10pb) 
     // if we consider the base_ratio to be 0.5 
     // than cur_ratio | tablet_limit_penalty
