@@ -78,13 +78,13 @@ public:
   ~ObTabletDDLCompleteMdsUserData();
   void reset();
   bool is_valid() const ;
-  int assign(ObIAllocator &allocator, const ObTabletDDLCompleteMdsUserData &other);
+  int assign(const ObTabletDDLCompleteMdsUserData &other);
   int generate_merge_param(ObDDLTableMergeDagParam &merge_param);
-  int set_with_merge_arg(const ObTabletDDLCompleteArg &merge_param, ObIAllocator &allocator);
-  int set_storage_schema(const ObStorageSchema &other, ObIAllocator &allocator);
+  int set_with_merge_arg(const ObTabletDDLCompleteArg &merge_param);
+  int set_storage_schema(const ObStorageSchema &other);
   ObStorageSchema &get_storage_schema() { return storage_schema_; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
   TO_STRING_KV(K_(has_complete), K_(direct_load_type), K_(has_complete),
                K_(data_format_version), K_(snapshot_version),
@@ -102,6 +102,7 @@ public:
   transaction::ObTransID trans_id_;
   share::SCN start_scn_;
   share::SCN inc_major_commit_scn_;
+  ObArenaAllocator allocator_;
 };
 } // namespace storage
 } // namespace oceanbase

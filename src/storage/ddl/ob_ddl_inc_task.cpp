@@ -258,12 +258,12 @@ int ObDDLIncCommitTask::record_inc_major_commit_info_to_mds(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTabletDDLCompleteArg complete_arg;
-  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlIncCommitCb"));
   ObTabletDDLCompleteMdsUserData user_data;
+  ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlIncCommitCb"));
   if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(ls_id, tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet handle", KR(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
-      SCN::max_scn(), allocator , ObTabletDDLCompleteMdsUserDataKey(trans_id), user_data))) {
+      SCN::max_scn(), ObTabletDDLCompleteMdsUserDataKey(trans_id), user_data))) {
     LOG_WARN("failed to get inc major direct load info", KR(ret), K(tablet_handle), K(trans_id));
   } else if (user_data.inc_major_commit_scn_.is_valid_and_not_min()) {
     // do nothing

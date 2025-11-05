@@ -146,7 +146,6 @@ int ObDDLMergeScheduler::finish_log_freeze_ddl_kv(const ObLSID &ls_id, ObTabletH
 int ObDDLMergeScheduler::check_need_merge_for_idem_sn(ObTablet &tablet, ObArray<ObDDLKVHandle> &ddl_kvs, bool &need_schedule_merge, ObDDLKVType &ddl_kv_type)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator arena(ObMemAttr(MTL_ID(), "Ddl_Check_Maj"));
   ObTabletDDLCompleteMdsUserData user_data;
   if (ddl_kv_type != ObDDLKVType::DDL_KV_INVALID || need_schedule_merge) {
     ret = OB_ERR_UNEXPECTED;
@@ -162,7 +161,7 @@ int ObDDLMergeScheduler::check_need_merge_for_idem_sn(ObTablet &tablet, ObArray<
     LOG_INFO("tablet already exist, not need to merge", K(ret), K(tablet.get_tablet_id()));
   } else {
     /* check need to merge major, first */
-    if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), arena, user_data))) {
+    if (OB_FAIL(tablet.get_ddl_complete(share::SCN::max_scn(), user_data))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -352,8 +351,6 @@ int ObDDLMergeScheduler::freeze_ddl_kv(const share::SCN &rec_scn, ObLS *ls, ObDD
       LOG_WARN("failed to freeze ddl kv", KR(ret));
     }
   } else {
-    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "DdlMrgSche"));
-
     ObTabletHandle tablet_handle;
     ObTabletCreateDeleteMdsUserData user_data;
     ObTabletDDLCompleteMdsUserData  ddl_complete;
@@ -364,7 +361,7 @@ int ObDDLMergeScheduler::freeze_ddl_kv(const share::SCN &rec_scn, ObLS *ls, ObDD
     } else if (!tablet_handle.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), allocator, ddl_complete))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), ddl_complete))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_SUCCESS;
         LOG_INFO("no ddl complete", K(ret), K(ls->get_ls_id()), K(ddl_kv_mgr_handle.get_obj()->get_tablet_id()));
@@ -597,7 +594,7 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_major_merge(
     /* schedule to build major sstable, getting merge param from mds data */
     bool has_freezed_ddl_kv = false;
     ObDDLTableMergeDagParam param;
-    ObArenaAllocator arena(ObMemAttr(MTL_ID(), "DDL_Mrg_Par"));
+    ObTabletCreateDeleteMdsUserData user_data;
     ObTabletDDLCompleteMdsUserData  ddl_complete;
     if (OB_FAIL(ObDDLUtil::is_major_exist(ls_id, tablet_handle.get_obj()->get_tablet_meta().tablet_id_, is_major_sstable_exist))) {
       LOG_WARN("failed to check major sstable exist", K(ret), K(ls_id), K(tablet_handle.get_obj()->get_tablet_meta().tablet_id_));
@@ -607,7 +604,7 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_major_merge(
       LOG_WARN("get ddl kv mgr failed", K(ret));
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_freezed_ddl_kv(has_freezed_ddl_kv))) {
       LOG_WARN("check has freezed ddl kv failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, ddl_complete))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), ddl_complete))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_SUCCESS;
       }
