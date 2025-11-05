@@ -3683,15 +3683,11 @@ int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, 
             if (OB_ISNULL(log_handler = ls->get_log_handler())) {
               ret = OB_ERR_UNEXPECTED;
               COMMON_LOG(ERROR, "log_handler is null", KR(ret), K(tenant_id), K(ls_id), KP(ls));
-            } else if (OB_FAIL(log_handler->get_paxos_member_list(old_member_list, old_replica_num))) {
-              LOG_WARN("get old_member_list failed", KR(ret), K(tenant_id), K(ls_id), KP(ls));
             } else {
               common::ObMemberList new_member_list;
-              // new_member_list is the intersection of args.server_list_ and old_member_list
               for (int64_t j = 0; OB_SUCC(ret) && j < arg.server_list_.size(); ++j) {
                 const common::ObAddr &server = arg.server_list_[j];
-                if (!old_member_list.contains(server)) {
-                } else if (OB_FAIL(new_member_list.add_member(ObMember(server, new_membership_timestamp)))){
+                if (OB_FAIL(new_member_list.add_member(ObMember(server, new_membership_timestamp)))){
                   LOG_WARN("new_member_list add_member failed", K(ret), K(server));
                 }
               }

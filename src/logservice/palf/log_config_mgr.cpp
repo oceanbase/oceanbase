@@ -1815,6 +1815,7 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       // force set single member
       new_config_info.config_.log_sync_memberlist_.reset();
       new_config_info.config_.degraded_learnerlist_.reset();
+      new_config_info.config_.learnerlist_.reset();
       new_config_info.config_.arbitration_member_.reset();
       new_config_info.config_.log_sync_memberlist_.add_member(member);
       new_config_info.config_.log_sync_replica_num_ = args.new_replica_num_;
@@ -1823,6 +1824,7 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       // force set member list
       new_config_info.config_.log_sync_memberlist_.reset();
       new_config_info.config_.degraded_learnerlist_.reset();
+      new_config_info.config_.learnerlist_.reset();
       new_config_info.config_.arbitration_member_.reset();
       new_config_info.config_.log_sync_memberlist_.deep_copy(args.new_member_list_);
       new_config_info.config_.log_sync_replica_num_ = args.new_replica_num_;
