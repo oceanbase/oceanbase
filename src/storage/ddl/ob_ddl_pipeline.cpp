@@ -944,11 +944,24 @@ int ObHNSWIndexAppendBufferOperator::append_row(
     const bool is_vec_tablet_rebuild = tablet_context->vector_index_ctx_->is_vec_tablet_rebuild_;
     ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
     ObPluginVectorIndexAdapterGuard adaptor_guard;
+    ObPluginVectorIndexAdaptor *adapter = nullptr;
+    int64_t extra_info_actual_size = 0;
 
     if (OB_ISNULL(vec_index_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, vector index service is nullptr", K(ret));
-    } else if (extra_column_count > 0) {
+    } else if (!is_vec_tablet_rebuild && OB_FAIL(vec_index_service->acquire_adapter_guard(tablet_context->vector_index_ctx_->ls_id_,
+                                                      tablet_id_,
+                                                      ObIndexType::INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
+                                                      adaptor_guard,
+                                                      &tablet_context->vector_index_ctx_->vec_idx_param_,
+                                                      tablet_context->vector_index_ctx_->vec_dim_))) {
+      LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
+    } else if (OB_ISNULL(adapter = is_vec_tablet_rebuild ? tablet_context->vector_index_ctx_->adapter_ : adaptor_guard.get_adatper())) {
+      LOG_WARN("error unexpected, adapter is nullptr", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
+    } else if (OB_FAIL(adaptor_guard.get_adatper()->get_extra_info_actual_size(extra_info_actual_size))) {
+      LOG_WARN("failed to get extra info actual size", K(ret));
+    } else if (extra_column_count > 0 && extra_info_actual_size > 0) { //no primary key /cluster table not support extra info right now
       char *buf = nullptr;
       if (OB_ISNULL(buf = static_cast<char *>(row_allocator_.alloc(sizeof(ObVecExtraInfoObj) * extra_column_count)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -968,17 +981,6 @@ int ObHNSWIndexAppendBufferOperator::append_row(
         }
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (!is_vec_tablet_rebuild &&
-               OB_FAIL(vec_index_service->acquire_adapter_guard(tablet_context->vector_index_ctx_->ls_id_,
-                                                                tablet_id_,
-                                                                ObIndexType::INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL,
-                                                                adaptor_guard,
-                                                                &tablet_context->vector_index_ctx_->vec_idx_param_,
-                                                                tablet_context->vector_index_ctx_->vec_dim_))) {
-      LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
-    }
-    ObPluginVectorIndexAdaptor *adapter = is_vec_tablet_rebuild ? tablet_context->vector_index_ctx_->adapter_ : adaptor_guard.get_adatper();
     uint32_t vec_length = vec_str.length();
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(adapter)) {
