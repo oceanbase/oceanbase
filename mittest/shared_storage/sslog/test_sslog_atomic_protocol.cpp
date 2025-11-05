@@ -417,7 +417,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     char buf[100];
     ObAtomicFileBuffer meta_value_buffer;
     meta_value_buffer.assign(buf, sizeof(buf));
-    sslog::ObSSLogIteratorGuard iter(false, true);
+    sslog::ObSSLogIteratorGuard iter(false, true, true);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_file_content(param,
                                                           share::SCN::invalid_scn(),
                                                           row_scn_ret,
@@ -430,7 +430,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     char buf[100];
     ObAtomicFileBuffer meta_value_buffer;
     meta_value_buffer.assign(buf, sizeof(buf));
-    sslog::ObSSLogIteratorGuard iter(false, true);
+    sslog::ObSSLogIteratorGuard iter(false, true, true);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_file_content(param2,
                                                           share::SCN::invalid_scn(),
                                                           row_scn_ret,
@@ -440,7 +440,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   }
 
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                   ObSSMetaReadResultType::READ_ONLY_KEY,
                                   false, /*try read local*/
@@ -461,7 +461,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   }
 
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                               ObSSMetaReadResultType::READ_ONLY_KEY,
                               false, /*read_local*/
@@ -482,7 +482,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   }
 
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                               ObSSMetaReadResultType::READ_ONLY_KEY,
                               false, /*read_local*/
@@ -502,7 +502,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   }
 
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param4.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                               ObSSMetaReadResultType::READ_ONLY_KEY,
                               false, /*read_local*/
@@ -587,7 +587,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     int64_t pos = 0;
     ObMetaVersionRange version_range;
     version_range.version_start_ = snapshot_version1;
-    ObSSLogIteratorGuard multi_version_iter(false, true);
+    ObSSLogIteratorGuard multi_version_iter(false, true, true);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_range_meta_value(param, version_range, multi_version_iter));
     ASSERT_EQ(OB_SUCCESS, multi_version_iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(true, row_scn_ret > SCN::min_scn());
@@ -602,7 +602,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     int64_t pos = 0;
     ObMetaVersionRange version_range;
     version_range.version_end_ = snapshot_version1;
-    ObSSLogIteratorGuard multi_version_iter(false, true);
+    ObSSLogIteratorGuard multi_version_iter(false, true, true);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_range_meta_value(param, version_range, multi_version_iter));
     ASSERT_EQ(OB_SUCCESS, multi_version_iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(true, row_scn_ret > SCN::min_scn());
@@ -620,7 +620,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
     ob_usleep(1_s);
     ObMetaVersionRange version_range;
     version_range.version_end_ = snapshot_version2;
-    ObSSLogIteratorGuard multi_version_iter(false, true);
+    ObSSLogIteratorGuard multi_version_iter(false, true, true);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_range_meta_value(param, version_range, multi_version_iter));
     ASSERT_EQ(OB_SUCCESS, multi_version_iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(OB_SUCCESS, extra_info_deserialize_ret.deserialize(extra_info_ret.ptr(), extra_info_ret.length(), pos));
@@ -640,11 +640,12 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   // ========== Test 5: read meta key =========
   {
     TRANS_LOG(INFO, "jianyue debug for segment query");
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                  ObSSMetaReadResultType::READ_ONLY_KEY,
                                  false, /*try read local*/
-                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn, true, 1);
+                                 meta_type1, ObLSID(1088), ObTabletID(200001), transfer_scn);
+    param.set_parallel_segment_query_params(1, true, SSLOG_DEFAULT_SEGMENT_SIZE);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param,
                                                       share::SCN::invalid_scn(),
                                                       iter));
@@ -677,7 +678,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   }
 
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                  ObSSMetaReadResultType::READ_ONLY_KEY,
                                  false, /*try read local*/
@@ -702,7 +703,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
 
   // ========== Test 6: read meta row =========
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::LS_PREFIX,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
                                  false, /*try read local*/
@@ -747,7 +748,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
   }
 
   {
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param4.set_ls_level_param(ObSSMetaReadParamType::TENANT_PREFIX,
                               ObSSMetaReadResultType::READ_WHOLE_ROW,
                               false, /*read_local*/
@@ -803,7 +804,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       TRANS_LOG(INFO, "mark delete row", K(param4));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param3, affected_rows));
       ASSERT_EQ(1, affected_rows);
-      ObSSLogIteratorGuard iter(true, true);
+      ObSSLogIteratorGuard iter(true, true, true);
       param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_ONLY_KEY,
                                     false, /*try read local*/
@@ -820,6 +821,14 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       int64_t pos = 0;
       ASSERT_EQ(OB_SUCCESS, extra_info_ret.deserialize(info.ptr(), info.length(), pos));
       ASSERT_EQ(true, extra_info_ret.meta_info_.mark_delete_);
+
+      param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
+        ObSSMetaReadResultType::READ_ONLY_KEY,
+        false, /*try read local*/
+        meta_type1, ObLSID(1077), ObTabletID(200003), transfer_scn3);
+      param3.set_read_mark_delete(false);
+      ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_meta_row(param3, share::SCN::invalid_scn(), iter));
+      ASSERT_EQ(OB_ITER_END, iter.get_next_row(row_scn_ret, type, key, value, info));
     }
     //  b. really delete
     {
@@ -832,7 +841,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       TRANS_LOG(INFO, "really delete row", K(param3));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param3, affected_rows));
       ASSERT_EQ(1, affected_rows);
-      ObSSLogIteratorGuard iter(true, true);
+      ObSSLogIteratorGuard iter(true, true, true);
       param3.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                     ObSSMetaReadResultType::READ_ONLY_KEY,
                                     false, /*try read local*/
@@ -859,7 +868,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       TRANS_LOG(INFO, "mark delete ls row", K(param4));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param5, affected_rows));
       ASSERT_EQ(1, affected_rows);
-      ObSSLogIteratorGuard iter(true, true);
+      ObSSLogIteratorGuard iter(true, true, true);
       param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
                                 false, /*read_local*/
@@ -886,7 +895,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_read_write_interface)
       TRANS_LOG(INFO, "really delete ls row", K(param4));
       ASSERT_EQ(OB_SUCCESS, ObAtomicFile::delete_meta_row(delete_param5, affected_rows));
       ASSERT_EQ(1, affected_rows);
-      ObSSLogIteratorGuard iter(true, true);
+      ObSSLogIteratorGuard iter(true, true, true);
       param5.set_ls_level_param(ObSSMetaReadParamType::LS_KEY,
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
                                 false, /*read_local*/
@@ -1097,7 +1106,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
                                   1)
     ASSERT_EQ(tablet_cur_op_id, sstablelist_file1->finish_op_id_);
 
-    ObSSLogIteratorGuard iter(false, true);
+    ObSSLogIteratorGuard iter(false, true, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
                                  false, /*try read local*/
@@ -1141,7 +1150,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
                                   true,
                                   1)
 
-    ObSSLogIteratorGuard iter(true, true);
+    ObSSLogIteratorGuard iter(true, true, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
                                  false, /*try read local*/
@@ -1201,7 +1210,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
     ObMetaVersionRange version_range;
     version_range.version_end_ = snapshot_version2;
     ob_usleep(1_s);
-    ObSSLogIteratorGuard iter(true, true);
+    ObSSLogIteratorGuard iter(true, true, true);
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_range_meta_value(param,
                                                       version_range,
                                                       iter));
@@ -1250,7 +1259,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_sstable_list_write_op)
                                 gc_info,
                                 1)
 
-    ObSSLogIteratorGuard iter(true, true);
+    ObSSLogIteratorGuard iter(true, true, true);
     param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
                                  false, /*try read local*/
@@ -1378,7 +1387,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_meta_value_write)
     char *buf = (char *)mtl_malloc(STR_LEN, "MITTEST");
     ObAtomicFileBuffer meta_value_buffer;
     meta_value_buffer.assign(buf, STR_LEN);
-    sslog::ObSSLogIteratorGuard iter(false, true);
+    sslog::ObSSLogIteratorGuard iter(false, true, true);
     TRANS_LOG(INFO, "read begin");
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::read_file_content(param,
                                                           share::SCN::invalid_scn(),
@@ -1472,7 +1481,7 @@ TEST_F(ObTestSSLogAtomicProtocol, test_parallel_op)
     ABORT_SSTABLELIST_ADD_PARALLEL_OP(1, op_handle1)
     FAIL_SSTABLELIST_ADD_PARALLEL_OP(1, op_handle5)
 
-    ObSSLogIteratorGuard iter(true, true);
+    ObSSLogIteratorGuard iter(true, true, true);
     ObMetaVersionRange version_range;
     ASSERT_EQ(OB_SUCCESS, ObAtomicFile::get_range_meta_value(param,
                                                       version_range,

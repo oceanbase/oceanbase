@@ -1009,8 +1009,8 @@ TEST_F(ObTestSSLogMetaService, test_tablet_ids_snapshot_read)
                                 ObSSMetaReadResultType::READ_ONLY_KEY,
                                 true,
                                 ObSSLogMetaType::SSLOG_TABLET_META,
-                                ls_id_,
-                                5);
+                                ls_id_);
+  read_param.set_parallel_segment_query_params(5, true, SSLOG_DEFAULT_SEGMENT_SIZE);
   EXPECT_EQ(true, read_param.is_valid());
   ObSSTabletIDIterator *iter = nullptr;
   ObSSMetaIterGuard<ObSSTabletIDIterator> iter_guard;
@@ -1048,8 +1048,8 @@ TEST_F(ObTestSSLogMetaService, test_get_tablet_iter)
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
                                 true,
                                 ObSSLogMetaType::SSLOG_TABLET_META,
-                                ls_id_,
-                                3);
+                                ls_id_);
+  read_param.set_parallel_segment_query_params(3, true, SSLOG_DEFAULT_SEGMENT_SIZE);
   EXPECT_EQ(true, read_param.is_valid());
   ObSSTabletIterator *iter = nullptr;
   ObSSMetaIterGuard<ObSSTabletIterator> iter_guard;
@@ -1086,8 +1086,8 @@ TEST_F(ObTestSSLogMetaService, test_raw_meta_row)
                                 ObSSMetaReadResultType::READ_WHOLE_ROW,
                                 true, /*read_local*/
                                 ObSSLogMetaType::SSLOG_TABLET_META,
-                                ls_id_,
-                                1);
+                                ls_id_);
+  read_param.set_parallel_segment_query_params(1, true, SSLOG_DEFAULT_SEGMENT_SIZE);
   EXPECT_EQ(true, read_param.is_valid());
   ObRawMetaRowIterator *iter = nullptr;
   ObSSMetaIterGuard<ObRawMetaRowIterator> iter_guard;

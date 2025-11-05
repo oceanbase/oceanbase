@@ -61,10 +61,10 @@ private:
   sslog::ObISSLogProxy *proxy_ptr = guard.get_sslog_proxy();            \
   MEMCPY(key_buf, meta_key1.ptr(), meta_key1.length());                 \
   const common::ObString meta_key_malloc(meta_key1.length(), key_buf);  \
-  ObSSLogIteratorGuard iter(false/*read_unfinish*/, true/*read_mark_delete*/);
+  ObSSLogIteratorGuard iter(false/*read_unfinish*/, true/*read_init_value*/, true/*read_mark_delete*/);
 
 #define SSLOG_TABLE_READ_INIT                                           \
-  ObSSLogIteratorGuard iter(true/*read_unfinish*/, true/*read_mark_delete*/);
+  ObSSLogIteratorGuard iter(true/*read_unfinish*/, true/*read_init_value*/, true/*read_mark_delete*/);
 
 TEST_F(TestSSLogKVProxy, basic_sslog_kv_basic)
 {
