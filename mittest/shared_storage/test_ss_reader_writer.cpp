@@ -1330,6 +1330,295 @@ TEST_F(TestSSReaderWriter, tmp_file_2MB_sealed_dual_write)
   LOG_INFO("=== All dual write tests passed! ===");
 }
 
+TEST_F(TestSSReaderWriter, test_batch_delete_tmp_files)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+
+  const int64_t write_size = 8192; // 8KB
+
+  // ======== Scenario 1: Test batch delete local tmp files ========
+  LOG_INFO("=== Test batch delete local tmp files ===");
+  check_tmp_file_disk_size_enough(write_size * 6);
+
+  const int64_t local_file_count = 3;
+  ObSEArray<MacroBlockId, local_file_count> local_file_ids;
+  ObSEArray<int64_t, local_file_count> local_lengths;
+
+  // Create and write local tmp files (100, 101, 102)
+  for (int64_t i = 0; i < local_file_count; i++) {
+    MacroBlockId file_id;
+    int64_t tmp_file_id = 100 + i;
+    file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    file_id.set_second_id(tmp_file_id);
+    file_id.set_third_id(0);   // segment_id
+
+    // Write first segment
+    write_tmp_file_data(file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+    // Append more data for file 0 and 2
+    if (i == 0 || i == 2) {
+      write_tmp_file_data(file_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
+    }
+
+    ASSERT_EQ(OB_SUCCESS, local_file_ids.push_back(file_id));
+    int64_t length = (i == 0 || i == 2) ? 2 * write_size : write_size;
+    ASSERT_EQ(OB_SUCCESS, local_lengths.push_back(length));
+  }
+
+  // Verify local files exist using segment metadata and read
+  for (int64_t i = 0; i < local_file_count; i++) {
+    check_tmp_file_seg_meta(local_file_ids.at(i), true/*is_meta_exist*/, true/*is_in_local*/, local_lengths.at(i)/*valid_length*/);
+    read_and_compare_tmp_file_data(local_file_ids.at(i), 0/*offset*/, write_size/*size*/);
+  }
+
+  // Batch delete local tmp files
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(local_file_ids, local_lengths));
+
+   // Verify local files are deleted - check segment metadata no longer exists
+  for (int64_t i = 0; i < local_file_count; i++) {
+    check_tmp_file_seg_meta(local_file_ids.at(i), false/*is_meta_exist*/);
+  }
+  LOG_INFO("=== Local tmp files batch delete test passed ===");
+
+  // ======== Scenario 2: Test invalid arguments ========
+  ObSEArray<MacroBlockId, 1> empty_file_ids;
+  ObSEArray<int64_t, 1> empty_lengths;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(empty_file_ids, empty_lengths));
+
+  ObSEArray<MacroBlockId, 2> mismatch_file_ids;
+  ObSEArray<int64_t, 1> mismatch_lengths;
+  MacroBlockId dummy_file_id;
+  dummy_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  dummy_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  dummy_file_id.set_second_id(200);
+  dummy_file_id.set_third_id(0);
+  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
+  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
+  ASSERT_EQ(OB_SUCCESS, mismatch_lengths.push_back(write_size));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(mismatch_file_ids, mismatch_lengths));
+
+  // ======== Scenario 3: Test batch delete remote tmp files ========
+  LOG_INFO("=== Test batch delete remote tmp files ===");
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+
+  const int64_t remote_file_count = 2;
+  ObSEArray<MacroBlockId, remote_file_count> remote_file_ids;
+  ObSEArray<int64_t, remote_file_count> remote_lengths;
+
+  // Create remote tmp files (300, 301) with disk exhausted
+  for (int64_t i = 0; i < remote_file_count; i++) {
+    MacroBlockId remote_file_id;
+    int64_t tmp_file_id = 300 + i;
+    remote_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+    remote_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+    remote_file_id.set_second_id(tmp_file_id);
+    remote_file_id.set_third_id(0);   // segment_id
+
+    // Write to remote (disk exhausted forces write through)
+    write_tmp_file_data(remote_file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
+
+    // Verify segment metadata exists (in remote)
+    check_tmp_file_seg_meta(remote_file_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
+
+    ASSERT_EQ(OB_SUCCESS, remote_file_ids.push_back(remote_file_id));
+    ASSERT_EQ(OB_SUCCESS, remote_lengths.push_back(write_size));
+  }
+
+  // Batch delete remote tmp files from object storage
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(remote_file_ids, remote_lengths));
+
+  // Verify remote files are deleted - check segment metadata no longer exists
+  for (int64_t i = 0; i < remote_file_count; i++) {
+    check_tmp_file_seg_meta(remote_file_ids.at(i), false/*is_meta_exist*/);
+  }
+
+  // Release disk space for next test
+  release_tmp_file_disk_size(avail_size);
+  LOG_INFO("=== Remote tmp files batch delete test passed ===");
+}
+
+// Test async_write_dual file size allocation correctness
+TEST_F(TestSSReaderWriter, test_async_write_dual_alloc_file_size)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+
+  // Disable background tasks to avoid interference
+  file_manager->preread_cache_mgr_.preread_task_.is_inited_ = false;
+  macro_cache_mgr->evict_task_.is_inited_ = false;
+  macro_cache_mgr->flush_task_.is_inited_ = false;
+  file_manager->calibrate_disk_space_task_.is_inited_ = false;
+  file_manager->segment_file_mgr_.gc_segment_file_task_.is_inited_ = false;
+  sleep(3);
+
+  uint64_t tmp_file_id = 400;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
+
+  MacroBlockId macro_id;
+  macro_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  macro_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
+  macro_id.set_second_id(tmp_file_id);
+
+  // ========================================================================
+  // Test 1: Verify file size allocation when local space is available
+  // ========================================================================
+  LOG_INFO("=== Test 1: Verify file size allocation with sufficient local space ===");
+
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+
+  // Record initial used size
+  int64_t initial_used_size = disk_space_mgr->get_macro_cache_used_size();
+  LOG_INFO("Initial disk usage", K(initial_used_size));
+
+  // Write 2MB sealed segment using async_write_dual
+  macro_id.set_third_id(300);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify file size was allocated (used size should increase by 2MB)
+  int64_t after_write_used_size = disk_space_mgr->get_macro_cache_used_size();
+  int64_t allocated_size = after_write_used_size - initial_used_size;
+  LOG_INFO("After write disk usage", K(after_write_used_size), K(allocated_size));
+
+  // The allocated size should be approximately 2MB (may have alignment overhead)
+  ASSERT_GE(allocated_size, OB_DEFAULT_MACRO_BLOCK_SIZE)
+      << "File size should be allocated. initial=" << initial_used_size
+      << ", after=" << after_write_used_size
+      << ", diff=" << allocated_size;
+
+  // Verify data can be read correctly
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // Verify meta exists (local write with meta)
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/,
+                          OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+
+  LOG_INFO("Test 1 passed: File size allocated correctly for local write");
+
+  // ========================================================================
+  // Test 2: Verify fallback when disk space is insufficient (no alloc needed)
+  // ========================================================================
+  LOG_INFO("=== Test 2: Verify fallback when disk space is insufficient ===");
+
+  // Exhaust disk space
+  int64_t avail_size = 0;
+  exhaust_tmp_file_disk_size(avail_size);
+
+  int64_t before_fallback_used_size = disk_space_mgr->get_macro_cache_used_size();
+  LOG_INFO("Before fallback disk usage", K(before_fallback_used_size));
+
+  // Write 2MB sealed segment (should fallback to write_through without alloc)
+  macro_id.set_third_id(301);
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+
+  // Verify no additional file size was allocated (write_through mode)
+  int64_t after_fallback_used_size = disk_space_mgr->get_macro_cache_used_size();
+  int64_t fallback_allocated = after_fallback_used_size - before_fallback_used_size;
+  LOG_INFO("After fallback disk usage", K(after_fallback_used_size), K(fallback_allocated));
+
+  ASSERT_EQ(0, fallback_allocated)
+      << "No file size should be allocated in write_through mode. before="
+      << before_fallback_used_size << ", after=" << after_fallback_used_size;
+
+  // Verify data can still be read from object storage
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+
+  // Verify no meta exists (write_through mode for sealed segment)
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+  LOG_INFO("Test 2 passed: Fallback works correctly without allocating file size");
+
+  // Restore disk space
+  release_tmp_file_disk_size(avail_size);
+
+  // ========================================================================
+  // Test 3: Verify file size allocation for multiple segments
+  // ========================================================================
+  LOG_INFO("=== Test 3: Verify file size allocation for multiple segments ===");
+
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE * 3);
+
+  int64_t before_multi_write = disk_space_mgr->get_macro_cache_used_size();
+  LOG_INFO("Before multiple writes", K(before_multi_write));
+
+  // Write 3 sealed segments
+  for (int i = 0; i < 3; i++) {
+    macro_id.set_third_id(302 + i);
+    write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                        OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+  }
+
+  int64_t after_multi_write = disk_space_mgr->get_macro_cache_used_size();
+  int64_t multi_allocated = after_multi_write - before_multi_write;
+  LOG_INFO("After multiple writes", K(after_multi_write), K(multi_allocated));
+
+  // Verify approximately 6MB was allocated (3 segments * 2MB each)
+  ASSERT_GE(multi_allocated, OB_DEFAULT_MACRO_BLOCK_SIZE * 3)
+      << "File size for 3 segments should be allocated. before=" << before_multi_write
+      << ", after=" << after_multi_write << ", diff=" << multi_allocated;
+
+  // Verify all 3 segments can be read
+  for (int i = 0; i < 3; i++) {
+    macro_id.set_third_id(302 + i);
+    read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+    check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/,
+                            OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+  }
+
+  LOG_INFO("Test 3 passed: Multiple segments allocated file size correctly");
+
+  // ========================================================================
+  // Test 4: Verify overwrite scenario (8KB unsealed -> 2MB sealed)
+  // ========================================================================
+  LOG_INFO("=== Test 4: Verify file size allocation for overwrite scenario ===");
+
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+
+  // First write 8KB unsealed segment
+  macro_id.set_third_id(305);
+  int64_t before_small_write = disk_space_mgr->get_macro_cache_used_size();
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/,
+                      false/*is_sealed*/, write_buf_);
+  int64_t after_small_write = disk_space_mgr->get_macro_cache_used_size();
+  int64_t small_allocated = after_small_write - before_small_write;
+  LOG_INFO("Small segment allocated", K(small_allocated));
+
+  ASSERT_GE(small_allocated, 8192) << "8KB should be allocated";
+
+  // Then overwrite with 2MB sealed segment using async_write_dual
+  check_tmp_file_disk_size_enough(OB_DEFAULT_MACRO_BLOCK_SIZE);
+  int64_t before_overwrite = disk_space_mgr->get_macro_cache_used_size();
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/,
+                      OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+  int64_t after_overwrite = disk_space_mgr->get_macro_cache_used_size();
+  int64_t overwrite_allocated = after_overwrite - before_overwrite;
+  LOG_INFO("Overwrite allocated", K(before_overwrite), K(after_overwrite), K(overwrite_allocated));
+
+  // Additional ~2MB should be allocated for the 2MB segment
+  ASSERT_GE(overwrite_allocated, OB_DEFAULT_MACRO_BLOCK_SIZE - 8192)
+      << "Additional file size should be allocated for overwrite. before=" << before_overwrite
+      << ", after=" << after_overwrite << ", diff=" << overwrite_allocated;
+
+  // Verify 2MB data can be read
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/,
+                          OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/);
+
+  LOG_INFO("Test 4 passed: Overwrite scenario allocates file size correctly");
+
+  LOG_INFO("=== All async_write_dual file size allocation tests passed! ===");
+}
+
 TEST_F(TestSSReaderWriter, performance_comparison_write_through_vs_write_dual)
 {
   // Performance comparison test:
@@ -1654,117 +1943,6 @@ TEST_F(TestSSReaderWriter, performance_comparison_write_through_vs_write_dual)
   LOG_INFO("Average time per segment (write_dual_25%)", "ms", duration_write_dual_quarter_ms / segment_count);
 
   LOG_INFO("=== Performance Comparison Test Passed ===");
-}
-
-TEST_F(TestSSReaderWriter, test_batch_delete_tmp_files)
-{
-  int ret = OB_SUCCESS;
-  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
-  ASSERT_NE(nullptr, tenant_file_mgr);
-
-  const int64_t write_size = 8192; // 8KB
-
-  // ======== Scenario 1: Test batch delete local tmp files ========
-  LOG_INFO("=== Test batch delete local tmp files ===");
-  check_tmp_file_disk_size_enough(write_size * 6);
-
-  const int64_t local_file_count = 3;
-  ObSEArray<MacroBlockId, local_file_count> local_file_ids;
-  ObSEArray<int64_t, local_file_count> local_lengths;
-
-  // Create and write local tmp files (100, 101, 102)
-  for (int64_t i = 0; i < local_file_count; i++) {
-    MacroBlockId file_id;
-    int64_t tmp_file_id = 100 + i;
-    file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
-    file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
-    file_id.set_second_id(tmp_file_id);
-    file_id.set_third_id(0);   // segment_id
-
-    // Write first segment
-    write_tmp_file_data(file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
-
-    // Append more data for file 0 and 2
-    if (i == 0 || i == 2) {
-      write_tmp_file_data(file_id, write_size/*offset*/, write_size, write_size * 2/*valid_length*/, false/*is_sealed*/, write_buf_);
-    }
-
-    ASSERT_EQ(OB_SUCCESS, local_file_ids.push_back(file_id));
-    int64_t length = (i == 0 || i == 2) ? 2 * write_size : write_size;
-    ASSERT_EQ(OB_SUCCESS, local_lengths.push_back(length));
-  }
-
-  // Verify local files exist using segment metadata and read
-  for (int64_t i = 0; i < local_file_count; i++) {
-    check_tmp_file_seg_meta(local_file_ids.at(i), true/*is_meta_exist*/, true/*is_in_local*/, local_lengths.at(i)/*valid_length*/);
-    read_and_compare_tmp_file_data(local_file_ids.at(i), 0/*offset*/, write_size/*size*/);
-  }
-
-  // Batch delete local tmp files
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(local_file_ids, local_lengths));
-
-   // Verify local files are deleted - check segment metadata no longer exists
-  for (int64_t i = 0; i < local_file_count; i++) {
-    check_tmp_file_seg_meta(local_file_ids.at(i), false/*is_meta_exist*/);
-  }
-  LOG_INFO("=== Local tmp files batch delete test passed ===");
-
-  // ======== Scenario 2: Test invalid arguments ========
-  ObSEArray<MacroBlockId, 1> empty_file_ids;
-  ObSEArray<int64_t, 1> empty_lengths;
-  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(empty_file_ids, empty_lengths));
-
-  ObSEArray<MacroBlockId, 2> mismatch_file_ids;
-  ObSEArray<int64_t, 1> mismatch_lengths;
-  MacroBlockId dummy_file_id;
-  dummy_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
-  dummy_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
-  dummy_file_id.set_second_id(200);
-  dummy_file_id.set_third_id(0);
-  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
-  ASSERT_EQ(OB_SUCCESS, mismatch_file_ids.push_back(dummy_file_id));
-  ASSERT_EQ(OB_SUCCESS, mismatch_lengths.push_back(write_size));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, tenant_file_mgr->delete_tmp_files(mismatch_file_ids, mismatch_lengths));
-
-  // ======== Scenario 3: Test batch delete remote tmp files ========
-  LOG_INFO("=== Test batch delete remote tmp files ===");
-  int64_t avail_size = 0;
-  exhaust_tmp_file_disk_size(avail_size);
-
-  const int64_t remote_file_count = 2;
-  ObSEArray<MacroBlockId, remote_file_count> remote_file_ids;
-  ObSEArray<int64_t, remote_file_count> remote_lengths;
-
-  // Create remote tmp files (300, 301) with disk exhausted
-  for (int64_t i = 0; i < remote_file_count; i++) {
-    MacroBlockId remote_file_id;
-    int64_t tmp_file_id = 300 + i;
-    remote_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
-    remote_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::TMP_FILE));
-    remote_file_id.set_second_id(tmp_file_id);
-    remote_file_id.set_third_id(0);   // segment_id
-
-    // Write to remote (disk exhausted forces write through)
-    write_tmp_file_data(remote_file_id, 0/*offset*/, write_size, write_size/*valid_length*/, false/*is_sealed*/, write_buf_);
-
-    // Verify segment metadata exists (in remote)
-    check_tmp_file_seg_meta(remote_file_id, true/*is_meta_exist*/, false/*is_in_local*/, write_size/*valid_length*/);
-
-    ASSERT_EQ(OB_SUCCESS, remote_file_ids.push_back(remote_file_id));
-    ASSERT_EQ(OB_SUCCESS, remote_lengths.push_back(write_size));
-  }
-
-  // Batch delete remote tmp files from object storage
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_files(remote_file_ids, remote_lengths));
-
-  // Verify remote files are deleted - check segment metadata no longer exists
-  for (int64_t i = 0; i < remote_file_count; i++) {
-    check_tmp_file_seg_meta(remote_file_ids.at(i), false/*is_meta_exist*/);
-  }
-
-  // Release disk space for next test
-  release_tmp_file_disk_size(avail_size);
-  LOG_INFO("=== Remote tmp files batch delete test passed ===");
 }
 
 TEST_F(TestSSReaderWriter, IOFaultDetector)
