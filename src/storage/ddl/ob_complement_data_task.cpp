@@ -1557,7 +1557,9 @@ int ObComplementWriteTask::do_local_scan()
       FLOG_INFO("local scan read tables", K(iterator), KPC(param_));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(param_->ranges_.at(task_id_).prepare_memtable_readable(org_col_ids_, allocator_))) {
+    } else if (OB_FAIL(param_->ranges_.at(task_id_, scan_range_))) {
+      LOG_WARN("get scan range failed", K(ret), K(task_id_));
+    } else if (OB_FAIL(scan_range_.prepare_memtable_readable(org_col_ids_, allocator_))) {
       LOG_WARN("prepare datum range for memtable readable", K(ret));
     } else {
       ObSchemaGetterGuard schema_guard;
@@ -1595,7 +1597,7 @@ int ObComplementWriteTask::do_local_scan()
                                                param_->orig_tablet_id_,
                                                iterator,
                                                query_flag,
-                                               param_->ranges_.at(task_id_)))) {
+                                               scan_range_))) {
         LOG_WARN("fail to do table scan", K(ret));
       }
     }
@@ -1640,7 +1642,9 @@ int ObComplementWriteTask::do_remote_scan()
   } else if (OB_FALSE_IT(scan = new (buf) ObRemoteScan())) {
   } else {
     scan_ = scan;
-    if (OB_FAIL(param_->ranges_.at(task_id_).prepare_memtable_readable(org_col_ids_, allocator_))) {
+    if (OB_FAIL(param_->ranges_.at(task_id_, scan_range_))) {
+      LOG_WARN("get scan range failed", K(ret), K(task_id_));
+    } else if (OB_FAIL(scan_range_.prepare_memtable_readable(org_col_ids_, allocator_))) {
       LOG_WARN("prepare datum range for memtable readable", K(ret));
     } else if (OB_FAIL(scan->init(param_->orig_tenant_id_,
                                   param_->orig_table_id_,
@@ -1650,7 +1654,7 @@ int ObComplementWriteTask::do_remote_scan()
                                   param_->dest_schema_version_,
                                   param_->snapshot_version_,
                                   param_->orig_tablet_id_,
-                                  param_->ranges_.at(task_id_)))) {
+                                  scan_range_))) {
       LOG_WARN("fail to remote_scan init", K(ret), KPC(param_));
     }
   }

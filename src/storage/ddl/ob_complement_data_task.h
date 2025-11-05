@@ -344,6 +344,7 @@ private:
   ObComplementRowIterator row_iter_;
   ObTabletSliceRowIterator slice_row_iter_;
   ObChunk chunk_;
+  blocksstable::ObDatumRange scan_range_;
   DISALLOW_COPY_AND_ASSIGN(ObComplementWriteTask);
 };
 
