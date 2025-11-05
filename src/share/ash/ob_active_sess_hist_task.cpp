@@ -51,18 +51,17 @@ int ObActiveSessHistTask::init()
   }
   return ret;
 }
-
+const static int64_t REFRESH_INTERVAL = 1 * 1000L * 1000L;
 int ObActiveSessHistTask::start()
 {
   int ret = OB_SUCCESS;
   // refresh sess info every 1 second
-  const static int64_t REFRESH_INTERVAL = 1 * 1000L * 1000L;
   if (OB_FAIL(TG_START(lib::TGDefIDs::ActiveSessHist))) {
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ActiveSessHist,
                                  *this,
                                  REFRESH_INTERVAL,
-                                 true /* repeat */))) {
+                                 false /* repeat */))) {
     LOG_WARN("fail define timer schedule", K(ret));
   } else if (OB_FAIL(ObAshRefreshTask::get_instance().start())) {
     LOG_WARN("failed to start ash refresh task", K(ret));
@@ -86,10 +85,11 @@ void ObActiveSessHistTask::destroy()
 {
   TG_DESTROY(lib::TGDefIDs::ActiveSessHist);
 }
-
+ERRSIM_POINT_DEF(OB_ASH_SCHEDULE_TIME);
 void ObActiveSessHistTask::runTimerTask()
 {
   common::ObTimeGuard time_guard(__func__, ash_iteration_time);
+  int64_t current_time = ObTimeUtility::current_time();
   common::ObBKGDSessInActiveGuard inactive_guard;
   int ret = OB_SUCCESS;
   ObActiveSessHistList::get_instance().lock();
@@ -122,6 +122,23 @@ void ObActiveSessHistTask::runTimerTask()
     }
   }
   ObActiveSessHistList::get_instance().unlock();
+  int64_t duration = ObTimeUtility::current_time() - current_time;
+  int64_t next_schedule_time = REFRESH_INTERVAL - duration;
+  if (next_schedule_time < 0) {
+    next_schedule_time = 0;
+  }
+  if (OB_ASH_SCHEDULE_TIME) {
+    next_schedule_time = -OB_ASH_SCHEDULE_TIME - 1;
+    LOG_INFO("ash simulate schedule time", K(next_schedule_time));
+  }
+  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ActiveSessHist,
+                                 *this,
+                                 next_schedule_time,
+                                 false /* repeat */))) {
+    // TG_SCHEDULE only fails when timer task queue is full.
+    // But in ASH sample thread, there is only one task. So it would never happen.
+    LOG_ERROR("fail to schedule next ASH timer task", K(ret), K(duration));
+  }
 }
 
 bool ObActiveSessHistTask::process_running_di(const SessionID &session_id, ObDiagnosticInfo *di)
