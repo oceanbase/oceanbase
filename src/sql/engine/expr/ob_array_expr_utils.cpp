@@ -84,9 +84,12 @@ int ObArrayExprUtils::get_type_vector(
     } else if (OB_FAIL(result->init(blob_data))) {
       LOG_WARN("failed to init array", K(ret));
     } else {
-      if (result->size() > ObExprVector::MAX_VECTOR_DIM) {
+      const bool is_dense_vector = (coll_info != NULL
+                                    && coll_info->collection_meta_ != NULL
+                                    && coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE);
+      if (is_dense_vector && result->size() > ObExprVector::MAX_VECTOR_DIM) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("vector dimension exceeds maximum limit", K(ret), K(result->size()));
+        LOG_WARN("vector dimension exceeds maximum limit for dense vector", K(ret), K(result->size()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector dimension exceeds maximum limit of 16000");
       }
     }
