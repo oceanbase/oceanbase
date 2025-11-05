@@ -113,6 +113,8 @@ private:
   int update_sqc_global_autoinc_value();
   bool need_count_rows() const { return (MY_SPEC.regenerate_heap_table_pk_ || is_vec_gen_vid_) && !count_rows_finish_; }
   int get_next_tablet_id(common::ObTabletID &tablet_id);
+  int setup_vector_index_monitor(const share::schema::ObTableSchema *table_schema, 
+                                 storage::ObInsertMonitor &insert_monitor);
 private:
   friend class storage::ObSSTableInsertRowIterator;
   static const uint64_t MAP_HASH_BUCKET_NUM = 1543L;

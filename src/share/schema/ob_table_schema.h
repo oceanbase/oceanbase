@@ -2126,6 +2126,7 @@ public:
   int get_rowkey_doc_tid(uint64_t &index_table_id) const;
   int get_docid_col_id(uint64_t &docid_col_id) const;
   int get_rowkey_vid_tid(uint64_t &index_table_id) const;
+  int get_rowkey_cid_tid(uint64_t &index_table_id, const ObIndexType index_type) const;
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   bool has_lob_column(const bool ignore_unused_column) const;

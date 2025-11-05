@@ -219,6 +219,8 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   DROP_VID_ROWKEY_INDEX_TABLE = 50,
   DROP_ROWKEY_VID_INDEX_TABLE = 51,
   BUILD_MLOG = 52,
+  GENERATE_CID_VEC_SCHEMA = 53,
+  WAIT_CID_VEC_TABLE_COMPLEMENT = 54,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -403,6 +405,11 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::BUILD_MLOG:
       str = "BUILD_MLOG";
+    case ObDDLTaskStatus::GENERATE_CID_VEC_SCHEMA:
+      str = "GENERATE_CID_VEC_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_CID_VEC_TABLE_COMPLEMENT:
+      str = "WAIT_CID_VEC_TABLE_COMPLEMENT";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -652,11 +659,11 @@ struct InsertMonitorNodeInfo final
 public:
   InsertMonitorNodeInfo():
     tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0), 
-    vec_task_thread_pool_cnt_(0), vec_task_total_cnt_(0), vec_task_finish_cnt_(0)
+    vec_task_monitor_type_(0), vec_task_value1_(0), vec_task_value2_(0), vec_task_value3_(0)
   {}
   ~InsertMonitorNodeInfo() = default;
-  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_), 
-  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_));
+  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_),
+               K(sstable_row_inserted_), K(vec_task_monitor_type_), K(vec_task_finish_tablet_cnt_), K(vec_task_value1_), K(vec_task_value2_), K(vec_task_value3_));
 
 public:
   uint64_t tenant_id_;
@@ -667,9 +674,14 @@ public:
   int64_t cg_row_inserted_;
   int64_t sstable_row_inserted_;
   // for vec index
-  int64_t vec_task_thread_pool_cnt_;
-  int64_t vec_task_total_cnt_;
-  int64_t vec_task_finish_cnt_;
+  int16_t vec_task_monitor_type_;
+  int16_t vec_task_finish_tablet_cnt_;
+  // thread_pool_cnt_ or kmeans_iter_info_
+  int64_t vec_task_value1_;
+  // total_cnt_ or kmeans_imbalance_
+  int64_t vec_task_value2_;
+  // finish_cnt_
+  int64_t vec_task_value3_;
 };
 
 struct ObSqlMonitorStats final
@@ -820,14 +832,14 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
-    vec_task_thread_pool_cnt_ = 0;
-    vec_task_total_cnt_ = 0;
-    vec_task_finish_cnt_ = 0;
+    thread_pool_cnt_cur_iter_ = 0;
+    total_cnt_ = 0;
+    finish_cnt_ = 0;
+    finish_diff_ = 0.0f;
+    cur_diff_ = 0.0f;
+    kmeans_imbalance_ = 0.0f;
     vec_task_trigger_cnt_ = 0;
-    vec_task_progress_ = 1;
-    vec_task_slowest_trigger_id_ = 0;
-    vec_task_slowest_cnt_ = 0;
-    vec_task_slowest_finish_cnt_ = 0;
+    vec_task_finish_tablet_cnt_ = 0;
 
     state_ = RedefinitionState::BEFORESCAN;
     is_empty_ = true;
@@ -884,14 +896,14 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
-    vec_task_thread_pool_cnt_ = 0;
-    vec_task_total_cnt_ = 0;
-    vec_task_finish_cnt_ = 0;
+    thread_pool_cnt_cur_iter_ = 0;
+    total_cnt_ = 0;
+    finish_cnt_ = 0;
+    finish_diff_ = 0.0f;
+    cur_diff_ = 0.0f;
+    kmeans_imbalance_ = 0.0f;
     vec_task_trigger_cnt_ = 0;
-    vec_task_progress_ = 1;
-    vec_task_slowest_trigger_id_ = 0;
-    vec_task_slowest_cnt_ = 0;
-    vec_task_slowest_finish_cnt_ = 0;
+    vec_task_finish_tablet_cnt_ = 0;
 
     state_ = RedefinitionState::BEFORESCAN;
     finish_thread_num_ = 0;
@@ -925,8 +937,7 @@ public:
   K(merge_sort_thread_num_), K(row_merge_sorted_), K(expected_round_), K(merge_sort_remain_time_), K(merge_sort_progress_),
   K(dump_size_), K(compress_type_),
   K(row_inserted_cg_), K(row_inserted_file_), K(insert_thread_num_), K(insert_progress_), K(insert_remain_time_),
-  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_), K(vec_task_trigger_cnt_), K(vec_task_progress_),
-  K(vec_task_slowest_trigger_id_), K(vec_task_slowest_cnt_), K(vec_task_slowest_finish_cnt_),
+  K(vec_task_trigger_cnt_), K(thread_pool_cnt_cur_iter_), K(total_cnt_), K(finish_cnt_), K(finish_diff_), K(cur_diff_), K(kmeans_imbalance_), K(vec_task_finish_tablet_cnt_),
   K(state_), K(parallelism_), K(real_parallelism_), K(execution_id_), K(finish_thread_num_),
   K(min_inmem_sort_row_), K(min_merge_sort_row_), K(min_insert_row_));
 
@@ -955,6 +966,7 @@ private:
   int diagnose_stats_analysis();
   int generate_session_longops_message(const int64_t target_cg_cnt, ObDDLTaskStatInfo &stat_info, int64_t &pos);
   int generate_session_longops_message_v1(int64_t target_cg_cnt, ObDDLTaskStatInfo &stat_info, int64_t &pos);
+  int print_vec_task_info(ObDDLTaskStatInfo &stat_info, int64_t &pos);
   bool inline is_skip_case() // finish ddl without sql plan monitor node
   {
     return finish_ddl_ && is_empty_;
@@ -1020,15 +1032,15 @@ private:
   double insert_spend_time_;
   int64_t insert_slowest_thread_id_ = 0;
   // for vec index
-  int64_t vec_task_thread_pool_cnt_;
-  int64_t vec_task_total_cnt_;
-  int64_t vec_task_finish_cnt_;
-  int64_t vec_task_trigger_cnt_;
-  double vec_task_progress_;
-  int64_t vec_task_slowest_trigger_id_;
-  int64_t vec_task_slowest_cnt_;
-  int64_t vec_task_slowest_finish_cnt_;
-
+  int16_t vec_task_trigger_cnt_;
+  int16_t vec_task_monitor_type_;
+  int16_t vec_task_finish_tablet_cnt_;
+  int16_t thread_pool_cnt_cur_iter_;
+  int64_t total_cnt_;
+  int64_t finish_cnt_;
+  float finish_diff_;
+  float cur_diff_;
+  float kmeans_imbalance_;
   // analysis data
   bool is_empty_;
   bool finish_ddl_;

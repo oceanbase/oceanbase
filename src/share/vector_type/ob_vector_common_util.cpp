@@ -13,6 +13,8 @@
 #include "lib/geo/ob_s2adapter.h" // for htonll
 #include "ob_vector_common_util.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include <cmath>
+#include <cstdio>
 
 namespace oceanbase {
 namespace share {
@@ -529,7 +531,10 @@ template <>
 int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_center_ids_dist(ObArrayWrap<bool> &nearest_cid_dist)
 {
   int ret = OB_SUCCESS;
-  if (heap_.count() > nprobe_) {
+  if (is_save_all_center_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("save all center mode not support this", K(ret), K(lbt()));
+  } else if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }
@@ -557,7 +562,10 @@ template <>
 int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_centers_ptrs(ObArrayWrap<float *> &nearest_cid_dist)
 {
   int ret = OB_SUCCESS;
-  if (heap_.count() > nprobe_) {
+  if (is_save_all_center_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("save all center mode not support this", K(ret), K(lbt()));
+  } else if (heap_.count() > nprobe_) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
   }

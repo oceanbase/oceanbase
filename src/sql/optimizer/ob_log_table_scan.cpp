@@ -5351,31 +5351,31 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
         bool res = false;
         for (int64_t i = 0; OB_SUCC(ret) && i < ObDomainIdUtils::ObDomainIDType::MAX && !res; i++) {
           ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(i);
-          if (OB_FAIL(ObDomainIdUtils::check_table_need_domain_id_merge(cur_type, ddl_table_schema, res))) {
+          if (OB_FAIL(ObDomainIdUtils::check_table_need_domain_id_merge(cur_type, *schema_guard->get_schema_guard(), *table_schema,
+                                                                        ddl_table_schema, res))) {
             LOG_WARN("fail to check table need domain id merge", K(ret), K(cur_type), KPC(ddl_table_schema));
           } else if (res) {
             if (OB_FAIL(with_domain_types_.push_back(i))) {
               LOG_WARN("fail to push back domain types", K(ret), K(i));
-            } else if (ddl_table_schema->is_vec_ivfflat_cid_vector_index()) {
-              // TODO(@liyao): 使用merge_iter补cid_vector
-              // uint64_t vec_cid_col_id = OB_INVALID_ID;
-              // for (int64_t i = 0; OB_SUCC(ret) && i < ddl_table_schema->get_column_count() && OB_INVALID_ID == vec_cid_col_id; ++i) {
-              //   const ObColumnSchemaV2 *col_schema = nullptr;
-              //   if (OB_ISNULL(col_schema = ddl_table_schema->get_column_schema_by_idx(i))) {
-              //     ret = OB_ERR_UNEXPECTED;
-              //     LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), KPC(ddl_table_schema));
-              //   } else if (col_schema->is_vec_ivf_center_id_column()) {
-              //     vec_cid_col_id = col_schema->get_column_id();
-              //   }
-              // }
-              // if (OB_SUCC(ret)) {
-              //   if (OB_INVALID_ID == vec_cid_col_id) {
-              //     ret = OB_ERR_UNEXPECTED;
-              //     LOG_WARN("invalid cid col in centriod table", K(ret));
-              //   } else if (OB_FAIL(vec_id_cols.push_back(vec_cid_col_id))) {
-              //     LOG_WARN("failed to push back array", K(ret));
-              //   }
-              // }
+            } else if (ddl_table_schema->is_vec_ivfflat_cid_vector_index() || ddl_table_schema->is_vec_ivfsq8_cid_vector_index() || ddl_table_schema->is_vec_ivfpq_code_index()) {
+              uint64_t vec_cid_col_id = OB_INVALID_ID;
+              for (int64_t i = 0; OB_SUCC(ret) && i < ddl_table_schema->get_column_count() && OB_INVALID_ID == vec_cid_col_id; ++i) {
+                const ObColumnSchemaV2 *col_schema = nullptr;
+                if (OB_ISNULL(col_schema = ddl_table_schema->get_column_schema_by_idx(i))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(i), KPC(ddl_table_schema));
+                } else if (col_schema->is_vec_ivf_center_id_column()) {
+                  vec_cid_col_id = col_schema->get_column_id();
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_INVALID_ID == vec_cid_col_id) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid cid col in centriod table", K(ret));
+                } else if (OB_FAIL(vec_id_cols.push_back(vec_cid_col_id))) {
+                  LOG_WARN("failed to push back array", K(ret));
+                }
+              }
             } else if (OB_FAIL(vec_id_cols.push_back(OB_INVALID_ID))) { // place holder for doc id/vid
               LOG_WARN("failed to push back col id", K(ret));
             }

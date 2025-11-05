@@ -233,6 +233,12 @@ static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
 static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
+static const uint64_t MAX_IVF_BRUTE_FORCE_SIZE = 10000;
+
+static const uint64_t MAX_IVF_PRE_ROW_CNT_WITH_IDX = 500000;
+static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_ROWKEY = 0.9;
+static constexpr double DEFAULT_IVF_PRE_RATE_FILTER_WITH_IDX = 0.1;
+
   ObVecIdxExtraInfo()
     : vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
       adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
@@ -259,13 +265,20 @@ static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
   }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+  inline bool is_ivf_vec_scan() const
+  {
+    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
+  }
   int64_t get_row_count() { return row_count_; }
   bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   int set_vec_param_info(const ObTableSchema *vec_index_schema);
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
-  double get_default_selectivity_rate() const {
-    if (vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
+  inline double get_default_selectivity_rate() const { return get_default_selectivity_rate(vector_index_param_.type_); }
+  static double get_default_selectivity_rate(const ObVectorIndexAlgorithmType type) {
+    if (type == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
       return DEFAULT_IVFPQ_SELECTIVITY_RATE;
     }
     return DEFAULT_SELECTIVITY_RATE;
@@ -302,6 +315,15 @@ public:
     table_id_ = table_id;
     tablet_id_ = tablet_id;
     return centers_.assign(centers);
+  }
+  int append_center(float* center)
+  {
+    return centers_.push_back(center);
+  }
+  void set_cache_key(ObTableID table_id, ObTabletID tablet_id)
+  {
+    table_id_ = table_id;
+    tablet_id_ = tablet_id;
   }
   ObArenaAllocator &get_allocator() { return allocator_; }
   void reuse() { table_id_ = ObCommonID::INVALID_ID; tablet_id_.reset(); centers_.reuse(); allocator_.reuse(); }
@@ -345,7 +367,9 @@ public:
       const ObTableSchema &data_table_schema,
       const ObString &old_index_params, 
       ObString &new_index_params, 
-      common::ObIAllocator *allocator);
+      ObVectorIndexType index_type,
+      common::ObIAllocator *allocator,
+      const int64_t vector_dim = 0);
   static int check_extra_info_size(
       const ObTableSchema &tbl_schema,
       const sql::ObSQLSessionInfo *session_info,
@@ -469,7 +493,17 @@ public:
       const ObTableSchema &data_table_schema,
       const ObIndexType index_type,
       const int64_t col_id, // index col id
+      const bool need_available,
       uint64_t &tid);
+  static int get_latest_avaliable_index_tids_for_ivf(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    const int64_t col_id,
+    ObVectorIndexAlgorithmType type,
+    uint64_t &centroid_tid,
+    uint64_t &cid_rowkey_tid,
+    uint64_t &rowkey_cid_tid,
+    uint64_t &extra_tid);
   static int get_latest_avaliable_index_tids_for_hnsw(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,
@@ -662,12 +696,17 @@ public:
                                            uint64_t &kmeans_mem);
   static ObExprVecIvfCenterIdCache* get_ivf_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx);
   static void get_ivf_pq_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx, ObExprVecIvfCenterIdCache *&cache, ObExprVecIvfCenterIdCache *&pq_cache);
-  static int get_ivf_aux_info(share::ObPluginVectorIndexService *service, 
-                                  ObExprVecIvfCenterIdCache *cache, 
-                                  const ObTableID &table_id, 
-                                  const ObTabletID &tablet_id, 
-                                  common::ObIAllocator &allocator, 
-                                  ObIArray<float*> &centers);
+  
+      static int get_ivf_aux_info(share::ObPluginVectorIndexService *service, 
+                                    ObExprVecIvfCenterIdCache *cache, 
+                                    const ObTableID &table_id, 
+                                    const ObTabletID &tablet_id, 
+                                    const ObTabletID &cent_tablet_id,
+                                    const bool is_pq_cache,
+                                    common::ObIAllocator &allocator, 
+                                    ObIArray<float*> &centers,
+                                    int64_t m = 0); // Number of PQ subspaces, 0 means using default value
+
   static int split_vector(ObIAllocator &alloc, int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int split_vector(int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int set_extra_info_actual_size_param(ObIAllocator *allocator, const ObString &old_param, int64_t actual_size,
@@ -681,12 +720,28 @@ public:
   static int64_t get_hnswsq_type_metric(int64_t origin_metric) {
     return origin_metric / 2 > VEC_INDEX_MIN_METRIC ? origin_metric / 2 : VEC_INDEX_MIN_METRIC;
   }
+
+  static bool is_hnsw_index_type(ObVectorIndexAlgorithmType type) {
+    return type == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+           type == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ ||
+           type == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
+           type == ObVectorIndexAlgorithmType::VIAT_HGRAPH;
+  }
+
+  static bool is_ivf_index_type(ObVectorIndexAlgorithmType type) {
+    return type == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
+           type == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
+           type == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; 
+  }
+
   static bool check_vector_index_memory(
       ObSchemaGetterGuard &schema_guard, 
       const ObTableSchema &index_schema, 
+      const common::ObAddr &addr,
       const uint64_t tenant_id, 
       const int64_t row_count);
-  static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const ObTableSchema &index_schema, const int64_t row_count);
+  static bool check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const common::ObAddr &addr, const uint64_t tenant_id, const int64_t row_count, const int64_t pre_construct_mem, uint64_t &current_construct_mem);
+  static int get_tenant_vector_memory_used_by_inner_sql(const uint64_t tenant_id, const common::ObAddr &addr, int64_t &memory_used);
   static int estimate_vector_memory_used(
       ObSchemaGetterGuard &schema_guard, 
       const ObTableSchema &index_schema, 
@@ -706,6 +761,35 @@ public:
                                              const ObString &new_idx_params,
                                              const ObTableSchema &index_table_schema,
                                              bool &only_change_search_params);
+  static int check_rowkey_cid_table_readable(ObSchemaGetterGuard &schema_guard,
+                                             const ObTableSchema &data_table_schema,
+                                             const ObTableSchema &cid_vec_schema, bool &readable);
+
+  static inline bool is_enable_ivf_adaptive_or_iterative_filter()
+  {
+    // patch for 4.3.5 BP4 hotfix, will disable this
+    return GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_5_4;
+  }
+
+  static bool is_enable_ivf_iterative_filter(const bool is_ivf_index)
+  {
+    return is_ivf_index && is_enable_ivf_adaptive_or_iterative_filter();
+  }
+
+  static bool is_enable_ivf_adaptive_scan(const bool is_ivf_index)
+  {
+    return is_ivf_index && is_enable_ivf_adaptive_or_iterative_filter();
+  }
+
+  static bool is_centroid_index_table_with_type(const ObVectorIndexAlgorithmType type, const ObIndexType index_type)
+  {
+    return ((type == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT && 
+              index_type == INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL) ||
+            (type == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 && 
+              index_type == INDEX_TYPE_VEC_IVFSQ8_CENTROID_LOCAL) ||
+            (type == ObVectorIndexAlgorithmType::VIAT_IVF_PQ && 
+              index_type == INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL));
+  }
 
 private:
   static void save_column_schema(

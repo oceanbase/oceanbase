@@ -32,12 +32,12 @@ void ObTenantVectorAllocator::init_throttle_config(int64_t &resource_limit, int6
   get_vector_mem_config(resource_limit, max_duration);
 }
 
-int64_t ObTenantVectorAllocator::get_vector_mem_limit_percentage(omt::ObTenantConfigGuard &tenant_config)
+int64_t ObTenantVectorAllocator::get_vector_mem_limit_percentage(omt::ObTenantConfigGuard &tenant_config, uint64_t tenant_id /*default is MTL_ID()*/)
 {
   const int64_t SMALL_TENANT_MEMORY_LIMIT = 8 * 1024 * 1024 * 1024L; // 8G
   const int64_t SMALL_VECTOR_LIMIT_PERCENTAGE = 40;
   const int64_t LARGE_VECTOR_LIMIT_PERCENTAGE = 50;
-  const int64_t tenant_memory = lib::get_tenant_memory_limit(MTL_ID());
+  const int64_t tenant_memory = lib::get_tenant_memory_limit(tenant_id);
   int64_t tenant_memstore_limit_percent = 0;
   int64_t percent = 0;
   if (tenant_config.is_valid()) {

@@ -2267,6 +2267,9 @@ int ObDMLStmtPrinter::print_vector_index_query_param()
       if (OB_SUCC(ret) && param.is_set_similarity_threshold_) {
         DATA_PRINTF(", similarity_threshold=%f", param.similarity_threshold_);
       }
+      if (OB_SUCC(ret) && param.is_set_ivf_nprobes_) {
+        DATA_PRINTF(", ivf_nprobes=%d", param.ivf_nprobes_);
+      }
       DATA_PRINTF(") ");
     }
   }

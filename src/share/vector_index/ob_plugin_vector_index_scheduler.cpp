@@ -189,6 +189,86 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
   }
 }
 
+void ObPluginVectorIndexLoadScheduler::clean_deprecated_ivf_caches()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, DEFAULT_TABLE_ARRAY_SIZE> delete_cache_tablet_id_array;
+  delete_cache_tablet_id_array.reset();
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  
+  if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    }
+  } else if (OB_ISNULL(index_ls_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(index_ls_mgr)) {
+    {
+      // Acquire read lock to protect ivf_cache_mgr_map iteration
+      RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
+      IvfCacheMgrMap &ivf_cache_mgr_map = index_ls_mgr->get_ivf_cache_mgr_map();
+      
+      // Iterate through all IVF cache managers (in lock scope, only mark for deletion)
+      FOREACH_X(iter, ivf_cache_mgr_map, OB_SUCC(ret)) {
+        ObTabletID cache_tablet_id = iter->first;
+        ObIvfCacheMgr *cache_mgr = iter->second;
+        ObTabletHandle tablet_handle;
+        bool need_delete = false;
+        if (OB_ISNULL(cache_mgr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null cache mgr skip current loop", KR(ret), K(cache_tablet_id));
+          continue;
+        }
+        // Check if tablet exists on this ls
+        if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(cache_tablet_id, tablet_handle))) {
+          if (OB_TABLET_NOT_EXIST != ret) {
+            LOG_WARN("fail to get tablet", K(ret), K(cache_tablet_id));
+          } else {
+            // Tablet not found, need clean cache
+            ret = OB_SUCCESS;
+            need_delete = true;
+            LOG_INFO("ivf cache tablet not exist, need clean", K(cache_tablet_id));
+          }
+        }  
+        // Add to deletion list if needed
+        if (need_delete) {
+          if (OB_FAIL(delete_cache_tablet_id_array.push_back(cache_tablet_id))) {
+            LOG_WARN("push back cache tablet id failed",
+              K(delete_cache_tablet_id_array.count()), K(cache_tablet_id), KR(ret));
+          }
+        }
+      }
+    } // Release lock here
+
+    // Perform actual deletion outside the lock
+    if (delete_cache_tablet_id_array.count() > 0) {
+      LOG_INFO("try erase ivf cache managers", 
+        K(index_ls_mgr->get_ls_id()), K(delete_cache_tablet_id_array.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < delete_cache_tablet_id_array.count(); i++) {
+      ObTabletID tablet_id = delete_cache_tablet_id_array.at(i);
+      // Use the existing erase_ivf_cache_mgr which handles reference counting properly
+      if (OB_FAIL(index_ls_mgr->erase_ivf_cache_mgr(tablet_id))) {
+        if (ret != OB_HASH_NOT_EXIST) {
+          LOG_WARN("failed to erase ivf cache manager", 
+            K(index_ls_mgr->get_ls_id()), K(tablet_id), KR(ret));
+        } else { // already removed
+          ret = OB_SUCCESS;
+        }
+      } else {
+        LOG_INFO("ivf cache mgr erased during cleanup", 
+          K(tablet_id), K(index_ls_mgr->get_ls_id()));
+      }
+    }
+    delete_cache_tablet_id_array.reset();
+  }
+}
+
 bool ObPluginVectorIndexLoadScheduler::check_can_do_work()
 {
   bool bret = true;
@@ -909,6 +989,26 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_adapter_maintenance_task
   return ret;
 }
 
+int ObPluginVectorIndexLoadScheduler::check_and_execute_ivf_cache_maintenance_task(ObPluginVectorIndexMgr *&mgr)
+{
+  int ret = OB_SUCCESS;
+  
+  // Schema version check
+  if (OB_FAIL(check_schema_version())) {
+    LOG_WARN("fail to check schema version for ivf cache", KR(ret));
+  } else if (OB_ISNULL(mgr)) {
+    // mgr is null, no cache to clean
+  } else if (mgr->get_ivf_cache_mgr_map().empty()) {
+    // no cache to clean
+  } else {
+    // Execute IVF cache cleanup
+    clean_deprecated_ivf_caches();
+    LOG_INFO("finish ivf cache maintenance task", K_(tenant_id), K(ls_->get_ls_id()));
+  }
+  
+  return ret;
+}
+
 int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr)
 {
   // Notice: only sync complete adapter, partial adapter will be merged to complete next timer schedule
@@ -1111,6 +1211,16 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
       LOG_WARN("fail to check and execute adapter maintenance task",
         KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
+    
+    // IVF: check and cleanup ivf caches (only on follower)
+    // Notice: leader has async task to clean deprecated ivf caches
+    if (!is_leader_) {
+      if (OB_FAIL(check_and_execute_ivf_cache_maintenance_task(index_ls_mgr))) {
+        LOG_WARN("fail to check and execute ivf cache maintenance task",
+          KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+      }
+    }
+    
     // Notice: leader write sync log, do memdata_sync only one loop(role changed from follower to leader)
     // explicit cover error code
 

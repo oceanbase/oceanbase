@@ -3486,6 +3486,9 @@ int ObDirectLoadSliceWriter::fill_vector_index_data(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(ATOMIC_LOAD(&is_canceled_))) {
+    ret = OB_CANCELED;
+    LOG_WARN("fil vector index data task canceled", K(ret), K(is_canceled_));
   } else if (OB_ISNULL(storage_schema) || snapshot_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(storage_schema), KP(slice_store_), K(snapshot_version));
@@ -4333,6 +4336,12 @@ void ObIvfSliceStore::reset()
   tmp_allocator_.reset();
 }
 
+void ObIvfSliceStore::cancel()
+{
+  helper_guard_.cancel();
+  LOG_INFO("cancel ivf slice store", K(*this));
+}
+
 ///////////////////////////
 // ObIvfCenterSliceStore //
 ///////////////////////////
@@ -4391,7 +4400,7 @@ int ObIvfCenterSliceStore::init(
           LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
-        } else if (OB_FAIL(helper->init_kmeans_ctx(vec_dim_))) {
+        } else if (OB_FAIL(helper->init_ctx(vec_dim_))) {
           LOG_WARN("failed ot init kmeans ctx", K(ret), K_(vec_dim));
         } else {
           is_inited_ = true;
@@ -4461,7 +4470,7 @@ int ObIvfCenterSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
     } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build())) {
+    } else if (OB_FAIL(executor->build(insert_monitor))) {
       LOG_WARN("failed to build clusters", K(ret));
     }
   }
@@ -4547,15 +4556,19 @@ int ObIvfCenterSliceStore::get_next_vector_data_row(
           LOG_WARN("unexpected outrow datum in ivf vector index", 
                     K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
-          for (int64_t idx = rowkey_cnt + extra_rowkey_cnt; idx < request_cnt; ++idx) {
-            if (idx != center_id_col_idx_ && idx != center_vector_col_idx_) {
-              current_row_.storage_datums_[idx].set_null(); // set null part key
+          for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
+            if (center_vector_col_idx_ == i) {
+              current_row_.storage_datums_[center_vector_col_idx_].set_string(vec_res);
+            } else if (center_id_col_idx_ == i) {
+              current_row_.storage_datums_[center_id_col_idx_].set_string(cid_str);
+            } else if (rowkey_cnt == i) {
+              current_row_.storage_datums_[i].set_int(-snapshot_version);
+            } else if (rowkey_cnt + 1 == i) {
+              current_row_.storage_datums_[i].set_int(0);
+            } else {
+              current_row_.storage_datums_[i].set_null(); // set part key null
             }
           }
-          current_row_.storage_datums_[center_vector_col_idx_].set_string(vec_res);
-          current_row_.storage_datums_[center_id_col_idx_].set_string(cid_str);
-          current_row_.storage_datums_[rowkey_cnt].set_int(-snapshot_version);
-          current_row_.storage_datums_[rowkey_cnt + 1].set_int(0);
           current_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
           datum_row = &current_row_;
           cur_row_pos_++;
@@ -4637,7 +4650,7 @@ int ObIvfSq8MetaSliceStore::init(
           LOG_WARN("failed to acquire ivf build helper guard", K(ret), K(ls_id), K(tablet_id_));
         } else if (OB_FAIL(get_spec_ivf_helper(helper))) {
           LOG_WARN("fail to get ivf flat helper", K(ret));
-        } else if (OB_FAIL(helper->init_result_vectors(vec_dim_))) {
+        } else if (OB_FAIL(helper->init_ctx(vec_dim_))) {
           LOG_WARN("failed ot init kmeans ctx", K(ret), K(vec_dim_));
         } else {
           is_inited_ = true;

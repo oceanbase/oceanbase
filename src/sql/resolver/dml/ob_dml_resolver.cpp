@@ -19708,8 +19708,12 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   
   // add calc_table_id_expr & calc_tablet_id_expr 
   ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(raw_expr);
+  bool is_support_reuse_cid_expr = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_5);
   if (OB_SUCC(ret)) {
     int64_t new_capacity = expr->get_param_count() + 2 * index_type_array.count() + ObIvfConstant::IVF_VEC_EXPR_PARAM_COUNT;
+    if (is_support_reuse_cid_expr) {
+      new_capacity += 1; // for ObExprVecIVFPQCenterIds will inc one param after 4.3.5.5
+    }
     if (OB_FAIL(expr->extend_param_exprs(new_capacity))) {
       LOG_WARN("failed to extend param exprs", K(ret));
     }
@@ -19793,6 +19797,37 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
         LOG_WARN("fail to replace param expr", K(ret), KP(calc_table_id_expr));
       } else if (OB_FAIL(expr->add_param_expr(calc_tablet_id_expr))) {
         LOG_WARN("fail to replace param expr", K(ret), KP(calc_tablet_id_expr));
+      } else if (is_support_reuse_cid_expr &&
+                 T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS == raw_expr->get_expr_type() &&
+                 index_type_array.at(i) == INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL) {
+        ObColumnRefRawExpr *cid_expr = nullptr;
+        ColumnItem *col_item = nullptr;
+        bool is_find = false;
+        // get cid expr from stmt
+        for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
+          const ObColumnSchemaV2 *col_schema = nullptr;
+          const ObColumnSchemaV2 *origin_col_schema = nullptr;
+          if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
+          } else if (OB_ISNULL(origin_col_schema = table_schema->get_column_schema(col_schema->get_column_id()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col_schema, is nullptr", K(ret), K(col_schema->get_column_id()), KPC(table_schema));
+          } else if (!origin_col_schema->is_vec_ivf_center_id_column()) {
+          } else if (OB_ISNULL(col_item = stmt->get_column_item(table_id, origin_col_schema->get_column_id()))) {
+            LOG_INFO("pq center cid col is exist, but center id col not found. Maybe index is rebuilding and old center id col is dropped",
+                     K(table_id), K(origin_col_schema->get_column_id()), KPC(table_schema), KPC(index_table_schema), KPC(col_schema));
+          } else if (FALSE_IT(cid_expr = col_item->expr_)) {
+          } else if (OB_ISNULL(cid_expr->get_dependant_expr())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected cid expr, is nullptr", K(ret), KP(cid_expr));
+          } else if (OB_FAIL(expr->add_param_expr(cid_expr->get_dependant_expr()))) {
+            LOG_WARN("fail to replace param expr", K(ret), KP(cid_expr->get_dependant_expr()));
+          } else {
+            is_find = true;
+          }
+        }
+        if (OB_SUCC(ret) && !is_find) {
+          LOG_INFO("cid expr not found", K(ret), K(vec_index_tid), K(column_schema->get_column_id()), KPC(table_schema));
+        }
       }
     }
   }
@@ -20508,16 +20543,23 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
     } else if (session_info_->get_ddl_info().is_ddl()) {
       ObDMLStmt *insert_stmt = upper_insert_resolver_->get_stmt();
       const share::schema::ObTableSchema *ddl_table_schema = nullptr;
-      if (OB_ISNULL(insert_stmt) || OB_UNLIKELY(insert_stmt->get_table_items().count() <= 0)) {
+      const share::schema::ObTableSchema *data_table = nullptr;
+      if (col_schema->is_vec_ivf_center_id_column() || col_schema->is_vec_ivf_pq_center_ids_column()) {
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), data_table))) {
+          LOG_WARN("fail to get ddl table schema", K(ret));
+        }
+      } 
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(insert_stmt) || OB_UNLIKELY(insert_stmt->get_table_items().count() <= 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, insert stmt is nullptr or hasn't table item", K(ret), KPC(insert_stmt));
       } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
               insert_stmt->get_table_item(0)->ddl_table_id_, ddl_table_schema))) {
         LOG_WARN("fail to get ddl table schema", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_));
-      } else if (OB_ISNULL(ddl_table_schema)) {
+      } else if (OB_ISNULL(ddl_table_schema) || OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ddl table schema is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_));
-      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(ddl_table_schema)) {
+        LOG_WARN("ddl table schema or schema guard is nullptr", K(ret), K(insert_stmt->get_table_item(0)->ddl_table_id_), K(ddl_table_schema));
+      } else if (ObDomainIdUtils::check_table_need_column_ref_in_ddl(*schema_guard, data_table, ddl_table_schema)) {
         need_column_ref_expr = false;
       }
     }

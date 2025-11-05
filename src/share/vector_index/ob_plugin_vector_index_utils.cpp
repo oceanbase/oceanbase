@@ -1519,9 +1519,12 @@ int ObPluginVectorIndexUtils::release_vector_index_adapter(ObPluginVectorIndexAd
   return ret;
 }
 
-int ObPluginVectorIndexUtils::release_vector_index_build_helper(ObIvfBuildHelper* &helper)
+int ObPluginVectorIndexUtils::release_vector_index_build_helper(ObIvfBuildHelper* &helper, bool *fully_released)
 {
   int ret = OB_SUCCESS;
+  if (nullptr != fully_released) {
+    *fully_released = false;
+  }
   if (OB_ISNULL(helper)) {
     // do nothing
   } else {
@@ -1535,6 +1538,9 @@ int ObPluginVectorIndexUtils::release_vector_index_build_helper(ObIvfBuildHelper
         allocator->free(helper);
       }
       helper = nullptr;
+      if (nullptr != fully_released) {
+        *fully_released = true;
+      }
     }
   }
   return ret;
@@ -1599,6 +1605,15 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index
     const char* delta_buffer_table = ObVecIndexBuilderUtil::DELTA_BUFFER_TABLE_NAME_SUFFIX;
     const char* index_id_table = ObVecIndexBuilderUtil::INDEX_ID_TABLE_NAME_SUFFIX;
     const char* index_snapshot_data_table = ObVecIndexBuilderUtil::SNAPSHOT_DATA_TABLE_NAME_SUFFIX;
+    // ivf
+    const char *ivf_centroid_table = ObVecIndexBuilderUtil::IVF_CENTROID_TABLE_NAME_SUFFIX;
+    const char* ivf_rowkey_cid_table = ObVecIndexBuilderUtil::IVF_ROWKEY_CID_TABLE_NAME_SUFFIX;
+    const char* ivf_cid_vector_table = ObVecIndexBuilderUtil::IVF_CID_VECTOR_TABLE_NAME_SUFFIX;
+    const char* ivf_sq_meta_table = ObVecIndexBuilderUtil::IVF_SQ_META_TABLE_NAME_SUFFIX;
+    const char* ivf_pq_centroid_table = ObVecIndexBuilderUtil::IVF_PQ_CENTROID_TABLE_NAME_SUFFIX;
+    const char* ivf_pq_code_table = ObVecIndexBuilderUtil::IVF_PQ_CODE_TABLE_NAME_SUFFIX;
+    const char* ivf_pq_rowkey_cid_table = ObVecIndexBuilderUtil::IVF_PQ_ROWKEY_CID_TABLE_NAME_SUFFIX;
+    
     int64_t prefix_len = 0;
 
     if (index_schema.is_vec_delta_buffer_type()) {
@@ -1607,26 +1622,42 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index
       prefix_len = table_name_len - strlen(index_id_table);
     } else if (index_schema.is_vec_index_snapshot_data_type()) {
       prefix_len = table_name_len - strlen(index_snapshot_data_table);
+    } else if (index_schema.is_vec_ivf_centroid_index()) {
+      prefix_len = table_name_len - strlen(ivf_centroid_table);
+    } else if (index_schema.is_vec_ivfflat_rowkey_cid_index() ||
+               index_schema.is_vec_ivfsq8_rowkey_cid_index()) {
+      prefix_len = table_name_len - strlen(ivf_rowkey_cid_table);
+    } else if (index_schema.is_vec_ivfflat_cid_vector_index() ||
+               index_schema.is_vec_ivfsq8_cid_vector_index()) {
+      prefix_len = table_name_len - strlen(ivf_cid_vector_table);
+    } else if (index_schema.is_vec_ivfsq8_meta_index()) {
+      prefix_len = table_name_len - strlen(ivf_sq_meta_table);
+    } else if (index_schema.is_vec_ivfpq_pq_centroid_index()) {
+      prefix_len = table_name_len - strlen(ivf_pq_centroid_table);
+    } else if (index_schema.is_vec_ivfpq_code_index()) {
+      prefix_len = table_name_len - strlen(ivf_pq_code_table);
+    } else if (index_schema.is_vec_ivfpq_rowkey_cid_index()) {
+      prefix_len = table_name_len - strlen(ivf_pq_rowkey_cid_table);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected vector index type", K(ret), K(index_schema));
     }
     if (OB_SUCC(ret)) {
       prefix.assign_ptr(tmp_table_name.ptr(), prefix_len);
-      LOG_INFO("get_index_prefix", K(prefix), K(tmp_table_name));
+      LOG_INFO("get_index_prefix", K(prefix), K(tmp_table_name), K(index_schema.get_table_id()));
     }
   }
   return ret;
 }
 
-int ObPluginVectorIndexUtils::erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key)
+int ObPluginVectorIndexUtils::erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key, bool *fully_cleared)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
   if (OB_ISNULL(vec_index_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
-  } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(ls_id, key))) {
+  } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(ls_id, key, fully_cleared))) {
     LOG_WARN("failed to erase ivf build helper", K(ret), K(ls_id), K(key));
   }
   if (ret == OB_HASH_NOT_EXIST) {

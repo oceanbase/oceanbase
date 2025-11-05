@@ -47,13 +47,15 @@ public:
   typedef common::ObSEArray<ObString, 2> DomainIds;
   /* DML Resolver Begin */
   static bool is_domain_id_index_col(const void *col_schema);
-  static bool check_table_need_column_ref_in_ddl(const void *table_schema);
+  static bool check_table_need_column_ref_in_ddl(share::schema::ObSchemaGetterGuard &schema_guard, const void *data_table_schema, const void *table_schema);
   /* DML Resolver End */
 
   /* ObLogTableScan Begin */
   const static char* get_domain_str_by_id(ObDomainIDType type) { return ObDomainIDStrArray[type]; }
   static bool is_domain_id_index_table(const void *table_schema);
-  static int check_table_need_domain_id_merge(ObDomainIDType type, const void *table_schema, bool &res);
+  static int check_table_need_domain_id_merge(ObDomainIDType type, ObSchemaGetterGuard &schema_guard,
+                                              const ObTableSchema &data_table_schema, const void *table_schema,
+                                              bool &res);
   static int check_column_need_domain_id_merge(
       const share::schema::ObTableSchema &table_schema,
       const ObDomainIDType type,

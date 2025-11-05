@@ -38,22 +38,32 @@ bool ObDomainIdUtils::is_domain_id_index_col(const void *col_schema)
   return bret;
 }
 
-bool ObDomainIdUtils::check_table_need_column_ref_in_ddl(const void *table_schema)
+bool ObDomainIdUtils::check_table_need_column_ref_in_ddl(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                         const void *data_table_schema, const void *table_schema)
 {
+  // true: needs to generate an expression
+  int ret = OB_SUCCESS;
   bool bret = false;
-  const schema::ObTableSchema *table = reinterpret_cast<const schema::ObTableSchema*>(table_schema);
+  const schema::ObTableSchema *table = reinterpret_cast<const schema::ObTableSchema *>(table_schema);
   if (OB_NOT_NULL(table)) {
-    bret = table->is_rowkey_doc_id() ||
-           table->is_vec_rowkey_vid_type() ||
-           table->is_vec_ivfflat_rowkey_cid_index() ||
-          // TODO(liyao): use the expression calculation currently.
-          //              use the merge_iter after the split post build step.
-          //  table->is_vec_ivfflat_centroid_index() ||
-           table->is_vec_ivfflat_cid_vector_index() ||
-           table->is_vec_ivfsq8_cid_vector_index() ||
-           table->is_vec_ivfsq8_rowkey_cid_index() ||
-           table->is_vec_ivfpq_code_index() ||
-           table->is_vec_ivfpq_rowkey_cid_index();
+    if (table->is_vec_ivfflat_cid_vector_index() || table->is_vec_ivfsq8_cid_vector_index() ||
+        table->is_vec_ivfpq_code_index()) {
+      bret = true;
+      // If the table rowkey_cid does not exist, the expr needs to be generated, and return true.
+      if (OB_NOT_NULL(data_table_schema)) {
+        const schema::ObTableSchema *data_table = reinterpret_cast<const schema::ObTableSchema *>(data_table_schema);
+        bool readable = false;
+        if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, *data_table, *table, readable))) {
+          LOG_WARN("fail to check rowkey cid table", K(ret), KPC(data_table));
+        } else if (readable) {
+          bret = false;
+        }
+      }
+    } else {
+      bret = table->is_rowkey_doc_id() || table->is_vec_rowkey_vid_type() ||
+             table->is_vec_ivfflat_rowkey_cid_index() || table->is_vec_ivfsq8_rowkey_cid_index() ||
+             table->is_vec_ivfpq_rowkey_cid_index();
+    }
   }
   return bret;
 }
@@ -70,7 +80,9 @@ bool ObDomainIdUtils::is_domain_id_index_table(const void *table_schema)
   return bret;
 }
 
-int ObDomainIdUtils::check_table_need_domain_id_merge(ObDomainIDType type, const void *table_schema, bool &res)
+int ObDomainIdUtils::check_table_need_domain_id_merge(ObDomainIDType type, ObSchemaGetterGuard &schema_guard,
+                                                      const ObTableSchema &data_table_schema, const void *table_schema,
+                                                      bool &res)
 {
   int ret = OB_SUCCESS;
   res = false;
@@ -99,22 +111,36 @@ int ObDomainIdUtils::check_table_need_domain_id_merge(ObDomainIDType type, const
         break;
       }
       case ObDomainIDType::IVFFLAT_CID: {
-        // TODO(@liyao): 使用merge_iter补cid_vector
-        // if (ddl_table_schema->is_vec_ivfflat_cid_vector_index()) {
-        //   res = true;
-        // }
+        if (ddl_table_schema->is_vec_ivfflat_cid_vector_index()) {
+          bool readable = false;
+          if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, data_table_schema, *ddl_table_schema, readable))) {
+            LOG_WARN("fail to check rowkey cid table", K(ret), KPC(ddl_table_schema));
+          } else if (readable) {
+            res = true;
+          }
+        }
         break;
       }
       case ObDomainIDType::IVFSQ_CID: {
-        // if (ddl_table_schema->is_vec_ivfsq8_cid_vector_index()) {
-        //   res = true;
-        // }
+        if (ddl_table_schema->is_vec_ivfsq8_cid_vector_index()) {
+          bool readable = false;
+          if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, data_table_schema, *ddl_table_schema, readable))) {
+            LOG_WARN("fail to check rowkey cid table", K(ret), KPC(ddl_table_schema));
+          } else if (readable) {
+            res = true;
+          }
+        }
         break;
       }
       case ObDomainIDType::IVFPQ_CID: {
-        // if (ddl_table_schema->is_vec_ivf_pq_code_index()) {
-        //   res = true;
-        // }
+        if (ddl_table_schema->is_vec_ivfpq_code_index()) {
+          bool readable = false;
+          if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, data_table_schema, *ddl_table_schema, readable))) {
+            LOG_WARN("fail to check rowkey cid table", K(ret), KPC(ddl_table_schema));
+          } else if (readable) {
+            res = true;
+          }
+        }
         break;
       }
       default: {
@@ -232,6 +258,24 @@ int ObDomainIdUtils::get_domain_tid_table_by_type(ObDomainIDType type,
       case ObDomainIDType::VID: {
         if (OB_FAIL(data_table->get_rowkey_vid_tid(domain_id_table_id))) {
           LOG_WARN("fail to get rowkey vid table id", K(ret), KPC(data_table));
+        }
+        break;
+      }
+      case ObDomainIDType::IVFFLAT_CID: {  
+        if (OB_FAIL(data_table->get_rowkey_cid_tid(domain_id_table_id, INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL))) {
+          LOG_WARN("fail to get rowkey cid table id", K(ret), KPC(data_table));
+        }
+        break;
+      }
+      case ObDomainIDType::IVFSQ_CID: {
+        if (OB_FAIL(data_table->get_rowkey_cid_tid(domain_id_table_id, INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL))) {
+          LOG_WARN("fail to get rowkey cid table id", K(ret), KPC(data_table));
+        }
+        break;
+      }
+      case ObDomainIDType::IVFPQ_CID: {
+        if (OB_FAIL(data_table->get_rowkey_cid_tid(domain_id_table_id, INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL))) {
+          LOG_WARN("fail to get rowkey cid table id", K(ret), KPC(data_table));
         }
         break;
       }

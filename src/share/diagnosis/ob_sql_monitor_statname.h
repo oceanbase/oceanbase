@@ -72,6 +72,10 @@ SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_CG_ROW_COUNT, sql_monitor_statname::INT,
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_THREAD_POOL_COUNT, sql_monitor_statname::INT, "vector index task thread pool count", "vector index task thread pool count")
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TOTAL_COUNT, sql_monitor_statname::INT, "vector index task total count", "vector index task total count")
 SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_FINISH_COUNT, sql_monitor_statname::INT, "vector index task finish count", "vector index task finish count")
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TABLET_COUNT, sql_monitor_statname::INT, "vector index task tablet count", "vector index task tablet count")
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_KMEANS_INFO, sql_monitor_statname::INT, "vector index task kmeans info", "vector index task kmeans info")
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_IMBALANCE, sql_monitor_statname::INT, "vector index task imbalance factor", "vector index task imbalance factor")
+
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, sql_monitor_statname::CAPACITY, "total io bytes read from disk", "total io bytes read from storage")
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by ssstore", "total bytes processed by ssstore")

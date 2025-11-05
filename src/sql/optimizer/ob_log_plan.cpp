@@ -15876,6 +15876,7 @@ int ObLogPlan::prepare_spiv_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                                         table_schema,
                                                         INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL,
                                                         vec_col_id,
+                                                        true,
                                                         dim_docid_value_tid))) {
       LOG_WARN("fail to get spec vector dim docid value table id", K(ret), K(vec_col_id), K(table_schema));
     /* do not change push order, should be same as ObVectorAuxTableIdx */
@@ -15916,24 +15917,15 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     uint64_t pq_cid_pid_tid = OB_INVALID_ID;
     ObVecIndexInfo &vc_info = table_scan->get_vector_index_info();
     if (vc_info.is_ivf_flat_scan()) {
-      if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL,
-                                                          vec_col_id,
-                                                          center_id_tid))) {
-        LOG_WARN("fail to get center_id_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL,
-                                                          vec_col_id,
-                                                          cid_vec_tid))) {
-        LOG_WARN("fail to get cid_vec_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL,
-                                                          vec_col_id,
-                                                          rowkey_cid_tid))) {
-        LOG_WARN("fail to get rowkey_cid_tid", K(ret), K(vec_col_id), K(table_schema));
+      if (OB_FAIL(ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(schema_guard,
+                                                                             table_schema,
+                                                                             vec_col_id,
+                                                                             ObVectorIndexAlgorithmType::VIAT_IVF_FLAT,
+                                                                             center_id_tid,
+                                                                             cid_vec_tid,
+                                                                             rowkey_cid_tid,
+                                                                             sq_meta_tid))) {
+        LOG_WARN("fail to get ivf index tid", K(ret), K(vec_col_id), K(table_schema));
       } else if (center_id_tid == OB_INVALID_ID || cid_vec_tid == OB_INVALID_ID || rowkey_cid_tid == OB_INVALID_ID) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to init aux table id", K(center_id_tid), K(cid_vec_tid), K(rowkey_cid_tid), K(ret));
@@ -15946,30 +15938,15 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
         LOG_WARN("fail to push back aux table id", K(ret), K(rowkey_cid_tid), K(vc_info.aux_table_id_.count()));
       }
     } else if (vc_info.is_ivf_sq_scan()) {
-      if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFSQ8_CENTROID_LOCAL,
-                                                          vec_col_id,
-                                                          center_id_tid))) {
-        LOG_WARN("fail to get center_id_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL,
-                                                          vec_col_id,
-                                                          cid_vec_tid))) {
-        LOG_WARN("fail to get cid_vec_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL,
-                                                          vec_col_id,
-                                                          rowkey_cid_tid))) {
-        LOG_WARN("fail to get rowkey_cid_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFSQ8_META_LOCAL,
-                                                          vec_col_id,
-                                                          sq_meta_tid))) {
-        LOG_WARN("fail to get rowkey_cid_tid", K(ret), K(vec_col_id), K(table_schema));
+      if (OB_FAIL(ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(schema_guard,
+                                                                            table_schema,
+                                                                            vec_col_id,
+                                                                            ObVectorIndexAlgorithmType::VIAT_IVF_SQ8,
+                                                                            center_id_tid,
+                                                                            cid_vec_tid,
+                                                                            rowkey_cid_tid,
+                                                                            sq_meta_tid))) {
+        LOG_WARN("fail to get ivf index tid", K(ret), K(vec_col_id), K(table_schema));
       } else if (center_id_tid == OB_INVALID_ID || cid_vec_tid == OB_INVALID_ID 
               || rowkey_cid_tid == OB_INVALID_ID || sq_meta_tid == OB_INVALID_ID) {
         ret = OB_ERR_UNEXPECTED;
@@ -15985,30 +15962,15 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
         LOG_WARN("fail to push back aux table id", K(ret), K(rowkey_cid_tid), K(vc_info.aux_table_id_.count()));
       }
     } else {
-      if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL,
-                                                          vec_col_id,
-                                                          center_id_tid))) {
-        LOG_WARN("fail to get center_id_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL,
-                                                          vec_col_id,
-                                                          pq_id_tid))) {
-        LOG_WARN("fail to get pq_id_tid", K(ret), K(pq_id_tid), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL,
-                                                          vec_col_id,
-                                                          pq_code_tid))) {
-        LOG_WARN("fail to get pq_code_tid", K(ret), K(vec_col_id), K(table_schema));
-      } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard,
-                                                          table_schema,
-                                                          INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL,
-                                                          vec_col_id,
-                                                          pq_cid_pid_tid))) {
-        LOG_WARN("fail to get pq_cid_pid_tid", K(ret), K(pq_cid_pid_tid), K(table_schema));
+      if (OB_FAIL(ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(schema_guard,
+                                                                            table_schema,
+                                                                            vec_col_id,
+                                                                            ObVectorIndexAlgorithmType::VIAT_IVF_PQ,
+                                                                            center_id_tid,
+                                                                            pq_code_tid,
+                                                                            pq_cid_pid_tid,
+                                                                            pq_id_tid))) {
+      LOG_WARN("fail to get ivf index tid", K(ret), K(vec_col_id), K(table_schema));
       } else if (center_id_tid == OB_INVALID_ID || pq_id_tid == OB_INVALID_ID 
               || pq_code_tid == OB_INVALID_ID || pq_cid_pid_tid == OB_INVALID_ID) {
         ret = OB_ERR_UNEXPECTED;
@@ -16026,6 +15988,24 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
     }
     if (OB_SUCC(ret)) {
       table_scan->set_index_back(true);
+      // if vec query and rebuild vec index happened at the same time
+      // the tid maybe not the lastest, update to latest
+      if (vc_info.vec_index_post_filter() && table_scan->get_index_table_id() != center_id_tid) {
+        table_scan->set_index_table_id(center_id_tid);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (vc_info.is_vec_adaptive_iter_scan()) {
+      const ObTableSchema *vec_table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(get_optimizer_context().get_session_info()->get_effective_tenant_id(),
+                                                  center_id_tid, vec_table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(center_id_tid));
+      } else if (OB_ISNULL(vec_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null schema", K(ret), K(center_id_tid));
+      } else if (OB_FAIL(vec_table_schema->get_index_name(vc_info.vec_index_name_))) {
+        LOG_WARN("failed to get index name", K(ret), KPC(vec_table_schema));
+      }
     }
   }
   return ret;
@@ -16155,7 +16135,8 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
-  } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_ivf_pq_scan() || table_scan->is_hnsw_vec_scan()) {
+  } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_ivf_pq_scan() || table_scan->is_hnsw_vec_scan()
+            || ObVectorIndexUtil::is_enable_ivf_adaptive_scan(table_scan->is_ivf_vec_scan())) {
     if (OB_FAIL(try_push_topn_into_vector_index_scan(top, 
                                                     topn_expr, 
                                                     get_stmt()->get_limit_expr(),

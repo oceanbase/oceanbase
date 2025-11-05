@@ -649,7 +649,7 @@ int ObPluginVectorIndexHelper::get_vector_memory_limit_size(const uint64_t tenan
     LOG_WARN("get invalid tenant config", K(tenant_id));
   } else {
     int64_t total_memory = lib::get_tenant_memory_limit(tenant_id);
-    int64_t vector_limit = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config);
+    int64_t vector_limit = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config, tenant_id);
     memory_limit = total_memory * vector_limit / 100;
     LOG_TRACE("vector index memory limit debug", K(tenant_id), K(total_memory), K(vector_limit), K(memory_limit)); 
   }

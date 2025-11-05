@@ -108,11 +108,23 @@ private:
   int prepare_sq_meta_table();
   int prepare_centroid_table();
   int prepare_pq_centroid_table();
+
+  // for version < 4.3.5.4
   int prepare_aux_index_tables();
   int prepare_aux_ivfflat_index_tables(bool &state_finished);
   int prepare_aux_ivfsq8_index_tables(bool &state_finished);
   int prepare_aux_ivfpq_index_tables(bool &state_finished);
-
+  
+  int prepare_rowkey_cid_table();
+  int prepare_ivfflat_rowkey_cid_table(bool &state_finished);
+  int prepare_ivfsq8_rowkey_cid_table(bool &state_finished);
+  int prepare_ivfpq_rowkey_cid_table(bool &state_finished);
+  
+  int prepare_cid_vec_tables();
+  int prepare_ivfflat_cid_vec_tables(bool &state_finished);
+  int prepare_ivfsq8_cid_vec_tables(bool &state_finished);
+  int prepare_ivfpq_cid_vec_tables(bool &state_finished);
+  
   int check_ivfflat_aux_table_schema_exist(bool &is_all_exist);
   int check_ivfsq8_aux_table_schema_exist(bool &is_all_exist);
   int check_ivfpq_aux_table_schema_exist(bool &is_all_exist);

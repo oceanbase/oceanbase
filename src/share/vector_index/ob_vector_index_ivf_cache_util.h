@@ -23,7 +23,8 @@ class ObIvfCacheUtil
 {
 public:
   static int is_cache_writable(const ObLSID &ls_id, int64_t table_id, const ObTabletID &tablet_id,
-                               const ObVectorIndexParam &vec_param, int64_t dim, bool &is_writable);
+                               const ObVectorIndexParam &vec_param, int64_t dim, 
+                               IvfCacheType cache_type, bool &is_writable);
   static int scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &service,
                                            const ObTableID &table_id, const ObTabletID &tablet_id,
                                            ObIvfCentCache &cent_cache);

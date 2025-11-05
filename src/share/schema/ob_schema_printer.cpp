@@ -678,7 +678,7 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             // skip doc id for sparse vector index.
           } else if (!col->is_shadow_column()) {
             const ObColumnSchemaV2 *tmp_column = NULL;
-            if (index_schema->is_multivalue_index_aux() && 
+            if ((index_schema->is_multivalue_index_aux() || index_schema->is_vec_ivf_index())&& 
                 OB_NOT_NULL(tmp_column = table_schema.get_column_schema(col->get_column_id()))) {
               if (tmp_column->is_rowkey_column()) {
                 continue;

@@ -668,6 +668,7 @@ public:
 
   virtual ~ObIvfSliceStore() {}
   virtual void reset();
+  virtual void cancel() override;
   virtual int build_clusters(ObInsertMonitor* insert_monitor) = 0;
   virtual int is_empty(bool &empty) = 0;
   OB_INLINE int64_t get_context_id() { return context_id_; }
@@ -1191,18 +1192,15 @@ public:
       : scanned_row_cnt_(tmp_scan_row),
         inserted_row_cnt_(tmp_insert_row),
         inserted_cg_row_cnt_(cg_insert_row),
-        vec_index_task_thread_pool_cnt_(nullptr),
-        vec_index_task_total_cnt_(nullptr),
-        vec_index_task_finish_cnt_(nullptr){};
+        kmeans_monitor_()
+  {}
   ~ObInsertMonitor();
 
 public:
   int64_t &scanned_row_cnt_;
   int64_t &inserted_row_cnt_;
   int64_t &inserted_cg_row_cnt_;
-  int64_t *vec_index_task_thread_pool_cnt_;
-  int64_t *vec_index_task_total_cnt_;
-  int64_t *vec_index_task_finish_cnt_;
+  ObKmeansMonitor kmeans_monitor_;
 };
 
 class ObDirectLoadSliceWriter final

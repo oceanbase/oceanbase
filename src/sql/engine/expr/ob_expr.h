@@ -681,6 +681,12 @@ public:
            type_ == T_FUN_SYS_COSINE_DISTANCE;
   }
 
+  inline bool is_ivf_center_expr() const {
+    return type_ == T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS ||
+           type_ == T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR ||
+           type_ == T_FUN_SYS_VEC_IVF_CENTER_ID;
+  }
+
   // Evaluate all parameters, assign the first sizeof...(args) parameters to %args.
   //
   // e.g.:

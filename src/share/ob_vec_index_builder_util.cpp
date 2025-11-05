@@ -920,10 +920,19 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
           LOG_WARN("failed to add column", K(ret), KPC(rowkey_column), K(row_desc));
         }
       }
+      bool need_set_extra_info = false;
+      uint64_t tenant_version = 0;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_version))) {
+        LOG_WARN("failed to get data version", K(ret));
+      } else if (tenant_version >= DATA_VERSION_4_3_5_4 && (is_vec_ivfflat_centroid_index(arg.index_type_) ||
+      is_vec_ivfsq8_centroid_index(arg.index_type_) || is_vec_ivfpq_centroid_index(arg.index_type_))) {
+        need_set_extra_info = true;
+      }
       // if is pq center_id table, add rowkey column
       ObVectorIndexParam index_param; // not use
       if (OB_FAIL(ret)) {
-      } else if (share::schema::is_vec_ivfpq_pq_centroid_index(arg.index_type_) &&
+      } else if ((is_vec_ivfpq_pq_centroid_index(arg.index_type_) || need_set_extra_info) &&
                  OB_FAIL(set_extra_info_columns(data_schema, row_desc, true, index_param, index_schema))) {
         LOG_WARN("fail to set extra info columns", K(ret));
       }

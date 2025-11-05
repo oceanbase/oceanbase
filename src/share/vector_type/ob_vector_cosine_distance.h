@@ -388,132 +388,113 @@ inline static int cosine_similarity(const float *a, const float *b, const int64_
 )
 
 #if defined(__aarch64__)
-inline static int cosine_similarity_neon(const float *a, const float *b, const int64_t len, double &similarity) {
+
+inline static float cosine_inner_product_neon(const float *x, const float *y, const int64_t len) {
+  float32x4_t sum0 = vdupq_n_f32(0.0f);
+  float32x4_t sum1 = vdupq_n_f32(0.0f);
+  float32x4_t sum2 = vdupq_n_f32(0.0f);
+  float32x4_t sum3 = vdupq_n_f32(0.0f);
+  
+  int64_t i = 0;
+  
+  for (; i + 15 < len; i += 16) {
+    float32x4x4_t a = vld1q_f32_x4(x + i);
+    float32x4x4_t b = vld1q_f32_x4(y + i);
+    
+    sum0 = vfmaq_f32(sum0, a.val[0], b.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], b.val[1]);
+    sum2 = vfmaq_f32(sum2, a.val[2], b.val[2]);
+    sum3 = vfmaq_f32(sum3, a.val[3], b.val[3]);
+  }
+  
+  if (i + 7 < len) {
+    float32x4x2_t a = vld1q_f32_x2(x + i);
+    float32x4x2_t b = vld1q_f32_x2(y + i);
+    
+    sum0 = vfmaq_f32(sum0, a.val[0], b.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], b.val[1]);
+    i += 8;
+  }
+  
+  if (i + 3 < len) {
+    float32x4_t a = vld1q_f32(x + i);
+    float32x4_t b = vld1q_f32(y + i);
+    sum0 = vfmaq_f32(sum0, a, b);
+    i += 4;
+  }
+  
+  sum0 = vaddq_f32(sum0, sum1);
+  sum2 = vaddq_f32(sum2, sum3);
+  sum0 = vaddq_f32(sum0, sum2);
+  
+  float result = vaddvq_f32(sum0);
+  for (; i < len; i++) {
+    result += x[i] * y[i];
+  }
+  
+  return result;
+}
+
+inline static float cosine_norm_square_neon(const float *x, const int64_t len) {
+  float32x4_t sum0 = vdupq_n_f32(0.0f);
+  float32x4_t sum1 = vdupq_n_f32(0.0f);
+  float32x4_t sum2 = vdupq_n_f32(0.0f);
+  float32x4_t sum3 = vdupq_n_f32(0.0f);
+  
+  int64_t i = 0;
+  
+  for (; i + 15 < len; i += 16) {
+    float32x4x4_t a = vld1q_f32_x4(x + i);
+    
+    sum0 = vfmaq_f32(sum0, a.val[0], a.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], a.val[1]);
+    sum2 = vfmaq_f32(sum2, a.val[2], a.val[2]);
+    sum3 = vfmaq_f32(sum3, a.val[3], a.val[3]);
+  }
+  
+  if (i + 7 < len) {
+    float32x4x2_t a = vld1q_f32_x2(x + i);
+    
+    sum0 = vfmaq_f32(sum0, a.val[0], a.val[0]);
+    sum1 = vfmaq_f32(sum1, a.val[1], a.val[1]);
+    i += 8;
+  }
+  
+  if (i + 3 < len) {
+    float32x4_t a = vld1q_f32(x + i);
+    sum0 = vfmaq_f32(sum0, a, a);
+    i += 4;
+  }
+  
+  sum0 = vaddq_f32(sum0, sum1);
+  sum2 = vaddq_f32(sum2, sum3);
+  sum0 = vaddq_f32(sum0, sum2);
+  
+  float result = vaddvq_f32(sum0);
+  for (; i < len; i++) {
+    result += x[i] * x[i];
+  }
+  
+  return result;
+}
+
+inline static int cosine_similarity_neon(const float *a, const float *b, const int64_t len, double &similarity)
+{
   int ret = OB_SUCCESS;
-
-  float32x4_t sum_ip = vdupq_n_f32(0.0f);
-  float32x4_t sum_a = vdupq_n_f32(0.0f);
-  float32x4_t sum_b = vdupq_n_f32(0.0f);
-
-  int64_t dim = len;
-  int64_t d = len;
-
-  while (d >= 16) {
-    float32x4x4_t va = vld1q_f32_x4(a + dim - d);
-    float32x4x4_t vb = vld1q_f32_x4(b + dim - d);
-
-    float32x4x4_t vip;
-    vip.val[0] = vmulq_f32(va.val[0], vb.val[0]);
-    vip.val[1] = vmulq_f32(va.val[1], vb.val[1]);
-    vip.val[2] = vmulq_f32(va.val[2], vb.val[2]);
-    vip.val[3] = vmulq_f32(va.val[3], vb.val[3]);
-
-    float32x4x4_t va2;
-    va2.val[0] = vmulq_f32(va.val[0], va.val[0]);
-    va2.val[1] = vmulq_f32(va.val[1], va.val[1]);
-    va2.val[2] = vmulq_f32(va.val[2], va.val[2]);
-    va2.val[3] = vmulq_f32(va.val[3], va.val[3]);
-
-    float32x4x4_t vb2;
-    vb2.val[0] = vmulq_f32(vb.val[0], vb.val[0]);
-    vb2.val[1] = vmulq_f32(vb.val[1], vb.val[1]);
-    vb2.val[2] = vmulq_f32(vb.val[2], vb.val[2]);
-    vb2.val[3] = vmulq_f32(vb.val[3], vb.val[3]);
-
-    // 折叠4矢量
-    vip.val[0] = vaddq_f32(vip.val[0], vip.val[1]);
-    vip.val[2] = vaddq_f32(vip.val[2], vip.val[3]);
-    vip.val[0] = vaddq_f32(vip.val[0], vip.val[2]);
-
-    va2.val[0] = vaddq_f32(va2.val[0], va2.val[1]);
-    va2.val[2] = vaddq_f32(va2.val[2], va2.val[3]);
-    va2.val[0] = vaddq_f32(va2.val[0], va2.val[2]);
-
-    vb2.val[0] = vaddq_f32(vb2.val[0], vb2.val[1]);
-    vb2.val[2] = vaddq_f32(vb2.val[2], vb2.val[3]);
-    vb2.val[0] = vaddq_f32(vb2.val[0], vb2.val[2]);
-
-    sum_ip = vaddq_f32(sum_ip, vip.val[0]);
-    sum_a = vaddq_f32(sum_a, va2.val[0]);
-    sum_b = vaddq_f32(sum_b, vb2.val[0]);
-
-    d -= 16;
-  }
-
-  if (d >= 8) {
-    float32x4x2_t va = vld1q_f32_x2(a + dim - d);
-    float32x4x2_t vb = vld1q_f32_x2(b + dim - d);
-
-    float32x4x2_t vip;
-    vip.val[0] = vmulq_f32(va.val[0], vb.val[0]);
-    vip.val[1] = vmulq_f32(va.val[1], vb.val[1]);
-    vip.val[0] = vaddq_f32(vip.val[0], vip.val[1]);
-
-    float32x4x2_t va2;
-    va2.val[0] = vmulq_f32(va.val[0], va.val[0]);
-    va2.val[1] = vmulq_f32(va.val[1], va.val[1]);
-    va2.val[0] = vaddq_f32(va2.val[0], va2.val[1]);
-
-    float32x4x2_t vb2;
-    vb2.val[0] = vmulq_f32(vb.val[0], vb.val[0]);
-    vb2.val[1] = vmulq_f32(vb.val[1], vb.val[1]);
-    vb2.val[0] = vaddq_f32(vb2.val[0], vb2.val[1]);
-
-    sum_ip = vaddq_f32(sum_ip, vip.val[0]);
-    sum_a = vaddq_f32(sum_a, va2.val[0]);
-    sum_b = vaddq_f32(sum_b, vb2.val[0]);
-
-    d -= 8;
-  }
-
-  if (d >= 4) {
-    float32x4_t va = vld1q_f32(a + dim - d);
-    float32x4_t vb = vld1q_f32(b + dim - d);
-
-    float32x4_t vip = vmulq_f32(va, vb);
-    float32x4_t va2 = vmulq_f32(va, va);
-    float32x4_t vb2 = vmulq_f32(vb, vb);
-
-    sum_ip = vaddq_f32(sum_ip, vip);
-    sum_a = vaddq_f32(sum_a, va2);
-    sum_b = vaddq_f32(sum_b, vb2);
-
-    d -= 4;
-  }
-
-  float32x4_t res_a = vdupq_n_f32(0.0f);
-  float32x4_t res_b = vdupq_n_f32(0.0f);
-  if (d >= 3) {
-    res_a = vld1q_lane_f32(a + dim - d, res_a, 2);
-    res_b = vld1q_lane_f32(b + dim - d, res_b, 2);
-    d -= 1;
-  }
-  if (d >= 2) {
-    res_a = vld1q_lane_f32(a + dim - d, res_a, 1);
-    res_b = vld1q_lane_f32(b + dim - d, res_b, 1);
-    d -= 1;
-  }
-  if (d >= 1) {
-    res_a = vld1q_lane_f32(a + dim - d, res_a, 0);
-    res_b = vld1q_lane_f32(b + dim - d, res_b, 0);
-    d -= 1;
-  }
-
-  sum_ip = vaddq_f32(sum_ip, vmulq_f32(res_a, res_b));
-  sum_a = vaddq_f32(sum_a, vmulq_f32(res_a, res_a));
-  sum_b = vaddq_f32(sum_b, vmulq_f32(res_b, res_b));
-
-  double ip = vaddvq_f32(sum_ip);
-  double abs_dist_a = vaddvq_f32(sum_a);
-  double abs_dist_b = vaddvq_f32(sum_b);
-
-  if (0 == abs_dist_a || 0 == abs_dist_b) {
+  
+  double ip = cosine_inner_product_neon(a, b, len);
+  double norm_a_sq = cosine_norm_square_neon(a, len);
+  double norm_b_sq = cosine_norm_square_neon(b, len);
+  
+  if (0 == norm_a_sq || 0 == norm_b_sq) {
     ret = OB_ERR_NULL_VALUE;
   } else {
-    similarity = ip / (sqrt(abs_dist_a * abs_dist_b));
+    similarity = ip / (sqrt(norm_a_sq) * sqrt(norm_b_sq));
   }
+  
   return ret;
 }
+
 #endif
 
 } // common

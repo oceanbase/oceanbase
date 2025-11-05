@@ -630,6 +630,19 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load_for_sn(
     }
   }
 
+  
+  // clean ivf build helper(if it is an IVF vector index task)
+  ObIvfHelperKey key(tablet_id, context_id);
+  bool fully_cleared = false;
+  if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id, key, &fully_cleared))) {
+    if (tmp_ret != OB_HASH_NOT_EXIST) {
+      LOG_WARN("failed to cleanup ivf build helper, potential memory leak", K(tmp_ret), K(ls_id), K(tablet_id), K(context_id));
+    }
+  } else if (!fully_cleared) {
+    LOG_INFO("ivf build helper not fully cleared after single cleanup", K(ret), K(ls_id), K(tablet_id), K(context_id));
+  }
+
+
   ObBucketHashWLockGuard guard(bucket_lock_, exec_id.hash());
   if (OB_TMP_FAIL(tablet_exec_context_map_.erase_refactored(exec_id))) {
     LOG_WARN("erase refactored failed", K(ret), K(tmp_ret), K(exec_id));
@@ -1193,6 +1206,25 @@ bool ObTabletDirectLoadMgr::is_valid()
       && is_valid_direct_load(direct_load_type_);
 }
 
+int ObTabletDirectLoadMgr::is_ivf_vector_index(bool &is_ivf) const
+{
+  int ret = OB_SUCCESS;
+  is_ivf = false;
+  const ObString &param_str = schema_item_.vec_idx_param_;
+  if (schema_item_.vec_dim_ > 0 || !param_str.empty()) {
+    ObVectorIndexParam param;
+    if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+          param_str, ObVectorIndexType::VIT_IVF_INDEX, param, false))) {
+      LOG_WARN("failed to parse vector index params", K(ret), K(param_str));
+    } else {
+      is_ivf = (param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
+                param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
+                param.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ);
+    }
+  }
+  return ret;
+}
+
 int ObTabletDirectLoadMgr::update(
     ObTabletDirectLoadMgr *lob_tablet_mgr,
     const ObTabletDirectLoadInsertParam &build_param)
@@ -1398,6 +1430,7 @@ int ObTabletDirectLoadMgr::prepare_schema_item_for_vec_idx_data(
                                                           *data_table_schema,
                                                           index_type,
                                                           col_ids.at(0),
+                                                          false,
                                                           with_param_table_tid))) {
         LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(col_ids), KPC(data_table_schema));
       }

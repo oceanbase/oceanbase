@@ -242,15 +242,9 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       LOG_WARN("failed to get tablet slice count", K(ret), K(ddl_task_id), K(MTL_ID()));
     } 
     if (OB_SUCC(ret) && is_vec_data_complement_) {
-      op_monitor_info_.otherstat_8_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_THREAD_POOL_COUNT;
-      op_monitor_info_.otherstat_8_value_ = 0;
-      op_monitor_info_.otherstat_9_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_TOTAL_COUNT;
-      op_monitor_info_.otherstat_9_value_ = 0;
-      op_monitor_info_.otherstat_10_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_FINISH_COUNT;
-      op_monitor_info_.otherstat_10_value_ = 0;
-      insert_monitor.vec_index_task_thread_pool_cnt_ = &op_monitor_info_.otherstat_8_value_;
-      insert_monitor.vec_index_task_total_cnt_ = &op_monitor_info_.otherstat_9_value_;
-      insert_monitor.vec_index_task_finish_cnt_ = &op_monitor_info_.otherstat_10_value_;
+      if (OB_FAIL(setup_vector_index_monitor(table_schema, insert_monitor))) {
+        LOG_WARN("failed to setup vector index monitor", K(ret));
+      }
     }
     
     for (notify_idx = 0; OB_SUCC(ret) && notify_idx < participants_.count();) {
@@ -658,5 +652,41 @@ int ObPxMultiPartSSTableInsertOp::update_sqc_global_autoinc_value()
     }
   }
 
+  return ret;
+}
+
+int ObPxMultiPartSSTableInsertOp::setup_vector_index_monitor(const share::schema::ObTableSchema *table_schema, 
+                                                             storage::ObInsertMonitor &insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table schema is null", K(ret));
+  } else {
+    op_monitor_info_.otherstat_7_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_TABLET_COUNT;
+    op_monitor_info_.otherstat_7_value_ = 0;
+    insert_monitor.kmeans_monitor_.finish_tablet_cnt_ = &op_monitor_info_.otherstat_7_value_;
+    
+    if (table_schema->is_vec_domain_index()) {
+      op_monitor_info_.otherstat_8_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_KMEANS_INFO;
+      op_monitor_info_.otherstat_8_value_ = 0;
+      op_monitor_info_.otherstat_9_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_IMBALANCE;
+      op_monitor_info_.otherstat_9_value_ = 0;
+      insert_monitor.kmeans_monitor_.kmeans_iter_info_value_ = &op_monitor_info_.otherstat_8_value_;
+      insert_monitor.kmeans_monitor_.imbalance_factor_int_ = &op_monitor_info_.otherstat_9_value_;
+    } else if (table_schema->is_vec_ivfpq_pq_centroid_index()) {
+      op_monitor_info_.otherstat_8_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_THREAD_POOL_COUNT;
+      op_monitor_info_.otherstat_8_value_ = 0;
+      op_monitor_info_.otherstat_9_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_TOTAL_COUNT;
+      op_monitor_info_.otherstat_9_value_ = 0;
+      op_monitor_info_.otherstat_10_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_FINISH_COUNT;
+      op_monitor_info_.otherstat_10_value_ = 0;
+      insert_monitor.kmeans_monitor_.vec_index_task_thread_pool_cnt_ = &op_monitor_info_.otherstat_8_value_;
+      insert_monitor.kmeans_monitor_.vec_index_task_total_cnt_ = &op_monitor_info_.otherstat_9_value_;
+      insert_monitor.kmeans_monitor_.vec_index_task_finish_cnt_ = &op_monitor_info_.otherstat_10_value_;
+    }
+  }
+  
   return ret;
 }

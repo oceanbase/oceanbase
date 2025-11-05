@@ -3339,6 +3339,9 @@ int ObTableScanOp::add_ddl_column_checksum_batch(const int64_t row_count)
       if (OB_ISNULL(e)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, expr is nullptr", K(ret));
+      } else if (e->is_ivf_center_expr()) {
+        // ivf center cols cannot do checksum and cost much on eval
+        // so we skip ddl checksum for ivf center exprs
       } else if (OB_FAIL(e->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
         LOG_WARN("evaluate expression failed", K(ret));
       } else {
