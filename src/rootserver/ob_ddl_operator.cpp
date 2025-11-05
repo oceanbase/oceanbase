@@ -9019,30 +9019,40 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
       }
     }
     if (is_replace) {
-      if (OB_SUCC(ret) && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+      if (OB_SUCC(ret)) {
+        const ObPackageInfo *del_package_info = NULL;
         // when recreate package header, need clear package body cache if exist package body
-        if (PACKAGE_TYPE == old_package_info->get_type()) {
-          const ObPackageInfo *del_package_info = NULL;
+        if (ObPackageType::PACKAGE_TYPE == old_package_info->get_type()) {
           if (OB_FAIL(schema_guard.get_package_info(tenant_id,
                                                     old_package_info->get_database_id(),
                                                     old_package_info->get_package_name(),
-                                                    PACKAGE_BODY_TYPE,
+                                                    ObPackageType::PACKAGE_BODY_TYPE,
                                                     old_package_info->get_compatibility_mode(),
                                                     del_package_info))) {
             LOG_WARN("get package body info failed", K(ret));
-          } else if (OB_NOT_NULL(del_package_info)) {
+          } else if (OB_NOT_NULL(del_package_info) && del_package_info->is_invoker_right() != new_package_info.is_invoker_right()) { // if spec and body invoker right is different, need to replace package body
+            ObPackageInfo package_body_info;
+            int64_t new_schema_version = OB_INVALID_VERSION;
+            OZ (package_body_info.assign(*del_package_info));
+            OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
+            OX (package_body_info.set_schema_version(new_schema_version));
+            OX (package_body_info.set_invoker_right(new_package_info.is_invoker_right()));
+            OZ (schema_service->get_routine_sql_service().create_package(package_body_info, &trans, true, ddl_stmt_str));
+          }
+        }
+
+        if (OB_SUCC(ret) && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
+          if (OB_NOT_NULL(del_package_info)) {
             OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
                                                                   tenant_id,
                                                                   del_package_info->get_package_id(),
                                                                   del_package_info->get_database_id()));
           }
-        } else {
-          // do nothing
+          OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                                tenant_id,
+                                                                old_package_info->get_package_id(),
+                                                                old_package_info->get_database_id()));
         }
-        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
-                                                              tenant_id,
-                                                              old_package_info->get_package_id(),
-                                                              old_package_info->get_database_id()));
       }
       OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                      old_package_info->get_package_id(),
