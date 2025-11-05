@@ -318,7 +318,8 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_inc_major_merge_for_sn(
 int ObDDLMergeScheduler::check_ddl_kv_dump_delay(ObDDLKV &ddl_kv)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ddl_kv.is_freezed())) {
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config->_enable_inc_major_direct_load || !ddl_kv.is_freezed())) {
     // do nothing
   } else {
     const SCN &freeze_scn = ddl_kv.get_freeze_scn();
