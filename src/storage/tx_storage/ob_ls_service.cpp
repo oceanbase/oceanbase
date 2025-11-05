@@ -799,9 +799,9 @@ int ObLSService::gc_ls_after_replay_slog()
               ob_usleep(SLEEP_TS);
             }
           } while (tmp_ret != OB_SUCCESS);
-          remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
+          remove_ls_(ls, true/*remove_from_disk*/);
         } else if (ls_status.is_zombie_state()) {
-          remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);
+          remove_ls_(ls, true/*remove_from_disk*/);
         }
       }
     }
@@ -1141,7 +1141,6 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
     const ObLSID &ls_id = ls->get_ls_id();
     static const int64_t SLEEP_TS = 100_ms;
     ObLSLockGuard lock_ls(ls);
-    const bool write_slog = remove_from_disk;
     if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
                                                          "LSSafeDestroy"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1149,14 +1148,14 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
     } else if (OB_BREAK_FAIL(ret)) {
       LOG_WARN("break fail for malloc", K(ret));
-    } else if (remove_from_disk && OB_BREAK_FAIL(ls->set_remove_state(write_slog))) {
+    } else if (remove_from_disk && OB_BREAK_FAIL(ls->set_remove_state(remove_from_disk))) {
       LOG_WARN("ls set remove state failed", KR(ret), K(ls_id));
     } else if (OB_BREAK_FAIL(task->init(MTL_ID(),
                                         handle,
                                         this))) {
       LOG_WARN("init safe destroy task failed", K(ret));
     } else {
-      remove_ls_(ls, remove_from_disk, write_slog);
+      remove_ls_(ls, remove_from_disk);
       // try until success.
       while (OB_BREAK_FAIL(gc_service->add_safe_destroy_task(*task))) {
         if (REACH_TIME_INTERVAL(1_min)) { // every minute
@@ -1173,7 +1172,7 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
   return ret;
 }
 
-void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog)
+void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls->get_ls_id();
@@ -1204,7 +1203,7 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
     }
     if (success_step < 2 && OB_SUCC(ret)) {
       // todo zk250686_ copy tablet_id_set to tablet_free_pending_array
-      if(write_slog && OB_FAIL(TENANT_STORAGE_META_SERVICE.delete_ls(ls_id, ls->get_ls_epoch()))) {
+      if(remove_from_disk && OB_FAIL(TENANT_STORAGE_META_SERVICE.delete_ls(ls_id, ls->get_ls_epoch()))) {
         LOG_WARN("fail to write remove ls slog", K(ret));
       } else {
         success_step = 2;

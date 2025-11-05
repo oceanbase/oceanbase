@@ -1675,8 +1675,10 @@ int ObTenantCheckpointSlogHandler::update_tenant_ls_item(
       }
     }
     if (OB_UNLIKELY(i == tenant_super_block.ls_cnt_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls not exist", K(ret), K(ls_id), K(ls_epoch), K(status));
+      if (ObLSItemStatus::DELETED != status) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls not exist", K(ret), K(ls_id), K(ls_epoch), K(status));
+      }
     } else {
       const ObLSItem old_item = tenant_super_block.ls_item_arr_[i];
       ObLSItem &new_item = tenant_super_block.ls_item_arr_[i];
