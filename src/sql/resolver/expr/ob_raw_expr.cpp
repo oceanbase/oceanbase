@@ -4881,10 +4881,24 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     if (T_FUN_SYS_AUTOINC_NEXTVAL == get_expr_type() &&
         OB_FAIL(get_autoinc_nextval_name(buf, buf_len, pos))) {
       LOG_WARN("fail to get_autoinc_nextval_name", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%.*s", get_func_name().length(), get_func_name().ptr()))) {
-      LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else {
-      if (is_valid_id(get_dblink_id())) {
+      if (T_FUN_COLUMN_CONV == get_expr_type()) {
+        if ((EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type)
+            && (get_cast_mode() & CM_FAST_COLUMN_CONV)) {
+          // only use in direct load
+          if (OB_FAIL(BUF_PRINTF("fast_"))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF("%.*s", get_func_name().length(), get_func_name().ptr()))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (is_valid_id(get_dblink_id())) {
         if (get_dblink_name().empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dblink name is empty", K(ret), KPC(this));

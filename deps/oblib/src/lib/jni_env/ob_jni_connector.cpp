@@ -51,10 +51,13 @@ int ObJniConnector::java_env_init() {
     LOG_WARN("java env is not ready for scanner", K(ret));
   } else if (OB_FAIL(java_env.check_version_valid())) {
     if (OB_FAIL(ObJniConnector::is_valid_loaded_jars_())) {
+      if (OB_JNI_ENV_SETUP_ERROR != ret) {
+        java_env.set_version_valid(ObJavaEnv::VersionValid::NOT_VALID);
+      }
       LOG_WARN("failed to check valid loaded jars", K(ret));
-      java_env.set_version_valid(false);
     } else {
-      java_env.set_version_valid(true);
+      // fast path for not check version valid again
+      java_env.set_version_valid(ObJavaEnv::VersionValid::VALID);
     }
   }
   return ret;
@@ -136,7 +139,7 @@ int ObJniConnector::is_valid_loaded_jars_() {
     if (OB_LIKELY(JAR_VERSION_102 <= real_jar_version)) {
       is_valid = true;
     } else {
-      LOG_WARN("current major jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
+      LOG_WARN("current major jar version is not 1.0.2", K(ret), K(real_jar_version), K(JAR_VERSION_102));
     }
   } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_4_0_0 || cur_version >= MOCK_CLUSTER_VERSION_4_3_5_3)) {
     if (OB_LIKELY(JAR_VERSION_101 <= real_jar_version && real_jar_version < JAR_VERSION_102)) {
@@ -171,10 +174,14 @@ int ObJniConnector::get_jni_env(JNIEnv *&env) {
     LOG_WARN("failed to init env variables", K(ret));
   } else {
     JVMFunctionHelper &helper = JVMFunctionHelper::getInstance();
-    if (!helper.is_inited()) {
+    if (OB_FAIL(helper.init_result())) {
       // Means helper is not ready.
-      ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("failed to get jni env", K(ret));
+      LOG_ERROR("failed to init jni env", K(ret), K(helper.get_error_msg()), K(ObJavaEnv::getInstance().jh_), K(ObJavaEnv::getInstance().ld_));
+      if (helper.get_error_msg() != nullptr) {
+        LOG_USER_ERROR(OB_JNI_ENV_SETUP_ERROR, STRLEN(helper.get_error_msg()), helper.get_error_msg());
+      } else {
+        LOG_USER_ERROR(OB_JNI_ENV_SETUP_ERROR, "failed to init jni env please check JAVA_HOME and JAVA_OPTS and LD_LIBRARY_PATH");
+      }
     } else if (OB_FAIL(helper.get_env(env))) {
       LOG_WARN("failed to get jni env from helper", K(ret));
     } else if (nullptr == env) {

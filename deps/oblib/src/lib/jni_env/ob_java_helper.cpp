@@ -76,17 +76,26 @@ static JNINativeMethod java_native_methods[] = {
 // ------------------------- start of JVMFunctionHelper -------------------------
 JVMFunctionHelper &JVMFunctionHelper::getInstance() {
   static JVMFunctionHelper helper;
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(helper.init_result_ == OB_SUCCESS)) {
+    // do nothing
+    // if we do not init success we will do symbol link again
+  } else if (OB_UNLIKELY(OB_FAIL(helper.do_init_()))) {
+    LOG_WARN("failed to init jni env", K(ret));
+  } else {
+    helper.init_result_ = ret;
+  }
   return helper;
 }
 
-JVMFunctionHelper::JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK) {
+JVMFunctionHelper::JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK), error_msg_(nullptr) {
     int ret = OB_SUCCESS;
-    if (is_inited_) {
+    if (init_result_ != OB_NOT_INIT) {
       // do nothing
     } else if (OB_FAIL(do_init_())) {
-      is_inited_ = false;
+      init_result_ = ret;
     } else {
-      is_inited_ = true;
+      init_result_ = OB_SUCCESS;
     }
 }
 
@@ -289,9 +298,7 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to find path of lib", K(ret), K(found), K(lib_paths.string()), K(lib_name));
   } else if (!found) {
-    ret = OB_JNI_ENV_ERROR;
-    const char *user_error_str = "cant not find lib path";
-    int user_error_len = STRLEN(user_error_str);
+    ret = OB_JNI_ENV_SETUP_ERROR;
     LOG_WARN("failed to find path", K(ret), K(lib_paths.string()), K(lib_name));
   } else {
     LOG_INFO("succ to find path", K(ret), K(lib_paths.string()), K(path), K(lib_name));
@@ -333,21 +340,19 @@ int JVMFunctionHelper::open_java_lib(ObJavaEnvContext &java_env_ctx)
     LOG_WARN("failed to allocate jni env for jvm lib", K(ret));
   } else if (OB_FAIL(get_lib_path(jvm_lib_buf, load_lib_size, jvm_lib_name))) {
     // if return OB_SUCCESS, this func will obtain the C-style jvm lib path string.
-    LOG_WARN("failed to get jvm path", K(ret));
+    LOG_ERROR("failed to get jvm path", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(jvm_lib_handle_ = LIB_OPEN(jvm_lib_buf))) {
-    ret = OB_JNI_ENV_ERROR;
+    ret = OB_JNI_ENV_SETUP_ERROR;
     const char * dlerror_str = dlerror();
     int dlerror_str_len = STRLEN(dlerror_str);
-    // LOG_USER_ERROR(OB_JNI_ENV_ERROR, dlerror_str_len, dlerror_str);
     LOG_WARN("failed to open jvm lib from path", K(ret), K(ObString(jvm_lib_buf)), K(dlerror_str));
   } else {
     LOG_INFO("use jvm lib from path", K(ret), KP(jvm_lib_handle_), K(ObString(jvm_lib_buf)));
 
     if (OB_FAIL(ret) && OB_NOT_NULL(jvm_lib_handle_)) {
-      if (OB_JNI_ENV_ERROR == ret) {
-        // LOG_USER_ERROR(OB_JNI_ENV_ERROR, user_error_len, hdfs_lib_buf);
+      if (OB_JNI_ENV_SETUP_ERROR == ret) {
         LOG_WARN("failed to open jvm lib handle", K(ret));
       }
       LIB_CLOSE(jvm_lib_handle_);
@@ -371,7 +376,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
 
   int64_t load_lib_size = 4096; // 4k is enough for library path on `ext4` file system.
   if (OB_ISNULL(jvm_lib_handle_)) {
-    ret = OB_JNI_ENV_ERROR;
+    ret = OB_JNI_ENV_SETUP_ERROR;
     LOG_WARN("invalid previous jvm lib handle which should be not null", K(ret));
   } else if (OB_ISNULL(hdfs_lib_buf = static_cast<char *>(ob_alloc_hdfs(&hdfs_env_ctx, load_lib_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -380,10 +385,9 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     // if return OB_SUCCESS, this func will obtain the C-style hdfs lib path string.
     LOG_WARN("failed to get hdfs path", K(ret));
   } else if (OB_ISNULL(hdfs_lib_handle_ = LIB_OPEN(hdfs_lib_buf))) {
-    ret = OB_JNI_ENV_ERROR;
+    ret = OB_JNI_ENV_SETUP_ERROR;
     const char * dlerror_str = dlerror();
     int dlerror_str_len = STRLEN(dlerror_str);
-    // LOG_USER_ERROR(OB_JNI_ENV_ERROR, dlerror_str_len, dlerror_str);
     LOG_WARN("failed to open hdfs lib from path", K(ret), K(ObString(hdfs_lib_buf)), K(dlerror_str));
   } else {
     LOG_TRACE("succ to open jvm and hdfs lib from patch", KP(hdfs_lib_handle_), K(ObString(hdfs_lib_buf)), K(ObString(hdfs_lib_buf)));
@@ -441,8 +445,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(hdfs_lib_handle_)) {
-      if (OB_JNI_ENV_ERROR == ret) {
-        // LOG_USER_ERROR(OB_JNI_ENV_ERROR, user_error_len, hdfs_lib_buf);
+      if (OB_JNI_ENV_SETUP_ERROR == ret) {
         LOG_WARN("failed to open hdfs lib handle", K(ret));
       }
       getJNIEnv = nullptr;
@@ -500,37 +503,27 @@ int JVMFunctionHelper::load_lib(ObJavaEnvContext &java_env_ctx,
     // do nothing
     LOG_TRACE("already success to open java and hdfs lib", K(ret));
   } else if (OB_ISNULL(jvm_lib_handle_) && OB_FAIL(open_java_lib(java_env_ctx))) {
+    ret = OB_JNI_ENV_SETUP_ERROR;
+    error_msg_ = "failed to open java lib, please check JAVA_HOME and LD_LIBRARY_PATH";
     LOG_WARN("failed to open java lib", K(ret));
   } else if (OB_ISNULL(hdfs_lib_handle_) && OB_FAIL(open_hdfs_lib(hdfs_env_ctx))) {
+    ret = OB_JNI_ENV_SETUP_ERROR;
+    error_msg_ = "failed to open hdfs lib, please check LD_LIBRARY_PATH";
     LOG_WARN("failed to open hdfs lib", K(ret));
   } else {
-    LOG_TRACE("succ to open java and hdfs lib", K(ret));
-    LOG_TRACE("start to load most important method: getJNIEnv", K(ret));
-    LIB_SYMBOL(hdfs_lib_handle_, "getJNIEnv", getJNIEnv, GETJNIENV);
-
-    if (OB_SUCC(ret)) {
-      LOG_TRACE("success to load most important method: getJNIEnv", K(ret));
-      java_env_ctx.jvm_loaded_ = true;
-      hdfs_env_ctx.hdfs_loaded_ = true;
-    }
+    LOG_TRACE("success to load most important method: getJNIEnv", K(ret));
+    java_env_ctx.jvm_loaded_ = true;
+    hdfs_env_ctx.hdfs_loaded_ = true;
   }
   return ret;
 }
 
-int JVMFunctionHelper::check_valid_env() {
-  int ret = OB_SUCCESS;
-  // TODO(bitao): add a more efficient method to check jni env whether can be used.
-  if (OB_FAIL(detect_java_runtime())) {
-    LOG_WARN("failed to detect java runtime env", K(ret));
-  }
-  return ret;
-}
 
 int JVMFunctionHelper::init_jni_env() {
   int ret = OB_SUCCESS;
   // init_jni_env can be called by multiple thread which it needs to add lock.
   LockGuard guard(lock_);
-  if (OB_FAIL(check_valid_env())) {
+  if (OB_FAIL(detect_java_runtime())) {
     LOG_WARN("jni env is invalid", K(ret));
   } else if (OB_FAIL(load_lib(java_env_ctx_, hdfs_env_ctx_))) {
     LOG_WARN("failed to load dynamic library", K(ret));
@@ -538,14 +531,11 @@ int JVMFunctionHelper::init_jni_env() {
     jni_env_ = getJNIEnv();
     if (nullptr == jni_env_) {
       ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("could not get a JNIEnv", K(ret), K(lbt()));
+      if (nullptr == error_msg_) {
+        error_msg_ = "could not get a JNIEnv please check jvm opts";
+      }
+      LOG_WARN("could not get a JNIEnv please check jvm opts", K(ret), K(lbt()));
     }
-  } else {
-    const char *jh = std::getenv("JAVA_HOME");
-    const char *jo = std::getenv("JAVA_OPTS");
-    const char *cp = std::getenv("CLASSPATH");
-    const char *ch = std::getenv("CONNECTOR_PATH");
-    LOG_TRACE("get env variables in init_jni_env", K(ret), K(jh), K(jo), K(cp), K(ch));
   }
   return ret;
 }
@@ -590,20 +580,87 @@ int JVMFunctionHelper::do_init_() {
   } else if (OB_FAIL(init_classes())) {
     LOG_WARN("failed to init useful classes", K(ret));
   }
+  if (OB_FAIL(ret)) {
+    if (nullptr == error_msg_) {
+      error_msg_ = "failed to init jni env";
+    }
+  }
 
   return ret;
 }
 
-ObString JVMFunctionHelper::to_ob_string(jstring str) {
-  const char* charflow = jni_env_->GetStringUTFChars((jstring)str, nullptr);
-  ObString res(charflow);
-  jni_env_->ReleaseStringUTFChars((jstring)str, charflow);
-  return res;
+int JVMFunctionHelper::detect_java_runtime() {
+  int ret = OB_SUCCESS;
+
+  const char *java_home = std::getenv("JAVA_HOME");
+  LOG_TRACE("get current java home", K(ret), K(java_home));
+  if (nullptr == java_home) {
+    ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
+    LOG_WARN("env 'JAVA_HOME' is not set", K(ret), K(java_home));
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *connector_path = std::getenv("CONNECTOR_PATH");
+    if (nullptr == connector_path) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'CONNECTOR_PATH' is not set", K(ret), K(connector_path));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *java_opts = std::getenv("JAVA_OPTS");
+    if (nullptr == java_opts) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'JAVA_OPTS' is not set", K(ret), K(java_opts));
+    } else if (OB_ISNULL(STRSTR(java_opts, "-XX:-CriticalJNINatives"))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN(
+          "env 'JAVA_OPTS' without critical config `-XX:-CriticalJNINatives`",
+          K(ret), K(java_opts));
+      error_msg_ = "run jvm without critical config `-XX:-CriticalJNINatives`";
+      LOG_USER_WARN(
+          OB_INVALID_ARGUMENT,
+          "run jvm without critical config `-XX:-CriticalJNINatives`");
+    } else if (OB_ISNULL(STRSTR(java_opts, "-Djdk.lang.processReaperUseDefaultStackSize=true"))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN(
+          "env 'JAVA_OPTS' without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`",
+          K(ret), K(java_opts));
+      error_msg_ = "run jvm without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`";
+      LOG_USER_WARN(
+          OB_INVALID_ARGUMENT,
+          "run jvm without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`");
+    } else if (OB_ISNULL(STRSTR(java_opts, "-Xrs"))) {
+      ret = OB_INVALID_ARGUMENT;
+      error_msg_ = "run jvm without critical config `-Xrs`";
+      LOG_WARN("env 'JAVA_OPTS' without critical config `-Xrs`", K(ret), K(java_opts));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `-Xrs`");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *libhdfs_opts = std::getenv("LIBHDFS_OPTS");
+    if (nullptr == libhdfs_opts) {
+      ret = OB_INVALID_ARGUMENT;
+      error_msg_ = "run jvm without critical config `LIBHDFS_OPTS`";
+      LOG_WARN("env 'LIBHDFS_OPTS' is not set", K(ret), K(libhdfs_opts));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `LIBHDFS_OPTS`");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *classpath = std::getenv("CLASSPATH");
+    if (nullptr == classpath) {
+      ret = OB_INVALID_ARGUMENT;
+      error_msg_ = "run jvm without critical config `CLASSPATH`";
+      LOG_WARN("env 'CLASSPATH' is not set", K(ret), K(classpath));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `CLASSPATH`");
+    }
+  }
+
+  return ret;
 }
 
-jmethodID JVMFunctionHelper::getToStringMethod(jclass clazz) {
-  return jni_env_->GetMethodID(clazz, "toString", "()Ljava/lang/String;");
-}
 // ------------------------- end of JVMFunctionHelper -------------------------
 
 // ------------------------- start of JavaGlobalRef -------------------------
@@ -641,71 +698,6 @@ void JavaGlobalRef::clear() {
   LOG_DEBUG("clear the global ref", K(ret));
 }
 // ------------------------- end of JavaGlobalRef -------------------------
-
-int detect_java_runtime() {
-  int ret = OB_SUCCESS;
-
-  const char *java_home = std::getenv("JAVA_HOME");
-  LOG_TRACE("get current java home", K(ret), K(java_home));
-  if (nullptr == java_home) {
-    ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
-    LOG_WARN("env 'JAVA_HOME' is not set", K(ret), K(java_home));
-  }
-
-  if (OB_SUCC(ret)) {
-    const char *connector_path = std::getenv("CONNECTOR_PATH");
-    if (nullptr == connector_path) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("env 'CONNECTOR_PATH' is not set", K(ret), K(connector_path));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    const char *java_opts = std::getenv("JAVA_OPTS");
-    if (nullptr == java_opts) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("env 'JAVA_OPTS' is not set", K(ret), K(java_opts));
-    } else if (OB_ISNULL(STRSTR(java_opts, "-XX:-CriticalJNINatives"))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN(
-          "env 'JAVA_OPTS' without critical config `-XX:-CriticalJNINatives`",
-          K(ret), K(java_opts));
-      LOG_USER_WARN(
-          OB_INVALID_ARGUMENT,
-          "run jvm without critical config `-XX:-CriticalJNINatives`");
-    } else if (OB_ISNULL(STRSTR(java_opts, "-Djdk.lang.processReaperUseDefaultStackSize=true"))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN(
-          "env 'JAVA_OPTS' without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`",
-          K(ret), K(java_opts));
-      LOG_USER_WARN(
-          OB_INVALID_ARGUMENT,
-          "run jvm without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`");
-    } else if (OB_ISNULL(STRSTR(java_opts, "-Xrs"))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("env 'JAVA_OPTS' without critical config `-Xrs`", K(ret), K(java_opts));
-      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `-Xrs`");
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    const char *libhdfs_opts = std::getenv("LIBHDFS_OPTS");
-    if (nullptr == libhdfs_opts) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("env 'LIBHDFS_OPTS' is not set", K(ret), K(libhdfs_opts));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    const char *classpath = std::getenv("CLASSPATH");
-    if (nullptr == classpath) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("env 'CLASSPATH' is not set", K(ret), K(classpath));
-    }
-  }
-
-  return ret;
-}
 
 } // namespace sql
 } // namespace oceanbase

@@ -24,6 +24,7 @@ namespace schema
 class ObExternalTableColumnSchemaHelper
 {
 public:
+  static void set_column_accuracy(ObCompatibilityMode mode, ObObjType accuracy_type, ObColumnSchemaV2 &column_schema);
   static int setup_bool(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_tinyint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);
   static int setup_smallint(const bool &is_oracle_mode, ObColumnSchemaV2 &column_schema);

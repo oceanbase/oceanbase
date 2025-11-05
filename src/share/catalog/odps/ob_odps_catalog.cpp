@@ -571,7 +571,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
     }
 
     if (OB_SUCC(ret)) {
-      int64_t snapshot_timestamp_ms = common::ObTimeUtil::current_time() / 1000;
+      int64_t snapshot_timestamp_ms = static_cast<const odps::ObODPSTableMetadata*>(table_metadata)->lake_table_metadata_version_ * 1000;
       ObOptExternalTableStatBuilder stat_builder;
       if (OB_FAIL(stat_builder.set_basic_info(table_metadata->tenant_id_,
                                               table_metadata->catalog_id_,
