@@ -63,7 +63,7 @@ public:
 class ObTenantSlogCheckpointWorkflow final
 {
 public:
-  enum Type:uint8_t {
+  enum Type:uint8_t { //FARM COMPAT WHITELIST
       NORMAL_SS = 0, // for Shared-Storage mode
       NORMAL_SN = 1, // for Shared-Nothing mode
       FORCE = 2, // for force triggered
