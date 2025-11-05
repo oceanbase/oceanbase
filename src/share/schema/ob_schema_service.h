@@ -1194,22 +1194,6 @@ public:
       const uint64_t tenant_id,
       int64_t &schema_version) = 0;
 
-  // link table.
-  /**
-   * ObMultiVersionSchemaService::get_link_table_schema() need adjust
-   * schema_version and link_schema_version, so param table_schema should not be const.
-   */
-  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
-                                    const common::ObString &database_name,
-                                    const common::ObString &table_name,
-                                    common::ObIAllocator &allocator,
-                                    ObTableSchema *&table_schema,
-                                    sql::ObSQLSessionInfo *session_info,
-                                    const common::ObString &dblink_name,
-                                    bool is_reverse_link,
-                                    uint64_t *current_scn,
-                                    bool &is_under_oracle12c) = 0;
-
   static bool is_formal_version(const int64_t schema_version);
   static bool is_sys_temp_version(const int64_t schema_version);
   static int gen_core_temp_version(const int64_t schema_version,

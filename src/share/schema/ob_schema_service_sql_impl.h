@@ -45,7 +45,6 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#include "sql/dblink/ob_dblink_utils.h"
 #include "lib/string/ob_string.h"
 
 namespace oceanbase
@@ -636,19 +635,6 @@ public:
       const int64_t schema_version,
       common::ObISQLClient &sql_client,
       common::ObIArray<ObAuxTableMetaInfo> &aux_tables);
-
-  // link table.
-  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
-                                    const common::ObString &database_name,
-                                    const common::ObString &table_name,
-                                    common::ObIAllocator &allocator,
-                                    ObTableSchema *&table_schema,
-                                    sql::ObSQLSessionInfo *session_info,
-                                    const ObString &dblink_name,
-                                    bool is_reverse_link,
-                                    uint64_t *current_scn,
-                                    bool &is_under_oracle12c);
-
   static int check_ddl_id_exist(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
@@ -1114,36 +1100,6 @@ private:
                            common::ObISQLClient &sql_client,
                            ObTablegroupSchema *&tablegroup_schema);
 
-  template<typename T>
-  int fetch_link_table_info(common::sqlclient::dblink_param_ctx &param_ctx,
-                            sql::DblinkGetConnType conn_type,
-                            const common::ObString &database_name,
-                            const common::ObString &table_name,
-                            ObIAllocator &alloctor,
-                            T *&table_schema,
-                            sql::ObSQLSessionInfo *session_info,
-                            const ObString &dblink_name,
-                            sql::ObReverseLink *reverse_link,
-                            uint64_t *current_scn,
-                            bool &is_under_oracle12c);
-  template<typename T>
-  int generate_link_table_schema(const common::sqlclient::dblink_param_ctx &param_ctx,
-                                 sql::DblinkGetConnType conn_type,
-                                 const ObString &database_name,
-                                 const ObString &table_name,
-                                 ObIAllocator &allocator,
-                                 T *&table_schema,
-                                 const sql::ObSQLSessionInfo *session_info,
-                                 common::sqlclient::ObISQLConnection *dblink_conn,
-                                 const common::sqlclient::ObMySQLResult *col_meta_result);
-  int fetch_link_current_scn(const common::sqlclient::dblink_param_ctx &param_ctx,
-                             sql::DblinkGetConnType conn_type,
-                             ObIAllocator &allocator,
-                             common::sqlclient::ObISQLConnection *dblink_conn,
-                             sql::ObReverseLink *reverse_link,
-                             uint64_t &current_scn);
-  int try_mock_link_table_column(ObTableSchema &table_schema);
-
   template<typename SCHEMA>
   int fetch_part_info(const ObRefreshSchemaStatus &schema_status,
                       const uint64_t tenant_id,
@@ -1256,7 +1212,6 @@ private:
 
 private:
   common::ObMySQLProxy *mysql_proxy_;
-  common::ObDbLinkProxy *dblink_proxy_;
   // record last schema version of log operation while execute ddl
   int64_t last_operation_schema_version_;
   ObTenantSqlService tenant_service_;
