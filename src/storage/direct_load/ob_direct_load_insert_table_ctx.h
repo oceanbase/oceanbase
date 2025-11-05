@@ -76,6 +76,21 @@ public:
   ObIVector *seq_no_vector_;
 };
 
+struct ObDirectLoadInsertTableResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDirectLoadInsertTableResult()
+    : insert_row_count_(0), delete_row_count_(0)
+  {
+  }
+  ~ObDirectLoadInsertTableResult() {}
+  TO_STRING_KV(K_(insert_row_count), K_(delete_row_count));
+public:
+  int64_t insert_row_count_;
+  int64_t delete_row_count_;
+};
+
 struct ObDirectLoadInsertTableParam
 {
 public:
@@ -235,12 +250,23 @@ public:
   }
   ObDirectLoadInsertLobTabletContext *get_lob_tablet_ctx() { return lob_tablet_ctx_; }
 
-  // row_count_
-  void inc_row_count(const int64_t row_count) { ATOMIC_AAF(&row_count_, row_count); }
-  int64_t get_row_count() const { return ATOMIC_LOAD(&row_count_); }
+  const ObDirectLoadInsertTableResult &get_insert_table_result() const
+  {
+    return insert_table_result_;
+  }
+  void update_insert_table_result(ObDirectLoadInsertTableResult &other)
+  {
+    ATOMIC_AAF(&insert_table_result_.insert_row_count_, other.insert_row_count_);
+    ATOMIC_AAF(&insert_table_result_.delete_row_count_, other.delete_row_count_);
+  }
+  int64_t get_row_count() const
+  {
+    return ATOMIC_LOAD(&insert_table_result_.insert_row_count_) +
+           ATOMIC_LOAD(&insert_table_result_.delete_row_count_);
+  }
 
   VIRTUAL_TO_STRING_KV(KP_(table_ctx), KP_(param), K_(ls_id), K_(origin_tablet_id), K_(tablet_id),
-                       K_(pk_tablet_id), KP_(lob_tablet_ctx), K_(row_count), K_(is_inited));
+                       K_(pk_tablet_id), KP_(lob_tablet_ctx), K_(insert_table_result), K_(is_inited));
 
 protected:
   ObDirectLoadInsertTableContext *table_ctx_;
@@ -255,7 +281,7 @@ protected:
   blocksstable::ObMacroDataSeq start_seq_;
   share::ObTabletCacheInterval pk_cache_;
   ObArray<int64_t> closed_slices_;
-  int64_t row_count_;
+  ObDirectLoadInsertTableResult insert_table_result_;
   bool is_inited_;
 };
 

@@ -866,6 +866,7 @@ int ObTableLoadStoreLobTableCtx::open_insert_table_ctx(
     insert_table_param.reuse_pk_ = true;
     insert_table_param.is_incremental_ =
       ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+    insert_table_param.is_inc_major_ = ObDirectLoadInsertSSTableType::Type::INC_MAJOR == param.insert_sstable_type_;
     insert_table_param.trans_param_ = param.trans_param_;
     insert_table_param.datum_utils_ = &(schema_->datum_utils_);
     insert_table_param.col_descs_ = &(schema_->column_descs_);
@@ -1177,6 +1178,7 @@ int ObTableLoadStoreIndexTableCtx::open_insert_table_ctx(
     insert_table_param.reuse_pk_ = true;
     insert_table_param.is_incremental_ =
       ObDirectLoadMethod::is_incremental(store_ctx_->ctx_->param_.method_);
+    insert_table_param.is_inc_major_ = ObDirectLoadInsertSSTableType::Type::INC_MAJOR == param.insert_sstable_type_;
     insert_table_param.trans_param_ = param.trans_param_;
     insert_table_param.datum_utils_ = &(schema_->datum_utils_);
     insert_table_param.col_descs_ = &(schema_->column_descs_);

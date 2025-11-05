@@ -133,8 +133,9 @@ int ObTableLoadDagInsertSSTableTaskBase::handle_merge_task_finish(
       LOG_WARN("fail to inc finish count", K(ret));
     } else if (is_ready) {
       const ObTabletID &tablet_id = tablet_merge_ctx->get_insert_tablet_ctx()->get_tablet_id();
-      LOG_INFO("tablet merge task all finished", K(tablet_merge_ctx->get_tablet_id()),
-               K(tablet_id));
+      const ObDirectLoadInsertTableResult &insert_table_result = tablet_merge_ctx->get_insert_tablet_ctx()->get_insert_table_result();
+      FLOG_INFO("tablet merge task all finished", K(tablet_merge_ctx->get_tablet_id()),
+               K(tablet_id), K(insert_table_result));
 
       ObArray<ObITask *> write_macro_block_tasks;
       if (OB_FAIL(dag_->generate_tablet_write_macro_block_tasks(

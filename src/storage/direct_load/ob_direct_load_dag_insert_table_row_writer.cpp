@@ -34,7 +34,7 @@ ObDirectLoadDagInsertTableBatchRowDirectWriter::ObDirectLoadDagInsertTableBatchR
     dml_row_handler_(nullptr),
     allocator_(ObMemAttr(MTL_ID(), "storage_writer")),
     slice_writer_(nullptr),
-    row_count_(0),
+    insert_table_result_(),
     is_inited_(false)
 {
 }
@@ -257,7 +257,7 @@ int ObDirectLoadDagInsertTableBatchRowDirectWriter::flush_batch(ObBatchDatumRows
   } else if (OB_FAIL(slice_writer_->append_batch(datum_rows))) {
     LOG_WARN("fail to append batch", KR(ret));
   } else {
-    row_count_ += datum_rows.row_count_;
+    insert_table_result_.insert_row_count_ += datum_rows.row_count_;
   }
   return ret;
 }
@@ -276,10 +276,8 @@ int ObDirectLoadDagInsertTableBatchRowDirectWriter::close()
     } else if (OB_FAIL(row_handler_.close())) {
       LOG_WARN("fail to close", KR(ret));
     } else {
-      if (row_count_ > 0) {
-        insert_tablet_ctx_->inc_row_count(row_count_);
-      }
-      FLOG_INFO("direct add sstable slice", K(tablet_id_), K(row_count_));
+      insert_tablet_ctx_->update_insert_table_result(insert_table_result_);
+      FLOG_INFO("direct add sstable slice end", K(tablet_id_), K(insert_table_result_));
     }
   }
   return ret;

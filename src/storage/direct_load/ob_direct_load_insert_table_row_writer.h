@@ -36,8 +36,8 @@ public:
   virtual ~ObDirectLoadInsertTableBatchRowBufferWriter();
   virtual int close();
   void cancel() { is_canceled_ = true; }
-  int64_t get_row_count() const { return row_count_; }
-  VIRTUAL_TO_STRING_KV(KP_(insert_tablet_ctx), K_(slice_id), K_(row_count), K_(is_canceled),
+  int64_t get_row_count() const { return insert_table_result_.insert_row_count_ + insert_table_result_.delete_row_count_; }
+  VIRTUAL_TO_STRING_KV(KP_(insert_tablet_ctx), K_(slice_id), K_(insert_table_result), K_(is_canceled),
                        K_(is_inited));
 
 protected:
@@ -63,7 +63,7 @@ protected:
   ObDirectLoadMgrAgent ddl_agent_;
   int64_t slice_id_;
   int64_t max_bytes_size_;
-  int64_t row_count_;
+  ObDirectLoadInsertTableResult insert_table_result_;
   bool is_canceled_;
   bool is_inited_;
 };

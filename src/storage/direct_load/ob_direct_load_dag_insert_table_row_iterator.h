@@ -18,6 +18,7 @@
 #include "storage/ddl/ob_tablet_slice_row_iterator.h"
 #include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "storage/direct_load/ob_direct_load_dag_insert_table_row_handler.h"
+#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
 namespace oceanbase
 {
@@ -55,7 +56,7 @@ protected:
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   ObDirectLoadDagInsertTableRowHandler row_handler_;
   int64_t pos_;
-  int64_t row_count_;
+  ObDirectLoadInsertTableResult insert_table_result_;
   bool is_delete_full_row_;
   bool is_inited_;
 };

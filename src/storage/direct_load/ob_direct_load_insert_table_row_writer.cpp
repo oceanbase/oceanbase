@@ -40,7 +40,7 @@ ObDirectLoadInsertTableBatchRowBufferWriter::ObDirectLoadInsertTableBatchRowBuff
     ddl_agent_(),
     slice_id_(0),
     max_bytes_size_(0),
-    row_count_(0),
+    insert_table_result_(),
     is_canceled_(false),
     is_inited_(false)
 {
@@ -128,7 +128,7 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::close()
     } else if (OB_FAIL(row_handler_.close())) {
       LOG_WARN("fail to close row handler", KR(ret));
     } else {
-      insert_tablet_ctx_->inc_row_count(row_count_);
+      insert_tablet_ctx_->update_insert_table_result(insert_table_result_);
     }
   }
   return ret;
@@ -172,7 +172,7 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::flush_batch(ObBatchDatumRows &d
   } else if (OB_FAIL(after_flush_batch(datum_rows))) {
     LOG_WARN("fail to after flush batch", KR(ret));
   } else {
-    row_count_ += datum_rows.row_count_;
+      insert_table_result_.insert_row_count_ += datum_rows.row_count_;
   }
   return ret;
 }

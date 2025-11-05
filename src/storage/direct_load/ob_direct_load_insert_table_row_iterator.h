@@ -15,6 +15,7 @@
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_handler.h"
+#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
 namespace oceanbase
 {
@@ -59,7 +60,7 @@ protected:
   int64_t rowkey_column_count_;
   int64_t column_count_;
   int64_t pos_;
-  int64_t row_count_;
+  ObDirectLoadInsertTableResult insert_table_result_;
   bool is_inited_;
 };
 
