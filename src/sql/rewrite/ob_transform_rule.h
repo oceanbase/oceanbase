@@ -170,43 +170,43 @@ enum TransMethod
 };
 
 enum TRANSFORM_TYPE {
-  INVALID_TRANSFORM_TYPE     = 0,
-  PRE_PROCESS                   ,
-  POST_PROCESS                  ,
-  SIMPLIFY_DISTINCT             ,
-  SIMPLIFY_EXPR                 ,
-  SIMPLIFY_GROUPBY              ,
-  SIMPLIFY_LIMIT                ,
-  SIMPLIFY_ORDERBY              ,
-  SIMPLIFY_SUBQUERY             ,
-  SIMPLIFY_WINFUNC              ,
-  FASTMINMAX                    , // select min/max -> select order by limit 1
-  ELIMINATE_OJ                  , // 外连接消除
-  VIEW_MERGE                    , // 视图合并
-  WHERE_SQ_PULL_UP              , // where子查询 -> semi join
-  QUERY_PUSH_DOWN               , // push down limit
-  AGGR_SUBQUERY                 , // JA类型子查询改写
-  SIMPLIFY_SET                  , // set相关改写
-  PROJECTION_PRUNING            , // project pruning
-  OR_EXPANSION                  , // or expansion
-  WIN_MAGIC                     ,
-  JOIN_ELIMINATION              ,
-  GROUPBY_PUSHDOWN              ,
-  GROUPBY_PULLUP                ,
-  SUBQUERY_COALESCE             ,
-  PREDICATE_MOVE_AROUND         ,
-  NL_FULL_OUTER_JOIN            ,
-  SEMI_TO_INNER                 ,
-  JOIN_LIMIT_PUSHDOWN           ,
-  TEMP_TABLE_OPTIMIZATION       ,
-  CONST_PROPAGATE               ,
-  LEFT_JOIN_TO_ANTI             ,  // left join + is null -> anti-join
-  COUNT_TO_EXISTS               ,
-  SELECT_EXPR_PULLUP            ,
-  PROCESS_DBLINK                ,
-  DECORRELATE                   ,
-  CONDITIONAL_AGGR_COALESCE     ,
-  LATE_MATERIALIZATION          ,
+  INVALID_TRANSFORM_TYPE        = 0,
+  PRE_PROCESS                   = 1,
+  POST_PROCESS                  = 2,
+  SIMPLIFY_DISTINCT             = 3,
+  SIMPLIFY_EXPR                 = 4,
+  SIMPLIFY_GROUPBY              = 5,
+  SIMPLIFY_LIMIT                = 6,
+  SIMPLIFY_ORDERBY              = 7,
+  SIMPLIFY_SUBQUERY             = 8,
+  SIMPLIFY_WINFUNC              = 9,
+  FASTMINMAX                    = 10, // select min/max -> select order by limit 1
+  ELIMINATE_OJ                  = 11, // 外连接消除
+  VIEW_MERGE                    = 12, // 视图合并
+  WHERE_SQ_PULL_UP              = 13, // where子查询 -> semi join
+  QUERY_PUSH_DOWN               = 14, // push down limit
+  AGGR_SUBQUERY                 = 15, // JA类型子查询改写
+  SIMPLIFY_SET                  = 16, // set相关改写
+  PROJECTION_PRUNING            = 17, // project pruning
+  OR_EXPANSION                  = 18, // or expansion
+  WIN_MAGIC                     = 19,
+  JOIN_ELIMINATION              = 20,
+  GROUPBY_PUSHDOWN              = 21,
+  GROUPBY_PULLUP                = 22,
+  SUBQUERY_COALESCE             = 23,
+  PREDICATE_MOVE_AROUND         = 24,
+  NL_FULL_OUTER_JOIN            = 25,
+  SEMI_TO_INNER                 = 26,
+  JOIN_LIMIT_PUSHDOWN           = 27,
+  TEMP_TABLE_OPTIMIZATION       = 28,
+  CONST_PROPAGATE               = 29,
+  LEFT_JOIN_TO_ANTI             = 30,  // left join + is null -> anti-join
+  COUNT_TO_EXISTS               = 31,
+  SELECT_EXPR_PULLUP            = 32,
+  PROCESS_DBLINK                = 33,
+  DECORRELATE                   = 34,
+  CONDITIONAL_AGGR_COALESCE     = 35,
+  LATE_MATERIALIZATION          = 36,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -318,7 +318,9 @@ public:
       (1L << LEFT_JOIN_TO_ANTI) |
       (1L << COUNT_TO_EXISTS) |
       (1L << SEMI_TO_INNER) |
-      (1L << CONDITIONAL_AGGR_COALESCE);
+      (1L << CONDITIONAL_AGGR_COALESCE) |
+      (1L << SELECT_EXPR_PULLUP) |
+      (1L << DECORRELATE);
   static const uint64_t ALL_COST_BASED_RULES =
       (1L << OR_EXPANSION) |
       (1L << WIN_MAGIC) |
@@ -328,7 +330,6 @@ public:
       (1L << SEMI_TO_INNER) |
       (1L << TEMP_TABLE_OPTIMIZATION) |
       (1L << LATE_MATERIALIZATION);
-
   static const uint64_t ALL_EXPR_LEVEL_HEURISTICS_RULES =
       (1L << SIMPLIFY_EXPR) |
       (1L << SIMPLIFY_DISTINCT) |
@@ -339,6 +340,18 @@ public:
       (1L << PREDICATE_MOVE_AROUND) |
       (1L << JOIN_LIMIT_PUSHDOWN) |
       (1L << CONST_PROPAGATE);
+
+  // static checks for transformer rule type definition
+  static const uint64_t NON_ITERATIVE_TRANSFORM_RULES =
+                        (1L << INVALID_TRANSFORM_TYPE) |
+                        (1L << PRE_PROCESS) |
+                        (1L << POST_PROCESS) |
+                        (1L << PROCESS_DBLINK);
+  static const uint64_t BOTH_HEURISTIC_AND_COST_BASED_RULES = (1L << SEMI_TO_INNER);
+  static_assert((ALL_HEURISTICS_RULES | ALL_COST_BASED_RULES | NON_ITERATIVE_TRANSFORM_RULES) == ALL_TRANSFORM_RULES,
+                "some of the transform rules are not correctly categorized");
+  static_assert((ALL_HEURISTICS_RULES & ALL_COST_BASED_RULES) == BOTH_HEURISTIC_AND_COST_BASED_RULES,
+                "invalid definition for BOTH_HEURISTIC_AND_COST_BASED_RULES");
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,

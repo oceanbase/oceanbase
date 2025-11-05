@@ -2117,10 +2117,7 @@ int ObTransformTempTable::need_transform(const common::ObIArray<ObParentDMLStmt>
     need_trans = false;
   } else if (!query_hint->has_outline_data()) {
     // TODO: sean.yyj make the priority of rule hint higher than cost based hint
-    if (OB_FAIL(ObTransformUtils::is_cost_based_trans_enable(ctx_, query_hint->global_hint_,
-                                                             need_trans))) {
-      LOG_WARN("failed to check cost based transform enable", K(ret));
-    }
+    need_trans = ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_);
   } else if (NULL == (trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))) {
     /*do nothing*/
     OPT_TRACE("outline reject transform");

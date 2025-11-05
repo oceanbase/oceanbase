@@ -377,7 +377,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
  * @param equal_join_conds equal-value correlated conditions in semi-join
  * @param cmp_join_conds less/greater correlated conditions (>,<,>=,<=) in semi-join
  * @param filter_conds non-correlated filter conditions that act on the left or right table alone
- * @param invalid_conds conditon references a table other than the left or right table in semi-join
+ * @param invalid_conds condition references a table other than the left or right table in semi-join
  * @param other_conds condition references to the left and right tables are not located on either side of the operator
  *        OR uses operators beyond: =, >, <, >=, <=
  */
@@ -494,7 +494,7 @@ int ObTransformSemiToInner::split_join_condition(ObDMLStmt& stmt,
  *      如果需要cast(left_expr)-->right_expr,则不能加distinct
  *      如果需要cast(right_expr)-->left_expr,则需要为右表的expr包裹cast后，才能加distinct
  *      如果左右expr的类型一致，直接加distinct
- *   c. semi condtion是否overlap左右表的索引
+ *   c. semi condition是否overlap左右表的索引
  *   如果上面的条件都满足，则改写为inner
  * 3.出现在嵌套子查询中的含有semi info信息的stmt，如果子查询的输出结果是否存在重复值不影响上层查询的输出结果，
  *   那么可以直接将semi join改为inner join，不需要添加distinct
@@ -527,10 +527,14 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
   int64_t cmp_join_conds_count = 0;
   int64_t invalid_conds_count = 0;
   int64_t other_conds_count = 0;
+  const ObQueryHint *query_hint = stmt.get_stmt_hint().query_hint_;
 
   if (OB_ISNULL(root_stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(root_stmt));
+  } else if (OB_ISNULL(query_hint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(query_hint));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < left_table_ids.count(); i++) {
     TableItem* temp_table = NULL;
@@ -647,7 +651,10 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
       ctx.is_multi_join_cond_ = is_multi_join_cond;
     }
   }
-  if (OB_SUCC(ret) && is_valid && need_check_cost && ctx_->in_accept_transform_) {
+  if (OB_SUCC(ret) && is_valid && need_check_cost
+      && (ctx_->in_accept_transform_
+          || ctx_->eval_cost_
+          || !ObTransformUtils::is_cost_based_trans_enable(*ctx_, query_hint->global_hint_))) {
     is_valid = false;
   }
   return ret;
@@ -713,7 +720,7 @@ int ObTransformSemiToInner::check_right_exprs_unique(ObDMLStmt &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null ctx", K(ret), K(right_table), K(ctx_));
   } else if (!right_table->is_generated_table() && !right_table->is_temp_table()) {
-    // baisc table
+    // basic table
     ObSEArray<TableItem*, 1> right_tables;
     ObSEArray<ObRawExpr*, 1> dummy_conds;
     if (OB_FAIL(right_tables.push_back(right_table))) {
@@ -1540,7 +1547,7 @@ int ObTransformSemiToInner::check_is_semi_condition(ObIArray<ObExecParamRawExpr 
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       uint64_t table_id = table_ids.at(i);
       if (OB_FAIL(ObOptimizerUtil::extract_column_ids(param_exprs, table_id, column_ids))) {
-        LOG_WARN("failed to extract colulmn ids", K(ret));
+        LOG_WARN("failed to extract column ids", K(ret));
       } else if (!column_ids.is_empty()) {
         is_valid = true;
       }
