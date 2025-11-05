@@ -415,6 +415,13 @@ TEST_F(TestSSDiagnoseInfoMgr, test_diagnose_info_circular_buffer)
   diagnose_mgr.destroy();
 }
 
+TEST_F(TestSSDiagnoseInfoMgr, test_destroy_core)
+{
+  int ret = OB_SUCCESS;
+  ObSSDiagnoseInfoMgr diagnose_mgr;
+  diagnose_mgr.destroy();
+}
+
 TEST_F(TestSSDiagnoseInfoMgr, test_mtl_module)
 {
   int ret = OB_SUCCESS;
