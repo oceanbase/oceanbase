@@ -175,7 +175,8 @@ int ObValuesTableAccessOp::get_real_src_obj_type(const int64_t row_idx,
         update_src_meta(src_obj_meta, src_obj_acc, src_meta);
       }
     } else if (src_expr.frame_idx_ < spec_.plan_->get_expr_frame_info().const_frame_.count() +
-                                     spec_.plan_->get_expr_frame_info().param_frame_.count()) {
+                                     spec_.plan_->get_expr_frame_info().param_frame_.count() +
+                                     spec_.plan_->get_expr_frame_info().dynamic_frame_.count()) {
       src_obj_meta = plan_ctx->get_param_store().at(param_idx).meta_;
       const ObAccuracy &src_obj_acc = plan_ctx->get_param_store().at(param_idx).get_accuracy();
       update_src_meta(src_obj_meta, src_obj_acc, src_meta);
