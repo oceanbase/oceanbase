@@ -11344,11 +11344,8 @@ with_param_column_ref { $$ = $1}
 with_param_column_ref:
 no_param_column_ref '^' literal
 {
-  ParseNode *node = NULL;
-  malloc_non_terminal_node(node, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, $1);
-  dup_node_string($1, node, result->malloc_pool_);
   ParseNode *list_node = NULL;
-  malloc_non_terminal_node(list_node, result->malloc_pool_, T_LINK_NODE, 2, node, $3);
+  malloc_non_terminal_node(list_node, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
   merge_nodes($$, result, T_MATCH_COLUMN_LIST, list_node);
 }
 ;
