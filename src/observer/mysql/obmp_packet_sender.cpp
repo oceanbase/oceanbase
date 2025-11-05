@@ -496,8 +496,12 @@ int ObMPPacketSender::send_error_packet(int err,
         } else {
           ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
           if (lib::is_oracle_mode() && 0 < session->get_pl_exact_err_msg().length()) {
-            if (OB_FAIL(fin_msg.append(session->get_pl_exact_err_msg().string()))) {
-              LOG_WARN("append pl exact err msg fail", K(ret), K(session->get_pl_exact_err_msg().string()));
+            ObArenaAllocator allocator(ObMemAttr(conn_->tenant_id_, "WARN_MSG"));
+            ObString convert_pl_exact_err_msg;
+            if (OB_FAIL(ObCharset::charset_convert(allocator, session->get_pl_exact_err_msg().string(), session->get_nls_collation(), session->get_local_collation_connection(), convert_pl_exact_err_msg))) {
+              LOG_WARN("convert pl exact err msg fail", K(ret));
+            } else if (OB_FAIL(fin_msg.append(convert_pl_exact_err_msg))) {
+              LOG_WARN("append pl exact err msg fail", K(ret), K(convert_pl_exact_err_msg));
             }
           }
         }
