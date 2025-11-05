@@ -23,6 +23,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/table/ob_ttl_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 
 namespace oceanbase
 {
@@ -510,77 +511,6 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Set table options error!", K(ret));
     } else {
       LOG_DEBUG("alter table resolve end", K(alter_table_schema));
-    }
-  }
-  return ret;
-}
-
-int ObAlterTableResolver::resolve_set_interval(ObAlterTableStmt *stmt, const ParseNode &node)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
-  } else if (OB_ISNULL(table_schema_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "table_schema_ should not be null", K(ret));
-  } else if (!table_schema_->is_range_part()) {
-    ret = OB_ERR_SET_INTERVAL_IS_NOT_LEGAL_ON_THIS_TABLE;
-    SQL_RESV_LOG(WARN, "set interval on no range partitioned table", K(ret));
-  } else if (OB_ISNULL(node.children_[0])) {
-    /* set interval () */
-    if (!table_schema_->is_interval_part()) {
-      ret = OB_ERR_TABLE_IS_ALREADY_A_RANGE_PARTITIONED_TABLE;
-      SQL_RESV_LOG(WARN, "table alreay a range partitionted table", K(ret));
-    } else {
-      /* 设置为interval -> range */
-      stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::INTERVAL_TO_RANGE;
-    }
-  } else if (OB_INVALID_ID != table_schema_->get_tablegroup_id()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("set interval in tablegroup not allowed", K(ret), K(table_schema_->get_tablegroup_id()));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add/drop table partition in 2.0 tablegroup");
-  } else {
-    ObRawExpr *expr = NULL;
-
-    /* set interval (expr) */
-    if (false == table_schema_->is_interval_part()) {
-      /* 设置为 range -> interval */
-      stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::SET_INTERVAL;
-    } else {
-      stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::SET_INTERVAL;
-    }
-    const ObRowkey *rowkey_last =
-        &table_schema_->get_part_array()[table_schema_->get_part_option().get_part_num()- 1]
-        ->get_high_bound_val();
-
-    if (OB_SUCC(ret) && NULL != rowkey_last) {
-      if (rowkey_last->get_obj_cnt() != 1) {
-        ret = OB_ERR_INTERVAL_CLAUSE_HAS_MORE_THAN_ONE_COLUMN;
-        SQL_RESV_LOG(WARN, "interval clause has more then one column", K(ret));
-      } else if (OB_ISNULL(rowkey_last->get_obj_ptr())) {
-          ret = OB_ERR_UNEXPECTED;
-          SQL_RESV_LOG(WARN, "row key is null", K(ret));
-      } else {
-        ObObj transition_value = rowkey_last->get_obj_ptr()[0];
-        ObItemType item_type;
-        ObConstRawExpr *transition_expr = NULL;
-        if (false == ObResolverUtils::is_valid_oracle_interval_data_type(
-                                      transition_value.get_type(), item_type)) {
-          ret = OB_ERR_INVALID_DATA_TYPE_INTERVAL_TABLE;
-          SQL_RESV_LOG(WARN, "invalid interval column data type", K(ret));
-        }
-        OZ (params_.expr_factory_->create_raw_expr(item_type, transition_expr));
-        OX (transition_expr->set_value(transition_value));
-        OZ (ObDDLResolver::resolve_interval_expr_low(params_,
-                                                  node.children_[0],
-                                                  *table_schema_,
-                                                  transition_expr,
-                                                  expr));
-        OX (stmt->set_transition_expr(transition_expr));
-        OX (stmt->set_interval_expr(expr));
-      }
     }
   }
   return ret;
@@ -1211,7 +1141,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             break;
           }
         case T_SET_INTERVAL: {
-            if (OB_FAIL(resolve_set_interval(alter_table_stmt, *action_node))) {
+            ObIntervalPartitionResolver interval_partition_resolver(params_);
+            if (OB_FAIL(interval_partition_resolver.resolve_set_interval(*alter_table_stmt, *action_node, *table_schema_))) {
               SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
             }
             break;
@@ -2359,7 +2290,7 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
 {
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
-  ObTableStmt *alter_stmt = get_alter_table_stmt();
+  ObAlterTableStmt *alter_stmt = get_alter_table_stmt();
   ObSEArray<ObString, 8> dummy_part_keys;
   const ObPartitionOption &part_option = orig_table_schema.get_part_option();
   const ObPartitionFuncType part_func_type = part_option.get_part_func_type();
@@ -2367,16 +2298,22 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
   ParseNode *part_elements_node = NULL;
   alter_table_schema.set_part_level(orig_table_schema.get_part_level());
   if (OB_ISNULL(node.children_[0]) ||
-      OB_ISNULL(part_elements_node = node.children_[0]->children_[0])) {
+      OB_ISNULL(part_elements_node = node.children_[0]->children_[0]) ||
+      OB_ISNULL(alter_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(node.children_[0]), K(part_elements_node));
+    LOG_WARN("get unexpected null", KR(ret), KP(node.children_[0]), KP(part_elements_node), KP(alter_stmt));
   } else if (OB_NOT_NULL(params_.session_info_) &&
              !params_.session_info_->is_inner() &&
              orig_table_schema.is_interval_part()) {
     ret = OB_ERR_ADD_PARTITION_ON_INTERVAL;
     LOG_WARN("add partition on interval");
+  } else if (orig_table_schema.is_interval_part()
+            && FALSE_IT(static_cast<ObAlterTableStmt*>(alter_stmt)->set_add_interval_partition(true))) {
   } else if (OB_FAIL(mock_part_func_node(orig_table_schema, false/*is_sub_part*/, part_func_node))) {
     LOG_WARN("mock part func node failed", K(ret));
+  } else if (OB_ISNULL(alter_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alter_stmt is null", KR(ret));
   } else if (OB_FAIL(resolve_part_func(params_, part_func_node,
                                        part_func_type, orig_table_schema,
                                        alter_stmt->get_part_fun_exprs(), dummy_part_keys))) {
@@ -2501,6 +2438,13 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
           }
         }
       }
+    }
+  }
+
+  if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    ObIntervalPartitionResolver interval_partition_resolver(params_);
+    if (OB_FAIL(interval_partition_resolver.resolve_interval_and_transition(node, *alter_stmt, orig_table_schema))) {
+      LOG_WARN("failed to resolve interval and transition", KR(ret));
     }
   }
 

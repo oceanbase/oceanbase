@@ -89,6 +89,11 @@ int ObPartitionExchange::check_and_exchange_partition(const obrpc::ObExchangePar
     LOG_WARN("base or inc table has drop column instant, not supported to exchange partition", KR(ret),
               K(base_has_drop_column_instant), K(inc_has_drop_column_instant));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Table has drop column instant, exchange partition");
+  } else if (base_table_schema->is_interval_part() || inc_table_schema->is_interval_part()) {
+    // interval partition table is already defended in ObAlterTableResolver::resolve_exchange_partition
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("interval part table exchange partition is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval part table exchange partition is");
   } else if (OB_FAIL(check_partition_exchange_conditions_(arg, *base_table_schema, *inc_table_schema, is_oracle_mode, schema_guard))) {
     LOG_WARN("fail to check partition exchange conditions", K(ret), K(arg), KPC(base_table_schema), KPC(inc_table_schema), K(is_oracle_mode));
   } else if (OB_FAIL(inner_init(*base_table_schema, *inc_table_schema, arg.exchange_partition_level_, is_oracle_mode, schema_guard))) {

@@ -514,6 +514,7 @@ ob_set_subtarget(ob_share resource_manager
 )
 
 ob_set_subtarget(ob_share schema
+  schema/ob_add_interval_part_controller.cpp
   schema/ob_column_schema.cpp
   schema/ob_constraint.cpp
   schema/ob_database_sql_service.cpp

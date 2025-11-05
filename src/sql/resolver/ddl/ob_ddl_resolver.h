@@ -752,11 +752,6 @@ protected:
       ParseNode *node,
       const bool is_subpartition,
       share::schema::ObTableSchema &table_schema);
-  int resolve_interval_clause(
-      ObPartitionedStmt *stmt,
-      ParseNode *node,
-      share::schema::ObTableSchema &table_schema,
-      common::ObSEArray<ObRawExpr*, 8> &range_exprs);
   int resolve_auto_partition_with_tenant_config(ObCreateTableStmt *stmt, ParseNode *node,
                                                 ObTableSchema &table_schema);
   int resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *node,
@@ -767,20 +762,6 @@ protected:
                                        ObTableSchema &table_schema);
   int check_only_modify_auto_partition_attr(ObPartitionedStmt *stmt, ParseNode *node,
                                             ObTableSchema &table_schema, bool &is_only_modify_auto_part_attr);
-
-  static int resolve_interval_node(
-      ObResolverParams &params,
-      ParseNode *interval_node,
-      common::ColumnType &col_dt,
-      int64_t precision,
-      int64_t scale,
-      ObRawExpr *&interval_value_expr_out);
-  static int resolve_interval_expr_low(
-      ObResolverParams &params,
-      ParseNode *interval_node,
-      const share::schema::ObTableSchema &table_schema,
-      ObRawExpr *transition_expr,
-      ObRawExpr *&interval_value);
   int resolve_partition_list(
       ObPartitionedStmt *stmt,
       ParseNode *node,

@@ -69,16 +69,6 @@ public:
                                        share::schema::ObTableSchema &table_schema,
                                        ObPartitionedStmt &stmt,
                                        bool is_subpart);
-                                       
-  static int check_transition_interval_valid(const stmt::StmtType stmt_type,
-                                             ObExecContext &ctx,
-                                             ObRawExpr *transition_expr,
-                                             ObRawExpr *interval_expr);
-
-  static int set_interval_value(ObExecContext &ctx,
-                                const stmt::StmtType stmt_type,
-                                share::schema::ObTableSchema &table_schema,
-                                ObRawExpr *interval_expr);
 
   /*--------------tablegroup related start------------------*/
   static int calc_values_exprs(ObExecContext &ctx, ObCreateTablegroupStmt &stmt);

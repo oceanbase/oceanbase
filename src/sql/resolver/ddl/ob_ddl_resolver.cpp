@@ -29,6 +29,7 @@
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "plugin/external_table/ob_external_struct.h"
 #include "plugin/sys/ob_plugin_helper.h"
+#include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 
 namespace oceanbase
 {
@@ -11503,196 +11504,6 @@ int ObDDLResolver::resolve_partition_hash_or_key(
   return ret;
 }
 
-/*
-  4.1 检查interval_expr是否是立即数或者，1+1 不算
-  4.2 expr的类型是否和col匹配 否则 ORA-14752
-*/
-int ObDDLResolver::resolve_interval_node(ObResolverParams &params,
-                                         ParseNode *interval_node,
-                                         common::ColumnType &col_dt,
-                                         int64_t precision,
-                                         int64_t scale,
-                                         ObRawExpr *&interval_value_expr_out)
-{
-  int ret = OB_SUCCESS;
-  ParseNode * expr_node;
-
-  CK (NULL != interval_node);
-  expr_node = interval_node->children_[0];;
-  CK (NULL != expr_node);
-
-  if (OB_SUCC(ret)) {
-    if (expr_node->type_ == T_NULL) {
-      ret = OB_ERR_INVALID_DATA_TYPE_INTERVAL_TABLE;
-    } else {
-      ObRawExpr *interval_value_expr = NULL;
-      OZ (ObResolverUtils::resolve_partition_range_value_expr(params, *expr_node, "interval_part",
-                                             PARTITION_FUNC_TYPE_RANGE_COLUMNS,
-                                             interval_value_expr, false, true));
-      if (ret == OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED) {
-        ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
-      } else if (!OB_SUCC(ret)) {
-        ret = OB_WRONG_COLUMN_NAME;
-        LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, static_cast<int>(interval_node->str_len_),
-                       interval_node->str_value_);
-      } else {
-        common::ObObjType expr_type = interval_value_expr->get_data_type();
-        switch (col_dt) {
-          case ObIntType:
-          case ObFloatType:
-          case ObDoubleType:
-          case ObNumberFloatType:
-          case ObNumberType: {
-            if (expr_type != ObIntType && expr_type != ObFloatType
-               && expr_type != ObNumberType && expr_type != ObDoubleType) {
-              ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
-              LOG_WARN("fail to check interval expr datatype", K(expr_type), K(col_dt), K(ret));
-            } else if (col_dt == ObNumberType) {
-              ObAccuracy acc;
-              acc.set_precision(precision);
-              acc.set_scale(scale);
-              interval_value_expr->set_accuracy(acc);
-            }
-            if (OB_SUCC(ret)) {
-              ParamStore dummy_params;
-              ObRawExprFactory expr_factory(*(params.allocator_));
-              ObObj out_val;
-              ObRawExpr *sign_expr = NULL;
-              OZ (ObRawExprUtils::build_sign_expr(expr_factory, interval_value_expr, sign_expr));
-              OZ (sign_expr->formalize(params.session_info_));
-              OZ (ObSQLUtils::calc_simple_expr_without_row(params.session_info_,
-                                                          sign_expr, out_val,
-                                                          &dummy_params, *(params.allocator_)));
-
-              if (OB_FAIL(ret)) {
-                // do nothing
-              } else if (out_val.is_negative_number()) {
-                ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
-                LOG_WARN("fail to check interval expr datatype", K(expr_type), K(col_dt), K(ret));
-              }
-              // if (OB_FAIL(ret)) {
-              //   // do nothing
-              // } else if (lib::is_oracle_mode()){
-              //   if (!out_val.is_number()) {
-              //     ret = OB_ERR_UNEXPECTED;
-              //     LOG_WARN("expected number type, but actually is not", K(ret));
-              //   } else {
-              //     number::ObNumber res;
-              //     OZ (out_val.get_number(res), out_val);
-              //     OX (res.is_negative_number)
-              //   }
-              // }
-            }
-            break;
-          }
-          case ObDateTimeType:
-          case ObTimestampNanoType: {
-            if (expr_type != ObIntervalYMType && expr_type != ObIntervalDSType) {
-              ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
-              LOG_WARN("fail to check interval expr datatype", K(expr_type), K(col_dt), K(ret));
-            }
-            break;
-          }
-          default: {
-            ret = OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE;
-            LOG_WARN("fail to check interval expr datatype", K(expr_type), K(col_dt), K(ret));
-            break;
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        interval_value_expr_out = interval_value_expr;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObDDLResolver::resolve_interval_expr_low(ObResolverParams &params,
-                                             ParseNode *interval_node,
-                                             const share::schema::ObTableSchema &table_schema,
-                                             ObRawExpr *transition_expr,
-                                             ObRawExpr *&interval_value)
-{
-  int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *col_schema = NULL;
-  common::ColumnType col_dt = ObNullType;
-  /* 1. interval 分区只支持一个分区键 否则 ORA-14750*/
-  if (OB_SUCC(ret)) {
-    if (table_schema.get_partition_key_column_num() > 1) {
-      ret = OB_ERR_INTERVAL_CLAUSE_HAS_MORE_THAN_ONE_COLUMN;
-      SQL_RESV_LOG(WARN, "interval clause has more then one column", K(ret));
-    }
-  }
-
-  /* 2. interval 分区列只支持数据类型： number, date, float, timestamp。 否则 ORA-14751 */
-  if (OB_SUCC(ret)) {
-    uint64_t col_id = OB_INVALID_ID;
-    ObItemType item_type;
-    const ObPartitionKeyInfo &part_key_info = table_schema.get_partition_key_info();
-
-    OZ (part_key_info.get_column_id(0, col_id));
-    CK (OB_NOT_NULL(col_schema = table_schema.get_column_schema(col_id)));
-    if (OB_SUCC(ret)) {
-      col_dt = col_schema->get_data_type();
-      if (ObFloatType == col_dt || ObDoubleType == col_dt) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support float or double as interval partition column", K(ret), K(col_dt));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition with float or double type partition column");
-      } else if (false == ObResolverUtils::is_valid_oracle_interval_data_type(col_dt, item_type)) {
-        ret = OB_ERR_INVALID_DATA_TYPE_INTERVAL_TABLE;
-        SQL_RESV_LOG(WARN, "invalid interval column data type", K(ret), K(col_dt));
-      }
-    }
-  }
-  /* 3. 最大分区不能是maxvalue。否则 ORA-14761 */
-  if (OB_SUCC(ret)) {
-    if (OB_SUCC(ret) && transition_expr->get_data_type() == ObMaxType) {
-      ret = OB_ERR_MAXVALUE_PARTITION_WITH_INTERVAL;
-      SQL_RESV_LOG(WARN, "interval with maxvalue ", K(ret), K(table_schema.get_table_name()));
-    }
-  }
-  /* 4. 检查inteval的表达式
-    4.1 检查是否是立即数，1+1 不算
-    4.2 expr的类型是否和col匹配 否则 ORA-14752
-  */
-  CK (OB_NOT_NULL(col_schema));
-  OZ (resolve_interval_node(params, interval_node, col_dt, col_schema->get_accuracy().get_precision(),
-                            col_schema->get_accuracy().get_scale(), interval_value));
-
-  return ret;
-}
-
-int ObDDLResolver::resolve_interval_clause(ObPartitionedStmt *stmt,
-                                           ParseNode *node,
-                                           ObTableSchema &table_schema,
-                                           common::ObSEArray<ObRawExpr*, 8> &range_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(stmt), K(node));
-  } else if (node->num_child_ > RANGE_INTERVAL_NODE) {
-    /* interval info record in 6th param */
-    ParseNode *interval_node = node->children_[RANGE_INTERVAL_NODE];
-    ObRawExpr *transition_expr = range_exprs.at(range_exprs.count() - 1);
-    ObRawExpr *interval_value = NULL;
-    if (OB_ISNULL(transition_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null transition expr", K(ret));
-    } else if (NULL == interval_node) {
-      // no nothing
-    } else if (OB_FAIL(resolve_interval_expr_low(params_, interval_node, table_schema,
-                                                 transition_expr, interval_value))) {
-      LOG_WARN("failed to resolve interval expr low", K(ret));
-    } else {
-      stmt->set_interval_expr(interval_value);
-    }
-  }
-  return ret;
-}
-
 int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
                                            ParseNode *node,
                                            const bool is_subpartition,
@@ -11720,8 +11531,18 @@ int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
     SQL_RESV_LOG(WARN, "get invalid num_child", KR(ret), K(is_subpartition), K(node->num_child_));
   } else if (nullptr == node->children_[RANGE_ELEMENTS_NODE]) {
     if (!is_subpartition) {
-      // auto_partition clause allow sql without partition definition, do nothing
+      // 1.auto_partition clause allow sql without partition definition, do nothing
       // e.g. create table t1 (c1 int primary key, c2 int) partition by range('c1')
+      // 2.auto_partition clause allow sql with interval partition definition, not support
+      // e.g. create table t1 (c1 int primary key, c2 int) partition by range('c1') interval(10) size('1MB')
+      if (node->num_child_ > RANGE_INTERVAL_NODE) {
+        ParseNode *interval_node = node->children_[RANGE_INTERVAL_NODE];
+        if (OB_NOT_NULL(interval_node)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("auto split part table with interval part is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto split part table with interval part is");
+        }
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("subpartition without partition definition", KR(ret));
@@ -11804,7 +11625,12 @@ int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
       }
     }
     // 2.5 resolve interval clause
-    OZ (resolve_interval_clause(stmt, node, table_schema, range_values_exprs));
+    if (OB_SUCC(ret)) {
+      ObIntervalPartitionResolver interval_partition_resolver(params_);
+      if (OB_FAIL(interval_partition_resolver.resolve_interval_clause(stmt, node, table_schema, range_values_exprs))) {
+        LOG_WARN("failed to resolve interval clause", KR(ret));
+      }
+    }
 
     // 解析模板化二级分区定义
     if (OB_SUCC(ret)) {

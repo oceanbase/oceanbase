@@ -10949,6 +10949,54 @@ int ObTableSchema::get_vec_id_rowkey_tid(uint64_t &vec_id_rowkey_tid) const
   return ret;
 }
 
+int ObTableSchema::check_support_interval_part() const
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  int64_t part_num = get_part_option().get_part_num();
+  ObPartition **part_array = get_part_array();
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
+  } else if (tenant_data_version < DATA_VERSION_4_4_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.4.2, interval partition is not supported",
+              KR(ret), KDV(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.4.2, interval partition");
+  } else if (OB_UNLIKELY(with_dynamic_partition_policy())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("interval partition and dynamic partition can not be used together", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition and dynamic partition used together");
+  } else if (is_auto_partitioned_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("auto partitioned table not support interval partition", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition and auto partition used together");
+  } else if (OB_UNLIKELY(1 != get_partition_key_column_num())) {
+    ret = OB_ERR_INTERVAL_CLAUSE_HAS_MORE_THAN_ONE_COLUMN;
+    LOG_WARN("interval partition table with more than one partition key", KR(ret));
+  } else if (OB_FAIL(check_identity_column_for_interval_part())) {
+    LOG_WARN("fail to check identity column for interval part", KR(ret));
+  }
+  return ret;
+}
+
+int ObTableSchema::check_identity_column_for_interval_part() const
+{
+  int ret = OB_SUCCESS;
+  for (ObTableSchema::const_column_iterator iter = column_begin(); OB_SUCC(ret) && iter != column_end(); ++iter) {
+    const ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", KR(ret));
+    } else if (column_schema->is_identity_column()
+                && column_schema->is_part_key_column()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("identity column as interval key is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "identity column as interval key is");
+    }
+  }
+  return ret;
+}
+
 int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;

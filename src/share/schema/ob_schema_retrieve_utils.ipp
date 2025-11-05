@@ -462,13 +462,8 @@ int ObSchemaRetrieveHelperBase<TABLE_SCHEMA, ObPartition>::add_schema(TABLE_SCHE
     const ObRowkey &high_bound_val = p.get_high_bound_val();
     if (high_bound_val > transition_point) {
       const ObRowkey &interval_range = table_schema.get_interval_range();
-      bool is_oracle_mode = false;
-      if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to check oracle mode", KR(ret), K(table_schema));
-      } else if (OB_FAIL(ObPartitionUtils::set_low_bound_val_by_interval_range_by_innersql(
-          is_oracle_mode, p, interval_range))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to set_low_bound_val_by_interval_range", K(interval_range),
-            K(is_oracle_mode), K(p), K(ret));
+      if (OB_FAIL(ObPartitionUtils::set_low_bound_val_by_interval_range(p, interval_range))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to set_low_bound_val_by_interval_range", K(interval_range), K(p), K(ret));
       }
     }
   }

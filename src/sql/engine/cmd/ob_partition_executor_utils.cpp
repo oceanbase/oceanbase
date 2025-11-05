@@ -15,6 +15,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
+#include "sql/engine/cmd/ob_interval_partition_utils.h"
 
 namespace oceanbase
 {
@@ -87,50 +88,6 @@ int ObPartitionExecutorUtils::calc_values_exprs_for_alter_table(ObExecContext &c
   return ret;
 }
 
-int ObPartitionExecutorUtils::check_transition_interval_valid(const stmt::StmtType stmt_type,
-                                                              ObExecContext &ctx,
-                                                              ObRawExpr *transition_expr,
-                                                              ObRawExpr *interval_expr)
-{
-  int ret = OB_SUCCESS;
-  ParamStore dummy_params;
-  ObObj temp_obj;
-  ObRawExprFactory raw_expr_factory(ctx.get_allocator());
-
-  CK (transition_expr != NULL);
-  CK (interval_expr != NULL);
-  CK (interval_expr->is_const_expr());
-  OZ (ObSQLUtils::calc_simple_expr_without_row(ctx.get_my_session(),
-                                   interval_expr, temp_obj, &dummy_params, ctx.get_allocator()));
-  if (OB_SUCC(ret) && temp_obj.is_zero()) {
-    ret = OB_ERR_INTERVAL_CANNOT_BE_ZERO;
-    LOG_WARN("interval can not be zero"); 
-  }
-  if (OB_SUCC(ret) && ((transition_expr->get_data_type() == ObDateTimeType 
-          ||transition_expr->get_data_type() == ObTimestampNanoType)
-        && (interval_expr->get_data_type() == ObIntervalYMType))) {
-    ObOpRawExpr *add_expr = NULL;
-    ObRawExpr *tmp_expr = transition_expr;
-    /* 对于年月的间隔，最多需要加12次，才能判断是否合法 */
-    for (int i = 0; OB_SUCC(ret) && i < 12; i ++) {
-      OX (add_expr = NULL);
-      OZ (raw_expr_factory.create_raw_expr(T_OP_ADD, add_expr));
-      if (NULL != add_expr) {
-        OZ (add_expr->set_param_exprs(tmp_expr, interval_expr));
-        OX (tmp_expr = add_expr);
-      }
-    }
-    OZ (add_expr->formalize(ctx.get_my_session()));
-    OZ (ObSQLUtils::calc_simple_expr_without_row(ctx.get_my_session(),
-                                  add_expr, temp_obj, &dummy_params, ctx.get_allocator()));
-    if (OB_ERR_DAY_OF_MONTH_RANGE == ret) {
-      ret = OB_ERR_INVALID_INTERVAL_HIGH_BOUNDS;
-      LOG_WARN("fail to calc value", K(ret), KPC(add_expr));
-    }
-  }
-  return ret;
-}
-
 int ObPartitionExecutorUtils::calc_values_exprs(ObExecContext &ctx,
                                                 const stmt::StmtType stmt_type,
                                                 ObTableSchema &table_schema,
@@ -184,11 +141,16 @@ int ObPartitionExecutorUtils::calc_values_exprs(ObExecContext &ctx,
       } else if (stmt.get_interval_expr() != NULL) {
         int64_t part_num = stmt.get_part_values_exprs().count();
         CK (part_num >= 1);
-        OZ (check_transition_interval_valid(stmt_type,
-                                            ctx, 
-                                            stmt.get_part_values_exprs().at(part_num - 1), 
-                                            stmt.get_interval_expr()));
-        OZ (set_interval_value(ctx, stmt_type, table_schema, stmt.get_interval_expr()));
+        OZ (ObIntervalPartitionUtils::check_transition_interval_valid(
+            stmt_type,
+            ctx,
+            stmt.get_part_values_exprs().at(part_num - 1),
+            stmt.get_interval_expr()));
+        OZ (ObIntervalPartitionUtils::set_interval_value(
+            ctx,
+            stmt_type,
+            table_schema,
+            stmt.get_interval_expr()));
       }
     } 
   }
@@ -507,29 +469,6 @@ int ObPartitionExecutorUtils::set_range_part_high_bound(ObExecContext &ctx,
         LOG_WARN("deep_copy_str fail", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObPartitionExecutorUtils::set_interval_value(ObExecContext &ctx,
-                                                 const stmt::StmtType stmt_type,
-                                                 ObTableSchema &table_schema,
-                                                 ObRawExpr *interval_expr)
-{
-  ObObj value_obj;
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr_cal_and_cast_with_check_varchar_len(stmt_type, false /*is_list_part*/, 
-                                                       ctx,
-                                                       interval_expr->get_result_type(),
-                                                       interval_expr,
-                                                       value_obj))) {
-    LOG_WARN("fail to cast_expr_to_obj", K(ret));
-  } else {
-    ObRowkey interval_rowkey;
-    interval_rowkey.assign(&value_obj, 1);
-    
-    OX (table_schema.get_part_option().set_part_func_type(PARTITION_FUNC_TYPE_INTERVAL));
-    OZ (table_schema.set_interval_range(interval_rowkey));
   }
   return ret;
 }

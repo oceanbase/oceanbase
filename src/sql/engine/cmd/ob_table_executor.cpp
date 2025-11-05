@@ -31,6 +31,8 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "storage/ob_partition_pre_split.h"
+#include "share/schema/ob_add_interval_part_controller.h"
+#include "sql/engine/cmd/ob_interval_partition_utils.h"
 
 namespace oceanbase
 {
@@ -391,6 +393,10 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("failed to prepare drop table arg", K(ret));
       } else if (OB_FAIL(ctx.get_sql_ctx()->schema_guard_->reset())){
         LOG_WARN("schema_guard reset failed", K(ret));
+      } else if (create_table_arg.schema_.is_interval_part()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create ctas for interval part table is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ctas for interval part table is");
       } else if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, create_table_res))) { //2, 建表;
         LOG_WARN("rpc proxy create table failed", K(ret), "dst", common_rpc_proxy->get_server());
       } else if (!(OB_INVALID_ID == create_table_res.table_id_
@@ -872,9 +878,17 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         || obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_table_arg.alter_part_type_) {
       alter_table_arg.is_alter_partitions_ = true;
     }
-    ObPartitionPreSplit pre_split;
     AlterTableSchema &alter_table_schema = const_cast<AlterTableSchema &>(alter_table_arg.alter_table_schema_);
-    if (OB_FAIL(populate_based_schema_obj_info_(alter_table_arg))) {
+    ObAddIntervalPartitionGuard guard(alter_table_schema.get_tenant_id(),
+                                      alter_table_schema.get_table_id());
+    if (obrpc::ObAlterTableArg::ADD_PARTITION == alter_table_arg.alter_part_type_
+        && alter_table_schema.is_interval_part()) {
+      if (OB_FAIL(guard.lock(alter_table_schema))) {
+        LOG_WARN("fail to handle interval partition addition", KR(ret));
+      }
+    }
+    ObPartitionPreSplit pre_split;
+    if (FAILEDx(populate_based_schema_obj_info_(alter_table_arg))) {
       LOG_WARN("fail to populate based schema obj info", KR(ret));
     } else if (OB_FAIL(pre_split.get_global_index_pre_split_schema_if_need(alter_table_schema.get_tenant_id(),
                                                             alter_table_arg.session_id_,
@@ -896,6 +910,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       // 在回滚时不会重试，也不检查 schema version
       alter_table_arg.based_schema_object_infos_.reset();
     }
+    DEBUG_SYNC(AFTER_SEND_ALTER_TABLE);
   }
 
   if (OB_SUCC(ret)) {
@@ -1959,6 +1974,14 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
         ret = OB_NOT_SUPPORTED;
         LOG_USER_WARN(OB_NOT_SUPPORTED, "add hash partition");
       }
+
+      if (OB_SUCC(ret) && table_schema.is_interval_part()) {
+        if (OB_FAIL(ObIntervalPartitionUtils::check_transition_interval_consistent(table_schema,
+                                                                                   ctx,
+                                                                                   stmt))) {
+          LOG_WARN("failed to check transition interval consistent", KR(ret));
+        }
+      }
     } else if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == arg.alter_part_type_) {
       if (table_schema.is_range_subpart()) {
         if (OB_FAIL(ObPartitionExecutorUtils::set_individual_range_part_high_bound(
@@ -1992,17 +2015,17 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
       LOG_WARN("no operation", K(arg.alter_part_type_), K(ret));
     }
     LOG_DEBUG("dump table schema", K(table_schema));
-  } else if (stmt.get_interval_expr() != NULL) {
-    CK (NULL != stmt.get_transition_expr());
-    OZ (ObPartitionExecutorUtils::check_transition_interval_valid(
+  } else if (stmt.get_interval_expr_for_set_interval() != NULL) {
+    CK (NULL != stmt.get_transition_expr_for_set_interval());
+    OZ (ObIntervalPartitionUtils::check_transition_interval_valid(
                                         stmt::T_CREATE_TABLE,
                                         ctx,
-                                        stmt.get_transition_expr(),
-                                        stmt.get_interval_expr()));
-    OZ (ObPartitionExecutorUtils::set_interval_value(ctx,
+                                        stmt.get_transition_expr_for_set_interval(),
+                                        stmt.get_interval_expr_for_set_interval()));
+    OZ (ObIntervalPartitionUtils::set_interval_value(ctx,
                                                      stmt::T_CREATE_TABLE,
                                                      table_schema,
-                                                     stmt.get_interval_expr()));
+                                                     stmt.get_interval_expr_for_set_interval()));
   }
 
   return ret;

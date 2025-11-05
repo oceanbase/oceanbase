@@ -1934,6 +1934,7 @@ class SqlKeywords:
          TP_NAME
          TRADITIONAL
          TRANSACTION
+         TRANSITION
          TRIGGER
          TRIGGERS
          TRIM

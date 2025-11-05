@@ -796,7 +796,7 @@ public:
                                            int n,
                                            ObRawExpr *&expr_out);
   static int build_interval_ym_diff_exprs(ObRawExprFactory &raw_expr_factory,
-                                          ObObj &const_val,
+                                          const ObObj &const_val,
                                           const ObObj &transition_val,
                                           const ObObj &interval_val,
                                           ObRawExpr *&diff_1_out,
@@ -804,7 +804,7 @@ public:
                                           ObConstRawExpr *&transition_expr,
                                           ObConstRawExpr *&interval_expr);
   static int build_interval_ds_diff_exprs(ObRawExprFactory &raw_expr_factory,
-                                          ObObj &const_val,
+                                          const ObObj &const_val,
                                           const ObObj &transition_val,
                                           const ObObj &interval_val,
                                           ObRawExpr *&diff_1_out,
@@ -816,16 +816,24 @@ public:
                                        ObObj &const_val,
                                        const ObObj &transition_val,
                                        const ObObj &interval_val,
+                                       const ColumnType &col_dt,
                                        ObRawExpr *&result_expr_out,
                                        ObRawExpr *&n_part_expr);
   static int build_common_diff_exprs(ObRawExprFactory &raw_expr_factory,
-                                     ObObj &const_val,
+                                     const ObObj &const_val,
                                      const ObObj &transition_val,
                                      const ObObj &interval_val,
                                      ObRawExpr *&diff_1_out,
                                      ObRawExpr *&diff_2_out,
                                      ObConstRawExpr *&transition_expr,
                                      ObConstRawExpr *&interval_expr);
+  static int build_val_interval_pos_expr(ObRawExprFactory &raw_expr_factory,
+                                           const ObObj &val,
+                                           const ObObj &transition_point_val,
+                                           const ObObj &interval_range_val,
+                                           ObRawExpr *&val_interval_pos_expr,
+                                           ObConstRawExpr *&transition_point_expr,
+                                           ObConstRawExpr *&interval_range_expr);
   static int build_sign_expr(ObRawExprFactory &expr_factory,
                              ObRawExpr *param,
                              ObRawExpr *&sign_expr);
@@ -833,6 +841,10 @@ public:
                                   ObRawExpr *left,
                                   ObRawExpr *right,
                                   ObOpRawExpr *&less_than_expr);
+  static int build_less_than_or_equal_expr(ObRawExprFactory &expr_factory,
+                                           ObRawExpr *left,
+                                           ObRawExpr *right,
+                                           ObOpRawExpr *&less_than_or_equal_expr);
   static int build_op_pseudo_column_expr(ObRawExprFactory &expr_factory,
                                          const ObItemType expr_type,
                                          const char *expr_name,

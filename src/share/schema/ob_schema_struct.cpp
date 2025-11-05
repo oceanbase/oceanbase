@@ -20,6 +20,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "sql/engine/cmd/ob_interval_partition_utils.h"
 
 namespace oceanbase
 {
@@ -3661,6 +3662,49 @@ int ObPartitionSchema::get_max_part_idx(int64_t &part_idx, const bool skip_exter
       } else {
         part_idx = max_part_idx;
       }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionSchema::get_max_range_part_idx_for_interval_part_table(int64_t &part_idx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_interval_part())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("this table is not interval part", KR(ret));
+  } else {
+    // binary search max range part
+    ObPartition max_range_part;
+    max_range_part.set_high_bound_val(transition_point_);
+    const ObPartition *const *result = std::lower_bound(partition_array_,
+                                                        partition_array_ + partition_num_,
+                                                        &max_range_part,
+                                                        ObPartition::less_than);
+    if (OB_ISNULL(result) || OB_ISNULL(*result)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else if ((*result)->get_high_bound_val() != transition_point_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected max range part", KR(ret));
+    } else {
+      part_idx = (*result)->get_part_idx();
+    }
+  }
+
+  return ret;
+}
+
+int ObPartitionSchema::get_base_part_idx_for_add_part(int64_t &base_part_idx) const
+{
+  int ret = OB_SUCCESS;
+  if (is_interval_part()) {
+    if (OB_FAIL(get_max_range_part_idx_for_interval_part_table(base_part_idx))) {
+      LOG_WARN("fail to get max range part idx for interval part table", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(get_max_part_idx(base_part_idx, is_external_table()))) {
+      LOG_WARN("fail to get max part idx", KR(ret));
     }
   }
   return ret;
@@ -8192,211 +8236,115 @@ int ObPartitionUtils::convert_rowkey_to_hex(
   return ret;
 }
 
-int ObPartitionUtils::set_low_bound_val_by_interval_range_by_innersql(
-    const bool is_oracle_mode,
+int ObPartitionUtils::set_low_bound_val_by_interval_range(
     ObPartition &p,
-    const ObRowkey &interval_range_val)
+    const ObRowkey &interval_range)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("SetLowBV");
-  char *high_bound_val_str = static_cast<char *>(allocator.alloc(OB_MAX_B_HIGH_BOUND_VAL_LENGTH));
-  char *interval_range_str = static_cast<char *>(allocator.alloc(OB_MAX_B_HIGH_BOUND_VAL_LENGTH));
-  int64_t high_bound_val_len = 0;
-  int64_t interval_range_len = 0;
-  ObCommonSqlProxy *sql_proxy = GCTX.ddl_oracle_sql_proxy_;
-  ObSqlString sql_string;
-  if (OB_ISNULL(high_bound_val_str) || OB_ISNULL(interval_range_str)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("high_bound_val_str is null", KR(ret), K(high_bound_val_str), K(interval_range_str));
+  bool is_oracle_mode = false;
+  const uint64_t tenant_id = p.get_tenant_id();
+  if (OB_UNLIKELY(!p.get_high_bound_val().is_valid() || !interval_range.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("high bound val or interval range is invalid", KR(ret), K(p.get_high_bound_val()), K(interval_range));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(p.get_tenant_id(), is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", KR(ret));
   } else {
-    MEMSET(high_bound_val_str, 0, OB_MAX_B_HIGH_BOUND_VAL_LENGTH);
-    MEMSET(interval_range_str, 0, OB_MAX_B_HIGH_BOUND_VAL_LENGTH);
-    ObTimeZoneInfo tz_info;
-    tz_info.set_offset(0);
-    const ObObj *high_bound_objs = p.get_high_bound_val().get_obj_ptr();
-    if (p.get_high_bound_val().get_obj_cnt() < 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rowkey is invalid", KR(ret), K(p), K(interval_range_val));
-    } else if (OB_ISNULL(high_bound_objs)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ptr NULL", KR(ret), K(p), K(interval_range_val));
-    } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(p.get_tenant_id(), tz_info.get_tz_map_wrap()))) {
-      LOG_WARN("get tenant timezone map failed", KR(ret), K(p.get_tenant_id()));
-    } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(
-               is_oracle_mode,
-               p.get_high_bound_val(), high_bound_val_str,
-               OB_MAX_B_HIGH_BOUND_VAL_LENGTH,
-               high_bound_val_len, false, &tz_info))) {
-      LOG_WARN("Failed to convert rowkey to sql text", K(tz_info), KR(ret));
-    } else if (OB_FAIL(ObPartitionUtils::convert_rowkey_to_sql_literal(
-               is_oracle_mode,
-               interval_range_val, interval_range_str,
-               OB_MAX_B_HIGH_BOUND_VAL_LENGTH,
-               interval_range_len, false, &tz_info))) {
-      LOG_WARN("Failed to convert rowkey to sql text", K(tz_info), KR(ret));
-    } else if (ObDateTimeType == high_bound_objs[0].get_type()) {
-      if (OB_FAIL(sql_string.append_fmt("SELECT TO_DATE(%.*s) - %.*s FROM DUAL",
-                                                static_cast<int>(high_bound_val_len),
-                                                high_bound_val_str,
-                                                static_cast<int>(interval_range_len),
-                                                interval_range_str))) {
-        LOG_WARN("fail to append format", KR(ret));
-      }
-    } else if (ObTimestampNanoType == high_bound_objs[0].get_type()) {
-      if(OB_FAIL(sql_string.append_fmt("SELECT TO_TIMESTAMP(%.*s) - %.*s FROM DUAL",
-                                                static_cast<int>(high_bound_val_len),
-                                                high_bound_val_str,
-                                                static_cast<int>(interval_range_len),
-                                                interval_range_str))) {
-        LOG_WARN("fail to append format", KR(ret));
-      }
-    } else if (OB_FAIL(sql_string.append_fmt("SELECT %.*s - %.*s FROM DUAL",
-                                             static_cast<int>(high_bound_val_len),
-                                             high_bound_val_str,
-                                             static_cast<int>(interval_range_len),
-                                             interval_range_str))) {
-      LOG_WARN("fail to append format", KR(ret));
-    }
-    if (OB_SUCC(ret)) {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        static int64_t ROW_KEY_CNT = 1;
-        ObObj obj_array[ROW_KEY_CNT];
-        obj_array[0].reset();
-        ObObj &low_bound = obj_array[0];
-        common::sqlclient::ObMySQLResult *result = NULL;
-        if (OB_FAIL(sql_proxy->read(res, p.get_tenant_id(), sql_string.ptr()))) {
-          LOG_WARN("execute sql failed", KR(ret), K(sql_string.ptr()), K(p), K(interval_range_val),
-                   K(high_bound_objs[0].get_type()));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("execute sql failed", KR(ret), K(p.get_tenant_id()), K(sql_string));
-        } else if (OB_FAIL(result->next())) {
-          LOG_WARN("iterate next result fail", KR(ret), K(sql_string));
-        } else if (OB_FAIL(result->get_obj((int64_t)0, low_bound))) {
-          LOG_WARN("failed to get obj", KR(ret));
-        } else {
-          ObRowkey low_bound_val;
-          low_bound_val.reset();
-          low_bound_val.assign(obj_array, ROW_KEY_CNT);
-          if (OB_FAIL(p.set_low_bound_val(low_bound_val))) {
-            LOG_WARN("fail to set low bound val", K(p), KR(ret));
-          }
-        }
-      }
-    }
+    lib::CompatModeGuard g(is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+    const ObObj &high_bound_val_obj = p.get_high_bound_val().get_obj_ptr()[0];
+    const ObObj &interval_range_obj = interval_range.get_obj_ptr()[0];
+    BUILD_EXPR_WITH_CONTEXT(tenant_id, NULL, set_low_bound_val_by_interval_range_with_context, high_bound_val_obj, interval_range_obj, p);
+  }
+  return ret;
+}
+
+int ObPartitionUtils::set_low_bound_val_by_interval_range_with_context(
+    const ObObj &high_bound_val_obj,
+    const ObObj &interval_range_obj,
+    ObPartition &p,
+    ObRawExprFactory &expr_factory,
+    ObExecContext &exec_ctx,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *interval_range_expr = NULL;
+  ObConstRawExpr *high_bound_val_expr = NULL;
+  ObOpRawExpr *minus_expr = NULL;
+  static int64_t ROW_KEY_CNT = 1;
+  ObObj obj_array[ROW_KEY_CNT];
+  ObObj &low_bound_val_obj = obj_array[0];
+  ParamStore dummy_params;
+  ObRowkey low_bound_val;
+
+  // low_bound_val = high_bound_val - interval_range
+  if (OB_FAIL(ObRawExprUtils::build_const_obj_expr(expr_factory, interval_range_obj, interval_range_expr))) {
+    LOG_WARN("fail to build const obj expr", KR(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_const_obj_expr(expr_factory, high_bound_val_obj, high_bound_val_expr))) {
+    LOG_WARN("fail to build const obj expr", KR(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_MINUS, minus_expr))) {
+    LOG_WARN("fail to create raw expr", KR(ret));
+  } else if (OB_FAIL(minus_expr->set_param_exprs(high_bound_val_expr, interval_range_expr))) {
+    LOG_WARN("fail to set param exprs", KR(ret));
+  } else if (OB_FAIL(minus_expr->formalize(exec_ctx.get_my_session()))) {
+    LOG_WARN("fail to formalize", KR(ret));
+  } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(exec_ctx.get_my_session(),
+                                                              minus_expr,
+                                                              low_bound_val_obj,
+                                                              &dummy_params,
+                                                              allocator))) {
+    LOG_WARN("fail to calc simple expr without row", KR(ret));
+  } else if (FALSE_IT(low_bound_val.assign(obj_array, ROW_KEY_CNT))) {
+  } else if (OB_FAIL(p.set_low_bound_val(low_bound_val))) {
+    LOG_WARN("fail to set low bound val", KR(ret), K(low_bound_val));
   }
   return ret;
 }
 
 int ObPartitionUtils::check_interval_partition_table(
+    const uint64_t tenant_id,
     const ObRowkey &transition_point,
     const ObRowkey &interval_range)
 {
   int ret = OB_SUCCESS;
-
-  const stmt::StmtType stmt_type = stmt::T_NONE;
-  SMART_VARS_4((ObExprCtx, expr_ctx),
-               (ObArenaAllocator, local_allocator),
-               (ObExecContext, exec_ctx, local_allocator),
-               (ObSQLSessionInfo, session_info)) {
-
-    OZ (session_info.init(0, 0, &local_allocator, NULL));
-    OX (session_info.set_time_zone(ObString("+8:00"), true, true));
-    OZ (session_info.load_default_sys_variable(false, false));
-    OZ (session_info.load_default_configs_in_pc());
-    OX (exec_ctx.set_my_session(&session_info));
-
-    if (OB_SUCC(ret)) {
-      ObNewRow tmp_row;
-      RowDesc row_desc;
-      ObObj temp_obj;
-      ParamStore dummy_params;
-
-      OZ (ObSQLUtils::wrap_expr_ctx(stmt_type, exec_ctx, exec_ctx.get_allocator(), expr_ctx));
-      ObExprOperatorFactory expr_op_factory(exec_ctx.get_allocator());
-      ObRawExprFactory raw_expr_factory(exec_ctx.get_allocator());
-      ObExprGeneratorImpl expr_gen(expr_op_factory, 0, 0, NULL, row_desc);
-      ObSqlExpression sql_expr(exec_ctx.get_allocator());
-      expr_ctx.cast_mode_ = CM_WARN_ON_FAIL; //always set to WARN_ON_FAIL to allow calculate
-
-      ObConstRawExpr *transition_expr = NULL;
-      ObConstRawExpr *interval_expr = NULL;
-
-      OZ (ObRawExprUtils::build_const_obj_expr(raw_expr_factory, transition_point.get_obj_ptr()[0], transition_expr));
-      OZ (ObRawExprUtils::build_const_obj_expr(raw_expr_factory, interval_range.get_obj_ptr()[0], interval_expr));
-
-      OZ (interval_expr->formalize(exec_ctx.get_my_session()));
-      CK (interval_expr->is_const_expr());
-
-      OZ (sql::ObPartitionExecutorUtils::check_transition_interval_valid(stmt::StmtType::T_NONE,
-                                                          exec_ctx,
-                                                          transition_expr,
-                                                          interval_expr));
-      // // OZ (expr_gen.generate(*interval_expr, sql_expr));
-      // // OZ (sql_expr.calc(expr_ctx, tmp_row, temp_obj));
-      // OZ (ObSQLUtils::calc_simple_expr_without_row(stmt::StmtType::T_NONE, &session_info,
-      //                              interval_expr, temp_obj, &dummy_params, exec_ctx.get_allocator()));
-
-      // if (OB_SUCC(ret)) {
-      //   if (temp_obj.is_zero()) {
-      //     ret = OB_ERR_INTERVAL_CANNOT_BE_ZERO;
-      //     LOG_WARN("interval can not be zero");
-      //   }
-      // }
-      // if (OB_SUCC(ret)) {
-      //   if ((transition_expr->get_data_type() == ObDateTimeType
-      //       ||transition_expr->get_data_type() == ObTimestampNanoType)
-      //     && (interval_expr->get_data_type() == ObIntervalYMType)) {
-      //     if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type, exec_ctx, exec_ctx.get_allocator(), expr_ctx))) {
-      //       LOG_WARN("Failed to wrap expr exec_ctx", K(ret));
-      //     } else {
-      //       ObOpRawExpr *add_expr = NULL;
-      //       ObRawExpr *tmp_expr = transition_expr;
-      //       ObObj temp_obj;
-      //       // ObExprOperatorFactory expr_op_factory(exec_ctx.get_allocator());
-      //       // ObRawExprFactory raw_expr_factory(exec_ctx.get_allocator());
-      //       // ObExprGeneratorImpl expr_gen(expr_op_factory, 0, 0, NULL, row_desc);
-      //       // ObSqlExpression sql_expr(exec_ctx.get_allocator());
-      //       // expr_ctx.cast_mode_ = CM_WARN_ON_FAIL; //always set to WARN_ON_FAIL to allow calculate
-      //       // EXPR_SET_CAST_CTX_MODE(expr_ctx);
-      //       // tmp_expr = transition_expr;
-      //       // for (int i = 0; OB_SUCC(ret) && i < n; i ++) {
-      //       //   OX (expr = NULL);
-      //       //   OZ (raw_expr_factory.create_raw_expr(T_OP_ADD, expr));
-      //       //   if (NULL != expr) {
-      //       //     OZ (expr->set_param_exprs(tmp_expr, interval_expr));
-      //       //     OX (tmp_expr = expr);
-      //       //   }
-      //       // }
-      //       // OZ (expr_gen.generate(*expr, sql_expr));
-      //       // if (OB_SUCC(ret) && OB_FAIL(sql_expr.calc(expr_ctx, tmp_row, temp_obj))) {
-      //       //   ret = OB_ERR_INVALID_INTERVAL_HIGH_BOUNDS;
-      //       //   LOG_WARN("fail to calc value", K(ret), K(*expr));
-      //       // }
-
-      //       // For the interval of year and month, it needs to be added up to 11 times to judge whether it is legal
-      //       for (int i = 0; OB_SUCC(ret) && i < 11; i ++) {
-      //         OX (add_expr = NULL);
-      //         OZ (raw_expr_factory.create_raw_expr(T_OP_ADD, add_expr));
-      //         if (NULL != add_expr) {
-      //           OZ (add_expr->set_param_exprs(tmp_expr, interval_expr));
-      //           OX (tmp_expr = add_expr);
-      //         }
-      //       }
-      //       OZ (add_expr->formalize(exec_ctx.get_my_session()));
-      //       OZ (ObSQLUtils::calc_simple_expr_without_row(stmt::StmtType::T_NONE,
-      //                                     exec_ctx.get_my_session(),
-      //                                     add_expr, temp_obj,
-      //                                     &dummy_params, exec_ctx.get_allocator()));
-      //       if (OB_ERR_DAY_OF_MONTH_RANGE == ret) {
-      //         ret = OB_ERR_INVALID_INTERVAL_HIGH_BOUNDS;
-      //         LOG_WARN("fail to calc value", K(ret), KPC(add_expr));
-      //       }
-      //     }
-      //   }
-      // }
-    }
+  const ObTenantSchema *tenant_schema = NULL;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema is null", KR(ret), K(tenant_id));
+  } else {
+    BUILD_EXPR_WITH_CONTEXT(tenant_id, tenant_schema->get_tenant_name_str(), check_interval_partition_table_with_context, transition_point, interval_range);
   }
+
+  return ret;
+}
+
+int ObPartitionUtils::check_interval_partition_table_with_context(
+    const ObRowkey &transition_point,
+    const ObRowkey &interval_range,
+    ObRawExprFactory &expr_factory,
+    ObExecContext &exec_ctx,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *transition_expr = NULL;
+  ObConstRawExpr *interval_expr = NULL;
+
+  OZ (ObRawExprUtils::build_const_obj_expr(expr_factory, transition_point.get_obj_ptr()[0], transition_expr));
+  OZ (ObRawExprUtils::build_const_obj_expr(expr_factory, interval_range.get_obj_ptr()[0], interval_expr));
+
+  OZ (interval_expr->formalize(exec_ctx.get_my_session()));
+  CK (interval_expr->is_const_expr());
+
+  OZ (sql::ObIntervalPartitionUtils::check_transition_interval_valid(stmt::StmtType::T_NONE,
+                                                                     exec_ctx,
+                                                                     transition_expr,
+                                                                     interval_expr));
   return ret;
 }
 
@@ -15349,6 +15297,100 @@ bool check_can_drop_column_instant(const uint64_t tenant_id,
     can_drop_column_instant = tenant_config->_enable_drop_column_instant;
   }
   return can_drop_column_instant;
+}
+
+// filter out the partition which is same to orig_table_schema in alter_table_arg
+int filter_out_duplicate_interval_part(const ObSimpleTableSchemaV2 &orig_table_schema,
+                                       ObTableSchema &alter_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **inc_part_array = alter_table_schema.get_part_array();
+  ObPartition **orig_part_array = orig_table_schema.get_part_array();
+  const int64_t inc_part_num = alter_table_schema.get_part_option().get_part_num();
+  const int64_t orig_part_num = orig_table_schema.get_part_option().get_part_num();
+
+  if (OB_UNLIKELY(!orig_table_schema.is_interval_part())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig_table_schema is not interval part", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc_part_array is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (OB_ISNULL(orig_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig_part_array is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (OB_UNLIKELY(orig_table_schema.get_interval_range() != alter_table_schema.get_interval_range()
+              || orig_table_schema.get_transition_point() != alter_table_schema.get_transition_point())) {
+    ret = OB_ERR_INTERVAL_PARTITION_ERROR;
+    LOG_WARN("interval_range or transition_point is changed", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  }
+
+  int64_t orig_idx = 0;
+  int64_t actual_inc_num = 0;
+  const ObRowkey *rowkey_orig= nullptr;
+  for (int64_t inc_idx = 0; OB_SUCC(ret) && inc_idx < inc_part_num; ++inc_idx) {
+    const ObRowkey *rowkey_cur = NULL;
+    if (OB_ISNULL(inc_part_array[inc_idx])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ptr is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+    } else if (OB_ISNULL(rowkey_cur = &inc_part_array[inc_idx]->get_high_bound_val())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rowkey_cur is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+    }
+    while (OB_SUCC(ret) && orig_idx < orig_part_num) {
+      if (OB_ISNULL(orig_part_array[orig_idx])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("orig_part is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+      } else if (OB_ISNULL(rowkey_orig = &orig_part_array[orig_idx]->get_high_bound_val())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rowkey_orig is null", KR(ret), K(orig_table_schema), K(alter_table_schema));
+      // orig less than inc, continue to find next orig
+      } else if (*rowkey_orig < *rowkey_cur) {
+        orig_idx++;
+      } else {
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (*rowkey_orig != *rowkey_cur) {
+      if (actual_inc_num != inc_idx) {
+        // move the partition to the front
+        inc_part_array[actual_inc_num] = inc_part_array[inc_idx];
+      }
+      actual_inc_num++;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (0 == actual_inc_num) {
+    ret = OB_ERR_INTERVAL_PARTITION_EXIST;
+    LOG_INFO("all interval part for add is exist", K(alter_table_schema), K(orig_table_schema));
+  } else if (actual_inc_num != inc_part_num) {
+    alter_table_schema.set_part_num(actual_inc_num);
+    alter_table_schema.set_partition_num(actual_inc_num);
+  }
+  return ret;
+}
+
+int check_is_interval_table(const int64_t tenant_id,
+                            const int64_t table_id,
+                            bool &is_interval_table)
+{
+  int ret = OB_SUCCESS;
+  is_interval_table = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSimpleTableSchemaV2 *table_schema = nullptr;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    // table may be dropped
+  } else if (table_schema->is_interval_part()) {
+    is_interval_table = true;
+  }
+  return ret;
 }
 
 //

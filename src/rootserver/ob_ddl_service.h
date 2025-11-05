@@ -2417,8 +2417,6 @@ private:
                                    obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_add_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                  obrpc::ObAlterTableArg &alter_table_arg);
-  int filter_out_duplicate_interval_part(const share::schema::ObTableSchema &orig_table_schema,
-                                         share::schema::ObTableSchema &alter_table_schema);
   int check_alter_add_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
                                  const obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_set_interval(const share::schema::ObTableSchema &orig_table_schema,
@@ -2470,6 +2468,15 @@ private:
   int gen_inc_table_schema_for_drop_subpart(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int calc_interval_part_pos(const share::schema::ObTableSchema &orig_table_schema,
+                             const share::schema::ObPartition &inc_part,
+                             int64_t &pos);
+  int calc_interval_part_pos_with_context(const share::schema::ObTableSchema &orig_table_schema,
+                                          const share::schema::ObPartition &inc_part,
+                                          int64_t &pos,
+                                          sql::ObRawExprFactory &expr_factory,
+                                          sql::ObExecContext &exec_ctx,
+                                          common::ObIAllocator &allocator);
   int drop_index_to_scheduler_(ObMySQLTransaction &trans,
                                ObSchemaGetterGuard &schema_guard,
                                ObIAllocator &allocator,

@@ -113,6 +113,7 @@ int ObInterruptUtil::interrupt_tasks(ObPxSqcMeta &sqc, int code)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SCHEMA_ERROR_NEED_RETRY);
 void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &code, int64_t px_worker_execute_start_schema_version)
 {
   int ret = OB_SUCCESS;
@@ -126,6 +127,9 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
     if (query_tenant_begin_schema_version == OB_INVALID_VERSION) {
       code = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid tenant_schema_version", K(ret), K(query_tenant_begin_schema_version));
+    } else if (OB_UNLIKELY(ERRSIM_SCHEMA_ERROR_NEED_RETRY)) {
+      code = ERRSIM_SCHEMA_ERROR_NEED_RETRY;
+      LOG_INFO("ERRSIM here", KR(ret));
     } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
                  tenant_id, current_moment_schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret));

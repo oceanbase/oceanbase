@@ -324,6 +324,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_sys_dispatch_call_executor.cpp
   engine/cmd/ob_flashback_standby_log_executor.cpp
   engine/cmd/ob_ccl_rule_executor.cpp
+  engine/cmd/ob_interval_partition_utils.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -1499,6 +1500,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_ccl_rule_stmt.cpp
   resolver/ddl/ob_drop_ccl_rule_resolver.cpp
   resolver/ddl/ob_drop_ccl_rule_stmt.cpp
+  resolver/ddl/ob_interval_partition_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

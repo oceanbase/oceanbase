@@ -4327,73 +4327,24 @@ int ObRootService::precheck_interval_part(const obrpc::ObAlterTableArg &arg)
   ObSchemaGetterGuard schema_guard;
   const ObAlterTableArg::AlterPartitionType op_type = arg.alter_part_type_;
   const ObSimpleTableSchemaV2 *simple_table_schema = NULL;
-  const AlterTableSchema &alter_table_schema = arg.alter_table_schema_;
+  AlterTableSchema &alter_table_schema = const_cast<AlterTableSchema &>(arg.alter_table_schema_);
   int64_t tenant_id = alter_table_schema.get_tenant_id();
 
   if (!alter_table_schema.is_interval_part()
       || obrpc::ObAlterTableArg::ADD_PARTITION != op_type) {
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, schema service must not be NULL", K(ret));
+    LOG_WARN("error unexpected, schema service must not be NULL", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
+    LOG_WARN("fail to get schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-             alter_table_schema.get_table_id(), simple_table_schema))) {
+                     alter_table_schema.get_table_id(), simple_table_schema))) {
     LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(alter_table_schema));
   } else if (OB_ISNULL(simple_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("simple_table_schema is null", K(ret), K(alter_table_schema));
-  } else if (simple_table_schema->get_schema_version() < alter_table_schema.get_schema_version()) {
-  } else if (simple_table_schema->get_interval_range() != alter_table_schema.get_interval_range()
-             || simple_table_schema->get_transition_point() != alter_table_schema.get_transition_point()) {
-    ret = OB_ERR_INTERVAL_PARTITION_ERROR;
-    LOG_WARN("interval_range or transition_point is changed", KR(ret), \
-             KPC(simple_table_schema), K(alter_table_schema));
-  } else {
-    int64_t j = 0;
-    const ObRowkey *rowkey_orig= NULL;
-    bool is_all_exist = true;
-    ObPartition **inc_part_array = alter_table_schema.get_part_array();
-    ObPartition **orig_part_array = simple_table_schema->get_part_array();
-    if (OB_ISNULL(inc_part_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ptr is null", K(ret), K(alter_table_schema), KPC(simple_table_schema));
-    } else if (OB_ISNULL(orig_part_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ptr is null", K(ret), K(alter_table_schema), KPC(simple_table_schema));
-    }
-    for (int64_t i = 0; is_all_exist && OB_SUCC(ret) && i < alter_table_schema.get_part_option().get_part_num(); ++i) {
-      const ObRowkey *rowkey_cur = NULL;
-      if (OB_ISNULL(inc_part_array[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ptr is null", K(ret), K(alter_table_schema), KPC(simple_table_schema));
-      } else if (OB_UNLIKELY(NULL == (rowkey_cur = &inc_part_array[i]->get_high_bound_val()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ptr is null", K(ret), K(alter_table_schema), KPC(simple_table_schema));
-      }
-      while (is_all_exist && OB_SUCC(ret) && j < simple_table_schema->get_part_option().get_part_num()) {
-        if (OB_ISNULL(orig_part_array[j])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ptr is null", K(ret), K(alter_table_schema), KPC(simple_table_schema));
-        } else if (OB_UNLIKELY(NULL == (rowkey_orig = &orig_part_array[j]->get_high_bound_val()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ptr is null", K(ret), K(alter_table_schema), KPC(simple_table_schema));
-        } else if (*rowkey_orig < *rowkey_cur) {
-          j++;
-        } else {
-          break;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (*rowkey_orig != *rowkey_cur) {
-        is_all_exist = false;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (is_all_exist) {
-      LOG_INFO("all interval part for add is exist", K(alter_table_schema), KPC(simple_table_schema));
-      ret = OB_ERR_INTERVAL_PARTITION_EXIST;
-    }
+    LOG_WARN("simple_table_schema is null", KR(ret), K(alter_table_schema));
+  } else if (OB_FAIL(share::schema::filter_out_duplicate_interval_part(*simple_table_schema, alter_table_schema))) {
+    LOG_WARN("fail to filter out duplicate interval part", KR(ret), K(alter_table_schema));
   }
   return ret;
 }
