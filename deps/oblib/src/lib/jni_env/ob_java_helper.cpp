@@ -24,9 +24,6 @@
 #include "share/ob_errno.h"
 
 GETJNIENV getJNIEnv = NULL;
-// hdfs detach current thread is a call back function
-// but jdbc pulgs use this function to detach current thread
-DETACHCURRENTTHREAD detachCurrentThread = NULL;
 
 // hdfs functions
 HdfsGetPathInfoFunc obHdfsGetPathInfo = NULL;
@@ -392,7 +389,6 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
   } else {
     LOG_TRACE("succ to open jvm and hdfs lib from patch", KP(hdfs_lib_handle_), K(ObString(hdfs_lib_buf)), K(ObString(hdfs_lib_buf)));
     LIB_SYMBOL(hdfs_lib_handle_, "getJNIEnv", getJNIEnv, GETJNIENV);
-    LIB_SYMBOL(hdfs_lib_handle_, "detachCurrentThread", detachCurrentThread, DETACHCURRENTTHREAD);
     // link related useful hdfs func
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsGetPathInfo", obHdfsGetPathInfo, HdfsGetPathInfoFunc);
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsFreeFileInfo", obHdfsFreeFileInfo, HdfsFreeFileInfoFunc);
@@ -423,7 +419,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     LIB_SYMBOL(hdfs_lib_handle_, "hdfsBuilderSetKerbTicketCachePath", obHdfsBuilderSetKerbTicketCachePath, HdfsBuilderSetKerbTicketCachePathFunc);
 
     int user_error_len = STRLEN(hdfs_lib_buf);
-    if (OB_ISNULL(getJNIEnv) || OB_ISNULL(detachCurrentThread) ||
+    if (OB_ISNULL(getJNIEnv) ||
         /* hdfs funcs */
         OB_ISNULL(obHdfsGetPathInfo) ||
         OB_ISNULL(obHdfsFreeFileInfo) || OB_ISNULL(obHdfsDelete) ||
@@ -449,7 +445,6 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
         LOG_WARN("failed to open hdfs lib handle", K(ret));
       }
       getJNIEnv = nullptr;
-      detachCurrentThread = nullptr;
       obHdfsGetPathInfo = nullptr;
       obHdfsFreeFileInfo = nullptr;
       obHdfsDelete = nullptr;

@@ -45,6 +45,7 @@ public:
   bool is_env_inited();
   int check_path_exists(const char* path, bool &found);
   int setup_java_home();
+  int setup_java_env_for_hdfs();
   int setup_java_opts();
   // This api will setup the connector_path and class_path
   int setup_useful_path();

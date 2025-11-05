@@ -88,7 +88,6 @@
 
 // define function
 typedef JNIEnv* (*GETJNIENV)(void);
-typedef jint (*DETACHCURRENTTHREAD)(void);
 
 // hdfs related symbols
 typedef hdfsFileInfo* (*HdfsGetPathInfoFunc)(hdfsFS, const char*);
@@ -121,7 +120,6 @@ typedef void (*HdfsBuilderSetKerbTicketCachePathFunc)(struct hdfsBuilder *, cons
 
 // desclare function
 extern "C" GETJNIENV getJNIEnv;
-extern "C" DETACHCURRENTTHREAD detachCurrentThread;
 
 // declare hdfs functions
 extern "C" HdfsGetPathInfoFunc obHdfsGetPathInfo;

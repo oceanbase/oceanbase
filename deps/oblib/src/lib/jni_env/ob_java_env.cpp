@@ -70,9 +70,6 @@ int ObJavaEnv::check_path_exists(const char* path, bool &found)
   if (OB_ISNULL(path) || NULL == (dirp = opendir(path))) {
     found = false;
   } else {
-    // do nothing
-  }
-  if (OB_NOT_NULL(dirp)) {
     if (0 != closedir(dirp)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to close dirp", K(ret), KP(dirp));
@@ -107,14 +104,14 @@ int ObJavaEnv::setup_java_home()
     java_home_ = temp_java_home.ptr();
     if (OB_ISNULL(java_home_)) {
       ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to setup JAVA_HOME with null vairables", K(ret), K(GCONF.ob_java_home.get_value_string()));
-      LOG_USER_WARN(OB_JNI_PARAMS_ERROR, "failed to setup JAVA_HOME with null vairables", K(ret));
+      LOG_WARN("failed to setup JAVA_HOME with null variables", K(ret), K(GCONF.ob_java_home.get_value_string()));
+      LOG_USER_WARN(OB_JNI_PARAMS_ERROR, "failed to setup JAVA_HOME with null variables", K(ret));
     } else if (0 != setenv(JAVA_HOME, java_home_, 1)) {
       ret = OB_JNI_PARAMS_ERROR;
       LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
     } else if (STRCMP(java_home_, std::getenv(JAVA_HOME))) {
       ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to set JAVA_HOME from varibables", K(ret), K_(java_home));
+      LOG_WARN("failed to set JAVA_HOME from variables", K(ret), K_(java_home));
     } else {
       is_inited_java_home_ = true;
     }
@@ -139,14 +136,14 @@ int ObJavaEnv::setup_java_opts()
   if (OB_SUCC(ret) && OB_LIKELY(!is_inited_java_opts_)) {
     if (OB_ISNULL(java_opts_)) {
       ret = OB_JNI_JAVA_OPTS_NOT_FOUND_ERROR;
-      LOG_WARN("failed to setup JAVA_OPTS with null vairables", K(ret));
+      LOG_WARN("failed to setup JAVA_OPTS with null variables", K(ret));
     } else {
       if (0 != setenv(JAVA_OPTS, java_opts_, 1)) {
         ret = OB_JNI_JAVA_OPTS_NOT_FOUND_ERROR;
         LOG_WARN("faieled to setup JAVA_OPTS", K(ret), K_(java_opts));
       } else if (STRCMP(java_opts_, std::getenv(JAVA_OPTS))) {
         ret = OB_JNI_JAVA_OPTS_NOT_FOUND_ERROR;
-        LOG_WARN("failed to set JAVA_OPTS from varibables", K(ret), K_(java_opts));
+        LOG_WARN("failed to set JAVA_OPTS from variables", K(ret), K_(java_opts));
       } else {
         is_inited_java_opts_ = true;
       }
@@ -160,7 +157,7 @@ int ObJavaEnv::setup_java_opts()
       LOG_WARN("faieled to setup LIBHDFS_OPTS", K(ret), K_(java_opts));
     } else if (STRCMP(java_opts_, std::getenv(LIBHDFS_OPTS))) {
       ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to set LIBHDFS_OPTS from varibables", K(ret),
+      LOG_WARN("failed to set LIBHDFS_OPTS from variables", K(ret),
                K_(java_opts));
     } else {
       is_inited_hdfs_opts_ = true;
@@ -245,17 +242,31 @@ int ObJavaEnv::setup_useful_path()
       }
     }
   }
+  if (OB_FAIL(ret)) {
+  } else {
+    ObSqlString hadoop_jar_path;
+    if (OB_FAIL(hadoop_jar_path.append_fmt("%s/%s", connector_path_, HADOOP_LIB_PATH_PREFIX))) {
+    } else if (OB_FAIL(check_path_exists(hadoop_jar_path.ptr(), found))) {
+      LOG_WARN("can't open dir path", K(hadoop_jar_path), K(ret));
+    } else if (!found) {
+      ret = OB_JNI_ENV_ERROR;
+      LOG_USER_ERROR(OB_JNI_ENV_ERROR, "can't open hadoop class jar path");
+      LOG_WARN("can't open hadoop class jar path", K(connector_path_), K(ret));
+    } else {
+      // found hadoop jar path
+    }
+  }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(connector_path_)) {
       ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
-      LOG_WARN("failed to setup CONNECTOR_PATH with null vairables", K(ret));
+      LOG_WARN("failed to setup CONNECTOR_PATH with null variables", K(ret));
     } else {
       if (0 != setenv(CONNECTOR_PATH, connector_path_, 1)) {
         ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
         LOG_WARN("faieled to setup CONNECTOR_PATH", K(ret), K_(connector_path));
       } else if (STRCMP(connector_path_, std::getenv(CONNECTOR_PATH))) {
         ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
-        LOG_WARN("failed to set CONNECTOR_PATH from varibables", K(ret), K_(connector_path));
+        LOG_WARN("failed to set CONNECTOR_PATH from variables", K(ret), K_(connector_path));
       } else {
         is_inited_conn_path_ = true;
       }
@@ -340,7 +351,25 @@ int ObJavaEnv::setup_java_env()
       LOG_WARN("failed to setup java home", K(ret));
     } else if (OB_FAIL(setup_java_opts())) {
       LOG_WARN("failed to setup java options", K(ret));
-    } else if (OB_FAIL(setup_useful_path())) {
+    }
+  }
+
+  jh_ = std::getenv(JAVA_HOME);
+  jo_ = std::getenv(JAVA_OPTS);
+
+  LOG_INFO("setup env variables", K(ret), K(jh_), K(jo_));
+  return ret;
+}
+
+int ObJavaEnv::setup_java_env_for_hdfs()
+{
+  int ret = OB_SUCCESS;
+  obsys::ObWLockGuard<> wg(setup_env_lock_);
+  if (!GCONF.ob_enable_java_env) {
+    ret = OB_JNI_NOT_ENABLE_JAVA_ENV_ERROR;
+    LOG_WARN("observer is not enable java env", K(ret));
+  } else {
+    if (OB_FAIL(setup_useful_path())) {
       LOG_WARN("failed to setup useful path", K(ret));
     } else if (OB_FAIL(setup_extra_runtime_lib_path())) {
       LOG_WARN("failed to setup extra runtime lib path", K(ret));
