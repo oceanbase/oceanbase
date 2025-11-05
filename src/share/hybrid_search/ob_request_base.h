@@ -200,7 +200,7 @@ public:
   bool need_parentheses_;
   inline ObItemType get_op_type() const { return op_type_; }
   bool has_multi_params_recursive() const;
-  void simplify_recursive();
+  void pullup_recursive();
 private:
   ObReqOpExpr(ObItemType op_type) : ObReqExpr(ObString()), need_parentheses_(false), op_type_(op_type) {}
   int init(ObReqExpr *l_para, ObReqExpr *r_para, ObItemType type);

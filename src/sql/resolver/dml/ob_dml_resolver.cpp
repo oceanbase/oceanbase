@@ -49,7 +49,7 @@
 #include "share/catalog/ob_catalog_utils.h"
 #include "share/ob_license_utils.h"
 #include "share/schema/ob_external_table_column_schema_helper.h"
-#include "src/share/hybrid_search/ob_hybrid_search_exector.h"
+#include "src/share/hybrid_search/ob_hybrid_search_executor.h"
 
 namespace oceanbase
 {

@@ -79,7 +79,7 @@ int ObQueryTranslator::translate_select()
   for (int i = 0; i < query_req->score_items_.count(); i++) {
     ObReqOpExpr *op_expr = dynamic_cast<ObReqOpExpr*>(query_req->score_items_.at(i));
     if (OB_NOT_NULL(op_expr)) {
-      op_expr->simplify_recursive();
+      op_expr->pullup_recursive();
     }
   }
   int item_count = query_req->select_items_.count();
@@ -297,7 +297,7 @@ int ObRequestTranslator::translate_where()
   for (int i = 0; i < req_->condition_items_.count(); i++) {
     ObReqOpExpr *op_expr = dynamic_cast<ObReqOpExpr*>(req_->condition_items_.at(i));
     if (OB_NOT_NULL(op_expr)) {
-      op_expr->simplify_recursive();
+      op_expr->pullup_recursive();
     }
   }
   if (req_->condition_items_.count() > 0) {
@@ -312,6 +312,8 @@ int ObRequestTranslator::translate_where()
     }
     if (OB_FAIL(expr->translate_expr(print_params_, buf_, buf_len_, pos_, WHERE_SCOPE, false))) {
       LOG_WARN("fail to translate expr", K(ret));
+    } else if (i + 1 < req_->condition_items_.count()) {
+      DATA_PRINTF(" AND ");
     }
   }
   return ret;
