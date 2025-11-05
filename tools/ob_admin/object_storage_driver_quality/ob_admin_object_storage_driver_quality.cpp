@@ -1180,6 +1180,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
     {"enable_obdal", 0, NULL, 'a'},
     {NULL, 0, NULL, 0},
   };
+  ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
       case 'h': {
@@ -1234,8 +1235,7 @@ int ObAdminObjectStorageDriverQualityExecutor::parse_cmd_(int argc, char *argv[]
         break;
       }
       case 'a': {
-        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
-        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
+        ObClusterStateBaseMgr::get_instance().set_enable_obdal(true);
         params_.use_obdal_ = true;
         break;
       }

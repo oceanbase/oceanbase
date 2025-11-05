@@ -38,6 +38,7 @@ static const int64_t DEFAULT_MULTI_SIZE             = 64 * 1024 * 1024;
 static const int64_t DEFAULT_MULTI_FRAGMENT_SIZE    = 2 * 1024 * 1024;
 static const int64_t READ_16K_SIZE                  = 16 * 1024;
 static const int64_t READ_2M_SIZE                   = 2 * 1024 * 1024;
+static const int64_t DEFAULT_MEMORY_LIMIT_SIZE_GB   = 16;
 
 class ObAdminIOAdapterBenchmarkExecutor : public ObAdminExecutor
 {
@@ -67,6 +68,7 @@ private:
   int64_t append_fragment_size_;
   int64_t multi_size_;
   int64_t multi_fragment_size_;
+  int64_t memory_limit_size_gb_;
   bool is_adaptive_;
   bool clean_after_execution_;
 
@@ -96,6 +98,8 @@ private:
   Metrics metrics_;
   char base_uri_[common::OB_MAX_URI_LENGTH];
   share::ObBackupStorageInfo *storage_info_;
+  int64_t completed_threads_;  // the count of completed threads
+  int64_t total_threads_;    // the total count of threads
 };
 
 } //namespace tools

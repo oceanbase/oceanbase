@@ -38,6 +38,7 @@ ObAdminIOAdapterBenchmarkExecutor::ObAdminIOAdapterBenchmarkExecutor()
     append_fragment_size_(DEFAULT_APPEND_FRAGMENT_SIZE),
     multi_size_(DEFAULT_MULTI_SIZE),
     multi_fragment_size_(DEFAULT_MULTI_FRAGMENT_SIZE),
+    memory_limit_size_gb_(DEFAULT_MEMORY_LIMIT_SIZE_GB),
     is_adaptive_(false),
     clean_after_execution_(false),
     configs_()
@@ -52,7 +53,7 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
   } else {
-    const int64_t MEMORY_LIMIT = 16 * 1024 * 1024 * 1024LL;
+    const int64_t MEMORY_LIMIT = memory_limit_size_gb_ * 1024 * 1024 * 1024LL;
     lib::set_memory_limit(MEMORY_LIMIT);
     lib::set_tenant_memory_limit(500, MEMORY_LIMIT);
     OB_LOGGER.set_log_level("INFO");
@@ -104,8 +105,8 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       {"thread-num", 1, NULL, 't'},
       {"max-task-run-times", 1, NULL, 'r'},
       {"time-limit", 1, NULL, 'l'},
-      {"obj-size", 1, NULL, 'o'},
-      {"obj-num", 1, NULL, 'n'},
+      {"object-size", 1, NULL, 'o'},
+      {"object-num", 1, NULL, 'n'},
       {"fragment-size", 1, NULL, 'f'},
       {"type", 1, NULL, 'p'},
       {"is-adaptive", 0, NULL, 'j'},
@@ -118,7 +119,9 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       {"append-fragment-size", 1, NULL, '0'},
       {"multi-size", 1, NULL, '0'},
       {"multi-fragment-size", 1, NULL, '0'},
+      {"memory-limit-size", 1, NULL, 'm'},
       {NULL, 0, NULL, 0}};
+  ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
       case 'h': {
@@ -162,6 +165,14 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
         }
         break;
       }
+      case 'm': {
+        if (OB_FAIL(c_str_to_int(optarg, memory_limit_size_gb_))) {
+          OB_LOG(WARN, "fail to parse memory limit size", K(ret), K((char *)optarg));
+        } else if (OB_UNLIKELY(memory_limit_size_gb_ <= 0)) {
+          OB_LOG(WARN, "memroy_limit_size should be greater than 0", K(ret), K(memory_limit_size_gb_));
+        }
+        break;
+      }
       case 'n': {
         if (OB_FAIL(c_str_to_int(optarg, obj_num_))) {
             OB_LOG(WARN, "fail to parse object num", K(ret), K((char *)optarg));
@@ -194,6 +205,8 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
           task_type_ = BenchmarkTaskType::BENCHMARK_TASK_IS_EXIST;
         } else if (0 == STRCMP("read_user_provided", optarg)) {
           task_type_ = BenchmarkTaskType::BENCHMARK_TASK_READ_USER_PROVIDED;
+        } else if (0 == STRCMP("nohead-read", optarg)) {
+          task_type_ = BenchmarkTaskType::BENCHMARK_TASK_NOHEAD_READ;
         } else {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "unknown test type", K((char *)optarg), K(ret));
@@ -223,8 +236,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
         break;
       }
       case 'a': {
-        // 必须在 ObDeviceManager::get_instance().init_devices_env() 之后执行
-        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
+        ObClusterStateBaseMgr::get_instance().set_enable_obdal(true);
         break;
       }
       case '0': {
@@ -497,11 +509,12 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf("options:\n");
   printf(HELP_FMT, "-d, --file-path-prefix", "required, absolute file path with file prefix");
   printf(HELP_FMT, "-s, --storage-info", "required, oss/cos should provide storage info");
-  printf(HELP_FMT, "-p, --type", "specifies the test type, the values can be auto-run, write, read, multi, read, del, is_exist, read_user_provided");
+  printf(HELP_FMT, "-p, --type", "specifies the test type, the values can be auto-run, write, read, multi, read, del, is_exist, read_user_provided, nohead-read");
   printf(HELP_FMT, "-t, --thread-num", "thread num");
-  printf(HELP_FMT, "-r, --max-task-run-times", "max task run times for each thread, default is 10");
-  printf(HELP_FMT, "-l, --time-limit", "time limit in second");
+  printf(HELP_FMT, "-r, --max-task-run-times", "max task run times for each thread, default is 10, -1 means unlimited, if -r and -l are both set, the actual runtime will be limited by both");
+  printf(HELP_FMT, "-l, --time-limit", "time limit in second, if -r and -l are both set, the actual runtime will be limited by both");
   printf(HELP_FMT, "-o, --object-size", "object size, default is 2097152, 2M");
+  printf(HELP_FMT, "-m, --memory-limit-size", "memory limit size in GB, default is 16");
   printf(HELP_FMT, "-n, --object-num", "object num, default is 10");
   printf(HELP_FMT, "-f, --fragment-size",
       "for read operations, 'fragment-size' denotes the expected size of data to be read, "
@@ -534,7 +547,7 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
 /*--------------------------------ObBackupIoAdapterBenchmarkRunner--------------------------------*/
 ObBackupIoAdapterBenchmarkRunner::ObBackupIoAdapterBenchmarkRunner()
     : lock_(), is_inited_(false), tg_id_(-1), ret_code_(OB_SUCCESS),
-      config_(), metrics_(), storage_info_(nullptr)
+      config_(), metrics_(), storage_info_(nullptr), completed_threads_(0), total_threads_(0)
 {
 }
 
@@ -599,8 +612,33 @@ int ObBackupIoAdapterBenchmarkRunner::do_benchmark()
   } else if (OB_FAIL(TG_START(tg_id_))) {
     OB_LOG(WARN, "start thread failed", K(ret), K_(tg_id), K(thread_num));
   } else {
+    // init the thread count and completed thread count
+    total_threads_ = thread_num;
+    completed_threads_ = 0;
+
     if (time_limit_s > 0) {
-      sleep(time_limit_s);
+      const int64_t check_interval_ms = 100; // check the thread completion status every 100ms
+      const int64_t max_checks = (time_limit_s * 1000) / check_interval_ms;
+
+      for (int64_t i = 0; i < max_checks; i++) {
+        bool all_completed = false;
+        {
+          SpinRLockGuard guard(lock_);
+          if (completed_threads_ >= total_threads_) {
+            all_completed = true;
+          }
+        }
+
+        if (all_completed) {
+          // stop the thread pool early
+          OB_LOG(INFO, "All threads completed early, stopping thread pool",
+                 K(completed_threads_), K(total_threads_), K(i * check_interval_ms));
+          break;
+        }
+
+        // wait for the check interval
+        usleep(check_interval_ms * 1000);
+      }
       TG_STOP(tg_id_);
     }
     TG_WAIT(tg_id_);
@@ -656,9 +694,19 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
     }
 
     if (OB_SUCC(ret)) {
+      Metrics thread_metrics = executor->get_metrics();
+      gettimeofday(&thread_metrics.end_real_time_, nullptr);
+      getrusage(RUSAGE_SELF, &thread_metrics.end_usage_);
+
       SpinWLockGuard guard(lock_);
-      metrics_.add(executor->get_metrics());
-    } else {
+      metrics_.add(thread_metrics);
+    }
+  }
+
+  {
+    SpinWLockGuard guard(lock_);
+    completed_threads_++;
+    if (ret_code_ == OB_SUCCESS) {
       ret_code_ = ret;
     }
   }

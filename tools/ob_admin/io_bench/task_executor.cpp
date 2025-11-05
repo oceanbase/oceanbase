@@ -167,6 +167,9 @@ Metrics::Metrics()
     : status_(OB_SUCCESS), throughput_bytes_(0), operation_num_(0),
       total_op_time_ms_map_(), open_time_ms_map_(), close_time_ms_map_()
 {
+  end_real_time_.tv_sec = 0;
+  end_real_time_.tv_usec = 0;
+  memset(&end_usage_, 0, sizeof(end_usage_));
 }
 
 void Metrics::reset()
@@ -177,6 +180,9 @@ void Metrics::reset()
   total_op_time_ms_map_ = TimeMap();
   open_time_ms_map_ = TimeMap();
   close_time_ms_map_ = TimeMap();
+  end_real_time_.tv_sec = 0;
+  end_real_time_.tv_usec = 0;
+  memset(&end_usage_, 0, sizeof(end_usage_));
 }
 
 int Metrics::assign(const Metrics &other)
@@ -192,6 +198,8 @@ int Metrics::assign(const Metrics &other)
     status_ = other.status_;
     throughput_bytes_ = other.throughput_bytes_;
     operation_num_ = other.operation_num_;
+    end_real_time_ = other.end_real_time_;
+    end_usage_ = other.end_usage_;
   }
   return ret;
 }
@@ -210,6 +218,10 @@ int Metrics::add(const Metrics &other)
       } else {
         throughput_bytes_ += other.throughput_bytes_;
         operation_num_ += other.operation_num_;
+        if (other.end_real_time_.tv_sec > 0) {
+          end_real_time_ = other.end_real_time_;
+          end_usage_ = other.end_usage_;
+        }
       }
    } else {
      status_ = other.status_;
@@ -233,14 +245,20 @@ void Metrics::summary(
     if (OB_UNLIKELY(operation_num_ <= 0)) {
       PrintHelper::print_dump_line("Operation num is unexpected", operation_num_);
     } else {
-      struct rusage end_usage;
-      struct timeval end_real_time;
-      getrusage(RUSAGE_SELF, &end_usage);
-      gettimeofday(&end_real_time, nullptr);
+      struct rusage actual_end_usage;
+      struct timeval actual_end_real_time;
 
-      const double cost_time_s = cal_time_diff(start_real_time, end_real_time);
-      const double user_cpu_time_s = cal_time_diff(start_usage.ru_utime, end_usage.ru_utime);
-      const double sys_cpu_time_s = cal_time_diff(start_usage.ru_stime, end_usage.ru_stime);
+      if (end_real_time_.tv_sec > 0) {
+        actual_end_real_time = end_real_time_;
+        actual_end_usage = end_usage_;
+      } else {
+        getrusage(RUSAGE_SELF, &actual_end_usage);
+        gettimeofday(&actual_end_real_time, nullptr);
+      }
+
+      const double cost_time_s = cal_time_diff(start_real_time, actual_end_real_time);
+      const double user_cpu_time_s = cal_time_diff(start_usage.ru_utime, actual_end_usage.ru_utime);
+      const double sys_cpu_time_s = cal_time_diff(start_usage.ru_stime, actual_end_usage.ru_stime);
       const double cpu_usage = (user_cpu_time_s + sys_cpu_time_s) / (cost_time_s) * 100.0;
       const double QPS = ((double)operation_num_) / cost_time_s;
       const double BW = ( ((double)throughput_bytes_) / 1024.0 / 1024.0 ) / cost_time_s;
@@ -373,6 +391,10 @@ int init_task_executor(const char *base_uri,
     }
   } else if (config.type_ == BenchmarkTaskType::BENCHMARK_TASK_READ_USER_PROVIDED) {
     if (OB_FAIL(alloc_executor<ReadUsedProvidedTaskExecutor>(executor, attr))) {
+      OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
+    }
+  } else if (config.type_ == BenchmarkTaskType::BENCHMARK_TASK_NOHEAD_READ) {
+    if (OB_FAIL(alloc_executor<NoHeadReadTaskExecutor>(executor, attr))) {
       OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
     }
   } else {
@@ -938,6 +960,56 @@ int ReadUsedProvidedTaskExecutor::prepare_(const int64_t object_id)
 {
   UNUSED(object_id);
   return OB_SUCCESS;
+}
+
+/*--------------------------------No Head Read Task Executor--------------------------------*/
+NoHeadReadTaskExecutor::NoHeadReadTaskExecutor()
+    : ReadTaskExecutor()
+{
+}
+
+int NoHeadReadTaskExecutor::execute()
+{
+  int ret = OB_SUCCESS;
+  const int64_t object_id = ObRandom::rand(0, obj_num_ - 1);
+  const int64_t start_time_us = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "NoReadTaskExecutor not init", K(ret), K_(base_uri));
+  } else if (OB_FAIL(prepare_(object_id))) {
+    OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
+  } else {
+    ObBackupIoAdapter adapter;
+    const int64_t offset = (ObRandom::rand(0, obj_size_ - expected_read_size_) / ALIGNMENT) * ALIGNMENT;
+
+    ObStorageAccessType access_type = OB_STORAGE_ACCESS_NOHEAD_READER;
+    ObIODevice *device_handle = nullptr;
+    ObIOFd fd;
+    ObIOHandle io_handle;
+    if (OB_FAIL(adapter.open_with_access_type(
+        device_handle, fd, storage_info_, base_uri_, access_type,
+        ObStorageIdMod::get_default_id_mod()))) {
+      OB_LOG(WARN, "failed to open device with access type",
+          K(ret), K_(base_uri), KPC_(storage_info), K(access_type));
+    } else if (OB_ISNULL(device_handle)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "device handle is NULL", K(ret), KP(device_handle), K_(base_uri));
+    } else if (OB_FAIL(adapter.async_pread(*device_handle, fd, read_buf_,
+        offset, expected_read_size_, io_handle))) {
+      OB_LOG(WARN, "failed to async pread", K(ret), K_(base_uri), KPC_(storage_info), K(offset), K(expected_read_size_));
+    } else if (OB_FAIL(io_handle.wait())) {
+      OB_LOG(WARN, "failed to wait async pread", K(ret), K_(base_uri), KPC_(storage_info), K(offset), K(expected_read_size_));
+    } else if (OB_FAIL(adapter.close_device_and_fd(device_handle, fd))) {
+      OB_LOG(WARN, "failed to close device and fd", K(ret), K_(base_uri));
+    } else {
+      metrics_.operation_num_++;
+      metrics_.throughput_bytes_ += io_handle.get_data_size();
+      metrics_.total_op_time_ms_map_.log_entry(start_time_us);
+    }
+  }
+
+  finish_(ret);
+  return ret;
 }
 
 }   //tools

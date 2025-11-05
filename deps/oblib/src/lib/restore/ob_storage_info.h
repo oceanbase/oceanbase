@@ -196,13 +196,22 @@ public:
     return false;
   }
   virtual bool is_write_with_if_match() const { return is_write_with_if_match_; }
+  virtual bool is_enable_obdal() const { return enable_obdal_; }
   static ObClusterStateBaseMgr &get_instance()
   {
     static ObClusterStateBaseMgr mgr;
     return mgr;
   }
+public:
+  void set_enable_obdal(const bool enable_obdal)
+  {
+    enable_obdal_ = enable_obdal;
+  }
+
+  void set_is_write_with_if_match(const bool is_write_with_if_match) { is_write_with_if_match_ = is_write_with_if_match; }
+
 private:
-  void set_is_write_with_if_match_(const bool is_write_with_if_match) { is_write_with_if_match_ = is_write_with_if_match; }
+  bool enable_obdal_;
   bool is_write_with_if_match_;
 };
 
@@ -496,20 +505,6 @@ public:
   bool update_access_time_us_;
   int64_t original_access_time_us_;
 };
-
-// @brief ObClusterEnableObdalConfigBase is used to check whether enable obdal or not.
-class ObClusterEnableObdalConfigBase
-{
-public:
-  ObClusterEnableObdalConfigBase() {};
-  virtual ~ObClusterEnableObdalConfigBase() {};
-  virtual bool is_enable_obdal() const { return true; }
-  static ObClusterEnableObdalConfigBase &get_instance() {
-    static ObClusterEnableObdalConfigBase instance;
-    return instance;
-  }
-};
-extern ObClusterEnableObdalConfigBase *cluster_enable_obdal_config;
 
 }
 }

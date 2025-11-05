@@ -117,6 +117,7 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
       {"sts_credential", 0, NULL, 'i'},
       {"enable_obdal", 0, NULL, 'a'},
       {NULL, 0, NULL, 0}};
+  ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, opt_str, longopts, &index))) {
     switch (opt) {
       case 'h': {
@@ -171,7 +172,7 @@ int ObAdminTestIODeviceExecutor::parse_cmd_(int argc, char *argv[])
         break;
       }
       case 'a': {
-        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
+        ObClusterStateBaseMgr::get_instance().set_enable_obdal(true);
         break;
       }
       default: {

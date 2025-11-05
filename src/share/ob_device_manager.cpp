@@ -188,7 +188,7 @@ bool ObClusterStateMgr::is_write_with_if_match() const
   return (0 == ObString(GCONF._object_storage_condition_put_mode).case_compare("if-match"));
 }
 
-bool ObClusterEnableObdalConfig::is_enable_obdal() const
+bool ObClusterStateMgr::is_enable_obdal() const
 {
   return GCONF._enable_obdal;
 }
@@ -286,7 +286,6 @@ int ObDeviceManager::init_devices_env()
       const bool compliantRfc3986Encoding =
           (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
       Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
-      cluster_enable_obdal_config = &ObClusterEnableObdalConfig::get_instance();
     }
   }
 
