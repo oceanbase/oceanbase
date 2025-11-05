@@ -627,7 +627,8 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
               LOG_WARN("failed to print flashback info", K(ret));
             }
             if (table_item->alias_name_.length() > 0) {
-              DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+              DATA_PRINTF(" ");
+              PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
             }
           }
         } else if (table_item->cte_type_ != TableItem::NOT_CTE && !print_params_.for_dblink_) {
@@ -2176,25 +2177,12 @@ int ObDMLStmtPrinter::print_where()
   return ret;
 }
 
-int ObDMLStmtPrinter::print_quote_for_const(ObRawExpr* expr, bool &print_quote)
-{
-  int ret = OB_SUCCESS;
-  print_quote = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (expr->is_const_or_param_expr()) {
-    print_quote = expr->get_result_type().is_numeric_type();
-  }
-  return ret;
-}
-
 int ObDMLStmtPrinter::print_expr_except_const_number(ObRawExpr* expr, ObStmtScope scope)
 {
   int ret = OB_SUCCESS;
   bool print_quote = false;
-  if (OB_FAIL(print_quote_for_const(expr, print_quote))) {
-    LOG_WARN("failed to check is const number", K(ret));
+  if (OB_FAIL(expr_printer_.print_quote_for_const(expr, scope, print_quote))) {
+    LOG_WARN("fail to check if print quote for const", K(ret), KPC(expr));
   } else if (print_quote) {
     DATA_PRINTF("'");
   }

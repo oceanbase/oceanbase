@@ -122,6 +122,8 @@ public:
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool print_cte = false);
   int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
+  int print_quote_for_const(ObRawExpr* expr, ObStmtScope scope, bool &print_quote);
+  int print_alias_for_expr(ObRawExpr* expr, ObStmtScope scope, bool &print_alias);
 private:
   int print_bool_expr(ObRawExpr *expr);
   int print_select_expr(ObRawExpr *expr);

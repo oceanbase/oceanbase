@@ -152,24 +152,13 @@ int ObRawExprPrinter::print_select_expr(ObRawExpr *expr)
 int ObRawExprPrinter::print(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
+  bool print_alias = false;
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
-  } else if (!expr->get_alias_column_name().empty()
-      && !expr->is_column_ref_expr()
-      && !expr->is_aggr_expr()
-      && !expr->is_pseudo_column_expr()
-     // quertionmark 是一个const expr，如果是prepare，需要打印成:0这样的东西，不能用alias来代替
-      && T_QUESTIONMARK != expr->get_expr_type()
-      && scope_ != T_DBLINK_SCOPE
-      && scope_ != T_FIELD_LIST_SCOPE
-      && scope_ != T_GROUP_SCOPE
-      && scope_ != T_WHERE_SCOPE
-      && scope_ != T_NONE_SCOPE
-      && scope_ != T_ORDER_SCOPE
-      && (scope_ == T_HAVING_SCOPE && lib::is_mysql_mode())) {
-    //expr is a alias column ref
-    //alias column target list
+  } else if (OB_FAIL(print_alias_for_expr(expr, scope_, print_alias))) {
+    LOG_WARN("failed to check if print alias for expr", K(ret));
+  } else if (print_alias) {
     PRINT_IDENT_WITH_QUOT(expr->get_alias_column_name());
   } else {
     switch (expr->get_expr_class()) {
@@ -5538,6 +5527,53 @@ int ObRawExprPrinter::print_array_map(ObSysFunRawExpr *expr, const char *func_na
       PRINT_EXPR(expr->get_param_expr(i));
     }
     DATA_PRINTF(")");
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_alias_for_expr(ObRawExpr* expr, ObStmtScope scope, bool &print_alias)
+{
+  int ret = OB_SUCCESS;
+  print_alias = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is NULL", K(ret));
+  } else if (!expr->get_alias_column_name().empty()
+      && !expr->is_column_ref_expr()
+      && !expr->is_aggr_expr()
+      && !expr->is_pseudo_column_expr()
+     // quertionmark 是一个const expr，如果是prepare，需要打印成:0这样的东西，不能用alias来代替
+      && T_QUESTIONMARK != expr->get_expr_type()
+      && scope != T_DBLINK_SCOPE
+      && scope != T_FIELD_LIST_SCOPE
+      && scope != T_WHERE_SCOPE
+      && scope != T_NONE_SCOPE
+      && (scope != T_GROUP_SCOPE || lib::is_mysql_mode())
+      && (scope != T_HAVING_SCOPE || lib::is_mysql_mode())
+      && (scope != T_UPDATE_SCOPE || lib::is_mysql_mode())
+      && (scope != T_INSERT_SCOPE || lib::is_mysql_mode())) {
+    //expr is a alias column ref
+    //alias column target list
+    print_alias = true;
+  }
+  return ret;
+}
+
+
+int ObRawExprPrinter::print_quote_for_const(ObRawExpr* expr, ObStmtScope scope, bool &print_quote)
+{
+  int ret = OB_SUCCESS;
+  print_quote = false;
+  bool print_alias = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(print_alias_for_expr(expr, scope, print_alias))) {
+    LOG_WARN("failed to check if print alias for expr", K(ret));
+  } else if (print_alias) {
+    // print alias, no need to print quote
+  } else if (expr->is_const_or_param_expr()) {
+    print_quote = expr->get_result_type().is_numeric_type();
   }
   return ret;
 }
