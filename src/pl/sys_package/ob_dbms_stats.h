@@ -63,15 +63,18 @@ public:
 
   static int gather_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int gather_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int gather_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int gather_table_index_stats(ObExecContext &ctx,
                                       const ObTableStatParam &data_param,
@@ -84,84 +87,102 @@ public:
 
   static int set_table_stats(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int set_column_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int set_index_stats(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int delete_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int delete_column_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int delete_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int delete_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int delete_table_index_stats(sql::ObExecContext &ctx,
                                       const ObTableStatParam data_param);
 
   static int create_stat_table(sql::ObExecContext &ctx,
                                sql::ParamStore &params,
-                               common::ObObj &result);
+                               common::ObObj &result,
+                               ObPLExecCtx& pl_exec_ctx);
 
   static int drop_stat_table(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int export_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int export_column_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int export_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int export_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int export_table_index_stats(sql::ObExecContext &ctx,
                                       const ObTableStatParam data_param);
 
   static int import_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int import_column_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int import_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int import_index_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int import_table_index_stats(sql::ObExecContext &ctx,
                                       const ObTableStatParam data_param);
 
   static int lock_table_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int lock_or_unlock_index_stats(sql::ObExecContext &ctx,
                                         const ObTableStatParam data_param,
@@ -169,87 +190,108 @@ public:
 
   static int lock_partition_stats(sql::ObExecContext &ctx,
                                   sql::ParamStore &params,
-                                  common::ObObj &result);
+                                  common::ObObj &result,
+                                  ObPLExecCtx& pl_exec_ctx);
 
   static int lock_schema_stats(sql::ObExecContext &ctx,
                                sql::ParamStore &params,
-                               common::ObObj &result);
+                               common::ObObj &result,
+                               ObPLExecCtx& pl_exec_ctx);
 
   static int unlock_table_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int unlock_partition_stats(sql::ObExecContext &ctx,
                                     sql::ParamStore &params,
-                                    common::ObObj &result);
+                                    common::ObObj &result,
+                                    ObPLExecCtx& pl_exec_ctx);
 
   static int unlock_schema_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int restore_table_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int restore_schema_stats(sql::ObExecContext &ctx,
                                   sql::ParamStore &params,
-                                  common::ObObj &result);
+                                  common::ObObj &result,
+                                  ObPLExecCtx& pl_exec_ctx);
 
   static int purge_stats(sql::ObExecContext &ctx,
                          sql::ParamStore &params,
-                         common::ObObj &result);
+                         common::ObObj &result,
+                         ObPLExecCtx& pl_exec_ctx);
 
   static int alter_stats_history_retention(sql::ObExecContext &ctx,
                                            sql::ParamStore &params,
-                                           common::ObObj &result);
+                                           common::ObObj &result,
+                                           ObPLExecCtx& pl_exec_ctx);
 
   static int get_stats_history_availability(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
-                                            common::ObObj &result);
+                                            common::ObObj &result,
+                                            ObPLExecCtx& pl_exec_ctx);
 
   static int get_stats_history_retention(sql::ObExecContext &ctx,
                                          sql::ParamStore &params,
-                                         common::ObObj &result);
+                                         common::ObObj &result,
+                                         ObPLExecCtx& pl_exec_ctx);
 
   static int reset_global_pref_defaults(sql::ObExecContext &ctx,
                                         sql::ParamStore &params,
-                                        common::ObObj &result);
+                                        common::ObObj &result,
+                                        ObPLExecCtx& pl_exec_ctx);
 
   static int set_global_prefs(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int set_schema_prefs(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int set_table_prefs(sql::ObExecContext &ctx,
                              sql::ParamStore &params,
-                             common::ObObj &result);
+                             common::ObObj &result,
+                             ObPLExecCtx& pl_exec_ctx);
 
   static int get_prefs(sql::ObExecContext &ctx,
                        sql::ParamStore &params,
-                       common::ObObj &result);
+                       common::ObObj &result,
+                       ObPLExecCtx& pl_exec_ctx);
 
   static int delete_schema_prefs(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int delete_table_prefs(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int copy_table_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int cancel_gather_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
-                                 common::ObObj &result);
+                                 common::ObObj &result,
+                                 ObPLExecCtx& pl_exec_ctx);
 
   static int async_gather_stats_job_proc(sql::ObExecContext &ctx,
                                          sql::ParamStore &params,
-                                         common::ObObj &result);
+                                         common::ObObj &result,
+                                         ObPLExecCtx& pl_exec_ctx);
 
   static int parse_method_opt(sql::ObExecContext &ctx,
                               ObIAllocator *allocator,
@@ -459,7 +501,8 @@ public:
 
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
-                                            common::ObObj &result);
+                                            common::ObObj &result,
+                                            ObPLExecCtx& pl_exec_ctx);
 
   static int process_not_size_manual_column(sql::ObExecContext &ctx, ObTableStatParam &table_param);
 
@@ -470,7 +513,8 @@ public:
 
   static int gather_database_stats_job_proc(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
-                                            common::ObObj &result);
+                                            common::ObObj &result,
+                                            ObPLExecCtx& pl_exec_ctx);
 
   static int gather_database_table_stats(sql::ObExecContext &ctx,
                                          const int64_t duration_time,
@@ -535,15 +579,18 @@ public:
 
   static int gather_system_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int delete_system_stats(sql::ObExecContext &ctx,
                                 sql::ParamStore &params,
-                                common::ObObj &result);
+                                common::ObObj &result,
+                                ObPLExecCtx& pl_exec_ctx);
 
   static int set_system_stats(sql::ObExecContext &ctx,
                               sql::ParamStore &params,
-                              common::ObObj &result);
+                              common::ObObj &result,
+                              ObPLExecCtx& pl_exec_ctx);
 
   static int update_system_stats_cache(const uint64_t rpc_tenant_id,
                                       const uint64_t tenant_id);
