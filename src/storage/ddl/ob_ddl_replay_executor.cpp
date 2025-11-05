@@ -633,7 +633,7 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
     if (OB_FAIL(ObDDLKVPendingGuard::set_skip_block_scn(tablet_handle.get_obj(),
                                                         scn_,
                                                         log_->get_redo_info().start_scn_,
-                                                        log_->get_redo_info().data_format_version_,
+                                                        log_->get_redo_info().table_key_.get_snapshot_version(),
                                                         log_->get_redo_info().data_format_version_,
                                                         log_->get_redo_info().type_))) {
       LOG_WARN("failed to set skip block scn", K(ret));
