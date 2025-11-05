@@ -126,9 +126,15 @@ private:
                                        const bool is_login_succ,
                                        bool &is_locked_now);
   bool is_connection_control_enabled(const uint64_t tenant_id);
-  int get_connection_control_stat(const uint64_t tenant_id, const int64_t current_failed_login_num,
-                                  const int64_t last_failed_login_timestamp,
-                                  bool &need_lock, bool &is_locked);
+  int get_connection_control_stat_mysql(const uint64_t tenant_id,
+                                        const int64_t current_failed_login_num,
+                                        const int64_t last_failed_login_timestamp,
+                                        bool &is_locked);
+  int is_need_lock_user_mysql(const uint64_t tenant_id,
+                              const int64_t current_failed_login_num,
+                              const int64_t last_failed_login_timestamp,
+                              bool &need_lock);
+
 
   int unlock_user_if_time_is_up(const uint64_t tenant_id,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
