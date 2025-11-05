@@ -6193,10 +6193,9 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
   return ret;
 }
 
-int64_t ObBasicSessionInfo::get_truncated_sql_len(const ObString &stmt) const
+int64_t ObBasicSessionInfo::get_truncated_sql_len(const ObString &stmt)
 {
-  return get_local_ob_enable_sql_audit() ? static_cast<int64_t>(stmt.length()) :
-                                           std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
+  return std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
 }
 
 int ObBasicSessionInfo::get_opt_dynamic_sampling(uint64_t &v) const
