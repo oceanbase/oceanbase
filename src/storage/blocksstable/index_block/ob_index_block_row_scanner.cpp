@@ -1762,7 +1762,7 @@ int ObIndexBlockRowScanner::get_next(
     ret = OB_NOT_INIT;
     LOG_WARN("Not inited", K(ret));
   } else {
-    const bool has_skip_scanner = nullptr != skip_scanner && !skip_scanner->is_disabled();
+    const bool has_skip_scanner = nullptr != skip_scanner && skip_scanner->should_skip();
     do {
       if (end_of_block()) {
         ret = OB_ITER_END;

@@ -4973,7 +4973,7 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
       OB_ISNULL(get_plan()) || OB_ISNULL(query_ctx = get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(query_ctx), K(ret));
-  } else if (is_virtual_table(ref_id)) {
+  } else if (is_virtual_table(ref_id) || is_inner_table(ref_id)) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (use_column_store) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
