@@ -806,6 +806,7 @@ int ObHybridVectorRefreshTask::delete_embedded_table(ObPluginVectorIndexAdaptor 
 {
   int ret = OB_SUCCESS;
   int64_t loop_cnt = 0;
+  ObAccessService *tsc_service = MTL(ObAccessService *);
   ObHybridVectorRefreshTaskCtx *task_ctx = static_cast<ObHybridVectorRefreshTaskCtx *>(get_task_ctx());
   if (OB_ISNULL(task_ctx) || OB_ISNULL(tx_desc)) {
     ret = OB_ERR_UNEXPECTED;
@@ -859,6 +860,16 @@ int ObHybridVectorRefreshTask::delete_embedded_table(ObPluginVectorIndexAdaptor 
         }
         CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
       }
+      if (OB_NOT_NULL(tsc_service)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_NOT_NULL(scan_iter)) {
+          tmp_ret = tsc_service->revert_scan_iter(scan_iter);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("revert scan_iter failed", K(ret));
+          }
+        }
+        scan_iter = nullptr;
+      }
     } // end heap var.
 
     int64_t affected_rows = 0;
@@ -895,6 +906,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   transaction::ObTxDesc *tx_desc = nullptr;
   oceanbase::transaction::ObTxReadSnapshot snapshot;
   storage::ObStoreCtxGuard store_ctx_guard;
+  ObAccessService *tsc_service = MTL(ObAccessService *);
   oceanbase::transaction::ObTransService *txs = MTL(transaction::ObTransService *);
   uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_ISNULL(task_ctx)) {
@@ -1002,6 +1014,16 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
         }
 
         CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
+      }
+      if (OB_NOT_NULL(tsc_service)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_NOT_NULL(vid_rowkey_iter)) {
+          tmp_ret = tsc_service->revert_scan_iter(vid_rowkey_iter);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("revert vid_rowkey_iter failed", K(ret));
+          }
+        }
+        vid_rowkey_iter = nullptr;
       }
     }
 
