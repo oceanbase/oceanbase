@@ -429,26 +429,16 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
   int ret = OB_SUCCESS;
   is_valid = true;
   uint64_t mlog_cid = OB_INVALID_ID;
-  bool has_pk = false;
   ObSEArray<uint64_t, 4> unique_col_ids;
   if (OB_ISNULL(table_schema) || OB_ISNULL(table_item) || OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_schema), K(schema_guard), K(table_item));
-  } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_pk))) {
-    LOG_WARN("failed to check table with logic pk", K(ret));
-  } else if (has_pk) {
-    if (OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, unique_col_ids))) {
-      LOG_WARN("failed to get rowkey column ids", K(ret));
-    }
-  } else if (table_schema->get_partition_key_info().is_valid() &&
-             OB_FAIL(table_schema->get_partition_key_info().get_column_ids(unique_col_ids))) {
-    LOG_WARN("failed to add part column ids", K(ret));
-  } else if (table_schema->get_subpartition_key_info().is_valid() &&
-             OB_FAIL(table_schema->get_subpartition_key_info().get_column_ids(unique_col_ids))) {
-    LOG_WARN("failed to add subpart column ids", K(ret));
+  } else if (OB_FAIL(get_table_rowkey_ids(table_schema, schema_guard, unique_col_ids))) {
+    LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
   }
   for (int i = 0; is_valid && OB_SUCC(ret) && i < unique_col_ids.count(); ++i) {
-    is_valid = NULL != mlog_schema.get_column_schema(unique_col_ids.at(i));
+    is_valid = NULL != mlog_schema.get_column_schema(unique_col_ids.at(i))
+               || OB_HIDDEN_PK_INCREMENT_COLUMN_ID == unique_col_ids.at(i);
     if (!is_valid) {
       ObString column_name;
       bool column_exist = false;
@@ -1279,7 +1269,6 @@ int ObMVChecker::collect_tables_primary_key_for_select(const ObSelectStmt &stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
     const TableItem *table_item = NULL;
     const ObTableSchema *table_schema = NULL;
-    bool has_logic_pk = false;
     pk_ids.reuse();
     if (OB_ISNULL(table_item = stmt.get_table_item(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1293,15 +1282,8 @@ int ObMVChecker::collect_tables_primary_key_for_select(const ObSelectStmt &stmt,
     } else if (OB_FAIL(query_ctx->sql_schema_guard_.get_table_schema(table_item->ref_id_,
                                                                      table_schema))) {
       LOG_WARN("table schema not found", K(ret), KPC(table_item));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid table schema", K(ret), K(table_schema));
-    } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_logic_pk))) {
-      LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
-    } else if (has_logic_pk ?
-               OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, pk_ids)) :
-               OB_FAIL(table_schema->get_rowkey_column_ids(pk_ids))) {
-      LOG_WARN("failed to get table rowkey ids", K(ret), K(has_logic_pk), KPC(table_schema));
+    } else if (OB_FAIL(get_table_rowkey_ids(table_schema, schema_guard, pk_ids))) {
+      LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < stmt.get_select_item_size(); ++j) {
         const ObRawExpr *expr = NULL;
@@ -1352,6 +1334,41 @@ int ObMVChecker::collect_tables_primary_key_for_select(const ObSelectStmt &stmt,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObMVChecker::get_table_rowkey_ids(const ObTableSchema *table_schema,
+                                      ObSchemaGetterGuard *schema_guard,
+                                      ObIArray<uint64_t> &rowkey_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> ori_rowkey_ids;
+  bool has_logic_pk = false;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_schema), K(schema_guard));
+  } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_logic_pk))) {
+    LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
+  } else if (has_logic_pk) {
+    if (OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, ori_rowkey_ids))) {
+      LOG_WARN("failed to get logic pk column ids", K(ret));
+    }
+  } else if (OB_FAIL(table_schema->get_rowkey_column_ids(ori_rowkey_ids))) {
+    LOG_WARN("failed to get table rowkey ids", K(ret), K(has_logic_pk), KPC(table_schema));
+  } else if (table_schema->get_partition_key_info().is_valid() &&
+             OB_FAIL(table_schema->get_partition_key_info().get_column_ids(ori_rowkey_ids))) {
+    LOG_WARN("failed to add part column ids", K(ret));
+  } else if (table_schema->get_subpartition_key_info().is_valid() &&
+             OB_FAIL(table_schema->get_subpartition_key_info().get_column_ids(ori_rowkey_ids))) {
+    LOG_WARN("failed to add subpart column ids", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(ori_rowkey_ids.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty rowkey id array", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(rowkey_ids, ori_rowkey_ids))) {
+    LOG_WARN("failed to append column ids no dup", K(ret));
   }
   return ret;
 }

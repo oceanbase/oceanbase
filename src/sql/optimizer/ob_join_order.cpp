@@ -21289,9 +21289,8 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
   } else if (OB_FAIL(ObOptimizerUtil::extract_real_dep_expr(gen_col_expr->get_dependant_expr(),
                                                             depend_expr))) {
     LOG_WARN("failed to extract real dep expr", K(ret));
-  }
-  // compare each param expr with depend_expr
-  if (T_FUN_SYS_CAST == depend_expr->get_expr_type() && (ObCharType == depend_expr->get_data_type() || ObNCharType == depend_expr->get_data_type())) {
+  } else if (T_FUN_SYS_CAST == depend_expr->get_expr_type() && (ObCharType == depend_expr->get_data_type() || ObNCharType == depend_expr->get_data_type())) {
+    // compare each param expr with depend_expr
     depend_expr = depend_expr->get_param_expr(0);
   }
   for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < expr->get_param_count(); i++) {

@@ -1128,24 +1128,16 @@ int ObMVPrinter::deep_copy_mv_def_stmt(ObSelectStmt *&new_stmt)
 }
 
 int ObMVPrinter::get_table_rowkey_ids(const ObTableSchema *table_schema,
-                                        ObIArray<uint64_t> &rowkey_ids)
+                                      ObIArray<uint64_t> &rowkey_ids)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard *schema_guard = NULL;
-  bool has_logic_pk = false;
   if (OB_ISNULL(table_schema) || OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())
       || OB_ISNULL(schema_guard = ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_schema), K(ctx_.stmt_factory_.get_query_ctx()), K(schema_guard));
-  } else if (OB_FAIL(table_schema->is_table_with_logic_pk(*schema_guard, has_logic_pk))) {
-    LOG_WARN("failed to check table with logic pk", K(ret), KPC(table_schema));
-  } else if (has_logic_pk ?
-             OB_FAIL(table_schema->get_logic_pk_column_ids(schema_guard, rowkey_ids)) :
-             OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_ids))) {
-    LOG_WARN("failed to get table rowkey ids", K(ret), K(has_logic_pk), KPC(table_schema));
-  } else if (OB_UNLIKELY(rowkey_ids.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected empty array", K(ret));
+  } else if (OB_FAIL(ObMVChecker::get_table_rowkey_ids(table_schema, schema_guard, rowkey_ids))) {
+    LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
   }
   return ret;
 }
@@ -1202,7 +1194,7 @@ int ObMVPrinter::gen_mv_rowkey_expr(const TableItem *mv_table,
   if (OB_ISNULL(mv_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table schema", K(ret), K(mv_table));
-  } else if (OB_FAIL(get_mv_rowkey_column_ids(rowkey_column_ids))) {
+  } else if (OB_FAIL(get_table_rowkey_ids(&mv_container_schema_, rowkey_column_ids))) {
     LOG_WARN("failed to get rowkey column ids", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_OP_ROW, rowkey_expr))) {
     LOG_WARN("failed to create query ref raw expr", K(ret));
@@ -1263,7 +1255,7 @@ int ObMVPrinter::add_mv_rowkey_into_select(ObSelectStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(mv_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table schema", K(ret), K(stmt), K(mv_table));
-  } else if (OB_FAIL(get_mv_rowkey_column_ids(rowkey_column_ids))) {
+  } else if (OB_FAIL(get_table_rowkey_ids(&mv_container_schema_, rowkey_column_ids))) {
     LOG_WARN("failed to get rowkey column ids", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); ++i) {
@@ -1284,41 +1276,6 @@ int ObMVPrinter::add_mv_rowkey_into_select(ObSelectStmt *stmt,
       sel_item->is_real_alias_ = true;
       sel_item->alias_name_ = static_cast<const ObColumnRefRawExpr*>(col_expr)->get_column_name();
     }
-  }
-  return ret;
-}
-
-int ObMVPrinter::get_mv_rowkey_column_ids(ObIArray<uint64_t> &rowkey_column_ids)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard *schema_guard = NULL;
-  ObSEArray<uint64_t, 4> part_column_ids;
-  ObSEArray<uint64_t, 4> subpart_column_ids;
-  bool has_pk = false;
-  if (OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())
-      || OB_ISNULL(schema_guard = ctx_.stmt_factory_.get_query_ctx()->sql_schema_guard_.get_schema_guard())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx_.stmt_factory_.get_query_ctx()), K(schema_guard));
-  } else if (OB_FAIL(mv_container_schema_.is_table_with_logic_pk(*schema_guard, has_pk))) {
-    LOG_WARN("failed to check table with logic pk", K(ret), K(mv_container_schema_));
-  } else if (has_pk) {
-    if (OB_FAIL(mv_container_schema_.get_logic_pk_column_ids(schema_guard, rowkey_column_ids))) {
-      LOG_WARN("failed to get rowkey column ids", K(ret));
-    } else if (OB_UNLIKELY(rowkey_column_ids.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected empty array", K(ret));
-    }
-  } else if (OB_FAIL(rowkey_column_ids.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
-    LOG_WARN("failed to push back hidden pk column ids", K(ret));
-  } else if (mv_container_schema_.get_partition_key_info().is_valid() &&
-             OB_FAIL(mv_container_schema_.get_partition_key_info().get_column_ids(part_column_ids))) {
-    LOG_WARN("failed to get part column ids", K(ret));
-  } else if (mv_container_schema_.get_subpartition_key_info().is_valid() &&
-             OB_FAIL(mv_container_schema_.get_subpartition_key_info().get_column_ids(subpart_column_ids))) {
-    LOG_WARN("failed to get subpart column ids", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(rowkey_column_ids, part_column_ids)) ||
-             OB_FAIL(append_array_no_dup(rowkey_column_ids, subpart_column_ids))) {
-    LOG_WARN("failed to append part and subpart column ids", K(ret));
   }
   return ret;
 }

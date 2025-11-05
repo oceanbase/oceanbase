@@ -142,6 +142,9 @@ class ObMVChecker
   static int get_generated_columns_recursively(ObDMLStmt *stmt,
                                                ObIArray<ObColumnRefRawExpr*> &gen_cols);
   static int reset_ref_query_stmt_id_recursively(ObSelectStmt *stmt);
+  static int get_table_rowkey_ids(const ObTableSchema *table_schema,
+                                  ObSchemaGetterGuard *schema_guard,
+                                  ObIArray<uint64_t> &rowkey_ids);
 private:
   int check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_join_type(const ObSelectStmt &stmt, bool &is_valid_join, bool &has_outer_join);
@@ -178,7 +181,7 @@ private:
   int check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
                                  ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
                                  bool &is_valid);
-  int check_and_expand_mav_aggr(const ObSelectStmt &stmt, 
+  int check_and_expand_mav_aggr(const ObSelectStmt &stmt,
                                 ObAggFunRawExpr *aggr,
                                 ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                 ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,

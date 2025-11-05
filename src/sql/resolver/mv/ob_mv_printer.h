@@ -276,7 +276,6 @@ protected:
   int gen_mv_rowkey_expr(const TableItem *mv_table, ObOpRawExpr *&rowkey_expr);
   int add_col_exprs_into_select(ObIArray<SelectItem> &select_items, const ObIArray<ObRawExpr*> &col_exprs);
   int add_mv_rowkey_into_select(ObSelectStmt *stmt, const TableItem *mv_table);
-  int get_mv_rowkey_column_ids(ObIArray<uint64_t> &rowkey_column_ids);
   int add_semi_to_inner_hint(ObDMLStmt *stmt);
   int add_dynamic_sampling_hint(ObDMLStmt *stmt, const TableItem *table);
   bool is_table_skip_refresh(const TableItem &table) const;
