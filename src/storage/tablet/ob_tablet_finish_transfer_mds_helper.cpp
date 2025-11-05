@@ -639,7 +639,7 @@ protected:
 private:
   int check_dest_transfer_tablet_(ObTabletHandle &tablet_handle);
   int check_transfer_table_replaced_(ObTabletHandle &tablet_handle);
-  int try_make_dest_ls_rebuild_();
+  int try_make_dest_ls_rebuild_(const ObTabletHandle &dest_tablet_handle);
   int set_dest_ls_rebuild_();
 
 private:
@@ -819,14 +819,15 @@ int ObTabletFinishTransferInReplayExecutor::check_transfer_table_replaced_(
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(tmp_ret), KP(transfer_service));
     } else if (FALSE_IT(transfer_service->wakeup())) {
-    } else if (OB_SUCCESS != (tmp_ret = (try_make_dest_ls_rebuild_()))) {
+    } else if (OB_SUCCESS != (tmp_ret = (try_make_dest_ls_rebuild_(tablet_handle)))) {
       LOG_WARN("failed to try make dest ls rebuild", K(tmp_ret), K(tablet_info_), K(src_ls_id_), K(dest_ls_id_));
     }
   }
   return ret;
 }
 
-int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
+int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_(
+    const ObTabletHandle &dest_tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = NULL;
@@ -835,10 +836,19 @@ int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
   share::SCN max_decided_scn;
   ObTabletHandle src_tablet_handle;
   bool need_rebuild = false;
+  const ObTablet *src_tablet = nullptr;
+  const ObTablet *dest_tablet = nullptr;
+  int64_t src_transfer_seq = 0;
+  int64_t dest_transfer_seq = 0;
+  share::SCN transfer_start_scn;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet start transfer out replay executor do not init", K(ret));
+  } else if (!dest_tablet_handle.is_valid() || OB_ISNULL(dest_tablet = dest_tablet_handle.get_obj())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("try make dest ls rebuild get invalid argument", K(ret), K(dest_tablet_handle));
+  } else if (FALSE_IT(transfer_start_scn = dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_)) {
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
@@ -855,7 +865,7 @@ int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
     LOG_WARN("ls should not be NULL", K(ret), K(src_ls_id_), K(ls_handle));
   } else if (OB_FAIL(ls->get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to get max decided scn", K(ret), KPC(ls), K(src_ls_id_));
-  } else if (max_decided_scn < scn_) {
+  } else if (max_decided_scn <= transfer_start_scn) {
     need_rebuild = false;
     //src still exist transfer out tablet, need wait
   } else if (OB_FAIL(ls->ha_get_tablet(tablet_info_.tablet_id_, src_tablet_handle))) {
@@ -865,6 +875,17 @@ int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
     } else {
       LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_info_), K(scn_));
     }
+  } else if (OB_ISNULL(src_tablet = src_tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src tablet should not be NULL", K(ret), K(src_tablet_handle));
+  } else if (FALSE_IT(src_transfer_seq = src_tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (FALSE_IT(dest_transfer_seq = dest_tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (src_transfer_seq > dest_transfer_seq) {
+    need_rebuild = true;
+    FLOG_INFO("src transfer seq is bigger than dest tablet transfer seq, allow dest ls rebuild", K(src_transfer_seq), K(dest_transfer_seq));
+  } else if (src_transfer_seq != dest_transfer_seq - 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src transfer seq is not match with dest transfer seq", K(ret), KPC(src_tablet), KPC(dest_tablet));
   } else {
     need_rebuild = false;
   }
