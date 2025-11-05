@@ -1190,8 +1190,9 @@ void ObRADatumStore::Reader::reset()
 void ObRADatumStore::Reader::reuse()
 {
   reset_cursor(0);
-  free_all_blks();
+  store_.free_blk_mem(buf_.data(), buf_.capacity());
   buf_.reset();
+  free_all_blks();
   idx_buf_.reset();
 }
 

@@ -331,7 +331,8 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
     } else if ((select_stmt->is_set_distinct() || ObSelectStmt::UNION != select_stmt->get_set_op())
                && (lib::is_oracle_mode()
                 || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0
-                || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_5)) {
+                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
+                    GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_5))) {
       // oracle mode or mysql mode under 4.2.3 or 4.3.5.5 version do not support recursive union distinct
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "recursive WITH clause using operation not union all");
@@ -7341,7 +7342,9 @@ int ObSelectResolver::check_recursive_cte_usage(const ObSelectStmt &select_stmt)
   }
   if (cte_ctx_.invalid_recursive_union() && fake_cte_table_count >= 1) {
     if (lib::is_mysql_mode()
-     && (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0 || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_5)) {
+     && (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0 ||
+        (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+        && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_5))) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
                      "recursive UNION DISTINCT in Recursive Common Table Expression");
