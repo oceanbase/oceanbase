@@ -98,7 +98,7 @@ LATCH_DEF(CLOG_FD_CACHE_LOCK, 71, "clog fd cache lock", LATCH_FIFO, 2000, 0, fal
 LATCH_DEF(MIGRATE_LOCK, 72, "migrate lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(CLOG_CASCADING_INFO_LOCK, 73, "clog cascading info lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(CLOG_LOCALITY_LOCK, 74, "clog locality lock", LATCH_FIFO, 2000, 0, false)
-LATCH_DEF(DTL_CHANNEL_WAIT, 75, "DTL channel wait", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DTL_CHANNEL_WAIT, 75, "DTL channel wait", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(GROUP_MIGRATE_LOCK, 76, "group migrate lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(GROUP_MIGRATE_TASK_LOCK, 77, "group migrate task lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(LOG_ENGINE_ENV_SWITCH_LOCK, 78, "log engine env switch lock", LATCH_FIFO, 2000, 0, false)

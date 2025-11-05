@@ -64,11 +64,11 @@ public:
     }
     return ret;
   }
-  int wait(const uint64_t time_ms = 0)
+  int wait(const uint64_t time_ms = 0, const int64_t p2 = 0, const int64_t p3 = 0)
   {
-    return wait_us(time_ms * 1000);
+    return wait_us(time_ms * 1000, p2, p3);
   }
-  int wait_us(const uint64_t time_us = 0);
+  int wait_us(const uint64_t time_us = 0, const int64_t p2 = 0, const int64_t p3 = 0);
   int signal()
   {
     int ret = OB_SUCCESS;
