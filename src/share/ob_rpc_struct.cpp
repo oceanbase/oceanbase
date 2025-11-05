@@ -9663,12 +9663,18 @@ int ObAutoSplitTabletArg::assign(const ObAutoSplitTabletArg &other)
     tenant_id_ = other.tenant_id_;
     auto_split_tablet_size_ = other.auto_split_tablet_size_;
     used_disk_space_ = other.used_disk_space_;
+    is_random_part_ = other.is_random_part_;
+    table_id_ = other.table_id_;
+    if (OB_FAIL(inactive_tablet_ids_.assign(other.inactive_tablet_ids_))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObAutoSplitTabletArg, ls_id_, tablet_id_,
-    tenant_id_, auto_split_tablet_size_, used_disk_space_);
+    tenant_id_, auto_split_tablet_size_, used_disk_space_,
+    is_random_part_, table_id_, inactive_tablet_ids_);
 
 int ObAutoSplitTabletBatchArg::assign(const ObAutoSplitTabletBatchArg &other)
 {

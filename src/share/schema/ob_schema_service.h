@@ -132,6 +132,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_ALTER_PARTITION_POLICY, = 69)                       \
   ACT(OB_DDL_ALTER_SUBPARTITION_POLICY, = 70)                    \
   ACT(OB_DDL_MODIFY_MLOG_STATUS, = 71)                           \
+  ACT(OB_DDL_SET_PARTITION_INACTIVE, = 72)                       \
   ACT(OB_DDL_TABLE_OPERATION_END, = 100)                         \
   ACT(OB_DDL_TENANT_OPERATION_BEGIN, = 101)                      \
   ACT(OB_DDL_ADD_TENANT,)                                        \

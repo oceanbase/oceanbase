@@ -2965,6 +2965,7 @@ typedef enum ObItemType
   T_VENDED_CREDENTAIL_ENABLED = 4930,
   T_HTTP_TIMEOUT = 4931,
   T_HTTP_KEEPLIVE_TIME = 4932,
+  T_RANDOM_PARTITION = 4933, // random distribution
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

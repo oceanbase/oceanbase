@@ -11278,7 +11278,8 @@ struct ObAutoSplitTabletArg final
 public:
   ObAutoSplitTabletArg()
     : ls_id_(), tablet_id_(), tenant_id_(OB_INVALID),
-      auto_split_tablet_size_(OB_INVALID_SIZE), used_disk_space_(OB_INVALID_SIZE)
+      auto_split_tablet_size_(OB_INVALID_SIZE), used_disk_space_(OB_INVALID_SIZE),
+      is_random_part_(false), table_id_(OB_INVALID_ID), inactive_tablet_ids_()
     {}
   ~ObAutoSplitTabletArg() = default;
   int assign(const ObAutoSplitTabletArg &other);
@@ -11287,13 +11288,16 @@ public:
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
         && OB_INVALID_SIZE != auto_split_tablet_size_ && OB_INVALID_SIZE != used_disk_space_;
   };
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(auto_split_tablet_size), K_(used_disk_space));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(auto_split_tablet_size), K_(used_disk_space), K_(is_random_part), K_(table_id), K_(inactive_tablet_ids));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   uint64_t tenant_id_;
   int64_t auto_split_tablet_size_;
   int64_t used_disk_space_;
+  bool is_random_part_;
+  uint64_t table_id_;
+  ObSArray<ObTabletID> inactive_tablet_ids_;
 };
 
 struct ObAutoSplitTabletBatchArg final
