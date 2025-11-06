@@ -983,7 +983,7 @@ void ObCompactionDiagnoseMgr::diagnose_count_info()
             ObCompactionDiagnoseInfo::DIA_STATUS_SPECIAL,
             ObTimeUtility::fast_current_time(),
             "diagnose info type", OB_SUSPECT_INFO_TYPES[ObSuspectInfoType::SUSPECT_MULTI_VERSION_START_NOT_ADVANCE].info_str,
-            "tablet snapshot type", ObStorageSnapshotInfo::ObSnapShotTypeStr[i],
+            "tablet snapshot type", ObStorageSnapshotInfo::get_snapshot_type_str(i),
             "count of tablets with the same problem", multi_version_diagnose_tablet_count_[i]))) {
         LOG_WARN_RET(tmp_ret, "failed to add diagnose info", K(tmp_ret));
       }

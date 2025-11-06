@@ -67,8 +67,8 @@ struct ObStorageSnapshotInfo
   }
   void update_by_smaller_snapshot(const uint64_t snapshot_type, const int64_t snapshot);
   static const char *ObSnapShotTypeStr[];
-  const char *get_snapshot_type_str() const;
-  TO_STRING_KV("type", get_snapshot_type_str(), K_(snapshot));
+  static const char *get_snapshot_type_str(const uint64_t snapshot_type);
+  TO_STRING_KV("type", get_snapshot_type_str(snapshot_type_), K_(snapshot));
   uint64_t snapshot_type_;
   int64_t snapshot_;
 };
