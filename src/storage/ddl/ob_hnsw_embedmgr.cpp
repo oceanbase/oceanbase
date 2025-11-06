@@ -58,13 +58,33 @@ int ObEmbeddingConfig::assign(const ObEmbeddingConfig &other)
 }
 
 // -------------------------------- ObEmbeddingResult --------------------------------
+int ObEmbeddingResult::set_extra_cols(const common::ObArray<blocksstable::ObStorageDatum> &src_extras, ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  extra_values_.reset();
+  if (src_extras.count() == 0) {
+    // nothing to do
+  } else if (OB_FAIL(extra_values_.reserve(src_extras.count()))) {
+    LOG_WARN("reserve extra array failed", K(ret), K(src_extras.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < src_extras.count(); ++i) {
+      const blocksstable::ObStorageDatum &src_datum = src_extras.at(i);
+      blocksstable::ObStorageDatum dst_datum;
+      if (OB_FAIL(dst_datum.deep_copy(src_datum, allocator))) {
+        LOG_WARN("deep copy extra datum failed", K(ret), K(i));
+      } else if (OB_FAIL(extra_values_.push_back(dst_datum))) {
+        LOG_WARN("push extra datum failed", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
 void ObEmbeddingResult::reset()
 {
-  vid_ = 0;
   vector_ = nullptr;
   vector_dim_ = 0;
   text_.reset();
-  rowkey_.reset();
+  extra_values_.reset();
   status_ = NEED_EMBEDDING;
 }
 
@@ -151,29 +171,6 @@ int ObEmbeddingIOCallback::process()
   return ret;
 }
 
-// -------------------------------- ObEmbeddingResult --------------------------------
-int ObEmbeddingResult::set_rowkey(const common::ObArray<blocksstable::ObStorageDatum> &src_rowkey, ObArenaAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  rowkey_.reset();
-  if (OB_FAIL(rowkey_.reserve(src_rowkey.count()))) {
-    LOG_WARN("reserve rowkey array failed", K(ret), K(src_rowkey.count()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < src_rowkey.count(); ++i) {
-      const blocksstable::ObStorageDatum &src_datum = src_rowkey.at(i);
-      blocksstable::ObStorageDatum dst_datum;
-
-      // deep copy
-      if (OB_FAIL(dst_datum.deep_copy(src_datum, allocator))) {
-        LOG_WARN("deep copy datum failed", K(ret), K(i));
-      } else if (OB_FAIL(rowkey_.push_back(dst_datum))) {
-        LOG_WARN("push rowkey datum failed", K(ret), K(i));
-      }
-    }
-  }
-  return ret;
-}
-
 // -------------------------------- ObTaskBatchInfo --------------------------------
 int ObTaskBatchInfo::init(const int64_t batch_size, const int64_t vec_dim)
 {
@@ -211,9 +208,8 @@ int ObTaskBatchInfo::init(const int64_t batch_size, const int64_t vec_dim)
   return ret;
 }
 
-int ObTaskBatchInfo::add_item(const int64_t vid,
-                              const common::ObString &text,
-                              const common::ObArray<blocksstable::ObStorageDatum> &rowkey,
+int ObTaskBatchInfo::add_item(const common::ObString &text,
+                              const common::ObArray<blocksstable::ObStorageDatum> &extras,
                               const ObEmbeddingResult::EmbeddingStatus status)
 {
   int ret = OB_SUCCESS;
@@ -222,7 +218,6 @@ int ObTaskBatchInfo::add_item(const int64_t vid,
     LOG_WARN("batch is full", K(ret), K_(current_count), K_(batch_size));
   } else {
     ObEmbeddingResult *result = results_.at(current_count_);
-    result->set_vid(vid);
     result->set_status(status);
     if (status == ObEmbeddingResult::NEED_EMBEDDING) {
       need_embedding_count_++;
@@ -240,9 +235,10 @@ int ObTaskBatchInfo::add_item(const int64_t vid,
       }
     }
 
+    // deep copy extras
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(result->set_rowkey(rowkey, allocator_))) {
-        LOG_WARN("deep copy rowkey failed", K(ret));
+      if (OB_FAIL(result->set_extra_cols(extras, allocator_))) {
+        LOG_WARN("deep copy extras failed", K(ret));
       }
     }
 

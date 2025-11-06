@@ -61,20 +61,18 @@ public:
   };
 
   ObEmbeddingResult()
-    : vid_(0), rowkey_(), vector_(nullptr), vector_dim_(0), text_(), status_(NEED_EMBEDDING) {}
+    : extra_values_(), vector_(nullptr), vector_dim_(0), text_(), status_(NEED_EMBEDDING) {}
 
   ~ObEmbeddingResult() {
     reset();
   }
 
-  int64_t get_vid() const { return vid_; }
-  void set_vid(const int64_t vid) { vid_ = vid; }
   common::ObString get_text() const { return text_; }
   void set_text(const common::ObString &text) { text_ = text; }
-  const common::ObArray<blocksstable::ObStorageDatum>& get_rowkey() const { return rowkey_; }
 
-  // Deep copy rowkey with allocator
-  int set_rowkey(const common::ObArray<blocksstable::ObStorageDatum> &src_rowkey, ObArenaAllocator &allocator);
+  // Deep copy extra non-embedding columns
+  int set_extra_cols(const common::ObArray<blocksstable::ObStorageDatum> &src_extras, ObArenaAllocator &allocator);
+  const common::ObArray<blocksstable::ObStorageDatum>& get_extra_cols() const { return extra_values_; }
   float *get_vector() const { return vector_; }
   int64_t get_vector_dim() const { return vector_dim_; }
   void set_vector(float *vector, const int64_t vector_dim) { vector_ = vector; vector_dim_ = vector_dim; }
@@ -85,11 +83,10 @@ public:
 
   void reset();
 
-  TO_STRING_KV(K_(vid), K_(rowkey), K_(vector_dim), K_(text), K_(status));
+  TO_STRING_KV(K_(vector_dim), K_(text), K_(status));
 
 private:
-  int64_t vid_;
-  common::ObArray<blocksstable::ObStorageDatum> rowkey_;
+  common::ObArray<blocksstable::ObStorageDatum> extra_values_;
   float* vector_;
   int64_t vector_dim_;
   common::ObString text_;
@@ -116,9 +113,8 @@ public:
   int init(const int64_t batch_size, const int64_t vec_dim);
 
   // Add an item during batching phase (deep copy to allocator)
-  int add_item(const int64_t vid,
-               const common::ObString &text,
-               const common::ObArray<blocksstable::ObStorageDatum> &rowkey,
+  int add_item(const common::ObString &text,
+               const common::ObArray<blocksstable::ObStorageDatum> &extras,
                const ObEmbeddingResult::EmbeddingStatus status);
   int64_t get_count() const { return current_count_; }
   int64_t get_need_embedding_count() const { return need_embedding_count_; }
