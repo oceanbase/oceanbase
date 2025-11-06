@@ -841,6 +841,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                  && package_ast.get_can_cached();
       FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
+      OZ (routine_storage.mask_special_compile_mode(session_info_));
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));
       OZ (generate_package_conditions(package_ast.get_condition_table(), package));
