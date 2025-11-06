@@ -1018,30 +1018,38 @@ int ObDASTRMergeIter::inner_release()
   }
 
   for (int64_t i = 0; i < inv_scan_params_.count(); ++i) {
-    inv_scan_params_[i]->destroy_schema_guard();
-    inv_scan_params_[i]->snapshot_.reset();
-    inv_scan_params_[i]->destroy();
+    if (OB_NOT_NULL(inv_scan_params_[i])) {
+      inv_scan_params_[i]->destroy_schema_guard();
+      inv_scan_params_[i]->snapshot_.reset();
+      inv_scan_params_[i]->destroy();
+    }
   }
   inv_scan_params_.reset();
 
   for (int64_t i = 0; i < inv_agg_params_.count(); ++i) {
-    inv_agg_params_[i]->destroy_schema_guard();
-    inv_agg_params_[i]->snapshot_.reset();
-    inv_agg_params_[i]->destroy();
+    if (OB_NOT_NULL(inv_agg_params_[i])) {
+      inv_agg_params_[i]->destroy_schema_guard();
+      inv_agg_params_[i]->snapshot_.reset();
+      inv_agg_params_[i]->destroy();
+    }
   }
   inv_agg_params_.reset();
 
   for (int64_t i = 0; i < fwd_scan_params_.count(); ++i) {
-    fwd_scan_params_[i]->destroy_schema_guard();
-    fwd_scan_params_[i]->snapshot_.reset();
-    fwd_scan_params_[i]->destroy();
+    if (OB_NOT_NULL(fwd_scan_params_[i])) {
+      fwd_scan_params_[i]->destroy_schema_guard();
+      fwd_scan_params_[i]->snapshot_.reset();
+      fwd_scan_params_[i]->destroy();
+    }
   }
   fwd_scan_params_.reset();
 
   for (int64_t i = 0; i < block_max_scan_params_.count(); ++i) {
-    block_max_scan_params_[i]->destroy_schema_guard();
-    block_max_scan_params_[i]->snapshot_.reset();
-    block_max_scan_params_[i]->destroy();
+    if (OB_NOT_NULL(block_max_scan_params_[i])) {
+      block_max_scan_params_[i]->destroy_schema_guard();
+      block_max_scan_params_[i]->snapshot_.reset();
+      block_max_scan_params_[i]->destroy();
+    }
   }
   block_max_scan_params_.reset();
 
