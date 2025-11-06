@@ -1492,7 +1492,7 @@ int ObTabletTableStore::calculate_read_tables(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(calculate_inc_major_read_tables(snapshot_version, tablet, iterator, base_table))) {
     LOG_WARN("fail to calculate inc major read tables", K(ret));
-  } else if (OB_FAIL(!GCTX.is_shared_storage_mode() && calculate_inc_ddl_read_tables(snapshot_version, tablet, iterator))) {
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(calculate_inc_ddl_read_tables(snapshot_version, tablet, iterator))) {
     LOG_WARN("fail to calculate inc major ddl read tables", KR(ret));
   }
 

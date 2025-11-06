@@ -498,7 +498,7 @@ int ObDDLIncPrepareTask::record_trans_id(const ObTransID &trans_id)
       is_prepared_ = false;
       LOG_INFO("inc major count exceeds max limit", KR(ret));
     }
-  } else if (trans_ids_.size() >= MAX_INC_MAJOR_SSTABLE_CNT) {
+  } else if (trans_ids_.size() >= MAX_INC_MAJOR_DIRECT_LOAD_CNT) {
     is_prepared_ = false;
     LOG_INFO("inc major count exceeds max limit", KR(ret));
   }

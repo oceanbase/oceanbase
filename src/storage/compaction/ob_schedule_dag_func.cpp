@@ -17,9 +17,6 @@
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 #include "storage/ddl/ob_tablet_lob_split_task.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
-#endif
 
 namespace oceanbase
 {
@@ -158,17 +155,6 @@ int ObScheduleDagFunc::schedule_batch_freeze_dag(
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObScheduleDagFunc::schedule_ss_update_inc_major_dag(
-    const storage::ObDirectLoadSSUpdateIncMajorDagParam &param)
-{
-  int ret = OB_SUCCESS;
-  bool is_emergency = true;
-  CREATE_DAG(ObDirectLoadSSUpdateIncMajorDag);
-  return ret;
-}
-#endif
 
 int ObDagParamFunc::fill_param(
     const share::ObLSID &ls_id,

@@ -7753,6 +7753,7 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
   bool minor_trans_state_determined = true;
   share::SCN tx_recycle_scn = share::SCN::min_scn();
   int64_t last_major_snapshot_version = 0;
+  int64_t uncommited_inc_major_cnt = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -7779,6 +7780,12 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
     if (major_cnt > 0) {
       last_major_snapshot_version = table_store->get_major_sstables().at(major_cnt - 1)->get_snapshot_version();
     }
+    for (int64_t i = 0; i < table_store->get_inc_major_sstables().count(); ++i) {
+      ObSSTable *inc_major = table_store->get_inc_major_sstables().at(i);
+      if (INT64_MAX == inc_major->get_upper_trans_version()) {
+        uncommited_inc_major_cnt ++;
+      }
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_store_meta_info.set(
@@ -7789,7 +7796,8 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
     table_store->get_meta_major_sstables().count(),
     minor_trans_state_determined,
     last_major_snapshot_version,
-    tx_recycle_scn))) {
+    tx_recycle_scn,
+    uncommited_inc_major_cnt))) {
     LOG_WARN("set table store meta info failed", K(ret), KPC(this));
   }
   return ret;

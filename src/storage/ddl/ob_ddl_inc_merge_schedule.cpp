@@ -24,7 +24,7 @@
 #include "storage/incremental/ob_ls_inc_sstable_uploader.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
+#include "storage/direct_load/ob_direct_load_ss_update_inc_major_task.h"
 #endif
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_ddl_merge_task_utils.h"
@@ -364,37 +364,51 @@ int ObDDLMergeScheduler::check_inc_major_merge_delay(
 
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObDDLMergeScheduler::schedule_ss_update_inc_major_and_gc_inc_major(
-    const ObLSID &ls_id,
+    ObLS *ls,
     const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  bool need_schedule = false;
-  if (!tenant_config->_enable_inc_major_direct_load) {
-    // do nothing
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", KR(ret));
-  } else if (OB_UNLIKELY(!table_store_wrapper.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table store wrapper is invalid", KR(ret));
-  } else if (table_store_wrapper.get_member()->get_inc_major_sstables().count() > 0) {
-    const ObSSTableArray &inc_major_sstables = table_store_wrapper.get_member()->get_inc_major_sstables();
-    for (int64_t i = 0; i < inc_major_sstables.count(); ++i) {
-      if (inc_major_sstables.at(i)->get_upper_trans_version() == INT64_MAX) {
-        need_schedule = true;
-        break;
-      }
-    }
+  const ObLSID &ls_id = ls->get_ls_id();
+  const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
+  // process local
+  ObDirectLoadSSUpdateLocalIncMajorTask local_task(*ls, *tablet_handle.get_obj(), ls_id, tablet_id);
+  if (OB_FAIL(local_task.process())) {
+    LOG_WARN("fail to process local task", KR(ret));
+    ret = OB_SUCCESS;
   }
 
-  if (OB_SUCC(ret) && need_schedule) {
-    storage::ObDirectLoadSSUpdateIncMajorDagParam param(ls_id, tablet_handle.get_obj()->get_tablet_id());
-    if (OB_FAIL(ObScheduleDagFunc::schedule_ss_update_inc_major_dag(param))) {
-      LOG_WARN("fail to schedule ss update inc major dag", KR(ret), K(param));
+  // process shared
+  if (OB_SUCC(ret)) {
+    ObMemAttr attr(MTL_ID(), "SS_INC_MAJOR");
+    ObArenaAllocator tmp_allocator(attr);
+    ObSSMetaService *ss_meta_service = MTL(ObSSMetaService *);
+    ObSSWriterService *ss_writer_service = MTL(ObSSWriterService *);
+    ObSSMetaUpdateMetaInfo ss_meta_info;
+    ObTabletHandle shared_tablet_handle;
+    SCN row_scn;
+    ObSSWriterKey key(ObSSWriterType::COMPACTION, ls_id, tablet_id);
+    bool is_sswriter = false;
+    int64_t sswriter_epoch = OB_INVALID_VERSION;
+    if (OB_ISNULL(ss_meta_service) || OB_ISNULL(ss_writer_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("service is nullptr", KR(ret), KP(ss_meta_service), KP(ss_writer_service));
+    } else if (OB_FAIL(ss_writer_service->check_lease(key, is_sswriter, sswriter_epoch))) {
+      LOG_WARN("fail to check lease", KR(ret), K(ls_id), K(tablet_id));
+    } else if (!is_sswriter) {
+      // only ss writer can update ss inc major
+    } else if (OB_FAIL(ss_meta_service->get_tablet(ls_id,
+                                                   tablet_id,
+                                                   tablet_handle.get_obj()->get_reorganization_scn(),
+                                                   tmp_allocator,
+                                                   shared_tablet_handle,
+                                                   ss_meta_info,
+                                                   row_scn))) {
+      LOG_WARN("fail to get ss tablet", KR(ret), K(ls_id), K(tablet_id));
+    } else if (ss_meta_info.table_store_meta_info_.uncommited_inc_major_cnt_ > 0) {
+      ObDirectLoadSSUpdateSharedIncMajorTask shared_task(*ls, *shared_tablet_handle.get_obj(), ls_id, tablet_id);
+      if (OB_FAIL(shared_task.process())) {
+        LOG_WARN("fail to process shared task", KR(ret));
+      }
     }
   }
   return ret;

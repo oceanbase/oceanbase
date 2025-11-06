@@ -27,7 +27,6 @@
 #include "storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/ob_ss_tablet_merge_helper.h"
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
 #include "storage/incremental/share/ob_ss_diagnose_mgr.h"
 #endif
 #include "storage/compaction/ob_schedule_status_cache.h"

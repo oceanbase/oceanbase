@@ -35,7 +35,6 @@ class ObTabletSplitDag;
 class ObTabletLobSplitDag;
 class ObComplementDataDag;
 class ObTablet;
-struct ObDirectLoadSSUpdateIncMajorDagParam;
 }
 
 namespace share
@@ -95,7 +94,6 @@ public:
   static int schedule_verify_ckm_dag(ObVerifyCkmParam &param);
   static int schedule_update_skip_major_tablet_dag(const ObUpdateSkipMajorParam &param);
   static int schedule_tablet_ss_minor_merge_dag(const ObTabletSSMinorMergeDagParam &param);
-  static int schedule_ss_update_inc_major_dag(const storage::ObDirectLoadSSUpdateIncMajorDagParam &param);
 #endif
 };
 

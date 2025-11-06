@@ -88,6 +88,7 @@ private:
 
 class ObDDLIncPrepareTask final : public share::ObITask
 {
+  static const int MAX_INC_MAJOR_DIRECT_LOAD_CNT = 48;
 public:
   ObDDLIncPrepareTask();
   int process() override;

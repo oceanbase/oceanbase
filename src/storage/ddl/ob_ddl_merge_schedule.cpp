@@ -24,7 +24,6 @@
 #include "storage/incremental/ob_ls_inc_sstable_uploader.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
-#include "storage/direct_load/ob_direct_load_ss_update_inc_major_dag.h"
 #endif
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_ddl_merge_task_utils.h"
@@ -501,7 +500,8 @@ int ObDDLMergeScheduler::schedule_ddl_merge(ObLS *ls,
 #endif
 
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode() && OB_TMP_FAIL(ObDDLMergeScheduler::schedule_ss_update_inc_major_and_gc_inc_major(ls_id,
+  if (OB_SUCC(ret)) {
+    if (GCTX.is_shared_storage_mode() && OB_TMP_FAIL(ObDDLMergeScheduler::schedule_ss_update_inc_major_and_gc_inc_major(ls,
                                                                                                    tablet_handle))) {
       LOG_WARN("fail to schedule ss update inc major and gc inc major", K(tmp_ret), K(ls_id), K(tablet_id));
     }
@@ -510,6 +510,7 @@ int ObDDLMergeScheduler::schedule_ddl_merge(ObLS *ls,
                                                                                        tablet_handle))) {
       LOG_WARN("fail to schedule ss update inc major and gc inc major", K(tmp_ret), K(ls_id), K(tablet_id));
     }
+  }
 #endif
 
   LOG_TRACE("schedule ddl tablet merge", K(ret), K(ls_id), K(tablet_id));
