@@ -314,6 +314,18 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
   if (OB_SUCCESS != ret) {
   } else if (OB_FAIL(FileDirectoryUtils::delete_directory(curr_dir))) {
     LOG_WARN("remove group directory failed", K(ret), K(curr_dir));
+    if (ret == OB_IO_ERROR && errno == EBUSY) {
+      int tmp_ret = OB_SUCCESS;
+      char task_file_path[PATH_BUFSIZE];
+      char task_buf[TASKS_BUFSIZE + 1];
+      snprintf(task_file_path, PATH_BUFSIZE, "%s/%s", curr_dir, TASKS_FILE);
+      if (OB_TMP_FAIL(get_string_from_file_(task_file_path, task_buf))) {
+        LOG_WARN("dump cgroup task file failed", K(tmp_ret), K(task_file_path));
+      } else {
+        task_buf[TASKS_BUFSIZE] = '\0';
+        LOG_WARN("cgroup task file content", K(curr_dir), K(task_file_path), K(task_buf));
+      }
+    }
   } else {
     LOG_INFO("remove group directory success", K(curr_dir));
   }

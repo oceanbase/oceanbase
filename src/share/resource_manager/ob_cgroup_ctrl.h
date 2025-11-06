@@ -222,6 +222,7 @@ private:
   static const int32_t PATH_BUFSIZE = 512;
   static const int32_t VALUE_BUFSIZE = 64;
   static const int32_t GROUP_NAME_BUFSIZE = 129;
+  static const int32_t TASKS_BUFSIZE = 512;
   // 使用 ObCgroupCtrl 之前需要判断 group_ctrl 对象是否 valid，若为 false 则跳过 cgroup 机制
   //  为 false 可能的原因是 cgroup 目录没有操作权限、操作系统不支持 cgroup 等。
   bool valid_;
