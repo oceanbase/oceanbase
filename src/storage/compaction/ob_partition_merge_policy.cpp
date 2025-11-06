@@ -2928,5 +2928,45 @@ int ObIncMajorTxHelper::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle
   return ret;
 }
 
+int ObIncMajorTxHelper::check_need_gc_ddl_dump(
+    const ObTablet &tablet,
+    const ObSSTable &ddl_dump,
+    bool &need_gc)
+{
+  int ret = OB_SUCCESS;
+  need_gc = true;
+  ObTransID trans_id;
+  ObTxSEQ seq_no;
+  ObDDLKvMgrHandle ddlkv_mgr_handle;
+  ObArray<ObDDLKVHandle> ddlkv_handles;
+  if (OB_UNLIKELY(!ddl_dump.is_inc_major_ddl_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ddl_dump));
+  } else if (OB_FAIL(get_trans_id_and_seq_no_from_sstable(&ddl_dump, trans_id, seq_no))) {
+    LOG_WARN("fail to get trans id and seq no", KR(ret), K(ddl_dump));
+  } else if (OB_FAIL(tablet.get_ddl_kv_mgr(ddlkv_mgr_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("ddl kv mgr is not exist", KR(ret), K(tablet));
+    } else {
+      LOG_WARN("fail to get ddl kv mgr", KR(ret), K(tablet));
+    }
+  } else if (OB_FAIL(ddlkv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddlkv_handles))) {
+    LOG_WARN("fail to get ddl kv", KR(ret), K(tablet));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddlkv_handles.count(); ++i) {
+      const ObDDLKV *cur_ddlkv = ddlkv_handles.at(i).get_obj();
+      if (OB_ISNULL(cur_ddlkv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddlkv is nullptr", KR(ret), K(i));
+      } else if (cur_ddlkv->get_trans_id() == trans_id && cur_ddlkv->get_seq_no() == seq_no) {
+        need_gc = false;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 } /* namespace compaction */
 } /* namespace oceanbase */
