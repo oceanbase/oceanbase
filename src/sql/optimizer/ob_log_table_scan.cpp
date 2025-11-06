@@ -2844,6 +2844,7 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (is_text_retrieval_scan() || is_vec_idx_scan_post_filter() || use_index_merge()
+             || is_ivf_adaptive_scan()
              || (NULL != table_schema 
                  && (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())
                      || table_schema->is_spatial_index() || table_schema->is_vec_index()))) {
