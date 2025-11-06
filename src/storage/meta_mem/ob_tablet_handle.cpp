@@ -232,6 +232,7 @@ void ObTabletHandle::reset()
   obj_pool_ = nullptr;
   allocator_ = nullptr;
   t3m_ = nullptr;
+  RESET_OBJ_LEAK_DEBUG_NODE(node_);
 }
 
 int ObTabletHandle::register_into_leak_checker(const char *file, const int line, const char *func)
