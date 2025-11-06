@@ -576,9 +576,9 @@ int ObDynamicPartitionManager::get_target_precreate_timestamp_(
       int64_t specified_precreate_time_num = -1;
       ObDateUnitType specified_precreate_time_unit = ObDateUnitType::DATE_UNIT_MAX;
       int64_t specified_timestamp = cur_timestamp;
-      if (OB_FAIL(OB_FAIL(str_to_time(specified_precreate_time,
-                                      specified_precreate_time_num,
-                                      specified_precreate_time_unit)))) {
+      if (OB_FAIL(str_to_time(specified_precreate_time,
+                              specified_precreate_time_num,
+                              specified_precreate_time_unit))) {
         LOG_WARN("fail to convert str to time", KR(ret), K(specified_precreate_time));
       } else if (OB_UNLIKELY(specified_precreate_time_num < 0)) {
         ret = OB_INVALID_ARGUMENT;
@@ -714,7 +714,7 @@ int ObDynamicPartitionManager::fetch_timestamp_from_part_key_(
 
 int ObDynamicPartitionManager::get_session_time_zone_str_(char *buf, const int64_t len, int64_t &pos)
 {
-  int64_t ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
