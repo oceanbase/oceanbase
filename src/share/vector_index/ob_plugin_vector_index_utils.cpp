@@ -284,7 +284,7 @@ int ObPluginVectorIndexUtils::read_object_from_embedded_table_iter(ObObj *&input
         output_vec_obj.reset();
         ret = OB_SUCCESS;
       }
-    } else if (datum_row->get_column_count() != EMBEDDED_TABLE_BASE_COLUMN_CNT + data_table_rowkey_count) {
+    } else if (datum_row->get_column_count() < EMBEDDED_TABLE_BASE_COLUMN_CNT + data_table_rowkey_count) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get row column cnt invalid.", K(ret), K(extra_column_count), K(datum_row->get_column_count()));
     } else {
@@ -292,7 +292,7 @@ int ObPluginVectorIndexUtils::read_object_from_embedded_table_iter(ObObj *&input
         LOG_WARN("failed to get extra info.", K(ret), K(extra_column_count), K(datum_row->storage_datums_[extra_column_count]));
       } else {
         char *copy_str = nullptr;
-        ObString vector = datum_row->storage_datums_[data_table_rowkey_count + 1].get_string();
+        ObString vector = datum_row->storage_datums_[datum_row->get_column_count() - 1].get_string();
         int64_t size = vector.length();
         if (size == 0) {
           output_vec_obj.reset();
@@ -1808,6 +1808,14 @@ int ObPluginVectorIndexUtils::init_table_param(ObTableParam *table_param,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(column_ids.push_back(vid_column_id))) {
         LOG_WARN("failed to push column id.", K(ret), K(vid_column_id));
+      } else if (!adapter->get_is_need_vid()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_column_ids.count(); ++i) {
+          if (OB_FAIL(column_ids.push_back(part_column_ids[i]))) {
+            LOG_WARN("failed to push column id.", K(ret), K(i), K(part_column_ids[i]), K(vid_column_id));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(column_ids.push_back(vector_column_id))) {
         LOG_WARN("failed to push column id.", K(ret), K(vector_column_id));
       }
