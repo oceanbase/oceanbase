@@ -268,7 +268,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
     if (OB_SUCC(ret)) {
       bool can_blockscan = false;
       ObMicroBlockData block_data;
-      if (OB_UNLIKELY(has_skip_scanner())) {
+      if (OB_UNLIKELY(has_skip_scanner() && nullptr != micro_scanner_->get_reader())) {
         if (access_ctx_->query_flag_.is_reverse_scan()) {
           const ObIndexSkipState *next_state = prefetcher_.get_next_skip_state();
           if (nullptr != next_state) {

@@ -1087,11 +1087,11 @@ int ObIndexSkipScanFactory::set_pending_disabled(
       if (OB_ISNULL(skip_scanner)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid null skip scanner", KR(ret), K(i), KPC(this));
-      } else if (!skip_scanner->is_prefix_filled()) {
       } else if (!is_pending_disabled_) {
         newest_key = is_reverse_scan ? &skip_scanner->get_complete_range().start_key_ :
                                        &skip_scanner->get_complete_range().end_key_;
         is_pending_disabled_ = true;
+      } else if (!skip_scanner->is_prefix_filled()) {
       } else {
         int cmp_ret = 0;
         const ObDatumRowkey &cur_prefix_key = is_reverse_scan ? skip_scanner->get_complete_range().start_key_ :
