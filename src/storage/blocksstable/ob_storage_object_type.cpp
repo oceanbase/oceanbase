@@ -111,22 +111,6 @@ static const char *ob_storage_object_type_strs[] = {
   "SHARED_INC_MAJOR_META_MACRO",
   "MAX"
 };
-static inline const char *get_ls_inner_tablet_name_(const int64_t tablet_id)
-{
-  ObTabletID id(tablet_id);
-  if (id.is_ls_tx_ctx_tablet()) {
-    return "TX_CTX";
-  } else if (id.is_ls_tx_data_tablet()) {
-    return "TX_DATA";
-  } else if (id.is_ls_lock_tablet()) {
-    return "TX_LOCK";
-  } else if (id.is_ls_reorg_info_tablet()) {
-    return "REORG_INFO";
-  } else {
-    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unexpected tablet_id", K(tablet_id));
-    return "UNEXPECTED";
-  }
-}
 
 static int get_ls_inner_tablet_id_(const char *str, int64_t &tablet_id)
 {
