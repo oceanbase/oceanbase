@@ -249,8 +249,8 @@ int ObJavaEnv::setup_useful_path()
     } else if (OB_FAIL(check_path_exists(hadoop_jar_path.ptr(), found))) {
       LOG_WARN("can't open dir path", K(hadoop_jar_path), K(ret));
     } else if (!found) {
-      ret = OB_JNI_ENV_ERROR;
-      LOG_USER_ERROR(OB_JNI_ENV_ERROR, "can't open hadoop class jar path");
+      ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
+      LOG_USER_ERROR(OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR, "can't open hadoop class jar path");
       LOG_WARN("can't open hadoop class jar path", K(connector_path_), K(ret));
     } else {
       // found hadoop jar path
@@ -361,7 +361,7 @@ int ObJavaEnv::setup_java_env()
   return ret;
 }
 
-int ObJavaEnv::setup_java_env_for_hdfs()
+int ObJavaEnv::setup_java_env_classpath_and_ldlib_path()
 {
   int ret = OB_SUCCESS;
   obsys::ObWLockGuard<> wg(setup_env_lock_);

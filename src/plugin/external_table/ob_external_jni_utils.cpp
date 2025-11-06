@@ -709,6 +709,17 @@ int ObJniTool::init_jni()
   allocator.set_tenant_id(tenant_id);
   if (!ObJavaEnv::getInstance().is_env_inited() && OB_FAIL(ObJavaEnv::getInstance().setup_java_env())) {
     LOG_WARN("failed to setup java env", K(ret));
+  } else if (OB_FAIL(ObJavaEnv::getInstance().setup_java_env_classpath_and_ldlib_path())) {
+    LOG_WARN("failed to setup java env for hdfs", K(ret));
+  } else if (ret != OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR || !OB_FALSE_IT(ret = OB_SUCCESS)) {
+    /*如果ret 是path not found 忽略错误，继续往下执行。因为插件目录下可能没有hadoop jar包，但是不影响使用。
+    if (ret == OB_PATH_NOT_FOUND) {
+      ret = OB_SUCCESS;
+    }
+    如果ret 不是 OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR 出错处理
+    如果ret 是 OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR 忽略错误，继续往下执行。
+    */
+    LOG_WARN("failed to setup java env for hdfs", K(ret));
   } else if (OB_SUCC(ObJniConnector::get_jni_env(jni_env))) {
     jni_env_getter_ = &ObJniTool::get_jni_env_connector;
     LOG_INFO("get jni env from ObJniConnector successfully");

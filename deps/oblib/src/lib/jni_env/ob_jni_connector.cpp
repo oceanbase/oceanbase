@@ -40,7 +40,7 @@ int ObJniConnector::java_env_init() {
   } else if (!java_env.is_env_inited()) {
     if (OB_FAIL(java_env.setup_java_env())) {
       LOG_WARN("failed to setup java env", K(ret));
-    } else if (OB_FAIL(java_env.setup_java_env_for_hdfs())) {
+    } else if (OB_FAIL(java_env.setup_java_env_classpath_and_ldlib_path())) {
       LOG_WARN("failed to setup java env for hdfs", K(ret));
     }
   }
