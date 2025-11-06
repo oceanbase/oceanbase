@@ -63,8 +63,8 @@ void ObDynamicScheduleCleanUpTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = cleaner_.get_tenant_id();
-  uint64_t schedule_interval = cleaner_.get_schedule_interval();
-  int interval = -1;
+  int64_t schedule_interval = cleaner_.get_schedule_interval();
+  int64_t interval = -1;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid cleaner tenant id", KR(ret), K(tenant_id));
@@ -201,11 +201,7 @@ int ObSessionTmpTableCleaner::cancel_and_schedule_task()
     TG_CANCEL_TASK(clean_tg_id_, normal_table_clean_);
     LOG_INFO("cancel task normal table clean");
   }
-  if (FAILEDx(TG_SCHEDULE(
-              clean_tg_id_,
-              normal_table_clean_,
-              schedule_interval_,
-              false /*repeat*/))) {
+  if (FAILEDx(schedule_normal_table_clean())) {
     LOG_WARN("TG_SCHEDULE normal_table_clean_ failed", KR(ret), K_(clean_tg_id), K_(schedule_interval));
   }
   exist = false;
@@ -215,11 +211,7 @@ int ObSessionTmpTableCleaner::cancel_and_schedule_task()
     TG_CANCEL_TASK(clean_tg_id_, standalone_table_clean_);
     LOG_INFO("cancel task standalone table clean");
   }
-  if (FAILEDx(TG_SCHEDULE(
-              clean_tg_id_,
-              standalone_table_clean_,
-              schedule_interval_,
-              false /*repeat*/))) {
+  if (FAILEDx(schedule_standalone_table_clean())) {
     LOG_WARN("TG_SCHEDULE standalone_table_clean_ failed", KR(ret), K_(clean_tg_id), K_(schedule_interval));
   }
   return ret;
@@ -234,6 +226,8 @@ int ObSessionTmpTableCleaner::schedule_normal_table_clean()
   } else if (OB_UNLIKELY(stopped_)) {
     ret = OB_CANCELED;
     LOG_WARN("ObSessionTmpTableCleaner is stopped", KR(ret), K_(tenant_id), K_(clean_tg_id));
+  } else if (0 == schedule_interval_) {
+    // do nothing
   } else if (OB_FAIL(TG_SCHEDULE(
                      clean_tg_id_,
                      normal_table_clean_,
@@ -252,6 +246,8 @@ int ObSessionTmpTableCleaner::schedule_standalone_table_clean()
   } else if (OB_UNLIKELY(stopped_)) {
     ret = OB_CANCELED;
     LOG_WARN("ObSessionTmpTableCleaner is stopped", KR(ret), K_(tenant_id), K_(clean_tg_id));
+  } else if (0 == schedule_interval_) {
+    // do nothing
   } else if (OB_FAIL(TG_SCHEDULE(
                      clean_tg_id_,
                      standalone_table_clean_,
