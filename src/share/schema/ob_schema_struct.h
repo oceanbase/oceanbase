@@ -6686,6 +6686,7 @@ public:
   inline int set_sequence_name(const char *name) { return deep_copy_str(name, name_); }
   inline int set_sequence_name(const common::ObString &name) { return deep_copy_str(name, name_); }
   inline int set_name(const common::ObString &name) { return set_sequence_name(name); }
+  inline int set_remote_database_name(const common::ObString &name) { return deep_copy_str(name, remote_db_name_); }
   // inline void set_max_value(int64_t val) { option_.set_max_value(val); }
   // inline void set_min_value(int64_t val) { option_.set_min_value(val); }
   // inline void set_increment_by(int64_t val) { option_.set_increment_by(val); }
@@ -6727,6 +6728,7 @@ public:
   inline bool get_order_flag() const { return option_.get_order_flag(); }
   inline const common::ObString &get_sequence_name() const { return name_; }
   inline const char *get_sequence_name_str() const { return extract_str(name_); }
+  inline const common::ObString &get_remote_database_name() const { return remote_db_name_; }
   inline share::ObSequenceOption &get_sequence_option() { return option_; }
   inline const share::ObSequenceOption &get_sequence_option() const { return option_; }
   inline ObTenantSequenceId get_tenant_sequence_id() const
@@ -6743,7 +6745,8 @@ public:
                        K_(schema_version),
                        K_(option),
                        K_(is_system_generated),
-                       K_(dblink_id));
+                       K_(dblink_id),
+                       K_(remote_db_name));
 private:
   //void *alloc(int64_t size);
   // int get_value(const common::ObString &str, int64_t &val);
@@ -6758,6 +6761,8 @@ private:
   bool is_system_generated_;
   //common::ObArenaAllocator allocator_;
   uint64_t dblink_id_;
+  // select db.seq.nextval@link, remote_db_name_ = 'db'
+  ObString remote_db_name_;
 };
 
 typedef ObSequenceSchema ObSequenceInfo;

@@ -66,7 +66,8 @@ private:
                                   const uint64_t dblink_id,
                                   const common::ObString &sequence_name,
                                   ObSQLSessionInfo *session_info,
-                                  uint64_t &sequence_id);
+                                  uint64_t &sequence_id,
+                                  ObString remote_db_name);
   const ObSchemaChecker *schema_checker_;
   const ObSQLSessionInfo *session_info_;
 };
