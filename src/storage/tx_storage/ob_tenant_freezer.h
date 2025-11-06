@@ -55,7 +55,6 @@ public:
 
   int64_t captured_merge_time_cost_[ObFreezerMergeType::MAX_MERGE_TYPE];
   int64_t captured_merge_times_[ObFreezerMergeType::MAX_MERGE_TYPE];
-  int64_t captured_source_times_[MAX_FREEZE_SOURCE_TYPE_COUNT];
 
   int64_t last_captured_retire_clock_;
 

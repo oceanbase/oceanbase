@@ -56,7 +56,7 @@ inline bool is_valid_freeze_source(const ObFreezeSourceFlag source)
     && source < ObFreezeSourceFlag::MAX_SOURCE;
 }
 
-inline const char *obj_to_cstring(const ObFreezeSourceFlag type)
+static inline const char *obj_to_cstring(const ObFreezeSourceFlag type)
 {
   const char *ret = "INVALID";
   switch (type) {
