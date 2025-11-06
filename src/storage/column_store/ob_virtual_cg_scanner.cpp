@@ -184,7 +184,7 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
   if (!iter_param.enable_pd_aggregate()) {
   } else if (OB_UNLIKELY(nullptr == access_ctx.block_row_store_ ||
                   nullptr == iter_param.aggregate_exprs_ ||
-                  1 != iter_param.aggregate_exprs_->count())) {
+                  iter_param.aggregate_exprs_->count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
   } else if (iter_param.use_new_format()) {
